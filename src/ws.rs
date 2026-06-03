@@ -159,7 +159,7 @@ mod tests {
     use super::*;
 
     fn parse_msg(text: &str) -> Option<WsEvent> {
-        parse(text, &crate::applog::AppLog::new())
+        parse(text, &crate::applog::AppLog::new(0))
     }
 
     // ── Play ─────────────────────────────────────────────────────────────────

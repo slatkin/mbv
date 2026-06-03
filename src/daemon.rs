@@ -1,5 +1,4 @@
 use std::sync::{Arc, Mutex, mpsc};
-use std::time::Duration;
 
 use ksni::blocking::TrayMethods;
 
@@ -7,6 +6,11 @@ use crate::api::{EmbyClient, MediaItem};
 use crate::applog::{AppLog, Level};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
+
+enum DaemonEvent {
+    Player(PlayerEvent),
+    Ws(WsEvent),
+}
 
 struct MbyTray;
 
@@ -47,13 +51,14 @@ pub fn run(client: EmbyClient) -> ! {
 
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx)    = mpsc::channel();
-    let log = AppLog::new();
+    let log = AppLog::new(50);
     let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan, log.clone());
     let player = Player::new(
         client.config.server_url.clone(),
         client.token.clone(),
         client.config.show_audio_window,
         client.config.use_mpv_config,
+        client.config.no_scripts,
         client.config.always_play_next,
         player_tx,
         Some(ws_send_tx),
@@ -75,23 +80,31 @@ pub fn run(client: EmbyClient) -> ! {
         None
     };
 
+    let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
+
+    let tx = merged_tx.clone();
+    std::thread::spawn(move || {
+        for ev in player_rx { let _ = tx.send(DaemonEvent::Player(ev)); }
+    });
+    let tx = merged_tx;
+    std::thread::spawn(move || {
+        for ev in ws_rx { let _ = tx.send(DaemonEvent::Ws(ev)); }
+    });
+
     let client = Arc::new(Mutex::new(client));
     let mut items: Vec<MediaItem> = Vec::new();
     let mut cursor: usize = 0;
 
-    loop {
-        while let Ok(ev) = player_rx.try_recv() {
-            if let PlayerEvent::TrackChanged(idx) = ev {
-                cursor = idx;
+    for ev in merged_rx {
+        match ev {
+            DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => { cursor = idx; }
+            DaemonEvent::Player(_) => {}
+            DaemonEvent::Ws(ws_ev) => {
+                handle_ws(ws_ev, &client, &player, &mut items, &mut cursor, &log);
             }
         }
-
-        while let Ok(ev) = ws_rx.try_recv() {
-            handle_ws(ev, &client, &player, &mut items, &mut cursor, &log);
-        }
-
-        std::thread::sleep(Duration::from_millis(200));
     }
+    unreachable!("daemon event channel closed")
 }
 
 fn handle_ws(

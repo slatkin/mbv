@@ -18,16 +18,17 @@ pub struct LogEntry {
 }
 
 #[derive(Clone)]
-pub struct AppLog(Arc<Mutex<VecDeque<LogEntry>>>);
+pub struct AppLog(Arc<Mutex<VecDeque<LogEntry>>>, usize);
 
 impl AppLog {
-    pub fn new() -> Self {
-        AppLog(Arc::new(Mutex::new(VecDeque::new())))
+    pub fn new(capacity: usize) -> Self {
+        AppLog(Arc::new(Mutex::new(VecDeque::new())), capacity)
     }
 
     pub fn push(&self, level: Level, source: &'static str, msg: impl Into<String>) {
+        if self.1 == 0 { return; }
         let mut g = self.0.lock().unwrap();
-        if g.len() >= 5000 { g.drain(..500); }
+        if g.len() >= self.1 { g.drain(..self.1 / 10); }
         g.push_back(LogEntry { level, source, msg: msg.into() });
     }
 

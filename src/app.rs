@@ -155,6 +155,7 @@ pub struct App {
     context_menu: Option<ContextMenu>,
     context_menu_rect: Option<Rect>,
     show_help: bool,
+    show_log_tab: bool,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
 }
@@ -168,10 +169,11 @@ impl App {
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
         let hidden_libraries = client.config.hidden_libraries.clone();
+        let show_log_tab = client.config.show_log_tab;
         let ws_url = client.ws_url();
-        let log = AppLog::new();
+        let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
         let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
-        let player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.always_play_next, player_tx, Some(ws_send_tx));
+        let player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, client.config.always_play_next, player_tx, Some(ws_send_tx));
         let player_status = player.status.clone();
         let player_cmd_tx = player.cmd_tx.clone();
         crate::mpris::start(player_status, move |cmd| {
@@ -234,6 +236,7 @@ impl App {
             card_image_rx,
             image_picker: None,
             show_help: false,
+            show_log_tab,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
@@ -461,7 +464,7 @@ impl App {
             }
             return false;
         }
-        if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::ALT) {
+        if self.show_log_tab && key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::ALT) {
             self.tab_idx = self.log_tab_idx();
             return false;
         }

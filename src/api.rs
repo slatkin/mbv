@@ -14,6 +14,42 @@ pub fn gen_session_id() -> String {
     format!("{:x}{:x}", t.as_secs(), t.subsec_nanos())
 }
 
+fn device_name() -> String {
+    std::fs::read_to_string("/etc/hostname")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .or_else(|| std::env::var("HOSTNAME").ok())
+        .unwrap_or_else(|| "mby".to_string())
+}
+
+fn device_id() -> String {
+    use rand::Rng;
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+    let dir = std::path::PathBuf::from(home).join(".local/share/mby");
+    let path = dir.join("device_id");
+    if let Ok(id) = std::fs::read_to_string(&path) {
+        let id = id.trim().to_string();
+        if !id.is_empty() { return id; }
+    }
+    let mut rng = rand::thread_rng();
+    let bytes: [u8; 16] = rng.gen();
+    let id = format!(
+        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
+        u32::from_be_bytes(bytes[0..4].try_into().unwrap()),
+        u16::from_be_bytes(bytes[4..6].try_into().unwrap()),
+        u16::from_be_bytes(bytes[6..8].try_into().unwrap()) & 0x0fff,
+        (u16::from_be_bytes(bytes[8..10].try_into().unwrap()) & 0x3fff) | 0x8000,
+        {
+            let b = &bytes[10..16];
+            u64::from_be_bytes([0, 0, b[0], b[1], b[2], b[3], b[4], b[5]])
+        },
+    );
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(&path, &id);
+    id
+}
+
 #[derive(Debug, Clone)]
 pub struct MediaItem {
     pub id: String,
@@ -131,6 +167,8 @@ pub struct EmbyClient {
     pub config: Config,
     pub user_id: String,
     pub token: String,
+    pub device_name: String,
+    pub device_id: String,
     agent: ureq::Agent,
 }
 
@@ -143,6 +181,8 @@ impl EmbyClient {
             config,
             user_id: String::new(),
             token: String::new(),
+            device_name: device_name(),
+            device_id: device_id(),
             agent,
         }
     }
@@ -153,8 +193,8 @@ impl EmbyClient {
 
     fn auth_header(&self) -> String {
         format!(
-            "Emby Client=\"mby\", Device=\"mby\", DeviceId=\"mby-001\", Version=\"0.1.0\", Token=\"{}\"",
-            self.token
+            "Emby Client=\"mby\", Device=\"{}\", DeviceId=\"{}\", Version=\"0.1.0\", Token=\"{}\"",
+            self.device_name, self.device_id, self.token
         )
     }
 
@@ -209,7 +249,7 @@ impl EmbyClient {
         if !self.config.password.is_empty() {
             let resp: Value = self.agent
                 .post(&self.url("/Users/AuthenticateByName"))
-                .set("Authorization", "Emby Client=\"mby\", Device=\"mby\", DeviceId=\"mby-001\", Version=\"0.1.0\"")
+                .set("Authorization", &format!("Emby Client=\"mby\", Device=\"{}\", DeviceId=\"{}\", Version=\"0.1.0\"", self.device_name, self.device_id))
                 .send_json(ureq::json!({
                     "Username": self.config.username,
                     "Pw": self.config.password,

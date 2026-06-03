@@ -13,6 +13,8 @@ pub struct Config {
     pub always_play_next: bool,
     pub card_image_protocol: Option<String>, // "halfblocks" | "sixel" | "kitty" | "iterm2"
     pub show_systray_icon: bool,
+    pub show_log_tab: bool,
+    pub no_scripts: bool,
 }
 
 impl Default for Config {
@@ -28,6 +30,8 @@ impl Default for Config {
             always_play_next: false,
             card_image_protocol: None,
             show_systray_icon: true,
+            show_log_tab: false,
+            no_scripts: false,
         }
     }
 }
@@ -122,6 +126,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
 
     let misc = doc.get("mpv");
     let daemon = doc.get("daemon");
+    let mby = doc.get("mby");
 
     let hidden_libraries: Vec<String> = emby
         .get("hidden_libraries")
@@ -154,6 +159,16 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
+    let show_log_tab = mby
+        .and_then(|m| m.get("show_log_tab"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let no_scripts = misc
+        .and_then(|m| m.get("no_scripts"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     Ok(Config {
         server_url: get_str(emby, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -165,6 +180,8 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         always_play_next,
         card_image_protocol,
         show_systray_icon,
+        show_log_tab,
+        no_scripts,
     })
 }
 

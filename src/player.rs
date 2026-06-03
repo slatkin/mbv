@@ -182,6 +182,7 @@ pub struct Player {
     token: String,
     show_audio_window: bool,
     use_mpv_config: bool,
+    no_scripts: bool,
     pub always_play_next: bool,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
@@ -197,6 +198,7 @@ impl Player {
         token: String,
         show_audio_window: bool,
         use_mpv_config: bool,
+        no_scripts: bool,
         always_play_next: bool,
         event_tx: mpsc::Sender<PlayerEvent>,
         ws_tx: Option<mpsc::Sender<String>>,
@@ -206,6 +208,7 @@ impl Player {
             token,
             show_audio_window,
             use_mpv_config,
+            no_scripts,
             always_play_next,
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
@@ -279,6 +282,7 @@ impl Player {
         let title = item.display_name();
         let headless = !self.show_audio_window && (item.media_type == "Audio" || item.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
+        let no_scripts = self.no_scripts;
         let event_tx = self.event_tx.clone();
         let status = self.status.clone();
         let ws_tx = self.ws_tx.clone();
@@ -334,7 +338,11 @@ impl Player {
                 opt!("wayland-app-id", "mby");
                 opt!("demuxer-max-bytes", "50M");
                 opt!("demuxer-max-back-bytes", "10M");
-                if !use_mpv_config {
+                if no_scripts {
+                    opt!("load-scripts", "no");
+                    opt!("osc", "no");
+                    opt!("osd-bar", "no");
+                } else if !use_mpv_config {
                     opt!("load-scripts", "no");
                     opt!("osc", "no");
                     opt!("osd-bar", "no");
@@ -729,6 +737,7 @@ impl Player {
         let headless = !self.show_audio_window
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
+        let no_scripts = self.no_scripts;
 
         {
             let mut st = status.lock().unwrap();
@@ -772,7 +781,11 @@ impl Player {
                 opt!("wayland-app-id", "mby");
                 opt!("demuxer-max-bytes", "50M");
                 opt!("demuxer-max-back-bytes", "10M");
-                if !use_mpv_config {
+                if no_scripts {
+                    opt!("load-scripts", "no");
+                    opt!("osc", "no");
+                    opt!("osd-bar", "no");
+                } else if !use_mpv_config {
                     opt!("load-scripts", "no");
                     opt!("osc", "no");
                     opt!("osd-bar", "no");
