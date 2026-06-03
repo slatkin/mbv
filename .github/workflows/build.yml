@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  makepkg:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm base-devel rust cargo mpv
+
+      - name: Create builder user
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+      - name: Set up build directory
+        run: |
+          PKGVER=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+          mkdir -p /tmp/mby-build
+          # makepkg expects the source tarball to extract to ${pkgname}-${pkgver}/
+          tar czf /tmp/mby-build/mby-${PKGVER}.tar.gz \
+              --transform "s|^\.|mby-${PKGVER}|" \
+              --exclude='.git' \
+              --exclude='target' \
+              -C "$GITHUB_WORKSPACE" .
+          cp PKGBUILD /tmp/mby-build/
+          chown -R builder:builder /tmp/mby-build
+
+      - name: Build package
+        run: |
+          su builder -c "cd /tmp/mby-build && makepkg --nodeps --noconfirm"
+
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mby-pkg
+          path: /tmp/mby-build/mby-*.pkg.tar.zst

@@ -1,0 +1,10 @@
+[emby]
+url = "http://emby.local:8096"
+hidden_libraries = ["live tv", "podcasts"]
+
+[mpv]
+use_mpv_config    = false
+show_audio_window = false
+
+[daemon]
+show_systray_icon = true
