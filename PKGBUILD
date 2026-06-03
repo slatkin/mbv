@@ -7,7 +7,7 @@ arch=('x86_64')
 url="https://github.com/slatkin/mby"
 license=('MIT')
 depends=('mpv')
-makedepends=('rust' 'cargo')
+makedepends=('rust' 'cargo' 'nasm')
 source=("${pkgname}-${pkgver}.tar.gz")
 sha256sums=('SKIP')
 
