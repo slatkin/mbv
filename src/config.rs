@@ -43,7 +43,11 @@ fn config_dir() -> PathBuf {
 }
 
 pub fn osc_script_path() -> PathBuf {
-    config_dir().join("scripts").join("mby.lua")
+    let user = data_dir().join("scripts").join("mby.lua");
+    if user.exists() {
+        return user;
+    }
+    PathBuf::from("/usr/share/mby/scripts/mby.lua")
 }
 
 pub fn prefs_path() -> PathBuf {

@@ -367,8 +367,10 @@ impl Player {
 
             {
                 let mut st = status.lock().unwrap();
-                st.volume_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
-                st.volume     = mpv.get_property::<i64>("volume").unwrap_or(100);
+                let raw_max   = mpv.get_property::<i64>("volume-max").unwrap_or(130);
+                let raw_vol   = mpv.get_property::<i64>("volume").unwrap_or(100);
+                st.volume_max = raw_max * raw_max / 100;
+                st.volume     = raw_vol * raw_vol / 100;
             }
 
             if start_pos > 0.0 {
@@ -384,6 +386,7 @@ impl Player {
 
             let _ = mpv.observe_property("time-pos", Format::Double, 0);
             let _ = mpv.observe_property("pause", Format::Flag, 1);
+            let _ = mpv.observe_property("volume", Format::Double, 2);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -459,9 +462,9 @@ impl Player {
                         PlayerCommand::SetVolume(v) => {
                             let vol_max = status.lock().unwrap().volume_max;
                             let v = v.clamp(0, vol_max);
-                            let current = status.lock().unwrap().volume;
-                            let delta = v - current;
-                            let _ = mpv.command("osd-bar", &["add", "volume", &delta.to_string()]);
+                            // v is perceptual (processed); convert to raw for mpv: raw = 10*sqrt(v)
+                            let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+                            let _ = mpv.set_property("volume", raw as f64);
                             status.lock().unwrap().volume = v;
                         }
                         PlayerCommand::JumpTo(_) => {}
@@ -566,6 +569,9 @@ impl Player {
                 }
 
                 match mpv.wait_event(0.5) {
+                    Some(Ok(Event::PropertyChange { name: "volume", change: PropertyData::Double(vol), .. })) => {
+                        status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
+                    }
                     Some(Ok(Event::PropertyChange { change: PropertyData::Double(pos_secs), .. })) => {
                         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
                         status.lock().unwrap().position_ticks = ticks;
@@ -799,8 +805,10 @@ impl Player {
 
             {
                 let mut st = status.lock().unwrap();
-                st.volume_max = mpv.get_property::<i64>("volume-max").unwrap_or(130);
-                st.volume     = mpv.get_property::<i64>("volume").unwrap_or(100);
+                let raw_max   = mpv.get_property::<i64>("volume-max").unwrap_or(130);
+                let raw_vol   = mpv.get_property::<i64>("volume").unwrap_or(100);
+                st.volume_max = raw_max * raw_max / 100;
+                st.volume     = raw_vol * raw_vol / 100;
             }
 
             // Set resume position before the first loadfile so mpv applies it immediately.
@@ -828,6 +836,7 @@ impl Player {
 
             let _ = mpv.observe_property("time-pos", Format::Double, 0);
             let _ = mpv.observe_property("pause", Format::Flag, 1);
+            let _ = mpv.observe_property("volume", Format::Double, 2);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -960,9 +969,9 @@ impl Player {
                         PlayerCommand::SetVolume(v) => {
                             let vol_max = status.lock().unwrap().volume_max;
                             let v = v.clamp(0, vol_max);
-                            let current = status.lock().unwrap().volume;
-                            let delta = v - current;
-                            let _ = mpv.command("osd-bar", &["add", "volume", &delta.to_string()]);
+                            // v is perceptual (processed); convert to raw for mpv: raw = 10*sqrt(v)
+                            let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+                            let _ = mpv.set_property("volume", raw as f64);
                             status.lock().unwrap().volume = v;
                         }
                         PlayerCommand::Seek(secs) => {
@@ -1048,6 +1057,9 @@ impl Player {
                 }
 
                 match mpv.wait_event(0.5) {
+                    Some(Ok(Event::PropertyChange { name: "volume", change: PropertyData::Double(vol), .. })) => {
+                        status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
+                    }
                     Some(Ok(Event::PropertyChange { change: PropertyData::Double(pos_secs), .. })) => {
                         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
                         status.lock().unwrap().position_ticks = ticks;
