@@ -36,7 +36,7 @@ jobs:
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
 
       - name: Upload release asset
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
