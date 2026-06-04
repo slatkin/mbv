@@ -9,7 +9,7 @@ license=('MIT')
 depends=('mpv' 'openssl')
 makedepends=('rust' 'cargo' 'nasm')
 source=("${pkgname}-${pkgver}.tar.gz::https://github.com/slatkin/${pkgname}/archive/v${pkgver}.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('743a4893cab437a8fb167b3cfbda763c97e72c00bf223b29a5389681ffd1f55d')
 
 prepare() {
     cd "${pkgname}-${pkgver}"
