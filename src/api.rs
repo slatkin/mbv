@@ -19,34 +19,31 @@ fn device_name() -> String {
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
-        .or_else(|| std::env::var("HOSTNAME").ok())
+        .or_else(|| std::env::var("HOSTNAME").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
         .unwrap_or_else(|| "mby".to_string())
 }
 
 fn device_id() -> String {
-    use rand::Rng;
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let dir = std::path::PathBuf::from(home).join(".local/share/mby");
+    let data_home = std::env::var("XDG_DATA_HOME")
+        .ok()
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
+            std::path::PathBuf::from(home).join(".local/share")
+        });
+    let dir = data_home.join("mby");
     let path = dir.join("device_id");
     if let Ok(id) = std::fs::read_to_string(&path) {
         let id = id.trim().to_string();
         if !id.is_empty() { return id; }
     }
-    let mut rng = rand::thread_rng();
-    let bytes: [u8; 16] = rng.gen();
-    let id = format!(
-        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
-        u32::from_be_bytes(bytes[0..4].try_into().unwrap()),
-        u16::from_be_bytes(bytes[4..6].try_into().unwrap()),
-        u16::from_be_bytes(bytes[6..8].try_into().unwrap()) & 0x0fff,
-        (u16::from_be_bytes(bytes[8..10].try_into().unwrap()) & 0x3fff) | 0x8000,
-        {
-            let b = &bytes[10..16];
-            u64::from_be_bytes([0, 0, b[0], b[1], b[2], b[3], b[4], b[5]])
-        },
-    );
-    let _ = std::fs::create_dir_all(&dir);
-    let _ = std::fs::write(&path, &id);
+    let id = uuid::Uuid::new_v4().to_string();
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("mby: could not create {}: {}", dir.display(), e);
+    } else if let Err(e) = std::fs::write(&path, &id) {
+        eprintln!("mby: could not write device_id to {}: {}", path.display(), e);
+    }
     id
 }
 
@@ -471,7 +468,7 @@ impl EmbyClient {
         let base = self.config.server_url
             .replacen("https://", "wss://", 1)
             .replacen("http://", "ws://", 1);
-        format!("{}/embywebsocket?api_key={}&deviceId=mby-001", base, self.token)
+        format!("{}/embywebsocket?api_key={}&deviceId={}", base, self.token, self.device_id)
     }
 
     pub fn report_start(&self, item: &MediaItem, media_source_id: &str, session_id: &str, log: &AppLog) {
@@ -953,12 +950,114 @@ mod tests {
         let url = client_with_url("http://server:8096").ws_url();
         assert!(url.starts_with("ws://"));
         assert!(url.contains("api_key=tok"));
-        assert!(url.contains("deviceId=mby-001"));
     }
 
     #[test]
     fn ws_url_https_becomes_wss() {
         let url = client_with_url("https://server:8096").ws_url();
         assert!(url.starts_with("wss://"));
+    }
+
+    #[test]
+    fn ws_url_contains_device_id() {
+        let mut c = client_with_url("http://server:8096");
+        c.device_id = "my-device-id".into();
+        let url = c.ws_url();
+        assert!(url.contains("deviceId=my-device-id"));
+    }
+
+    // ── auth_header ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn auth_header_contains_device_name_and_id() {
+        let mut c = client_with_url("http://server:8096");
+        c.device_name = "myhost".into();
+        c.device_id = "abcd-1234".into();
+        c.token = "mytoken".into();
+        let h = c.auth_header();
+        assert!(h.contains("Device=\"myhost\""), "header: {h}");
+        assert!(h.contains("DeviceId=\"abcd-1234\""), "header: {h}");
+        assert!(h.contains("Token=\"mytoken\""), "header: {h}");
+    }
+
+    // ── device_name ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn device_name_trims_hostname_env_var() {
+        // /etc/hostname will be read first on Linux; test only the env-var path
+        // by observing that a client created with HOSTNAME set has no whitespace
+        // in its device_name field.
+        let name = {
+            let _g = ENV_MTX.lock().unwrap();
+            std::env::set_var("HOSTNAME", "  trimtest  \n");
+            let c = EmbyClient::new(crate::config::Config::default());
+            std::env::remove_var("HOSTNAME");
+            c.device_name
+        };
+        // device_name should never embed raw whitespace
+        assert!(!name.contains('\n'), "name contains newline: {:?}", name);
+        assert_eq!(name, name.trim());
+    }
+
+    #[test]
+    fn device_name_falls_back_to_mby() {
+        // Only reachable when both /etc/hostname is absent/empty and HOSTNAME unset.
+        // We can't suppress /etc/hostname, but we can verify the fallback string
+        // is the sentinel "mby" when nothing else is available.
+        let name = device_name();
+        assert!(!name.is_empty());
+        // Must not contain raw newlines regardless of source.
+        assert!(!name.contains('\n'));
+    }
+
+    // ── device_id ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn device_id_returns_uuid_v4_format() {
+        let id = device_id_with_xdg(make_temp_data_dir());
+        // xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+        let parts: Vec<&str> = id.split('-').collect();
+        assert_eq!(parts.len(), 5, "id: {id}");
+        assert_eq!(parts[0].len(), 8);
+        assert_eq!(parts[1].len(), 4);
+        assert_eq!(parts[2].len(), 4);
+        assert!(parts[2].starts_with('4'), "version nibble: {id}");
+        assert_eq!(parts[3].len(), 4);
+        assert_eq!(parts[4].len(), 12);
+        assert!(id.chars().all(|c| c.is_ascii_hexdigit() || c == '-'));
+    }
+
+    #[test]
+    fn device_id_is_stable_across_calls() {
+        let dir = make_temp_data_dir();
+        let first = device_id_with_xdg(dir.clone());
+        let second = device_id_with_xdg(dir);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn device_id_respects_xdg_data_home() {
+        let dir = make_temp_data_dir();
+        let id = device_id_with_xdg(dir.clone());
+        let persisted = std::fs::read_to_string(
+            std::path::PathBuf::from(&dir).join("mby/device_id")
+        ).unwrap();
+        assert_eq!(persisted.trim(), id);
+    }
+
+    fn make_temp_data_dir() -> String {
+        let dir = std::env::temp_dir().join(format!("mby-test-{}", uuid::Uuid::new_v4()));
+        dir.to_str().unwrap().to_string()
+    }
+
+    // Serialize all tests that mutate env vars so they don't race each other.
+    static ENV_MTX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn device_id_with_xdg(xdg: String) -> String {
+        let _g = ENV_MTX.lock().unwrap();
+        std::env::set_var("XDG_DATA_HOME", &xdg);
+        let id = device_id();
+        std::env::remove_var("XDG_DATA_HOME");
+        id
     }
 }

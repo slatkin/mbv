@@ -269,4 +269,28 @@ hidden_libraries = ["Live TV", "MOVIES"]
         std::env::remove_var("XDG_CONFIG_HOME");
         assert_eq!(path.to_str().unwrap(), "/tmp/xdg-test/mby/token.json");
     }
+
+    #[test]
+    fn parse_show_log_tab_true() {
+        let toml = "[emby]\nurl = \"http://host\"\n[mby]\nshow_log_tab = true";
+        assert!(parse_config(toml).unwrap().show_log_tab);
+    }
+
+    #[test]
+    fn parse_show_log_tab_defaults_false() {
+        let toml = "[emby]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().show_log_tab);
+    }
+
+    #[test]
+    fn parse_no_scripts_true() {
+        let toml = "[emby]\nurl = \"http://host\"\n[mpv]\nno_scripts = true";
+        assert!(parse_config(toml).unwrap().no_scripts);
+    }
+
+    #[test]
+    fn parse_no_scripts_defaults_false() {
+        let toml = "[emby]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().no_scripts);
+    }
 }

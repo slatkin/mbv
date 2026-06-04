@@ -338,14 +338,12 @@ impl Player {
                 opt!("wayland-app-id", "mby");
                 opt!("demuxer-max-bytes", "50M");
                 opt!("demuxer-max-back-bytes", "10M");
-                if no_scripts {
+                if no_scripts || !use_mpv_config {
                     opt!("load-scripts", "no");
                     opt!("osc", "no");
                     opt!("osd-bar", "no");
-                } else if !use_mpv_config {
-                    opt!("load-scripts", "no");
-                    opt!("osc", "no");
-                    opt!("osd-bar", "no");
+                }
+                if !no_scripts && !use_mpv_config {
                     let script = crate::config::osc_script_path();
                     if script.exists() {
                         opt!("scripts", script.to_str().unwrap_or(""));
@@ -781,14 +779,12 @@ impl Player {
                 opt!("wayland-app-id", "mby");
                 opt!("demuxer-max-bytes", "50M");
                 opt!("demuxer-max-back-bytes", "10M");
-                if no_scripts {
+                if no_scripts || !use_mpv_config {
                     opt!("load-scripts", "no");
                     opt!("osc", "no");
                     opt!("osd-bar", "no");
-                } else if !use_mpv_config {
-                    opt!("load-scripts", "no");
-                    opt!("osc", "no");
-                    opt!("osd-bar", "no");
+                }
+                if !no_scripts && !use_mpv_config {
                     let script = crate::config::osc_script_path();
                     if script.exists() {
                         opt!("scripts", script.to_str().unwrap_or(""));
