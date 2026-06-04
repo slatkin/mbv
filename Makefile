@@ -3,7 +3,7 @@ INSTALL_DIR := $(HOME)/.local/bin
 DATA_DIR    := $(HOME)/.local/share/mby
 CONFIG_DIR  := $(HOME)/.config/mby
 
-.PHONY: all build install clean
+.PHONY: all build install uninstall clean
 
 all: build
 
@@ -20,6 +20,10 @@ install: build
 	else \
 		echo "Config already exists at $(CONFIG_DIR)/config.toml — skipping"; \
 	fi
+
+uninstall:
+	rm -f $(INSTALL_DIR)/$(BINARY)
+	rm -rf $(DATA_DIR)
 
 clean:
 	cargo clean

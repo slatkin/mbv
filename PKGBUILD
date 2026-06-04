@@ -8,7 +8,7 @@ url="https://github.com/slatkin/mby"
 license=('MIT')
 depends=('mpv' 'openssl')
 makedepends=('rust' 'cargo' 'nasm')
-source=("${pkgname}-${pkgver}.tar.gz")
+source=("${pkgname}-${pkgver}.tar.gz::https://github.com/slatkin/${pkgname}/archive/v${pkgver}.tar.gz")
 sha256sums=('SKIP')
 
 prepare() {
