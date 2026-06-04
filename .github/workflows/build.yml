@@ -10,6 +10,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container: archlinux/archlinux:base-devel
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
