@@ -21,6 +21,9 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --noconfirm --needed rust cargo nasm mpv openssl github-cli git openssh
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
       - name: Build binary
         run: cargo build --release
 
