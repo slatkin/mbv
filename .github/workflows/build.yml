@@ -45,6 +45,44 @@ jobs:
         run: |
           gh release upload "v${PKGVER}" "${TARBALL}" --clobber
 
+      - name: Update PKGBUILD sha256 on main
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA256=$(sha256sum "${TARBALL}" | cut -d' ' -f1)
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}" /tmp/repo
+          cd /tmp/repo
+          sed -i "s/^pkgver=.*/pkgver=${PKGVER}/" PKGBUILD
+          sed -i "s/^sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
+          git add PKGBUILD
+          git diff --staged --quiet || git commit -m "Release v${PKGVER}: update PKGBUILD sha256"
+          git push origin main
+
+      - name: Push to AUR
+        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+        env:
+          AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
+        run: |
+          mkdir -p /root/.ssh
+          echo "$AUR_SSH_KEY" > /root/.ssh/aur
+          chmod 600 /root/.ssh/aur
+          export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur -o StrictHostKeyChecking=accept-new"
+          git config --global --add safe.directory '*'
+          git clone ssh://aur@aur.archlinux.org/mby.git /tmp/aur-mby
+          cp /tmp/repo/PKGBUILD /tmp/aur-mby/PKGBUILD
+          useradd -m aurbuild
+          chown -R aurbuild /tmp/aur-mby
+          su -c 'cd /tmp/aur-mby && makepkg --printsrcinfo' aurbuild > /tmp/aur-mby/.SRCINFO
+          cd /tmp/aur-mby
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add PKGBUILD .SRCINFO
+          git diff --staged --quiet || git commit -m "Release v${PKGVER}"
+          git push
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
