@@ -32,6 +32,10 @@ fn device_id() -> String {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
             std::path::PathBuf::from(home).join(".local/share")
         });
+    device_id_in(data_home)
+}
+
+fn device_id_in(data_home: std::path::PathBuf) -> String {
     let dir = data_home.join("mby");
     let path = dir.join("device_id");
     if let Ok(id) = std::fs::read_to_string(&path) {
@@ -1017,7 +1021,7 @@ mod tests {
 
     #[test]
     fn device_id_returns_uuid_v4_format() {
-        let id = device_id_with_xdg(make_temp_data_dir());
+        let id = device_id_in(make_temp_data_dir());
         // xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
         let parts: Vec<&str> = id.split('-').collect();
         assert_eq!(parts.len(), 5, "id: {id}");
@@ -1033,34 +1037,22 @@ mod tests {
     #[test]
     fn device_id_is_stable_across_calls() {
         let dir = make_temp_data_dir();
-        let first = device_id_with_xdg(dir.clone());
-        let second = device_id_with_xdg(dir);
+        let first = device_id_in(dir.clone());
+        let second = device_id_in(dir);
         assert_eq!(first, second);
     }
 
     #[test]
     fn device_id_respects_xdg_data_home() {
         let dir = make_temp_data_dir();
-        let id = device_id_with_xdg(dir.clone());
-        let persisted = std::fs::read_to_string(
-            std::path::PathBuf::from(&dir).join("mby/device_id")
-        ).unwrap();
+        let id = device_id_in(dir.clone());
+        let persisted = std::fs::read_to_string(dir.join("mby/device_id")).unwrap();
         assert_eq!(persisted.trim(), id);
     }
 
-    fn make_temp_data_dir() -> String {
-        let dir = std::env::temp_dir().join(format!("mby-test-{}", uuid::Uuid::new_v4()));
-        dir.to_str().unwrap().to_string()
+    fn make_temp_data_dir() -> std::path::PathBuf {
+        std::env::temp_dir().join(format!("mby-test-{}", uuid::Uuid::new_v4()))
     }
 
-    // Serialize all tests that mutate env vars so they don't race each other.
     static ENV_MTX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    fn device_id_with_xdg(xdg: String) -> String {
-        let _g = ENV_MTX.lock().unwrap();
-        std::env::set_var("XDG_DATA_HOME", &xdg);
-        let id = device_id();
-        std::env::remove_var("XDG_DATA_HOME");
-        id
-    }
 }
