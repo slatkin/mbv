@@ -3410,7 +3410,6 @@ fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
     }
     let text = format!("{}{}", item.display_name(), suffix);
     let style = if selected { Style::default() }
-        else if item.played { Style::default().fg(palette::SUBTLE) }
         else if item.playback_position_ticks > 0 { Style::default().fg(palette::YELLOW) }
         else { Style::default().fg(palette::TEXT) };
     (text, style)
@@ -3428,7 +3427,6 @@ fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'sta
 
 fn highlight_style(item: &MediaItem) -> Style {
     if item.is_folder && item.item_type != "Series" { Style::default().fg(palette::BASE).bg(palette::PINE) }
-    else if item.played && item.item_type != "Series" { Style::default().fg(palette::BASE).bg(palette::SUBTLE) }
     else if item.playback_position_ticks > 0 { Style::default().fg(palette::BASE).bg(palette::YELLOW) }
     else                    { Style::default().fg(palette::TEXT).bg(palette::HIGHLIGHT_MED) }
 }
@@ -3512,11 +3510,11 @@ mod tests {
     }
 
     #[test]
-    fn item_text_played_movie_uses_muted_color() {
+    fn item_text_played_movie_uses_default_color() {
         let mut item = make_item("Inception", "Movie");
         item.played = true;
         let (_, style) = item_text_and_style(&item, false);
-        assert_eq!(style.fg, Some(palette::SUBTLE));
+        assert_eq!(style.fg, Some(palette::TEXT));
     }
 
     #[test]
