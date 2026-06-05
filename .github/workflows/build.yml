@@ -29,7 +29,10 @@ jobs:
 
       - name: Bundle release tarball
         run: |
-          PKGVER=$(grep '^pkgver=' PKGBUILD | cut -d= -f2)
+          PKGVER=${GITHUB_REF_NAME#v}
+          if [[ "$PKGVER" == "main" || "$PKGVER" == "$GITHUB_REF_NAME" ]]; then
+            PKGVER=$(grep '^pkgver=' PKGBUILD | cut -d= -f2)
+          fi
           DIST="mby-${PKGVER}"
           mkdir -p "${DIST}"
           cp target/release/mby "${DIST}/"
