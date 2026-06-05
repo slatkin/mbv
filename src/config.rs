@@ -69,7 +69,11 @@ fn data_dir() -> PathBuf {
 }
 
 pub fn osc_fonts_dir() -> PathBuf {
-    data_dir().join("fonts")
+    let user = data_dir().join("fonts");
+    if user.exists() {
+        return user;
+    }
+    PathBuf::from("/usr/share/mby/fonts")
 }
 
 pub fn mpv_ipc_path() -> String {
