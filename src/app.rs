@@ -497,7 +497,7 @@ impl App {
             && self.libs.get(self.tab_idx - 2).is_some_and(|l| l.search.is_some());
         if self.confirm_clear_playlist {
             self.confirm_clear_playlist = false;
-            if matches!(key.code, KeyCode::Char('y') | KeyCode::Enter) {
+            if matches!(key.code, KeyCode::Char('y')) {
                 self.player.stop();
                 self.player_tab.items.clear();
                 self.player_tab.playlist_cursor = 0;
@@ -743,6 +743,13 @@ impl App {
                 let n = self.player_tab.items.len();
                 self.player_tab.playlist_cursor = (self.player_tab.playlist_cursor + p).min(n.saturating_sub(1));
             }
+            KeyCode::Home => {
+                self.player_tab.playlist_cursor = 0;
+            }
+            KeyCode::End => {
+                let n = self.player_tab.items.len();
+                if n > 0 { self.player_tab.playlist_cursor = n - 1; }
+            }
             KeyCode::Enter => {
                 let t = self.player_tab.playlist_cursor;
                 let n = self.player_tab.items.len();
@@ -872,7 +879,7 @@ impl App {
     fn tab_title_widths(&self) -> Vec<u16> {
         let mut w = vec![
             "Home".chars().count() as u16,
-            "List".chars().count() as u16,
+            "Queue".chars().count() as u16,
         ];
         for l in &self.libs {
             w.push(l.library.name.chars().count() as u16);
@@ -1778,7 +1785,7 @@ impl App {
                 self.player_tab.playlist_cursor = 0;
                 self.player.play_playlist(items, 0, c, self.log.clone());
                 self.tab_idx = 1;
-                self.status = format!("Shuffling {count} items");
+                self.flash_status(format!("Shuffling {count} items"));
             }
             Err(e) => self.status = format!("Error: {e}"),
         }
@@ -1818,7 +1825,7 @@ impl App {
                 self.player_tab.playlist_cursor = 0;
                 self.player.play_playlist(items, 0, c, self.log.clone());
                 self.tab_idx = 1;
-                self.status = format!("Shuffling {count} items");
+                self.flash_status(format!("Shuffling {count} items"));
             }
             Err(e) => { drop(client); self.status = format!("Error: {e}"); }
         }
@@ -2135,7 +2142,7 @@ impl App {
 
         // Tab bar
         let tab_titles: Vec<Span> = std::iter::once(Span::raw("Home"))
-            .chain(std::iter::once(Span::raw("List")))
+            .chain(std::iter::once(Span::raw("Queue")))
             .chain(self.libs.iter().map(|l| Span::raw(l.library.name.clone())))
             .collect();
         let tab_select = if self.tab_idx == self.log_tab_idx() { usize::MAX } else { self.tab_idx };
@@ -2162,10 +2169,10 @@ impl App {
         }
         // Any explicit status (flash or persistent prompt) beats now_playing
         let (status_text, status_color) = if !self.status.is_empty() {
-            let color = if self.status_expires.is_some() { palette::FOAM } else { palette::GOLD };
+            let color = if self.status_expires.is_some() { palette::GOLD } else { palette::GOLD };
             (Some(self.status.as_str()), color)
         } else {
-            (now_playing.as_deref(), palette::GOLD)
+            (now_playing.as_deref(), palette::FOAM)
         };
         if let Some(text) = status_text {
             f.render_widget(
@@ -2518,7 +2525,7 @@ impl App {
         let block = Block::default()
             .borders(Borders::ALL).border_type(BorderType::Rounded)
             .border_style(Style::default().fg(palette::IRIS))
-            .title(Span::styled("Playlist",
+            .title(Span::styled("Queue",
                 Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)))
             .title_alignment(Alignment::Center);
         let inner = block.inner(area);
