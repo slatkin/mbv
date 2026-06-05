@@ -292,6 +292,14 @@ impl App {
                         }
                         if let Some(item) = self.next_up_item.take() {
                             if self.player.always_play_next {
+                                if self.player.status.lock().unwrap().active {
+                                    // EndFile fired but Shutdown hasn't yet; active is still true.
+                                    // LoadNew sent now would race with Shutdown and be dropped.
+                                    // Restore the item and wait for the Shutdown-triggered Stopped
+                                    // where active will be false and play() starts a clean thread.
+                                    self.next_up_item = Some(item);
+                                    continue;
+                                }
                                 self.log.push(Level::Warn, "app", format!("next-up: auto-playing '{}'", item.display_name()));
                                 let c = Arc::new(self.client.lock().unwrap().clone());
                                 self.player_tab.items = vec![item.clone()];
