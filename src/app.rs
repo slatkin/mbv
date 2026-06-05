@@ -2596,9 +2596,10 @@ impl App {
                 let filled = (((pos_ticks as f64 / rt_ticks as f64) * BAR_W as f64)
                     .round() as usize)
                     .min(BAR_W);
+                let bar_color = if i == current_idx && active { palette::FOAM } else { palette::GOLD };
                 Cell::from(Line::from(vec![
                     Span::raw("  "),
-                    Span::styled("━".repeat(filled),         Style::default().fg(palette::IRIS)),
+                    Span::styled("━".repeat(filled),         Style::default().fg(bar_color)),
                     Span::styled("─".repeat(BAR_W - filled), Style::default().fg(palette::WHITE)),
                 ])).style(Style::default())
             } else {
