@@ -15,6 +15,11 @@ use config::load_config;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    if args.contains(&"--version".to_string()) || args.contains(&"-V".to_string()) {
+        println!("mby {}", env!("CARGO_PKG_VERSION"));
+        return;
+    }
+
     // Kill running daemon
     if args.contains(&"-q".to_string()) {
         let path = daemon::pid_file();
