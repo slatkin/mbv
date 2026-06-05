@@ -183,6 +183,26 @@ pub fn run(client: EmbyClient) -> ! {
                 *shared_cursor.lock().unwrap() = idx;
                 broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::TrackChanged(idx)));
             }
+            DaemonEvent::Player(PlayerEvent::NextUpThreshold { series_id, season, episode }) => {
+                if let Some(item) = items.get(cursor + 1) {
+                    player.send_command(PlayerCommand::NextUpShow {
+                        item_id: item.id.clone(),
+                        title: item.display_name(),
+                    });
+                }
+                broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::NextUpThreshold {
+                    series_id, season, episode,
+                }));
+            }
+            DaemonEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }) => {
+                if let Some(item) = items.get(next_idx) {
+                    player.send_command(PlayerCommand::NextUpShow {
+                        item_id: item.id.clone(),
+                        title: item.display_name(),
+                    });
+                }
+                broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }));
+            }
             DaemonEvent::Player(pe) => {
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
@@ -196,7 +216,7 @@ pub fn run(client: EmbyClient) -> ! {
             }
             DaemonEvent::Ctrl(cmd) => {
                 handle_ctrl(cmd, &client, &player, &mut items, &mut cursor,
-                            &shared_items, &shared_cursor, &log);
+                            &shared_items, &shared_cursor, &ctrl_clients, &log);
             }
         }
     }
@@ -211,6 +231,7 @@ fn handle_ctrl(
     cursor: &mut usize,
     shared_items: &Arc<Mutex<Vec<MediaItem>>>,
     shared_cursor: &Arc<Mutex<usize>>,
+    ctrl_clients: &ClientList,
     log: &AppLog,
 ) {
     match cmd {
@@ -229,18 +250,51 @@ fn handle_ctrl(
                 }
             };
             if fetched.is_empty() { return; }
-            *items = fetched.clone();
-            *cursor = 0;
-            *shared_items.lock().unwrap() = fetched.clone();
-            *shared_cursor.lock().unwrap() = 0;
-            let c = Arc::new(client.lock().unwrap().clone());
             if fetched.len() == 1 {
-                let mut item = fetched[0].clone();
-                if start_ticks > 0 {
-                    item.playback_position_ticks = start_ticks;
+                let item = fetched[0].clone();
+                if !item.series_id.is_empty() && player.always_play_next {
+                    let queue = client.lock().unwrap().get_episodes_from(&item.series_id, &item.id, log);
+                    if queue.len() > 1 {
+                        *items = queue.clone();
+                        *cursor = 0;
+                        *shared_items.lock().unwrap() = queue.clone();
+                        *shared_cursor.lock().unwrap() = 0;
+                        broadcast(ctrl_clients, &CtrlEvent::State(CtrlState {
+                            status: player.status.lock().unwrap().clone(),
+                            items: queue.clone(),
+                            cursor: 0,
+                        }));
+                        let c = Arc::new(client.lock().unwrap().clone());
+                        player.play_playlist(queue, 0, c, log.clone());
+                        return;
+                    }
                 }
-                player.play(&item, c, log.clone());
+                *items = vec![item.clone()];
+                *cursor = 0;
+                *shared_items.lock().unwrap() = items.clone();
+                *shared_cursor.lock().unwrap() = 0;
+                broadcast(ctrl_clients, &CtrlEvent::State(CtrlState {
+                    status: player.status.lock().unwrap().clone(),
+                    items: items.clone(),
+                    cursor: 0,
+                }));
+                let mut play_item = item;
+                if start_ticks > 0 {
+                    play_item.playback_position_ticks = start_ticks;
+                }
+                let c = Arc::new(client.lock().unwrap().clone());
+                player.play(&play_item, c, log.clone());
             } else {
+                *items = fetched.clone();
+                *cursor = 0;
+                *shared_items.lock().unwrap() = fetched.clone();
+                *shared_cursor.lock().unwrap() = 0;
+                broadcast(ctrl_clients, &CtrlEvent::State(CtrlState {
+                    status: player.status.lock().unwrap().clone(),
+                    items: fetched.clone(),
+                    cursor: 0,
+                }));
+                let c = Arc::new(client.lock().unwrap().clone());
                 let active = player.status.lock().unwrap().active;
                 if active {
                     player.play(&fetched[0], c, log.clone());
@@ -267,7 +321,7 @@ fn handle_ws(
     log: &AppLog,
 ) {
     match ev {
-        WsEvent::Play { item_ids, play_now, start_position_ticks } => {
+        WsEvent::Play { item_ids, play_now, start_position_ticks, start_index } => {
             if !play_now { return; }
             let fetched = {
                 let c = client.lock().unwrap();
@@ -277,32 +331,37 @@ fn handle_ws(
                 }
             };
             if fetched.is_empty() { return; }
+            // Clamp start_index in case the server sends an out-of-range value
+            let start_idx = start_index.min(fetched.len().saturating_sub(1));
             *items  = fetched.clone();
-            *cursor = 0;
+            *cursor = start_idx;
             *shared_items.lock().unwrap() = fetched.clone();
-            *shared_cursor.lock().unwrap() = 0;
+            *shared_cursor.lock().unwrap() = start_idx;
             // Broadcast updated playlist to connected TUIs
             if let Ok(json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
                 status: player.status.lock().unwrap().clone(),
                 items: fetched.clone(),
-                cursor: 0,
+                cursor: start_idx,
             })) {
                 ctrl_clients.lock().unwrap().retain(|tx| tx.send(json.clone()).is_ok());
             }
-            let c = Arc::new(client.lock().unwrap().clone());
             if fetched.len() == 1 {
-                let mut item = fetched[0].clone();
+                let mut play_item = fetched[0].clone();
                 if start_position_ticks > 0 {
-                    item.playback_position_ticks = start_position_ticks;
+                    play_item.playback_position_ticks = start_position_ticks;
                 }
-                player.play(&item, c, log.clone());
+                let c = Arc::new(client.lock().unwrap().clone());
+                player.play(&play_item, c, log.clone());
             } else {
-                let active = player.status.lock().unwrap().active;
-                if active {
-                    player.play(&fetched[0], c, log.clone());
-                } else {
-                    player.play_playlist(fetched, 0, c, log.clone());
+                // Apply StartPositionTicks to the starting item
+                let mut start_item = fetched[start_idx].clone();
+                if start_position_ticks > 0 {
+                    start_item.playback_position_ticks = start_position_ticks;
                 }
+                let mut items_with_pos = fetched.clone();
+                items_with_pos[start_idx] = start_item;
+                let c = Arc::new(client.lock().unwrap().clone());
+                player.play_playlist(items_with_pos, start_idx, c, log.clone());
             }
         }
         WsEvent::Stop   => { player.stop(); }
@@ -355,3 +414,4 @@ fn handle_ws(
         WsEvent::UserDataChanged => {}
     }
 }
+

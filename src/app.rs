@@ -139,6 +139,8 @@ pub struct App {
     layout_button_area: Rect,
     layout_tracks_area: Rect,
     layout_vol_area: Rect,
+    layout_sub_area: Rect,
+    layout_audio_area: Rect,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     confirm_clear_playlist: bool,
     next_up_item: Option<MediaItem>,
@@ -224,6 +226,8 @@ impl App {
             layout_button_area: Rect::default(),
             layout_tracks_area: Rect::default(),
             layout_vol_area: Rect::default(),
+            layout_sub_area: Rect::default(),
+            layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
             next_up_item: None,
@@ -305,6 +309,8 @@ impl App {
             layout_button_area: Rect::default(),
             layout_tracks_area: Rect::default(),
             layout_vol_area: Rect::default(),
+            layout_sub_area: Rect::default(),
+            layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
             next_up_item: None,
@@ -379,31 +385,14 @@ impl App {
                             }
                             self.last_played_item_id = Some(item.id.clone());
                         }
-                        if let Some(item) = take_auto_play(&mut self.next_up_item, self.player.always_play_next) {
-                            self.log.push(Level::Warn, "app", format!("next-up: auto-playing '{}'", item.display_name()));
-                            let c = Arc::new(self.client.lock().unwrap().clone());
-                            self.player_tab.items = vec![item.clone()];
-                            self.player_tab.playlist_cursor = 0;
-                            self.flash_status(item.playback_label());
-                            self.player.play(&item, c, self.log.clone());
-                            continue;
-                        }
                         self.next_up_item = None;
                         self.status.clear();
                         self.refresh_after_stop();
                     }
                     PlayerEvent::TrackChanged(idx) => {
-                        if let Some(item) = self.next_up_item.take() {
-                            // AppendNext seamless transition: the queued episode is now playing.
-                            self.player_tab.items = vec![item.clone()];
-                            self.player_tab.playlist_cursor = 0;
-                            self.flash_status(item.playback_label());
+                        self.player_tab.playlist_cursor = idx;
+                        if let Some(item) = self.player_tab.items.get(idx) {
                             self.last_played_item_id = Some(item.id.clone());
-                        } else {
-                            self.player_tab.playlist_cursor = idx;
-                            if let Some(item) = self.player_tab.items.get(idx) {
-                                self.last_played_item_id = Some(item.id.clone());
-                            }
                         }
                     }
                     PlayerEvent::PlaylistNextUp { next_idx } => {
@@ -411,41 +400,15 @@ impl App {
                             let item_id = item.id.clone();
                             let title   = item.display_name();
                             self.next_up_item = Some(item.clone());
-                            self.player.send_command(PlayerCommand::NextUpShow { item_id, title });
-                        }
-                    }
-                    PlayerEvent::NextUpThreshold { series_id, season, episode } => {
-                        self.log.push(Level::Warn, "app", format!("next-up: threshold S{season:02}E{episode:02} series={series_id}"));
-                        let client = self.client.lock().unwrap();
-                        match client.get_next_episode(&series_id, season, episode, &self.log) {
-                            Some(next_item) => {
-                                let item_id = next_item.id.clone();
-                                let title = next_item.display_name();
-                                self.log.push(Level::Warn, "app", format!("next-up: found '{}' id={item_id}", title));
-                                self.next_up_item = Some(next_item.clone());
-                                // If always_play_next, pre-queue the next episode in mpv's playlist
-                                // for a seamless same-window transition when the current one ends.
-                                if self.player.always_play_next {
-                                    let url = format!(
-                                        "{}/Videos/{}/stream?static=true&api_key={}",
-                                        client.config.server_url, next_item.id, client.token
-                                    );
-                                    let start_pos = next_item.resume_seconds();
-                                    drop(client);
-                                    self.player.send_command(PlayerCommand::AppendNext {
-                                        url,
-                                        start_pos,
-                                        item: Box::new(next_item),
-                                    });
-                                } else {
-                                    drop(client);
-                                }
+                            // Daemon sends NextUpShow to mpv directly; only send from local player.
+                            if !self.player.is_remote() {
                                 self.player.send_command(PlayerCommand::NextUpShow { item_id, title });
                             }
-                            None => {
-                                self.log.push(Level::Warn, "app", "next-up: no next episode found (end of series)");
-                            }
                         }
+                    }
+                    PlayerEvent::NextUpThreshold { .. } => {
+                        // Series episodes now use play_playlist; this only fires for movies
+                        // (always_play_next=false or non-series content). No action needed.
                     }
                     PlayerEvent::NextUpPlay => {
                         self.log.push(Level::Warn, "app", "next-up: play triggered");
@@ -456,15 +419,15 @@ impl App {
                                 self.player_tab.playlist_cursor = idx;
                                 self.flash_status(label);
                             } else {
-                                let c = Arc::new(self.client.lock().unwrap().clone());
-                                self.player_tab.items = vec![item.clone()];
-                                self.player_tab.playlist_cursor = 0;
-                                self.flash_status(label);
-                                self.player.play(&item, c, self.log.clone());
+                                self.log.push(Level::Warn, "app", "next-up: item not in queue, cannot jump");
                             }
                         } else {
                             self.log.push(Level::Warn, "app", "next-up: NextUpPlay fired but next_up_item is None");
                         }
+                    }
+                    PlayerEvent::QueueUpdated { items, cursor } => {
+                        self.player_tab.items = items;
+                        self.player_tab.playlist_cursor = cursor;
                     }
                 }
             }
@@ -503,7 +466,11 @@ impl App {
             terminal.draw(|f| self.render(f))?;
         }
 
-        self.player.stop();
+        // Leave the daemon's player running when the TUI disconnects; only
+        // stop the player when we own it locally.
+        if !self.player.is_remote() {
+            self.player.stop();
+        }
         self.player.join();
         self.save_playlist();
         restore_terminal(terminal)?;
@@ -614,7 +581,7 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Char('q') => { self.player.stop(); return true; }
+            KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Esc | KeyCode::Backspace => self.go_back(),
@@ -674,7 +641,7 @@ impl App {
 
     fn handle_combined_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
-            KeyCode::Char('q') => { self.player.stop(); return true; }
+            KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
             KeyCode::Tab => {
                 let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); return false;
             }
@@ -755,13 +722,16 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Char('q') => { self.player.stop(); return true; }
+            KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Up | KeyCode::Left
-                if self.player_tab.playlist_cursor > 0 => { self.player_tab.playlist_cursor -= 1; }
+                if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_card_view) => {
+                    self.player_tab.playlist_cursor -= 1;
+                }
             KeyCode::Down | KeyCode::Right
-                if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len() => {
+                if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len()
+                && (key.code == KeyCode::Down || self.playlist_card_view) => {
                     self.player_tab.playlist_cursor += 1;
                 }
             KeyCode::PageUp => {
@@ -822,7 +792,7 @@ impl App {
 
     fn handle_log_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
-            KeyCode::Char('q') => { self.player.stop(); return true; }
+            KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
             KeyCode::Tab | KeyCode::BackTab => { self.set_tab(0); }
             KeyCode::Left  => { self.log_pane = LogPane::Sources; }
             KeyCode::Right => { self.log_pane = LogPane::Log; }
@@ -1359,15 +1329,18 @@ impl App {
                     return;
                 }
 
-                // Click on info row: vol area → vol down; left half → audio; right half → sub
-                if self.layout_tracks_area.contains((col, row).into()) {
-                    if self.layout_vol_area.contains((col, row).into()) {
-                        let v = self.player.status.lock().unwrap().volume.saturating_sub(5);
-                        self.player.send_command(PlayerCommand::SetVolume(v));
-                    } else {
-                        let mid = self.layout_tracks_area.x + self.layout_tracks_area.width / 2;
-                        if col < mid { self.cycle_audio(); } else { self.cycle_sub(); }
-                    }
+                // Click on info row: exact chip rects
+                if self.layout_sub_area.contains((col, row).into()) {
+                    self.cycle_sub();
+                    return;
+                }
+                if self.layout_audio_area.contains((col, row).into()) {
+                    self.cycle_audio();
+                    return;
+                }
+                if self.layout_vol_area.contains((col, row).into()) {
+                    let v = self.player.status.lock().unwrap().volume.saturating_sub(5);
+                    self.player.send_command(PlayerCommand::SetVolume(v));
                     return;
                 }
 
@@ -1561,6 +1534,30 @@ impl App {
         self.status_expires = Some(Instant::now() + Duration::from_secs(3));
     }
 
+    /// Play a single item. For series episodes with always_play_next, expands
+    /// to the full series queue starting from this episode — matching Emby Web's model.
+    fn play_item(&mut self, item: MediaItem) {
+        let label = item.playback_label();
+        if !item.series_id.is_empty() && self.player.always_play_next {
+            let c = self.client.lock().unwrap();
+            let episodes = c.get_episodes_from(&item.series_id, &item.id, &self.log);
+            drop(c);
+            if episodes.len() > 1 {
+                let c = Arc::new(self.client.lock().unwrap().clone());
+                self.player_tab.items = episodes.clone();
+                self.player_tab.playlist_cursor = 0;
+                self.flash_status(label);
+                self.player.play_playlist(episodes, 0, c, self.log.clone());
+                return;
+            }
+        }
+        let c = Arc::new(self.client.lock().unwrap().clone());
+        self.player_tab.items = vec![item.clone()];
+        self.player_tab.playlist_cursor = 0;
+        self.flash_status(label);
+        self.player.play(&item, c, self.log.clone());
+    }
+
     fn add_to_playlist_home(&mut self) {
         let Some(item) = self.current_home_item() else { return };
         if item.is_folder || !is_playable(&item) { return; }
@@ -1637,11 +1634,7 @@ impl App {
                     .and_then(|mut v| if v.is_empty() { None } else { Some(v.remove(0)) })
                     .unwrap_or(item)
             };
-            self.player_tab.items = vec![fresh.clone()];
-            self.player_tab.playlist_cursor = 0;
-            self.flash_status(fresh.playback_label());
-            let c = Arc::new(self.client.lock().unwrap().clone());
-            self.player.play(&fresh, c, self.log.clone());
+            self.play_item(fresh);
         }
     }
 
@@ -1666,11 +1659,7 @@ impl App {
                     .and_then(|mut v| if v.is_empty() { None } else { Some(v.remove(0)) })
                     .unwrap_or(item)
             };
-            self.player_tab.items = vec![fresh.clone()];
-            self.player_tab.playlist_cursor = 0;
-            self.flash_status(fresh.playback_label());
-            let c = Arc::new(self.client.lock().unwrap().clone());
-            self.player.play(&fresh, c, self.log.clone());
+            self.play_item(fresh);
         }
     }
 
@@ -1985,7 +1974,7 @@ impl App {
 
     fn handle_ws_event(&mut self, ev: WsEvent) {
         match ev {
-            WsEvent::Play { item_ids, play_now, start_position_ticks } => {
+            WsEvent::Play { item_ids, play_now, start_position_ticks, start_index } => {
                 self.log.push(Level::Info, "ws", format!("Play: {} id(s), play_now={play_now}", item_ids.len()));
                 if !play_now { return; }
                 let items = {
@@ -1999,6 +1988,7 @@ impl App {
                     self.log.push(Level::Warn, "ws", format!("Play: no items found for ids={}", item_ids.join(",")));
                     return;
                 }
+                let start_idx = start_index.min(items.len().saturating_sub(1));
                 self.tab_idx = 1;
                 if items.len() == 1 {
                     let mut item = items[0].clone();
@@ -2011,15 +2001,21 @@ impl App {
                 } else {
                     let count = items.len();
                     self.player_tab.items = items.clone();
-                    self.player_tab.playlist_cursor = 0;
+                    self.player_tab.playlist_cursor = start_idx;
                     self.status = format!("Playing {count} items");
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     let active = self.player.status.lock().unwrap().active;
-                    self.log.push(Level::Info, "ws", format!("Play multi: active={active}, count={count}"));
+                    self.log.push(Level::Info, "ws", format!("Play multi: active={active}, count={count}, start_idx={start_idx}"));
                     if active {
-                        self.player.play(&items[0], c, self.log.clone());
+                        let mut start_item = items[start_idx].clone();
+                        if start_position_ticks > 0 { start_item.playback_position_ticks = start_position_ticks; }
+                        self.player.play(&start_item, c, self.log.clone());
                     } else {
-                        self.player.play_playlist(items, 0, c, self.log.clone());
+                        let mut items_with_pos = items.clone();
+                        if start_position_ticks > 0 {
+                            items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
+                        }
+                        self.player.play_playlist(items_with_pos, start_idx, c, self.log.clone());
                     }
                 }
             }
@@ -2194,6 +2190,8 @@ impl App {
             self.layout_button_area  = Rect::default();
             self.layout_tracks_area  = Rect::default();
             self.layout_vol_area     = Rect::default();
+            self.layout_sub_area     = Rect::default();
+            self.layout_audio_area   = Rect::default();
         }
 
         if self.tab_idx == 0 {
@@ -2394,27 +2392,29 @@ impl App {
 
         // Each info group gets 1 char padding on each side; groups separated by 2 spaces
         let vol_pct = format!("{volume}%");
-        let g1_inner = format!("\u{266a} {}", audio_label); // ♪ audio
-        let g2_inner = format!("\u{2261} {}", sub_label);   // ≡ sub
-        let g3_inner = format!("{vol_icon} {vol_pct}");     // ▄ vol%
+        let g1_inner = format!("Subs: \u{2261} {}", sub_label);        // Subs: ≡ sub
+        let g2_inner = format!("\u{266a} {}", audio_label);          // ♪ audio
+        let g3_inner = format!("{vol_icon} {vol_pct}");               // ▄ vol%
         let pad = 1u16;
         let gap = 2u16;
         let g1_w = g1_inner.chars().count() as u16 + pad * 2;
         let g2_w = g2_inner.chars().count() as u16 + pad * 2;
         let g3_w = g3_inner.chars().count() as u16 + pad * 2;
-        let total_w = g1_w + gap + g2_w + gap + g3_w;
-        let row_y = area.y + 2;
-        let g1_x = area.x + area.width.saturating_sub(total_w) / 2;
-        let g2_x = g1_x + g1_w + gap;
-        let g3_x = g2_x + g2_w + gap;
+        // Row 1: audio + volume left-justified; subs right-justified
+        let row_y = area.y + 1;
+        let g1_x = area.x;
+        let g3_x = area.x + g1_w + gap;
+        let g2_x = (area.x + area.width).saturating_sub(g2_w);
         let vol_x = g3_x + pad; // for click detection
 
         self.layout_seekbar_area = Rect { x: area.x, y: area.y,     width: area.width, height: 1 };
-        self.layout_button_area  = Rect { x: btn_x,  y: area.y + 1, width: BTNS_W,     height: 1 };
+        self.layout_button_area  = Rect { x: btn_x,  y: area.y + 2, width: BTNS_W,     height: 1 };
         self.layout_tracks_area  = Rect { x: area.x, y: row_y,      width: area.width, height: 1 };
         self.layout_vol_area     = Rect { x: vol_x,  y: row_y,      width: g3_w,       height: 1 };
+        self.layout_sub_area     = Rect { x: g1_x,   y: row_y,      width: g1_w,       height: 1 };
+        self.layout_audio_area   = Rect { x: g2_x,   y: row_y,      width: g2_w,       height: 1 };
 
-        let btn_row = Rect { x: area.x, y: area.y + 1, width: area.width, height: 1 };
+        let btn_row = Rect { x: area.x, y: area.y + 2, width: area.width, height: 1 };
         let chip_bg = Style::default().bg(Color::Rgb(38, 38, 52));
 
         // Row 0 — Gauge with timestamp label
@@ -2434,33 +2434,29 @@ impl App {
             Rect { x: area.x, y: area.y, width: area.width, height: 1 },
         );
 
-        // Row 1 — buttons, centered
-        f.render_widget(
-            Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
-            btn_row,
-        );
-
-        // Row 2 — three filled chips
+        // Row 1 — subs + volume (left), audio (right)
         let text_style = btn_style;
         let p = " ".repeat(pad as usize);
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::raw(&p),
+                Span::styled("Subs: ", text_style),
+                Span::styled("\u{2261} ", Style::default().fg(palette::TEXT)),
+                Span::styled(sub_label, text_style),
+                Span::raw(&p),
+            ])),
+            Rect { x: g1_x, y: row_y, width: g1_w, height: 1 },
+        );
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(&p),
                 Span::styled("\u{266a} ", Style::default().fg(palette::IRIS)),
                 Span::styled(audio_label, text_style),
                 Span::raw(&p),
-            ])).style(chip_bg),
-            Rect { x: g1_x, y: row_y, width: g1_w, height: 1 },
-        );
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::raw(&p),
-                Span::styled("\u{2261} ", Style::default().fg(palette::TEXT)),
-                Span::styled(sub_label, text_style),
-                Span::raw(&p),
-            ])).style(chip_bg),
+            ])),
             Rect { x: g2_x, y: row_y, width: g2_w, height: 1 },
         );
+
         let (vol_icon_style, vol_text_style) = if volume > 100 {
             (Style::default().fg(Color::Red), Style::default().fg(Color::Yellow))
         } else {
@@ -2472,8 +2468,14 @@ impl App {
                 Span::styled(format!("{vol_icon} "), vol_icon_style),
                 Span::styled(vol_pct, vol_text_style),
                 Span::raw(&p),
-            ])).style(chip_bg),
+            ])),
             Rect { x: g3_x, y: row_y, width: g3_w, height: 1 },
+        );
+
+        // Row 2 — buttons, centered
+        f.render_widget(
+            Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
+            btn_row,
         );
     }
 
@@ -2561,7 +2563,7 @@ impl App {
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let stripe_bg = if i % 2 == 1 { palette::STRIPE } else { Color::Reset };
             let row_style = if i == current_idx && active {
-                Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD).bg(stripe_bg)
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD).bg(stripe_bg)
             } else if stripe_bg != Color::Reset {
                 Style::default().fg(palette::WHITE).bg(stripe_bg)
             } else {
@@ -3417,13 +3419,6 @@ fn highlight_style(item: &MediaItem) -> Style {
 }
 
 
-/// If `always_play_next` is enabled and a next item is queued, consume and return it.
-/// Otherwise consume and discard the item (returns None).
-/// Extracted for testability — the Stopped handler calls this.
-fn take_auto_play(next_up_item: &mut Option<MediaItem>, always_play_next: bool) -> Option<MediaItem> {
-    let item = next_up_item.take()?;
-    if always_play_next { Some(item) } else { None }
-}
 
 #[cfg(test)]
 mod tests {
@@ -3539,64 +3534,6 @@ mod tests {
         assert_eq!(style.fg, None);
     }
 
-    // ── always_play_next / AppendNext ────────────────────────────────────────
-
-    fn make_episode(id: &str) -> MediaItem {
-        MediaItem {
-            id: id.into(), name: "S01E02 - Next One".into(), item_type: "Episode".into(),
-            is_folder: false, media_type: "Video".into(), collection_type: String::new(),
-            runtime_ticks: 90 * TICKS_PER_SECOND, played: false, playback_position_ticks: 0,
-            series_id: "series1".into(), series_name: "Show".into(),
-            index_number: 2, parent_index_number: 1,
-            unplayed_item_count: 0,
-            path: String::new(), artist: String::new(), sort_name: String::new(),
-        }
-    }
-
-    #[test]
-    fn take_auto_play_returns_item_when_enabled() {
-        let item = make_episode("ep2");
-        let mut next_up = Some(item.clone());
-        let result = take_auto_play(&mut next_up, true);
-        assert_eq!(result.unwrap().id, "ep2", "should return the queued item");
-        assert!(next_up.is_none(), "next_up_item should be consumed");
-    }
-
-    #[test]
-    fn take_auto_play_returns_none_when_disabled() {
-        let item = make_episode("ep2");
-        let mut next_up = Some(item);
-        let result = take_auto_play(&mut next_up, false);
-        assert!(result.is_none(), "should not auto-play when disabled");
-        assert!(next_up.is_none(), "next_up_item should still be consumed");
-    }
-
-    #[test]
-    fn take_auto_play_no_item_returns_none() {
-        let mut next_up: Option<MediaItem> = None;
-        let result = take_auto_play(&mut next_up, true);
-        assert!(result.is_none());
-    }
-
-    // AppendNext transition: TrackChanged with next_up_item set means the
-    // pre-queued episode is now playing; next_up_item is consumed for the UI update.
-    #[test]
-    fn append_next_transition_consumes_next_up_item() {
-        let next_ep = make_episode("ep2");
-        let mut next_up_item = Some(next_ep.clone());
-        // Simulate TrackChanged handler: if next_up_item is Some, it's the AppendNext transition.
-        let transition_item = next_up_item.take();
-        assert_eq!(transition_item.unwrap().id, "ep2");
-        assert!(next_up_item.is_none());
-    }
-
-    #[test]
-    fn append_next_transition_absent_uses_playlist_cursor() {
-        // When next_up_item is None, TrackChanged is a normal playlist advance.
-        let mut next_up_item: Option<MediaItem> = None;
-        let transition_item = next_up_item.take();
-        assert!(transition_item.is_none(), "no AppendNext transition when next_up_item is absent");
-    }
 }
 
 fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>> {

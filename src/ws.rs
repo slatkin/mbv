@@ -13,6 +13,9 @@ pub enum WsEvent {
         item_ids: Vec<String>,
         play_now: bool,
         start_position_ticks: i64,
+        /// Index into item_ids of the first item to play; preceding items are
+        /// already-queued but not current.
+        start_index: usize,
     },
     Stop,
     Pause,
@@ -55,7 +58,8 @@ fn parse(text: &str, log: &AppLog) -> Option<WsEvent> {
             }
             let play_now = data["PlayCommand"].as_str().unwrap_or("PlayNow") == "PlayNow";
             let start_position_ticks = data["StartPositionTicks"].as_i64().unwrap_or(0);
-            Some(WsEvent::Play { item_ids, play_now, start_position_ticks })
+            let start_index = data["StartIndex"].as_u64().unwrap_or(0) as usize;
+            Some(WsEvent::Play { item_ids, play_now, start_position_ticks, start_index })
         }
         "Playstate" => {
             let cmd = v["Data"]["Command"].as_str().unwrap_or("");
@@ -168,10 +172,11 @@ mod tests {
     fn play_parses_item_ids_and_play_now() {
         let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["a","b"],"PlayCommand":"PlayNow","StartPositionTicks":0}}"#;
         let ev = parse_msg(msg).unwrap();
-        if let WsEvent::Play { item_ids, play_now, start_position_ticks } = ev {
+        if let WsEvent::Play { item_ids, play_now, start_position_ticks, start_index } = ev {
             assert_eq!(item_ids, vec!["a", "b"]);
             assert!(play_now);
             assert_eq!(start_position_ticks, 0);
+            assert_eq!(start_index, 0);
         } else { panic!("wrong variant"); }
     }
 
@@ -188,6 +193,22 @@ mod tests {
         let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["x"],"StartPositionTicks":50000000}}"#;
         if let WsEvent::Play { start_position_ticks, .. } = parse_msg(msg).unwrap() {
             assert_eq!(start_position_ticks, 50000000);
+        } else { panic!(); }
+    }
+
+    #[test]
+    fn play_start_index_parsed() {
+        let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["a","b","c"],"StartIndex":2}}"#;
+        if let WsEvent::Play { start_index, .. } = parse_msg(msg).unwrap() {
+            assert_eq!(start_index, 2);
+        } else { panic!(); }
+    }
+
+    #[test]
+    fn play_start_index_defaults_to_zero() {
+        let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["a","b"]}}"#;
+        if let WsEvent::Play { start_index, .. } = parse_msg(msg).unwrap() {
+            assert_eq!(start_index, 0);
         } else { panic!(); }
     }
 

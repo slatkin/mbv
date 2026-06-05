@@ -627,13 +627,20 @@ impl EmbyClient {
             .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
             .call().map_err(|e| e.to_string())?
             .into_json().map_err(|e| e.to_string())?;
-        Ok(resp["Items"].as_array()
+        let mut items: Vec<MediaItem> = resp["Items"].as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default())
+            .unwrap_or_default();
+        // Emby returns items in server sort order, not input order. Restore input order.
+        let order: std::collections::HashMap<&str, usize> =
+            ids.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
+        items.sort_by_key(|item| order.get(item.id.as_str()).copied().unwrap_or(usize::MAX));
+        Ok(items)
     }
 
-    pub fn get_next_episode(&self, series_id: &str, season: i64, episode: i64, log: &AppLog) -> Option<MediaItem> {
-        log.push(Level::Debug, "api", format!("→ NextEpisode series={series_id} S{season:02}E{episode:02}"));
+    /// Returns all episodes of a series starting from `from_item_id` (inclusive), in air order.
+    /// Mirrors Emby Web's `getEpisodes(seriesId)` + filter pattern.
+    pub fn get_episodes_from(&self, series_id: &str, from_item_id: &str, log: &AppLog) -> Vec<MediaItem> {
+        log.push(Level::Debug, "api", format!("→ EpisodesFrom series={series_id} from={from_item_id}"));
         let resp: Value = match self.get(&format!("/Shows/{}/Episodes", series_id))
             .query("UserId", &self.user_id)
             .query("Fields", "UserData,RunTimeTicks,SeriesId,SeriesName,ParentIndexNumber,IndexNumber")
@@ -641,29 +648,25 @@ impl EmbyClient {
         {
             Ok(r) => match r.into_json() {
                 Ok(v) => v,
-                Err(e) => { log.push(Level::Warn, "api", format!("← ERR NextEpisode parse: {e}")); return None; }
+                Err(e) => { log.push(Level::Warn, "api", format!("← ERR EpisodesFrom parse: {e}")); return vec![]; }
             },
-            Err(e) => { log.push(Level::Warn, "api", format!("← ERR NextEpisode: {e}")); return None; }
+            Err(e) => { log.push(Level::Warn, "api", format!("← ERR EpisodesFrom: {e}")); return vec![]; }
         };
-        let items = resp["Items"].as_array()?;
-        // Episodes are returned in air order. Find the first one that comes after
-        // (season, episode) — handles end-of-season continuation automatically.
-        let mut found_current = false;
-        for v in items {
-            let s = v["ParentIndexNumber"].as_i64().unwrap_or(0);
-            let e = v["IndexNumber"].as_i64().unwrap_or(0);
-            if found_current {
-                let item = parse_item(v);
-                log.push(Level::Info, "api", format!("← NextEpisode: {}", item.display_name()));
-                return Some(item);
-            }
-            if s == season && e == episode {
-                found_current = true;
-            }
+        let Some(all) = resp["Items"].as_array() else { return vec![]; };
+        let mut found = false;
+        let items: Vec<MediaItem> = all.iter().filter_map(|v| {
+            if found { return Some(parse_item(v)); }
+            if v["Id"].as_str().unwrap_or("") == from_item_id { found = true; Some(parse_item(v)) } else { None }
+        }).collect();
+        if items.is_empty() {
+            // from_item_id not in series — return everything as a fallback
+            log.push(Level::Warn, "api", format!("← EpisodesFrom: from_item_id not found, returning all"));
+            return all.iter().map(parse_item).collect();
         }
-        log.push(Level::Debug, "api", "← NextEpisode: none (end of series)");
-        None
+        log.push(Level::Info, "api", format!("← EpisodesFrom: {} episodes from '{}'", items.len(), items[0].display_name()));
+        items
     }
+
 
     #[allow(dead_code)]
     pub fn get_next_up(&self, series_id: &str, log: &AppLog) -> Option<MediaItem> {

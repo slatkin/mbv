@@ -58,7 +58,11 @@ impl RemotePlayer {
                         match ev {
                             CtrlEvent::State(s) => {
                                 *status_r.lock().unwrap() = s.status;
-                                *items_r.lock().unwrap() = s.items;
+                                *items_r.lock().unwrap() = s.items.clone();
+                                let _ = event_tx_r.send(PlayerEvent::QueueUpdated {
+                                    items: s.items,
+                                    cursor: s.cursor,
+                                });
                             }
                             CtrlEvent::Player(pe) => {
                                 match &pe {

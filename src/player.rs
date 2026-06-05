@@ -43,6 +43,8 @@ pub enum PlayerEvent {
     NextUpThreshold { series_id: String, season: i64, episode: i64 },
     NextUpPlay,
     PlaylistNextUp { next_idx: usize },
+    /// Emitted by RemotePlayer when CtrlState arrives so App can sync player_tab.
+    QueueUpdated { items: Vec<crate::api::MediaItem>, cursor: usize },
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -55,9 +57,6 @@ pub enum PlayerCommand {
     SetAudio(i64),
     SetSub(i64), // 0 = off
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
-    // Append a next episode to mpv's playlist for seamless same-window auto-play.
-    // Sent by the app when NextUpThreshold fires with always_play_next=true.
-    AppendNext { url: String, start_pos: f64, item: Box<MediaItem> },
     NextUpShow { item_id: String, title: String },
 }
 
@@ -411,7 +410,7 @@ impl Player {
             let status_p = status.clone();
             let ws_tx_p = ws_tx.clone();
             let log_p = log.clone();
-            let (mut progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
+            let (progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
             let mut progress_handle = Some(thread::spawn(move || {
                 let mut ticks: u32 = 0;
                 loop {
@@ -444,8 +443,7 @@ impl Player {
             let mut stop_reported = false;
             let mut mark_played_id: Option<String> = None; // set when natural end; retry in Shutdown if needed
             let mut pending_load = false;
-            let mut queued_next: Option<(f64, MediaItem)> = None; // AppendNext item waiting for transition
-            let mut pending_resume_secs: Option<f64> = None; // seek-to-resume after AppendNext transition
+            let mut pending_resume_secs: Option<f64> = None;
             let mut last_seek_at: Option<Instant> = None;
             let mut tracks_initialized = false;
             let mut current_osd_title = item.display_name();
@@ -506,24 +504,11 @@ impl Player {
                             status.lock().unwrap().sub_id = id;
                             refresh_tracks(&mpv, &status);
                         }
-                        PlayerCommand::AppendNext { url, start_pos, item } => {
-                            let title_opt = mpv_title_opt(&item.display_name());
-                            match mpv.command("loadfile", &[url.as_str(), "append-play", "-1", title_opt.as_str()]) {
-                                Ok(_) => {
-                                    log.push(Level::Info, "player", format!("next-up: appended '{}' for seamless transition", item.display_name()));
-                                    queued_next = Some((start_pos, *item));
-                                }
-                                Err(e) => {
-                                    log.push(Level::Warn, "player", format!("next-up: append-play failed: {}", mpv_err_str(&e)));
-                                }
-                            }
-                        }
                         PlayerCommand::LoadNew { url, start_pos, item } => {
                             // Cancel any pending quit so the new file loads in the same window.
                             // This handles WS Stop+Play arriving in the same iteration.
                             cancel_stop = true;
                             quit_at = None;
-                            queued_next = None; // loadfile replace cancels any pending append
 
                             // Report stopped for the current item before replacing
                             let old_id   = current_item_id.lock().unwrap().clone();
@@ -606,7 +591,7 @@ impl Player {
                         status.lock().unwrap().position_ticks = ticks;
                         if pos_secs > 0.0 { last_valid_pos = ticks; }
                         // Fire next-up prompt 60 s before the episode ends (once per playback).
-                        const NEXT_UP_TICKS: i64 = 90 * TICKS_PER_SECOND;
+                        const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
                         if !next_up_fired {
                             if series_id_for_next_up.is_empty() {
                                 if !next_up_armed_logged && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
@@ -646,9 +631,11 @@ impl Player {
                         }
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
+                        let event_name: &str;
                         if !tracks_initialized {
                             auto_select_tracks(&mpv, &status);
                             tracks_initialized = true;
+                            let _ = mpv.set_property("start", "0");
                             if let Some(secs) = pending_resume_secs.take() {
                                 if secs > 0.0 {
                                     let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
@@ -656,6 +643,7 @@ impl Player {
                                 }
                             }
                             if use_mpv_config { let _ = mpv.command("show-text", &[&current_osd_title, "3000"]); }
+                            event_name = "TimeUpdate";
                         } else {
                             // Any restart after init means a seek happened (via TUI or mpv OSC).
                             // Re-arm so a seek into/out-of the threshold is handled correctly.
@@ -664,6 +652,7 @@ impl Player {
                             if last_seek_at.take().is_some() {
                                 if use_mpv_config { let _ = mpv.command("show-text", &[&current_osd_title, "2000"]); }
                             }
+                            event_name = "Seek";
                         }
                         let seek_settled = last_seek_at.is_none_or(|t| t.elapsed() > Duration::from_millis(500));
                         if quit_at.is_none() && seek_settled {
@@ -676,9 +665,9 @@ impl Player {
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = current_sid.lock().unwrap().clone();
                             if let Some(ref tx) = ws_tx {
-                                client.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log);
+                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx, &log);
                             } else {
-                                client.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate", &log);
+                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name, &log);
                             }
                         }
                     }
@@ -686,93 +675,6 @@ impl Player {
                         if quit_at.is_some() { continue; }
                         // EndFile triggered by a loadfile replace — already reported stopped above
                         if pending_load { pending_load = false; continue; }
-
-                        // AppendNext seamless transition: natural end with a queued next episode.
-                        // mpv advances to the appended file; handle it as a track change rather
-                        // than stopping playback entirely.
-                        if reason == mpv_end_file_reason::Eof {
-                            if let Some((next_start_pos, next_item)) = queued_next.take() {
-                                let id   = current_item_id.lock().unwrap().clone();
-                                let msid = current_msid.lock().unwrap().clone();
-                                let sid  = current_sid.lock().unwrap().clone();
-                                // Report finished for the completed episode
-                                let _ = progress_stop_tx.send(());
-                                if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                                client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
-                                match client.mark_played(&id) {
-                                    Ok(()) => log.push(Level::Info, "player", format!("mark_played ok id={id}")),
-                                    Err(e) => log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}")),
-                                }
-                                // Start tracking the new episode
-                                let (new_sid, new_msid) = {
-                                    let (s, m) = client.get_playback_info(&next_item.id, &log);
-                                    client.report_start(&next_item, &m, &s, &log);
-                                    (s, m)
-                                };
-                                *current_item_id.lock().unwrap() = next_item.id.clone();
-                                *current_msid.lock().unwrap()    = new_msid.clone();
-                                *current_sid.lock().unwrap()     = new_sid.clone();
-                                last_valid_pos    = next_item.playback_position_ticks;
-                                current_osd_title = next_item.display_name();
-                                {
-                                    let mut st = status.lock().unwrap();
-                                    st.position_ticks = next_item.playback_position_ticks;
-                                    st.runtime_ticks  = next_item.runtime_ticks;
-                                    st.title          = current_osd_title.clone();
-                                }
-                                tracks_initialized    = false;
-                                stop_reported         = false;
-                                mark_played_id        = None;
-                                next_up_fired         = false;
-                                next_up_armed_logged  = false;
-                                if next_item.item_type == "Episode" {
-                                    series_id_for_next_up = next_item.series_id.clone();
-                                    season_for_next_up    = next_item.parent_index_number;
-                                    episode_for_next_up   = next_item.index_number;
-                                } else {
-                                    series_id_for_next_up = String::new();
-                                }
-                                if next_start_pos > 0.0 {
-                                    pending_resume_secs = Some(next_start_pos);
-                                }
-                                // Restart progress thread for the new episode
-                                let (new_stop_tx, new_stop_rx) = mpsc::channel::<()>();
-                                progress_stop_tx = new_stop_tx;
-                                let cid_p    = current_item_id.clone();
-                                let cmsid_p  = current_msid.clone();
-                                let csid_p   = current_sid.clone();
-                                let status_p = status.clone();
-                                let ws_tx_p  = ws_tx.clone();
-                                let log_p    = log.clone();
-                                let client_p = client.clone();
-                                progress_handle = Some(thread::spawn(move || {
-                                    let mut ticks: u32 = 0;
-                                    loop {
-                                        match new_stop_rx.recv_timeout(Duration::from_secs(10)) {
-                                            Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                                            Err(mpsc::RecvTimeoutError::Timeout) => {
-                                                ticks += 1;
-                                                let (pos, paused) = { let s = status_p.lock().unwrap(); (s.position_ticks, s.paused) };
-                                                let id   = cid_p.lock().unwrap().clone();
-                                                let msid = cmsid_p.lock().unwrap().clone();
-                                                let sid  = csid_p.lock().unwrap().clone();
-                                                if ticks.is_multiple_of(3) {
-                                                    if let Some(ref tx) = ws_tx_p {
-                                                        client_p.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log_p);
-                                                    } else {
-                                                        client_p.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate", &log_p);
-                                                    }
-                                                } else {
-                                                    client_p.report_ping(&sid, &log_p);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }));
-                                let _ = event_tx.send(PlayerEvent::TrackChanged(0));
-                                continue;
-                            }
-                        }
 
                         if reason == mpv_end_file_reason::Error {
                             log.push(Level::Warn, "player", "EndFile: playback error (file may be unreadable or format unsupported)");
@@ -1177,8 +1079,6 @@ impl Player {
                                 log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
                             }
                         }
-                        // AppendNext is only for the single-episode play() path; ignore in playlists.
-                        PlayerCommand::AppendNext { .. } => {}
                     }
                 }
 
@@ -1212,21 +1112,29 @@ impl Player {
                         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
                         status.lock().unwrap().position_ticks = ticks;
                         if pos_secs > 0.0 { last_valid_pos = ticks; }
-                        // Playlist next-up: fire when 90s from end and next item exists.
-                        const PLAYLIST_NEXT_UP_TICKS: i64 = 90 * TICKS_PER_SECOND;
+                        // Playlist next-up: match Emby Web's timing from videoosd.js.
+                        // 90 s before end regardless of runtime length.
+                        // Minimum episode: 10 min. Minimum remaining when shown: 20 s.
+                        const MIN_RUNTIME_TICKS: i64 = 600 * TICKS_PER_SECOND;
+                        const MIN_REMAIN_TICKS:  i64 = 20 * TICKS_PER_SECOND;
                         if current_idx + 1 < items.len() {
                             let runtime = status.lock().unwrap().runtime_ticks;
-                            if playlist_next_up_fired && (runtime <= PLAYLIST_NEXT_UP_TICKS || ticks <= runtime - PLAYLIST_NEXT_UP_TICKS) {
-                                playlist_next_up_fired = false;
-                                playlist_next_up_armed = false;
-                            }
-                            if !playlist_next_up_fired {
-                                if runtime > PLAYLIST_NEXT_UP_TICKS && ticks > runtime - PLAYLIST_NEXT_UP_TICKS {
-                                    playlist_next_up_fired = true;
-                                    let _ = event_tx.send(PlayerEvent::PlaylistNextUp { next_idx: current_idx + 1 });
-                                } else if !playlist_next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                                    playlist_next_up_armed = true;
-                                    log.push(Level::Info, "player", format!("playlist next-up armed idx={}", current_idx + 1));
+                            if runtime > 0 {
+                                let show_secs: i64 = 60;
+                                let show_at = runtime - show_secs * TICKS_PER_SECOND;
+                                let remaining = runtime - ticks;
+                                if playlist_next_up_fired && ticks < show_at {
+                                    playlist_next_up_fired = false;
+                                    playlist_next_up_armed = false;
+                                }
+                                if !playlist_next_up_fired && runtime >= MIN_RUNTIME_TICKS {
+                                    if remaining >= MIN_REMAIN_TICKS && ticks >= show_at {
+                                        playlist_next_up_fired = true;
+                                        let _ = event_tx.send(PlayerEvent::PlaylistNextUp { next_idx: current_idx + 1 });
+                                    } else if !playlist_next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                                        playlist_next_up_armed = true;
+                                        log.push(Level::Info, "player", format!("playlist next-up armed idx={}", current_idx + 1));
+                                    }
                                 }
                             }
                         }
@@ -1355,16 +1263,19 @@ impl Player {
                         playlist_next_up_fired = false;
                         playlist_next_up_armed = false;
 
-                        let next_id = items[current_idx].id.clone();
-                        *current_item_id.lock().unwrap() = next_id.clone();
-                        *current_msid.lock().unwrap() = next_id.clone();
+                        let (new_sid, new_msid) = {
+                            let (sid, msid) = client.get_playback_info(&items[current_idx].id, &log);
+                            client.report_start(&items[current_idx], &msid, &sid, &log);
+                            (sid, msid)
+                        };
+                        *current_item_id.lock().unwrap() = items[current_idx].id.clone();
+                        *current_msid.lock().unwrap()    = new_msid;
+                        *session_id.lock().unwrap()      = new_sid;
                         current_osd_title = items[current_idx].display_name();
                         let next = &items[current_idx];
                         if next.media_type == "Video" && next.playback_position_ticks > 0 {
                             pending_resume_secs = Some(next.resume_seconds());
                         }
-                        let sid = session_id.lock().unwrap().clone();
-                        client.report_start(&items[current_idx], &next_id, &sid, &log);
                         let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));
                     }
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mby-next-up-play") => {
@@ -1475,6 +1386,10 @@ impl PlayerProxy {
         }
     }
 
+    pub fn is_remote(&self) -> bool {
+        matches!(self.inner, PlayerProxyInner::Remote(_))
+    }
+
     pub fn is_remote_disconnected(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
@@ -1554,26 +1469,6 @@ mod tests {
             index_number: 2, parent_index_number: 1,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
-        }
-    }
-
-    #[test]
-    fn append_next_serde_roundtrip() {
-        let item = make_media_item("ep2");
-        let cmd = PlayerCommand::AppendNext {
-            url: "http://emby.local/Videos/ep2/stream?static=true&api_key=tok".into(),
-            start_pos: 42.5,
-            item: Box::new(item),
-        };
-        let json = serde_json::to_string(&cmd).expect("AppendNext must serialize");
-        let decoded: PlayerCommand = serde_json::from_str(&json).expect("AppendNext must deserialize");
-        match decoded {
-            PlayerCommand::AppendNext { url, start_pos, item } => {
-                assert_eq!(url, "http://emby.local/Videos/ep2/stream?static=true&api_key=tok");
-                assert!((start_pos - 42.5).abs() < f64::EPSILON);
-                assert_eq!(item.id, "ep2");
-            }
-            _ => panic!("deserialized to wrong variant"),
         }
     }
 
