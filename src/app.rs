@@ -77,6 +77,7 @@ mod palette {
     pub const TEXT:          Color = Color::Rgb(230, 230, 230);  // primary text
     pub const WHITE:         Color = Color::Rgb(253, 253, 253);  // near-white (#fdfdfd)
     pub const GOLD:          Color = Color::Rgb(246, 162, 30);   // amber — in-progress, paused
+    pub const YELLOW:        Color = Color::Rgb(250, 220, 70);   // yellow — in-progress (continue watching)
     pub const PINE:          Color = Color::Rgb(61,  139, 55);   // dark green — folders, watched
     pub const FOAM:          Color = Color::Rgb(0,   164, 220);  // emby blue — now-playing item
     pub const IRIS:          Color = Color::Rgb(82,  181, 75);   // emby green — active tab, focused
@@ -2983,7 +2984,7 @@ impl App {
         let cont_focused = home_focused && self.home.section == 0;
         let s0 = self.render_home_section(
             f, section_areas[0], "Continue Watching",
-            &self.home.continue_items, self.home.continue_cursor, cont_focused,
+            &self.home.continue_items, self.home.continue_cursor, cont_focused, true,
         );
 
         // Collect to avoid holding &self.home.latest across render calls that need &mut self
@@ -2997,7 +2998,7 @@ impl App {
             let focused = home_focused && self.home.section == i + 1;
             let s = self.render_home_section(
                 f, section_areas[i + 1], title,
-                items, *cursor, focused,
+                items, *cursor, focused, false,
             );
             scrolls.push(s);
         }
@@ -3007,6 +3008,7 @@ impl App {
     fn render_home_section(
         &self, f: &mut ratatui::Frame, area: Rect,
         title: &str, items: &[MediaItem], cursor: usize, focused: bool,
+        continue_style: bool,
     ) -> usize {
         let border_style = if focused { Style::default().fg(palette::IRIS) } else { Style::default().fg(palette::OVERLAY) };
         let title_style = if focused {
@@ -3029,8 +3031,14 @@ impl App {
 
         let list_items: Vec<ListItem> = items.iter().enumerate().map(|(i, item)| {
             let sel = focused && i == cursor;
-            let li = ListItem::new(fmt_item_wrapped(item, inner.width as usize, sel));
-            if sel { li.style(highlight_style(item)) } else { li }
+            let li = if continue_style {
+                ListItem::new(fmt_item_continue(item, inner.width as usize, sel))
+            } else {
+                ListItem::new(fmt_item_wrapped(item, inner.width as usize, sel))
+            };
+            if sel {
+                li.style(if continue_style { highlight_style_continue(item) } else { highlight_style(item) })
+            } else { li }
         }).collect();
 
         let mut state = ListState::default();
@@ -3425,6 +3433,30 @@ fn highlight_style(item: &MediaItem) -> Style {
     else if item.playback_position_ticks > 0 { Style::default().fg(palette::BASE).bg(palette::GOLD) }
     else                    { Style::default().fg(palette::TEXT).bg(palette::HIGHLIGHT_MED) }
 }
+
+fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
+    let (full_text, _) = item_text_and_style(item, selected);
+    let w = width.max(1);
+    let span_style = if selected { Style::default() }
+        else if item.playback_position_ticks > 0 { Style::default().fg(palette::YELLOW) }
+        else { Style::default().fg(palette::WHITE) };
+    let mut lines: Vec<Line<'static>> = wrap(&full_text, w)
+        .into_iter()
+        .map(|s| Line::from(Span::styled(s.into_owned(), span_style)))
+        .collect();
+    if !selected && item.played {
+        if let Some(last) = lines.last_mut() {
+            last.spans.push(Span::styled(" ✓", Style::default().fg(palette::IRIS)));
+        }
+    }
+    if lines.is_empty() { Text::from("") } else { Text::from(lines) }
+}
+
+fn highlight_style_continue(_item: &MediaItem) -> Style {
+    Style::default().fg(palette::TEXT).bg(palette::HIGHLIGHT_MED)
+}
+
+
 
 
 
