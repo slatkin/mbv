@@ -303,4 +303,24 @@ hidden_libraries = ["Live TV", "MOVIES"]
         let toml = "[emby]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().no_scripts);
     }
+
+    // always_play_next must live in [mpv] — placing it elsewhere silently ignores it.
+    #[test]
+    fn parse_always_play_next_true_from_mpv_section() {
+        let toml = "[emby]\nurl = \"http://host\"\n[mpv]\nalways_play_next = true";
+        assert!(parse_config(toml).unwrap().always_play_next);
+    }
+
+    #[test]
+    fn parse_always_play_next_defaults_false() {
+        let toml = "[emby]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().always_play_next);
+    }
+
+    #[test]
+    fn parse_always_play_next_in_wrong_section_is_ignored() {
+        // Placing always_play_next under [emby] must NOT enable it — wrong section.
+        let toml = "[emby]\nurl = \"http://host\"\nalways_play_next = true";
+        assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [mpv], not [emby]");
+    }
 }

@@ -1541,4 +1541,51 @@ mod tests {
         assert!(!is_english("#1"));
         assert!(!is_english(""));
     }
+
+    // ── PlayerCommand serde (IPC protocol integrity) ─────────────────────────
+
+    fn make_media_item(id: &str) -> crate::api::MediaItem {
+        crate::api::MediaItem {
+            id: id.into(), name: "Test Episode".into(), item_type: "Episode".into(),
+            is_folder: false, media_type: "Video".into(), collection_type: String::new(),
+            runtime_ticks: 3600 * crate::api::TICKS_PER_SECOND,
+            played: false, playback_position_ticks: 0,
+            series_id: "series1".into(), series_name: "Show".into(),
+            index_number: 2, parent_index_number: 1,
+            unplayed_item_count: 0,
+            path: String::new(), artist: String::new(), sort_name: String::new(),
+        }
+    }
+
+    #[test]
+    fn append_next_serde_roundtrip() {
+        let item = make_media_item("ep2");
+        let cmd = PlayerCommand::AppendNext {
+            url: "http://emby.local/Videos/ep2/stream?static=true&api_key=tok".into(),
+            start_pos: 42.5,
+            item: Box::new(item),
+        };
+        let json = serde_json::to_string(&cmd).expect("AppendNext must serialize");
+        let decoded: PlayerCommand = serde_json::from_str(&json).expect("AppendNext must deserialize");
+        match decoded {
+            PlayerCommand::AppendNext { url, start_pos, item } => {
+                assert_eq!(url, "http://emby.local/Videos/ep2/stream?static=true&api_key=tok");
+                assert!((start_pos - 42.5).abs() < f64::EPSILON);
+                assert_eq!(item.id, "ep2");
+            }
+            _ => panic!("deserialized to wrong variant"),
+        }
+    }
+
+    #[test]
+    fn load_new_serde_roundtrip() {
+        let cmd = PlayerCommand::LoadNew {
+            url: "http://emby.local/Videos/ep1/stream".into(),
+            start_pos: 0.0,
+            item: Box::new(make_media_item("ep1")),
+        };
+        let json = serde_json::to_string(&cmd).unwrap();
+        let decoded: PlayerCommand = serde_json::from_str(&json).unwrap();
+        assert!(matches!(decoded, PlayerCommand::LoadNew { .. }));
+    }
 }

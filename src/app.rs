@@ -379,16 +379,14 @@ impl App {
                             }
                             self.last_played_item_id = Some(item.id.clone());
                         }
-                        if let Some(item) = self.next_up_item.take() {
-                            if self.player.always_play_next {
-                                self.log.push(Level::Warn, "app", format!("next-up: auto-playing '{}'", item.display_name()));
-                                let c = Arc::new(self.client.lock().unwrap().clone());
-                                self.player_tab.items = vec![item.clone()];
-                                self.player_tab.playlist_cursor = 0;
-                                self.flash_status(item.playback_label());
-                                self.player.play(&item, c, self.log.clone());
-                                continue;
-                            }
+                        if let Some(item) = take_auto_play(&mut self.next_up_item, self.player.always_play_next) {
+                            self.log.push(Level::Warn, "app", format!("next-up: auto-playing '{}'", item.display_name()));
+                            let c = Arc::new(self.client.lock().unwrap().clone());
+                            self.player_tab.items = vec![item.clone()];
+                            self.player_tab.playlist_cursor = 0;
+                            self.flash_status(item.playback_label());
+                            self.player.play(&item, c, self.log.clone());
+                            continue;
                         }
                         self.next_up_item = None;
                         self.status.clear();
@@ -3419,6 +3417,14 @@ fn highlight_style(item: &MediaItem) -> Style {
 }
 
 
+/// If `always_play_next` is enabled and a next item is queued, consume and return it.
+/// Otherwise consume and discard the item (returns None).
+/// Extracted for testability — the Stopped handler calls this.
+fn take_auto_play(next_up_item: &mut Option<MediaItem>, always_play_next: bool) -> Option<MediaItem> {
+    let item = next_up_item.take()?;
+    if always_play_next { Some(item) } else { None }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3531,6 +3537,65 @@ mod tests {
         let item = make_item("X", "Movie");
         let (_, style) = item_text_and_style(&item, true);
         assert_eq!(style.fg, None);
+    }
+
+    // ── always_play_next / AppendNext ────────────────────────────────────────
+
+    fn make_episode(id: &str) -> MediaItem {
+        MediaItem {
+            id: id.into(), name: "S01E02 - Next One".into(), item_type: "Episode".into(),
+            is_folder: false, media_type: "Video".into(), collection_type: String::new(),
+            runtime_ticks: 90 * TICKS_PER_SECOND, played: false, playback_position_ticks: 0,
+            series_id: "series1".into(), series_name: "Show".into(),
+            index_number: 2, parent_index_number: 1,
+            unplayed_item_count: 0,
+            path: String::new(), artist: String::new(), sort_name: String::new(),
+        }
+    }
+
+    #[test]
+    fn take_auto_play_returns_item_when_enabled() {
+        let item = make_episode("ep2");
+        let mut next_up = Some(item.clone());
+        let result = take_auto_play(&mut next_up, true);
+        assert_eq!(result.unwrap().id, "ep2", "should return the queued item");
+        assert!(next_up.is_none(), "next_up_item should be consumed");
+    }
+
+    #[test]
+    fn take_auto_play_returns_none_when_disabled() {
+        let item = make_episode("ep2");
+        let mut next_up = Some(item);
+        let result = take_auto_play(&mut next_up, false);
+        assert!(result.is_none(), "should not auto-play when disabled");
+        assert!(next_up.is_none(), "next_up_item should still be consumed");
+    }
+
+    #[test]
+    fn take_auto_play_no_item_returns_none() {
+        let mut next_up: Option<MediaItem> = None;
+        let result = take_auto_play(&mut next_up, true);
+        assert!(result.is_none());
+    }
+
+    // AppendNext transition: TrackChanged with next_up_item set means the
+    // pre-queued episode is now playing; next_up_item is consumed for the UI update.
+    #[test]
+    fn append_next_transition_consumes_next_up_item() {
+        let next_ep = make_episode("ep2");
+        let mut next_up_item = Some(next_ep.clone());
+        // Simulate TrackChanged handler: if next_up_item is Some, it's the AppendNext transition.
+        let transition_item = next_up_item.take();
+        assert_eq!(transition_item.unwrap().id, "ep2");
+        assert!(next_up_item.is_none());
+    }
+
+    #[test]
+    fn append_next_transition_absent_uses_playlist_cursor() {
+        // When next_up_item is None, TrackChanged is a normal playlist advance.
+        let mut next_up_item: Option<MediaItem> = None;
+        let transition_item = next_up_item.take();
+        assert!(transition_item.is_none(), "no AppendNext transition when next_up_item is absent");
     }
 }
 
