@@ -8,7 +8,7 @@ url="https://github.com/slatkin/mby"
 license=('MIT')
 depends=('mpv' 'openssl')
 source=("${pkgname}-${pkgver}-linux-x86_64.tar.gz::https://github.com/slatkin/${pkgname}/releases/download/v${pkgver}/${pkgname}-${pkgver}-linux-x86_64.tar.gz")
-sha256sums=('365428024f29d9509441865fc3450c17639073ad6c7067c3c2f43082a0a0d33f')
+sha256sums=('f7d55da24fa4a334ecc1941a4772e30a4d20f7fffa2794b013ad32452b7a5b55')
 
 package() {
     cd "${pkgname}-${pkgver}"
