@@ -20,6 +20,7 @@ fn mpv_title_opt(title: &str) -> String {
     format!("force-media-title=%{}%{}", title.len(), title)
 }
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlayerStatus {
     pub position_ticks: i64,
     pub runtime_ticks: i64,
@@ -35,6 +36,7 @@ pub struct PlayerStatus {
     pub sub_id: i64,   // 0 = off
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum PlayerEvent {
     Stopped { idx: usize, position_ticks: i64 },
     TrackChanged(usize),
@@ -43,6 +45,7 @@ pub enum PlayerEvent {
     PlaylistNextUp { next_idx: usize },
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
@@ -52,6 +55,9 @@ pub enum PlayerCommand {
     SetAudio(i64),
     SetSub(i64), // 0 = off
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
+    // Append a next episode to mpv's playlist for seamless same-window auto-play.
+    // Sent by the app when NextUpThreshold fires with always_play_next=true.
+    AppendNext { url: String, start_pos: f64, item: Box<MediaItem> },
     NextUpShow { item_id: String, title: String },
 }
 
@@ -183,6 +189,7 @@ pub struct Player {
     show_audio_window: bool,
     use_mpv_config: bool,
     no_scripts: bool,
+    #[allow(dead_code)]
     pub always_play_next: bool,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
@@ -404,7 +411,7 @@ impl Player {
             let status_p = status.clone();
             let ws_tx_p = ws_tx.clone();
             let log_p = log.clone();
-            let (progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
+            let (mut progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
             let mut progress_handle = Some(thread::spawn(move || {
                 let mut ticks: u32 = 0;
                 loop {
@@ -435,7 +442,10 @@ impl Player {
 
             let mut quit_at: Option<Instant> = None;
             let mut stop_reported = false;
+            let mut mark_played_id: Option<String> = None; // set when natural end; retry in Shutdown if needed
             let mut pending_load = false;
+            let mut queued_next: Option<(f64, MediaItem)> = None; // AppendNext item waiting for transition
+            let mut pending_resume_secs: Option<f64> = None; // seek-to-resume after AppendNext transition
             let mut last_seek_at: Option<Instant> = None;
             let mut tracks_initialized = false;
             let mut current_osd_title = item.display_name();
@@ -496,11 +506,24 @@ impl Player {
                             status.lock().unwrap().sub_id = id;
                             refresh_tracks(&mpv, &status);
                         }
+                        PlayerCommand::AppendNext { url, start_pos, item } => {
+                            let title_opt = mpv_title_opt(&item.display_name());
+                            match mpv.command("loadfile", &[url.as_str(), "append-play", "-1", title_opt.as_str()]) {
+                                Ok(_) => {
+                                    log.push(Level::Info, "player", format!("next-up: appended '{}' for seamless transition", item.display_name()));
+                                    queued_next = Some((start_pos, *item));
+                                }
+                                Err(e) => {
+                                    log.push(Level::Warn, "player", format!("next-up: append-play failed: {}", mpv_err_str(&e)));
+                                }
+                            }
+                        }
                         PlayerCommand::LoadNew { url, start_pos, item } => {
                             // Cancel any pending quit so the new file loads in the same window.
                             // This handles WS Stop+Play arriving in the same iteration.
                             cancel_stop = true;
                             quit_at = None;
+                            queued_next = None; // loadfile replace cancels any pending append
 
                             // Report stopped for the current item before replacing
                             let old_id   = current_item_id.lock().unwrap().clone();
@@ -626,6 +649,12 @@ impl Player {
                         if !tracks_initialized {
                             auto_select_tracks(&mpv, &status);
                             tracks_initialized = true;
+                            if let Some(secs) = pending_resume_secs.take() {
+                                if secs > 0.0 {
+                                    let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
+                                    last_seek_at = Some(Instant::now());
+                                }
+                            }
                             if use_mpv_config { let _ = mpv.command("show-text", &[&current_osd_title, "3000"]); }
                         } else {
                             // Any restart after init means a seek happened (via TUI or mpv OSC).
@@ -657,6 +686,94 @@ impl Player {
                         if quit_at.is_some() { continue; }
                         // EndFile triggered by a loadfile replace — already reported stopped above
                         if pending_load { pending_load = false; continue; }
+
+                        // AppendNext seamless transition: natural end with a queued next episode.
+                        // mpv advances to the appended file; handle it as a track change rather
+                        // than stopping playback entirely.
+                        if reason == mpv_end_file_reason::Eof {
+                            if let Some((next_start_pos, next_item)) = queued_next.take() {
+                                let id   = current_item_id.lock().unwrap().clone();
+                                let msid = current_msid.lock().unwrap().clone();
+                                let sid  = current_sid.lock().unwrap().clone();
+                                // Report finished for the completed episode
+                                let _ = progress_stop_tx.send(());
+                                if let Some(h) = progress_handle.take() { let _ = h.join(); }
+                                client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
+                                match client.mark_played(&id) {
+                                    Ok(()) => log.push(Level::Info, "player", format!("mark_played ok id={id}")),
+                                    Err(e) => log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}")),
+                                }
+                                // Start tracking the new episode
+                                let (new_sid, new_msid) = {
+                                    let (s, m) = client.get_playback_info(&next_item.id, &log);
+                                    client.report_start(&next_item, &m, &s, &log);
+                                    (s, m)
+                                };
+                                *current_item_id.lock().unwrap() = next_item.id.clone();
+                                *current_msid.lock().unwrap()    = new_msid.clone();
+                                *current_sid.lock().unwrap()     = new_sid.clone();
+                                last_valid_pos    = next_item.playback_position_ticks;
+                                current_osd_title = next_item.display_name();
+                                {
+                                    let mut st = status.lock().unwrap();
+                                    st.position_ticks = next_item.playback_position_ticks;
+                                    st.runtime_ticks  = next_item.runtime_ticks;
+                                    st.title          = current_osd_title.clone();
+                                }
+                                tracks_initialized    = false;
+                                stop_reported         = false;
+                                mark_played_id        = None;
+                                next_up_fired         = false;
+                                next_up_armed_logged  = false;
+                                if next_item.item_type == "Episode" {
+                                    series_id_for_next_up = next_item.series_id.clone();
+                                    season_for_next_up    = next_item.parent_index_number;
+                                    episode_for_next_up   = next_item.index_number;
+                                } else {
+                                    series_id_for_next_up = String::new();
+                                }
+                                if next_start_pos > 0.0 {
+                                    pending_resume_secs = Some(next_start_pos);
+                                }
+                                // Restart progress thread for the new episode
+                                let (new_stop_tx, new_stop_rx) = mpsc::channel::<()>();
+                                progress_stop_tx = new_stop_tx;
+                                let cid_p    = current_item_id.clone();
+                                let cmsid_p  = current_msid.clone();
+                                let csid_p   = current_sid.clone();
+                                let status_p = status.clone();
+                                let ws_tx_p  = ws_tx.clone();
+                                let log_p    = log.clone();
+                                let client_p = client.clone();
+                                progress_handle = Some(thread::spawn(move || {
+                                    let mut ticks: u32 = 0;
+                                    loop {
+                                        match new_stop_rx.recv_timeout(Duration::from_secs(10)) {
+                                            Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                                            Err(mpsc::RecvTimeoutError::Timeout) => {
+                                                ticks += 1;
+                                                let (pos, paused) = { let s = status_p.lock().unwrap(); (s.position_ticks, s.paused) };
+                                                let id   = cid_p.lock().unwrap().clone();
+                                                let msid = cmsid_p.lock().unwrap().clone();
+                                                let sid  = csid_p.lock().unwrap().clone();
+                                                if ticks.is_multiple_of(3) {
+                                                    if let Some(ref tx) = ws_tx_p {
+                                                        client_p.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log_p);
+                                                    } else {
+                                                        client_p.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate", &log_p);
+                                                    }
+                                                } else {
+                                                    client_p.report_ping(&sid, &log_p);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }));
+                                let _ = event_tx.send(PlayerEvent::TrackChanged(0));
+                                continue;
+                            }
+                        }
+
                         if reason == mpv_end_file_reason::Error {
                             log.push(Level::Warn, "player", "EndFile: playback error (file may be unreadable or format unsupported)");
                         }
@@ -670,7 +787,15 @@ impl Player {
                         client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
                         stop_reported = true;
                         if natural_end {
-                            let _ = client.mark_played(&id);
+                            match client.mark_played(&id) {
+                                Ok(()) => {
+                                    log.push(Level::Info, "player", format!("mark_played ok id={id}"));
+                                }
+                                Err(e) => {
+                                    log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}; will retry"));
+                                    mark_played_id = Some(id.clone());
+                                }
+                            }
                             let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos });
                         }
                     }
@@ -699,6 +824,18 @@ impl Player {
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = current_sid.lock().unwrap().clone();
                             client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
+                        }
+                        // Retry mark_played in a detached thread so Shutdown never blocks.
+                        if let Some(mid) = mark_played_id.take() {
+                            let c2 = client.clone();
+                            let l2 = log.clone();
+                            std::thread::spawn(move || {
+                                if let Err(e) = c2.mark_played(&mid) {
+                                    l2.push(Level::Warn, "player", format!("mark_played retry failed id={mid}: {e}"));
+                                } else {
+                                    l2.push(Level::Info, "player", format!("mark_played retry ok id={mid}"));
+                                }
+                            });
                         }
                         status.lock().unwrap().active = false;
                         let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos });
@@ -1040,6 +1177,8 @@ impl Player {
                                 log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
                             }
                         }
+                        // AppendNext is only for the single-episode play() path; ignore in playlists.
+                        PlayerCommand::AppendNext { .. } => {}
                     }
                 }
 
@@ -1159,7 +1298,11 @@ impl Player {
                             if let Some(h) = progress_handle.take() { let _ = h.join(); }
                             client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
                             stop_reported = true;
-                            if natural_end { let _ = client.mark_played(&id); }
+                            if natural_end {
+                                if let Err(e) = client.mark_played(&id) {
+                                    log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}"));
+                                }
+                            }
                             continue; // wait for Shutdown to fire PlayerEvent::Stopped
                         }
 
@@ -1179,7 +1322,11 @@ impl Player {
                             if let Some(h) = progress_handle.take() { let _ = h.join(); }
                             status.lock().unwrap().active = false;
                             client.report_stopped(&id, &msid, completed_pos, &sid, &log);
-                            if natural { let _ = client.mark_played(&items[completed_idx].id); }
+                            if natural {
+                                if let Err(e) = client.mark_played(&items[completed_idx].id) {
+                                    log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
+                                }
+                            }
                             let _ = event_tx.send(PlayerEvent::Stopped { idx: completed_idx, position_ticks: completed_pos });
                             return;
                         }
@@ -1197,7 +1344,11 @@ impl Player {
                         }
 
                         client.report_stopped(&id, &msid, completed_pos, &sid, &log);
-                        if natural { let _ = client.mark_played(&items[completed_idx].id); }
+                        if natural {
+                            if let Err(e) = client.mark_played(&items[completed_idx].id) {
+                                log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
+                            }
+                        }
 
                         // Reset start position so the next playlist item isn't affected
                         let _ = mpv.set_property("start", "0");
@@ -1255,6 +1406,80 @@ impl Player {
         }
         // Don't clear cmd_tx here: a LoadNew command sent after stop() must still
         // reach the thread so it can cancel the quit and load the new file instead.
+    }
+}
+
+// ── PlayerProxy ─────────────────────────────────────────────────────────────
+// Wraps either a local Player or a RemotePlayer so App can use a single type.
+
+enum PlayerProxyInner {
+    Local(Player),
+    Remote(crate::remote_player::RemotePlayer),
+}
+
+pub struct PlayerProxy {
+    pub always_play_next: bool,
+    pub status: Arc<Mutex<PlayerStatus>>,
+    inner: PlayerProxyInner,
+}
+
+impl PlayerProxy {
+    pub fn local(player: Player, always_play_next: bool) -> Self {
+        let status = player.status.clone();
+        PlayerProxy { always_play_next, status, inner: PlayerProxyInner::Local(player) }
+    }
+
+    pub fn remote(remote: crate::remote_player::RemotePlayer, always_play_next: bool) -> Self {
+        let status = remote.status.clone();
+        PlayerProxy { always_play_next, status, inner: PlayerProxyInner::Remote(remote) }
+    }
+
+    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog) {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.play(item, client, log),
+            PlayerProxyInner::Remote(r) => r.play(item, client, log),
+        }
+    }
+
+    pub fn play_playlist(
+        &self,
+        items: Vec<MediaItem>,
+        start_idx: usize,
+        client: Arc<EmbyClient>,
+        log: AppLog,
+    ) {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.play_playlist(items, start_idx, client, log),
+            PlayerProxyInner::Remote(r) => r.play_playlist(items, start_idx, client, log),
+        }
+    }
+
+    pub fn stop(&self) {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.stop(),
+            PlayerProxyInner::Remote(r) => r.stop(),
+        }
+    }
+
+    pub fn join(&self) {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.join(),
+            PlayerProxyInner::Remote(r) => r.join(),
+        }
+    }
+
+    pub fn send_command(&self, cmd: PlayerCommand) {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.send_command(cmd),
+            PlayerProxyInner::Remote(r) => r.send_command(cmd),
+        }
+    }
+
+    pub fn is_remote_disconnected(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Remote(r) => r.is_disconnected(),
+        }
     }
 }
 

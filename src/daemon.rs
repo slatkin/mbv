@@ -1,16 +1,22 @@
+use std::io::{BufRead, BufReader, Write};
+use std::os::unix::net::UnixListener;
 use std::sync::{Arc, Mutex, mpsc};
 
 use ksni::blocking::TrayMethods;
 
 use crate::api::{EmbyClient, MediaItem};
 use crate::applog::{AppLog, Level};
+use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlState};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
 enum DaemonEvent {
     Player(PlayerEvent),
     Ws(WsEvent),
+    Ctrl(CtrlCmd),
 }
+
+type ClientList = Arc<Mutex<Vec<mpsc::Sender<String>>>>;
 
 struct MbyTray;
 
@@ -44,6 +50,13 @@ pub fn pid_file() -> std::path::PathBuf {
     let _ = std::fs::create_dir_all(&dir);
     dir.join("mby.pid")
 }
+
+fn broadcast(clients: &ClientList, event: &CtrlEvent) {
+    if let Ok(json) = serde_json::to_string(event) {
+        clients.lock().unwrap().retain(|tx| tx.send(json.clone()).is_ok());
+    }
+}
+
 
 pub fn run(client: EmbyClient) -> ! {
     std::fs::write(pid_file(), std::process::id().to_string())
@@ -86,10 +99,78 @@ pub fn run(client: EmbyClient) -> ! {
     std::thread::spawn(move || {
         for ev in player_rx { let _ = tx.send(DaemonEvent::Player(ev)); }
     });
-    let tx = merged_tx;
+    let tx = merged_tx.clone();
     std::thread::spawn(move || {
         for ev in ws_rx { let _ = tx.send(DaemonEvent::Ws(ev)); }
     });
+
+    // Shared state for ctrl socket initial-state snapshots
+    let shared_items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
+    let shared_cursor: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
+    let ctrl_clients: ClientList = Arc::new(Mutex::new(Vec::new()));
+
+    // Spawn control socket listener
+    {
+        let ctrl_clients = ctrl_clients.clone();
+        let merged_tx2 = merged_tx;
+        let player_status = player.status.clone();
+        let shared_items = shared_items.clone();
+        let shared_cursor = shared_cursor.clone();
+
+        std::thread::spawn(move || {
+            let path = crate::config::control_socket_path();
+            let _ = std::fs::remove_file(&path);
+            let listener = match UnixListener::bind(&path) {
+                Ok(l) => l,
+                Err(e) => {
+                    eprintln!("mby daemon: ctrl socket bind failed ({e}), remote TUI unavailable");
+                    return;
+                }
+            };
+
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { continue };
+                let Ok(stream_w) = stream.try_clone() else { continue };
+
+                let (ev_tx, ev_rx) = mpsc::channel::<String>();
+
+                // Build and enqueue initial state before registering, so it's
+                // the first thing the writer thread sends.
+                if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
+                    status: player_status.lock().unwrap().clone(),
+                    items: shared_items.lock().unwrap().clone(),
+                    cursor: *shared_cursor.lock().unwrap(),
+                })) {
+                    ev_tx.send(init_json).ok();
+                }
+
+                ctrl_clients.lock().unwrap().push(ev_tx);
+
+                // Writer thread: drains ev_rx → socket
+                std::thread::spawn(move || {
+                    let mut w = stream_w;
+                    for line in ev_rx {
+                        if writeln!(w, "{line}").is_err() {
+                            break;
+                        }
+                    }
+                });
+
+                // Reader thread: socket → merged_tx as DaemonEvent::Ctrl
+                let ctrl_tx = merged_tx2.clone();
+                std::thread::spawn(move || {
+                    let reader = BufReader::new(stream);
+                    for line in reader.lines() {
+                        let Ok(line) = line else { break };
+                        if line.is_empty() { continue; }
+                        if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
+                            let _ = ctrl_tx.send(DaemonEvent::Ctrl(cmd));
+                        }
+                    }
+                });
+            }
+        });
+    }
 
     let client = Arc::new(Mutex::new(client));
     let mut items: Vec<MediaItem> = Vec::new();
@@ -97,14 +178,81 @@ pub fn run(client: EmbyClient) -> ! {
 
     for ev in merged_rx {
         match ev {
-            DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => { cursor = idx; }
-            DaemonEvent::Player(_) => {}
+            DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => {
+                cursor = idx;
+                *shared_cursor.lock().unwrap() = idx;
+                broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::TrackChanged(idx)));
+            }
+            DaemonEvent::Player(pe) => {
+                broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
+            }
             DaemonEvent::Ws(ws_ev) => {
-                handle_ws(ws_ev, &client, &player, &mut items, &mut cursor, &log);
+                handle_ws(
+                    ws_ev, &client, &player,
+                    &mut items, &mut cursor,
+                    &shared_items, &shared_cursor,
+                    &ctrl_clients, &log,
+                );
+            }
+            DaemonEvent::Ctrl(cmd) => {
+                handle_ctrl(cmd, &client, &player, &mut items, &mut cursor,
+                            &shared_items, &shared_cursor, &log);
             }
         }
     }
     unreachable!("daemon event channel closed")
+}
+
+fn handle_ctrl(
+    cmd: CtrlCmd,
+    client: &Arc<Mutex<EmbyClient>>,
+    player: &Player,
+    items: &mut Vec<MediaItem>,
+    cursor: &mut usize,
+    shared_items: &Arc<Mutex<Vec<MediaItem>>>,
+    shared_cursor: &Arc<Mutex<usize>>,
+    log: &AppLog,
+) {
+    match cmd {
+        CtrlCmd::PlayerCmd(pc) => {
+            player.send_command(pc);
+        }
+        CtrlCmd::PlayItems { item_ids, start_ticks } => {
+            let fetched = {
+                let c = client.lock().unwrap();
+                match c.get_items_by_ids(&item_ids) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        log.push(Level::Warn, "daemon", format!("ctrl play error: {e}"));
+                        return;
+                    }
+                }
+            };
+            if fetched.is_empty() { return; }
+            *items = fetched.clone();
+            *cursor = 0;
+            *shared_items.lock().unwrap() = fetched.clone();
+            *shared_cursor.lock().unwrap() = 0;
+            let c = Arc::new(client.lock().unwrap().clone());
+            if fetched.len() == 1 {
+                let mut item = fetched[0].clone();
+                if start_ticks > 0 {
+                    item.playback_position_ticks = start_ticks;
+                }
+                player.play(&item, c, log.clone());
+            } else {
+                let active = player.status.lock().unwrap().active;
+                if active {
+                    player.play(&fetched[0], c, log.clone());
+                } else {
+                    player.play_playlist(fetched, 0, c, log.clone());
+                }
+            }
+        }
+        CtrlCmd::Stop => {
+            player.stop();
+        }
+    }
 }
 
 fn handle_ws(
@@ -113,6 +261,9 @@ fn handle_ws(
     player: &Player,
     items: &mut Vec<MediaItem>,
     cursor: &mut usize,
+    shared_items: &Arc<Mutex<Vec<MediaItem>>>,
+    shared_cursor: &Arc<Mutex<usize>>,
+    ctrl_clients: &ClientList,
     log: &AppLog,
 ) {
     match ev {
@@ -128,6 +279,16 @@ fn handle_ws(
             if fetched.is_empty() { return; }
             *items  = fetched.clone();
             *cursor = 0;
+            *shared_items.lock().unwrap() = fetched.clone();
+            *shared_cursor.lock().unwrap() = 0;
+            // Broadcast updated playlist to connected TUIs
+            if let Ok(json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
+                status: player.status.lock().unwrap().clone(),
+                items: fetched.clone(),
+                cursor: 0,
+            })) {
+                ctrl_clients.lock().unwrap().retain(|tx| tx.send(json.clone()).is_ok());
+            }
             let c = Arc::new(client.lock().unwrap().clone());
             if fetched.len() == 1 {
                 let mut item = fetched[0].clone();

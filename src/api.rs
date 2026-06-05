@@ -47,7 +47,7 @@ fn device_id() -> String {
     id
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MediaItem {
     pub id: String,
     pub name: String,

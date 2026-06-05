@@ -78,8 +78,14 @@ pub fn osc_fonts_dir() -> PathBuf {
 
 pub fn mpv_ipc_path() -> String {
     let runtime = env::var("XDG_RUNTIME_DIR")
-        .unwrap_or_else(|_| format!("/tmp"));
+        .unwrap_or_else(|_| "/tmp".to_string());
     format!("{}/mby-mpv.sock", runtime)
+}
+
+pub fn control_socket_path() -> String {
+    let runtime = env::var("XDG_RUNTIME_DIR")
+        .unwrap_or_else(|_| "/tmp".to_string());
+    format!("{}/mby-ctrl.sock", runtime)
 }
 
 pub fn playlist_cache_path() -> PathBuf {

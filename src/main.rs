@@ -2,15 +2,24 @@ mod api;
 mod app;
 mod applog;
 mod config;
+mod ctrl;
 mod daemon;
 mod login;
 mod mpris;
 mod player;
+mod remote_player;
 mod ws;
 
 use api::EmbyClient;
 use app::App;
 use config::load_config;
+
+fn daemon_running() -> bool {
+    let Ok(s) = std::fs::read_to_string(daemon::pid_file()) else { return false };
+    let Ok(pid) = s.trim().parse::<u32>() else { return false };
+    // Check if the process is alive via /proc (Linux-specific, no extra deps)
+    std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -82,6 +91,22 @@ fn main() {
 
     if daemon_inner {
         daemon::run(client); // never returns
+    }
+
+    // If a daemon is running, try to connect to it instead of standalone mode.
+    if daemon_running() {
+        match remote_player::RemotePlayer::connect() {
+            Ok((remote, player_rx)) => {
+                if let Err(e) = App::new_remote(client, remote, player_rx).run() {
+                    eprintln!("Error: {e}");
+                    std::process::exit(1);
+                }
+                return;
+            }
+            Err(e) => {
+                eprintln!("mby: daemon found but control socket unavailable ({e}), starting standalone");
+            }
+        }
     }
 
     if let Err(e) = App::new(client).run() {

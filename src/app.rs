@@ -20,7 +20,7 @@ use ratatui_image::protocol::StatefulProtocol;
 
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 use crate::applog::{AppLog, Level};
-use crate::player::{Player, PlayerCommand, PlayerEvent};
+use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use crate::ws::WsEvent;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -104,7 +104,7 @@ struct LibraryTab {
 
 pub struct App {
     client: Arc<Mutex<EmbyClient>>,
-    player: Player,
+    player: PlayerProxy,
     player_rx: mpsc::Receiver<PlayerEvent>,
     ws_rx: mpsc::Receiver<WsEvent>,
     tab_idx: usize,
@@ -173,14 +173,16 @@ impl App {
         let ws_url = client.ws_url();
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
         let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
-        let player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, client.config.always_play_next, player_tx, Some(ws_send_tx));
-        let player_status = player.status.clone();
-        let player_cmd_tx = player.cmd_tx.clone();
+        let always_play_next = client.config.always_play_next;
+        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, player_tx, Some(ws_send_tx));
+        let player_status = raw_player.status.clone();
+        let player_cmd_tx = raw_player.cmd_tx.clone();
         crate::mpris::start(player_status, move |cmd| {
             if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
                 let _ = tx.send(cmd);
             }
         });
+        let player = PlayerProxy::local(raw_player, always_play_next);
         App {
             client: Arc::new(Mutex::new(client)),
             player,
@@ -189,6 +191,87 @@ impl App {
             tab_idx: 0,
             hidden_libraries,
             player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
+            home: HomePane {
+                continue_items: Vec::new(),
+                continue_cursor: 0,
+                latest: Vec::new(),
+                section: 0,
+            },
+            libs: Vec::new(),
+            status: String::new(),
+            status_expires: None,
+            log,
+            log_scroll: 0,
+            log_pane: LogPane::Log,
+            log_source_cursor: 0,
+            log_disabled_sources: std::collections::HashSet::new(),
+            playlist_rect: Rect::default(),
+            home_rect: Rect::default(),
+            layout_playlist_inner: Rect::default(),
+            layout_section_areas: Vec::new(),
+            layout_tabs_area: Rect::default(),
+            terminal_width: 80,
+            terminal_height: 24,
+            layout_lib_scroll: 0,
+            layout_lib_row_heights: Vec::new(),
+            layout_home_scrolls: Vec::new(),
+            layout_lib_table_area: Rect::default(),
+            layout_breadcrumbs: Vec::new(),
+            last_click_time: Instant::now(),
+            last_drag_seek: Instant::now() - Duration::from_secs(1),
+            last_click_pos: (u16::MAX, u16::MAX),
+            layout_seekbar_area: Rect::default(),
+            layout_button_area: Rect::default(),
+            layout_tracks_area: Rect::default(),
+            layout_vol_area: Rect::default(),
+            confirm_remove_idx: None,
+            confirm_clear_playlist: false,
+            next_up_item: None,
+            playlist_card_view: Self::load_playlist_card_view(),
+            last_played_item_id: None,
+            layout_carousel_slots: [(None, Rect::default()); 3],
+            last_carousel_click_slot: None,
+            last_carousel_click_time: Instant::now() - Duration::from_secs(1),
+            card_image_states: std::collections::HashMap::new(),
+            card_image_loading: std::collections::HashSet::new(),
+            card_image_tx,
+            card_image_rx,
+            image_picker: None,
+            show_help: false,
+            show_log_tab,
+            context_menu: None,
+            context_menu_rect: None,
+            lib_tx,
+            lib_rx,
+        }
+    }
+
+    pub fn new_remote(
+        client: EmbyClient,
+        remote: crate::remote_player::RemotePlayer,
+        player_rx: mpsc::Receiver<PlayerEvent>,
+    ) -> Self {
+        let (_, ws_rx) = mpsc::channel::<crate::ws::WsEvent>();
+        let (lib_tx, lib_rx) = mpsc::channel();
+        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
+        let hidden_libraries = client.config.hidden_libraries.clone();
+        let show_log_tab = client.config.show_log_tab;
+        let always_play_next = client.config.always_play_next;
+        let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
+        let initial_items = remote.items.lock().unwrap().clone();
+        let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let player = PlayerProxy::remote(remote, always_play_next);
+        App {
+            client: Arc::new(Mutex::new(client)),
+            player,
+            player_rx,
+            ws_rx,
+            tab_idx: 0,
+            hidden_libraries,
+            player_tab: PlayerTab {
+                items: initial_items,
+                playlist_cursor: initial_cursor,
+            },
             home: HomePane {
                 continue_items: Vec::new(),
                 continue_cursor: 0,
@@ -284,6 +367,12 @@ impl App {
             if let Ok(ev) = self.player_rx.try_recv() {
                 match ev {
                     PlayerEvent::Stopped { idx, position_ticks } => {
+                        if self.player.is_remote_disconnected() {
+                            self.next_up_item = None;
+                            self.status = "Daemon disconnected — playback stopped".into();
+                            self.refresh_after_stop();
+                            continue;
+                        }
                         if let Some(item) = self.player_tab.items.get_mut(idx) {
                             if position_ticks > 0 {
                                 item.playback_position_ticks = position_ticks;
@@ -292,14 +381,6 @@ impl App {
                         }
                         if let Some(item) = self.next_up_item.take() {
                             if self.player.always_play_next {
-                                if self.player.status.lock().unwrap().active {
-                                    // EndFile fired but Shutdown hasn't yet; active is still true.
-                                    // LoadNew sent now would race with Shutdown and be dropped.
-                                    // Restore the item and wait for the Shutdown-triggered Stopped
-                                    // where active will be false and play() starts a clean thread.
-                                    self.next_up_item = Some(item);
-                                    continue;
-                                }
                                 self.log.push(Level::Warn, "app", format!("next-up: auto-playing '{}'", item.display_name()));
                                 let c = Arc::new(self.client.lock().unwrap().clone());
                                 self.player_tab.items = vec![item.clone()];
@@ -314,9 +395,17 @@ impl App {
                         self.refresh_after_stop();
                     }
                     PlayerEvent::TrackChanged(idx) => {
-                        self.player_tab.playlist_cursor = idx;
-                        if let Some(item) = self.player_tab.items.get(idx) {
+                        if let Some(item) = self.next_up_item.take() {
+                            // AppendNext seamless transition: the queued episode is now playing.
+                            self.player_tab.items = vec![item.clone()];
+                            self.player_tab.playlist_cursor = 0;
+                            self.flash_status(item.playback_label());
                             self.last_played_item_id = Some(item.id.clone());
+                        } else {
+                            self.player_tab.playlist_cursor = idx;
+                            if let Some(item) = self.player_tab.items.get(idx) {
+                                self.last_played_item_id = Some(item.id.clone());
+                            }
                         }
                     }
                     PlayerEvent::PlaylistNextUp { next_idx } => {
@@ -335,8 +424,24 @@ impl App {
                                 let item_id = next_item.id.clone();
                                 let title = next_item.display_name();
                                 self.log.push(Level::Warn, "app", format!("next-up: found '{}' id={item_id}", title));
-                                self.next_up_item = Some(next_item);
-                                drop(client);
+                                self.next_up_item = Some(next_item.clone());
+                                // If always_play_next, pre-queue the next episode in mpv's playlist
+                                // for a seamless same-window transition when the current one ends.
+                                if self.player.always_play_next {
+                                    let url = format!(
+                                        "{}/Videos/{}/stream?static=true&api_key={}",
+                                        client.config.server_url, next_item.id, client.token
+                                    );
+                                    let start_pos = next_item.resume_seconds();
+                                    drop(client);
+                                    self.player.send_command(PlayerCommand::AppendNext {
+                                        url,
+                                        start_pos,
+                                        item: Box::new(next_item),
+                                    });
+                                } else {
+                                    drop(client);
+                                }
                                 self.player.send_command(PlayerCommand::NextUpShow { item_id, title });
                             }
                             None => {
@@ -440,7 +545,7 @@ impl App {
         if self.tab_idx != self.log_tab_idx() {
             if key.code == KeyCode::Char('c') && !key.modifiers.contains(KeyModifiers::ALT) && !in_lib_search {
                 if self.player_tab.items.is_empty() { return false; }
-                self.status = "Clear playlist? y/Enter: Yes  any other key: Cancel".into();
+                self.status = "Clear playlist? (y/N)".into();
                 self.confirm_clear_playlist = true;
                 return false;
             }
