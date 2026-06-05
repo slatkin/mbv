@@ -22,7 +22,15 @@ jobs:
           pacman -S --noconfirm --needed rust cargo nasm mpv openssl github-cli git openssh
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Run tests
         run: cargo test
