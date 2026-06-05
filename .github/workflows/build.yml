@@ -70,7 +70,7 @@ jobs:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
           mkdir -p /root/.ssh
-          echo "$AUR_SSH_KEY" > /root/.ssh/aur
+          echo "$AUR_SSH_KEY" | tr -d '\r' > /root/.ssh/aur
           chmod 600 /root/.ssh/aur
           export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur -o StrictHostKeyChecking=accept-new"
           git config --global --add safe.directory '*'
