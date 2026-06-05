@@ -19,7 +19,7 @@ jobs:
       - name: Update system and install makedeps
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed rust cargo nasm mpv openssl github-cli git
+          pacman -S --noconfirm --needed rust cargo nasm mpv openssl github-cli git openssh
 
       - name: Build binary
         run: cargo build --release
