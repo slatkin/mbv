@@ -76,8 +76,7 @@ mod palette {
     pub const SUBTLE:        Color = Color::Rgb(158, 158, 158);  // secondary text
     pub const TEXT:          Color = Color::Rgb(230, 230, 230);  // primary text
     pub const WHITE:         Color = Color::Rgb(253, 253, 253);  // near-white (#fdfdfd)
-    pub const GOLD:          Color = Color::Rgb(246, 162, 30);   // amber — in-progress, paused
-    pub const YELLOW:        Color = Color::Rgb(250, 220, 70);   // yellow — in-progress (continue watching)
+    pub const YELLOW:        Color = Color::Rgb(250, 220, 70);   // yellow — in-progress, paused
     pub const PINE:          Color = Color::Rgb(61,  139, 55);   // dark green — folders, watched
     pub const FOAM:          Color = Color::Rgb(0,   164, 220);  // emby blue — now-playing item
     pub const IRIS:          Color = Color::Rgb(82,  181, 75);   // emby green — active tab, focused
@@ -2170,7 +2169,7 @@ impl App {
         }
         // Any explicit status (flash or persistent prompt) beats now_playing
         let (status_text, status_color) = if !self.status.is_empty() {
-            let color = if self.status_expires.is_some() { palette::GOLD } else { palette::GOLD };
+            let color = if self.status_expires.is_some() { palette::YELLOW } else { palette::YELLOW };
             (Some(self.status.as_str()), color)
         } else {
             (now_playing.as_deref(), palette::FOAM)
@@ -2468,7 +2467,7 @@ impl App {
         let (vol_icon_style, vol_text_style) = if volume > 100 {
             (Style::default().fg(Color::Red), Style::default().fg(Color::Yellow))
         } else {
-            (Style::default().fg(palette::GOLD), text_style)
+            (Style::default().fg(palette::YELLOW), text_style)
         };
         f.render_widget(
             Paragraph::new(Line::from(vec![
@@ -2597,7 +2596,7 @@ impl App {
                 let filled = (((pos_ticks as f64 / rt_ticks as f64) * BAR_W as f64)
                     .round() as usize)
                     .min(BAR_W);
-                let bar_color = if i == current_idx && active { palette::FOAM } else { palette::GOLD };
+                let bar_color = if i == current_idx && active { palette::FOAM } else { palette::YELLOW };
                 Cell::from(Line::from(vec![
                     Span::raw("  "),
                     Span::styled("━".repeat(filled),         Style::default().fg(bar_color)),
@@ -2930,7 +2929,7 @@ impl App {
                 let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
                 put(f, text_y, Paragraph::new(Line::from(vec![
                     Span::raw(" ".repeat(pad)),
-                    Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::FOAM } else { palette::GOLD })),
+                    Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::FOAM } else { palette::YELLOW })),
                     Span::styled("─".repeat(bar_w - filled), Style::default().fg(palette::WHITE)),
                 ])));
                 text_y += 1;
@@ -3075,7 +3074,7 @@ impl App {
             let block = Block::default()
                 .borders(Borders::ALL).border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(palette::IRIS))
-                .title(Span::styled(display, Style::default().fg(palette::GOLD).add_modifier(Modifier::BOLD)))
+                .title(Span::styled(display, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)))
                 .title_alignment(Alignment::Center);
             let inner = block.inner(area);
             f.render_widget(block, area);
@@ -3213,7 +3212,7 @@ impl App {
             }
 
             let text_color = if item.played && item.item_type != "Series" { palette::SUBTLE }
-                else if item.playback_position_ticks > 0                  { palette::GOLD }
+                else if item.playback_position_ticks > 0                  { palette::YELLOW }
                 else                                                      { palette::TEXT };
 
             let title_str = if item.is_folder && item.unplayed_item_count > 0 {
@@ -3246,7 +3245,7 @@ impl App {
             } else if item.playback_position_ticks > 0 && item.runtime_ticks > 0 {
                 let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
                 f.render_widget(
-                    Paragraph::new(Span::styled(format!("{pct}%"), Style::default().fg(palette::GOLD))),
+                    Paragraph::new(Span::styled(format!("{pct}%"), Style::default().fg(palette::YELLOW))),
                     stat_rect,
                 );
             }
@@ -3261,7 +3260,7 @@ impl App {
         let [hint_area, body] = Layout::vertical([Constraint::Length(1), Constraint::Min(0)])
             .areas(area);
 
-        let k = Style::default().fg(palette::GOLD).add_modifier(Modifier::BOLD);
+        let k = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
         let m = Style::default().fg(palette::MUTED);
         let sp = "  ";
         let hints = Line::from(vec![
@@ -3296,7 +3295,7 @@ impl App {
             if y >= src_inner.bottom() { break; }
             let disabled = self.log_disabled_sources.contains(src);
             let selected = i == src_cursor && src_focused;
-            let fg = if disabled { palette::OVERLAY } else if selected { palette::GOLD } else { palette::SUBTLE };
+            let fg = if disabled { palette::OVERLAY } else if selected { palette::YELLOW } else { palette::SUBTLE };
             let prefix = if disabled { "○ " } else { "● " };
             let dot_color = if disabled { palette::OVERLAY } else { palette::IRIS };
             f.buffer_mut().set_stringn(src_inner.left(), y, prefix, 2, Style::default().fg(dot_color));
@@ -3412,7 +3411,7 @@ fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
     let text = format!("{}{}", item.display_name(), suffix);
     let style = if selected { Style::default() }
         else if item.played { Style::default().fg(palette::SUBTLE) }
-        else if item.playback_position_ticks > 0 { Style::default().fg(palette::GOLD) }
+        else if item.playback_position_ticks > 0 { Style::default().fg(palette::YELLOW) }
         else { Style::default().fg(palette::TEXT) };
     (text, style)
 }
@@ -3430,7 +3429,7 @@ fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'sta
 fn highlight_style(item: &MediaItem) -> Style {
     if item.is_folder && item.item_type != "Series" { Style::default().fg(palette::BASE).bg(palette::PINE) }
     else if item.played && item.item_type != "Series" { Style::default().fg(palette::BASE).bg(palette::SUBTLE) }
-    else if item.playback_position_ticks > 0 { Style::default().fg(palette::BASE).bg(palette::GOLD) }
+    else if item.playback_position_ticks > 0 { Style::default().fg(palette::BASE).bg(palette::YELLOW) }
     else                    { Style::default().fg(palette::TEXT).bg(palette::HIGHLIGHT_MED) }
 }
 
@@ -3527,7 +3526,7 @@ mod tests {
         item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 1 hour in → 50%
         let (text, style) = item_text_and_style(&item, false);
         assert!(text.contains("50%"), "expected percentage in: {text}");
-        assert_eq!(style.fg, Some(palette::GOLD));
+        assert_eq!(style.fg, Some(palette::YELLOW));
     }
 
     #[test]
