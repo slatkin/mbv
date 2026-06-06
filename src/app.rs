@@ -3140,6 +3140,7 @@ impl App {
     fn render_library_table(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
         self.layout_lib_table_area = area;
         const LIB_IMG_W: u16 = 20;
+        const LIB_EP_IMG_W: u16 = 32;
 
         let (display_items, cursor): (Vec<(usize, crate::api::MediaItem)>, usize) = {
             let lib = &self.libs[lib_idx];
@@ -3171,10 +3172,12 @@ impl App {
         // Row heights: 2 base (+ wrapped overview for episodes) + 1 separator.
         // Selected row also gets +2 padding (top + bottom).
         let episode_content_w = area.width.saturating_sub(1) as usize;
+        let episode_selected_content_w = area.width.saturating_sub(1 + LIB_EP_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let base: u16 = if item.item_type == "Episode" {
+                let ew = if i == cursor { episode_selected_content_w } else { episode_content_w };
                 let ov_lines = if item.overview.is_empty() { 0 }
-                    else { wrap(&item.overview, episode_content_w.max(1)).len().min(4) as u16 };
+                    else { wrap(&item.overview, ew.max(1)).len().min(4) as u16 };
                 let seekbar: u16 = if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 { 2 } else { 0 };
                 2 + ov_lines + seekbar
             } else { 2 };
@@ -3194,12 +3197,21 @@ impl App {
         };
         self.layout_lib_scroll = scroll;
 
-        // Trigger image fetch for selected movie before rendering loop
+        // Trigger image fetch for selected item before rendering loop
         if let Some((_, item)) = display_items.get(cursor) {
-            if item.item_type == "Movie" {
-                let cache_key = format!("{}:lib", item.id);
-                let item_id = item.id.clone();
-                self.fetch_card_image(cache_key, item_id, String::new(), &["Logo", "Primary"]);
+            let cache_key = format!("{}:lib", item.id);
+            match item.item_type.as_str() {
+                "Movie" | "Series" => {
+                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Logo", "Primary"]);
+                }
+                "Season" => {
+                    self.fetch_card_image(cache_key, item.id.clone(), item.series_id.clone(), &["Logo", "Primary"]);
+                }
+                "Episode" => {
+                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Primary"]);
+                }
+
+                _ => {}
             }
         }
 
@@ -3211,7 +3223,7 @@ impl App {
             let abs_idx = scroll + vi;
             let row_h = all_heights[abs_idx].min(area.y + area.height - row_y);
             let selected = abs_idx == cursor;
-            let show_img = selected && item.item_type == "Movie";
+            let show_img = selected && matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode");
             let row_rect = Rect { x: area.x, y: row_y, width: area.width, height: row_h };
 
             // Content area excludes the separator line at the bottom of the row.
@@ -3226,16 +3238,22 @@ impl App {
             let cache_key = format!("{}:lib", item.id);
             let img_actual = if show_img {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                    let avail = ratatui::layout::Size { width: LIB_IMG_W, height: padded_area.height };
+                    let (img_w, img_h) = if item.item_type == "Episode" {
+                        (LIB_EP_IMG_W, 4u16.min(padded_area.height))
+                    } else {
+                        (LIB_IMG_W, padded_area.height)
+                    };
+                    let avail = ratatui::layout::Size { width: img_w, height: img_h };
                     Some(state.size_for(ratatui_image::Resize::Fit(None), avail))
                 } else { None }
             } else { None };
 
-            // Split padded_area: indicator | text | [image]
+            // Split padded_area: indicator | text | gap | [image]
             let (ind_rect, text_rect, img_rect_opt) = if let Some(actual) = img_actual {
-                let [a, b, c] = Layout::horizontal([
+                let [a, b, _, c] = Layout::horizontal([
                     Constraint::Length(1),
                     Constraint::Min(0),
+                    Constraint::Length(2),
                     Constraint::Length(actual.width),
                 ]).areas(padded_area);
                 let img_rect = Rect { height: actual.height.min(c.height), ..c };
