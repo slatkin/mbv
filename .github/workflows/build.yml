@@ -2,6 +2,8 @@ name: PKGBUILD
 
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v*'
   workflow_dispatch:
