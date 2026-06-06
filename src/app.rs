@@ -2710,7 +2710,7 @@ impl App {
 
         // Panels are 80% of available height, centered vertically, capped 6 rows below area.
         // Side cards are 80% of center height, also centered.
-        let center_h   = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(40) }.max(4);
+        let center_h   = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
         let side_h     = ((center_h as u32 * 4 / 5) as u16).max(3);
         let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
@@ -2721,7 +2721,7 @@ impl App {
 
         // Width split: gap | side 30% | gap | center 40% | gap | side 30% | gap
         // Four equal gaps consumed from total width before distributing to panels.
-        const GAP: u16 = 3;
+        const GAP: u16 = 1;
         let (center_w, side_w, x_left, x_center, x_right) = if show_sides {
             let avail_w  = area.width.saturating_sub(GAP * 4);
             let cw = (avail_w as u32 * 2 / 5) as u16;
@@ -3079,7 +3079,7 @@ impl App {
 
         if let Some(s) = &self.libs[lib_idx].search {
             self.layout_breadcrumbs.clear();
-            let display = format!(" / {}█", s.query);
+            let display = format!(" {}█", s.query);
             let block = Block::default()
                 .borders(Borders::ALL).border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(palette::IRIS))
