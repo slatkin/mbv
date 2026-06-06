@@ -3373,6 +3373,16 @@ impl App {
                     }
                     Line::from(spans)
                 }
+                _ if item.is_folder && item.item_type != "Series" && item.item_type != "Season" => {
+                    if item.total_count > 0 {
+                        Line::from(Span::styled(
+                            format!("{} items", item.total_count),
+                            Style::default().fg(palette::SUBTLE),
+                        ))
+                    } else {
+                        Line::from(vec![])
+                    }
+                }
                 _ => {
                     // Movie and other non-folder types
                     let mut spans: Vec<Span> = Vec::new();
