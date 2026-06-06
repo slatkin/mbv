@@ -64,12 +64,11 @@ show_systray_icon = true
 - **Daemon mode** — run mby as a background service with no terminal required. Register it with your server and drive it entirely from remote apps.
 - **System media keys** — mby exposes an MPRIS2 interface so desktop widgets, `playerctl`, and system media keys all work automatically.
 
-### Playback details
+### Media Playback details
 
-- Media plays through an embedded mpv instance. Switching tracks is seamless — no window close/reopen between items.
+- Media plays through an embedded mpv instance. Playback is synchronised between mpv, the mby client, and Emby server.
 - Audio plays headless by default (no mpv window). Set `show_audio_window = true` to change this.
-- Your personal `~/.config/mpv/mpv.conf` is respected (shaders, audio devices, renderer settings, keybindings).
-- Volume range follows mpv's `volume-max` setting, so `+`/`-` in mby respects whatever ceiling you have set.
+- If you want, your personal `~/.config/mpv/mpv.conf` is respected (shaders, audio devices, renderer settings, keybindings).
 - The mpv IPC socket lives at `$XDG_RUNTIME_DIR/mby-mpv.sock`, separate from the default mpv socket, so running mby alongside standalone mpv doesn't cause conflicts.
 - By default mby uses its own bundled OSC ([mpv-osc-modern](https://github.com/maoiscat/mpv-osc-modern)). Set `use_mpv_config = true` to defer to your own `~/.config/mpv/` setup instead.
 
