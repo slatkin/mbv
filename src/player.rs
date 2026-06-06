@@ -1469,6 +1469,8 @@ mod tests {
             index_number: 2, parent_index_number: 1,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
+            production_year: 0, end_year: 0, overview: String::new(),
+            premiere_date: String::new(), total_count: 0,
         }
     }
 

@@ -2674,9 +2674,18 @@ impl App {
     }
 
     fn evict_card_images(&mut self) {
-        let valid: std::collections::HashSet<String> = self.player_tab.items.iter()
+        let mut valid: std::collections::HashSet<String> = self.player_tab.items.iter()
             .flat_map(|item| [format!("{}:A", item.id), format!("{}:S", item.id)])
             .collect();
+        for lib in &self.libs {
+            if let Some(lvl) = lib.nav_stack.last() {
+                if let Some(item) = lvl.items.get(lvl.cursor) {
+                    if item.item_type == "Movie" {
+                        valid.insert(format!("{}:lib", item.id));
+                    }
+                }
+            }
+        }
         self.card_image_states.retain(|k, _| valid.contains(k));
         self.card_image_loading.retain(|k| valid.contains(k));
     }
@@ -3130,9 +3139,7 @@ impl App {
 
     fn render_library_table(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
         self.layout_lib_table_area = area;
-        const DUR_W:  u16 = 7;
-        const STAT_W: u16 = 4;
-        let title_w = area.width.saturating_sub(1 + DUR_W + STAT_W) as usize;
+        const LIB_IMG_W: u16 = 20;
 
         let (display_items, cursor): (Vec<(usize, crate::api::MediaItem)>, usize) = {
             let lib = &self.libs[lib_idx];
@@ -3161,18 +3168,23 @@ impl App {
             return;
         }
 
-        // Compute height of each item based on title wrapping (capped at 3)
-        let all_heights: Vec<u16> = display_items.iter().map(|(_, item)| {
-            let s = if item.is_folder && item.unplayed_item_count > 0 {
-                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
-            } else { item.display_name() };
-            wrap(&s, title_w.max(1)).len().clamp(1, 3) as u16
+        // Row heights: 2 base (+ wrapped overview for episodes) + 1 separator.
+        // Selected row also gets +2 padding (top + bottom).
+        let episode_content_w = area.width.saturating_sub(1) as usize;
+        let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
+            let base: u16 = if item.item_type == "Episode" {
+                let ov_lines = if item.overview.is_empty() { 0 }
+                    else { wrap(&item.overview, episode_content_w.max(1)).len().min(4) as u16 };
+                let seekbar: u16 = if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 { 2 } else { 0 };
+                2 + ov_lines + seekbar
+            } else { 2 };
+            let padding: u16 = if i == cursor { 2 } else { 0 };
+            base + padding + 1 // +1 for separator line at bottom
         }).collect();
 
         // Scroll: keep existing scroll, only adjust to keep cursor visible.
         let scroll = {
             let mut s = self.layout_lib_scroll.min(cursor);
-            // If cursor is below the visible area, scroll down just enough.
             loop {
                 let visible_h: u16 = all_heights[s..=cursor].iter().sum();
                 if visible_h <= area.height { break; }
@@ -3182,6 +3194,15 @@ impl App {
         };
         self.layout_lib_scroll = scroll;
 
+        // Trigger image fetch for selected movie before rendering loop
+        if let Some((_, item)) = display_items.get(cursor) {
+            if item.item_type == "Movie" {
+                let cache_key = format!("{}:lib", item.id);
+                let item_id = item.id.clone();
+                self.fetch_card_image(cache_key, item_id, String::new(), &["Logo", "Primary"]);
+            }
+        }
+
         // Render visible rows, accumulating y
         let mut row_y = area.y;
         let mut rendered_heights: Vec<u16> = Vec::new();
@@ -3190,63 +3211,192 @@ impl App {
             let abs_idx = scroll + vi;
             let row_h = all_heights[abs_idx].min(area.y + area.height - row_y);
             let selected = abs_idx == cursor;
+            let show_img = selected && item.item_type == "Movie";
             let row_rect = Rect { x: area.x, y: row_y, width: area.width, height: row_h };
 
-            let stripe_bg = if abs_idx % 2 == 1 { palette::STRIPE } else { Color::Reset };
-            if stripe_bg != Color::Reset {
-                f.render_widget(Block::default().style(Style::default().bg(stripe_bg)), row_rect);
-            }
+            // Content area excludes the separator line at the bottom of the row.
+            // For selected rows it is further inset by 1 top and 1 bottom for padding.
+            let content_area = Rect { height: row_h.saturating_sub(1), ..row_rect };
+            let padded_area = if selected {
+                Rect { y: content_area.y + 1, height: content_area.height.saturating_sub(2), ..content_area }
+            } else { content_area };
 
-            let [ind_rect, title_rect, dur_rect, stat_rect] = Layout::horizontal([
-                Constraint::Length(1),
-                Constraint::Min(0),
-                Constraint::Length(DUR_W),
-                Constraint::Length(STAT_W),
-            ]).areas(row_rect);
+            // Compute actual image size first so we can size the column correctly.
+            // Image sits at the far right; text fills everything to its left.
+            let cache_key = format!("{}:lib", item.id);
+            let img_actual = if show_img {
+                if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
+                    let avail = ratatui::layout::Size { width: LIB_IMG_W, height: padded_area.height };
+                    Some(state.size_for(ratatui_image::Resize::Fit(None), avail))
+                } else { None }
+            } else { None };
+
+            // Split padded_area: indicator | text | [image]
+            let (ind_rect, text_rect, img_rect_opt) = if let Some(actual) = img_actual {
+                let [a, b, c] = Layout::horizontal([
+                    Constraint::Length(1),
+                    Constraint::Min(0),
+                    Constraint::Length(actual.width),
+                ]).areas(padded_area);
+                let img_rect = Rect { height: actual.height.min(c.height), ..c };
+                (a, b, Some(img_rect))
+            } else {
+                let [a, c] = Layout::horizontal([
+                    Constraint::Length(1),
+                    Constraint::Min(0),
+                ]).areas(padded_area);
+                (a, c, None)
+            };
+            let content_w = text_rect.width as usize;
 
             if selected {
-                f.render_widget(
-                    Paragraph::new(Span::styled("▌", Style::default().fg(palette::IRIS))),
-                    ind_rect,
-                );
+                let bar: Vec<Line> = (0..ind_rect.height)
+                    .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::IRIS))))
+                    .collect();
+                f.render_widget(Paragraph::new(bar), ind_rect);
             }
 
-            let text_color = if item.played && item.item_type != "Series" { palette::SUBTLE }
-                else if item.playback_position_ticks > 0                  { palette::YELLOW }
-                else                                                      { palette::TEXT };
+            // Render image at the right of the row
+            if let Some(img_rect) = img_rect_opt {
+                type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
+                if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
+                    f.render_stateful_widget(SImg::default().resize(ratatui_image::Resize::Fit(None)), img_rect, state);
+                }
+            }
 
-            let title_str = if item.is_folder && item.unplayed_item_count > 0 {
-                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
-            } else {
-                item.display_name()
+            let text_color = palette::TEXT;
+
+            // Build title line (line 1)
+            let title_line = match item.item_type.as_str() {
+                "Episode" => {
+                    let n = item.index_number;
+                    if n > 0 { format!("{}. {}", n, item.name) } else { item.name.clone() }
+                }
+                "Series" => {
+                    if item.total_count > 0 {
+                        format!("{} ({}/{})", item.name, item.unplayed_item_count, item.total_count)
+                    } else if item.unplayed_item_count > 0 {
+                        format!("{} ({})", item.name, item.unplayed_item_count)
+                    } else {
+                        item.name.clone()
+                    }
+                }
+                _ => item.name.clone(),
             };
-            let lines: Vec<Line> = wrap(&title_str, title_w.max(1))
-                .into_iter()
-                .take(row_h as usize)
-                .map(|s| Line::from(Span::styled(s.into_owned(), Style::default().fg(text_color))))
-                .collect();
-            f.render_widget(Paragraph::new(lines), title_rect);
+            let title_display = wrap(&title_line, content_w.max(1))
+                .into_iter().next().map(|c| c.into_owned()).unwrap_or_default();
 
-            let dur_s = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
-            if dur_s > 0 {
-                let h = dur_s / 3600; let m = (dur_s % 3600) / 60;
-                let dur_str = if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") };
+            // Build metadata line (line 2)
+            let meta_line: Line = match item.item_type.as_str() {
+                "Series" => {
+                    let year_str = if item.production_year > 0 && item.end_year > 0 && item.end_year != item.production_year {
+                        format!("{} \u{2013} {}", item.production_year, item.end_year)
+                    } else if item.production_year > 0 && item.end_year == 0 {
+                        format!("{} \u{2013}", item.production_year)
+                    } else if item.production_year > 0 {
+                        format!("{}", item.production_year)
+                    } else {
+                        String::new()
+                    };
+                    Line::from(Span::styled(year_str, Style::default().fg(palette::SUBTLE)))
+                }
+                "Season" => {
+                    let mut parts: Vec<String> = Vec::new();
+                    if item.total_count > 0 { parts.push(format!("{} eps", item.total_count)); }
+                    if item.production_year > 0 { parts.push(format!("{}", item.production_year)); }
+                    Line::from(Span::styled(parts.join(" \u{b7} "), Style::default().fg(palette::SUBTLE)))
+                }
+                "Episode" => {
+                    let mut spans: Vec<Span> = Vec::new();
+                    if item.played {
+                        spans.push(Span::styled("\u{f00c} ", Style::default().fg(palette::PINE)));
+                    }
+                    let mut parts: Vec<String> = Vec::new();
+                    if !item.premiere_date.is_empty() { parts.push(item.premiere_date.clone()); }
+                    let dur_s = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
+                    if dur_s > 0 {
+                        let h = dur_s / 3600; let m = (dur_s % 3600) / 60;
+                        parts.push(if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") });
+                    }
+                    if !parts.is_empty() {
+                        spans.push(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)));
+                    }
+                    Line::from(spans)
+                }
+                _ => {
+                    // Movie and other non-folder types
+                    let mut spans: Vec<Span> = Vec::new();
+                    if item.played {
+                        spans.push(Span::styled("\u{f00c} ", Style::default().fg(palette::PINE)));
+                    }
+                    let mut parts: Vec<String> = Vec::new();
+                    if item.production_year > 0 { parts.push(format!("{}", item.production_year)); }
+                    let dur_s = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
+                    if dur_s > 0 {
+                        let h = dur_s / 3600; let m = (dur_s % 3600) / 60;
+                        parts.push(if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") });
+                    }
+                    if !parts.is_empty() {
+                        spans.push(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)));
+                    }
+                    if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
+                        let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+                        spans.push(Span::styled(format!("  {pct}%"), Style::default().fg(palette::SUBTLE)));
+                    }
+                    Line::from(spans)
+                }
+            };
+
+            // Split text_rect vertically into lines
+            let is_ep_in_progress = item.item_type == "Episode"
+                && item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0;
+            let overview_lines: Vec<String> = if item.item_type == "Episode" && !item.overview.is_empty() {
+                wrap(&item.overview, content_w.max(1))
+                    .into_iter()
+                    .take(4)
+                    .map(|s| s.into_owned())
+                    .collect()
+            } else { Vec::new() };
+            let seekbar_extra: usize = if is_ep_in_progress { 2 } else { 0 }; // spacer + bar
+            let line_count = (2 + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
+            let constraints: Vec<Constraint> = (0..line_count).map(|_| Constraint::Length(1)).collect();
+            let line_rects = Layout::vertical(constraints).split(text_rect);
+
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(title_display, Style::default().fg(text_color)))),
+                line_rects[0],
+            );
+            if line_count >= 2 {
+                f.render_widget(Paragraph::new(meta_line), line_rects[1]);
+            }
+            for (j, ov_line) in overview_lines.iter().enumerate() {
+                let idx = 2 + j;
+                if idx >= line_count { break; }
                 f.render_widget(
-                    Paragraph::new(Span::styled(dur_str, Style::default().fg(palette::SUBTLE))),
-                    dur_rect,
+                    Paragraph::new(Span::styled(ov_line.as_str(), Style::default().fg(palette::MUTED))),
+                    line_rects[idx],
                 );
             }
+            // Seekbar: spacer at line_count-2, bar at line_count-1
+            if is_ep_in_progress && line_count >= 2 + seekbar_extra {
+                let bar_w = content_w;
+                let fraction = (item.playback_position_ticks as f64 / item.runtime_ticks as f64).clamp(0.0, 1.0);
+                let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
+                let seekbar_line = Line::from(vec![
+                    Span::styled("━".repeat(filled),           Style::default().fg(palette::YELLOW)),
+                    Span::styled("─".repeat(bar_w - filled),   Style::default().fg(palette::MUTED)),
+                ]);
+                f.render_widget(Paragraph::new(seekbar_line), line_rects[line_count - 1]);
+            }
 
-            if item.played {
+            // Separator line at the bottom of each row
+            let sep_y = row_y + row_h - 1;
+            if sep_y < area.y + area.height {
+                let sep_rect = Rect { x: area.x, y: sep_y, width: area.width, height: 1 };
+                let sep_str: String = "\u{2500}".repeat(area.width as usize);
                 f.render_widget(
-                    Paragraph::new(Span::styled("\u{f00c}", Style::default().fg(palette::PINE))),
-                    stat_rect,
-                );
-            } else if item.playback_position_ticks > 0 && item.runtime_ticks > 0 {
-                let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                f.render_widget(
-                    Paragraph::new(Span::styled(format!("{pct}%"), Style::default().fg(palette::YELLOW))),
-                    stat_rect,
+                    Paragraph::new(Span::styled(sep_str, Style::default().fg(palette::MUTED))),
+                    sep_rect,
                 );
             }
 
@@ -3471,6 +3621,8 @@ mod tests {
             index_number: 0, parent_index_number: 0,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
+            production_year: 0, end_year: 0, overview: String::new(),
+            premiere_date: String::new(), total_count: 0,
         }
     }
 

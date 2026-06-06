@@ -70,6 +70,11 @@ pub struct MediaItem {
     pub path: String,
     pub artist: String,
     pub sort_name: String,
+    pub production_year: u32,
+    pub end_year: u32,
+    pub overview: String,
+    pub premiere_date: String,
+    pub total_count: u32,
 }
 
 impl MediaItem {
@@ -120,6 +125,11 @@ fn parse_item(raw: &Value) -> MediaItem {
     let is_folder = raw["IsFolder"].as_bool().unwrap_or(false)
         || matches!(item_type.as_str(), "CollectionFolder" | "Channel" | "Series" | "Season"
                                         | "MusicArtist" | "MusicAlbum" | "BoxSet" | "Folder");
+    let total_count = if item_type == "Series" {
+        raw["RecursiveItemCount"].as_u64().unwrap_or(0) as u32
+    } else {
+        raw["ChildCount"].as_u64().unwrap_or(0) as u32
+    };
     MediaItem {
         id: raw["Id"].as_str().unwrap_or("").to_string(),
         name: raw["Name"].as_str().unwrap_or("").to_string(),
@@ -140,6 +150,17 @@ fn parse_item(raw: &Value) -> MediaItem {
             .or_else(|| raw["Artists"].get(0).and_then(|v| v.as_str()))
             .unwrap_or("").to_string(),
         sort_name: raw["SortName"].as_str().unwrap_or("").to_string(),
+        production_year: raw["ProductionYear"].as_u64().unwrap_or(0) as u32,
+        end_year: raw["EndDate"].as_str()
+            .and_then(|s| s.get(..4))
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0),
+        overview: raw["Overview"].as_str().unwrap_or("").to_string(),
+        premiere_date: raw["PremiereDate"].as_str()
+            .and_then(|s| s.get(..10))
+            .map(|s| s.to_string())
+            .unwrap_or_default(),
+        total_count,
     }
 }
 
@@ -325,6 +346,11 @@ impl EmbyClient {
                     path: String::new(),
                     artist: String::new(),
                     sort_name: String::new(),
+                    production_year: 0,
+                    end_year: 0,
+                    overview: String::new(),
+                    premiere_date: String::new(),
+                    total_count: 0,
                 };
                 seen.insert(id);
                 items.push(item);
@@ -358,7 +384,7 @@ impl EmbyClient {
             .query("SortBy", "SortName")
             .query("SortOrder", "Ascending")
             .query("Limit", "5000")
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,ChildCount,RecursiveItemCount")
             .query("EnableUserData", "true");
         if let Some(types) = item_types {
             req = req.query("IncludeItemTypes", types).query("Recursive", "true");
@@ -718,6 +744,8 @@ mod tests {
             index_number: 0, parent_index_number: 0,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
+            production_year: 0, end_year: 0, overview: String::new(),
+            premiere_date: String::new(), total_count: 0,
         }
     }
 
