@@ -2926,9 +2926,12 @@ impl App {
                     put(f, text_y, Paragraph::new(Line::from(spans)).alignment(Alignment::Center));
                     text_y += 1;
                 } else {
-                    // Wrap: first w chars of name on line 1, remainder + suffix on line 2.
-                    let line1: String = name_chars.iter().take(w).collect();
-                    let line2: String = name_chars.iter().skip(w).take(w).collect();
+                    // Word-wrap at w chars; fall back to hard split if a single word exceeds w.
+                    let wrapped = wrap(&name, w);
+                    let line1: String = wrapped.first().map(|s| s.to_string()).unwrap_or_default();
+                    let skip = line1.chars().count();
+                    let line2: String = name.chars().skip(skip).collect::<String>()
+                        .trim_start().chars().take(w).collect();
                     put(f, text_y, Paragraph::new(Line::from(
                         Span::styled(line1, Style::default().fg(title_fg).add_modifier(title_mod))
                     )).alignment(Alignment::Center));
