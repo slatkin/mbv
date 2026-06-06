@@ -34,15 +34,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build and test
-        run: cargo test --release && cargo build --release
-
-      - name: Bundle release tarball
+      - name: Set version from tag
         run: |
           PKGVER=${GITHUB_REF_NAME#v}
           if [[ "$PKGVER" == "main" || "$PKGVER" == "$GITHUB_REF_NAME" ]]; then
             PKGVER=$(grep '^pkgver=' PKGBUILD | cut -d= -f2)
           fi
+          sed -i "s/^version = \".*\"/version = \"${PKGVER}\"/" Cargo.toml
+          echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
+
+      - name: Build and test
+        run: cargo test --release && cargo build --release
+
+      - name: Bundle release tarball
+        run: |
           DIST="mby-${PKGVER}"
           mkdir -p "${DIST}"
           cp target/release/mby "${DIST}/"

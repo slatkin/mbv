@@ -157,6 +157,7 @@ pub struct App {
     context_menu: Option<ContextMenu>,
     context_menu_rect: Option<Rect>,
     show_help: bool,
+    help_scroll: u16,
     show_log_tab: bool,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
@@ -242,6 +243,7 @@ impl App {
             card_image_rx,
             image_picker: None,
             show_help: false,
+            help_scroll: 0,
             show_log_tab,
             context_menu: None,
             context_menu_rect: None,
@@ -325,6 +327,7 @@ impl App {
             card_image_rx,
             image_picker: None,
             show_help: false,
+            help_scroll: 0,
             show_log_tab,
             context_menu: None,
             context_menu_rect: None,
@@ -484,10 +487,19 @@ impl App {
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
         if self.show_help {
-            self.show_help = false;
+            match key.code {
+                KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+                KeyCode::Esc | KeyCode::F(1) => { self.show_help = false; }
+                KeyCode::Up       => { self.help_scroll = self.help_scroll.saturating_sub(1); }
+                KeyCode::Down     => { self.help_scroll += 1; }
+                KeyCode::PageUp   => { self.help_scroll = self.help_scroll.saturating_sub(10); }
+                KeyCode::PageDown => { self.help_scroll += 10; }
+                KeyCode::Home     => { self.help_scroll = 0; }
+                _ => {}
+            }
             return false;
         }
-        if key.code == KeyCode::Char('?') {
+        if key.code == KeyCode::F(1) {
             self.show_help = true;
             return false;
         }
@@ -546,6 +558,10 @@ impl App {
             self.tab_idx = self.log_tab_idx();
             return false;
         }
+        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::ALT) {
+            self.enqueue_selected();
+            return false;
+        }
         if self.tab_idx == 0 { return self.handle_combined_key(key); }
         if self.tab_idx == 1 { return self.handle_playlist_key(key); }
         if self.tab_idx == self.log_tab_idx() { return self.handle_log_key(key); }
@@ -594,36 +610,12 @@ impl App {
             KeyCode::Home     => self.jump_lib_cursor(false),
             KeyCode::End      => self.jump_lib_cursor(true),
             KeyCode::Enter => self.select(),
-            KeyCode::Char('p') if alt => self.add_to_playlist_lib(),
             KeyCode::Char('w') if alt => self.toggle_watched(),
-            KeyCode::Char('r') if !alt => self.refresh_lib(),
             KeyCode::Char('s') if alt => self.shuffle_play(),
             KeyCode::Char('o') if alt => self.open_context_menu(),
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);
                 if idx < self.tab_count() { self.set_tab(idx); }
-            }
-            KeyCode::Char('/') if key.modifiers.contains(KeyModifiers::ALT) => {
-                let parent_id = self.libs[lib_idx].nav_stack.last()
-                    .map(|l| l.parent_id.clone())
-                    .unwrap_or_else(|| self.libs[lib_idx].library.id.clone());
-                let client = self.client.lock().unwrap();
-                match client.get_all_playable_recursive(&parent_id) {
-                    Ok(mut items) => {
-                        items.retain(|i| !i.is_folder);
-                        items.sort_by_key(|a| natural_sort_key(a.sort_key()));
-                        let n = items.len();
-                        drop(client);
-                        self.libs[lib_idx].search = Some(LibSearch {
-                            query: String::new(),
-                            items,
-                            results: (0..n).collect(),
-                            cursor: 0,
-                        });
-                        self.update_lib_search(lib_idx);
-                    }
-                    Err(e) => { drop(client); self.status = format!("Error: {e}"); }
-                }
             }
             KeyCode::Char('/') => {
                 let items = self.libs[lib_idx].nav_stack.last()
@@ -662,9 +654,6 @@ impl App {
                 self.home.section = (self.home.section + 1) % n;
                 return false;
             }
-            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::ALT) => { self.add_to_playlist_home(); return false; }
-            KeyCode::Char('a') => { self.cycle_audio(); return false; }
-            KeyCode::Char('s') => { self.cycle_sub();  return false; }
             KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
                 self.open_context_menu(); return false;
             }
@@ -680,7 +669,6 @@ impl App {
             KeyCode::Down => self.move_home_cursor(1),
             KeyCode::Enter => self.select_home(),
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::ALT) => self.toggle_watched_home(),
-            KeyCode::Char('r') => { let _ = self.fetch_home(); }
             _ => {}
         }
         false
@@ -707,6 +695,8 @@ impl App {
                 self.player.send_command(PlayerCommand::SetVolume(v));
                 Some(false)
             }
+            KeyCode::Char('a') if alt => { self.cycle_audio(); Some(false) }
+            KeyCode::Char('z') if alt => { self.cycle_sub();   Some(false) }
             _ => None,
         }
     }
@@ -767,10 +757,6 @@ impl App {
                         self.player.play_playlist(items, t, c, self.log.clone());
                     }
                 }
-            }
-            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::ALT) => {
-                let t = self.player_tab.playlist_cursor;
-                if t < self.player_tab.items.len() { self.remove_from_playlist(t); }
             }
             KeyCode::Delete => {
                 let t = self.player_tab.playlist_cursor;
@@ -1197,6 +1183,15 @@ impl App {
         let col = mouse.column;
         let row = mouse.row;
 
+        if self.show_help {
+            match mouse.kind {
+                MouseEventKind::ScrollDown => { self.help_scroll += 3; }
+                MouseEventKind::ScrollUp   => { self.help_scroll = self.help_scroll.saturating_sub(3); }
+                _ => {}
+            }
+            return;
+        }
+
         // Tab bar — always consume clicks in this row
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout_tabs_area.contains((col, row).into()) {
@@ -1582,12 +1577,18 @@ impl App {
         self.player.play(&item, c, self.log.clone());
     }
 
-    fn add_to_playlist_home(&mut self) {
-        let Some(item) = self.current_home_item() else { return };
-        if item.is_folder || !is_playable(&item) { return; }
-        if let Some(pos) = self.player_tab.items.iter().position(|i| i.id == item.id) {
-            self.remove_from_playlist(pos);
-        } else {
+    fn enqueue_selected(&mut self) {
+        if self.tab_idx == 0 {
+            let Some(item) = self.current_home_item() else { return };
+            if item.is_folder { self.do_enqueue_folder(item); return; }
+            if !is_playable(&item) { return; }
+            let name = item.display_name();
+            self.player_tab.items.push(item);
+            self.flash_status(format!("Added: {name}"));
+        } else if self.tab_idx >= 2 && self.tab_idx != self.log_tab_idx() {
+            let Some(item) = self.current_lib_item() else { return };
+            if item.is_folder { self.do_enqueue_folder(item); return; }
+            if !is_playable(&item) { return; }
             let name = item.display_name();
             self.player_tab.items.push(item);
             self.flash_status(format!("Added: {name}"));
@@ -1607,19 +1608,6 @@ impl App {
                 self.flash_status(format!("Enqueued {count} items from {}", item.display_name()));
             }
             Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
-        }
-    }
-
-    fn add_to_playlist_lib(&mut self) {
-        let Some(item) = self.current_lib_item() else { return };
-        if item.is_folder { self.do_enqueue_folder(item); return; }
-        if !is_playable(&item) { return; }
-        if let Some(pos) = self.player_tab.items.iter().position(|i| i.id == item.id) {
-            self.remove_from_playlist(pos);
-        } else {
-            let name = item.display_name();
-            self.player_tab.items.push(item);
-            self.flash_status(format!("Added: {name}"));
         }
     }
 
@@ -2134,6 +2122,7 @@ impl App {
     // ── rendering ────────────────────────────────────────────────────────────
 
     fn render(&mut self, f: &mut ratatui::Frame) {
+        if self.show_help { self.render_help_screen(f); return; }
         let area = f.area();
         if area.width != self.terminal_width || area.height != self.terminal_height {
             self.card_image_states.clear();
@@ -2229,113 +2218,136 @@ impl App {
         }
 
         self.render_context_menu(f);
-        if self.show_help { self.render_help_overlay(f); }
     }
 
-    fn render_help_overlay(&self, f: &mut ratatui::Frame) {
+    fn render_help_screen(&mut self, f: &mut ratatui::Frame) {
         let area = f.area();
-        let w = 74u16.min(area.width.saturating_sub(2));
-        let h = 30u16.min(area.height.saturating_sub(2));
-        let x = (area.width.saturating_sub(w)) / 2;
-        let y = (area.height.saturating_sub(h)) / 2;
-        let rect = Rect { x, y, width: w, height: h };
 
-        f.render_widget(Clear, rect);
-
-        let block = Block::default()
-            .borders(Borders::ALL).border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS))
-            .style(Style::default().bg(Color::Rgb(18, 18, 18)))
-            .title(Span::styled(
-                " ⌨  Keyboard Shortcuts ",
-                Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD),
-            ));
-        let inner = block.inner(rect);
-        f.render_widget(block, rect);
-
-        let col_w = inner.width / 2;
-        let [left, right] = Layout::horizontal([
-            Constraint::Length(col_w),
+        let [header_area, sep_area, content_area] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
             Constraint::Min(0),
-        ]).areas(inner);
+        ]).areas(area);
 
-        let key_w = 17usize;
+        // Header bar: title left, hint right
+        let title = " ⌨  Keyboard Shortcuts";
+        let hint  = "↑↓ / mouse · Esc to close ";
+        let pad = (area.width as usize).saturating_sub(title.len() + hint.len());
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                Span::raw(" ".repeat(pad)),
+                Span::styled(hint, Style::default().fg(palette::MUTED)),
+            ])),
+            header_area,
+        );
+
+        // Separator
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "─".repeat(area.width as usize),
+                Style::default().fg(palette::OVERLAY),
+            )),
+            sep_area,
+        );
+
+        // Build content lines
+        let w = content_area.width as usize;
+        let key_w = 20usize;
+
         let mk = |key: &str, desc: &str| -> Line<'static> {
             Line::from(vec![
-                Span::styled(format!("  {:<kw$}", key, kw = key_w), Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD)),
-                Span::styled(desc.to_string(), Style::default().fg(palette::SUBTLE)),
+                Span::raw("  "),
+                Span::styled(
+                    format!("{:<kw$}", key, kw = key_w),
+                    Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(desc.to_owned(), Style::default().fg(palette::SUBTLE)),
             ])
         };
-        let sep = |label: &str| -> Line<'static> {
+        let section = |label: &str| -> Line<'static> {
+            let dash_count = w.saturating_sub(2 + label.len() + 1);
             Line::from(vec![
-                Span::styled(format!("  {label}"), Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                Span::raw("  "),
+                Span::styled(label.to_owned(), Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    format!(" {}", "─".repeat(dash_count)),
+                    Style::default().fg(palette::OVERLAY),
+                ),
             ])
         };
-        let rule = || -> Line<'static> {
-            Line::from(Span::styled(
-                format!("  {}", "─".repeat(col_w.saturating_sub(2) as usize)),
-                Style::default().fg(palette::OVERLAY),
-            ))
-        };
-        let blank = || -> Line<'static> { Line::from("") };
+        let blank = || Line::from("");
 
-        let left_lines: Vec<Line> = vec![
+        let show_log = self.show_log_tab;
+        let mut lines: Vec<Line> = vec![
             blank(),
-            sep("GLOBAL"),
-            rule(),
-            mk("?",             "This screen"),
-            mk("Tab/Shift+Tab", "Cycle tabs"),
-            mk("1 – 9",         "Jump to tab"),
-            mk("c",             "Clear List (asks confirm)"),
-            mk("Alt+L",         "Open log (↑↓ scroll, ←→ switch pane, Space toggle source, +/- level, f focus, h hide off, c copy mode)"),
-            mk("q",             "Quit"),
-            blank(),
-            sep("LIST"),
-            rule(),
-            mk("Enter",         "Play from cursor"),
-            mk("Del / Alt+P",   "Remove from List"),
-            mk("Alt+O",         "Context menu"),
-            blank(),
-            sep("NAVIGATION"),
-            rule(),
-            mk("↑↓",            "Move cursor"),
-            mk("PgUp / PgDn",   "Page scroll"),
-            mk("Enter",         "Open / Play"),
-            mk("Esc/Backspace",  "Go back"),
-            mk("Mouse click",   "Select row"),
-            mk("Double-click",  "Open / Play"),
-            mk("Right-click",   "Context menu"),
+            section("GLOBAL"),
+            mk("F1",               "Help"),
+            mk("Tab",              "Cycle menu"),
+            mk("1 – 9",            "Jump to tab"),
+            mk("↑ / ↓",            "Move cursor"),
+            mk("PgUp / PgDn",      "Page scroll"),
+            mk("Home / End",       "First / last"),
+            mk("Enter",            "Select / Play / Open"),
+            mk("Alt+Q",            "Add item(s) to Queue"),
+            mk("Alt+O",            "Context menu"),
+            mk("c",                "Clear Queue (confirms)"),
+            mk("q",                "Quit"),
         ];
+        lines.extend(vec![
 
-        let right_lines: Vec<Line> = vec![
             blank(),
-            sep("PLAYBACK"),
-            rule(),
-            mk("Space",         "Pause / Resume"),
-            mk("← / →",         "Seek ±5 seconds"),
-            mk("Alt+← / →",     "Prev / Next track"),
-            mk("Alt+Enter",     "Stop"),
-            mk("- / +",         "Volume down / up"),
-            blank(),
-            sep("LIBRARY"),
-            rule(),
-            mk("/",             "Search"),
-            mk("Alt+P (item)",  "Add / Remove from List"),
-            mk("Alt+P (folder)","Enqueue contents"),
-            mk("Alt+W",          "Toggle watched"),
-            mk("r",             "Refresh"),
-            mk("Alt+S",         "Shuffle play"),
-            mk("Alt+O",         "Context menu"),
-            blank(),
-            blank(),
-            Line::from(Span::styled(
-                "  Press any key to close",
-                Style::default().fg(palette::MUTED),
-            )),
-        ];
+            section("PLAYBACK"),
+            mk("Space",            "Pause / Resume"),
+            mk("Alt+← / →",       "Seek ±5 seconds"),
+            mk("Alt+Enter",        "Stop"),
+            mk("- / +",            "Volume down / up"),
+            mk("Alt+A",            "Cycle audio track"),
+            mk("Alt+Z",            "Enable subtitles"),
 
-        f.render_widget(Paragraph::new(left_lines).style(Style::default().bg(Color::Rgb(18, 18, 18))), left);
-        f.render_widget(Paragraph::new(right_lines).style(Style::default().bg(Color::Rgb(18, 18, 18))), right);
+            blank(),
+            section("QUEUE"),
+            mk(".",                "Jump to playing item"),
+            mk("Del",              "Remove from Queue"),
+            mk("Alt+V",            "Toggle view"),
+
+            blank(),
+            section("HOME"),
+            mk("Alt+↑ / ↓",        "Switch sections"),
+            mk("Alt+W",            "Toggle watched"),
+
+            blank(),
+            section("LIBRARY"),
+            mk("Esc / Backspace",  "Go back"),
+            mk("/",                "Search library"),
+            mk("Alt+W",            "Toggle watched"),
+            mk("Alt+S",            "Shuffle and play selection"),
+
+            blank(),
+        ]);
+        if show_log {
+            lines.extend(vec![
+                section("LOG"),
+                mk("Alt+L",            "Open Log"),
+                mk("← / →",            "Switch pane (Sources / Log)"),
+                mk("↑ / ↓",            "Scroll log / navigate sources"),
+                mk("PgUp / PgDn",      "Page scroll"),
+                mk("Space",            "Toggle source on/off"),
+                mk("c",                "Copy log to clipboard"),
+                blank(),
+                blank(),
+            ]);
+        }
+
+        let total = lines.len();
+        let visible = content_area.height as usize;
+        self.help_scroll = self.help_scroll.min(total.saturating_sub(visible) as u16);
+
+        f.render_widget(
+            Paragraph::new(lines)
+                .scroll((self.help_scroll, 0)),
+            content_area,
+        );
     }
 
     fn render_context_menu(&mut self, f: &mut ratatui::Frame) {
