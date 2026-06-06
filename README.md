@@ -1,6 +1,6 @@
 # mby
 
-A terminal UI client for [Emby](https://emby.media) media servers. Browse your libraries, manage a playlist, and play media through [mpv](https://mpv.io) — all from the terminal. A WebSocket connection to the server lets any Emby remote control app (phone, web UI, etc.) control playback in real time. mby can also run as a headless daemon with no TUI, driven entirely by remote control.
+A terminal UI client for [Emby](https://emby.media) media servers. Browse your libraries, build a queue, and play media — all from the terminal. Control playback from any Emby remote app on your phone or browser, or let mby run headless as a background daemon.
 
 This was built with Claude Code because I am lazy and I already have a job (for now).
 
@@ -26,7 +26,7 @@ mby --daemon # run headless, controlled via remote only
 
 ## Configuration
 
-On first run a login screen prompts for server URL, username, and password. Credentials are cached after a successful login and won't be requested again unless the token is rejected.
+On first run a login screen prompts for server URL, username, and password. Credentials are saved after a successful login.
 
 Optionally create `~/.config/mby/config.toml`:
 
@@ -53,122 +53,86 @@ show_systray_icon = true
 
 ## Features
 
-### Terminal UI
+### What you can do
 
-- **Home** — Continue Watching and Latest Movies / Shows sections.
-- **Library browser** — single-row table with wrapping titles; navigate folders and series with real-time fuzzy search. Press `p` on a folder to enqueue all its contents into the List (asks confirmation).
-- **List** — queue items from any tab; table view shows title, duration, and a mini progress seekbar. Play from any position; progress is resumed for videos. The active item's seekbar updates live during playback.
-- **Playback controls** — seek bar with time and volume display; audio and subtitle track cycling.
-- **Keyboard shortcut help** — press `?` from anywhere to open a cheat-sheet overlay.
-- **Log tab** — live log of server communication and player events (`Ctrl+L` to open).
+- **Browse your libraries** — navigate folders and series, jump straight to a show's seasons and episodes, or fuzzy-search within any folder.
+- **Build a queue** — add individual items or entire folders to the Queue from any screen. Folders are expanded automatically. Play from any position in the queue; the rest follows in order.
+- **Pick up where you left off** — videos resume from their saved position. Watched status is synced back to the server automatically.
+- **Full playback controls** — seek, pause, adjust volume, cycle audio tracks, enable subtitles, all from the keyboard.
+- **Home screen** — see your Continue Watching items and what was recently added across your libraries.
+- **Remote control** — any Emby app on your phone or browser can control mby in real time: play, pause, seek, skip, adjust volume, queue items.
+- **Daemon mode** — run mby as a background service with no terminal required. Register it with your server and drive it entirely from remote apps.
+- **System media keys** — mby exposes an MPRIS2 interface so desktop widgets, `playerctl`, and system media keys all work automatically.
 
-### Playback
+### Playback details
 
-- Plays media via an embedded mpv window alongside the TUI.
-- Seamless track switching: starting a new item while one is already playing loads it into the existing mpv window without closing and reopening.
-- Videos resume from their stored position when played from the List; the stored position is updated when playback stops.
-- Audio files play headless (no mpv window) by default; set `show_audio_window = true` to override.
-- Mouse-over the mpv window shows the current item title as an OSD overlay. The OSC (on-screen controller) appears on mouse movement and hides after 5 seconds. Press `F8` to show the mpv playlist.
-- Media titles are passed to mpv so the OSC and `F8` playlist show item names rather than stream URLs.
-- By default mby uses its own bundled OSC ([mpv-osc-modern](https://github.com/maoiscat/mpv-osc-modern)) and suppresses user scripts to avoid conflicts. Set `use_mpv_config = true` to defer entirely to your own `~/.config/mpv/` setup.
-- Auto-selects English audio track and disables subtitles on each new file.
-- Reports playback progress and watched status back to the server continuously.
-- Loads your personal `~/.config/mpv/mpv.conf` (shaders, renderer settings, audio devices, keybinds, etc.) so your mpv setup is respected.
-- Volume ceiling is read from mpv's `volume-max` setting, so if you have raised or lowered it in `mpv.conf` mby's `+`/`-` keys will respect that limit.
-- The mpv IPC socket is placed at `$XDG_RUNTIME_DIR/mby-mpv.sock` (separate from the default mpv socket) so running mby alongside standalone mpv does not cause conflicts.
-
-### Remote control (WebSocket)
-
-mby maintains a persistent WebSocket connection to the server. Any Emby remote (mobile app, web UI) can:
-
-- Play a single item or a full shuffled playlist
-- Stop, pause, resume
-- Seek, skip to next/previous track
-- Adjust volume
-- Navigate to any item in the current playlist
-
-Shuffling or queuing a folder from the remote loads into the existing mpv window when something is already playing.
-
-### Daemon mode
-
-`mby --daemon` runs without a TUI — no terminal required. It registers with the server and responds to all the same WebSocket remote commands. A PID file is written to `~/.local/share/mby/mby.pid`.
-
-### MPRIS
-
-mby exposes an MPRIS2 interface so system media keys, desktop widgets, and tools like `playerctl` work automatically.
+- Media plays through an embedded mpv instance. Switching tracks is seamless — no window close/reopen between items.
+- Audio plays headless by default (no mpv window). Set `show_audio_window = true` to change this.
+- Your personal `~/.config/mpv/mpv.conf` is respected (shaders, audio devices, renderer settings, keybindings).
+- Volume range follows mpv's `volume-max` setting, so `+`/`-` in mby respects whatever ceiling you have set.
+- The mpv IPC socket lives at `$XDG_RUNTIME_DIR/mby-mpv.sock`, separate from the default mpv socket, so running mby alongside standalone mpv doesn't cause conflicts.
+- By default mby uses its own bundled OSC ([mpv-osc-modern](https://github.com/maoiscat/mpv-osc-modern)). Set `use_mpv_config = true` to defer to your own `~/.config/mpv/` setup instead.
 
 ## Key bindings
 
-Press `?` at any time to open the built-in cheat-sheet overlay.
-
-### Playback (all tabs, when player is active)
-
-| Key | Action |
-|-----|--------|
-| `Space` | Pause / resume |
-| `←` / `→` | Seek ±5 seconds |
-| `Alt+←` / `Alt+→` | Previous / next item in List |
-| `Ctrl+Enter` | Stop |
-| `-` / `+` | Volume down / up |
+Press `F1` at any time to open the built-in reference screen.
 
 ### Global
 
 | Key | Action |
 |-----|--------|
-| `?` | Keyboard shortcut help |
-| `Tab` / `Shift+Tab` | Cycle tabs |
+| `F1` | Keyboard shortcut help |
+| `Tab` / `Shift+Tab` | Cycle tabs forward / backward |
 | `1`–`9` | Jump to tab by number |
-| `Ctrl+L` | Open log tab |
+| `↑` / `↓` | Move cursor |
+| `PgUp` / `PgDn` | Page scroll |
+| `Home` / `End` | Jump to first / last item |
+| `Enter` | Select / play / open |
+| `Alt+Q` | Add selected item or folder to Queue |
+| `Alt+O` | Context menu |
+| `c` | Clear Queue (asks confirmation) |
 | `q` | Quit |
+
+### Playback (when player is active)
+
+| Key | Action |
+|-----|--------|
+| `Space` | Pause / resume |
+| `Alt+←` / `Alt+→` | Seek ±5 seconds |
+| `Alt+Enter` | Stop |
+| `-` / `+` | Volume down / up |
+| `Alt+A` | Cycle audio track |
+| `Alt+Z` | Enable subtitles |
+
+### Queue tab
+
+| Key | Action |
+|-----|--------|
+| `.` | Jump to currently playing item |
+| `Delete` | Remove selected item from Queue |
+| `Alt+V` | Toggle list / card view |
 
 ### Home tab
 
 | Key | Action |
 |-----|--------|
-| `↑` / `k`, `↓` / `j` | Move cursor |
-| `Enter` | Play selected item |
-| `p` | Add / remove from List |
-| `w` | Toggle watched status |
-| `r` | Refresh |
+| `Alt+↑` / `Alt+↓` | Switch between sections |
+| `Alt+W` | Toggle watched status |
 
-### Library browser tab
+### Library tab
 
 | Key | Action |
 |-----|--------|
-| `↑` / `k`, `↓` / `j` | Move cursor |
-| `PgUp` / `PgDn` | Page scroll |
-| `Enter` | Open folder / play item |
-| `p` | Add item to List; on a folder, enqueue all contents |
-| `w` | Toggle watched status |
-| `r` | Refresh current view |
-| `Ctrl+S` | Shuffle-play current folder |
-| `Ctrl+O` | Context menu |
 | `Esc` / `Backspace` | Go back |
-| `/` | Open fuzzy search |
-
-### List tab
-
-| Key | Action |
-|-----|--------|
-| `↑` / `k`, `↓` / `j` | Move cursor |
-| `PgUp` / `PgDn` | Page scroll |
-| `Enter` | Play from selected item |
-| `Delete` / `Alt+P` | Remove selected item |
-| `Alt+O` | Context menu (also: Remove from Playlist) |
-
-### Log tab
-
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` | Scroll |
-| `c` | Toggle text-selection mode (for copying) |
+| `/` | Search within current folder |
+| `Alt+W` | Toggle watched status |
+| `Alt+S` | Shuffle and play current selection |
 
 ## Mouse
 
 - Click a tab to switch to it.
-- Click a row to move the cursor; double-click to activate (play / open).
-- Right-click an item to activate it directly.
+- Click a row to move the cursor; double-click to play or open.
+- Right-click an item to open its context menu.
 - Double-click the seek bar to jump to that position; click and drag to scrub.
 - Click the audio or subtitle label in the controls bar to cycle tracks.
 - Scroll wheel moves the cursor in any list.
-- Moving the mouse over the mpv window shows the current item title as an OSD.
