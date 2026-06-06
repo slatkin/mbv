@@ -783,7 +783,7 @@ impl App {
                 self.playlist_card_view = !self.playlist_card_view;
                 self.save_playlist_card_view();
             }
-            KeyCode::Home => {
+            KeyCode::Char('.') => {
                 let s = self.player.status.lock().unwrap();
                 if s.active {
                     self.player_tab.playlist_cursor = s.current_idx;
@@ -2422,7 +2422,7 @@ impl App {
         self.layout_audio_area   = Rect { x: g2_x,   y: row_y,      width: g2_w,       height: 1 };
 
         let btn_row = Rect { x: area.x, y: area.y + 2, width: area.width, height: 1 };
-        let chip_bg = Style::default().bg(Color::Rgb(38, 38, 52));
+        let _chip_bg = Style::default().bg(Color::Rgb(38, 38, 52));
 
         // Row 0 — Gauge with timestamp label
         let ratio = if runtime_ticks > 0 {
