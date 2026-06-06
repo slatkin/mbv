@@ -3359,6 +3359,7 @@ impl App {
             } else { Vec::new() };
             let seekbar_extra: usize = if is_ep_in_progress { 2 } else { 0 }; // spacer + bar
             let line_count = (2 + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
+            if line_count == 0 { continue; }
             let constraints: Vec<Constraint> = (0..line_count).map(|_| Constraint::Length(1)).collect();
             let line_rects = Layout::vertical(constraints).split(text_rect);
 
