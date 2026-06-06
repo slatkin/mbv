@@ -3096,7 +3096,7 @@ impl App {
 
         if let Some(s) = &self.libs[lib_idx].search {
             self.layout_breadcrumbs.clear();
-            let display = format!(" {}█", s.query);
+            let display = format!("{}█", s.query);
             let block = Block::default()
                 .borders(Borders::ALL).border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(palette::IRIS))
