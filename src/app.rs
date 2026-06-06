@@ -568,6 +568,8 @@ impl App {
                 KeyCode::Down     => self.move_lib_cursor(1),
                 KeyCode::PageUp   => { let p = self.lib_page_size(); self.move_lib_cursor(-(p as i64)); }
                 KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
+                KeyCode::Home     => self.jump_lib_cursor(false),
+                KeyCode::End      => self.jump_lib_cursor(true),
                 KeyCode::Enter => self.select(),
                 KeyCode::Char('s') if alt => self.shuffle_play(),
                 KeyCode::Char('o') if alt => self.open_context_menu(),
@@ -589,6 +591,8 @@ impl App {
             KeyCode::Down     => self.move_lib_cursor(1),
             KeyCode::PageUp   => { let p = self.lib_page_size(); self.move_lib_cursor(-(p as i64)); }
             KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
+            KeyCode::Home     => self.jump_lib_cursor(false),
+            KeyCode::End      => self.jump_lib_cursor(true),
             KeyCode::Enter => self.select(),
             KeyCode::Char('p') if alt => self.add_to_playlist_lib(),
             KeyCode::Char('w') if alt => self.toggle_watched(),
@@ -1423,6 +1427,19 @@ impl App {
             if n > 0 {
                 lvl.cursor = (lvl.cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
             }
+        }
+    }
+
+    fn jump_lib_cursor(&mut self, to_end: bool) {
+        let lib = &mut self.libs[self.tab_idx - 2];
+        if let Some(s) = &mut lib.search {
+            let n = s.results.len();
+            if n > 0 { s.cursor = if to_end { n - 1 } else { 0 }; }
+            return;
+        }
+        if let Some(lvl) = lib.nav_stack.last_mut() {
+            let n = lvl.items.len();
+            if n > 0 { lvl.cursor = if to_end { n - 1 } else { 0 }; }
         }
     }
 
