@@ -161,6 +161,7 @@ pub struct App {
     show_log_tab: bool,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
+    force_clear: bool,
 }
 
 impl App {
@@ -249,6 +250,7 @@ impl App {
             context_menu_rect: None,
             lib_tx,
             lib_rx,
+            force_clear: false,
         }
     }
 
@@ -333,6 +335,7 @@ impl App {
             context_menu_rect: None,
             lib_tx,
             lib_rx,
+            force_clear: false,
         }
     }
 
@@ -466,6 +469,10 @@ impl App {
                 }
             }
 
+            if self.force_clear {
+                self.force_clear = false;
+                terminal.clear()?;
+            }
             terminal.draw(|f| self.render(f))?;
         }
 
@@ -560,6 +567,10 @@ impl App {
         }
         if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::ALT) {
             self.enqueue_selected();
+            return false;
+        }
+        if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            self.force_clear = true;
             return false;
         }
         if self.tab_idx == 0 { return self.handle_combined_key(key); }
@@ -1837,6 +1848,9 @@ impl App {
     }
 
     fn set_tab(&mut self, idx: usize) {
+        if idx != self.tab_idx && !self.card_image_states.is_empty() {
+            self.force_clear = true;
+        }
         self.tab_idx = idx;
         if self.tab_idx == 0 {
             self.home.section = 0;
