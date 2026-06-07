@@ -14,6 +14,26 @@ fn mpv_err_str(e: &libmpv2::Error) -> String {
     }
 }
 
+fn niri_consume_window_into_column(log: &AppLog) {
+    let Ok(socket_path) = std::env::var("NIRI_SOCKET") else { return };
+    use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::net::UnixStream;
+    match UnixStream::connect(&socket_path) {
+        Err(e) => log.push(Level::Warn, "niri", format!("connect: {e}")),
+        Ok(mut stream) => {
+            let _ = writeln!(stream, r#"{{"Action":{{"ConsumeOrExpelWindowLeft":{{}}}}}}"#);
+            let _ = writeln!(stream, r#"{{"Action":{{"MoveWindowUp":{{}}}}}}"#);
+            let mut reader = BufReader::new(&mut stream);
+            let mut resp = String::new();
+            let _ = reader.read_line(&mut resp);
+            log.push(Level::Info, "niri", format!("consume-or-expel-window-left: {}", resp.trim()));
+            resp.clear();
+            let _ = reader.read_line(&mut resp);
+            log.push(Level::Info, "niri", format!("move-window-up: {}", resp.trim()));
+        }
+    }
+}
+
 fn mpv_title_opt(title: &str) -> String {
     // Use mpv's %N% length-prefix format so the value is passed verbatim —
     // no escaping needed, handles commas, backslashes, and any other character.
@@ -188,6 +208,7 @@ pub struct Player {
     show_audio_window: bool,
     use_mpv_config: bool,
     no_scripts: bool,
+    niri: bool,
     #[allow(dead_code)]
     pub always_play_next: bool,
     pub event_tx: mpsc::Sender<PlayerEvent>,
@@ -205,6 +226,7 @@ impl Player {
         show_audio_window: bool,
         use_mpv_config: bool,
         no_scripts: bool,
+        niri: bool,
         always_play_next: bool,
         event_tx: mpsc::Sender<PlayerEvent>,
         ws_tx: Option<mpsc::Sender<String>>,
@@ -215,6 +237,7 @@ impl Player {
             show_audio_window,
             use_mpv_config,
             no_scripts,
+            niri,
             always_play_next,
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
@@ -289,6 +312,7 @@ impl Player {
         let headless = !self.show_audio_window && (item.media_type == "Audio" || item.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
         let no_scripts = self.no_scripts;
+        let niri = self.niri;
         let event_tx = self.event_tx.clone();
         let status = self.status.clone();
         let ws_tx = self.ws_tx.clone();
@@ -446,6 +470,7 @@ impl Player {
             let mut pending_resume_secs: Option<f64> = None;
             let mut last_seek_at: Option<Instant> = None;
             let mut tracks_initialized = false;
+            let mut niri_consumed = false;
             let mut current_osd_title = item.display_name();
             let mut last_mouse_osd: Option<Instant> = None;
             // mpv fires time-pos=0 when closing a file, before EndFile; track the last
@@ -635,6 +660,10 @@ impl Player {
                         if !tracks_initialized {
                             auto_select_tracks(&mpv, &status);
                             tracks_initialized = true;
+                            if niri && !niri_consumed && !headless {
+                                niri_consumed = true;
+                                niri_consume_window_into_column(&log);
+                            }
                             let _ = mpv.set_property("start", "0");
                             if let Some(secs) = pending_resume_secs.take() {
                                 if secs > 0.0 {
@@ -775,6 +804,7 @@ impl Player {
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
         let no_scripts = self.no_scripts;
+        let niri = self.niri;
 
         {
             let mut st = status.lock().unwrap();
@@ -935,6 +965,7 @@ impl Player {
             let mut last_seek_at: Option<Instant> = None;
             let mut last_valid_pos: i64 = 0;
             let mut tracks_initialized = false;
+            let mut niri_consumed = false;
             let mut playlist_cancelled = false;
             let mut pending_load = false;
             let mut stop_reported = false;
@@ -1158,6 +1189,10 @@ impl Player {
                         if !tracks_initialized {
                             auto_select_tracks(&mpv, &status);
                             tracks_initialized = true;
+                            if niri && !niri_consumed && !headless {
+                                niri_consumed = true;
+                                niri_consume_window_into_column(&log);
+                            }
                             if let Some(secs) = pending_resume_secs.take() {
                                 let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
                                 last_seek_at = Some(Instant::now());

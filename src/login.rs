@@ -100,6 +100,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     show_systray_icon: base_config.show_systray_icon,
                     show_log_tab: base_config.show_log_tab,
                     no_scripts: base_config.no_scripts,
+                    niri: base_config.niri,
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {

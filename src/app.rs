@@ -178,7 +178,7 @@ impl App {
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
         let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
         let always_play_next = client.config.always_play_next;
-        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, player_tx, Some(ws_send_tx));
+        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, client.config.niri, always_play_next, player_tx, Some(ws_send_tx));
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();
         crate::mpris::start(player_status, move |cmd| {
@@ -1048,15 +1048,16 @@ impl App {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return };
 
         // Support both new format {"ids":[...],"cursor":N} and old format [...]
-        let (ids, last_played_item_id): (Vec<String>, Option<String>) = if v.is_array() {
+        let (ids, saved_cursor, last_played_item_id): (Vec<String>, usize, Option<String>) = if v.is_array() {
             let ids = serde_json::from_value(v).unwrap_or_default();
-            (ids, None)
+            (ids, 0, None)
         } else {
             let ids = v["ids"].as_array()
                 .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
                 .unwrap_or_default();
+            let cursor = v["cursor"].as_u64().unwrap_or(0) as usize;
             let last_id = v["last_played_item_id"].as_str().map(String::from);
-            (ids, last_id)
+            (ids, cursor, last_id)
         };
 
         if ids.is_empty() { return }
@@ -1065,19 +1066,7 @@ impl App {
             // preserve original order (get_items_by_ids may reorder)
             items.sort_by_key(|item| ids.iter().position(|id| id == &item.id).unwrap_or(usize::MAX));
             drop(client);
-            let cursor = if let Some(ref last_id) = last_played_item_id {
-                if let Some(pos) = items.iter().position(|i| &i.id == last_id) {
-                    if items[pos].playback_position_ticks > 0 && !items[pos].played {
-                        pos
-                    } else {
-                        (pos + 1).min(items.len() - 1)
-                    }
-                } else {
-                    0
-                }
-            } else {
-                0
-            };
+            let cursor = saved_cursor.min(items.len().saturating_sub(1));
             self.last_played_item_id = last_played_item_id;
             self.player_tab.playlist_cursor = cursor;
             self.player_tab.items = items;

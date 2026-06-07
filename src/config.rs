@@ -15,6 +15,7 @@ pub struct Config {
     pub show_systray_icon: bool,
     pub show_log_tab: bool,
     pub no_scripts: bool,
+    pub niri: bool,
 }
 
 impl Default for Config {
@@ -32,6 +33,7 @@ impl Default for Config {
             show_systray_icon: true,
             show_log_tab: false,
             no_scripts: false,
+            niri: false,
         }
     }
 }
@@ -179,6 +181,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let niri = mby
+        .and_then(|m| m.get("niri"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     Ok(Config {
         server_url: get_str(emby, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -192,6 +199,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         show_systray_icon,
         show_log_tab,
         no_scripts,
+        niri,
     })
 }
 
@@ -302,6 +310,18 @@ hidden_libraries = ["Live TV", "MOVIES"]
     fn parse_no_scripts_defaults_false() {
         let toml = "[emby]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().no_scripts);
+    }
+
+    #[test]
+    fn parse_niri_true() {
+        let toml = "[emby]\nurl = \"http://host\"\n[mby]\nniri = true";
+        assert!(parse_config(toml).unwrap().niri);
+    }
+
+    #[test]
+    fn parse_niri_defaults_false() {
+        let toml = "[emby]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().niri);
     }
 
     // always_play_next must live in [mpv] — placing it elsewhere silently ignores it.
