@@ -1,6 +1,6 @@
 # mby
 
-A terminal UI client for [Emby](https://emby.media) media servers. Browse your libraries, build a queue, and play media — all from the terminal. Control playback from any Emby remote app on your phone or browser, or let mby run headless as a background daemon.
+A terminal UI client for [Emby](https://emby.media) media servers. Browse your libraries, build a queue, and play media — all from the terminal. Control playback from any Emby remote app on your phone or browser, or let mby run headless as a background daemon. The name 'mby' stands for "My Bloody Yalentine."
 
 This was built with Claude Code because I am lazy and I already have a job (for now).
 
