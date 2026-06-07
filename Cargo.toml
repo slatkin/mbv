@@ -21,7 +21,7 @@ uuid = { version = "1", features = ["v4", "fast-rng"] }
 textwrap = "0.16"
 fuzzy-matcher = "0.3"
 tungstenite = { version = "0.24", features = ["native-tls"] }
-zbus = { version = "4", default-features = false, features = ["tokio"] }
+zbus = { version = "5", default-features = false, features = ["tokio"] }
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 ksni = { version = "0.3", features = ["blocking"] }
 ratatui-image = { version = "11", default-features = false, features = ["crossterm"] }
