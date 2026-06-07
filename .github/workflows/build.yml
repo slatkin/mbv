@@ -24,7 +24,7 @@ jobs:
           pacman -S --noconfirm --needed rust cargo nasm mpv openssl github-cli git openssh
 
       - name: Cache Rust build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
