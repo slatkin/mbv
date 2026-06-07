@@ -14,6 +14,11 @@ This was built with Claude Code because I am lazy and I already have a job (for 
 ```sh
 make install
 ```
+Or if you are on Arch just use AUR.
+
+```sh
+paru -Syu mby
+```
 
 Installs the binary to `~/.local/bin/mby`.
 
