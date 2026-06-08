@@ -146,6 +146,7 @@ pub struct App {
     confirm_clear_playlist: bool,
     next_up_item: Option<MediaItem>,
     playlist_card_view: bool,
+    home_card_view: bool,
     last_played_item_id: Option<String>,
     layout_carousel_slots: [(Option<usize>, Rect); 3],
     last_carousel_click_slot: Option<usize>,
@@ -181,7 +182,7 @@ impl App {
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
         let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
         let always_play_next = client.config.always_play_next;
-        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, client.config.niri, always_play_next, player_tx, Some(ws_send_tx));
+        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, player_tx, Some(ws_send_tx));
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();
         crate::mpris::start(player_status, move |cmd| {
@@ -238,6 +239,7 @@ impl App {
             confirm_clear_playlist: false,
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
+            home_card_view: Self::load_home_card_view(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -324,6 +326,7 @@ impl App {
             confirm_clear_playlist: false,
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
+            home_card_view: Self::load_home_card_view(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -664,12 +667,20 @@ impl App {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + n - 1) % n;
                 self.ensure_home_section_visible();
+                if self.home_card_view && !self.card_image_states.is_empty() { self.force_clear = true; }
                 return false;
             }
             KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + 1) % n;
                 self.ensure_home_section_visible();
+                if self.home_card_view && !self.card_image_states.is_empty() { self.force_clear = true; }
+                return false;
+            }
+            KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.home_card_view = !self.home_card_view;
+                self.save_home_card_view();
+                if !self.card_image_states.is_empty() { self.force_clear = true; }
                 return false;
             }
             KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
@@ -683,8 +694,28 @@ impl App {
             _ => {}
         }
         match key.code {
-            KeyCode::Up   => self.move_home_cursor(-1),
-            KeyCode::Down => self.move_home_cursor(1),
+            KeyCode::Up => {
+                if self.home_card_view {
+                    let n = 1 + self.home.latest.len();
+                    self.home.section = (self.home.section + n - 1) % n;
+                    self.ensure_home_section_visible();
+                    if !self.card_image_states.is_empty() { self.force_clear = true; }
+                } else {
+                    self.move_home_cursor(-1);
+                }
+            }
+            KeyCode::Down => {
+                if self.home_card_view {
+                    let n = 1 + self.home.latest.len();
+                    self.home.section = (self.home.section + 1) % n;
+                    self.ensure_home_section_visible();
+                    if !self.card_image_states.is_empty() { self.force_clear = true; }
+                } else {
+                    self.move_home_cursor(1);
+                }
+            }
+            KeyCode::Left  => { if self.home_card_view { self.move_home_cursor(-1); } }
+            KeyCode::Right => { if self.home_card_view { self.move_home_cursor(1); } }
             KeyCode::Enter => self.select_home(),
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::ALT) => self.toggle_watched_home(),
             _ => {}
@@ -1019,22 +1050,35 @@ impl App {
         (4, 4)
     }
 
-    fn load_playlist_card_view() -> bool {
+    fn load_prefs() -> serde_json::Value {
         let path = crate::config::prefs_path();
         std::fs::read_to_string(path)
             .ok()
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-            .and_then(|v| v["playlist_card_view"].as_bool())
-            .unwrap_or(false)
+            .unwrap_or_default()
     }
 
-    fn save_playlist_card_view(&self) {
+    fn load_playlist_card_view() -> bool {
+        Self::load_prefs()["playlist_card_view"].as_bool().unwrap_or(false)
+    }
+
+    fn load_home_card_view() -> bool {
+        Self::load_prefs()["home_card_view"].as_bool().unwrap_or(false)
+    }
+
+    fn save_prefs(&self) {
         let path = crate::config::prefs_path();
-        let v = serde_json::json!({ "playlist_card_view": self.playlist_card_view });
+        let v = serde_json::json!({
+            "playlist_card_view": self.playlist_card_view,
+            "home_card_view": self.home_card_view,
+        });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
         }
     }
+
+    fn save_playlist_card_view(&self) { self.save_prefs(); }
+    fn save_home_card_view(&self) { self.save_prefs(); }
 
     fn save_playlist(&self) {
         let ids: Vec<&str> = self.player_tab.items.iter().map(|i| i.id.as_str()).collect();
@@ -2561,7 +2605,11 @@ impl App {
 
     fn render_combined(&mut self, f: &mut ratatui::Frame, area: Rect) {
         self.home_rect = area;
-        self.render_home_panel(f, area);
+        if self.home_card_view {
+            self.render_home_cards(f, area);
+        } else {
+            self.render_home_panel(f, area);
+        }
     }
 
     fn render_playlist_panel(&mut self, f: &mut ratatui::Frame, area: Rect) {
@@ -2864,168 +2912,9 @@ impl App {
             };
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
 
-            let border_fg = if selected { palette::IRIS } else { palette::WHITE };
-            let block = Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(border_fg));
-            let inner = block.inner(*card_rect);
-            f.render_widget(block, *card_rect);
-
-            if inner.height < 2 || inner.width == 0 { continue; }
-
-            let trunc = |s: &str| -> String {
-                let w = inner.width as usize;
-                if s.chars().count() > w {
-                    format!("{}…", &s[..s.char_indices()
-                        .nth(w.saturating_sub(1))
-                        .map(|(b, _)| b)
-                        .unwrap_or(s.len())])
-                } else { s.to_string() }
-            };
-
-            let put = |f: &mut ratatui::Frame, y: u16, para: Paragraph| {
-                if y < inner.bottom() {
-                    f.render_widget(para, Rect { x: inner.x, y, width: inner.width, height: 1 });
-                }
-            };
-
-            let fmt_m = |t: i64| -> String {
-                let s = t / TICKS_PER_SECOND;
-                if s >= 3600 { format!("{}h{:02}m", s/3600, (s%3600)/60) }
-                else         { format!("{}m", s/60) }
-            };
-
-            // "Now Playing" header at top (2 rows).
-            let mut header_rows = 0u16;
-            if now_playing {
-                put(f, inner.y, Paragraph::new("Now Playing")
-                    .style(Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD))
-                    .alignment(Alignment::Center));
-                let rule_w = (inner.width as u32 * 4 / 5) as usize;
-                let pad    = (inner.width as usize).saturating_sub(rule_w) / 2;
-                let rule   = format!("{}{}", " ".repeat(pad), "─".repeat(rule_w));
-                put(f, inner.y + 1, Paragraph::new(rule).style(Style::default().fg(palette::IRIS)));
-                header_rows = 2;
-            }
-
-            // Text rows pinned to the bottom, scaled to available height:
-            //   >=10 rows inner: title(2) + series(1) + progress(2) = 5
-            //   >=7  rows inner: title(2) + series(1) = 3  (drop progress bar)
-            //   <7   rows inner: title(1) only = 1
-            let text_rows = if inner.height >= 10 { 5u16 }
-                            else if inner.height >= 7 { 3 }
-                            else { 1 };
-            let img_top    = inner.y + header_rows;
-            let img_bottom = inner.bottom().saturating_sub(text_rows);
-            let img_h      = img_bottom.saturating_sub(img_top);
-
-            // Render image if available and there is space.
-            let mut text_y = img_bottom; // text always pinned to bottom
-            if img_h >= 2 {
-                if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                    type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                    if *is_center {
-                        let avail = ratatui::layout::Size { width: inner.width.saturating_sub(2), height: img_h };
-                        let actual = state.size_for(ratatui_image::Resize::Fit(None), avail);
-                        let img_x = inner.x + (inner.width.saturating_sub(actual.width)) / 2;
-                        let img_y = img_top + (img_h.saturating_sub(actual.height)) / 2;
-                        let img_rect = Rect { x: img_x, y: img_y, width: actual.width, height: actual.height };
-                        f.render_stateful_widget(
-                            SImg::default().resize(ratatui_image::Resize::Fit(None)),
-                            img_rect, state,
-                        );
-                    } else {
-                        let w     = (inner.width as u32 * 36 / 100) as u16;
-                        let avail = ratatui::layout::Size { width: w, height: img_h };
-                        let actual = state.size_for(ratatui_image::Resize::Fit(None), avail);
-                        let img_x = inner.x + (inner.width.saturating_sub(actual.width)) / 2;
-                        let img_y = img_top + (img_h.saturating_sub(actual.height)) / 2;
-                        let img_rect = Rect { x: img_x, y: img_y, width: actual.width, height: actual.height };
-                        f.render_stateful_widget(
-                            SImg::default().resize(ratatui_image::Resize::Fit(None)),
-                            img_rect, state,
-                        );
-                    }
-                    text_y = img_bottom;
-                }
-            }
-
-            // Title line: "Bold Title (dim 43m)"
-            {
-                let title_fg  = if selected { palette::WHITE } else { palette::TEXT };
-                let title_mod = if selected { Modifier::BOLD } else { Modifier::empty() };
-                let dur_suffix = if runtime > 0 { format!(" ({})", fmt_m(runtime)) } else { String::new() };
-                // Render title + duration, wrapping up to 2 lines.
-                let w           = inner.width as usize;
-                let name_chars: Vec<char> = name.chars().collect();
-                let name_len    = name_chars.len();
-                let suffix_len  = dur_suffix.chars().count();
-                if name_len + suffix_len <= w {
-                    // Fits on one line.
-                    let mut spans = vec![Span::styled(name.clone(), Style::default().fg(title_fg).add_modifier(title_mod))];
-                    if !dur_suffix.is_empty() {
-                        spans.push(Span::styled(dur_suffix, Style::default().fg(palette::MUTED)));
-                    }
-                    put(f, text_y, Paragraph::new(Line::from(spans)).alignment(Alignment::Center));
-                    text_y += 1;
-                } else {
-                    // Word-wrap at w chars; fall back to hard split if a single word exceeds w.
-                    let wrapped = wrap(&name, w);
-                    let line1: String = wrapped.first().map(|s| s.to_string()).unwrap_or_default();
-                    let skip = line1.chars().count();
-                    let line2: String = name.chars().skip(skip).collect::<String>()
-                        .trim_start().chars().take(w).collect();
-                    put(f, text_y, Paragraph::new(Line::from(
-                        Span::styled(line1, Style::default().fg(title_fg).add_modifier(title_mod))
-                    )).alignment(Alignment::Center));
-                    text_y += 1;
-                    let mut spans = vec![Span::styled(line2, Style::default().fg(title_fg).add_modifier(title_mod))];
-                    if !dur_suffix.is_empty() {
-                        spans.push(Span::styled(dur_suffix, Style::default().fg(palette::MUTED)));
-                    }
-                    put(f, text_y, Paragraph::new(Line::from(spans)).alignment(Alignment::Center));
-                    text_y += 1;
-                }
-            }
-
             let ep_tag = if is_ep { format!("S{:02}E{:02}", season, episode) } else { String::new() };
-            if text_rows >= 3 && (!series.is_empty() || !ep_tag.is_empty()) {
-                let line = if !series.is_empty() && !ep_tag.is_empty() {
-                    Line::from(vec![
-                        Span::styled(trunc(&series), Style::default().fg(palette::SUBTLE)),
-                        Span::styled(" • ",          Style::default().fg(palette::IRIS)),
-                        Span::styled(ep_tag,         Style::default().fg(palette::MUTED)),
-                    ])
-                } else if !series.is_empty() {
-                    Line::from(Span::styled(trunc(&series), Style::default().fg(palette::SUBTLE)))
-                } else {
-                    Line::from(Span::styled(ep_tag, Style::default().fg(palette::MUTED)))
-                };
-                put(f, text_y, Paragraph::new(line).alignment(Alignment::Center));
-                text_y += 1;
-            }
-
-            if text_rows >= 5 && pos_ticks > 0 && rt_ticks > 0 {
-                let full_w = inner.width as usize;
-                let bar_w  = (full_w as u32 * 3 / 5) as usize;
-                let pad    = (full_w.saturating_sub(bar_w)) / 2;
-                let fraction = (pos_ticks as f64 / rt_ticks as f64).clamp(0.0, 1.0);
-                let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
-                put(f, text_y, Paragraph::new(Line::from(vec![
-                    Span::raw(" ".repeat(pad)),
-                    Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::FOAM } else { palette::YELLOW })),
-                    Span::styled("─".repeat(bar_w - filled), Style::default().fg(palette::WHITE)),
-                ])));
-                text_y += 1;
-                put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
-                    .style(Style::default().fg(palette::MUTED))
-                    .alignment(Alignment::Center));
-            } else if text_rows >= 5 && played {
-                put(f, text_y, Paragraph::new("Played")
-                    .style(Style::default().fg(palette::MUTED))
-                    .alignment(Alignment::Center));
-            }
+            self.render_card_slot(f, *card_rect, *is_center, selected, now_playing,
+                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played);
         }
 
         // Prefetch images for the three items before and after the cursor.
@@ -3043,6 +2932,319 @@ impl App {
         }
 
         // Gutter: show selected index / total.
+        if area.height >= 2 {
+            f.render_widget(
+                Paragraph::new(format!("{}/{}", cursor + 1, n))
+                    .style(Style::default().fg(palette::MUTED))
+                    .alignment(Alignment::Center),
+                Rect { x: area.x, y: gutter_y, width: area.width, height: 1 },
+            );
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn render_card_slot(
+        &mut self,
+        f: &mut ratatui::Frame,
+        card_rect: Rect,
+        is_center: bool,
+        selected: bool,
+        now_playing: bool,
+        cache_key: &str,
+        name: &str,
+        series: &str,
+        ep_tag: &str,
+        runtime: i64,
+        pos_ticks: i64,
+        rt_ticks: i64,
+        played: bool,
+    ) {
+        let border_fg = if selected { palette::IRIS } else { palette::WHITE };
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(border_fg));
+        let inner = block.inner(card_rect);
+        f.render_widget(block, card_rect);
+
+        if inner.height < 2 || inner.width == 0 { return; }
+
+        let trunc = |s: &str| -> String {
+            let w = inner.width as usize;
+            if s.chars().count() > w {
+                format!("{}…", &s[..s.char_indices()
+                    .nth(w.saturating_sub(1))
+                    .map(|(b, _)| b)
+                    .unwrap_or(s.len())])
+            } else { s.to_string() }
+        };
+
+        let put = |f: &mut ratatui::Frame, y: u16, para: Paragraph| {
+            if y < inner.bottom() {
+                f.render_widget(para, Rect { x: inner.x, y, width: inner.width, height: 1 });
+            }
+        };
+
+        let fmt_m = |t: i64| -> String {
+            let s = t / TICKS_PER_SECOND;
+            if s >= 3600 { format!("{}h{:02}m", s/3600, (s%3600)/60) }
+            else         { format!("{}m", s/60) }
+        };
+
+        // "Now Playing" header at top (2 rows).
+        let mut header_rows = 0u16;
+        if now_playing {
+            put(f, inner.y, Paragraph::new("Now Playing")
+                .style(Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD))
+                .alignment(Alignment::Center));
+            let rule_w = (inner.width as u32 * 4 / 5) as usize;
+            let pad    = (inner.width as usize).saturating_sub(rule_w) / 2;
+            let rule   = format!("{}{}", " ".repeat(pad), "─".repeat(rule_w));
+            put(f, inner.y + 1, Paragraph::new(rule).style(Style::default().fg(palette::IRIS)));
+            header_rows = 2;
+        }
+
+        // Text rows pinned to the bottom, scaled to available height:
+        //   >=10 rows inner: title(2) + series(1) + progress(2) = 5
+        //   >=7  rows inner: title(2) + series(1) = 3  (drop progress bar)
+        //   <7   rows inner: title(1) only = 1
+        let text_rows = if inner.height >= 10 { 5u16 }
+                        else if inner.height >= 7 { 3 }
+                        else { 1 };
+        let img_top    = inner.y + header_rows;
+        let img_bottom = inner.bottom().saturating_sub(text_rows);
+        let img_h      = img_bottom.saturating_sub(img_top);
+
+        // Render image if available and there is space.
+        let mut text_y = img_bottom; // text always pinned to bottom
+        if img_h >= 2 {
+            if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
+                type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
+                if is_center {
+                    let avail = ratatui::layout::Size { width: inner.width.saturating_sub(2), height: img_h };
+                    let actual = state.size_for(ratatui_image::Resize::Fit(None), avail);
+                    let img_x = inner.x + (inner.width.saturating_sub(actual.width)) / 2;
+                    let img_y = img_top + (img_h.saturating_sub(actual.height)) / 2;
+                    let img_rect = Rect { x: img_x, y: img_y, width: actual.width, height: actual.height };
+                    f.render_stateful_widget(
+                        SImg::default().resize(ratatui_image::Resize::Fit(None)),
+                        img_rect, state,
+                    );
+                } else {
+                    let w     = (inner.width as u32 * 36 / 100) as u16;
+                    let avail = ratatui::layout::Size { width: w, height: img_h };
+                    let actual = state.size_for(ratatui_image::Resize::Fit(None), avail);
+                    let img_x = inner.x + (inner.width.saturating_sub(actual.width)) / 2;
+                    let img_y = img_top + (img_h.saturating_sub(actual.height)) / 2;
+                    let img_rect = Rect { x: img_x, y: img_y, width: actual.width, height: actual.height };
+                    f.render_stateful_widget(
+                        SImg::default().resize(ratatui_image::Resize::Fit(None)),
+                        img_rect, state,
+                    );
+                }
+                text_y = img_bottom;
+            }
+        }
+
+        // Title line: "Bold Title (dim 43m)"
+        {
+            let title_fg  = if selected { palette::WHITE } else { palette::TEXT };
+            let title_mod = if selected { Modifier::BOLD } else { Modifier::empty() };
+            let dur_suffix = if runtime > 0 { format!(" ({})", fmt_m(runtime)) } else { String::new() };
+            let w           = inner.width as usize;
+            let name_chars: Vec<char> = name.chars().collect();
+            let name_len    = name_chars.len();
+            let suffix_len  = dur_suffix.chars().count();
+            if name_len + suffix_len <= w {
+                let mut spans = vec![Span::styled(name.to_string(), Style::default().fg(title_fg).add_modifier(title_mod))];
+                if !dur_suffix.is_empty() {
+                    spans.push(Span::styled(dur_suffix, Style::default().fg(palette::MUTED)));
+                }
+                put(f, text_y, Paragraph::new(Line::from(spans)).alignment(Alignment::Center));
+                text_y += 1;
+            } else {
+                let wrapped = wrap(name, w);
+                let line1: String = wrapped.first().map(|s| s.to_string()).unwrap_or_default();
+                let skip = line1.chars().count();
+                let line2: String = name.chars().skip(skip).collect::<String>()
+                    .trim_start().chars().take(w).collect();
+                put(f, text_y, Paragraph::new(Line::from(
+                    Span::styled(line1, Style::default().fg(title_fg).add_modifier(title_mod))
+                )).alignment(Alignment::Center));
+                text_y += 1;
+                let mut spans = vec![Span::styled(line2, Style::default().fg(title_fg).add_modifier(title_mod))];
+                if !dur_suffix.is_empty() {
+                    spans.push(Span::styled(dur_suffix, Style::default().fg(palette::MUTED)));
+                }
+                put(f, text_y, Paragraph::new(Line::from(spans)).alignment(Alignment::Center));
+                text_y += 1;
+            }
+        }
+
+        if text_rows >= 3 && (!series.is_empty() || !ep_tag.is_empty()) {
+            let line = if !series.is_empty() && !ep_tag.is_empty() {
+                Line::from(vec![
+                    Span::styled(trunc(series), Style::default().fg(palette::SUBTLE)),
+                    Span::styled(" • ",         Style::default().fg(palette::IRIS)),
+                    Span::styled(ep_tag.to_string(), Style::default().fg(palette::MUTED)),
+                ])
+            } else if !series.is_empty() {
+                Line::from(Span::styled(trunc(series), Style::default().fg(palette::SUBTLE)))
+            } else {
+                Line::from(Span::styled(ep_tag.to_string(), Style::default().fg(palette::MUTED)))
+            };
+            put(f, text_y, Paragraph::new(line).alignment(Alignment::Center));
+            text_y += 1;
+        }
+
+        if text_rows >= 5 && pos_ticks > 0 && rt_ticks > 0 {
+            let full_w = inner.width as usize;
+            let bar_w  = (full_w as u32 * 3 / 5) as usize;
+            let pad    = (full_w.saturating_sub(bar_w)) / 2;
+            let fraction = (pos_ticks as f64 / rt_ticks as f64).clamp(0.0, 1.0);
+            let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
+            put(f, text_y, Paragraph::new(Line::from(vec![
+                Span::raw(" ".repeat(pad)),
+                Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::FOAM } else { palette::YELLOW })),
+                Span::styled("─".repeat(bar_w - filled), Style::default().fg(palette::WHITE)),
+            ])));
+            text_y += 1;
+            put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
+                .style(Style::default().fg(palette::MUTED))
+                .alignment(Alignment::Center));
+        } else if text_rows >= 5 && played {
+            put(f, text_y, Paragraph::new("Played")
+                .style(Style::default().fg(palette::MUTED))
+                .alignment(Alignment::Center));
+        }
+    }
+
+    fn render_home_cards(&mut self, f: &mut ratatui::Frame, area: Rect) {
+        let n_sections = 1 + self.home.latest.len();
+        if n_sections == 0 { return; }
+
+        // Clamp section index in case data changed.
+        if self.home.section >= n_sections { self.home.section = 0; }
+        let sec = self.home.section;
+
+        // Get current section's title, items, and cursor.
+        let (sec_title, items, cursor) = if sec == 0 {
+            (
+                "Continue Watching".to_string(),
+                self.home.continue_items.clone(),
+                self.home.continue_cursor,
+            )
+        } else {
+            let (t, _, items, c) = &self.home.latest[sec - 1];
+            (t.clone(), items.clone(), *c)
+        };
+
+        let n = items.len();
+        if n == 0 {
+            f.render_widget(
+                Paragraph::new("(empty)").style(Style::default().fg(palette::MUTED)).alignment(Alignment::Center),
+                area,
+            );
+            return;
+        }
+
+        let cursor = cursor.min(n - 1);
+
+        let cards_area = area;
+        let cards_h    = cards_area.height;
+
+        // Same geometry as render_playlist_cards.
+        let center_h   = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
+        let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
+        // Place title and count just below the center card, with a one-line gap.
+        let title_y  = (cards_area.y + center_v_pad + center_h + 1).min(area.bottom().saturating_sub(2));
+        let gutter_y = (title_y + 1).min(area.bottom().saturating_sub(1));
+        let side_h     = ((center_h as u32 * 4 / 5) as u16).max(3);
+        let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
+
+        const SIDE_HIDE_W: u16 = 60;
+        let show_sides = cards_area.width >= SIDE_HIDE_W;
+
+        const GAP: u16 = 1;
+        let (center_w, side_w, x_left, x_center, x_right) = if show_sides {
+            let avail_w  = cards_area.width.saturating_sub(GAP * 4);
+            let cw = (avail_w as u32 * 2 / 5) as u16;
+            let sw = avail_w.saturating_sub(cw) / 2;
+            let xl = cards_area.x + GAP;
+            let xc = xl + sw + GAP;
+            let xr = xc + cw + GAP;
+            (cw, sw, xl, xc, xr)
+        } else {
+            let avail_w = cards_area.width.saturating_sub(GAP * 2);
+            (avail_w, 0, cards_area.x, cards_area.x + GAP, cards_area.x)
+        };
+
+        let slots: [(Option<usize>, Rect, bool); 3] = [
+            (
+                if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
+                Rect { x: x_left,   y: cards_area.y + side_v_pad, width: side_w,   height: side_h   },
+                false,
+            ),
+            (
+                Some(cursor),
+                Rect { x: x_center, y: cards_area.y + center_v_pad, width: center_w, height: center_h },
+                true,
+            ),
+            (
+                if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
+                Rect { x: x_right,  y: cards_area.y + side_v_pad, width: side_w,   height: side_h   },
+                false,
+            ),
+        ];
+
+        // Prefetch images for neighbours.
+        let prefetch_start = cursor.saturating_sub(3);
+        let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
+        for pi in prefetch_start..=prefetch_end {
+            let item = &items[pi];
+            let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
+            self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), &["Primary", "Backdrop", "Logo"]);
+            if pi != cursor {
+                self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
+            }
+        }
+
+        for (maybe_idx, card_rect, is_center) in &slots {
+            let i = match maybe_idx { None => continue, Some(i) => *i };
+            if card_rect.width < 3 { continue; }
+
+            let item = &items[i];
+            let is_ep = item.item_type == "Episode" && item.parent_index_number > 0;
+            let ep_tag = if is_ep { format!("S{:02}E{:02}", item.parent_index_number, item.index_number) } else { String::new() };
+            let name       = item.name.clone();
+            let series     = item.series_name.clone();
+            let runtime    = item.runtime_ticks;
+            let pos_ticks  = item.playback_position_ticks;
+            let rt_ticks   = item.runtime_ticks;
+            let played     = item.played;
+            let item_id    = item.id.clone();
+            let series_id  = item.series_id.clone();
+            let selected   = i == cursor;
+
+            let (cache_key, img_types): (String, &[&str]) = if *is_center {
+                (format!("{}:A", item_id), &["Primary", "Backdrop", "Logo"])
+            } else {
+                (format!("{}:S", item_id), &["Logo", "Primary", "Backdrop"])
+            };
+            self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+
+            self.render_card_slot(f, *card_rect, *is_center, selected, false,
+                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played);
+        }
+
+        // Title, then count below it.
+        let title_line = Line::from(
+            Span::styled(sec_title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD))
+        );
+        f.render_widget(
+            Paragraph::new(title_line).alignment(Alignment::Center),
+            Rect { x: area.x, y: title_y, width: area.width, height: 1 },
+        );
         if area.height >= 2 {
             f.render_widget(
                 Paragraph::new(format!("{}/{}", cursor + 1, n))
