@@ -72,7 +72,6 @@ pub fn run(client: EmbyClient) -> ! {
         client.config.show_audio_window,
         client.config.use_mpv_config,
         client.config.no_scripts,
-        client.config.niri,
         client.config.always_play_next,
         player_tx,
         Some(ws_send_tx),
