@@ -1782,7 +1782,7 @@ impl App {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
                 if items.is_empty() { self.status = "Nothing to shuffle".into(); return; }
-                items.shuffle(&mut rand::thread_rng());
+                items.shuffle(&mut rand::rng());
                 let count = items.len();
                 let c = Arc::new(client.clone());
                 drop(client);
@@ -1822,7 +1822,7 @@ impl App {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
                 if items.is_empty() { drop(client); self.status = "Nothing to shuffle".into(); return; }
-                items.shuffle(&mut rand::thread_rng());
+                items.shuffle(&mut rand::rng());
                 let count = items.len();
                 let c = Arc::new(client.clone());
                 drop(client);
