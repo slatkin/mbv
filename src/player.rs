@@ -1335,6 +1335,13 @@ pub struct PlayerProxy {
 }
 
 impl PlayerProxy {
+    #[cfg(test)]
+    pub fn stub(status: Arc<Mutex<PlayerStatus>>) -> Self {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let player = Player::new(String::new(), String::new(), false, false, false, false, tx, None);
+        PlayerProxy { always_play_next: false, status, inner: PlayerProxyInner::Local(player) }
+    }
+
     pub fn local(player: Player, always_play_next: bool) -> Self {
         let status = player.status.clone();
         PlayerProxy { always_play_next, status, inner: PlayerProxyInner::Local(player) }

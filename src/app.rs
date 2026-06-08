@@ -4075,6 +4075,359 @@ mod tests {
         assert_eq!(style.fg, None);
     }
 
+    // ── test helpers ─────────────────────────────────────────────────────────
+
+    fn make_items(n: usize) -> Vec<MediaItem> {
+        (0..n).map(|i| {
+            let mut item = make_item(&format!("Item {i}"), "Movie");
+            item.id = format!("id{i}");
+            item
+        }).collect()
+    }
+
+    /// Minimal App stub for logic-only tests.
+    fn make_app_stub() -> App {
+        use std::sync::{Arc, Mutex};
+        use crate::player::{PlayerProxy, PlayerStatus};
+
+        let status = Arc::new(Mutex::new(PlayerStatus {
+            position_ticks: 0, runtime_ticks: 0, paused: false,
+            volume: 100, volume_max: 100, current_idx: 0, active: false,
+            title: String::new(), audio_tracks: Vec::new(), sub_tracks: Vec::new(),
+            audio_id: 0, sub_id: 0,
+        }));
+
+        let (_, player_rx) = std::sync::mpsc::channel();
+        let (_, ws_rx)     = std::sync::mpsc::channel();
+        let (lib_tx, lib_rx) = std::sync::mpsc::channel();
+        let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
+
+        let player = PlayerProxy::stub(status.clone());
+
+        use crate::api::EmbyClient;
+        use crate::config::Config;
+        let client = EmbyClient::new(Config::default());
+
+        App {
+            client: Arc::new(Mutex::new(client)),
+            player,
+            player_rx,
+            ws_rx,
+            tab_idx: 0,
+            hidden_libraries: Vec::new(),
+            player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
+            home: HomePane {
+                continue_items: Vec::new(),
+                continue_cursor: 0,
+                latest: Vec::new(),
+                section: 0,
+            },
+            libs: Vec::new(),
+            status: String::new(),
+            status_expires: None,
+            log: crate::applog::AppLog::new(0),
+            log_scroll: 0,
+            log_pane: LogPane::Log,
+            log_source_cursor: 0,
+            log_disabled_sources: std::collections::HashSet::new(),
+            playlist_rect: ratatui::layout::Rect::default(),
+            home_rect: ratatui::layout::Rect::default(),
+            layout_playlist_inner: ratatui::layout::Rect::default(),
+            layout_section_areas: Vec::new(),
+            layout_tabs_area: ratatui::layout::Rect::default(),
+            terminal_width: 80,
+            terminal_height: 24,
+            layout_lib_scroll: 0,
+            layout_lib_row_heights: Vec::new(),
+            layout_home_scrolls: Vec::new(),
+            home_panel_section_offset: 0,
+            layout_lib_table_area: ratatui::layout::Rect::default(),
+            layout_breadcrumbs: Vec::new(),
+            last_click_time: std::time::Instant::now(),
+            last_drag_seek: std::time::Instant::now(),
+            last_click_pos: (u16::MAX, u16::MAX),
+            layout_seekbar_area: ratatui::layout::Rect::default(),
+            layout_button_area: ratatui::layout::Rect::default(),
+            layout_tracks_area: ratatui::layout::Rect::default(),
+            layout_vol_area: ratatui::layout::Rect::default(),
+            layout_sub_area: ratatui::layout::Rect::default(),
+            layout_audio_area: ratatui::layout::Rect::default(),
+            confirm_remove_idx: None,
+            confirm_clear_playlist: false,
+            next_up_item: None,
+            playlist_card_view: false,
+            home_card_view: false,
+            last_played_item_id: None,
+            layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
+            last_carousel_click_slot: None,
+            last_carousel_click_time: std::time::Instant::now(),
+            card_image_states: std::collections::HashMap::new(),
+            card_image_loading: std::collections::HashSet::new(),
+            card_image_tx,
+            card_image_rx,
+            image_picker: None,
+            show_help: false,
+            help_scroll: 0,
+            show_log_tab: false,
+            context_menu: None,
+            context_menu_rect: None,
+            lib_tx,
+            lib_rx,
+            force_clear: false,
+        }
+    }
+
+    // ── home_section_len_cur ─────────────────────────────────────────────────
+
+    #[test]
+    fn home_section_len_cur_section_zero_uses_continue_items() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(5);
+        app.home.continue_cursor = 3;
+        assert_eq!(app.home_section_len_cur(0), (5, 3));
+    }
+
+    #[test]
+    fn home_section_len_cur_section_one_uses_latest() {
+        let mut app = make_app_stub();
+        app.home.latest = vec![
+            ("Latest Movies".into(), "lib1".into(), make_items(7), 2),
+        ];
+        assert_eq!(app.home_section_len_cur(1), (7, 2));
+    }
+
+    #[test]
+    fn home_section_len_cur_out_of_bounds_returns_zero() {
+        let app = make_app_stub();
+        assert_eq!(app.home_section_len_cur(99), (0, 0));
+    }
+
+    // ── set_home_cursor ──────────────────────────────────────────────────────
+
+    #[test]
+    fn set_home_cursor_section_zero_sets_continue_cursor() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(5);
+        app.set_home_cursor(0, 4);
+        assert_eq!(app.home.continue_cursor, 4);
+    }
+
+    #[test]
+    fn set_home_cursor_section_one_sets_latest_cursor() {
+        let mut app = make_app_stub();
+        app.home.latest = vec![("T".into(), "lib".into(), make_items(10), 0)];
+        app.set_home_cursor(1, 7);
+        assert_eq!(app.home.latest[0].3, 7);
+    }
+
+    #[test]
+    fn set_home_cursor_out_of_bounds_section_is_noop() {
+        let mut app = make_app_stub();
+        app.set_home_cursor(99, 3); // should not panic
+    }
+
+    // ── move_home_cursor ─────────────────────────────────────────────────────
+
+    #[test]
+    fn move_home_cursor_forward_within_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(5);
+        app.home.continue_cursor = 0;
+        app.move_home_cursor(1);
+        assert_eq!(app.home.continue_cursor, 1);
+        assert_eq!(app.home.section, 0);
+    }
+
+    #[test]
+    fn move_home_cursor_forward_wraps_to_next_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(3);
+        app.home.continue_cursor = 2; // already at end of section 0
+        app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
+        app.move_home_cursor(1);
+        assert_eq!(app.home.section, 1);
+        assert_eq!(app.home.continue_cursor, 2); // unchanged
+    }
+
+    #[test]
+    fn move_home_cursor_forward_clamped_at_last_item_of_last_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(3);
+        app.home.continue_cursor = 2;
+        // no latest sections
+        app.move_home_cursor(1);
+        assert_eq!(app.home.section, 0);
+        assert_eq!(app.home.continue_cursor, 2);
+    }
+
+    #[test]
+    fn move_home_cursor_backward_within_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(5);
+        app.home.continue_cursor = 3;
+        app.move_home_cursor(-1);
+        assert_eq!(app.home.continue_cursor, 2);
+        assert_eq!(app.home.section, 0);
+    }
+
+    #[test]
+    fn move_home_cursor_backward_wraps_to_previous_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(3);
+        app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
+        app.home.section = 1;
+        app.home.latest[0].3 = 0; // at start of section 1
+        app.move_home_cursor(-1);
+        assert_eq!(app.home.section, 0);
+    }
+
+    #[test]
+    fn move_home_cursor_backward_clamped_at_first_item_of_first_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(3);
+        app.home.continue_cursor = 0;
+        app.move_home_cursor(-1);
+        assert_eq!(app.home.section, 0);
+        assert_eq!(app.home.continue_cursor, 0);
+    }
+
+    // ── ensure_home_section_visible ──────────────────────────────────────────
+
+    fn sections(n: usize) -> Vec<(String, String, Vec<MediaItem>, usize)> {
+        (0..n).map(|i| (format!("Sec {i}"), format!("lib{i}"), make_items(3), 0)).collect()
+    }
+
+    #[test]
+    fn ensure_visible_all_sections_fit_no_scrolling_needed() {
+        let mut app = make_app_stub();
+        // terminal_height=24, chrome=3, panel_h=21; HOME_MIN_SECTION_H=6; 3*6=18<=21 => all visible
+        app.terminal_height = 24;
+        app.home.latest = sections(2); // 3 total sections
+        app.home.section = 2;
+        app.home_panel_section_offset = 0;
+        app.ensure_home_section_visible();
+        assert_eq!(app.home_panel_section_offset, 0);
+    }
+
+    #[test]
+    fn ensure_visible_scrolls_offset_down_when_section_below_window() {
+        let mut app = make_app_stub();
+        // panel_h = 24 - 3 = 21; visible = 21/6 = 3; sections=5 => offset must move
+        app.terminal_height = 24;
+        app.home.latest = sections(4); // 5 total sections
+        app.home.section = 4; // last section
+        app.home_panel_section_offset = 0;
+        app.ensure_home_section_visible();
+        // offset + visible > section, so offset = section + 1 - visible = 4 + 1 - 3 = 2
+        assert_eq!(app.home_panel_section_offset, 2);
+    }
+
+    #[test]
+    fn ensure_visible_scrolls_offset_up_when_section_above_window() {
+        let mut app = make_app_stub();
+        app.terminal_height = 24;
+        app.home.latest = sections(4); // 5 total sections
+        app.home.section = 0;
+        app.home_panel_section_offset = 3; // selected is above window
+        app.ensure_home_section_visible();
+        assert_eq!(app.home_panel_section_offset, 0);
+    }
+
+    #[test]
+    fn ensure_visible_clamps_offset_to_max() {
+        let mut app = make_app_stub();
+        // panel_h = 24 - 3 = 21; visible = 3; 3 total sections => max_offset = 0
+        app.terminal_height = 24;
+        app.home.latest = sections(2); // 3 total sections, all fit
+        app.home.section = 1;
+        app.home_panel_section_offset = 10; // way too high
+        app.ensure_home_section_visible();
+        assert_eq!(app.home_panel_section_offset, 0);
+    }
+
+    // ── home_card_view toggle ────────────────────────────────────────────────
+
+    #[test]
+    fn home_card_view_defaults_false() {
+        let app = make_app_stub();
+        assert!(!app.home_card_view);
+    }
+
+    #[test]
+    fn home_card_view_toggle_changes_state() {
+        let mut app = make_app_stub();
+        app.home_card_view = !app.home_card_view;
+        assert!(app.home_card_view);
+        app.home_card_view = !app.home_card_view;
+        assert!(!app.home_card_view);
+    }
+
+    // ── cursor preservation during home refresh ──────────────────────────────
+
+    #[test]
+    fn home_refresh_preserves_cursor_by_lib_id() {
+        // Simulate what init_home does: old_cursors keyed by lib_id.
+        let old_latest: Vec<(String, String, Vec<MediaItem>, usize)> = vec![
+            ("Latest Movies".into(), "lib-movies".into(), make_items(10), 7),
+            ("Latest TV".into(),     "lib-tv".into(),     make_items(5),  3),
+        ];
+        let old_cursors: std::collections::HashMap<String, usize> = old_latest.iter()
+            .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
+            .collect();
+
+        // New fetch returns same libs but with fresh items.
+        let new_items_movies = make_items(12);
+        let new_items_tv     = make_items(4);
+
+        let cursor_movies = old_cursors.get("lib-movies").copied().unwrap_or(0)
+            .min(new_items_movies.len().saturating_sub(1));
+        let cursor_tv = old_cursors.get("lib-tv").copied().unwrap_or(0)
+            .min(new_items_tv.len().saturating_sub(1));
+
+        assert_eq!(cursor_movies, 7, "cursor preserved when within bounds");
+        assert_eq!(cursor_tv, 3,     "cursor preserved when within bounds");
+    }
+
+    #[test]
+    fn home_refresh_clamps_cursor_when_new_list_is_shorter() {
+        let old_latest: Vec<(String, String, Vec<MediaItem>, usize)> = vec![
+            ("Latest Movies".into(), "lib-movies".into(), make_items(10), 9),
+        ];
+        let old_cursors: std::collections::HashMap<String, usize> = old_latest.iter()
+            .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
+            .collect();
+
+        let new_items = make_items(5); // shorter than before
+        let cursor = old_cursors.get("lib-movies").copied().unwrap_or(0)
+            .min(new_items.len().saturating_sub(1));
+
+        assert_eq!(cursor, 4, "cursor clamped to new last index");
+    }
+
+    #[test]
+    fn home_refresh_cursor_defaults_zero_for_new_library() {
+        let old_cursors: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let new_items = make_items(8);
+        let cursor = old_cursors.get("brand-new-lib").copied().unwrap_or(0)
+            .min(new_items.len().saturating_sub(1));
+        assert_eq!(cursor, 0);
+    }
+
+    #[test]
+    fn home_section_clamped_after_refresh_removes_sections() {
+        let mut app = make_app_stub();
+        app.home.latest = sections(4); // 5 total
+        app.home.section = 4;
+
+        // Simulate refresh that returns fewer sections.
+        app.home.latest = sections(1); // now only 2 total
+        let n = 1 + app.home.latest.len();
+        if app.home.section >= n {
+            app.home.section = n.saturating_sub(1);
+        }
+        assert_eq!(app.home.section, 1);
+    }
+
 }
 
 fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>> {
