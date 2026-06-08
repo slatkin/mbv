@@ -107,7 +107,7 @@ impl RemotePlayer {
         let _ = self.cmd_tx.send(CtrlCmd::PlayerCmd(cmd));
     }
 
-    pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _log: AppLog) {
+    pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _log: AppLog, _initial_volume: u8) {
         let _ = self.cmd_tx.send(CtrlCmd::PlayItems {
             item_ids: vec![item.id.clone()],
             start_ticks: item.playback_position_ticks,
@@ -121,6 +121,7 @@ impl RemotePlayer {
         start_idx: usize,
         _client: Arc<EmbyClient>,
         _log: AppLog,
+        _initial_volume: u8,
     ) {
         let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
         let start_ticks = items.get(start_idx).map_or(0, |i| i.playback_position_ticks);

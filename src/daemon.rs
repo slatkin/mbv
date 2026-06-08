@@ -265,7 +265,7 @@ fn handle_ctrl(
                             cursor: 0,
                         }));
                         let c = Arc::new(client.lock().unwrap().clone());
-                        player.play_playlist(queue, 0, c, log.clone());
+                        player.play_playlist(queue, 0, c, log.clone(), 100);
                         return;
                     }
                 }
@@ -283,7 +283,7 @@ fn handle_ctrl(
                     play_item.playback_position_ticks = start_ticks;
                 }
                 let c = Arc::new(client.lock().unwrap().clone());
-                player.play(&play_item, c, log.clone());
+                player.play(&play_item, c, log.clone(), 100);
             } else {
                 *items = fetched.clone();
                 *cursor = 0;
@@ -297,9 +297,9 @@ fn handle_ctrl(
                 let c = Arc::new(client.lock().unwrap().clone());
                 let active = player.status.lock().unwrap().active;
                 if active {
-                    player.play(&fetched[0], c, log.clone());
+                    player.play(&fetched[0], c, log.clone(), 100);
                 } else {
-                    player.play_playlist(fetched, 0, c, log.clone());
+                    player.play_playlist(fetched, 0, c, log.clone(), 100);
                 }
             }
         }
@@ -351,7 +351,7 @@ fn handle_ws(
                     play_item.playback_position_ticks = start_position_ticks;
                 }
                 let c = Arc::new(client.lock().unwrap().clone());
-                player.play(&play_item, c, log.clone());
+                player.play(&play_item, c, log.clone(), 100);
             } else {
                 // Apply StartPositionTicks to the starting item
                 let mut start_item = fetched[start_idx].clone();
@@ -361,7 +361,7 @@ fn handle_ws(
                 let mut items_with_pos = fetched.clone();
                 items_with_pos[start_idx] = start_item;
                 let c = Arc::new(client.lock().unwrap().clone());
-                player.play_playlist(items_with_pos, start_idx, c, log.clone());
+                player.play_playlist(items_with_pos, start_idx, c, log.clone(), 100);
             }
         }
         WsEvent::Stop   => { player.stop(); }

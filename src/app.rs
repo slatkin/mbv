@@ -82,6 +82,7 @@ mod palette {
     pub const IRIS:          Color = Color::Rgb(82,  181, 75);   // emby green — active tab, focused
     pub const HIGHLIGHT_MED: Color = Color::Rgb(42,  42,  42);   // selection row bg (#2a2a2a)
     pub const STRIPE:        Color = Color::Rgb(58,  58,  58);   // zebra stripe row bg (#3a3a3a)
+    pub const RED:           Color = Color::Rgb(220, 60,  60);   // loud volume
 }
 
 struct PlayerTab {
@@ -164,9 +165,9 @@ pub struct App {
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
     force_clear: bool,
-    last_lib_tab: usize,
-    lib_picker_open: bool,
-    lib_picker_cursor: usize,
+    tab_scroll: usize,
+    ui_volume: u8,
+    layout_tabbar_vol_area: Rect,
 }
 
 const HOME_MIN_SECTION_H: u16 = 6; // 2 border rows + 4 content rows
@@ -243,6 +244,8 @@ impl App {
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
+            ui_volume: Self::load_ui_volume(),
+            layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -260,9 +263,7 @@ impl App {
             lib_tx,
             lib_rx,
             force_clear: false,
-            last_lib_tab: 2,
-            lib_picker_open: false,
-            lib_picker_cursor: 0,
+            tab_scroll: 0,
         }
     }
 
@@ -333,6 +334,8 @@ impl App {
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
+            ui_volume: Self::load_ui_volume(),
+            layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -350,9 +353,7 @@ impl App {
             lib_tx,
             lib_rx,
             force_clear: false,
-            last_lib_tab: 2,
-            lib_picker_open: false,
-            lib_picker_cursor: 0,
+            tab_scroll: 0,
         }
     }
 
@@ -555,34 +556,6 @@ impl App {
     fn tab_count(&self) -> usize { 2 + self.libs.len() }
     fn log_tab_idx(&self) -> usize { 2 + self.libs.len() }
 
-    fn open_lib_picker(&mut self) {
-        if self.libs.len() > 1 {
-            self.lib_picker_cursor = self.tab_idx.saturating_sub(2).min(self.libs.len().saturating_sub(1));
-            self.lib_picker_open = true;
-        }
-    }
-
-    fn set_tab_by_number(&mut self, c: char) {
-        match c {
-            '1' => self.set_tab(0),
-            '2' => self.set_tab(1),
-            '3' => { if !self.libs.is_empty() { self.set_tab(self.last_lib_tab); } }
-            _ => {}
-        }
-    }
-
-    fn next_logical_tab(&self) -> usize {
-        if self.tab_idx == 0 { 1 }
-        else if self.tab_idx == 1 { if self.libs.is_empty() { 0 } else { self.last_lib_tab } }
-        else { 0 }
-    }
-
-    fn prev_logical_tab(&self) -> usize {
-        if self.tab_idx == 0 { if self.libs.is_empty() { 1 } else { self.last_lib_tab } }
-        else if self.tab_idx == 1 { 0 }
-        else { 1 }
-    }
-
     // ── key handling ────────────────────────────────────────────────────────
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
@@ -654,24 +627,6 @@ impl App {
             }
             return false;
         }
-        if self.lib_picker_open {
-            match key.code {
-                KeyCode::Up => {
-                    if self.lib_picker_cursor > 0 { self.lib_picker_cursor -= 1; }
-                }
-                KeyCode::Down => {
-                    if self.lib_picker_cursor + 1 < self.libs.len() { self.lib_picker_cursor += 1; }
-                }
-                KeyCode::Enter => {
-                    let idx = 2 + self.lib_picker_cursor;
-                    self.lib_picker_open = false;
-                    self.set_tab(idx);
-                }
-                KeyCode::Esc | KeyCode::Char('\\') => { self.lib_picker_open = false; }
-                _ => {}
-            }
-            return false;
-        }
         if self.show_log_tab && key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::ALT) {
             self.tab_idx = self.log_tab_idx();
             return false;
@@ -722,9 +677,8 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
-            KeyCode::Tab => { self.set_tab(self.next_logical_tab()); }
-            KeyCode::BackTab => { self.set_tab(self.prev_logical_tab()); }
-            KeyCode::Char('\\') => { self.open_lib_picker(); }
+            KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
+            KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Esc | KeyCode::Backspace => self.go_back(),
             KeyCode::Up       => self.move_lib_cursor(-1),
             KeyCode::Down     => self.move_lib_cursor(1),
@@ -736,7 +690,10 @@ impl App {
             KeyCode::Char('w') if alt => self.toggle_watched(),
             KeyCode::Char('s') if alt => self.shuffle_play(),
             KeyCode::Char('o') if alt => self.open_context_menu(),
-            KeyCode::Char(c @ '1'..='3') => { self.set_tab_by_number(c); }
+            KeyCode::Char(c @ '1'..='9') => {
+                let idx = (c as usize) - ('1' as usize);
+                if idx < self.tab_count() { self.set_tab(idx); }
+            }
             KeyCode::Char('/') => {
                 let items = self.libs[lib_idx].nav_stack.last()
                     .map(|l| l.items.clone())
@@ -758,8 +715,12 @@ impl App {
     fn handle_combined_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
-            KeyCode::Tab => { self.set_tab(self.next_logical_tab()); return false; }
-            KeyCode::BackTab => { self.set_tab(self.prev_logical_tab()); return false; }
+            KeyCode::Tab => {
+                let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); return false;
+            }
+            KeyCode::BackTab => {
+                let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); return false;
+            }
             KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + n - 1) % n;
@@ -783,7 +744,11 @@ impl App {
             KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
                 self.open_context_menu(); return false;
             }
-            KeyCode::Char(c @ '1'..='3') => { self.set_tab_by_number(c); return false; }
+            KeyCode::Char(c @ '1'..='9') => {
+                let idx = (c as usize) - ('1' as usize);
+                if idx < self.tab_count() { self.set_tab(idx); }
+                return false;
+            }
             _ => {}
         }
         match key.code {
@@ -816,27 +781,35 @@ impl App {
         false
     }
 
+    fn adjust_volume(&mut self, delta: i64) {
+        let active = self.player.status.lock().unwrap().active;
+        if active {
+            let st = self.player.status.lock().unwrap();
+            let v = (st.volume as i64 + delta).clamp(0, st.volume_max as i64) as u8;
+            drop(st);
+            self.player.send_command(PlayerCommand::SetVolume(v as i64));
+            self.ui_volume = v;
+        } else {
+            self.ui_volume = (self.ui_volume as i64 + delta).clamp(0, 200) as u8;
+            self.save_prefs();
+        }
+    }
+
     fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
         let active = self.player.status.lock().unwrap().active;
-        if !active { return None; }
         let alt = key.modifiers.contains(KeyModifiers::ALT);
+        // Volume works regardless of playback state
+        match key.code {
+            KeyCode::Char('-') => { self.adjust_volume(-5); return Some(false); }
+            KeyCode::Char('+') | KeyCode::Char('=') => { self.adjust_volume(5); return Some(false); }
+            _ => {}
+        }
+        if !active { return None; }
         match key.code {
             KeyCode::Enter if alt => { self.player.stop(); Some(false) }
             KeyCode::Char(' ') => { self.player.send_command(PlayerCommand::TogglePause); Some(false) }
             KeyCode::Left  if key.modifiers == KeyModifiers::ALT => { self.player.send_command(PlayerCommand::Seek(-5.0)); Some(false) }
             KeyCode::Right if key.modifiers == KeyModifiers::ALT => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
-            KeyCode::Char('-') => {
-                let v = self.player.status.lock().unwrap().volume.saturating_sub(5);
-                self.player.send_command(PlayerCommand::SetVolume(v));
-                Some(false)
-            }
-            KeyCode::Char('+') | KeyCode::Char('=') => {
-                let st = self.player.status.lock().unwrap();
-                let v = (st.volume + 5).min(st.volume_max);
-                drop(st);
-                self.player.send_command(PlayerCommand::SetVolume(v));
-                Some(false)
-            }
             KeyCode::Char('a') if alt => { self.cycle_audio(); Some(false) }
             KeyCode::Char('z') if alt => { self.cycle_sub();   Some(false) }
             _ => None,
@@ -859,8 +832,8 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
-            KeyCode::Tab => { self.set_tab(self.next_logical_tab()); }
-            KeyCode::BackTab => { self.set_tab(self.prev_logical_tab()); }
+            KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
+            KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Up | KeyCode::Left
                 if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_card_view) => {
                     self.player_tab.playlist_cursor -= 1;
@@ -896,7 +869,7 @@ impl App {
                     } else if !self.player_tab.items.is_empty() {
                         let items = self.player_tab.items.clone();
                         let c = Arc::new(self.client.lock().unwrap().clone());
-                        self.player.play_playlist(items, t, c, self.log.clone());
+                        self.player.play_playlist(items, t, c, self.log.clone(), self.ui_volume);
                     }
                 }
             }
@@ -904,7 +877,10 @@ impl App {
                 let t = self.player_tab.playlist_cursor;
                 if t < self.player_tab.items.len() { self.remove_from_playlist(t); }
             }
-            KeyCode::Char(c @ '1'..='3') => { self.set_tab_by_number(c); }
+            KeyCode::Char(c @ '1'..='9') => {
+                let idx = (c as usize) - ('1' as usize);
+                if idx < self.tab_count() { self.set_tab(idx); }
+            }
             KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
                 self.open_context_menu();
             }
@@ -978,7 +954,10 @@ impl App {
                 if copied { self.flash_status(format!("Copied {n} log lines to clipboard")); }
                 else      { self.flash_status("Copy failed — wl-copy/xclip not found".into()); }
             }
-            KeyCode::Char(c @ '1'..='3') => { self.set_tab_by_number(c); }
+            KeyCode::Char(c @ '1'..='9') => {
+                let idx = (c as usize) - ('1' as usize);
+                if idx < self.tab_count() { self.set_tab(idx); }
+            }
             _ => {}
         }
         false
@@ -1002,29 +981,73 @@ impl App {
 
     // ── mouse ────────────────────────────────────────────────────────────────
 
+    // Returns (first_visible_idx, end_exclusive) of tabs that fit in avail_w.
+    fn visible_tab_range(&self, avail_w: u16) -> (usize, usize) {
+        let widths = self.tab_title_widths();
+        let n = widths.len();
+        let start = self.tab_scroll.min(if n > 0 { n - 1 } else { 0 });
+        let left_w: u16 = if start > 0 { 2 } else { 0 }; // "< "
+        let mut budget = avail_w.saturating_sub(left_w);
+        let mut end = start;
+        while end < n {
+            let _is_last_in_list = end + 1 == n;
+            let tab_w: u16 = widths[end] + 2; // no divider
+            let right_w: u16 = if end + 1 < n { 2 } else { 0 }; // " >"
+            if budget < tab_w + right_w && end > start { break; }
+            budget = budget.saturating_sub(tab_w);
+            end += 1;
+        }
+        (start, end)
+    }
+
+    fn ensure_tab_visible(&mut self) {
+        let n = self.tab_count();
+        if n == 0 { return; }
+        if self.tab_idx < self.tab_scroll {
+            self.tab_scroll = self.tab_idx;
+            return;
+        }
+        const VOL_W: u16 = 11;
+        let tab_w = self.terminal_width.saturating_sub(VOL_W);
+        loop {
+            let (_, end) = self.visible_tab_range(tab_w);
+            if self.tab_idx < end { break; }
+            self.tab_scroll += 1;
+        }
+    }
+
     fn tab_title_widths(&self) -> Vec<u16> {
-        let lib_name = self.libs.get(self.tab_idx.saturating_sub(2))
-            .map(|l| l.library.name.as_str())
-            .unwrap_or("Libraries");
-        vec![
-            "Home".chars().count() as u16,
-            "Queue".chars().count() as u16,
-            lib_name.chars().count() as u16,
-        ]
+        // Each title has 1 space each side via the span format " name ".
+        let pad: u16 = 2;
+        let mut w = vec![
+            "Home".chars().count() as u16 + pad,
+            "Queue".chars().count() as u16 + pad,
+        ];
+        for l in &self.libs {
+            w.push(l.library.name.chars().count() as u16 + pad);
+        }
+        w
     }
 
     fn tab_idx_at(&self, col: u16) -> Option<usize> {
         let area = self.layout_tabs_area;
         if col < area.x || col >= area.x + area.width { return None; }
         let rel = col - area.x;
+        let (vis_start, vis_end) = self.visible_tab_range(area.width);
+        let has_left  = vis_start > 0;
+        let has_right = vis_end < self.tab_count();
+        let left_w:  u16 = if has_left  { 2 } else { 0 };
+        let right_w: u16 = if has_right { 2 } else { 0 };
+        // Clicks on scroll indicators scroll the tab bar
+        if has_left && rel < left_w  { return Some(usize::MAX - 1); } // sentinel: scroll left
+        if has_right && rel >= area.width - right_w { return Some(usize::MAX); } // sentinel: scroll right
+        let rel = rel - left_w;
         let widths = self.tab_title_widths();
-        // ratatui Tabs renders: pad(1) + title(w) + pad(1) + divider(3) per tab
         let pad = 1u16;
-        let div_w = 3u16; // " • "
         let mut x = 0u16;
-        for (i, &w) in widths.iter().enumerate() {
-            let is_last = i + 1 == widths.len();
-            let end = x + pad + w + pad + if is_last { 0 } else { div_w };
+        for i in vis_start..vis_end {
+            let w = widths[i];
+            let end = x + pad + w + pad; // no divider
             if rel < end { return Some(i); }
             x = end;
         }
@@ -1153,11 +1176,16 @@ impl App {
         Self::load_prefs()["home_card_view"].as_bool().unwrap_or(false)
     }
 
+    fn load_ui_volume() -> u8 {
+        Self::load_prefs()["ui_volume"].as_u64().unwrap_or(100).min(200) as u8
+    }
+
     fn save_prefs(&self) {
         let path = crate::config::prefs_path();
         let v = serde_json::json!({
             "playlist_card_view": self.playlist_card_view,
             "home_card_view": self.home_card_view,
+            "ui_volume": self.ui_volume,
         });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
@@ -1333,19 +1361,16 @@ impl App {
         // Tab bar — always consume clicks in this row
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout_tabs_area.contains((col, row).into()) {
-                if let Some(visual_idx) = self.tab_idx_at(col) {
-                    match visual_idx {
-                        0 => self.set_tab(0),
-                        1 => self.set_tab(1),
-                        2 => {
-                            if self.tab_idx >= 2 {
-                                // already on Libraries — open picker to switch
-                                self.open_lib_picker();
-                            } else if !self.libs.is_empty() {
-                                self.set_tab(self.last_lib_tab);
-                            }
-                        }
-                        _ => {}
+                if let Some(idx) = self.tab_idx_at(col) {
+                    if idx == usize::MAX - 1 {
+                        // scroll left indicator
+                        self.tab_scroll = self.tab_scroll.saturating_sub(1);
+                    } else if idx == usize::MAX {
+                        // scroll right indicator
+                        let max_scroll = self.tab_count().saturating_sub(1);
+                        self.tab_scroll = (self.tab_scroll + 1).min(max_scroll);
+                    } else {
+                        self.set_tab(idx);
                     }
                 }
                 return;
@@ -1354,11 +1379,9 @@ impl App {
         match mouse.kind {
             MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
                 let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollDown) { 1 } else { -1 };
-                if self.layout_vol_area.contains((col, row).into()) {
-                    let st = self.player.status.lock().unwrap();
-                    let v = (st.volume as i64 - delta * 5).clamp(0, st.volume_max);
-                    drop(st);
-                    self.player.send_command(PlayerCommand::SetVolume(v));
+                if self.layout_tabbar_vol_area.contains((col, row).into())
+                    || self.layout_vol_area.contains((col, row).into()) {
+                    self.adjust_volume(-delta * 5);
                     return;
                 }
                 if self.tab_idx == 0 {
@@ -1437,7 +1460,7 @@ impl App {
                                         } else if !self.player_tab.items.is_empty() {
                                             let items = self.player_tab.items.clone();
                                             let c = Arc::new(self.client.lock().unwrap().clone());
-                                            self.player.play_playlist(items, *item_idx, c, self.log.clone());
+                                            self.player.play_playlist(items, *item_idx, c, self.log.clone(), self.ui_volume);
                                         }
                                     }
                                 }
@@ -1495,8 +1518,7 @@ impl App {
                     return;
                 }
                 if self.layout_vol_area.contains((col, row).into()) {
-                    let v = self.player.status.lock().unwrap().volume.saturating_sub(5);
-                    self.player.send_command(PlayerCommand::SetVolume(v));
+                    self.adjust_volume(-5);
                     return;
                 }
 
@@ -1516,10 +1538,7 @@ impl App {
             }
             MouseEventKind::Down(MouseButton::Right) => {
                 if self.layout_vol_area.contains((col, row).into()) {
-                    let st = self.player.status.lock().unwrap();
-                    let v = (st.volume + 5).min(st.volume_max);
-                    drop(st);
-                    self.player.send_command(PlayerCommand::SetVolume(v));
+                    self.adjust_volume(5);
                     return;
                 }
                 if self.click_set_cursor(col, row) {
@@ -1729,7 +1748,7 @@ impl App {
                 self.player_tab.items = episodes.clone();
                 self.player_tab.playlist_cursor = 0;
                 self.flash_status(label);
-                self.player.play_playlist(episodes, 0, c, self.log.clone());
+                self.player.play_playlist(episodes, 0, c, self.log.clone(), self.ui_volume);
                 return;
             }
         }
@@ -1737,7 +1756,7 @@ impl App {
         self.player_tab.items = vec![item.clone()];
         self.player_tab.playlist_cursor = 0;
         self.flash_status(label);
-        self.player.play(&item, c, self.log.clone());
+        self.player.play(&item, c, self.log.clone(), self.ui_volume);
     }
 
     fn enqueue_selected(&mut self) {
@@ -1951,7 +1970,7 @@ impl App {
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
-                self.player.play_playlist(items, 0, c, self.log.clone());
+                self.player.play_playlist(items, 0, c, self.log.clone(), self.ui_volume);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
             }
@@ -1971,7 +1990,7 @@ impl App {
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
-                self.player.play_playlist(items, 0, c, self.log.clone());
+                self.player.play_playlist(items, 0, c, self.log.clone(), self.ui_volume);
                 self.tab_idx = 1;
                 self.status = format!("Playing {count} items");
             }
@@ -1991,7 +2010,7 @@ impl App {
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
-                self.player.play_playlist(items, 0, c, self.log.clone());
+                self.player.play_playlist(items, 0, c, self.log.clone(), self.ui_volume);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
             }
@@ -2004,9 +2023,7 @@ impl App {
             self.force_clear = true;
         }
         self.tab_idx = idx;
-        if idx >= 2 && idx != self.log_tab_idx() {
-            self.last_lib_tab = idx;
-        }
+        self.ensure_tab_visible();
         if self.tab_idx == 0 {
             self.home.section = 0;
             let _ = self.fetch_home();
@@ -2186,7 +2203,7 @@ impl App {
                     self.player_tab.playlist_cursor = 0;
                     self.flash_status(item.playback_label());
                     let c = Arc::new(self.client.lock().unwrap().clone());
-                    self.player.play(&item, c, self.log.clone());
+                    self.player.play(&item, c, self.log.clone(), self.ui_volume);
                 } else {
                     let count = items.len();
                     self.player_tab.items = items.clone();
@@ -2198,13 +2215,13 @@ impl App {
                     if active {
                         let mut start_item = items[start_idx].clone();
                         if start_position_ticks > 0 { start_item.playback_position_ticks = start_position_ticks; }
-                        self.player.play(&start_item, c, self.log.clone());
+                        self.player.play(&start_item, c, self.log.clone(), self.ui_volume);
                     } else {
                         let mut items_with_pos = items.clone();
                         if start_position_ticks > 0 {
                             items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
                         }
-                        self.player.play_playlist(items_with_pos, start_idx, c, self.log.clone());
+                        self.player.play_playlist(items_with_pos, start_idx, c, self.log.clone(), self.ui_volume);
                     }
                 }
             }
@@ -2312,7 +2329,7 @@ impl App {
         let controls_h: u16 = if active { 3 } else { 0 };
         let sep_h: u16 = if active { 1 } else { 0 };
 
-        let [tabs_area, _gap_area, main_area, sep_area, status_area, controls_area] = Layout::vertical([
+        let [tabs_area, gap_area, main_area, sep_area, status_area, controls_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
             Constraint::Length(1),            // spacer
             Constraint::Min(0),               // main content
@@ -2321,24 +2338,68 @@ impl App {
             Constraint::Length(controls_h),   // playback controls (global, when active)
         ]).areas(area);
 
+        // Thin underline below tab row
+        f.render_widget(
+            Paragraph::new("─".repeat(area.width as usize))
+                .style(Style::default().fg(palette::MUTED)),
+            gap_area,
+        );
+
+        // Volume bar (always visible, right side of tab row)
+        const VOL_W: u16 = 11; // " Vol: XXX%"
+        let vol_area = Rect {
+            x: tabs_area.x + tabs_area.width.saturating_sub(VOL_W),
+            y: tabs_area.y, width: VOL_W, height: 1,
+        };
+        self.layout_tabbar_vol_area = vol_area;
+        self.render_volume_bar(f, vol_area);
+        let tabs_area = Rect { width: tabs_area.width.saturating_sub(VOL_W), ..tabs_area };
         self.layout_tabs_area = tabs_area;
 
-        // Tab bar: always 3 logical tabs — Home, Queue, Libraries (current lib name)
-        let lib_label = if self.tab_idx >= 2 && self.tab_idx != self.log_tab_idx() {
-            self.libs.get(self.tab_idx - 2).map(|l| l.library.name.clone())
+        // Tab bar with scroll indicators when tabs overflow
+        let (vis_start, vis_end) = self.visible_tab_range(tabs_area.width);
+        let has_left  = vis_start > 0;
+        let has_right = vis_end < self.tab_count();
+        let ind_style = Style::default().fg(palette::WHITE);
+        let left_w:  u16 = if has_left  { 2 } else { 0 };
+        let right_w: u16 = if has_right { 2 } else { 0 };
+        if has_left {
+            f.render_widget(
+                Paragraph::new("« ").style(ind_style),
+                Rect { x: tabs_area.x, y: tabs_area.y, width: 2, height: 1 },
+            );
+        }
+        if has_right {
+            f.render_widget(
+                Paragraph::new(" »").style(ind_style),
+                Rect { x: tabs_area.x + tabs_area.width - 2, y: tabs_area.y, width: 2, height: 1 },
+            );
+        }
+        let inner_tabs = Rect {
+            x: tabs_area.x + left_w,
+            y: tabs_area.y,
+            width: tabs_area.width.saturating_sub(left_w + right_w),
+            height: tabs_area.height,
+        };
+        let all_names: Vec<String> = std::iter::once("Home".to_string())
+            .chain(std::iter::once("Queue".to_string()))
+            .chain(self.libs.iter().map(|l| l.library.name.clone()))
+            .collect();
+        let tab_titles: Vec<Span> = all_names[vis_start..vis_end]
+            .iter().map(|n| Span::raw(format!(" {n} "))).collect();
+        let tab_select = if self.tab_idx == self.log_tab_idx() || self.tab_idx < vis_start || self.tab_idx >= vis_end {
+            usize::MAX
         } else {
-            self.libs.get(self.last_lib_tab.saturating_sub(2)).map(|l| l.library.name.clone())
-        }.unwrap_or_else(|| "Libraries".to_string());
-        let tab_titles = vec![Span::raw("Home"), Span::raw("Queue"), Span::raw(lib_label)];
-        let tab_select = if self.tab_idx == self.log_tab_idx() { usize::MAX }
-            else if self.tab_idx >= 2 { 2 }
-            else { self.tab_idx };
+            self.tab_idx - vis_start
+        };
         f.render_widget(
             Tabs::new(tab_titles)
                 .select(tab_select)
-                .divider(Span::styled(" • ", Style::default().fg(palette::IRIS)))
-                .highlight_style(Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
-            tabs_area,
+                .style(Style::default().fg(palette::SUBTLE))
+                .divider(Span::raw(""))
+                .padding("", "")
+                .highlight_style(Style::default().fg(palette::WHITE).bg(palette::IRIS).add_modifier(Modifier::BOLD)),
+            inner_tabs,
         );
 
         // When playing: derive title from player state to avoid races with PlayerEvent::Stopped.
@@ -2373,7 +2434,7 @@ impl App {
         if active {
             f.render_widget(
                 Paragraph::new(Span::styled(
-                    "\u{2500}".repeat(area.width as usize),
+                    "─".repeat(area.width as usize),
                     Style::default().fg(palette::MUTED),
                 )),
                 sep_area,
@@ -2399,44 +2460,22 @@ impl App {
         }
 
         self.render_context_menu(f);
-        self.render_lib_picker(f);
     }
 
-    fn render_lib_picker(&mut self, f: &mut ratatui::Frame) {
-        if !self.lib_picker_open || self.libs.is_empty() { return; }
-        let area = f.area();
-        let w = (area.width / 2).max(30).min(area.width);
-        let h = (self.libs.len() as u16 + 2).min(area.height.saturating_sub(4));
-        let x = (area.width.saturating_sub(w)) / 2;
-        let y = (area.height.saturating_sub(h)) / 2;
-        let popup = Rect { x, y, width: w, height: h };
-        f.render_widget(ratatui::widgets::Clear, popup);
-        let block = ratatui::widgets::Block::default()
-            .borders(ratatui::widgets::Borders::ALL)
-            .title(" Libraries ")
-            .border_style(Style::default().fg(palette::IRIS));
-        let inner = block.inner(popup);
-        f.render_widget(block, popup);
-        let visible_h = inner.height as usize;
-        let scroll = if self.lib_picker_cursor >= visible_h {
-            self.lib_picker_cursor + 1 - visible_h
-        } else {
-            0
+    fn render_volume_bar(&self, f: &mut ratatui::Frame, area: Rect) {
+        let (volume, _volume_max) = {
+            let s = self.player.status.lock().unwrap();
+            if s.active { (s.volume, s.volume_max) }
+            else { (self.ui_volume as i64, 100) }
         };
-        for (row, lib) in self.libs.iter().enumerate().skip(scroll).take(visible_h) {
-            let y = inner.y + (row - scroll) as u16;
-            let selected = row == self.lib_picker_cursor;
-            let style = if selected {
-                Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::TEXT)
-            };
-            let prefix = if selected { "> " } else { "  " };
-            f.render_widget(
-                Paragraph::new(format!("{}{}", prefix, lib.library.name)).style(style),
-                Rect { x: inner.x, y, width: inner.width, height: 1 },
-            );
-        }
+        let color = if volume > 100 { palette::RED }
+            else if volume > 60 { palette::YELLOW }
+            else { palette::PINE };
+        let text = format!(" Vol: {}%", volume);
+        f.render_widget(
+            Paragraph::new(text).style(Style::default().fg(color)),
+            area,
+        );
     }
 
     fn render_help_screen(&mut self, f: &mut ratatui::Frame) {
@@ -3633,8 +3672,7 @@ impl App {
                 let seekbar: u16 = if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 { 2 } else { 0 };
                 2 + ov_lines + seekbar
             } else { 2 };
-            let padding: u16 = if i == cursor { 2 } else { 0 };
-            base + padding + 1 // +1 for separator line at bottom
+            base + 1 // +1 for separator line at bottom
         }).collect();
 
         // Scroll: keep existing scroll, only adjust to keep cursor visible.
@@ -3679,11 +3717,8 @@ impl App {
             let row_rect = Rect { x: area.x, y: row_y, width: area.width, height: row_h };
 
             // Content area excludes the separator line at the bottom of the row.
-            // For selected rows it is further inset by 1 top and 1 bottom for padding.
             let content_area = Rect { height: row_h.saturating_sub(1), ..row_rect };
-            let padded_area = if selected {
-                Rect { y: content_area.y + 1, height: content_area.height.saturating_sub(2), ..content_area }
-            } else { content_area };
+            let padded_area = content_area;
 
             // Compute actual image size first so we can size the column correctly.
             // Image sits at the far right; text fills everything to its left.
@@ -4303,9 +4338,9 @@ mod tests {
             lib_tx,
             lib_rx,
             force_clear: false,
-            last_lib_tab: 2,
-            lib_picker_open: false,
-            lib_picker_cursor: 0,
+            tab_scroll: 0,
+            ui_volume: 100,
+            layout_tabbar_vol_area: Rect::default(),
         }
     }
 

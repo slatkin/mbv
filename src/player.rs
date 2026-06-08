@@ -251,7 +251,7 @@ impl Player {
         }
     }
 
-    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog) {
+    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
         // If a video is already playing, load the new file into the existing mpv window
         if self.status.lock().unwrap().active {
             let url = format!(
@@ -289,6 +289,7 @@ impl Player {
         let headless = !self.show_audio_window && (item.media_type == "Audio" || item.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
         let no_scripts = self.no_scripts;
+        let initial_volume = initial_volume;
         let event_tx = self.event_tx.clone();
         let status = self.status.clone();
         let ws_tx = self.ws_tx.clone();
@@ -380,9 +381,11 @@ impl Player {
             {
                 let mut st = status.lock().unwrap();
                 let raw_max   = mpv.get_property::<i64>("volume-max").unwrap_or(130);
-                let raw_vol   = mpv.get_property::<i64>("volume").unwrap_or(100);
                 st.volume_max = raw_max * raw_max / 100;
-                st.volume     = raw_vol * raw_vol / 100;
+                let v = (initial_volume as i64).clamp(0, st.volume_max);
+                let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+                let _ = mpv.set_property("volume", raw as f64);
+                st.volume = v;
             }
 
             if start_pos > 0.0 {
@@ -480,6 +483,7 @@ impl Player {
                             let raw = (10.0 * (v as f64).sqrt()).round() as i64;
                             let _ = mpv.set_property("volume", raw as f64);
                             status.lock().unwrap().volume = v;
+                            let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
                         }
                         PlayerCommand::JumpTo(_) => {}
                         PlayerCommand::Seek(secs) => {
@@ -753,7 +757,7 @@ impl Player {
         *self.thread_handle.lock().unwrap() = Some(handle);
     }
 
-    pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, log: AppLog) {
+    pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
         self.stop();
         self.join();
         if items.is_empty() { return; }
@@ -775,6 +779,7 @@ impl Player {
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
         let no_scripts = self.no_scripts;
+        let initial_volume = initial_volume;
 
         {
             let mut st = status.lock().unwrap();
@@ -854,9 +859,11 @@ impl Player {
             {
                 let mut st = status.lock().unwrap();
                 let raw_max   = mpv.get_property::<i64>("volume-max").unwrap_or(130);
-                let raw_vol   = mpv.get_property::<i64>("volume").unwrap_or(100);
                 st.volume_max = raw_max * raw_max / 100;
-                st.volume     = raw_vol * raw_vol / 100;
+                let v = (initial_volume as i64).clamp(0, st.volume_max);
+                let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+                let _ = mpv.set_property("volume", raw as f64);
+                st.volume = v;
             }
 
             // Set resume position before the first loadfile so mpv applies it immediately.
@@ -1021,6 +1028,7 @@ impl Player {
                             let raw = (10.0 * (v as f64).sqrt()).round() as i64;
                             let _ = mpv.set_property("volume", raw as f64);
                             status.lock().unwrap().volume = v;
+                            let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
                         }
                         PlayerCommand::Seek(secs) => {
                             let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
@@ -1352,10 +1360,10 @@ impl PlayerProxy {
         PlayerProxy { always_play_next, status, inner: PlayerProxyInner::Remote(remote) }
     }
 
-    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog) {
+    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play(item, client, log),
-            PlayerProxyInner::Remote(r) => r.play(item, client, log),
+            PlayerProxyInner::Local(p) => p.play(item, client, log, initial_volume),
+            PlayerProxyInner::Remote(r) => r.play(item, client, log, initial_volume),
         }
     }
 
@@ -1365,10 +1373,11 @@ impl PlayerProxy {
         start_idx: usize,
         client: Arc<EmbyClient>,
         log: AppLog,
+        initial_volume: u8,
     ) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play_playlist(items, start_idx, client, log),
-            PlayerProxyInner::Remote(r) => r.play_playlist(items, start_idx, client, log),
+            PlayerProxyInner::Local(p) => p.play_playlist(items, start_idx, client, log, initial_volume),
+            PlayerProxyInner::Remote(r) => r.play_playlist(items, start_idx, client, log, initial_volume),
         }
     }
 
