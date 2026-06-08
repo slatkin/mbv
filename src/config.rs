@@ -11,7 +11,7 @@ pub struct Config {
     pub show_audio_window: bool,
     pub use_mpv_config: bool,
     pub always_play_next: bool,
-    pub card_image_protocol: Option<String>, // "halfblocks" | "sixel" | "kitty" | "iterm2"
+    pub card_image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
     pub show_systray_icon: bool,
     pub show_log_tab: bool,
     pub no_scripts: bool,

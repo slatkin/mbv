@@ -147,6 +147,8 @@ pub struct App {
     next_up_item: Option<MediaItem>,
     playlist_card_view: bool,
     home_card_view: bool,
+    home_section_wrapped: std::collections::HashMap<usize, bool>,
+    playlist_card_wrapped: bool,
     last_played_item_id: Option<String>,
     layout_carousel_slots: [(Option<usize>, Rect); 3],
     last_carousel_click_slot: Option<usize>,
@@ -240,6 +242,8 @@ impl App {
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
+            home_section_wrapped: std::collections::HashMap::new(),
+            playlist_card_wrapped: false,
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -327,6 +331,8 @@ impl App {
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
+            home_section_wrapped: std::collections::HashMap::new(),
+            playlist_card_wrapped: false,
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -355,17 +361,17 @@ impl App {
         use ratatui_image::picker::ProtocolType;
         let protocol_override = self.client.lock().unwrap().config.card_image_protocol.clone();
         let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
-        let default_proto = ProtocolType::Sixel;
         let proto = protocol_override.as_deref()
             .and_then(|s| match s.to_lowercase().as_str() {
                 "sixel"      => Some(ProtocolType::Sixel),
                 "kitty"      => Some(ProtocolType::Kitty),
                 "iterm2"     => Some(ProtocolType::Iterm2),
                 "halfblocks" => Some(ProtocolType::Halfblocks),
-                _            => None,
-            })
-            .unwrap_or(default_proto);
-        picker.set_protocol_type(proto);
+                _            => None, // "auto" or unknown: use picker's detected protocol
+            });
+        if let Some(proto) = proto {
+            picker.set_protocol_type(proto);
+        }
         self.image_picker = Some(picker);
 
         self.status = "Loading...".into();
@@ -442,6 +448,7 @@ impl App {
                     PlayerEvent::QueueUpdated { items, cursor } => {
                         self.player_tab.items = items;
                         self.player_tab.playlist_cursor = cursor;
+                        self.playlist_card_wrapped = false;
                     }
                 }
             }
@@ -465,13 +472,61 @@ impl App {
             }
 
             if event::poll(Duration::from_millis(50))? {
-                match event::read()? {
+                let ev = event::read()?;
+                let is_home_card_nav = self.home_card_view && self.tab_idx == 0;
+                match ev {
                     Event::Key(key) => {
                         if key.kind != KeyEventKind::Press { continue; }
+                        let nav_code = is_home_card_nav
+                            && matches!(key.code, KeyCode::Left | KeyCode::Right);
                         if self.handle_key(key) { break; }
+                        // Drain queued duplicate nav keys to prevent scroll backlog.
+                        if nav_code {
+                            while event::poll(Duration::ZERO)? {
+                                match event::read()? {
+                                    Event::Key(k) if k.kind == KeyEventKind::Press
+                                        && k.code == key.code => {}
+                                    other => {
+                                        match other {
+                                            Event::Key(k) if k.kind == KeyEventKind::Press => {
+                                                if self.handle_key(k) { break; }
+                                            }
+                                            Event::Mouse(m) => self.handle_mouse(m),
+                                            _ => {}
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                     Event::Mouse(mouse) => {
+                        let nav_scroll = is_home_card_nav
+                            && matches!(mouse.kind,
+                                crossterm::event::MouseEventKind::ScrollUp |
+                                crossterm::event::MouseEventKind::ScrollDown)
+                            && self.home_rect.contains((mouse.column, mouse.row).into());
                         self.handle_mouse(mouse);
+                        // Drain queued scroll events to prevent scroll backlog.
+                        if nav_scroll {
+                            while event::poll(Duration::ZERO)? {
+                                match event::read()? {
+                                    Event::Mouse(m) if matches!(m.kind,
+                                        crossterm::event::MouseEventKind::ScrollUp |
+                                        crossterm::event::MouseEventKind::ScrollDown) => {}
+                                    other => {
+                                        match other {
+                                            Event::Key(k) if k.kind == KeyEventKind::Press => {
+                                                if self.handle_key(k) { break; }
+                                            }
+                                            Event::Mouse(m) => self.handle_mouse(m),
+                                            _ => {}
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                     }
                     _ => {}
                 }
@@ -528,6 +583,7 @@ impl App {
                 self.player.stop();
                 self.player_tab.items.clear();
                 self.player_tab.playlist_cursor = 0;
+                self.playlist_card_wrapped = false;
                 self.flash_status("Playlist cleared".into());
             } else {
                 self.status.clear();
@@ -769,13 +825,26 @@ impl App {
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Up | KeyCode::Left
-                if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_card_view) => {
-                    self.player_tab.playlist_cursor -= 1;
+                if (key.code == KeyCode::Up || self.playlist_card_view) => {
+                    let n = self.player_tab.items.len();
+                    let cur = self.player_tab.playlist_cursor;
+                    if cur > 0 {
+                        self.player_tab.playlist_cursor -= 1;
+                    } else if self.playlist_card_view && n > 1 {
+                        self.playlist_card_wrapped = true;
+                        self.player_tab.playlist_cursor = n - 1;
+                    }
                 }
             KeyCode::Down | KeyCode::Right
-                if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len()
-                && (key.code == KeyCode::Down || self.playlist_card_view) => {
-                    self.player_tab.playlist_cursor += 1;
+                if (key.code == KeyCode::Down || self.playlist_card_view) => {
+                    let n = self.player_tab.items.len();
+                    let cur = self.player_tab.playlist_cursor;
+                    if cur + 1 < n {
+                        self.player_tab.playlist_cursor += 1;
+                    } else if self.playlist_card_view && n > 1 {
+                        self.playlist_card_wrapped = true;
+                        self.player_tab.playlist_cursor = 0;
+                    }
                 }
             KeyCode::PageUp => {
                 let p = self.playlist_page_size();
@@ -1121,6 +1190,7 @@ impl App {
             self.last_played_item_id = last_played_item_id;
             self.player_tab.playlist_cursor = cursor;
             self.player_tab.items = items;
+            self.playlist_card_wrapped = false;
         }
     }
 
@@ -1269,8 +1339,25 @@ impl App {
                 } else if self.tab_idx == 1 {
                     let n = self.player_tab.items.len();
                     if n > 0 {
-                        self.player_tab.playlist_cursor =
-                            (self.player_tab.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                        if self.playlist_card_view && n > 1 {
+                            let cur = self.player_tab.playlist_cursor;
+                            if delta > 0 {
+                                if cur + 1 < n {
+                                    self.player_tab.playlist_cursor += 1;
+                                } else {
+                                    self.playlist_card_wrapped = true;
+                                    self.player_tab.playlist_cursor = 0;
+                                }
+                            } else if cur > 0 {
+                                self.player_tab.playlist_cursor -= 1;
+                            } else {
+                                self.playlist_card_wrapped = true;
+                                self.player_tab.playlist_cursor = n - 1;
+                            }
+                        } else {
+                            self.player_tab.playlist_cursor =
+                                (self.player_tab.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                        }
                     }
                 } else if self.tab_idx == self.log_tab_idx() {
                     if delta > 0 { self.log_scroll += 1; }
@@ -1490,24 +1577,28 @@ impl App {
     }
 
     fn move_home_cursor(&mut self, delta: i64) {
-        let n_sections = 1 + self.home.latest.len();
         let sec = self.home.section;
+        let wrapped = self.home_section_wrapped.get(&sec).copied().unwrap_or(false);
 
         if delta > 0 {
             let (len, cur) = self.home_section_len_cur(sec);
             if cur + 1 < len {
                 self.set_home_cursor(sec, cur + 1);
-            } else if sec + 1 < n_sections {
-                self.home.section += 1;
-                self.ensure_home_section_visible();
+            } else if wrapped {
+                self.set_home_cursor(sec, 0);
+            } else {
+                self.home_section_wrapped.insert(sec, true);
+                self.set_home_cursor(sec, 0);
             }
         } else {
-            let (_, cur) = self.home_section_len_cur(sec);
+            let (len, cur) = self.home_section_len_cur(sec);
             if cur > 0 {
                 self.set_home_cursor(sec, cur - 1);
-            } else if sec > 0 {
-                self.home.section -= 1;
-                self.ensure_home_section_visible();
+            } else if wrapped {
+                self.set_home_cursor(sec, len.saturating_sub(1));
+            } else {
+                self.home_section_wrapped.insert(sec, true);
+                self.set_home_cursor(sec, len.saturating_sub(1));
             }
         }
     }
@@ -1642,6 +1733,7 @@ impl App {
                 let c = Arc::new(self.client.lock().unwrap().clone());
                 self.player_tab.items = episodes.clone();
                 self.player_tab.playlist_cursor = 0;
+                self.playlist_card_wrapped = false;
                 self.flash_status(label);
                 self.player.play_playlist(episodes, 0, c, self.log.clone());
                 return;
@@ -1650,6 +1742,7 @@ impl App {
         let c = Arc::new(self.client.lock().unwrap().clone());
         self.player_tab.items = vec![item.clone()];
         self.player_tab.playlist_cursor = 0;
+        self.playlist_card_wrapped = false;
         self.flash_status(label);
         self.player.play(&item, c, self.log.clone());
     }
@@ -1865,6 +1958,7 @@ impl App {
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
+                self.playlist_card_wrapped = false;
                 self.player.play_playlist(items, 0, c, self.log.clone());
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
@@ -1885,6 +1979,7 @@ impl App {
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
+                self.playlist_card_wrapped = false;
                 self.player.play_playlist(items, 0, c, self.log.clone());
                 self.tab_idx = 1;
                 self.status = format!("Playing {count} items");
@@ -1905,6 +2000,7 @@ impl App {
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
+                self.playlist_card_wrapped = false;
                 self.player.play_playlist(items, 0, c, self.log.clone());
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
@@ -2825,9 +2921,7 @@ impl App {
             (s.active, s.current_idx)
         };
 
-        // Reserve one row at the bottom for the gutter index indicator.
-        let cards_h = area.height.saturating_sub(1);
-        let gutter_y = area.y + cards_h;
+        let cards_h = area.height;
 
         // Panels are 80% of available height, centered vertically, capped 6 rows below area.
         // Side cards are 80% of center height, also centered.
@@ -2857,9 +2951,10 @@ impl App {
         };
 
         // is_center: true for the selected middle slot
+        let pl_wrapped = self.playlist_card_wrapped;
         let slots: [(Option<usize>, Rect, bool); 3] = [
             (
-                if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
+                if show_sides && (cursor > 0 || pl_wrapped) { Some(if cursor > 0 { cursor - 1 } else { n - 1 }) } else { None },
                 Rect { x: x_left,   y: area.y + side_v_pad, width: side_w,   height: side_h   },
                 false,
             ),
@@ -2869,7 +2964,7 @@ impl App {
                 true,
             ),
             (
-                if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
+                if show_sides && (cursor + 1 < n || pl_wrapped) { Some(if cursor + 1 < n { cursor + 1 } else { 0 }) } else { None },
                 Rect { x: x_right,  y: area.y + side_v_pad, width: side_w,   height: side_h   },
                 false,
             ),
@@ -2931,13 +3026,14 @@ impl App {
             }
         }
 
-        // Gutter: show selected index / total.
-        if area.height >= 2 {
+        // Count just below the center card, matching the home tab's title_y position.
+        let count_y = (area.y + center_v_pad + center_h + 1).min(area.bottom().saturating_sub(1));
+        if count_y < area.bottom() {
             f.render_widget(
                 Paragraph::new(format!("{}/{}", cursor + 1, n))
                     .style(Style::default().fg(palette::MUTED))
                     .alignment(Alignment::Center),
-                Rect { x: area.x, y: gutter_y, width: area.width, height: 1 },
+                Rect { x: area.x, y: count_y, width: area.width, height: 1 },
             );
         }
     }
@@ -3179,9 +3275,10 @@ impl App {
             (avail_w, 0, cards_area.x, cards_area.x + GAP, cards_area.x)
         };
 
+        let sec_wrapped = n > 1 && self.home_section_wrapped.get(&sec).copied().unwrap_or(false);
         let slots: [(Option<usize>, Rect, bool); 3] = [
             (
-                if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
+                if show_sides && (cursor > 0 || sec_wrapped) { Some(if cursor > 0 { cursor - 1 } else { n - 1 }) } else { None },
                 Rect { x: x_left,   y: cards_area.y + side_v_pad, width: side_w,   height: side_h   },
                 false,
             ),
@@ -3191,15 +3288,25 @@ impl App {
                 true,
             ),
             (
-                if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
+                if show_sides && (cursor + 1 < n || sec_wrapped) { Some(if cursor + 1 < n { cursor + 1 } else { 0 }) } else { None },
                 Rect { x: x_right,  y: cards_area.y + side_v_pad, width: side_w,   height: side_h   },
                 false,
             ),
         ];
 
-        // Prefetch images for neighbours.
+        // Prefetch images for neighbours (including wrap-around).
         let prefetch_start = cursor.saturating_sub(3);
         let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
+        if n > 1 {
+            // Prefetch the wrap-around neighbours.
+            for pi in [if cursor == 0 { n - 1 } else { usize::MAX }, if cursor + 1 == n { 0 } else { usize::MAX }] {
+                if pi < n && (pi < prefetch_start || pi > prefetch_end) {
+                    let item = &items[pi];
+                    let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
+                    self.fetch_card_image(format!("{}:S", item_id.clone()), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
+                }
+            }
+        }
         for pi in prefetch_start..=prefetch_end {
             let item = &items[pi];
             let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
@@ -4157,6 +4264,8 @@ mod tests {
             next_up_item: None,
             playlist_card_view: false,
             home_card_view: false,
+            home_section_wrapped: std::collections::HashMap::new(),
+            playlist_card_wrapped: false,
             last_played_item_id: None,
             layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -4239,25 +4348,27 @@ mod tests {
     }
 
     #[test]
-    fn move_home_cursor_forward_wraps_to_next_section() {
+    fn move_home_cursor_forward_wraps_within_section_on_first_edge() {
         let mut app = make_app_stub();
         app.home.continue_items = make_items(3);
-        app.home.continue_cursor = 2; // already at end of section 0
+        app.home.continue_cursor = 2; // at end of section 0
         app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
         app.move_home_cursor(1);
-        assert_eq!(app.home.section, 1);
-        assert_eq!(app.home.continue_cursor, 2); // unchanged
+        // wraps within section 0, does not advance to section 1
+        assert_eq!(app.home.section, 0);
+        assert_eq!(app.home.continue_cursor, 0);
+        assert!(app.home_section_wrapped.get(&0).copied().unwrap_or(false));
     }
 
     #[test]
-    fn move_home_cursor_forward_clamped_at_last_item_of_last_section() {
+    fn move_home_cursor_forward_wraps_within_section_at_last_section() {
         let mut app = make_app_stub();
         app.home.continue_items = make_items(3);
         app.home.continue_cursor = 2;
-        // no latest sections
+        // no latest sections — still wraps to beginning
         app.move_home_cursor(1);
         assert_eq!(app.home.section, 0);
-        assert_eq!(app.home.continue_cursor, 2);
+        assert_eq!(app.home.continue_cursor, 0);
     }
 
     #[test]
@@ -4271,24 +4382,28 @@ mod tests {
     }
 
     #[test]
-    fn move_home_cursor_backward_wraps_to_previous_section() {
+    fn move_home_cursor_backward_wraps_within_section_on_first_edge() {
         let mut app = make_app_stub();
         app.home.continue_items = make_items(3);
         app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
         app.home.section = 1;
         app.home.latest[0].3 = 0; // at start of section 1
         app.move_home_cursor(-1);
-        assert_eq!(app.home.section, 0);
+        // wraps within section 1 to last item, does not go back to section 0
+        assert_eq!(app.home.section, 1);
+        assert_eq!(app.home.latest[0].3, 3);
+        assert!(app.home_section_wrapped.get(&1).copied().unwrap_or(false));
     }
 
     #[test]
-    fn move_home_cursor_backward_clamped_at_first_item_of_first_section() {
+    fn move_home_cursor_backward_wraps_within_section_at_first_section() {
         let mut app = make_app_stub();
         app.home.continue_items = make_items(3);
         app.home.continue_cursor = 0;
         app.move_home_cursor(-1);
+        // wraps to last item of section 0
         assert_eq!(app.home.section, 0);
-        assert_eq!(app.home.continue_cursor, 0);
+        assert_eq!(app.home.continue_cursor, 2);
     }
 
     // ── ensure_home_section_visible ──────────────────────────────────────────
