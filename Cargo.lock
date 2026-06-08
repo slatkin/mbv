@@ -1343,7 +1343,7 @@ dependencies = [
 
 [[package]]
 name = "mby"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "crossterm",
  "fuzzy-matcher",
