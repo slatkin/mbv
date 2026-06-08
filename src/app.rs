@@ -164,6 +164,9 @@ pub struct App {
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
     force_clear: bool,
+    last_lib_tab: usize,
+    lib_picker_open: bool,
+    lib_picker_cursor: usize,
 }
 
 const HOME_MIN_SECTION_H: u16 = 6; // 2 border rows + 4 content rows
@@ -257,6 +260,9 @@ impl App {
             lib_tx,
             lib_rx,
             force_clear: false,
+            last_lib_tab: 2,
+            lib_picker_open: false,
+            lib_picker_cursor: 0,
         }
     }
 
@@ -344,6 +350,9 @@ impl App {
             lib_tx,
             lib_rx,
             force_clear: false,
+            last_lib_tab: 2,
+            lib_picker_open: false,
+            lib_picker_cursor: 0,
         }
     }
 
@@ -546,6 +555,34 @@ impl App {
     fn tab_count(&self) -> usize { 2 + self.libs.len() }
     fn log_tab_idx(&self) -> usize { 2 + self.libs.len() }
 
+    fn open_lib_picker(&mut self) {
+        if self.libs.len() > 1 {
+            self.lib_picker_cursor = self.tab_idx.saturating_sub(2).min(self.libs.len().saturating_sub(1));
+            self.lib_picker_open = true;
+        }
+    }
+
+    fn set_tab_by_number(&mut self, c: char) {
+        match c {
+            '1' => self.set_tab(0),
+            '2' => self.set_tab(1),
+            '3' => { if !self.libs.is_empty() { self.set_tab(self.last_lib_tab); } }
+            _ => {}
+        }
+    }
+
+    fn next_logical_tab(&self) -> usize {
+        if self.tab_idx == 0 { 1 }
+        else if self.tab_idx == 1 { if self.libs.is_empty() { 0 } else { self.last_lib_tab } }
+        else { 0 }
+    }
+
+    fn prev_logical_tab(&self) -> usize {
+        if self.tab_idx == 0 { if self.libs.is_empty() { 1 } else { self.last_lib_tab } }
+        else if self.tab_idx == 1 { 0 }
+        else { 1 }
+    }
+
     // ── key handling ────────────────────────────────────────────────────────
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
@@ -617,6 +654,24 @@ impl App {
             }
             return false;
         }
+        if self.lib_picker_open {
+            match key.code {
+                KeyCode::Up => {
+                    if self.lib_picker_cursor > 0 { self.lib_picker_cursor -= 1; }
+                }
+                KeyCode::Down => {
+                    if self.lib_picker_cursor + 1 < self.libs.len() { self.lib_picker_cursor += 1; }
+                }
+                KeyCode::Enter => {
+                    let idx = 2 + self.lib_picker_cursor;
+                    self.lib_picker_open = false;
+                    self.set_tab(idx);
+                }
+                KeyCode::Esc | KeyCode::Char('\\') => { self.lib_picker_open = false; }
+                _ => {}
+            }
+            return false;
+        }
         if self.show_log_tab && key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::ALT) {
             self.tab_idx = self.log_tab_idx();
             return false;
@@ -667,8 +722,9 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
-            KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
-            KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
+            KeyCode::Tab => { self.set_tab(self.next_logical_tab()); }
+            KeyCode::BackTab => { self.set_tab(self.prev_logical_tab()); }
+            KeyCode::Char('\\') => { self.open_lib_picker(); }
             KeyCode::Esc | KeyCode::Backspace => self.go_back(),
             KeyCode::Up       => self.move_lib_cursor(-1),
             KeyCode::Down     => self.move_lib_cursor(1),
@@ -680,10 +736,7 @@ impl App {
             KeyCode::Char('w') if alt => self.toggle_watched(),
             KeyCode::Char('s') if alt => self.shuffle_play(),
             KeyCode::Char('o') if alt => self.open_context_menu(),
-            KeyCode::Char(c @ '1'..='9') => {
-                let idx = (c as usize) - ('1' as usize);
-                if idx < self.tab_count() { self.set_tab(idx); }
-            }
+            KeyCode::Char(c @ '1'..='3') => { self.set_tab_by_number(c); }
             KeyCode::Char('/') => {
                 let items = self.libs[lib_idx].nav_stack.last()
                     .map(|l| l.items.clone())
@@ -705,12 +758,8 @@ impl App {
     fn handle_combined_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
             KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
-            KeyCode::Tab => {
-                let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); return false;
-            }
-            KeyCode::BackTab => {
-                let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); return false;
-            }
+            KeyCode::Tab => { self.set_tab(self.next_logical_tab()); return false; }
+            KeyCode::BackTab => { self.set_tab(self.prev_logical_tab()); return false; }
             KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + n - 1) % n;
@@ -734,11 +783,7 @@ impl App {
             KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
                 self.open_context_menu(); return false;
             }
-            KeyCode::Char(c @ '1'..='9') => {
-                let idx = (c as usize) - ('1' as usize);
-                if idx < self.tab_count() { self.set_tab(idx); }
-                return false;
-            }
+            KeyCode::Char(c @ '1'..='3') => { self.set_tab_by_number(c); return false; }
             _ => {}
         }
         match key.code {
@@ -814,8 +859,8 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
-            KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
-            KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
+            KeyCode::Tab => { self.set_tab(self.next_logical_tab()); }
+            KeyCode::BackTab => { self.set_tab(self.prev_logical_tab()); }
             KeyCode::Up | KeyCode::Left
                 if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_card_view) => {
                     self.player_tab.playlist_cursor -= 1;
@@ -859,10 +904,7 @@ impl App {
                 let t = self.player_tab.playlist_cursor;
                 if t < self.player_tab.items.len() { self.remove_from_playlist(t); }
             }
-            KeyCode::Char(c @ '1'..='9') => {
-                let idx = (c as usize) - ('1' as usize);
-                if idx < self.tab_count() { self.set_tab(idx); }
-            }
+            KeyCode::Char(c @ '1'..='3') => { self.set_tab_by_number(c); }
             KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
                 self.open_context_menu();
             }
@@ -936,10 +978,7 @@ impl App {
                 if copied { self.flash_status(format!("Copied {n} log lines to clipboard")); }
                 else      { self.flash_status("Copy failed — wl-copy/xclip not found".into()); }
             }
-            KeyCode::Char(c @ '1'..='9') => {
-                let idx = (c as usize) - ('1' as usize);
-                if idx < self.tab_count() { self.set_tab(idx); }
-            }
+            KeyCode::Char(c @ '1'..='3') => { self.set_tab_by_number(c); }
             _ => {}
         }
         false
@@ -964,14 +1003,14 @@ impl App {
     // ── mouse ────────────────────────────────────────────────────────────────
 
     fn tab_title_widths(&self) -> Vec<u16> {
-        let mut w = vec![
+        let lib_name = self.libs.get(self.tab_idx.saturating_sub(2))
+            .map(|l| l.library.name.as_str())
+            .unwrap_or("Libraries");
+        vec![
             "Home".chars().count() as u16,
             "Queue".chars().count() as u16,
-        ];
-        for l in &self.libs {
-            w.push(l.library.name.chars().count() as u16);
-        }
-        w
+            lib_name.chars().count() as u16,
+        ]
     }
 
     fn tab_idx_at(&self, col: u16) -> Option<usize> {
@@ -1294,8 +1333,20 @@ impl App {
         // Tab bar — always consume clicks in this row
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout_tabs_area.contains((col, row).into()) {
-                if let Some(idx) = self.tab_idx_at(col) {
-                    self.set_tab(idx);
+                if let Some(visual_idx) = self.tab_idx_at(col) {
+                    match visual_idx {
+                        0 => self.set_tab(0),
+                        1 => self.set_tab(1),
+                        2 => {
+                            if self.tab_idx >= 2 {
+                                // already on Libraries — open picker to switch
+                                self.open_lib_picker();
+                            } else if !self.libs.is_empty() {
+                                self.set_tab(self.last_lib_tab);
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 return;
             }
@@ -1953,6 +2004,9 @@ impl App {
             self.force_clear = true;
         }
         self.tab_idx = idx;
+        if idx >= 2 && idx != self.log_tab_idx() {
+            self.last_lib_tab = idx;
+        }
         if self.tab_idx == 0 {
             self.home.section = 0;
             let _ = self.fetch_home();
@@ -2269,12 +2323,16 @@ impl App {
 
         self.layout_tabs_area = tabs_area;
 
-        // Tab bar
-        let tab_titles: Vec<Span> = std::iter::once(Span::raw("Home"))
-            .chain(std::iter::once(Span::raw("Queue")))
-            .chain(self.libs.iter().map(|l| Span::raw(l.library.name.clone())))
-            .collect();
-        let tab_select = if self.tab_idx == self.log_tab_idx() { usize::MAX } else { self.tab_idx };
+        // Tab bar: always 3 logical tabs — Home, Queue, Libraries (current lib name)
+        let lib_label = if self.tab_idx >= 2 && self.tab_idx != self.log_tab_idx() {
+            self.libs.get(self.tab_idx - 2).map(|l| l.library.name.clone())
+        } else {
+            self.libs.get(self.last_lib_tab.saturating_sub(2)).map(|l| l.library.name.clone())
+        }.unwrap_or_else(|| "Libraries".to_string());
+        let tab_titles = vec![Span::raw("Home"), Span::raw("Queue"), Span::raw(lib_label)];
+        let tab_select = if self.tab_idx == self.log_tab_idx() { usize::MAX }
+            else if self.tab_idx >= 2 { 2 }
+            else { self.tab_idx };
         f.render_widget(
             Tabs::new(tab_titles)
                 .select(tab_select)
@@ -2341,6 +2399,44 @@ impl App {
         }
 
         self.render_context_menu(f);
+        self.render_lib_picker(f);
+    }
+
+    fn render_lib_picker(&mut self, f: &mut ratatui::Frame) {
+        if !self.lib_picker_open || self.libs.is_empty() { return; }
+        let area = f.area();
+        let w = (area.width / 2).max(30).min(area.width);
+        let h = (self.libs.len() as u16 + 2).min(area.height.saturating_sub(4));
+        let x = (area.width.saturating_sub(w)) / 2;
+        let y = (area.height.saturating_sub(h)) / 2;
+        let popup = Rect { x, y, width: w, height: h };
+        f.render_widget(ratatui::widgets::Clear, popup);
+        let block = ratatui::widgets::Block::default()
+            .borders(ratatui::widgets::Borders::ALL)
+            .title(" Libraries ")
+            .border_style(Style::default().fg(palette::IRIS));
+        let inner = block.inner(popup);
+        f.render_widget(block, popup);
+        let visible_h = inner.height as usize;
+        let scroll = if self.lib_picker_cursor >= visible_h {
+            self.lib_picker_cursor + 1 - visible_h
+        } else {
+            0
+        };
+        for (row, lib) in self.libs.iter().enumerate().skip(scroll).take(visible_h) {
+            let y = inner.y + (row - scroll) as u16;
+            let selected = row == self.lib_picker_cursor;
+            let style = if selected {
+                Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::TEXT)
+            };
+            let prefix = if selected { "> " } else { "  " };
+            f.render_widget(
+                Paragraph::new(format!("{}{}", prefix, lib.library.name)).style(style),
+                Rect { x: inner.x, y, width: inner.width, height: 1 },
+            );
+        }
     }
 
     fn render_help_screen(&mut self, f: &mut ratatui::Frame) {
@@ -4207,6 +4303,9 @@ mod tests {
             lib_tx,
             lib_rx,
             force_clear: false,
+            last_lib_tab: 2,
+            lib_picker_open: false,
+            lib_picker_cursor: 0,
         }
     }
 
