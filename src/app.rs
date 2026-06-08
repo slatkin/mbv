@@ -147,7 +147,6 @@ pub struct App {
     next_up_item: Option<MediaItem>,
     playlist_card_view: bool,
     home_card_view: bool,
-    home_section_wrapped: std::collections::HashSet<usize>,
     last_played_item_id: Option<String>,
     layout_carousel_slots: [(Option<usize>, Rect); 3],
     last_carousel_click_slot: Option<usize>,
@@ -241,7 +240,6 @@ impl App {
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
-            home_section_wrapped: std::collections::HashSet::new(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -329,7 +327,6 @@ impl App {
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
-            home_section_wrapped: std::collections::HashSet::new(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -1542,28 +1539,11 @@ impl App {
 
     fn move_home_cursor(&mut self, delta: i64) {
         let sec = self.home.section;
-        let wrapped = self.home_section_wrapped.contains(&sec);
-
+        let (len, cur) = self.home_section_len_cur(sec);
         if delta > 0 {
-            let (len, cur) = self.home_section_len_cur(sec);
-            if cur + 1 < len {
-                self.set_home_cursor(sec, cur + 1);
-            } else if wrapped {
-                self.set_home_cursor(sec, 0);
-            } else {
-                self.home_section_wrapped.insert(sec);
-                self.set_home_cursor(sec, 0);
-            }
+            if cur + 1 < len { self.set_home_cursor(sec, cur + 1); }
         } else {
-            let (len, cur) = self.home_section_len_cur(sec);
-            if cur > 0 {
-                self.set_home_cursor(sec, cur - 1);
-            } else if wrapped {
-                self.set_home_cursor(sec, len.saturating_sub(1));
-            } else {
-                self.home_section_wrapped.insert(sec);
-                self.set_home_cursor(sec, len.saturating_sub(1));
-            }
+            if cur > 0 { self.set_home_cursor(sec, cur - 1); }
         }
     }
 
@@ -3233,10 +3213,9 @@ impl App {
             (avail_w, 0, cards_area.x, cards_area.x + GAP, cards_area.x)
         };
 
-        let sec_wrapped = n > 1 && self.home_section_wrapped.contains(&sec);
         let slots: [(Option<usize>, Rect, bool); 3] = [
             (
-                if show_sides && (cursor > 0 || sec_wrapped) { Some(if cursor > 0 { cursor - 1 } else { n - 1 }) } else { None },
+                if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
                 Rect { x: x_left,   y: cards_area.y + side_v_pad, width: side_w,   height: side_h   },
                 false,
             ),
@@ -3246,29 +3225,14 @@ impl App {
                 true,
             ),
             (
-                if show_sides && (cursor + 1 < n || sec_wrapped) { Some(if cursor + 1 < n { cursor + 1 } else { 0 }) } else { None },
+                if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
                 Rect { x: x_right,  y: cards_area.y + side_v_pad, width: side_w,   height: side_h   },
                 false,
             ),
         ];
 
-        // Prefetch images for neighbours (including wrap-around).
         let prefetch_start = cursor.saturating_sub(3);
         let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
-        if n > 1 {
-            // Prefetch the wrap-around neighbours.
-            let wrap_neighbours: [Option<usize>; 2] = [
-                if cursor == 0 { Some(n - 1) } else { None },
-                if cursor + 1 == n { Some(0) } else { None },
-            ];
-            for pi in wrap_neighbours.into_iter().flatten() {
-                if pi < prefetch_start || pi > prefetch_end {
-                    let item = &items[pi];
-                    let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-                    self.fetch_card_image(format!("{}:S", item_id.clone()), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
-                }
-            }
-        }
         for pi in prefetch_start..=prefetch_end {
             let item = &items[pi];
             let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
@@ -4226,7 +4190,6 @@ mod tests {
             next_up_item: None,
             playlist_card_view: false,
             home_card_view: false,
-            home_section_wrapped: std::collections::HashSet::new(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
             last_carousel_click_slot: None,
@@ -4309,27 +4272,25 @@ mod tests {
     }
 
     #[test]
-    fn move_home_cursor_forward_wraps_within_section_on_first_edge() {
+    fn move_home_cursor_forward_stops_at_end_with_adjacent_section() {
         let mut app = make_app_stub();
         app.home.continue_items = make_items(3);
         app.home.continue_cursor = 2; // at end of section 0
         app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
         app.move_home_cursor(1);
-        // wraps within section 0, does not advance to section 1
+        // stays at end, does not advance to section 1 or wrap
         assert_eq!(app.home.section, 0);
-        assert_eq!(app.home.continue_cursor, 0);
-        assert!(app.home_section_wrapped.contains(&0));
+        assert_eq!(app.home.continue_cursor, 2);
     }
 
     #[test]
-    fn move_home_cursor_forward_wraps_within_section_at_last_section() {
+    fn move_home_cursor_forward_stops_at_end_of_last_section() {
         let mut app = make_app_stub();
         app.home.continue_items = make_items(3);
         app.home.continue_cursor = 2;
-        // no latest sections — still wraps to beginning
         app.move_home_cursor(1);
         assert_eq!(app.home.section, 0);
-        assert_eq!(app.home.continue_cursor, 0);
+        assert_eq!(app.home.continue_cursor, 2);
     }
 
     #[test]
@@ -4343,28 +4304,26 @@ mod tests {
     }
 
     #[test]
-    fn move_home_cursor_backward_wraps_within_section_on_first_edge() {
+    fn move_home_cursor_backward_stops_at_start_with_prior_section() {
         let mut app = make_app_stub();
         app.home.continue_items = make_items(3);
         app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
         app.home.section = 1;
         app.home.latest[0].3 = 0; // at start of section 1
         app.move_home_cursor(-1);
-        // wraps within section 1 to last item, does not go back to section 0
+        // stays at start, does not go back to section 0 or wrap
         assert_eq!(app.home.section, 1);
-        assert_eq!(app.home.latest[0].3, 3);
-        assert!(app.home_section_wrapped.contains(&1));
+        assert_eq!(app.home.latest[0].3, 0);
     }
 
     #[test]
-    fn move_home_cursor_backward_wraps_within_section_at_first_section() {
+    fn move_home_cursor_backward_stops_at_start_of_first_section() {
         let mut app = make_app_stub();
         app.home.continue_items = make_items(3);
         app.home.continue_cursor = 0;
         app.move_home_cursor(-1);
-        // wraps to last item of section 0
         assert_eq!(app.home.section, 0);
-        assert_eq!(app.home.continue_cursor, 2);
+        assert_eq!(app.home.continue_cursor, 0);
     }
 
     // ── ensure_home_section_visible ──────────────────────────────────────────
