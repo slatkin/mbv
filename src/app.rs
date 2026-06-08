@@ -11,7 +11,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Cell, Clear, Gauge, List, ListItem, ListState, Paragraph, Row, Table, TableState, Tabs},
+    widgets::{Block, BorderType, Borders, Cell, Clear, Gauge, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState, Tabs},
 };
 use textwrap::wrap;
 
@@ -130,6 +130,7 @@ pub struct App {
     layout_lib_scroll: usize,
     layout_lib_row_heights: Vec<u16>, // height of each visible row, from scroll
     layout_home_scrolls: Vec<usize>,
+    home_panel_section_offset: usize,
     layout_lib_table_area: Rect,
     layout_breadcrumbs: Vec<(u16, u16, usize)>, // (x_start, x_end, target nav_stack len)
     last_click_time: Instant,
@@ -163,6 +164,8 @@ pub struct App {
     lib_rx: mpsc::Receiver<LibEvent>,
     force_clear: bool,
 }
+
+const HOME_MIN_SECTION_H: u16 = 6; // 2 border rows + 4 content rows
 
 impl App {
     pub fn new(client: EmbyClient) -> Self {
@@ -219,6 +222,7 @@ impl App {
             layout_lib_scroll: 0,
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
+            home_panel_section_offset: 0,
             layout_lib_table_area: Rect::default(),
             layout_breadcrumbs: Vec::new(),
             last_click_time: Instant::now(),
@@ -304,6 +308,7 @@ impl App {
             layout_lib_scroll: 0,
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
+            home_panel_section_offset: 0,
             layout_lib_table_area: Rect::default(),
             layout_breadcrumbs: Vec::new(),
             last_click_time: Instant::now(),
@@ -658,11 +663,13 @@ impl App {
             KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + n - 1) % n;
+                self.ensure_home_section_visible();
                 return false;
             }
             KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + 1) % n;
+                self.ensure_home_section_visible();
                 return false;
             }
             KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
@@ -1448,6 +1455,7 @@ impl App {
                 self.set_home_cursor(sec, cur + 1);
             } else if sec + 1 < n_sections {
                 self.home.section += 1;
+                self.ensure_home_section_visible();
             }
         } else {
             let (_, cur) = self.home_section_len_cur(sec);
@@ -1455,7 +1463,32 @@ impl App {
                 self.set_home_cursor(sec, cur - 1);
             } else if sec > 0 {
                 self.home.section -= 1;
+                self.ensure_home_section_visible();
             }
+        }
+    }
+
+    fn ensure_home_section_visible(&mut self) {
+        let active = self.player.status.lock().unwrap().active;
+        let chrome: u16 = if active { 6 } else { 3 };
+        let panel_h = self.terminal_height.saturating_sub(chrome);
+
+        let n_sections = 1 + self.home.latest.len();
+        let visible = if (n_sections as u16) * HOME_MIN_SECTION_H <= panel_h {
+            n_sections
+        } else {
+            ((panel_h / HOME_MIN_SECTION_H) as usize).max(1)
+        };
+
+        let sec = self.home.section;
+        if sec < self.home_panel_section_offset {
+            self.home_panel_section_offset = sec;
+        } else if sec >= self.home_panel_section_offset + visible {
+            self.home_panel_section_offset = sec + 1 - visible;
+        }
+        let max_offset = n_sections.saturating_sub(visible);
+        if self.home_panel_section_offset > max_offset {
+            self.home_panel_section_offset = max_offset;
         }
     }
 
@@ -1967,23 +2000,31 @@ impl App {
             self.libs.push(LibraryTab { library: view.clone(), nav_stack: stack, search: None });
         }
 
-        let user_views = client.get_user_views().unwrap_or_default();
-        let tv = user_views.iter().find(|v| v.collection_type == "tvshows").cloned();
-        let mv = user_views.iter().find(|v| v.collection_type == "movies").cloned();
+        let old_cursors: HashMap<String, usize> = self.home.latest.iter()
+            .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
+            .collect();
 
+        let user_views = client.get_user_views().unwrap_or_default();
         let mut latest: Vec<(String, String, Vec<MediaItem>, usize)> = Vec::new();
-        if let Some(v) = mv {
-            latest.push(("Latest Movies".to_string(), v.id.clone(), client.get_latest(&v.id, 15).unwrap_or_default(), 0));
+        for v in &user_views {
+            let title = format!("Latest {}", v.name);
+            let items = if v.collection_type == "tvshows" {
+                client.get_latest_episodes(&v.id, 15).unwrap_or_default()
+            } else {
+                client.get_latest(&v.id, 15).unwrap_or_default()
+            };
+            let cursor = old_cursors.get(&v.id).copied().unwrap_or(0)
+                .min(items.len().saturating_sub(1));
+            latest.push((title, v.id.clone(), items, cursor));
         }
-        if let Some(v) = tv {
-            latest.push(("Latest Episodes".to_string(), v.id.clone(), client.get_latest_episodes(&v.id, 15).unwrap_or_default(), 0));
-        }
-        for (i, col) in latest.iter_mut().enumerate() {
-            if let Some(old) = self.home.latest.get(i) {
-                col.3 = old.3.min(col.2.len().saturating_sub(1));
-            }
-        }
+        drop(client);
         self.home.latest = latest;
+
+        let n = 1 + self.home.latest.len();
+        if self.home.section >= n {
+            self.home.section = n.saturating_sub(1);
+        }
+        self.ensure_home_section_visible();
         Ok(())
     }
 
@@ -3017,18 +3058,47 @@ impl App {
         let n_sections = 1 + self.home.latest.len();
         if n_sections == 0 { return; }
 
-        let constraints: Vec<Constraint> = (0..n_sections)
-            .map(|_| Constraint::Ratio(1, n_sections as u32))
+        let visible = if (n_sections as u16) * HOME_MIN_SECTION_H <= area.height {
+            n_sections
+        } else {
+            ((area.height / HOME_MIN_SECTION_H) as usize).max(1)
+        };
+
+        let max_offset = n_sections.saturating_sub(visible);
+        if self.home_panel_section_offset > max_offset {
+            self.home_panel_section_offset = max_offset;
+        }
+        let offset = self.home_panel_section_offset;
+        let render_count = visible.min(n_sections - offset);
+
+        let scrollable = n_sections > visible;
+        let layout_area = if scrollable && area.width > 2 {
+            Rect { width: area.width - 2, ..area }
+        } else {
+            area
+        };
+
+        let constraints: Vec<Constraint> = (0..render_count)
+            .map(|_| Constraint::Ratio(1, render_count as u32))
             .collect();
-        let section_areas = Layout::vertical(constraints).split(area);
+        let section_areas = Layout::vertical(constraints).split(layout_area);
 
-        self.layout_section_areas = section_areas.iter().copied().collect();
+        // layout_section_areas is indexed by logical section; off-screen sections get Rect::default()
+        let mut areas: Vec<Rect> = vec![Rect::default(); n_sections];
+        for i in 0..render_count {
+            areas[offset + i] = section_areas[i];
+        }
+        self.layout_section_areas = areas;
 
-        let cont_focused = home_focused && self.home.section == 0;
-        let s0 = self.render_home_section(
-            f, section_areas[0], "Continue Watching",
-            &self.home.continue_items, self.home.continue_cursor, cont_focused, true,
-        );
+        let mut scrolls = vec![0usize; n_sections];
+
+        if offset == 0 && render_count > 0 {
+            let cont_focused = home_focused && self.home.section == 0;
+            scrolls[0] = self.render_home_section(
+                f, section_areas[0], "Continue Watching",
+                &self.home.continue_items, self.home.continue_cursor, cont_focused, true,
+            );
+        }
 
         // Collect to avoid holding &self.home.latest across render calls that need &mut self
         let latest_data: Vec<(String, Vec<MediaItem>, usize)> = self.home.latest
@@ -3036,16 +3106,32 @@ impl App {
             .map(|(t, _, items, c)| (t.clone(), items.clone(), *c))
             .collect();
 
-        let mut scrolls = vec![s0];
-        for (i, (title, items, cursor)) in latest_data.iter().enumerate() {
-            let focused = home_focused && self.home.section == i + 1;
-            let s = self.render_home_section(
-                f, section_areas[i + 1], title,
-                items, *cursor, focused, false,
-            );
-            scrolls.push(s);
+        for render_pos in 0..render_count {
+            let logical = offset + render_pos;
+            if logical == 0 { continue; }
+            let latest_idx = logical - 1;
+            if let Some((title, items, cursor)) = latest_data.get(latest_idx) {
+                let focused = home_focused && self.home.section == logical;
+                scrolls[logical] = self.render_home_section(
+                    f, section_areas[render_pos], title,
+                    items, *cursor, focused, false,
+                );
+            }
         }
         self.layout_home_scrolls = scrolls;
+
+        if scrollable {
+            let mut sb_state = ScrollbarState::new(max_offset + 1).position(offset);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("▐")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None)
+                    .end_symbol(None),
+                area,
+                &mut sb_state,
+            );
+        }
     }
 
     fn render_home_section(
