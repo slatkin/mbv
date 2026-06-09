@@ -133,6 +133,7 @@ pub struct App {
     layout_lib_scroll: usize,
     layout_lib_row_heights: Vec<u16>, // height of each visible row, from scroll
     layout_home_scrolls: Vec<usize>,
+    layout_home_scrollbar: Rect,
     home_panel_section_offset: usize,
     layout_lib_table_area: Rect,
     layout_breadcrumbs: Vec<(u16, u16, usize)>, // (x_start, x_end, target nav_stack len)
@@ -233,6 +234,7 @@ impl App {
             layout_lib_scroll: 0,
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
+            layout_home_scrollbar: Rect::default(),
             home_panel_section_offset: 0,
             layout_lib_table_area: Rect::default(),
             layout_breadcrumbs: Vec::new(),
@@ -327,6 +329,7 @@ impl App {
             layout_lib_scroll: 0,
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
+            layout_home_scrollbar: Rect::default(),
             home_panel_section_offset: 0,
             layout_lib_table_area: Rect::default(),
             layout_breadcrumbs: Vec::new(),
@@ -1430,7 +1433,17 @@ impl App {
                     return;
                 }
                 if self.tab_idx == 0 {
-                    if self.home_rect.contains((col, row).into()) {
+                    let sb = self.layout_home_scrollbar;
+                    if sb.width > 0 && sb.contains((col, row).into()) {
+                        let active = self.player.status.lock().unwrap().active;
+                        let chrome: u16 = if active { 6 } else { 3 };
+                        let panel_h = self.terminal_height.saturating_sub(chrome);
+                        let n_sections = 1 + self.home.latest.len();
+                        let visible = ((panel_h / HOME_MIN_SECTION_H) as usize).max(1).min(n_sections);
+                        let max_offset = n_sections.saturating_sub(visible);
+                        self.home_panel_section_offset =
+                            (self.home_panel_section_offset as i64 + delta).clamp(0, max_offset as i64) as usize;
+                    } else if self.home_rect.contains((col, row).into()) {
                         self.move_home_cursor(delta);
                     }
                 } else if self.tab_idx == 1 {
@@ -1567,6 +1580,15 @@ impl App {
                     return;
                 }
 
+                // Home panel scrollbar click
+                if self.tab_idx == 0 {
+                    let sb = self.layout_home_scrollbar;
+                    if sb.width > 0 && sb.contains((col, row).into()) {
+                        self.home_scrollbar_seek(row);
+                        return;
+                    }
+                }
+
                 // Breadcrumb click: navigate back to that depth
                 if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
                     let crumbs = self.layout_breadcrumbs.clone();
@@ -1610,6 +1632,13 @@ impl App {
                     self.open_context_menu_at(col, row);
                 }
             }
+            MouseEventKind::Drag(MouseButton::Left)
+                if self.tab_idx == 0 && {
+                    let sb = self.layout_home_scrollbar;
+                    sb.width > 0 && sb.contains((col, row).into())
+                } => {
+                    self.home_scrollbar_seek(row);
+                }
             MouseEventKind::Drag(MouseButton::Left)
                 if self.layout_seekbar_area.contains((col, row).into())
                     && self.last_drag_seek.elapsed() >= Duration::from_millis(150)
@@ -1704,6 +1733,21 @@ impl App {
         if self.home_panel_section_offset > max_offset {
             self.home_panel_section_offset = max_offset;
         }
+    }
+
+    fn home_scrollbar_seek(&mut self, row: u16) {
+        let sb = self.layout_home_scrollbar;
+        if sb.height == 0 { return; }
+        let active = self.player.status.lock().unwrap().active;
+        let chrome: u16 = if active { 6 } else { 3 };
+        let panel_h = self.terminal_height.saturating_sub(chrome);
+        let n_sections = 1 + self.home.latest.len();
+        let visible = ((panel_h / HOME_MIN_SECTION_H) as usize).max(1).min(n_sections);
+        let max_offset = n_sections.saturating_sub(visible);
+        if max_offset == 0 { return; }
+        let frac = (row.saturating_sub(sb.y)) as f64 / sb.height as f64;
+        let new_offset = ((frac * max_offset as f64).round() as usize).min(max_offset);
+        self.home_panel_section_offset = new_offset;
     }
 
     fn home_section_len_cur(&self, sec: usize) -> (usize, usize) {
@@ -3608,6 +3652,8 @@ impl App {
         self.layout_home_scrolls = scrolls;
 
         if scrollable {
+            let sb_rect = Rect { x: area.x + area.width.saturating_sub(1), y: area.y, width: 1, height: area.height };
+            self.layout_home_scrollbar = sb_rect;
             let mut sb_state = ScrollbarState::new(max_offset + 1).position(offset);
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -3618,6 +3664,8 @@ impl App {
                 area,
                 &mut sb_state,
             );
+        } else {
+            self.layout_home_scrollbar = Rect::default();
         }
     }
 
@@ -4171,8 +4219,6 @@ fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
         } else {
             item.display_name()
         };
-        // Series are content, not navigation folders — don't colour them green
-        let is_series = item.item_type == "Series";
         let style = if selected { Style::default() }
             else               { Style::default().fg(palette::WHITE) };
         return (text, style);
@@ -4183,12 +4229,7 @@ fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
         let h = (s / 3600.0) as u64;
         let m = ((s % 3600.0) / 60.0) as u64;
         let dur = if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") };
-        if item.playback_position_ticks > 0 {
-            let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-            suffix = format!("  [{pct}%/{dur}]");
-        } else {
-            suffix = format!("  [{dur}]");
-        }
+        suffix = format!(" ({dur})");
     }
     let text = format!("{}{}", item.display_name(), suffix);
     let style = if selected { Style::default() }
@@ -4196,17 +4237,42 @@ fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
     (text, style)
 }
 
+fn split_suffix(s: &str) -> (&str, &str) {
+    if s.ends_with(')') {
+        if let Some(pos) = s.rfind(" (") { return (&s[..pos], &s[pos..]); }
+    }
+    if s.ends_with(']') {
+        if let Some(pos) = s.rfind(" [") { return (&s[..pos], &s[pos..]); }
+    }
+    (s, "")
+}
+
 fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
     let (full_text, style) = item_text_and_style(item, selected);
     let in_progress = !item.is_folder && item.playback_position_ticks > 0;
     let yellow = Style::default().fg(palette::YELLOW);
+    let subtle = Style::default().fg(palette::SUBTLE);
     let w = width.max(1);
-    let mut lines: Vec<Line<'static>> = wrap(&full_text, w).into_iter().enumerate()
+    let lines: Vec<Line<'static>> = wrap(&full_text, w).into_iter().enumerate()
         .map(|(i, s)| {
+            let s = s.into_owned();
             if i == 0 && in_progress {
-                Line::from(vec![Span::styled("• ", yellow), Span::styled(s.into_owned(), style)])
+                let pct_str = if item.runtime_ticks > 0 {
+                    let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+                    format!(" {pct}%")
+                } else { String::new() };
+                let (name, suf) = split_suffix(&s);
+                let mut spans = vec![Span::styled("• ", yellow), Span::styled(name.to_string(), style)];
+                if !suf.is_empty() { spans.push(Span::styled(suf.to_string(), subtle)); }
+                if !pct_str.is_empty() { spans.push(Span::styled(pct_str, yellow)); }
+                Line::from(spans)
             } else {
-                Line::from(Span::styled(s.into_owned(), style))
+                let (name, suf) = split_suffix(&s);
+                if suf.is_empty() {
+                    Line::from(Span::styled(s, style))
+                } else {
+                    Line::from(vec![Span::styled(name.to_string(), style), Span::styled(suf.to_string(), subtle)])
+                }
             }
         })
         .collect();
@@ -4224,18 +4290,28 @@ fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'st
     let in_progress = item.playback_position_ticks > 0;
     let span_style = if selected { Style::default() } else { Style::default().fg(palette::WHITE) };
     let yellow = Style::default().fg(palette::YELLOW);
+    let subtle = Style::default().fg(palette::SUBTLE);
     let w = width.max(1);
-    let iris = Style::default().fg(palette::IRIS);
-    let mut lines: Vec<Line<'static>> = wrap(&full_text, w).into_iter().enumerate()
+    let lines: Vec<Line<'static>> = wrap(&full_text, w).into_iter().enumerate()
         .map(|(i, s)| {
-            if i == 0 && (in_progress || item.played) {
-                let mut spans = Vec::new();
-                if in_progress { spans.push(Span::styled("• ", yellow)); }
-                if item.played  { spans.push(Span::styled("✓ ", iris)); }
-                spans.push(Span::styled(s.into_owned(), span_style));
+            let s = s.into_owned();
+            if i == 0 && in_progress {
+                let pct_str = if item.runtime_ticks > 0 {
+                    let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+                    format!(" {pct}%")
+                } else { String::new() };
+                let (name, suf) = split_suffix(&s);
+                let mut spans = vec![Span::styled("• ", yellow), Span::styled(name.to_string(), span_style)];
+                if !suf.is_empty() { spans.push(Span::styled(suf.to_string(), subtle)); }
+                if !pct_str.is_empty() { spans.push(Span::styled(pct_str, yellow)); }
                 Line::from(spans)
             } else {
-                Line::from(Span::styled(s.into_owned(), span_style))
+                let (name, suf) = split_suffix(&s);
+                if suf.is_empty() {
+                    Line::from(Span::styled(s, span_style))
+                } else {
+                    Line::from(vec![Span::styled(name.to_string(), span_style), Span::styled(suf.to_string(), subtle)])
+                }
             }
         })
         .collect();
@@ -4313,23 +4389,25 @@ mod tests {
     }
 
     #[test]
-    fn item_text_in_progress_shows_percentage() {
+    fn item_text_in_progress_shows_duration() {
         let mut item = make_item("Inception", "Movie");
         item.runtime_ticks = TICKS_PER_SECOND * 7200; // 2 hours
         item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 1 hour in → 50%
         let (text, style) = item_text_and_style(&item, false);
-        assert!(text.contains("50%"), "expected percentage in: {text}");
+        assert!(text.contains("2h00m"), "expected duration in: {text}");
+        assert!(!text.contains("50%"), "pct should be in span, not text: {text}");
         assert_eq!(style.fg, Some(palette::WHITE));
     }
 
     #[test]
-    fn item_text_played_but_in_progress_shows_percentage() {
+    fn item_text_played_but_in_progress_shows_duration() {
         let mut item = make_item("Inception", "Movie");
         item.runtime_ticks = TICKS_PER_SECOND * 7200;
         item.playback_position_ticks = TICKS_PER_SECOND * 3600;
         item.played = true;
         let (text, _) = item_text_and_style(&item, false);
-        assert!(text.contains("50%"), "expected percentage in: {text}");
+        assert!(text.contains("2h00m"), "expected duration in: {text}");
+        assert!(!text.contains("50%"), "pct should be in span, not text: {text}");
     }
 
     #[test]
@@ -4430,6 +4508,7 @@ mod tests {
             layout_lib_scroll: 0,
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
+            layout_home_scrollbar: Rect::default(),
             home_panel_section_offset: 0,
             layout_lib_table_area: ratatui::layout::Rect::default(),
             layout_breadcrumbs: Vec::new(),
