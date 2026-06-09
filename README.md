@@ -132,6 +132,15 @@ Press `F1` at any time to open the built-in reference screen.
 | `Alt+W` | Toggle watched status |
 | `Alt+S` | Shuffle and play current selection |
 
+#### YouTube / Channels libraries
+
+Libraries whose Emby collection type is `channels` (YouTube via the Emby Channels plugin) or `homevideos` get special treatment when first opened:
+
+- **Video items only** — folders and playlists are filtered out; only playable `Video` items are fetched.
+- **Unplayed only** — the item list is restricted to content you haven't watched yet, keeping the view uncluttered.
+
+This is applied automatically based on the library's collection type as reported by the Emby server. No configuration is required.
+
 ## Mouse
 
 - Click a tab to switch to it.

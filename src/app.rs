@@ -1133,6 +1133,10 @@ impl App {
     }
 
     fn context_menu_spawn_point(&self) -> (u16, u16) {
+        if (self.tab_idx == 0 && self.home_card_view) || (self.tab_idx == 1 && self.playlist_card_view) {
+            let center = self.layout_carousel_slots[1].1;
+            return (center.x + center.width / 2, center.y + center.height / 2);
+        }
         if self.tab_idx == 0 {
             let sec = self.home.section;
             if let Some(area) = self.layout_section_areas.get(sec) {
@@ -1539,6 +1543,26 @@ impl App {
             MouseEventKind::Down(MouseButton::Right) => {
                 if self.layout_vol_area.contains((col, row).into()) {
                     self.adjust_volume(5);
+                    return;
+                }
+                if (self.tab_idx == 1 && self.playlist_card_view) || (self.tab_idx == 0 && self.home_card_view) {
+                    let slots = self.layout_carousel_slots;
+                    for (maybe_item_idx, card_rect) in slots.iter() {
+                        if card_rect.contains((col, row).into()) {
+                            if let Some(item_idx) = maybe_item_idx {
+                                if self.tab_idx == 1 {
+                                    self.player_tab.playlist_cursor = *item_idx;
+                                } else {
+                                    let sec = self.home.section;
+                                    self.set_home_cursor(sec, *item_idx);
+                                }
+                                let cx = card_rect.x + card_rect.width / 2;
+                                let cy = card_rect.y + card_rect.height / 2;
+                                self.open_context_menu_at(cx, cy);
+                            }
+                            return;
+                        }
+                    }
                     return;
                 }
                 if self.click_set_cursor(col, row) {
@@ -2327,14 +2351,12 @@ impl App {
 
         let active = self.player.status.lock().unwrap().active;
         let controls_h: u16 = if active { 3 } else { 0 };
-        let sep_h: u16 = if active { 1 } else { 0 };
 
-        let [tabs_area, gap_area, main_area, sep_area, status_area, controls_area] = Layout::vertical([
+        let [tabs_area, gap_area, main_area, status_area, controls_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
             Constraint::Length(1),            // spacer
             Constraint::Min(0),               // main content
-            Constraint::Length(sep_h),        // separator
-            Constraint::Length(1),            // status line (now playing)
+            Constraint::Length(1),            // status line / now-playing HR
             Constraint::Length(controls_h),   // playback controls (global, when active)
         ]).areas(area);
 
@@ -2385,20 +2407,26 @@ impl App {
             .chain(std::iter::once("Queue".to_string()))
             .chain(self.libs.iter().map(|l| l.library.name.clone()))
             .collect();
-        let tab_titles: Vec<Span> = all_names[vis_start..vis_end]
-            .iter().map(|n| Span::raw(format!("  {n}  "))).collect();
-        let tab_select = if self.tab_idx == self.log_tab_idx() || self.tab_idx < vis_start || self.tab_idx >= vis_end {
+        let selected_tab = if self.tab_idx == self.log_tab_idx() || self.tab_idx < vis_start || self.tab_idx >= vis_end {
             usize::MAX
         } else {
             self.tab_idx - vis_start
         };
+        let tab_titles: Vec<Span> = all_names[vis_start..vis_end]
+            .iter().enumerate().map(|(i, n)| {
+                if i == selected_tab {
+                    Span::styled(format!("  {n}  "), Style::default().fg(palette::WHITE).bg(palette::IRIS).add_modifier(Modifier::BOLD))
+                } else {
+                    Span::styled(format!("  {n}  "), Style::default().fg(palette::SUBTLE))
+                }
+            }).collect();
         f.render_widget(
             Tabs::new(tab_titles)
-                .select(tab_select)
+                .select(usize::MAX)
                 .style(Style::default().fg(palette::SUBTLE))
+                .highlight_style(Style::default())
                 .divider(Span::raw(""))
-                .padding("", "")
-                .highlight_style(Style::default().fg(palette::WHITE).bg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                .padding("", ""),
             inner_tabs,
         );
 
@@ -2422,23 +2450,28 @@ impl App {
         } else {
             (now_playing.as_deref(), palette::FOAM)
         };
-        if let Some(text) = status_text {
-            f.render_widget(
-                Paragraph::new(text)
-                    .alignment(Alignment::Center)
-                    .style(Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-                status_area,
-            );
-        }
-
         if active {
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    "─".repeat(area.width as usize),
-                    Style::default().fg(palette::MUTED),
-                )),
-                sep_area,
-            );
+            if let Some(text) = status_text {
+                f.render_widget(
+                    Block::default()
+                        .borders(Borders::TOP)
+                        .border_style(Style::default().fg(palette::MUTED))
+                        .title(Span::styled(
+                            format!("  {}  ", text),
+                            Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                        ))
+                        .title_alignment(Alignment::Center),
+                    status_area,
+                );
+            } else {
+                f.render_widget(
+                    Paragraph::new(Span::styled(
+                        "─".repeat(area.width as usize),
+                        Style::default().fg(palette::MUTED),
+                    )),
+                    status_area,
+                );
+            }
             self.render_playback_controls(f, controls_area);
         } else {
             self.layout_seekbar_area = Rect::default();
@@ -2447,6 +2480,14 @@ impl App {
             self.layout_vol_area     = Rect::default();
             self.layout_sub_area     = Rect::default();
             self.layout_audio_area   = Rect::default();
+            if let Some(text) = status_text {
+                f.render_widget(
+                    Paragraph::new(text)
+                        .alignment(Alignment::Center)
+                        .style(Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
+                    status_area,
+                );
+            }
         }
 
         if self.tab_idx == 0 {
@@ -2646,10 +2687,10 @@ impl App {
         let inner_x = area.x + (area.width.saturating_sub(inner_w)) / 2;
         let area = Rect { x: inner_x, y: area.y, width: inner_w, height: area.height };
 
-        let (position_ticks, runtime_ticks, paused, volume, volume_max,
+        let (position_ticks, runtime_ticks, paused,
              audio_tracks, sub_tracks, audio_id, sub_id) = {
             let s = self.player.status.lock().unwrap();
-            (s.position_ticks, s.runtime_ticks, s.paused, s.volume, s.volume_max,
+            (s.position_ticks, s.runtime_ticks, s.paused,
              s.audio_tracks.clone(), s.sub_tracks.clone(), s.audio_id, s.sub_id)
         };
 
@@ -2678,40 +2719,32 @@ impl App {
             format!("{} ({}/{})", label, pos + 1, audio_tracks.len())
         };
         let sub_label = if sub_id == 0 || sub_tracks.is_empty() { "Off" } else { "On" };
-        let vol_chars = ['▁','▂','▃','▄','▅','▆','▇','█'];
-        let vol_icon = vol_chars[(volume as usize * 8 / (volume_max as usize + 1)).min(7)];
 
         const BTNS_W: u16 = 30; // 6 buttons × 5
         let btn_x = area.x + area.width.saturating_sub(BTNS_W) / 2;
 
-        // Each info group gets 1 char padding on each side; groups separated by 2 spaces
-        let vol_pct = format!("{volume}%");
-        let g1_inner = format!("Subs: \u{2261} {}", sub_label);        // Subs: ≡ sub
-        let g2_inner = format!("\u{266a} {}", audio_label);          // ♪ audio
-        let g3_inner = format!("{vol_icon} {vol_pct}");               // ▄ vol%
         let pad = 1u16;
-        let gap = 2u16;
-        let g1_w = g1_inner.chars().count() as u16 + pad * 2;
-        let g2_w = g2_inner.chars().count() as u16 + pad * 2;
-        let g3_w = g3_inner.chars().count() as u16 + pad * 2;
-        // Row 1: audio + volume left-justified; subs right-justified
-        let row_y = area.y + 1;
+        let p = " ".repeat(pad as usize);
+        let text_style = btn_style;
+
+        let sub_val_inner   = format!("\u{2261} {}", sub_label);
+        let audio_val_inner = format!("\u{266a} {}", audio_label);
+        let g1_w = (5usize.max(sub_val_inner.chars().count()) as u16) + pad * 2;
+        let g2_w = (6usize.max(audio_val_inner.chars().count()) as u16) + pad * 2;
+
+        let btn_row_y = area.y + 1;
+        let val_row_y = area.y + 2;
         let g1_x = area.x;
-        let g3_x = area.x + g1_w + gap;
         let g2_x = (area.x + area.width).saturating_sub(g2_w);
-        let vol_x = g3_x + pad; // for click detection
 
-        self.layout_seekbar_area = Rect { x: area.x, y: area.y,     width: area.width, height: 1 };
-        self.layout_button_area  = Rect { x: btn_x,  y: area.y + 2, width: BTNS_W,     height: 1 };
-        self.layout_tracks_area  = Rect { x: area.x, y: row_y,      width: area.width, height: 1 };
-        self.layout_vol_area     = Rect { x: vol_x,  y: row_y,      width: g3_w,       height: 1 };
-        self.layout_sub_area     = Rect { x: g1_x,   y: row_y,      width: g1_w,       height: 1 };
-        self.layout_audio_area   = Rect { x: g2_x,   y: row_y,      width: g2_w,       height: 1 };
+        self.layout_seekbar_area = Rect { x: area.x, y: area.y,   width: area.width, height: 1 };
+        self.layout_button_area  = Rect { x: btn_x,  y: btn_row_y, width: BTNS_W,    height: 1 };
+        self.layout_tracks_area  = Rect { x: area.x, y: val_row_y, width: area.width, height: 1 };
+        self.layout_vol_area     = Rect::default();
+        self.layout_sub_area     = Rect { x: g1_x, y: val_row_y, width: g1_w, height: 1 };
+        self.layout_audio_area   = Rect { x: g2_x, y: val_row_y, width: g2_w, height: 1 };
 
-        let btn_row = Rect { x: area.x, y: area.y + 2, width: area.width, height: 1 };
-        let _chip_bg = Style::default().bg(Color::Rgb(38, 38, 52));
-
-        // Row 0 — Gauge with timestamp label
+        // Row 0 — seekbar
         let ratio = if runtime_ticks > 0 {
             (position_ticks as f64 / runtime_ticks as f64).clamp(0.0, 1.0)
         } else { 0.0 };
@@ -2728,48 +2761,42 @@ impl App {
             Rect { x: area.x, y: area.y, width: area.width, height: 1 },
         );
 
-        // Row 1 — subs + volume (left), audio (right)
-        let text_style = btn_style;
-        let p = " ".repeat(pad as usize);
+        // Row 1 — "Subs:" label (left) + buttons (center) + "Audio:" label (right)
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(&p),
-                Span::styled("Subs: ", text_style),
-                Span::styled("\u{2261} ", Style::default().fg(palette::TEXT)),
-                Span::styled(sub_label, text_style),
-                Span::raw(&p),
+                Span::styled("Subs:", text_style),
             ])),
-            Rect { x: g1_x, y: row_y, width: g1_w, height: 1 },
+            Rect { x: g1_x, y: btn_row_y, width: g1_w, height: 1 },
+        );
+        f.render_widget(
+            Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
+            Rect { x: area.x, y: btn_row_y, width: area.width, height: 1 },
         );
         f.render_widget(
             Paragraph::new(Line::from(vec![
+                Span::styled("Audio:", text_style),
                 Span::raw(&p),
+            ])).alignment(Alignment::Right),
+            Rect { x: g2_x, y: btn_row_y, width: g2_w, height: 1 },
+        );
+
+        // Row 2 — sub value (left, under "Subs:") + audio value (right, under "Audio:")
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::raw(&p),
+                Span::styled("\u{2261} ", Style::default().fg(palette::TEXT)),
+                Span::styled(sub_label, text_style),
+            ])),
+            Rect { x: g1_x, y: val_row_y, width: g1_w, height: 1 },
+        );
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
                 Span::styled("\u{266a} ", Style::default().fg(palette::IRIS)),
                 Span::styled(audio_label, text_style),
                 Span::raw(&p),
-            ])),
-            Rect { x: g2_x, y: row_y, width: g2_w, height: 1 },
-        );
-
-        let (vol_icon_style, vol_text_style) = if volume > 100 {
-            (Style::default().fg(Color::Red), Style::default().fg(Color::Yellow))
-        } else {
-            (Style::default().fg(palette::YELLOW), text_style)
-        };
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::raw(&p),
-                Span::styled(format!("{vol_icon} "), vol_icon_style),
-                Span::styled(vol_pct, vol_text_style),
-                Span::raw(&p),
-            ])),
-            Rect { x: g3_x, y: row_y, width: g3_w, height: 1 },
-        );
-
-        // Row 2 — buttons, centered
-        f.render_widget(
-            Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
-            btn_row,
+            ])).alignment(Alignment::Right),
+            Rect { x: g2_x, y: val_row_y, width: g2_w, height: 1 },
         );
     }
 
@@ -3028,7 +3055,7 @@ impl App {
         let slots: [(Option<usize>, Rect, bool); 3] = [
             (
                 if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
-                Rect { x: x_left,   y: area.y + side_v_pad, width: side_w,   height: side_h   },
+                Rect { x: x_left + 1, y: area.y + side_v_pad, width: side_w.saturating_sub(2), height: side_h },
                 false,
             ),
             (
@@ -3038,7 +3065,7 @@ impl App {
             ),
             (
                 if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
-                Rect { x: x_right,  y: area.y + side_v_pad, width: side_w,   height: side_h   },
+                Rect { x: x_right + 1, y: area.y + side_v_pad, width: side_w.saturating_sub(2), height: side_h },
                 false,
             ),
         ];
@@ -3129,10 +3156,15 @@ impl App {
         played: bool,
     ) {
         let border_fg = if selected { palette::IRIS } else { palette::WHITE };
-        let block = Block::default()
+        let mut block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(border_fg));
+        if now_playing {
+            block = block
+                .title(Span::styled(" Now Playing ", Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)))
+                .title_alignment(Alignment::Center);
+        }
         let inner = block.inner(card_rect);
         f.render_widget(block, card_rect);
 
@@ -3160,27 +3192,14 @@ impl App {
             else         { format!("{}m", s/60) }
         };
 
-        // "Now Playing" header at top (2 rows).
-        let mut header_rows = 0u16;
-        if now_playing {
-            put(f, inner.y, Paragraph::new("Now Playing")
-                .style(Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD))
-                .alignment(Alignment::Center));
-            let rule_w = (inner.width as u32 * 4 / 5) as usize;
-            let pad    = (inner.width as usize).saturating_sub(rule_w) / 2;
-            let rule   = format!("{}{}", " ".repeat(pad), "─".repeat(rule_w));
-            put(f, inner.y + 1, Paragraph::new(rule).style(Style::default().fg(palette::IRIS)));
-            header_rows = 2;
-        }
-
         // Text rows pinned to the bottom, scaled to available height:
-        //   >=10 rows inner: title(2) + series(1) + progress(2) = 5
-        //   >=7  rows inner: title(2) + series(1) = 3  (drop progress bar)
-        //   <7   rows inner: title(1) only = 1
-        let text_rows = if inner.height >= 10 { 5u16 }
-                        else if inner.height >= 7 { 3 }
+        //   >=8 rows inner: title(2) + series(1) + progress(2) = 5
+        //   >=5 rows inner: title(2) + series(1) = 3  (drop progress bar)
+        //   <5  rows inner: title(1) only = 1
+        let text_rows = if inner.height >= 8 { 5u16 }
+                        else if inner.height >= 5 { 3 }
                         else { 1 };
-        let img_top    = inner.y + header_rows;
+        let img_top    = inner.y;
         let img_bottom = inner.bottom().saturating_sub(text_rows);
         let img_h      = img_bottom.saturating_sub(img_top);
 
@@ -3351,7 +3370,7 @@ impl App {
         let slots: [(Option<usize>, Rect, bool); 3] = [
             (
                 if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
-                Rect { x: x_left,   y: cards_area.y + side_v_pad, width: side_w,   height: side_h   },
+                Rect { x: x_left + 1, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(2), height: side_h },
                 false,
             ),
             (
@@ -3361,7 +3380,7 @@ impl App {
             ),
             (
                 if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
-                Rect { x: x_right,  y: cards_area.y + side_v_pad, width: side_w,   height: side_h   },
+                Rect { x: x_right + 1, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(2), height: side_h },
                 false,
             ),
         ];
