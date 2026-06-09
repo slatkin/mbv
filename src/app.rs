@@ -80,6 +80,9 @@ mod palette {
     pub const PINE:          Color = Color::Rgb(61,  139, 55);   // dark green — folders, watched
     pub const FOAM:          Color = Color::Rgb(0,   164, 220);  // emby blue — now-playing item
     pub const IRIS:          Color = Color::Rgb(82,  181, 75);   // emby green — active tab, focused
+    pub const MODAL_BG:      Color = Color::Rgb(30,  30,  30);   // modal background (#1e1e1e)
+    pub const MODAL_HEADER:  Color = Color::Rgb(40,  40,  40);   // modal header (#282828)
+    pub const FOCUSED:       Color = Color::Rgb(83,  83,  83);   // focused item bg (#535353)
     pub const HIGHLIGHT_MED: Color = Color::Rgb(42,  42,  42);   // selection row bg (#2a2a2a)
     pub const STRIPE:        Color = Color::Rgb(58,  58,  58);   // zebra stripe row bg (#3a3a3a)
     pub const RED:           Color = Color::Rgb(220, 60,  60);   // loud volume
@@ -160,6 +163,10 @@ pub struct App {
     context_menu: Option<ContextMenu>,
     context_menu_rect: Option<Rect>,
     show_help: bool,
+    show_settings: bool,
+    layout_settings_area: Rect,
+    layout_settings_modal: Rect,
+    layout_settings_ok_btn: Rect,
     help_scroll: u16,
     show_log_tab: bool,
     lib_tx: mpsc::Sender<LibEvent>,
@@ -256,6 +263,10 @@ impl App {
             card_image_rx,
             image_picker: None,
             show_help: false,
+            show_settings: false,
+            layout_settings_area: Rect::default(),
+            layout_settings_modal: Rect::default(),
+            layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab,
             context_menu: None,
@@ -346,6 +357,10 @@ impl App {
             card_image_rx,
             image_picker: None,
             show_help: false,
+            show_settings: false,
+            layout_settings_area: Rect::default(),
+            layout_settings_modal: Rect::default(),
+            layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab,
             context_menu: None,
@@ -559,6 +574,10 @@ impl App {
     // ── key handling ────────────────────────────────────────────────────────
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
+        if self.show_settings {
+            if key.code == KeyCode::Esc { self.show_settings = false; }
+            return false;
+        }
         if self.show_help {
             match key.code {
                 KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
@@ -1380,6 +1399,29 @@ impl App {
                 return;
             }
 
+        // Gear icon click
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
+            && self.layout_settings_area.contains((col, row).into()) {
+            self.show_settings = !self.show_settings;
+            return;
+        }
+
+        // Settings modal intercepts all mouse events while open
+        if self.show_settings {
+            if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
+                if !self.layout_settings_modal.contains((col, row).into()) {
+                    // Click outside modal: dismiss
+                    self.show_settings = false;
+                } else if self.layout_settings_ok_btn != Rect::default()
+                    && self.layout_settings_ok_btn.contains((col, row).into()) {
+                    // Click on OK button: close
+                    self.show_settings = false;
+                }
+                // Click inside modal but not on OK: swallow
+            }
+            return;
+        }
+
         match mouse.kind {
             MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
                 let delta: i64 = if matches!(mouse.kind, MouseEventKind::ScrollDown) { 1 } else { -1 };
@@ -2064,7 +2106,7 @@ impl App {
             let lib_name = self.libs[idx].library.name.clone();
             let (item_types, unplayed_only) = match self.libs[idx].library.collection_type.as_str() {
                 "movies"               => (Some("Movie".to_string()), false),
-                "channels"|"homevideos"=> (Some("Video".to_string()), true),
+                "channels"|"homevideos" if lib_name == "Youtube" => (Some("Video".to_string()), true),
                 _                      => (None, false),
             };
             self.libs[idx].nav_stack.push(BrowseLevel {
@@ -2367,15 +2409,29 @@ impl App {
             gap_area,
         );
 
-        // Volume bar (always visible, right side of tab row)
-        const VOL_W: u16 = 11; // " Vol: XXX%"
+        // Right side: Vol (11) + 1 gap + gear (2) = 14 cols total
+        const VOL_W:  u16 = 11; // " Vol: XXX%"
+        const SETTINGS_W: u16 = 2;  // "⋮ "
+        const GAP:    u16 = 1;
+        let right_w = VOL_W + GAP + SETTINGS_W;
+        let gear_area = Rect {
+            x: tabs_area.x + tabs_area.width.saturating_sub(SETTINGS_W),
+            y: tabs_area.y, width: SETTINGS_W, height: 1,
+        };
         let vol_area = Rect {
-            x: tabs_area.x + tabs_area.width.saturating_sub(VOL_W),
+            x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
             y: tabs_area.y, width: VOL_W, height: 1,
         };
+        self.layout_settings_area = gear_area;
         self.layout_tabbar_vol_area = vol_area;
         self.render_volume_bar(f, vol_area);
-        let tabs_area = Rect { width: tabs_area.width.saturating_sub(VOL_W), ..tabs_area };
+        let gear_style = if self.show_settings {
+            Style::default().fg(palette::IRIS)
+        } else {
+            Style::default().fg(palette::WHITE)
+        };
+        f.render_widget(Paragraph::new("⋮ ").style(gear_style), gear_area);
+        let tabs_area = Rect { width: tabs_area.width.saturating_sub(right_w), ..tabs_area };
         self.layout_tabs_area = tabs_area;
 
         // Tab bar with scroll indicators when tabs overflow
@@ -2501,6 +2557,49 @@ impl App {
         }
 
         self.render_context_menu(f);
+
+        if self.show_settings {
+            let mw = main_area.width / 2;
+            let mh = main_area.height * 4 / 5;
+            let mx = main_area.x + (main_area.width.saturating_sub(mw)) / 2;
+            let my = main_area.y + (main_area.height.saturating_sub(mh)) / 2;
+            let modal_rect = Rect { x: mx, y: my, width: mw, height: mh };
+            self.layout_settings_modal = modal_rect;
+            f.render_widget(Clear, modal_rect);
+            f.render_widget(Block::default().style(Style::default().bg(palette::MODAL_HEADER)), modal_rect);
+            let inner = modal_rect;
+            f.render_widget(
+                Paragraph::new(Span::styled(" mby client settings", Style::default().fg(palette::SUBTLE).add_modifier(Modifier::BOLD)))
+                    .style(Style::default().bg(palette::MODAL_BG)),
+                Rect { x: inner.x, y: inner.y, width: inner.width, height: 1 },
+            );
+            if inner.height > 0 {
+                f.render_widget(
+                    Paragraph::new("Boo!")
+                        .alignment(Alignment::Center)
+                        .style(Style::default().fg(palette::TEXT)),
+                    Rect { x: inner.x, y: inner.y + inner.height / 2, width: inner.width, height: 1 },
+                );
+            }
+            if inner.height >= 4 {
+                let bottom = inner.bottom();
+                let hr_top_y  = bottom.saturating_sub(3);
+                let btn_y     = bottom.saturating_sub(2);
+                let btn_rect  = Rect { x: inner.x, y: btn_y, width: inner.width, height: 1 };
+                self.layout_settings_ok_btn = btn_rect;
+                f.render_widget(
+                    Paragraph::new(Span::styled("─".repeat(inner.width as usize), Style::default().fg(palette::OVERLAY))),
+                    Rect { x: inner.x, y: hr_top_y, width: inner.width, height: 1 },
+                );
+                f.render_widget(
+                    Paragraph::new(Span::styled("  OK  ", Style::default().fg(palette::BASE).bg(palette::SUBTLE)))
+                        .alignment(Alignment::Center),
+                    btn_rect,
+                );
+            } else {
+                self.layout_settings_ok_btn = Rect::default();
+            }
+        }
     }
 
     fn render_volume_bar(&self, f: &mut ratatui::Frame, area: Rect) {
@@ -2729,7 +2828,7 @@ impl App {
 
         let sub_val_inner   = format!("\u{2261} {}", sub_label);
         let audio_val_inner = format!("\u{266a} {}", audio_label);
-        let g1_w = (5usize.max(sub_val_inner.chars().count()) as u16) + pad * 2;
+        let g1_w = (11usize.max(sub_val_inner.chars().count()) as u16) + pad * 2; // "≡ Subtitles" = 11
         let g2_w = (6usize.max(audio_val_inner.chars().count()) as u16) + pad * 2;
 
         let btn_row_y = area.y + 1;
@@ -2761,11 +2860,12 @@ impl App {
             Rect { x: area.x, y: area.y, width: area.width, height: 1 },
         );
 
-        // Row 1 — "Subs:" label (left) + buttons (center) + "Audio:" label (right)
+        // Row 1 — "≡ Subs:" label (left) + buttons (center) + "♪ Audio:" label (right)
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(&p),
-                Span::styled("Subs:", text_style),
+                Span::styled("\u{2261} ", Style::default().fg(palette::TEXT)),
+                Span::styled("Subtitles", text_style),
             ])),
             Rect { x: g1_x, y: btn_row_y, width: g1_w, height: 1 },
         );
@@ -2775,24 +2875,23 @@ impl App {
         );
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled("Audio:", text_style),
+                Span::styled("Audio ", text_style),
+                Span::styled("\u{266a}", Style::default().fg(palette::IRIS)),
                 Span::raw(&p),
             ])).alignment(Alignment::Right),
             Rect { x: g2_x, y: btn_row_y, width: g2_w, height: 1 },
         );
 
-        // Row 2 — sub value (left, under "Subs:") + audio value (right, under "Audio:")
+        // Row 2 — sub value (left, under label) + audio value (right, under label)
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(&p),
-                Span::styled("\u{2261} ", Style::default().fg(palette::TEXT)),
                 Span::styled(sub_label, text_style),
             ])),
             Rect { x: g1_x, y: val_row_y, width: g1_w, height: 1 },
         );
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled("\u{266a} ", Style::default().fg(palette::IRIS)),
                 Span::styled(audio_label, text_style),
                 Span::raw(&p),
             ])).alignment(Alignment::Right),
@@ -3788,7 +3887,13 @@ impl App {
                 }
             }
 
-            let text_color = palette::TEXT;
+            if selected {
+                f.render_widget(
+                    ratatui::widgets::Block::default().style(Style::default().bg(palette::FOCUSED)),
+                    row_rect,
+                );
+            }
+            let text_color = if selected { palette::WHITE } else { palette::TEXT };
 
             // Build title line (line 1)
             let title_line = match item.item_type.as_str() {
@@ -4113,7 +4218,7 @@ fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'sta
 fn highlight_style(item: &MediaItem) -> Style {
     if item.is_folder && item.item_type != "Series" { Style::default().fg(palette::BASE).bg(palette::PINE) }
     else if item.playback_position_ticks > 0 { Style::default().fg(palette::BASE).bg(palette::YELLOW) }
-    else                    { Style::default().fg(palette::TEXT).bg(palette::HIGHLIGHT_MED) }
+    else                    { Style::default().fg(palette::WHITE).bg(palette::FOCUSED) }
 }
 
 fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
@@ -4135,7 +4240,7 @@ fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'st
 }
 
 fn highlight_style_continue(_item: &MediaItem) -> Style {
-    Style::default().fg(palette::TEXT).bg(palette::HIGHLIGHT_MED)
+    Style::default().fg(palette::WHITE).bg(palette::FOCUSED)
 }
 
 
@@ -4350,6 +4455,10 @@ mod tests {
             card_image_rx,
             image_picker: None,
             show_help: false,
+            show_settings: false,
+            layout_settings_area: Rect::default(),
+            layout_settings_modal: Rect::default(),
+            layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
             context_menu: None,
