@@ -1028,8 +1028,8 @@ impl App {
             self.tab_scroll = self.tab_idx;
             return;
         }
-        const VOL_W: u16 = 11;
-        let tab_w = self.terminal_width.saturating_sub(VOL_W);
+        const RIGHT_W: u16 = 11 + 1 + 2; // VOL_W + GAP + SETTINGS_W, must match render
+        let tab_w = self.terminal_width.saturating_sub(RIGHT_W);
         loop {
             let (_, end) = self.visible_tab_range(tab_w);
             if self.tab_idx < end { break; }
