@@ -56,6 +56,8 @@ use_mpv_config = false
 show_systray_icon = true
 ```
 
+Press `F1` at any time to open the reference screen.
+
 ## Features
 
 ### What you can do
@@ -86,61 +88,6 @@ mby applies opinionated defaults every time a new item starts playing:
 - **Image-based subtitle tracks are hidden.** PGS (`hdmv_pgs_subtitle`, `pgssub`), DVD (`dvd_subtitle`, `dvdsub`), DVB (`dvb_subtitle`), and XSUB tracks do not appear in the subtitle list at all, since mpv cannot render them in headless mode.
 
 These defaults suit an English-language setup where subtitles are an opt-in rather than opt-out. There is currently no config option to change them.
-
-## Key bindings
-
-Press `F1` at any time to open the built-in reference screen.
-
-### Global
-
-| Key | Action |
-|-----|--------|
-| `F1` | Keyboard shortcut help |
-| `Tab` / `Shift+Tab` | Cycle tabs forward / backward |
-| `1`–`9` | Jump to tab by number |
-| `↑` / `↓` | Move cursor |
-| `PgUp` / `PgDn` | Page scroll |
-| `Home` / `End` | Jump to first / last item |
-| `Enter` | Select / play / open |
-| `Alt+Q` | Add selected item or folder to Queue |
-| `Alt+O` | Context menu |
-| `c` | Clear Queue (asks confirmation) |
-| `q` | Quit |
-
-### Playback (when player is active)
-
-| Key | Action |
-|-----|--------|
-| `Space` | Pause / resume |
-| `Alt+←` / `Alt+→` | Seek ±5 seconds |
-| `Alt+Enter` | Stop |
-| `-` / `+` | Volume down / up |
-| `Alt+A` | Cycle audio track |
-| `Alt+Z` | Enable subtitles |
-
-### Queue tab
-
-| Key | Action |
-|-----|--------|
-| `.` | Jump to currently playing item |
-| `Delete` | Remove selected item from Queue |
-| `Alt+V` | Toggle list / card view |
-
-### Home tab
-
-| Key | Action |
-|-----|--------|
-| `Alt+↑` / `Alt+↓` | Switch between sections |
-| `Alt+W` | Toggle watched status |
-
-### Library tab
-
-| Key | Action |
-|-----|--------|
-| `Esc` / `Backspace` | Go back |
-| `/` | Search within current folder |
-| `Alt+W` | Toggle watched status |
-| `Alt+S` | Shuffle and play current selection |
 
 #### YouTube / Channels libraries
 
