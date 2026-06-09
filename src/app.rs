@@ -3168,10 +3168,11 @@ impl App {
 
         // Panels are 80% of available height, centered vertically, capped 6 rows below area.
         // Side cards are 80% of center height, also centered.
-        let center_h   = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
+        let max_h      = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
+        let side_h     = ((max_h as u32 * 4 / 5) as u16).max(3);
+        let center_h   = side_h;
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
-        let side_h     = ((center_h as u32 * 4 / 5) as u16).max(3);
-        let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
+        let side_v_pad = center_v_pad;
 
         // Below this width threshold, hide side cards and give all space to center.
         const SIDE_HIDE_W: u16 = 60;
@@ -3250,8 +3251,10 @@ impl App {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
 
             let ep_tag = if is_ep { format!("S{:02}E{:02}", season, episode) } else { String::new() };
+            let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
             self.render_card_slot(f, *card_rect, *is_center, selected, now_playing,
-                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played);
+                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
+                count_label.as_deref(), None);
         }
 
         // Prefetch images for the three items before and after the cursor.
@@ -3266,17 +3269,6 @@ impl App {
             if pi != cursor {
                 self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
             }
-        }
-
-        // Count just below the center card, matching the home tab's title_y position.
-        let count_y = (area.y + center_v_pad + center_h + 1).min(area.bottom().saturating_sub(1));
-        if count_y < area.bottom() {
-            f.render_widget(
-                Paragraph::new(format!("{}/{}", cursor + 1, n))
-                    .style(Style::default().fg(palette::MUTED))
-                    .alignment(Alignment::Center),
-                Rect { x: area.x, y: count_y, width: area.width, height: 1 },
-            );
         }
     }
 
@@ -3296,16 +3288,28 @@ impl App {
         pos_ticks: i64,
         rt_ticks: i64,
         played: bool,
+        count_label: Option<&str>,
+        section_title: Option<&str>,
     ) {
         let border_fg = if selected { palette::IRIS } else { palette::WHITE };
         let mut block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(border_fg));
-        if now_playing {
+        if let Some(title) = section_title {
+            block = block
+                .title(Span::styled(format!(" {} ", title), Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)))
+                .title_alignment(Alignment::Center);
+        } else if now_playing {
             block = block
                 .title(Span::styled(" Now Playing ", Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)))
                 .title_alignment(Alignment::Center);
+        }
+        if let Some(label) = count_label {
+            block = block.title_bottom(
+                Line::from(Span::styled(format!(" {} ", label), Style::default().fg(palette::MUTED)))
+                    .centered()
+            );
         }
         let inner = block.inner(card_rect);
         f.render_widget(block, card_rect);
@@ -3484,13 +3488,13 @@ impl App {
         let cards_h    = cards_area.height;
 
         // Same geometry as render_playlist_cards.
-        let center_h   = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
+        let max_h      = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
+        let side_h     = ((max_h as u32 * 4 / 5) as u16).max(3);
+        let center_h   = side_h;
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
-        // Place title and count just below the center card, with a one-line gap.
-        let title_y  = (cards_area.y + center_v_pad + center_h + 1).min(area.bottom().saturating_sub(2));
-        let gutter_y = (title_y + 1).min(area.bottom().saturating_sub(1));
-        let side_h     = ((center_h as u32 * 4 / 5) as u16).max(3);
-        let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
+        // Row just below the center card — used for ▼ scroll arrow.
+        let gutter_y = (cards_area.y + center_v_pad + center_h + 1).min(area.bottom().saturating_sub(1));
+        let side_v_pad = center_v_pad;
 
         const SIDE_HIDE_W: u16 = 60;
         let show_sides = cards_area.width >= SIDE_HIDE_W;
@@ -3562,23 +3566,25 @@ impl App {
             };
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
 
+            let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
+            let sec_title_label = if *is_center { Some(sec_title.as_str()) } else { None };
             self.render_card_slot(f, *card_rect, *is_center, selected, false,
-                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played);
+                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
+                count_label.as_deref(), sec_title_label);
         }
 
-        // Title, then count below it.
-        let title_line = Line::from(
-            Span::styled(sec_title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD))
-        );
-        f.render_widget(
-            Paragraph::new(title_line).alignment(Alignment::Center),
-            Rect { x: area.x, y: title_y, width: area.width, height: 1 },
-        );
-        if area.height >= 2 {
+        // Section scroll arrows.
+        let n_sections = 1 + self.home.latest.len();
+        let arrow_style = Style::default().fg(palette::IRIS);
+        if self.home.section > 0 && center_v_pad > 3 {
             f.render_widget(
-                Paragraph::new(format!("{}/{}", cursor + 1, n))
-                    .style(Style::default().fg(palette::MUTED))
-                    .alignment(Alignment::Center),
+                Paragraph::new("▲").style(arrow_style).alignment(Alignment::Center),
+                Rect { x: area.x, y: area.y + 3, width: area.width, height: 1 },
+            );
+        }
+        if self.home.section + 1 < n_sections && gutter_y < area.bottom() {
+            f.render_widget(
+                Paragraph::new("▼").style(arrow_style).alignment(Alignment::Center),
                 Rect { x: area.x, y: gutter_y, width: area.width, height: 1 },
             );
         }
