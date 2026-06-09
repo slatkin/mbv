@@ -77,6 +77,16 @@ show_systray_icon = true
 - The mpv IPC socket lives at `$XDG_RUNTIME_DIR/mby-mpv.sock`, separate from the default mpv socket, so running mby alongside standalone mpv doesn't cause conflicts.
 - By default mby uses its own bundled OSC ([mpv-osc-modern](https://github.com/maoiscat/mpv-osc-modern)). Set `use_mpv_config = true` to defer to your own `~/.config/mpv/` setup instead.
 
+### Audio and subtitle track selection
+
+mby applies opinionated defaults every time a new item starts playing:
+
+- **English audio is always preferred.** If the default track selected by mpv is not English (`en`, `eng`, `en-US`, `en-GB`, or anything starting with `english`), mby switches to the first English track it finds. If no English track exists, the default track is kept.
+- **Subtitles are always off at start.** Regardless of what mpv or the Emby server would default to, subtitles are disabled when playback begins. Use `Alt+Z` or click the `≡` control to enable them manually.
+- **Image-based subtitle tracks are hidden.** PGS (`hdmv_pgs_subtitle`, `pgssub`), DVD (`dvd_subtitle`, `dvdsub`), DVB (`dvb_subtitle`), and XSUB tracks do not appear in the subtitle list at all, since mpv cannot render them in headless mode.
+
+These defaults suit an English-language setup where subtitles are an opt-in rather than opt-out. There is currently no config option to change them.
+
 ## Key bindings
 
 Press `F1` at any time to open the built-in reference screen.
