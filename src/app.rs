@@ -2386,7 +2386,7 @@ impl App {
             .chain(self.libs.iter().map(|l| l.library.name.clone()))
             .collect();
         let tab_titles: Vec<Span> = all_names[vis_start..vis_end]
-            .iter().map(|n| Span::raw(format!(" {n} "))).collect();
+            .iter().map(|n| Span::raw(format!("  {n}  "))).collect();
         let tab_select = if self.tab_idx == self.log_tab_idx() || self.tab_idx < vis_start || self.tab_idx >= vis_end {
             usize::MAX
         } else {
@@ -2471,11 +2471,11 @@ impl App {
         let color = if volume > 100 { palette::RED }
             else if volume > 60 { palette::YELLOW }
             else { palette::PINE };
-        let text = format!(" Vol: {}%", volume);
-        f.render_widget(
-            Paragraph::new(text).style(Style::default().fg(color)),
-            area,
-        );
+        let line = Line::from(vec![
+            Span::styled(" Vol: ", Style::default().fg(Color::Rgb(253, 253, 253))),
+            Span::styled(format!("{}%", volume), Style::default().fg(color)),
+        ]);
+        f.render_widget(Paragraph::new(line), area);
     }
 
     fn render_help_screen(&mut self, f: &mut ratatui::Frame) {
