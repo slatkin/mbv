@@ -4171,59 +4171,104 @@ fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
         } else {
             item.display_name()
         };
-        // Series are content, not navigation folders — don't colour them green
-        let is_series = item.item_type == "Series";
-        let style = if selected { Style::default() }
-            else if is_series  { Style::default().fg(palette::TEXT) }
-            else               { Style::default().fg(palette::PINE) };
+        let style = if selected { Style::default() } else { Style::default().fg(palette::WHITE) };
         return (text, style);
     }
-    let mut suffix = String::new();
+    let mut dur_str = String::new();
     if item.runtime_ticks > 0 {
         let s = item.runtime_seconds();
         let h = (s / 3600.0) as u64;
         let m = ((s % 3600.0) / 60.0) as u64;
-        let dur = if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") };
-        if item.playback_position_ticks > 0 {
-            let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-            suffix = format!("  [{pct}%/{dur}]");
-        } else {
-            suffix = format!("  [{dur}]");
-        }
+        dur_str = if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") };
     }
-    let text = format!("{}{}", item.display_name(), suffix);
-    let style = if selected { Style::default() }
-        else if item.playback_position_ticks > 0 { Style::default().fg(palette::YELLOW) }
-        else { Style::default().fg(palette::TEXT) };
+    let in_progress = item.runtime_ticks > 0 && item.playback_position_ticks > 0;
+    let mut text = if in_progress { format!("• {}", item.display_name()) } else { item.display_name() };
+    if !dur_str.is_empty() { text.push_str(&format!("  [{dur_str}]")); }
+    let style = if selected { Style::default() } else { Style::default().fg(palette::WHITE) };
     (text, style)
 }
 
 fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
-    let (full_text, style) = item_text_and_style(item, selected);
+    if item.is_folder {
+        let base_style = if selected { Style::default() } else { Style::default().fg(palette::WHITE) };
+        let subtle = if selected { Style::default() } else { Style::default().fg(palette::SUBTLE) };
+        let w = width.max(1);
+        let name = item.display_name();
+        let mut lines: Vec<Line<'static>> = wrap(&name, w)
+            .into_iter()
+            .map(|s| Line::from(Span::styled(s.into_owned(), base_style)))
+            .collect();
+        if item.unplayed_item_count > 0 {
+            if let Some(last) = lines.last_mut() {
+                last.spans.push(Span::styled(format!(" [{}]", item.unplayed_item_count), subtle));
+            }
+        }
+        return if lines.is_empty() { Text::from("") } else { Text::from(lines) };
+    }
+    let mut dur_str = String::new();
+    if item.runtime_ticks > 0 {
+        let s = item.runtime_seconds();
+        let h = (s / 3600.0) as u64;
+        let m = ((s % 3600.0) / 60.0) as u64;
+        dur_str = if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") };
+    }
+    let in_progress = item.runtime_ticks > 0 && item.playback_position_ticks > 0;
+    let base_style = if selected { Style::default() } else { Style::default().fg(palette::WHITE) };
+    let yellow = if selected { Style::default() } else { Style::default().fg(palette::YELLOW) };
     let w = width.max(1);
-    let lines: Vec<Line<'static>> = wrap(&full_text, w)
-        .into_iter()
-        .map(|s| Line::from(Span::styled(s.into_owned(), style)))
+    let display_name = item.display_name();
+    let title_lines = wrap(&display_name, w);
+    let mut lines: Vec<Line<'static>> = title_lines.iter().enumerate()
+        .map(|(i, s)| {
+            let mut spans = Vec::new();
+            if i == 0 && in_progress {
+                spans.push(Span::styled("• ", yellow));
+            }
+            spans.push(Span::styled(s.clone().into_owned(), base_style));
+            Line::from(spans)
+        })
         .collect();
+    let subtle = if selected { Style::default() } else { Style::default().fg(palette::SUBTLE) };
+    if !dur_str.is_empty() {
+        if let Some(last) = lines.last_mut() {
+            last.spans.push(Span::styled(format!("  [{dur_str}]"), subtle));
+        }
+    }
     if lines.is_empty() { Text::from("") } else { Text::from(lines) }
 }
 
-fn highlight_style(item: &MediaItem) -> Style {
-    if item.is_folder && item.item_type != "Series" { Style::default().fg(palette::BASE).bg(palette::PINE) }
-    else if item.playback_position_ticks > 0 { Style::default().fg(palette::BASE).bg(palette::YELLOW) }
-    else                    { Style::default().fg(palette::WHITE).bg(palette::FOCUSED) }
+fn highlight_style(_item: &MediaItem) -> Style {
+    Style::default().fg(palette::WHITE).bg(palette::FOCUSED)
 }
 
 fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
-    let (full_text, _) = item_text_and_style(item, selected);
+    let base_style = if selected { Style::default() } else { Style::default().fg(palette::WHITE) };
+    let yellow = if selected { Style::default() } else { Style::default().fg(palette::YELLOW) };
+    let mut dur_str = String::new();
+    if item.runtime_ticks > 0 {
+        let s = item.runtime_seconds();
+        let h = (s / 3600.0) as u64;
+        let m = ((s % 3600.0) / 60.0) as u64;
+        dur_str = if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") };
+    }
+    let in_progress = item.runtime_ticks > 0 && item.playback_position_ticks > 0;
     let w = width.max(1);
-    let span_style = if selected { Style::default() }
-        else if item.playback_position_ticks > 0 { Style::default().fg(palette::YELLOW) }
-        else { Style::default().fg(palette::WHITE) };
-    let mut lines: Vec<Line<'static>> = wrap(&full_text, w)
-        .into_iter()
-        .map(|s| Line::from(Span::styled(s.into_owned(), span_style)))
+    let mut lines: Vec<Line<'static>> = wrap(&item.display_name(), w).into_iter().enumerate()
+        .map(|(i, s)| {
+            let mut spans = Vec::new();
+            if i == 0 && in_progress {
+                spans.push(Span::styled("• ", yellow));
+            }
+            spans.push(Span::styled(s.into_owned(), base_style));
+            Line::from(spans)
+        })
         .collect();
+    let subtle = if selected { Style::default() } else { Style::default().fg(palette::SUBTLE) };
+    if !dur_str.is_empty() {
+        if let Some(last) = lines.last_mut() {
+            last.spans.push(Span::styled(format!("  [{dur_str}]"), subtle));
+        }
+    }
     if !selected && item.played {
         if let Some(last) = lines.last_mut() {
             last.spans.push(Span::styled(" ✓", Style::default().fg(palette::IRIS)));
@@ -4291,7 +4336,7 @@ mod tests {
         let item = make_item("Inception", "Movie");
         let (text, style) = item_text_and_style(&item, false);
         assert_eq!(text, "Inception");
-        assert_eq!(style.fg, Some(palette::TEXT));
+        assert_eq!(style.fg, Some(palette::WHITE));
     }
 
     #[test]
@@ -4299,27 +4344,27 @@ mod tests {
         let mut item = make_item("Inception", "Movie");
         item.played = true;
         let (_, style) = item_text_and_style(&item, false);
-        assert_eq!(style.fg, Some(palette::TEXT));
+        assert_eq!(style.fg, Some(palette::WHITE));
     }
 
     #[test]
-    fn item_text_in_progress_shows_percentage() {
+    fn item_text_in_progress_shows_bullet() {
         let mut item = make_item("Inception", "Movie");
         item.runtime_ticks = TICKS_PER_SECOND * 7200; // 2 hours
-        item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 1 hour in → 50%
+        item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 1 hour in
         let (text, style) = item_text_and_style(&item, false);
-        assert!(text.contains("50%"), "expected percentage in: {text}");
-        assert_eq!(style.fg, Some(palette::YELLOW));
+        assert!(text.starts_with("• "), "expected bullet prefix in: {text}");
+        assert_eq!(style.fg, Some(palette::WHITE));
     }
 
     #[test]
-    fn item_text_played_but_in_progress_shows_percentage() {
+    fn item_text_played_but_in_progress_shows_bullet() {
         let mut item = make_item("Inception", "Movie");
         item.runtime_ticks = TICKS_PER_SECOND * 7200;
         item.playback_position_ticks = TICKS_PER_SECOND * 3600;
         item.played = true;
         let (text, _) = item_text_and_style(&item, false);
-        assert!(text.contains("50%"), "expected percentage in: {text}");
+        assert!(text.starts_with("• "), "expected bullet prefix in: {text}");
     }
 
     #[test]
@@ -4331,22 +4376,37 @@ mod tests {
     }
 
     #[test]
-    fn item_text_series_shows_unplayed_count_not_green() {
+    fn item_text_series_shows_unplayed_count() {
         let mut item = make_item("Breaking Bad", "Series");
         item.is_folder = true;
         item.unplayed_item_count = 5;
         let (text, style) = item_text_and_style(&item, false);
         assert!(text.contains("[5]"), "expected count in: {text}");
-        // Series should use TEXT colour, not the PINE folder colour
-        assert_eq!(style.fg, Some(palette::TEXT));
+        assert_eq!(style.fg, Some(palette::WHITE));
     }
 
     #[test]
-    fn item_text_nav_folder_is_green() {
+    fn item_text_music_album() {
+        let mut item = make_item("Dark Side of the Moon", "MusicAlbum");
+        item.is_folder = true;
+        let (_, style) = item_text_and_style(&item, false);
+        assert_eq!(style.fg, Some(palette::WHITE));
+    }
+
+    #[test]
+    fn item_text_music_artist() {
+        let mut item = make_item("Pink Floyd", "MusicArtist");
+        item.is_folder = true;
+        let (_, style) = item_text_and_style(&item, false);
+        assert_eq!(style.fg, Some(palette::WHITE));
+    }
+
+    #[test]
+    fn item_text_nav_folder() {
         let mut item = make_item("Folder", "Folder");
         item.is_folder = true;
         let (_, style) = item_text_and_style(&item, false);
-        assert_eq!(style.fg, Some(palette::PINE));
+        assert_eq!(style.fg, Some(palette::WHITE));
     }
 
     #[test]
