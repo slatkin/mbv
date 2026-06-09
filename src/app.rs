@@ -83,7 +83,6 @@ mod palette {
     pub const MODAL_BG:      Color = Color::Rgb(30,  30,  30);   // modal background (#1e1e1e)
     pub const MODAL_HEADER:  Color = Color::Rgb(40,  40,  40);   // modal header (#282828)
     pub const FOCUSED:       Color = Color::Rgb(83,  83,  83);   // focused item bg (#535353)
-    pub const HIGHLIGHT_MED: Color = Color::Rgb(42,  42,  42);   // selection row bg (#2a2a2a)
     pub const STRIPE:        Color = Color::Rgb(58,  58,  58);   // zebra stripe row bg (#3a3a3a)
     pub const RED:           Color = Color::Rgb(220, 60,  60);   // loud volume
 }
@@ -3887,12 +3886,6 @@ impl App {
                 }
             }
 
-            if selected {
-                f.render_widget(
-                    ratatui::widgets::Block::default().style(Style::default().bg(palette::FOCUSED)),
-                    row_rect,
-                );
-            }
             let text_color = if selected { palette::WHITE } else { palette::TEXT };
 
             // Build title line (line 1)
