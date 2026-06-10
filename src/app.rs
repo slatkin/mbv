@@ -4420,7 +4420,7 @@ impl App {
             crumb_names.push((lvl.title.clone(), i + 1));
         }
 
-        let sep = " > ";
+        let sep = " \u{bb} ";
         let is_deep = crumb_names.len() > 1;
 
         // Title sits on the top border row; x starts after left corner + 1 space pad.
