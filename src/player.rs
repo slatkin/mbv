@@ -1532,7 +1532,7 @@ mod tests {
             is_folder: false, media_type: "Video".into(), collection_type: String::new(),
             runtime_ticks: 3600 * crate::api::TICKS_PER_SECOND,
             played: false, playback_position_ticks: 0,
-            series_id: "series1".into(), series_name: "Show".into(),
+            series_id: "series1".into(), series_name: "Show".into(), album_id: String::new(),
             index_number: 2, parent_index_number: 1,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),

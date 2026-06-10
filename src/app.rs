@@ -3562,18 +3562,19 @@ impl App {
         ]).areas(inner);
 
         // Rule header: ─ fill in OVERLAY, column labels in IRIS.
-        // Column layout: [1, Min(10), 7, 10, 1] spacing 1 → fixed = 23, title = w-23.
-        // Span breakdown (total = w):  2 + 7 + (w-30) + 1 + 7 + 1 + 10 + 2 = w
+        // Column layout: [1, Min(10), 7, 5, 10, 1] spacing 2 → fixed = 34, title = w-34.
         {
             let label = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
             let w = header_line.width as usize;
-            let fill = w.saturating_sub(29);
+            let fill = w.saturating_sub(38);
             let header_spans = Line::from(vec![
-                Span::raw("  "),
+                Span::raw("   "),
                 Span::styled("Title",              label),
                 Span::raw(" ".repeat(fill + 1)),
                 Span::styled(" Length",            label),
-                Span::raw(" "),
+                Span::raw("  "),
+                Span::styled(" Type",              label),
+                Span::raw("  "),
                 Span::styled("  Progress",         label),
             ]);
             f.render_widget(Paragraph::new(header_spans), header_line);
@@ -3595,6 +3596,7 @@ impl App {
             let title = item.playback_label();
             let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
             let length = if len_secs > 0 { format!("{:>7}", fmt_duration(len_secs)) } else { format!("{:>7}", "—") };
+            let media_type_str = if !item.media_type.is_empty() { item.media_type.clone() } else { "—".to_string() };
             let (pos_ticks, rt_ticks) = if i == current_idx && active {
                 (live_pos, live_runtime)
             } else {
@@ -3621,6 +3623,7 @@ impl App {
                 indicator,
                 Cell::from(title),
                 Cell::from(length),
+                Cell::from(media_type_str).style(Style::default().fg(palette::SUBTLE)),
                 progress_cell,
                 Cell::from(""),
             ]).style(row_style)
@@ -3632,10 +3635,11 @@ impl App {
             Constraint::Length(1),
             Constraint::Min(10),
             Constraint::Length(7),
+            Constraint::Length(5),
             Constraint::Length(10),
             Constraint::Length(1),
         ])
-        .column_spacing(1)
+        .column_spacing(2)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
     }
