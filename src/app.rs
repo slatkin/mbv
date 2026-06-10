@@ -2656,10 +2656,11 @@ impl App {
             // [字]=4 cols, [♪:🏳]=6 cols (♪=1, :=1, flag=2, brackets=2)
             const SUB_W: u16 = 4;
             const AUD_W: u16 = 6;
-            // Sub indicator sits SUB_W before the right_w block; audio immediately after sub
-            let sub_start = (gap_area.width.saturating_sub(right_w + SUB_W)) as usize;
-            let aud_start = sub_start + SUB_W as usize;
-            let right_dashes = (gap_area.width as usize).saturating_sub(aud_start + AUD_W as usize);
+            // Right-align: audio indicator's right edge lines up with the '%' at the end of Vol display
+            let aud_end   = gap_area.width.saturating_sub(right_w) as usize + VOL_W as usize;
+            let aud_start = aud_end.saturating_sub(AUD_W as usize);
+            let sub_start = aud_start.saturating_sub(SUB_W as usize);
+            let right_dashes = (gap_area.width as usize).saturating_sub(aud_end);
 
             let dash = Style::default().fg(palette::MUTED);
             let bra  = Style::default().fg(palette::SUBTLE);
