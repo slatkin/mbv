@@ -105,7 +105,7 @@ These defaults suit an English-language setup where subtitles are an opt-in rath
 
 #### YouTube / Channels libraries
 
-Libraries whose Emby collection type is `channels` (YouTube via the Emby Channels plugin) or `homevideos` get special treatment when first opened:
+Libraries of type `homevideos` get special treatment when first opened:
 
 - **Video items only** — folders and playlists are filtered out; only playable `Video` items are fetched.
 - **Unplayed only** — the item list is restricted to content you haven't watched yet, keeping the view uncluttered.
