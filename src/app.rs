@@ -31,6 +31,8 @@ enum ContextAction {
     Play,
     PlayFolder(String),
     ShuffleFolder(String),
+    Enqueue,
+    EnqueueFolder(MediaItem),
     MarkPlayed(String),
     MarkUnplayed(String),
     RemoveFromContinueWatching,
@@ -1117,6 +1119,8 @@ impl App {
                 actions.push(ContextAction::PlayFolder(item.id.clone()));
                 items.push("Shuffle");
                 actions.push(ContextAction::ShuffleFolder(item.id.clone()));
+                items.push("Add to Queue");
+                actions.push(ContextAction::EnqueueFolder(item.clone()));
                 items.push("Mark Watched");
                 actions.push(ContextAction::MarkPlayed(item.id.clone()));
                 items.push("Mark Unwatched");
@@ -1124,6 +1128,10 @@ impl App {
             } else {
                 items.push("Play");
                 actions.push(ContextAction::Play);
+                if self.tab_idx != 1 {
+                    items.push("Add to Queue");
+                    actions.push(ContextAction::Enqueue);
+                }
                 let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
                 if !is_audio {
                     if item.played {
@@ -1999,6 +2007,8 @@ impl App {
             }
             Some(ContextAction::PlayFolder(id)) => self.play_folder(&id),
             Some(ContextAction::ShuffleFolder(id)) => self.shuffle_folder(&id),
+            Some(ContextAction::Enqueue) => self.enqueue_selected(),
+            Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder(item),
             Some(ContextAction::MarkPlayed(id))   => self.context_set_played(&id, true),
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
             Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
