@@ -146,7 +146,7 @@ pub struct App {
     layout_home_scrollbar: Rect,
     home_panel_section_offset: usize,
     layout_lib_table_area: Rect,
-    layout_breadcrumbs: Vec<(u16, u16, usize)>, // (x_start, x_end, target nav_stack len)
+    layout_breadcrumbs: Vec<(u16, u16, u16, usize)>, // (x_start, x_end, row, target nav_stack len)
     last_click_time: Instant,
     last_click_pos: (u16, u16),
     last_drag_seek: Instant,
@@ -1831,8 +1831,8 @@ impl App {
                 if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
                     let crumbs = self.layout_breadcrumbs.clone();
                     let lib_off = self.lib_tab_offset();
-                    for (x_start, x_end, target_depth) in crumbs {
-                        if col >= x_start && col < x_end {
+                    for (x_start, x_end, crumb_row, target_depth) in crumbs {
+                        if row == crumb_row && col >= x_start && col < x_end {
                             let lib = &mut self.libs[self.tab_idx - lib_off];
                             lib.nav_stack.truncate(target_depth);
                             lib.search = None;
@@ -4374,11 +4374,14 @@ impl App {
             return;
         }
 
-        if let Some(_s) = &self.libs[lib_idx].search {
+        if let Some(s) = &self.libs[lib_idx].search {
             self.layout_breadcrumbs.clear();
+            let display = format!("{}█", s.query);
             let block = Block::default()
                 .borders(Borders::ALL).border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(palette::IRIS));
+                .border_style(Style::default().fg(palette::IRIS))
+                .title(Span::styled(display, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)))
+                .title_alignment(Alignment::Center);
             let inner = block.inner(area);
             f.render_widget(block, area);
             self.render_library_table(f, inner, lib_idx);
@@ -4389,37 +4392,42 @@ impl App {
         let lib = &self.libs[lib_idx];
         let skip = if lib.nav_stack.first().map(|l| l.title == lib.library.name).unwrap_or(false) { 1 } else { 0 };
         // crumb 0 = library name (target depth 1), then each nav_stack part above skip
-        let mut crumb_names: Vec<(&str, usize)> = vec![(&lib.library.name, 1)];
+        let mut crumb_names: Vec<(String, usize)> = vec![(lib.library.name.clone(), 1)];
         for (i, lvl) in lib.nav_stack.iter().enumerate().skip(skip) {
-            crumb_names.push((lvl.title.as_str(), i + 1));
+            crumb_names.push((lvl.title.clone(), i + 1));
         }
 
         let sep = " > ";
         let is_deep = crumb_names.len() > 1;
 
-        // Compute total width to derive the centered x offset for click regions.
-        let total_title_w: u16 = crumb_names.iter().enumerate().map(|(ci, (name, _))| {
-            let w = name.chars().count() as u16;
-            if ci + 1 < crumb_names.len() { w + sep.len() as u16 } else { w }
-        }).sum();
-        let title_x = area.x + area.width.saturating_sub(total_title_w) / 2;
+        // Title sits on the top border row; x starts after left corner + 1 space pad.
+        let crumb_row = area.y;
+        let mut x = area.x + 2; // border char + leading space
 
-        let mut x = title_x;
-        let mut new_breadcrumbs: Vec<(u16, u16, usize)> = Vec::new();
+        let crumb_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
+        let mut crumb_spans: Vec<Span<'static>> = Vec::new();
+        let mut new_breadcrumbs: Vec<(u16, u16, u16, usize)> = Vec::new();
         for (ci, (name, target_depth)) in crumb_names.iter().enumerate() {
             let is_last = ci + 1 == crumb_names.len();
             let w = name.chars().count() as u16;
-            new_breadcrumbs.push((x, x + w, *target_depth));
+            new_breadcrumbs.push((x, x + w, crumb_row, *target_depth));
+            crumb_spans.push(Span::styled(name.clone(), crumb_style));
             x += w;
             if !is_last {
+                crumb_spans.push(Span::styled(sep, crumb_style));
                 x += sep.len() as u16;
             }
         }
         self.layout_breadcrumbs = if is_deep { new_breadcrumbs } else { Vec::new() };
 
-        let block = Block::default()
+        let mut block = Block::default()
             .borders(Borders::ALL).border_type(BorderType::Rounded)
             .border_style(Style::default().fg(palette::IRIS));
+        if is_deep {
+            crumb_spans.insert(0, Span::raw(" "));
+            crumb_spans.push(Span::raw(" "));
+            block = block.title(Line::from(crumb_spans));
+        }
         let inner = block.inner(area);
         f.render_widget(block, area);
         self.render_library_table(f, inner, lib_idx);
@@ -4693,7 +4701,7 @@ impl App {
                     lines.truncate(4);
                     let last = lines.last_mut().unwrap();
                     if last.len() + 3 <= w { last.push_str("..."); }
-                    else { last.replace_range(last.len().saturating_sub(3).., "..."); }
+                    else { let i = last.char_indices().rev().nth(2).map(|(i, _)| i).unwrap_or(0); last.replace_range(i.., "..."); }
                 }
                 lines
             } else { Vec::new() };
