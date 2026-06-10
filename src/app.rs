@@ -171,7 +171,6 @@ pub struct App {
     layout_settings_ok_btn: Rect,
     help_scroll: u16,
     show_log_tab: bool,
-    remote_mode: bool,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
     force_clear: bool,
@@ -276,7 +275,6 @@ impl App {
             layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab,
-            remote_mode: false,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
@@ -373,7 +371,6 @@ impl App {
             layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
-            remote_mode: true,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
@@ -2270,11 +2267,6 @@ impl App {
         let client = self.client.lock().unwrap();
 
         self.home.continue_items = client.get_continue_watching(10).unwrap_or_default();
-
-        if self.remote_mode {
-            drop(client);
-            return Ok(());
-        }
 
         let all_views = client.get_views()?;
         let old_libs: HashMap<String, Vec<BrowseLevel>> = self.libs.drain(..)
@@ -4592,7 +4584,6 @@ mod tests {
             layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
-            remote_mode: false,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
