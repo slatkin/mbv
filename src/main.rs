@@ -14,6 +14,38 @@ use api::EmbyClient;
 use app::App;
 use config::load_config;
 
+fn prompt_line(label: &str) -> String {
+    use std::io::Write;
+    print!("{label}");
+    let _ = std::io::stdout().flush();
+    let mut buf = String::new();
+    let _ = std::io::stdin().read_line(&mut buf);
+    buf.trim().to_string()
+}
+
+fn prompt_password(label: &str) -> String {
+    use std::io::Write;
+    use crossterm::event::{Event, KeyCode, KeyEventKind};
+    print!("{label}");
+    let _ = std::io::stdout().flush();
+    let _ = crossterm::terminal::enable_raw_mode();
+    let mut pass = String::new();
+    loop {
+        if let Ok(Event::Key(key)) = crossterm::event::read() {
+            if key.kind != KeyEventKind::Press { continue; }
+            match key.code {
+                KeyCode::Enter => break,
+                KeyCode::Backspace => { pass.pop(); }
+                KeyCode::Char(c) => pass.push(c),
+                _ => {}
+            }
+        }
+    }
+    let _ = crossterm::terminal::disable_raw_mode();
+    println!();
+    pass
+}
+
 fn daemon_running() -> bool {
     let Ok(s) = std::fs::read_to_string(daemon::pid_file()) else { return false };
     let Ok(pid) = s.trim().parse::<u32>() else { return false };
@@ -68,10 +100,23 @@ fn main() {
             eprintln!("mbv daemon: no cached credentials — run mbv interactively first");
             std::process::exit(1);
         }
-        client = match login::run(client) {
-            Ok(c) => c,
-            Err(_) => std::process::exit(0),
-        };
+        if daemon_mode {
+            if client.config.server_url.is_empty() {
+                eprintln!("mbv: set server_url in your config file before starting the daemon");
+                std::process::exit(1);
+            }
+            client.config.username = prompt_line("Username: ");
+            client.config.password = prompt_password("Password: ");
+            if let Err(e) = client.authenticate_credentials() {
+                eprintln!("mbv: {e}");
+                std::process::exit(1);
+            }
+        } else {
+            client = match login::run(client) {
+                Ok(c) => c,
+                Err(_) => std::process::exit(0),
+            };
+        }
     }
 
     if daemon_mode {

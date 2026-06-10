@@ -5,19 +5,18 @@ use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph},
 };
 
 use crate::api::EmbyClient;
 use crate::config::Config;
 
-const BASE:    Color = Color::Rgb(35,  33,  54);
-const OVERLAY: Color = Color::Rgb(57,  53,  82);
-const MUTED:   Color = Color::Rgb(110, 106, 134);
-const TEXT:    Color = Color::Rgb(224, 222, 244);
-const GOLD:    Color = Color::Rgb(246, 193, 119);
-const IRIS:    Color = Color::Rgb(196, 167, 231);
-const LOVE:    Color = Color::Rgb(235, 111, 146);
+const BASE:    Color = Color::Rgb(26,  26,  26);
+const OVERLAY: Color = Color::Rgb(63,  63,  63);
+const MUTED:   Color = Color::Rgb(108, 108, 108);
+const TEXT:    Color = Color::Rgb(230, 230, 230);
+const IRIS:    Color = Color::Rgb(82,  181, 75);
+const LOVE:    Color = Color::Rgb(220, 60,  60);
 
 struct LoginForm {
     fields: [String; 3], // [server_url, username, password]
@@ -157,6 +156,7 @@ fn render(f: &mut ratatui::Frame, form: &LoginForm) {
     f.render_widget(
         Block::default()
             .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(IRIS))
             .title(" mbv ")
             .title_alignment(Alignment::Center)
@@ -191,14 +191,14 @@ fn render(f: &mut ratatui::Frame, form: &LoginForm) {
         ])
         .split(inner);
 
-    let labels = ["Server URL", "Username", "Password"];
+    let labels = ["Emby Server URL", "Username", "Password"];
     let label_rows = [1usize, 4, 7];
     let input_rows = [2usize, 5, 8];
 
     for i in 0..3usize {
         let focused = form.focus == i;
         let label_style = if focused {
-            Style::default().fg(GOLD).add_modifier(Modifier::BOLD)
+            Style::default().fg(IRIS).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(MUTED)
         };
