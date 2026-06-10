@@ -2657,7 +2657,7 @@ impl App {
             const SUB_W: u16 = 4;
             const AUD_W: u16 = 6;
             // Right-align: audio indicator's right edge lines up with the '%' at the end of Vol display
-            let aud_end   = gap_area.width.saturating_sub(right_w) as usize + VOL_W as usize;
+            let aud_end   = gap_area.width.saturating_sub(right_w) as usize + VOL_W as usize - 1;
             let aud_start = aud_end.saturating_sub(AUD_W as usize);
             let sub_start = aud_start.saturating_sub(SUB_W as usize);
             let right_dashes = (gap_area.width as usize).saturating_sub(aud_end);
