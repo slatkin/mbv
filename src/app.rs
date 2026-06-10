@@ -2633,7 +2633,7 @@ impl App {
         ]).areas(area);
 
         // Right side: Vol (11) + 1 gap + gear (2) = 14 cols total
-        const VOL_W:  u16 = 11; // " Vol: XXX%"
+        const VOL_W:  u16 = 14; // " Volume: XXX%"
         const SETTINGS_W: u16 = 2;  // "⋮ "
         const GAP:    u16 = 1;
         let right_w = VOL_W + GAP + SETTINGS_W;
@@ -2850,7 +2850,7 @@ impl App {
             else if volume > 60 { palette::YELLOW }
             else { palette::PINE };
         let line = Line::from(vec![
-            Span::styled(" Vol: ", Style::default().fg(Color::Rgb(253, 253, 253))),
+            Span::styled(" Volume: ", Style::default().fg(Color::Rgb(253, 253, 253))),
             Span::styled(format!("{}%", volume), Style::default().fg(color)),
         ]);
         f.render_widget(Paragraph::new(line), area);
