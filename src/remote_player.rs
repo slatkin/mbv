@@ -56,6 +56,9 @@ impl RemotePlayer {
                     Ok(l) => {
                         let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else { continue };
                         match ev {
+                            CtrlEvent::StatusOnly(s) => {
+                                *status_r.lock().unwrap() = s;
+                            }
                             CtrlEvent::State(s) => {
                                 *status_r.lock().unwrap() = s.status;
                                 *items_r.lock().unwrap() = s.items.clone();

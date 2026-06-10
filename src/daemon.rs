@@ -174,6 +174,19 @@ pub fn run(client: EmbyClient) -> ! {
         });
     }
 
+    // Broadcast current PlayerStatus to connected TUIs every 500ms so the
+    // seekbar and toggle state stay in sync without sending the full queue.
+    {
+        let player_status = player.status.clone();
+        let ctrl_clients = ctrl_clients.clone();
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if ctrl_clients.lock().unwrap().is_empty() { continue; }
+            let status = player_status.lock().unwrap().clone();
+            broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));
+        });
+    }
+
     let client = Arc::new(Mutex::new(client));
     let mut items: Vec<MediaItem> = Vec::new();
     let mut cursor: usize = 0;

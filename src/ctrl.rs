@@ -14,6 +14,7 @@ pub enum CtrlCmd {
 pub enum CtrlEvent {
     Player(PlayerEvent),
     State(CtrlState),
+    StatusOnly(PlayerStatus),
 }
 
 #[derive(Serialize, Deserialize)]
