@@ -3497,7 +3497,7 @@ impl App {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
 
             let ep_tag = if is_ep { format!("S{:02}E{:02}", season, episode) } else { String::new() };
-            let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
+            let count_label = if *is_center { Some(format!("{:02}/{:02}", cursor + 1, n)) } else { None };
             self.render_card_slot(f, *card_rect, *is_center, selected, now_playing,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
                 count_label.as_deref(), None);
@@ -3812,7 +3812,7 @@ impl App {
             };
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
 
-            let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
+            let count_label = if *is_center { Some(format!("{:02}/{:02}", cursor + 1, n)) } else { None };
             let sec_title_label = if *is_center { Some(sec_title.as_str()) } else { None };
             self.render_card_slot(f, *card_rect, *is_center, selected, false,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
