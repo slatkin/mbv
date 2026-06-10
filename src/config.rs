@@ -18,6 +18,7 @@ pub struct Config {
     pub no_scripts: bool,
     pub start_on_queue: bool,
     pub daemon_mode_on_exit: bool,
+    pub autoload: bool,
 }
 
 impl Default for Config {
@@ -38,6 +39,7 @@ impl Default for Config {
             no_scripts: false,
             start_on_queue: false,
             daemon_mode_on_exit: false,
+            autoload: false,
         }
     }
 }
@@ -195,6 +197,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let autoload = misc
+        .and_then(|m| m.get("autoload"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let start_on_queue = mbv
         .and_then(|m| m.get("start_on_queue"))
         .and_then(|v| v.as_bool())
@@ -216,6 +223,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         no_scripts,
         start_on_queue,
         daemon_mode_on_exit,
+        autoload,
     })
 }
 
@@ -258,6 +266,7 @@ pub fn save_config_settings(cfg: &Config) {
     mpv.insert("show_audio_window".to_string(), toml::Value::Boolean(cfg.show_audio_window));
     mpv.insert("use_mpv_config".to_string(),    toml::Value::Boolean(cfg.use_mpv_config));
     mpv.insert("no_scripts".to_string(),        toml::Value::Boolean(cfg.no_scripts));
+    mpv.insert("autoload".to_string(),          toml::Value::Boolean(cfg.autoload));
 
     let daemon = section!("daemon");
     daemon.insert("show_systray_icon".to_string(), toml::Value::Boolean(cfg.show_systray_icon));
@@ -395,6 +404,18 @@ hidden_latest = ["Movies", "TV SHOWS"]
     fn parse_no_scripts_defaults_false() {
         let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().no_scripts);
+    }
+
+    #[test]
+    fn parse_autoload_true() {
+        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nautoload = true";
+        assert!(parse_config(toml).unwrap().autoload);
+    }
+
+    #[test]
+    fn parse_autoload_defaults_false() {
+        let toml = "[server]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().autoload);
     }
 
     // always_play_next must live in [mbv] — placing it elsewhere silently ignores it.

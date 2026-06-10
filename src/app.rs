@@ -2261,6 +2261,31 @@ impl App {
                     .and_then(|mut v| if v.is_empty() { None } else { Some(v.remove(0)) })
                     .unwrap_or(item)
             };
+            let autoload = self.client.lock().unwrap().config.autoload;
+            if autoload {
+                let lib_idx = self.tab_idx - self.lib_tab_offset();
+                if let Some(parent_id) = self.libs[lib_idx].nav_stack.last().map(|l| l.parent_id.clone()) {
+                    let client = self.client.lock().unwrap();
+                    match client.get_direct_playable(&parent_id) {
+                        Ok(mut siblings) => {
+                            siblings.retain(|i| !i.is_folder);
+                            siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
+                            if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) {
+                                let label = fresh.playback_label();
+                                let c = Arc::new(client.clone());
+                                drop(client);
+                                self.player_tab.items = siblings.clone();
+                                self.player_tab.playlist_cursor = 0;
+                                self.flash_status(label);
+                                self.player.play_playlist(siblings, start_idx, c, self.log.clone(), self.ui_volume);
+                                return;
+                            }
+                            drop(client);
+                        }
+                        Err(_) => { drop(client); }
+                    }
+                }
+            }
             self.play_item(fresh);
         }
     }

@@ -473,6 +473,21 @@ impl EmbyClient {
             .unwrap_or_default())
     }
 
+    pub fn get_direct_playable(&self, parent_id: &str) -> Result<Vec<MediaItem>, String> {
+        let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
+            .query("ParentId", parent_id)
+            .query("IncludeItemTypes", "Episode,Movie,Video,Audio")
+            .query("SortBy", "SortName")
+            .query("SortOrder", "Ascending")
+            .query("Limit", "2000")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        Ok(resp["Items"].as_array()
+            .map(|arr| arr.iter().map(parse_item).collect())
+            .unwrap_or_default())
+    }
+
     pub fn get_all_videos_recursive(&self, parent_id: &str) -> Result<Vec<MediaItem>, String> {
         let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
             .query("ParentId", parent_id)
