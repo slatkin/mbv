@@ -2284,7 +2284,10 @@ impl App {
 
         let user_views = client.get_user_views().unwrap_or_default();
         let mut latest: Vec<(String, String, Vec<MediaItem>, usize)> = Vec::new();
-        for v in user_views.iter().filter(|v| !self.hidden_latest.contains(&v.name.to_lowercase())) {
+        for v in user_views.iter().filter(|v| {
+            let lower = v.name.to_lowercase();
+            !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
+        }) {
             let title = format!("Latest {}", v.name);
             let items = if v.collection_type == "tvshows" {
                 client.get_latest_episodes(&v.id, 15).unwrap_or_default()
