@@ -2638,31 +2638,31 @@ impl App {
         const GAP:    u16 = 1;
         let right_w = VOL_W + GAP + SETTINGS_W;
 
-        // Thin underline below tab row
-        f.render_widget(
-            Paragraph::new("─".repeat(area.width as usize))
-                .style(Style::default().fg(palette::MUTED)),
-            gap_area,
-        );
-        // [字] subtitle-active indicator overlaid on the HR line
+        // Thin underline below tab row, with optional [字] indicator embedded inline
         {
             let sub_active = {
                 let s = self.player.status.lock().unwrap();
                 s.sub_id != 0 && !s.sub_tracks.is_empty()
             };
+            const IND_W: u16 = 4; // "[字]" = [=1, 字=2, ]=1
+            let dash_style = Style::default().fg(palette::MUTED);
+            let gap_spans: Vec<Span> = if sub_active {
+                let ind_offset = gap_area.width.saturating_sub(right_w + IND_W) as usize;
+                let right_dashes = (gap_area.width as usize).saturating_sub(ind_offset + IND_W as usize);
+                vec![
+                    Span::styled("─".repeat(ind_offset), dash_style),
+                    Span::styled("[",  Style::default().fg(palette::SUBTLE)),
+                    Span::styled("字", Style::default().fg(palette::RED)),
+                    Span::styled("]",  Style::default().fg(palette::SUBTLE)),
+                    Span::styled("─".repeat(right_dashes), dash_style),
+                ]
+            } else {
+                vec![Span::styled("─".repeat(gap_area.width as usize), dash_style)]
+            };
+            f.render_widget(Paragraph::new(Line::from(gap_spans)), gap_area);
             if sub_active {
-                let ind_w: u16 = 4; // "[字]" = [=1, 字=2, ]=1
-                let ind_x = gap_area.x + gap_area.width.saturating_sub(right_w + ind_w);
-                let ind_rect = Rect { x: ind_x, y: gap_area.y, width: ind_w, height: 1 };
-                f.render_widget(
-                    Paragraph::new(Line::from(vec![
-                        Span::styled("[",  Style::default().fg(palette::SUBTLE)),
-                        Span::styled("字", Style::default().fg(palette::RED)),
-                        Span::styled("]",  Style::default().fg(palette::SUBTLE)),
-                    ])),
-                    ind_rect,
-                );
-                self.layout_sub_indicator_area = ind_rect;
+                let ind_x = gap_area.x + gap_area.width.saturating_sub(right_w + IND_W);
+                self.layout_sub_indicator_area = Rect { x: ind_x, y: gap_area.y, width: IND_W, height: 1 };
             } else {
                 self.layout_sub_indicator_area = Rect::default();
             }
