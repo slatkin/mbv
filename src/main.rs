@@ -158,4 +158,18 @@ fn main() {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
+
+    if let Ok(cfg) = load_config() {
+        if cfg.daemon_mode_on_exit && !daemon_running() {
+            let exe = std::env::current_exe().expect("cannot locate binary");
+            #[allow(clippy::zombie_processes)]
+            let _ = std::process::Command::new(exe)
+                .arg("--daemon-inner")
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+            println!("mbv: daemon started");
+        }
+    }
 }
