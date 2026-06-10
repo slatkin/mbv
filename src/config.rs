@@ -152,7 +152,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let always_play_next = misc
+    let always_play_next = mbv
         .and_then(|m| m.get("always_play_next"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
@@ -324,10 +324,10 @@ hidden_latest = ["Movies", "TV SHOWS"]
         assert!(!parse_config(toml).unwrap().no_scripts);
     }
 
-    // always_play_next must live in [mpv] — placing it elsewhere silently ignores it.
+    // always_play_next must live in [mbv] — placing it elsewhere silently ignores it.
     #[test]
-    fn parse_always_play_next_true_from_mpv_section() {
-        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nalways_play_next = true";
+    fn parse_always_play_next_true_from_mbv_section() {
+        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nalways_play_next = true";
         assert!(parse_config(toml).unwrap().always_play_next);
     }
 
@@ -341,6 +341,6 @@ hidden_latest = ["Movies", "TV SHOWS"]
     fn parse_always_play_next_in_wrong_section_is_ignored() {
         // Placing always_play_next under [server] must NOT enable it — wrong section.
         let toml = "[server]\nurl = \"http://host\"\nalways_play_next = true";
-        assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [mpv], not [server]");
+        assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [mbv], not [server]");
     }
 }
