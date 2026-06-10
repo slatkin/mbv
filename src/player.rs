@@ -402,6 +402,7 @@ impl Player {
             let _ = mpv.observe_property("time-pos", Format::Double, 0);
             let _ = mpv.observe_property("pause", Format::Flag, 1);
             let _ = mpv.observe_property("volume", Format::Double, 2);
+            let _ = mpv.observe_property("sid", Format::Int64, 3);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -633,6 +634,9 @@ impl Player {
                                 client.report_progress_http(&id, &msid, pos, paused, &sid, event_name, &log);
                             }
                         }
+                    }
+                    Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
+                        status.lock().unwrap().sub_id = id;
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
                         let event_name: &str;
@@ -892,6 +896,7 @@ impl Player {
             let _ = mpv.observe_property("time-pos", Format::Double, 0);
             let _ = mpv.observe_property("pause", Format::Flag, 1);
             let _ = mpv.observe_property("volume", Format::Double, 2);
+            let _ = mpv.observe_property("sid", Format::Int64, 3);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -1161,6 +1166,9 @@ impl Player {
                                 client.report_progress_http(&id, &msid, pos, paused, &sid, event_name, &log);
                             }
                         }
+                    }
+                    Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
+                        status.lock().unwrap().sub_id = id;
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
                         if !tracks_initialized {
@@ -1486,7 +1494,7 @@ mod tests {
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),
-            premiere_date: String::new(), total_count: 0,
+            premiere_date: String::new(), total_count: 0, container: String::new(),
         }
     }
 

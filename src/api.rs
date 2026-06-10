@@ -81,6 +81,7 @@ pub struct MediaItem {
     pub overview: String,
     pub premiere_date: String,
     pub total_count: u32,
+    pub container: String,
 }
 
 impl MediaItem {
@@ -167,6 +168,7 @@ fn parse_item(raw: &Value) -> MediaItem {
             .map(|s| s.to_string())
             .unwrap_or_default(),
         total_count,
+        container: raw["Container"].as_str().unwrap_or("").to_string(),
     }
 }
 
@@ -361,6 +363,7 @@ impl EmbyClient {
                     overview: String::new(),
                     premiere_date: String::new(),
                     total_count: 0,
+                    container: String::new(),
                 };
                 seen.insert(id);
                 items.push(item);
@@ -394,7 +397,7 @@ impl EmbyClient {
             .query("SortBy", "SortName")
             .query("SortOrder", "Ascending")
             .query("Limit", "5000")
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,ChildCount,RecursiveItemCount")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,ChildCount,RecursiveItemCount,Container")
             .query("EnableUserData", "true");
         if let Some(types) = item_types {
             req = req.query("IncludeItemTypes", types).query("Recursive", "true");
@@ -755,7 +758,7 @@ mod tests {
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),
-            premiere_date: String::new(), total_count: 0,
+            premiere_date: String::new(), total_count: 0, container: String::new(),
         }
     }
 

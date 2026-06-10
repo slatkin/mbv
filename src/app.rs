@@ -11,7 +11,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span, Text},
-    widgets::{Block, BorderType, Borders, Cell, Clear, Gauge, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState, Tabs},
+    widgets::{Block, BorderType, Borders, Cell, Clear, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState, Tabs},
 };
 use textwrap::wrap;
 
@@ -82,6 +82,7 @@ mod palette {
     pub const PINE:          Color = Color::Rgb(61,  139, 55);   // dark green — folders, watched
     pub const FOAM:          Color = Color::Rgb(0,   164, 220);  // emby blue — now-playing item
     pub const IRIS:          Color = Color::Rgb(82,  181, 75);   // emby green — active tab, focused
+    pub const IRIS_DIM:      Color = Color::Rgb(83,  133, 80);   // seekbar downloaded-unplayed: IRIS@50% over #555555
     pub const FOCUSED:       Color = Color::Rgb(83,  83,  83);   // focused item bg (#535353)
     pub const RED:           Color = Color::Rgb(220, 60,  60);   // loud volume
 }
@@ -145,6 +146,7 @@ pub struct App {
     layout_tracks_area: Rect,
     layout_vol_area: Rect,
     layout_sub_area: Rect,
+    layout_sub_indicator_area: Rect,
     layout_audio_area: Rect,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     confirm_clear_playlist: bool,
@@ -325,6 +327,7 @@ impl App {
             layout_tracks_area: Rect::default(),
             layout_vol_area: Rect::default(),
             layout_sub_area: Rect::default(),
+            layout_sub_indicator_area: Rect::default(),
             layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
@@ -427,6 +430,7 @@ impl App {
             layout_tracks_area: Rect::default(),
             layout_vol_area: Rect::default(),
             layout_sub_area: Rect::default(),
+            layout_sub_indicator_area: Rect::default(),
             layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
@@ -1737,7 +1741,8 @@ impl App {
                 }
 
                 // Click on info row: exact chip rects
-                if self.layout_sub_area.contains((col, row).into()) {
+                if self.layout_sub_area.contains((col, row).into())
+                    || self.layout_sub_indicator_area.contains((col, row).into()) {
                     self.cycle_sub();
                     return;
                 }
@@ -2628,18 +2633,41 @@ impl App {
             Constraint::Length(controls_h),   // playback controls (global, when active)
         ]).areas(area);
 
+        // Right side: Vol (11) + 1 gap + gear (2) = 14 cols total
+        const VOL_W:  u16 = 11; // " Vol: XXX%"
+        const SETTINGS_W: u16 = 2;  // "⋮ "
+        const GAP:    u16 = 1;
+        let right_w = VOL_W + GAP + SETTINGS_W;
+
         // Thin underline below tab row
         f.render_widget(
             Paragraph::new("─".repeat(area.width as usize))
                 .style(Style::default().fg(palette::MUTED)),
             gap_area,
         );
-
-        // Right side: Vol (11) + 1 gap + gear (2) = 14 cols total
-        const VOL_W:  u16 = 11; // " Vol: XXX%"
-        const SETTINGS_W: u16 = 2;  // "⋮ "
-        const GAP:    u16 = 1;
-        let right_w = VOL_W + GAP + SETTINGS_W;
+        // [字] subtitle-active indicator overlaid on the HR line
+        {
+            let sub_active = {
+                let s = self.player.status.lock().unwrap();
+                s.sub_id != 0 && !s.sub_tracks.is_empty()
+            };
+            if sub_active {
+                let ind_w: u16 = 4; // "[字]" = [=1, 字=2, ]=1
+                let ind_x = gap_area.x + gap_area.width.saturating_sub(right_w + ind_w);
+                let ind_rect = Rect { x: ind_x, y: gap_area.y, width: ind_w, height: 1 };
+                f.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::styled("[",  Style::default().fg(palette::SUBTLE)),
+                        Span::styled("字", Style::default().fg(palette::RED)),
+                        Span::styled("]",  Style::default().fg(palette::SUBTLE)),
+                    ])),
+                    ind_rect,
+                );
+                self.layout_sub_indicator_area = ind_rect;
+            } else {
+                self.layout_sub_indicator_area = Rect::default();
+            }
+        }
         let gear_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(SETTINGS_W),
             y: tabs_area.y, width: SETTINGS_W, height: 1,
@@ -3180,7 +3208,7 @@ impl App {
         let p = " ".repeat(pad as usize);
         let text_style = btn_style;
 
-        let sub_val_inner   = format!("\u{2261} {}", sub_label);
+        let sub_val_inner   = format!("字 {}", sub_label);
         let audio_val_inner = format!("\u{266a} {}", audio_label);
         let g1_w = (11usize.max(sub_val_inner.chars().count()) as u16) + pad * 2; // "≡ Subtitles" = 11
         let g2_w = (6usize.max(audio_val_inner.chars().count()) as u16) + pad * 2;
@@ -3201,24 +3229,25 @@ impl App {
         let ratio = if runtime_ticks > 0 {
             (position_ticks as f64 / runtime_ticks as f64).clamp(0.0, 1.0)
         } else { 0.0 };
-        let seek_label = Span::styled(
-            format!("{} / {}", pos_str, dur_str),
-            Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD),
-        );
-        f.render_widget(
-            Gauge::default()
-                .ratio(ratio)
-                .label(seek_label)
-                .gauge_style(Style::default().fg(palette::IRIS).bg(palette::OVERLAY))
-                .use_unicode(true),
-            Rect { x: area.x, y: area.y, width: area.width, height: 1 },
-        );
+        let seek_rect = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+        let bar_w = seek_rect.width as usize;
+        let filled = (ratio * bar_w as f64).round() as usize;
+        let unfilled = bar_w.saturating_sub(filled);
+        f.render_widget(Paragraph::new(Line::from(vec![
+            Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)),
+            Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)),
+        ])), seek_rect);
+        let label = format!(" {} / {} ", pos_str, dur_str);
+        let label_w = label.chars().count() as u16;
+        let label_x = seek_rect.x + seek_rect.width.saturating_sub(label_w) / 2;
+        let label_rect = Rect { x: label_x, y: seek_rect.y, width: label_w.min(seek_rect.width), height: 1 };
+        f.render_widget(Paragraph::new(Span::styled(label, Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD))), label_rect);
 
         // Row 1 — "≡ Subs:" label (left) + buttons (center) + "♪ Audio:" label (right)
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(&p),
-                Span::styled("\u{2261} ", Style::default().fg(palette::TEXT)),
+                Span::styled("字 ", Style::default().fg(palette::RED)),
                 Span::styled("Subtitles", text_style),
             ])),
             Rect { x: g1_x, y: btn_row_y, width: g1_w, height: 1 },
@@ -4173,6 +4202,8 @@ impl App {
     fn render_library_table(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
         self.layout_lib_table_area = area;
         const LIB_SELECTED_IMG_W: u16 = 32;
+        const LIB_AUDIO_IMG_W: u16 = 24;
+        const LIB_AUDIO_IMG_H: u16 = 12;
 
         let (display_items, cursor): (Vec<(usize, crate::api::MediaItem)>, usize) = {
             let lib = &self.libs[lib_idx];
@@ -4206,7 +4237,10 @@ impl App {
         let images_enabled = self.images_enabled();
         let content_w_sel = area.width.saturating_sub(1 + LIB_SELECTED_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
-            let base: u16 = if images_enabled && i == cursor {
+            let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
+            let base: u16 = if is_audio {
+                if i == cursor { LIB_AUDIO_IMG_H.max(3) } else { 3 }
+            } else if images_enabled && i == cursor {
                 let ew = content_w_sel;
                 let ov_lines = if item.overview.is_empty() { 0 }
                     else { wrap(&item.overview, ew.max(1)).len().min(4) as u16 };
@@ -4229,10 +4263,13 @@ impl App {
         self.layout_lib_scroll = scroll;
 
         // Trigger image fetch for selected item before rendering loop
-        if images_enabled {
+        {
             if let Some((_, item)) = display_items.get(cursor) {
-                let cache_key = format!("{}:lib", item.id);
-                self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Primary"]);
+                let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
+                if images_enabled || is_audio {
+                    let cache_key = format!("{}:lib", item.id);
+                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Primary"]);
+                }
             }
         }
 
@@ -4244,7 +4281,8 @@ impl App {
             let abs_idx = scroll + vi;
             let row_h = all_heights[abs_idx].min(area.y + area.height - row_y);
             let selected = abs_idx == cursor;
-            let show_img = selected && images_enabled;
+            let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
+            let show_img = selected && (images_enabled || is_audio);
             let row_rect = Rect { x: area.x, y: row_y, width: area.width, height: row_h };
 
             // Content area excludes the separator line at the bottom of the row.
@@ -4252,17 +4290,39 @@ impl App {
             let padded_area = content_area;
 
             // Compute actual image size first so we can size the column correctly.
-            // Image sits at the far right; text fills everything to its left.
             let cache_key = format!("{}:lib", item.id);
             let img_actual = if show_img {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                    let avail = ratatui::layout::Size { width: LIB_SELECTED_IMG_W, height: padded_area.height };
+                    let (img_w, img_h) = if is_audio {
+                        (LIB_AUDIO_IMG_W, LIB_AUDIO_IMG_H)
+                    } else {
+                        (LIB_SELECTED_IMG_W, padded_area.height)
+                    };
+                    let avail = ratatui::layout::Size { width: img_w, height: img_h.min(padded_area.height) };
                     Some(state.size_for(ratatui_image::Resize::Fit(None), avail))
                 } else { None }
             } else { None };
 
-            // Split padded_area: indicator | text | gap | [image]
-            let (ind_rect, text_rect, img_rect_opt) = if let Some(actual) = img_actual {
+            // Split padded_area: for audio, image LEFT; for others, image RIGHT
+            // Layout: indicator(1) | [image + gap] | text | [gap + image]
+            let (ind_rect, text_rect, img_rect_opt) = if is_audio {
+                if let Some(actual) = img_actual {
+                    let [a, b, _, c] = Layout::horizontal([
+                        Constraint::Length(1),
+                        Constraint::Length(actual.width),
+                        Constraint::Length(1),
+                        Constraint::Min(0),
+                    ]).areas(padded_area);
+                    let img_rect = Rect { height: actual.height.min(b.height), ..b };
+                    (a, c, Some(img_rect))
+                } else {
+                    let [a, c] = Layout::horizontal([
+                        Constraint::Length(1),
+                        Constraint::Min(0),
+                    ]).areas(padded_area);
+                    (a, c, None)
+                }
+            } else if let Some(actual) = img_actual {
                 let [a, b, _, c] = Layout::horizontal([
                     Constraint::Length(1),
                     Constraint::Min(0),
@@ -4317,7 +4377,12 @@ impl App {
             let title_display = wrap(&title_line, content_w.max(1))
                 .into_iter().next().map(|c| c.into_owned()).unwrap_or_default();
 
-            // Build metadata line (line 2)
+            // For audio: artist line between title and metadata
+            let artist_line: Option<String> = if is_audio && !item.artist.is_empty() {
+                Some(item.artist.clone())
+            } else { None };
+
+            // Build metadata line (line 2 for non-audio, line 3 for audio)
             let meta_line: Line = match item.item_type.as_str() {
                 "Series" => {
                     let year_str = if item.production_year > 0 && item.end_year > 0 && item.end_year != item.production_year {
@@ -4365,7 +4430,7 @@ impl App {
                     }
                 }
                 _ => {
-                    // Movie and other non-folder types
+                    // Movie, Audio, and other non-folder types
                     let mut spans: Vec<Span> = Vec::new();
                     if item.played {
                         spans.push(Span::styled("\u{f00c} ", Style::default().fg(palette::PINE)));
@@ -4376,6 +4441,9 @@ impl App {
                     if dur_s > 0 {
                         let h = dur_s / 3600; let m = (dur_s % 3600) / 60;
                         parts.push(if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") });
+                    }
+                    if item.media_type == "Audio" && !item.container.is_empty() {
+                        parts.push(item.container.to_uppercase());
                     }
                     if !parts.is_empty() {
                         spans.push(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)));
@@ -4390,15 +4458,17 @@ impl App {
 
             // Split text_rect vertically into lines
             let in_progress = item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0;
-            let overview_lines: Vec<String> = if selected && images_enabled && !item.overview.is_empty() {
+            let overview_lines: Vec<String> = if !is_audio && selected && images_enabled && !item.overview.is_empty() {
                 wrap(&item.overview, content_w.max(1))
                     .into_iter()
                     .take(4)
                     .map(|s| s.into_owned())
                     .collect()
             } else { Vec::new() };
-            let seekbar_extra: usize = if selected && images_enabled && in_progress { 2 } else { 0 }; // spacer + bar
-            let line_count = (2 + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
+            let seekbar_extra: usize = if !is_audio && selected && images_enabled && in_progress { 2 } else { 0 }; // spacer + bar
+            let artist_extra: usize = if artist_line.is_some() { 1 } else { 0 };
+            let base_lines = 2 + artist_extra;
+            let line_count = (base_lines + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
             if line_count == 0 { continue; }
             let constraints: Vec<Constraint> = (0..line_count).map(|_| Constraint::Length(1)).collect();
             let line_rects = Layout::vertical(constraints).split(text_rect);
@@ -4407,11 +4477,21 @@ impl App {
                 Paragraph::new(Line::from(Span::styled(title_display, Style::default().fg(text_color)))),
                 line_rects[0],
             );
-            if line_count >= 2 {
+            if let Some(ref a) = artist_line {
+                if line_count >= 2 {
+                    f.render_widget(
+                        Paragraph::new(Span::styled(a.as_str(), Style::default().fg(palette::SUBTLE))),
+                        line_rects[1],
+                    );
+                }
+                if line_count >= 3 {
+                    f.render_widget(Paragraph::new(meta_line), line_rects[2]);
+                }
+            } else if line_count >= 2 {
                 f.render_widget(Paragraph::new(meta_line), line_rects[1]);
             }
             for (j, ov_line) in overview_lines.iter().enumerate() {
-                let idx = 2 + j;
+                let idx = base_lines + j;
                 if idx >= line_count { break; }
                 f.render_widget(
                     Paragraph::new(Span::styled(ov_line.as_str(), Style::default().fg(palette::MUTED))),
@@ -4419,7 +4499,7 @@ impl App {
                 );
             }
             // Seekbar: spacer at line_count-2, bar at line_count-1
-            if selected && images_enabled && in_progress && line_count >= 2 + seekbar_extra {
+            if !is_audio && selected && images_enabled && in_progress && line_count >= base_lines + seekbar_extra {
                 let bar_w = content_w;
                 let fraction = (item.playback_position_ticks as f64 / item.runtime_ticks as f64).clamp(0.0, 1.0);
                 let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
@@ -4701,7 +4781,7 @@ mod tests {
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),
-            premiere_date: String::new(), total_count: 0,
+            premiere_date: String::new(), total_count: 0, container: String::new(),
         }
     }
 
@@ -4881,6 +4961,7 @@ mod tests {
             layout_tracks_area: ratatui::layout::Rect::default(),
             layout_vol_area: ratatui::layout::Rect::default(),
             layout_sub_area: ratatui::layout::Rect::default(),
+            layout_sub_indicator_area: ratatui::layout::Rect::default(),
             layout_audio_area: ratatui::layout::Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
