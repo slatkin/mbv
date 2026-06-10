@@ -3822,10 +3822,10 @@ impl App {
         // Section scroll arrows.
         let n_sections = 1 + self.home.latest.len();
         let arrow_style = Style::default().fg(palette::IRIS);
-        if self.home.section > 0 && center_v_pad > 3 {
+        if self.home.section > 0 && center_v_pad >= 2 {
             f.render_widget(
                 Paragraph::new("▲").style(arrow_style).alignment(Alignment::Center),
-                Rect { x: area.x, y: area.y + 3, width: area.width, height: 1 },
+                Rect { x: area.x, y: cards_area.y + center_v_pad - 2, width: area.width, height: 1 },
             );
         }
         if self.home.section + 1 < n_sections && gutter_y < area.bottom() {
