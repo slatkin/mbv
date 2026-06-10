@@ -1025,7 +1025,7 @@ impl App {
             KeyCode::Char(' ') => { self.player.send_command(PlayerCommand::TogglePause); Some(false) }
             KeyCode::Left  if key.modifiers == KeyModifiers::ALT => { self.player.send_command(PlayerCommand::Seek(-5.0)); Some(false) }
             KeyCode::Right if key.modifiers == KeyModifiers::ALT => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
-            KeyCode::Char('a') if alt => { self.cycle_audio(); Some(false) }
+            KeyCode::Char('a') if alt => { if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); } Some(false) }
             KeyCode::Char('z') if alt => { self.cycle_sub();   Some(false) }
             _ => None,
         }
@@ -1810,7 +1810,7 @@ impl App {
                 }
                 if self.layout_audio_indicator_area.contains((col, row).into())
                     || self.layout_audio_area.contains((col, row).into()) {
-                    self.cycle_audio();
+                    if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); }
                     return;
                 }
                 if self.layout_vol_area.contains((col, row).into()) {
@@ -2033,6 +2033,26 @@ impl App {
             }
             let lvl = lib.nav_stack.last()?;
             lvl.items.get(lvl.cursor).cloned()
+        }
+    }
+
+    fn is_audio_item(&self) -> bool {
+        let idx = self.player_tab.playlist_cursor;
+        self.player_tab.items.get(idx)
+            .map(|i| i.media_type == "Audio" || i.item_type == "Audio")
+            .unwrap_or(false)
+    }
+
+    fn toggle_mute(&mut self) {
+        if self.ui_volume == 0 {
+            if let Some(v) = self.pre_mute_volume.take() {
+                self.player.send_command(PlayerCommand::SetVolume(v as i64));
+                self.ui_volume = v;
+            }
+        } else {
+            self.pre_mute_volume = Some(self.ui_volume);
+            self.player.send_command(PlayerCommand::SetVolume(0));
+            self.ui_volume = 0;
         }
     }
 
@@ -2746,20 +2766,23 @@ impl App {
             let (sub_active, player_active, audio_muted, audio_label) = {
                 let s = self.player.status.lock().unwrap();
                 let sub_on = !self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
-                let muted = s.active && s.audio_id == 0;
+                let muted = s.active && (s.audio_id == 0 || self.ui_volume == 0);
                 let aud_label = if s.active && s.audio_id != 0 {
                     s.audio_tracks.iter().find(|(id, _)| *id == s.audio_id)
                         .map(|(_, l)| l.clone())
                 } else { None };
                 (sub_on, s.active, muted, aud_label)
             };
-            // audio_icon: single 2-cell glyph — muted, flag, or ♫ (padded to 2)
+            let is_audio_item = self.is_audio_item();
+            // audio_icon: single 2-cell glyph — muted, speaker (audio), flag, or ♪
             let audio_icon: &str = if audio_muted {
-                "\u{1F507}"   // 🔇 muted (2-wide emoji)
+                "\u{1F507}"   // 🔇 muted
+            } else if is_audio_item {
+                "\u{1F50A}"   // 🔊 speaker (audio file, unmuted)
             } else {
                 audio_label.as_deref()
                     .map(crate::player::lang_to_flag)
-                    .map(|f| if f.is_empty() { "\u{1F509}" } else { f }) // ♫ + space = 2 cells
+                    .map(|f| if f.is_empty() { "\u{1F509}" } else { f })
                     .unwrap_or("\u{1F509}")
             };
 
