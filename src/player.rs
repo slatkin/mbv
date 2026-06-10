@@ -342,7 +342,7 @@ impl Player {
                 opt!("input-ipc-server", ipc_path.as_str());
                 opt!("input-default-bindings", "yes");
                 opt!("input-vo-keyboard", "yes");
-                opt!("wayland-app-id", "mby");
+                opt!("wayland-app-id", "mbv");
                 opt!("demuxer-max-bytes", "50M");
                 opt!("demuxer-max-back-bytes", "10M");
                 if no_scripts || !use_mpv_config {
@@ -468,8 +468,8 @@ impl Player {
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
                         PlayerCommand::NextUpShow { item_id, title } => {
-                            log.push(Level::Warn, "player", format!("next-up: sending script-message mby-next-up id={item_id} title={title}"));
-                            let r = mpv.command("script-message", &["mby-next-up", &item_id, &title]);
+                            log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} title={title}"));
+                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &title]);
                             log.push(Level::Warn, "player", format!("next-up: script-message result={r:?}"));
                         }
                         PlayerCommand::TogglePause => {
@@ -561,7 +561,7 @@ impl Player {
                             if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
                                 log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
                             }
-                            let _ = mpv.command("script-message", &["mby-next-up-dismiss"]);
+                            let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
                         }
                     }
                 }
@@ -711,8 +711,8 @@ impl Player {
                             log.push(Level::Warn, "mpv", format!("[{}/{}] {}", prefix, level, t));
                         }
                     }
-                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mby-next-up-play") => {
-                        log.push(Level::Info, "player", "next-up: mby-next-up-play received from Lua");
+                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
+                        log.push(Level::Info, "player", "next-up: mbv-next-up-play received from Lua");
                         let _ = event_tx.send(PlayerEvent::NextUpPlay);
                     }
                     Some(Ok(Event::ClientMessage(args))) if use_mpv_config && args.first().copied() == Some("mouse-moved") => {
@@ -820,7 +820,7 @@ impl Player {
                 opt!("input-ipc-server", ipc_path.as_str());
                 opt!("input-default-bindings", "yes");
                 opt!("input-vo-keyboard", "yes");
-                opt!("wayland-app-id", "mby");
+                opt!("wayland-app-id", "mbv");
                 opt!("demuxer-max-bytes", "50M");
                 opt!("demuxer-max-back-bytes", "10M");
                 if no_scripts || !use_mpv_config {
@@ -956,8 +956,8 @@ impl Player {
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
                         PlayerCommand::NextUpShow { item_id, title } => {
-                            log.push(Level::Warn, "player", format!("next-up: sending script-message mby-next-up id={item_id} title={title}"));
-                            let r = mpv.command("script-message", &["mby-next-up", &item_id, &title]);
+                            log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} title={title}"));
+                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &title]);
                             log.push(Level::Warn, "player", format!("next-up: script-message result={r:?}"));
                         }
                         PlayerCommand::TogglePause => {
@@ -1286,8 +1286,8 @@ impl Player {
                         }
                         let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));
                     }
-                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mby-next-up-play") => {
-                        log.push(Level::Info, "player", "next-up: mby-next-up-play received from Lua");
+                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
+                        log.push(Level::Info, "player", "next-up: mbv-next-up-play received from Lua");
                         let _ = event_tx.send(PlayerEvent::NextUpPlay);
                     }
                     Some(Ok(Event::ClientMessage(args))) if use_mpv_config && args.first().copied() == Some("mouse-moved") => {

@@ -1,6 +1,6 @@
-# mby
+# mbv
 
-A terminal UI client for [Emby](https://emby.media) media servers. Browse your libraries, build a queue, and play media — all from the terminal. Control playback from any Emby remote app on your phone or browser, or let mby run headless as a background daemon. The name 'mby' stands for "My Bloody Yalentine."
+A terminal UI client for [Emby](https://emby.media) media servers. Browse your libraries, build a queue, and play media — all from the terminal. Control playback from any Emby remote app on your phone or browser, or let mbv run headless as a background daemon.
 
 This was built with Claude Code because I am lazy and I already have a job (for now).
 
@@ -17,30 +17,30 @@ make install
 Or if you are on Arch just use AUR.
 
 ```sh
-paru -Syu mby
+paru -Syu mbv
 ```
 
-Installs the binary to `~/.local/bin/mby`.
+Installs the binary to `~/.local/bin/mbv`.
 
 ## Usage
 
 ```sh
-mby          # launch with terminal UI
-mby --daemon # run headless, controlled via remote only
+mbv          # launch with terminal UI
+mbv --daemon # run headless, controlled via remote only
 ```
 
 ## Configuration
 
 On first run a login screen prompts for server URL, username, and password. Credentials are saved after a successful login.
 
-Optionally create `~/.config/mby/config.toml`:
+Optionally create `~/.config/mbv/config.toml`:
 
 ```toml
 [server]
 # Override the server URL (normally set via the login screen)
 url = "http://emby.local:8096"
 
-[mby]
+[mbv]
 # Hide libraries from the tab bar (case-insensitive). Default: ["Live TV", "Podcasts"]
 hidden_libraries = ["Live TV", "Podcasts"]
 
@@ -57,7 +57,7 @@ show_log_tab = false
 show_audio_window = false
 
 # Use your own ~/.config/mpv/ setup (scripts, OSC, mpv.conf) instead of
-# mby's bundled OSC. Default false = mby manages its own mpv environment.
+# mbv's bundled OSC. Default false = mbv manages its own mpv environment.
 use_mpv_config = false
 
 [daemon]
@@ -76,23 +76,23 @@ Press `F1` at any time to open the reference screen.
 - **Pick up where you left off** — videos resume from their saved position. Watched status is synced back to the server automatically.
 - **Full playback controls** — seek, pause, adjust volume, cycle audio tracks, enable subtitles, all from the keyboard.
 - **Home screen** — see your Continue Watching items and what was recently added across your libraries.
-- **Remote control** — any Emby app on your phone or browser can control mby in real time: play, pause, seek, skip, adjust volume, queue items.
-- **Daemon mode** — run mby as a background service with no terminal required. Register it with your server and drive it entirely from remote apps.
-- **System media keys** — mby exposes an MPRIS2 interface so desktop widgets, `playerctl`, and system media keys all work automatically.
+- **Remote control** — any Emby app on your phone or browser can control mbv in real time: play, pause, seek, skip, adjust volume, queue items.
+- **Daemon mode** — run mbv as a background service with no terminal required. Register it with your server and drive it entirely from remote apps.
+- **System media keys** — mbv exposes an MPRIS2 interface so desktop widgets, `playerctl`, and system media keys all work automatically.
 
 ### Media Playback details
 
-- Media plays through an embedded mpv instance. Playback is synchronised between mpv, the mby client, and Emby server.
+- Media plays through an embedded mpv instance. Playback is synchronised between mpv, the mbv client, and Emby server.
 - Audio plays headless by default (no mpv window). Set `show_audio_window = true` to change this.
 - If you want, your personal `~/.config/mpv/mpv.conf` is respected (shaders, audio devices, renderer settings, keybindings).
-- The mpv IPC socket lives at `$XDG_RUNTIME_DIR/mby-mpv.sock`, separate from the default mpv socket, so running mby alongside standalone mpv doesn't cause conflicts.
-- By default mby uses its own bundled OSC ([mpv-osc-modern](https://github.com/maoiscat/mpv-osc-modern)). Set `use_mpv_config = true` to defer to your own `~/.config/mpv/` setup instead.
+- The mpv IPC socket lives at `$XDG_RUNTIME_DIR/mbv-mpv.sock`, separate from the default mpv socket, so running mbv alongside standalone mpv doesn't cause conflicts.
+- By default mbv uses its own bundled OSC ([mpv-osc-modern](https://github.com/maoiscat/mpv-osc-modern)). Set `use_mpv_config = true` to defer to your own `~/.config/mpv/` setup instead.
 
 ### Audio and subtitle track selection
 
-mby applies opinionated defaults every time a new item starts playing:
+mbv applies opinionated defaults every time a new item starts playing:
 
-- **English audio is always preferred.** If the default track selected by mpv is not English (`en`, `eng`, `en-US`, `en-GB`, or anything starting with `english`), mby switches to the first English track it finds. If no English track exists, the default track is kept.
+- **English audio is always preferred.** If the default track selected by mpv is not English (`en`, `eng`, `en-US`, `en-GB`, or anything starting with `english`), mbv switches to the first English track it finds. If no English track exists, the default track is kept.
 - **Subtitles are always off at start.** Regardless of what mpv or the Emby server would default to, subtitles are disabled when playback begins. Use `Alt+Z` or click the `≡` control to enable them manually.
 - **Image-based subtitle tracks are hidden.** PGS (`hdmv_pgs_subtitle`, `pgssub`), DVD (`dvd_subtitle`, `dvdsub`), DVB (`dvb_subtitle`), and XSUB tracks do not appear in the subtitle list at all, since mpv cannot render them in headless mode.
 

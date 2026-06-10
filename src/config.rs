@@ -45,15 +45,15 @@ fn config_dir() -> PathBuf {
             let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
             PathBuf::from(home).join(".config")
         });
-    base.join("mby")
+    base.join("mbv")
 }
 
 pub fn osc_script_path() -> PathBuf {
-    let user = data_dir().join("scripts").join("mby.lua");
+    let user = data_dir().join("scripts").join("mbv.lua");
     if user.exists() {
         return user;
     }
-    PathBuf::from("/usr/share/mby/scripts/mby.lua")
+    PathBuf::from("/usr/share/mbv/scripts/mbv.lua")
 }
 
 pub fn prefs_path() -> PathBuf {
@@ -67,7 +67,7 @@ fn data_dir() -> PathBuf {
             let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
             PathBuf::from(home).join(".local").join("share")
         });
-    base.join("mby")
+    base.join("mbv")
 }
 
 pub fn osc_fonts_dir() -> PathBuf {
@@ -75,19 +75,19 @@ pub fn osc_fonts_dir() -> PathBuf {
     if user.exists() {
         return user;
     }
-    PathBuf::from("/usr/share/mby/fonts")
+    PathBuf::from("/usr/share/mbv/fonts")
 }
 
 pub fn mpv_ipc_path() -> String {
     let runtime = env::var("XDG_RUNTIME_DIR")
         .unwrap_or_else(|_| "/tmp".to_string());
-    format!("{}/mby-mpv.sock", runtime)
+    format!("{}/mbv-mpv.sock", runtime)
 }
 
 pub fn control_socket_path() -> String {
     let runtime = env::var("XDG_RUNTIME_DIR")
         .unwrap_or_else(|_| "/tmp".to_string());
-    format!("{}/mby-ctrl.sock", runtime)
+    format!("{}/mbv-ctrl.sock", runtime)
 }
 
 pub fn playlist_cache_path() -> PathBuf {
@@ -99,17 +99,7 @@ pub fn token_cache_path() -> PathBuf {
 }
 
 pub fn config_path() -> PathBuf {
-    let dir = config_dir();
-    // Try the new "mby" path first, fall back to the legacy "emby-browser" path.
-    let new_path = dir.join("config.toml");
-    if new_path.exists() {
-        return new_path;
-    }
-    let legacy = dir.parent().unwrap_or(&dir).join("emby-browser").join("config.toml");
-    if legacy.exists() {
-        return legacy;
-    }
-    new_path
+    config_dir().join("config.toml")
 }
 
 pub fn load_config() -> Result<Config, String> {
@@ -138,15 +128,15 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
 
     let misc = doc.get("mpv");
     let daemon = doc.get("daemon");
-    let mby = doc.get("mby");
+    let mbv = doc.get("mbv");
 
-    let hidden_libraries: Vec<String> = mby
+    let hidden_libraries: Vec<String> = mbv
         .and_then(|m| m.get("hidden_libraries"))
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect())
         .unwrap_or_else(|| vec!["live tv".into(), "podcasts".into()]);
 
-    let hidden_latest: Vec<String> = mby
+    let hidden_latest: Vec<String> = mbv
         .and_then(|m| m.get("hidden_latest"))
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect())
@@ -177,7 +167,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let show_log_tab = mby
+    let show_log_tab = mbv
         .and_then(|m| m.get("show_log_tab"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
@@ -213,7 +203,7 @@ mod tests {
         let toml = r#"
 [server]
 url = "http://localhost:8096/"
-[mby]
+[mbv]
 hidden_libraries = ["Live TV", "Podcasts", "Music"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -239,7 +229,7 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
         let toml = r#"
 [server]
 url = "http://host"
-[mby]
+[mbv]
 hidden_libraries = ["Live TV", "MOVIES"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -258,7 +248,7 @@ hidden_libraries = ["Live TV", "MOVIES"]
         let toml = r#"
 [server]
 url = "http://host"
-[mby]
+[mbv]
 hidden_latest = ["Movies", "TV SHOWS"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -307,12 +297,12 @@ hidden_latest = ["Movies", "TV SHOWS"]
         std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-test");
         let path = token_cache_path();
         std::env::remove_var("XDG_CONFIG_HOME");
-        assert_eq!(path.to_str().unwrap(), "/tmp/xdg-test/mby/token.json");
+        assert_eq!(path.to_str().unwrap(), "/tmp/xdg-test/mbv/token.json");
     }
 
     #[test]
     fn parse_show_log_tab_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[mby]\nshow_log_tab = true";
+        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nshow_log_tab = true";
         assert!(parse_config(toml).unwrap().show_log_tab);
     }
 

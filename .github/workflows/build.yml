@@ -48,10 +48,10 @@ jobs:
 
       - name: Bundle release tarball
         run: |
-          DIST="mby-${PKGVER}"
+          DIST="mbv-${PKGVER}"
           mkdir -p "${DIST}"
-          cp target/release/mby "${DIST}/"
-          cp scripts/mby.lua "${DIST}/"
+          cp target/release/mbv "${DIST}/"
+          cp scripts/mbv.lua "${DIST}/"
           cp fonts/Material-Design-Iconic-Font.ttf "${DIST}/"
           cp dist/config.toml "${DIST}/"
           tar czf "${DIST}-linux-x86_64.tar.gz" "${DIST}"
@@ -94,12 +94,12 @@ jobs:
           chmod 600 /root/.ssh/aur
           export GIT_SSH_COMMAND="ssh -i /root/.ssh/aur -o StrictHostKeyChecking=accept-new"
           git config --global --add safe.directory '*'
-          git clone ssh://aur@aur.archlinux.org/mby.git /tmp/aur-mby
-          cp /tmp/repo/PKGBUILD /tmp/aur-mby/PKGBUILD
+          git clone ssh://aur@aur.archlinux.org/mbv.git /tmp/aur-mbv
+          cp /tmp/repo/PKGBUILD /tmp/aur-mbv/PKGBUILD
           useradd -m aurbuild
-          chown -R aurbuild /tmp/aur-mby
-          su -c 'cd /tmp/aur-mby && makepkg --printsrcinfo' aurbuild > /tmp/aur-mby/.SRCINFO
-          cd /tmp/aur-mby
+          chown -R aurbuild /tmp/aur-mbv
+          su -c 'cd /tmp/aur-mbv && makepkg --printsrcinfo' aurbuild > /tmp/aur-mbv/.SRCINFO
+          cd /tmp/aur-mbv
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add PKGBUILD .SRCINFO
@@ -109,6 +109,6 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: mby-linux-x86_64
+          name: mbv-linux-x86_64
           path: "*.tar.gz"
           if-no-files-found: error

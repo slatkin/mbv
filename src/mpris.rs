@@ -164,7 +164,7 @@ pub fn start(status: Arc<Mutex<PlayerStatus>>, send: impl Fn(PlayerCommand) + Se
             let player_iface = MediaPlayer2Player { status, cmd_tx: send };
             let conn = match connection::Builder::session()
                 .unwrap()
-                .name("org.mpris.MediaPlayer2.mby")
+                .name("org.mpris.MediaPlayer2.mbv")
                 .unwrap()
                 .serve_at("/org/mpris/MediaPlayer2", MediaPlayer2)
                 .unwrap()

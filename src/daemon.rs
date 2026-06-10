@@ -24,13 +24,13 @@ struct MbyTray;
 
 impl ksni::Tray for MbyTray {
     fn id(&self) -> String {
-        "mby".into()
+        "mbv".into()
     }
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
         vec![ksni::Icon { width: 24, height: 24, data: TRAY_ICON.to_vec() }]
     }
     fn title(&self) -> String {
-        "mby".into()
+        "mbv".into()
     }
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
@@ -48,9 +48,9 @@ impl ksni::Tray for MbyTray {
 
 pub fn pid_file() -> std::path::PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let dir = std::path::PathBuf::from(home).join(".local/share/mby");
+    let dir = std::path::PathBuf::from(home).join(".local/share/mbv");
     let _ = std::fs::create_dir_all(&dir);
-    dir.join("mby.pid")
+    dir.join("mbv.pid")
 }
 
 fn broadcast(clients: &ClientList, event: &CtrlEvent) {
@@ -62,7 +62,7 @@ fn broadcast(clients: &ClientList, event: &CtrlEvent) {
 
 pub fn run(client: EmbyClient) -> ! {
     std::fs::write(pid_file(), std::process::id().to_string())
-        .expect("mby daemon: failed to write PID file");
+        .expect("mbv daemon: failed to write PID file");
 
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx)    = mpsc::channel();
@@ -125,7 +125,7 @@ pub fn run(client: EmbyClient) -> ! {
             let listener = match UnixListener::bind(&path) {
                 Ok(l) => l,
                 Err(e) => {
-                    eprintln!("mby daemon: ctrl socket bind failed ({e}), remote TUI unavailable");
+                    eprintln!("mbv daemon: ctrl socket bind failed ({e}), remote TUI unavailable");
                     return;
                 }
             };

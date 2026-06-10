@@ -20,7 +20,7 @@ fn device_name() -> String {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .or_else(|| std::env::var("HOSTNAME").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()))
-        .unwrap_or_else(|| "mby".to_string())
+        .unwrap_or_else(|| "mbv".to_string())
 }
 
 fn device_id() -> String {
@@ -36,7 +36,7 @@ fn device_id() -> String {
 }
 
 fn device_id_in(data_home: std::path::PathBuf) -> String {
-    let dir = data_home.join("mby");
+    let dir = data_home.join("mbv");
     let path = dir.join("device_id");
     if let Ok(id) = std::fs::read_to_string(&path) {
         let id = id.trim().to_string();
@@ -44,9 +44,9 @@ fn device_id_in(data_home: std::path::PathBuf) -> String {
     }
     let id = uuid::Uuid::new_v4().to_string();
     if let Err(e) = std::fs::create_dir_all(&dir) {
-        eprintln!("mby: could not create {}: {}", dir.display(), e);
+        eprintln!("mbv: could not create {}: {}", dir.display(), e);
     } else if let Err(e) = std::fs::write(&path, &id) {
-        eprintln!("mby: could not write device_id to {}: {}", path.display(), e);
+        eprintln!("mbv: could not write device_id to {}: {}", path.display(), e);
     }
     id
 }
@@ -215,7 +215,7 @@ impl EmbyClient {
 
     fn auth_header(&self) -> String {
         format!(
-            "Emby Client=\"mby\", Device=\"{}\", DeviceId=\"{}\", Version=\"0.1.0\", Token=\"{}\"",
+            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"0.1.0\", Token=\"{}\"",
             self.device_name, self.device_id, self.token
         )
     }
@@ -271,7 +271,7 @@ impl EmbyClient {
         if !self.config.password.is_empty() {
             let resp: Value = self.agent
                 .post(&self.url("/Users/AuthenticateByName"))
-                .set("Authorization", &format!("Emby Client=\"mby\", Device=\"{}\", DeviceId=\"{}\", Version=\"0.1.0\"", self.device_name, self.device_id))
+                .set("Authorization", &format!("Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"0.1.0\"", self.device_name, self.device_id))
                 .send_json(ureq::json!({
                     "Username": self.config.username,
                     "Pw": self.config.password,
@@ -1035,10 +1035,10 @@ mod tests {
     }
 
     #[test]
-    fn device_name_falls_back_to_mby() {
+    fn device_name_falls_back_to_mbv() {
         // Only reachable when both /etc/hostname is absent/empty and HOSTNAME unset.
         // We can't suppress /etc/hostname, but we can verify the fallback string
-        // is the sentinel "mby" when nothing else is available.
+        // is the sentinel "mbv" when nothing else is available.
         let name = device_name();
         assert!(!name.is_empty());
         // Must not contain raw newlines regardless of source.
@@ -1074,12 +1074,12 @@ mod tests {
     fn device_id_respects_xdg_data_home() {
         let dir = make_temp_data_dir();
         let id = device_id_in(dir.clone());
-        let persisted = std::fs::read_to_string(dir.join("mby/device_id")).unwrap();
+        let persisted = std::fs::read_to_string(dir.join("mbv/device_id")).unwrap();
         assert_eq!(persisted.trim(), id);
     }
 
     fn make_temp_data_dir() -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("mby-test-{}", uuid::Uuid::new_v4()))
+        std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()))
     }
 
     static ENV_MTX: std::sync::Mutex<()> = std::sync::Mutex::new(());

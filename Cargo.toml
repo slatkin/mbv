@@ -1,10 +1,10 @@
 [package]
-name = "mby"
+name = "mbv"
 version = "0.3.2"
 edition = "2021"
 
 [[bin]]
-name = "mby"
+name = "mbv"
 path = "src/main.rs"
 
 [dependencies]

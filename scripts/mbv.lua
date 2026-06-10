@@ -2289,15 +2289,15 @@ local function next_up_render()
     next_up.osd:update()
 end
 
-mp.register_script_message('mby-next-up', function(item_id, title)
-    msg.warn('next-up: received mby-next-up id=' .. tostring(item_id) .. ' title=' .. tostring(title))
+mp.register_script_message('mbv-next-up', function(item_id, title)
+    msg.warn('next-up: received mbv-next-up id=' .. tostring(item_id) .. ' title=' .. tostring(title))
     next_up.item_id = item_id or ''
     next_up.title   = title   or ''
     next_up.visible = true
     next_up_render()
 end)
 
-mp.register_script_message('mby-next-up-dismiss', function()
+mp.register_script_message('mbv-next-up-dismiss', function()
     next_up_hide()
 end)
 
@@ -2314,6 +2314,6 @@ end)
 mp.set_key_bindings({
     {'mbtn_left', function()
         next_up_hide()
-        mp.commandv('script-message', 'mby-next-up-play')
+        mp.commandv('script-message', 'mbv-next-up-play')
     end},
 }, 'next-up', 'force')

@@ -25,7 +25,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     if args.contains(&"--version".to_string()) || args.contains(&"-V".to_string()) {
-        println!("mby {}", env!("CARGO_PKG_VERSION"));
+        println!("mbv {}", env!("CARGO_PKG_VERSION"));
         return;
     }
 
@@ -42,13 +42,13 @@ fn main() {
                     .unwrap_or(false);
                 if ok {
                     let _ = std::fs::remove_file(&path);
-                    println!("mby: daemon stopped (pid {pid})");
+                    println!("mbv: daemon stopped (pid {pid})");
                 } else {
-                    eprintln!("mby: failed to stop daemon (pid {pid})");
+                    eprintln!("mbv: failed to stop daemon (pid {pid})");
                     std::process::exit(1);
                 }
             }
-            Err(_) => { eprintln!("mby: no daemon running"); std::process::exit(1); }
+            Err(_) => { eprintln!("mbv: no daemon running"); std::process::exit(1); }
         }
         return;
     }
@@ -65,7 +65,7 @@ fn main() {
 
     if client.authenticate().is_err() {
         if daemon_inner {
-            eprintln!("mby daemon: no cached credentials — run mby interactively first");
+            eprintln!("mbv daemon: no cached credentials — run mbv interactively first");
             std::process::exit(1);
         }
         client = match login::run(client) {
@@ -84,8 +84,8 @@ fn main() {
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .spawn()
-            .expect("mby: failed to spawn daemon");
-        println!("mby: daemon started");
+            .expect("mbv: failed to spawn daemon");
+        println!("mbv: daemon started");
         return;
     }
 
@@ -104,7 +104,7 @@ fn main() {
                 return;
             }
             Err(e) => {
-                eprintln!("mby: daemon found but control socket unavailable ({e}), starting standalone");
+                eprintln!("mbv: daemon found but control socket unavailable ({e}), starting standalone");
             }
         }
     }

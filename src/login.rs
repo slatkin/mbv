@@ -157,7 +157,7 @@ fn render(f: &mut ratatui::Frame, form: &LoginForm) {
         Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(IRIS))
-            .title(" mby ")
+            .title(" mbv ")
             .title_alignment(Alignment::Center)
             .style(Style::default().bg(BASE)),
         area,

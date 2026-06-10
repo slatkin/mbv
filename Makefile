@@ -1,7 +1,7 @@
-BINARY     := mby
+BINARY     := mbv
 INSTALL_DIR := $(HOME)/.local/bin
-DATA_DIR    := $(HOME)/.local/share/mby
-CONFIG_DIR  := $(HOME)/.config/mby
+DATA_DIR    := $(HOME)/.local/share/mbv
+CONFIG_DIR  := $(HOME)/.config/mbv
 
 .PHONY: all build install uninstall clean
 
@@ -12,7 +12,7 @@ build:
 
 install: build
 	install -Dm755 target/release/$(BINARY) $(INSTALL_DIR)/$(BINARY)
-	install -Dm644 scripts/mby.lua $(DATA_DIR)/scripts/mby.lua
+	install -Dm644 scripts/mbv.lua $(DATA_DIR)/scripts/mbv.lua
 	install -Dm644 fonts/Material-Design-Iconic-Font.ttf $(DATA_DIR)/fonts/Material-Design-Iconic-Font.ttf
 	@if [ ! -f $(CONFIG_DIR)/config.toml ]; then \
 		install -Dm644 dist/config.toml $(CONFIG_DIR)/config.toml; \

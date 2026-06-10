@@ -2632,7 +2632,7 @@ impl App {
             f.render_widget(Block::default().style(Style::default().bg(palette::MODAL_HEADER)), modal_rect);
             let inner = modal_rect;
             f.render_widget(
-                Paragraph::new(Span::styled(" mby client settings", Style::default().fg(palette::SUBTLE).add_modifier(Modifier::BOLD)))
+                Paragraph::new(Span::styled(" mbv client settings", Style::default().fg(palette::SUBTLE).add_modifier(Modifier::BOLD)))
                     .style(Style::default().bg(palette::MODAL_BG)),
                 Rect { x: inner.x, y: inner.y, width: inner.width, height: 1 },
             );
