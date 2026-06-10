@@ -4460,7 +4460,15 @@ impl App {
         self.layout_lib_table_area = area;
         const LIB_SELECTED_IMG_W: u16 = 32;
         const LIB_AUDIO_IMG_W: u16 = 24;
-        const LIB_AUDIO_IMG_H: u16 = 12;
+        // Height for a square image at LIB_AUDIO_IMG_W columns, derived from actual cell pixel ratio.
+        let lib_audio_img_h: u16 = self.image_picker.as_ref()
+            .map(|p| {
+                let fs = p.font_size();
+                ((LIB_AUDIO_IMG_W as f32 * fs.width as f32) / fs.height as f32).ceil() as u16
+            })
+            .unwrap_or(12);
+        #[allow(non_snake_case)]
+        let LIB_AUDIO_IMG_H = lib_audio_img_h;
 
         let (display_items, cursor): (Vec<(usize, crate::api::MediaItem)>, usize) = {
             let lib = &self.libs[lib_idx];
@@ -4572,7 +4580,9 @@ impl App {
                         Constraint::Length(1),
                         Constraint::Min(0),
                     ]).areas(padded_area);
-                    let img_rect = Rect { height: actual.height.min(b.height), ..b };
+                    let img_h = actual.height.min(b.height);
+                    let v_off = b.height.saturating_sub(img_h) / 2;
+                    let img_rect = Rect { y: b.y + v_off, height: img_h, ..b };
                     (a, c, Some(img_rect))
                 } else {
                     let [a, c] = Layout::horizontal([
@@ -4599,7 +4609,7 @@ impl App {
             };
             let content_w = text_rect.width as usize;
 
-            if selected {
+            if selected && img_rect_opt.is_none() {
                 let bar: Vec<Line> = (0..ind_rect.height)
                     .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::IRIS))))
                     .collect();
@@ -4733,8 +4743,16 @@ impl App {
             let base_lines = 2 + artist_extra;
             let line_count = (base_lines + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
             if line_count == 0 { continue; }
+            let v_offset = if is_audio && selected {
+                (text_rect.height as usize).saturating_sub(line_count) / 2
+            } else { 0 };
+            let centered_text_rect = Rect {
+                y: text_rect.y + v_offset as u16,
+                height: text_rect.height.saturating_sub(v_offset as u16),
+                ..text_rect
+            };
             let constraints: Vec<Constraint> = (0..line_count).map(|_| Constraint::Length(1)).collect();
-            let line_rects = Layout::vertical(constraints).split(text_rect);
+            let line_rects = Layout::vertical(constraints).split(centered_text_rect);
 
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(title_display, Style::default().fg(text_color)))),
