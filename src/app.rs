@@ -3582,11 +3582,13 @@ impl App {
                 let filled = (((pos_ticks as f64 / rt_ticks as f64) * BAR_W as f64)
                     .round() as usize)
                     .min(BAR_W);
-                let bar_color = if i == current_idx && active { palette::FOAM } else { palette::YELLOW };
+                let now_playing = i == current_idx && active;
+                let bar_color    = if now_playing { palette::FOAM } else { palette::YELLOW };
+                let unplayed_color = if now_playing { Color::Rgb(0, 80, 128) } else { Color::Rgb(252, 238, 160) };
                 Cell::from(Line::from(vec![
                     Span::raw("  "),
                     Span::styled("━".repeat(filled),         Style::default().fg(bar_color)),
-                    Span::styled("─".repeat(BAR_W - filled), Style::default().fg(palette::WHITE)),
+                    Span::styled("─".repeat(BAR_W - filled), Style::default().fg(unplayed_color)),
                 ])).style(Style::default())
             } else {
                 Cell::from("")
@@ -3988,7 +3990,7 @@ impl App {
             put(f, text_y, Paragraph::new(Line::from(vec![
                 Span::raw(" ".repeat(pad)),
                 Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::FOAM } else { palette::YELLOW })),
-                Span::styled("─".repeat(bar_w - filled), Style::default().fg(palette::WHITE)),
+                Span::styled("─".repeat(bar_w - filled), Style::default().fg(if now_playing { Color::Rgb(0, 80, 128) } else { Color::Rgb(252, 238, 160) })),
             ])));
             text_y += 1;
             put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
@@ -5154,6 +5156,7 @@ mod tests {
             layout_vol_area: ratatui::layout::Rect::default(),
             layout_sub_area: ratatui::layout::Rect::default(),
             layout_sub_indicator_area: ratatui::layout::Rect::default(),
+            layout_audio_indicator_area: ratatui::layout::Rect::default(),
             layout_audio_area: ratatui::layout::Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
