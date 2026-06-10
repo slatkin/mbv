@@ -2735,10 +2735,10 @@ impl App {
             Constraint::Length(controls_h),   // playback controls (global, when active)
         ]).areas(area);
 
-        // Right side: Vol (11) + 1 gap + gear (2) = 14 cols total
+        // Right side: Vol (14) + gear (2) = 16 cols total
         const VOL_W:  u16 = 14; // " Volume: XXX%"
         const SETTINGS_W: u16 = 2;  // "⋮ "
-        const GAP:    u16 = 1;
+        const GAP:    u16 = 0;
         let right_w = VOL_W + GAP + SETTINGS_W;
 
         // Thin underline below tab row, with [字] sub and [♪:🏳] audio indicators embedded inline
@@ -4089,7 +4089,8 @@ impl App {
             for pi in prefetch_start..=prefetch_end {
                 let item = &items[pi];
                 let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-                self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), &["Primary", "Backdrop", "Logo"]);
+                let types_a: &[&str] = if item.item_type == "Movie" { &["Backdrop", "Primary", "Logo"] } else { &["Primary", "Backdrop", "Logo"] };
+                self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), types_a);
                 if pi != cursor {
                     self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
                 }
@@ -4114,7 +4115,8 @@ impl App {
             let selected   = i == cursor;
 
             let (cache_key, img_types): (String, &[&str]) = if *is_center {
-                (format!("{}:A", item_id), &["Primary", "Backdrop", "Logo"])
+                let types: &[&str] = if item.item_type == "Movie" { &["Backdrop", "Primary", "Logo"] } else { &["Primary", "Backdrop", "Logo"] };
+                (format!("{}:A", item_id), types)
             } else {
                 (format!("{}:S", item_id), &["Logo", "Primary", "Backdrop"])
             };
