@@ -1,6 +1,6 @@
 # mbv
 
-A terminal UI client for [Emby](https://emby.media) media servers that uses an external mpv instance as its main media player. It allows one to browse libraries, build a queue, and play media. You can leverage the standard Emby remote control API to control playback from any Emby remote app on your phone or browser. It can also headless as a background daemon as a purely remote-controlled solution.
+A terminal UI client for [Emby](https://emby.media) media servers that uses an external mpv instance as its main media player. It allows one to browse libraries, build a queue, and play media from your library in a way that syncs playback with the Emby server. You can leverage the standard Emby remote control API to control playback from any Emby remote app on your phone or browser. It can also headless as a background daemon as a purely remote-controlled solution.
 
 This was built with Claude Code because I am lazy and I already have a job (for now).
 
