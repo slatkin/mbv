@@ -3167,7 +3167,7 @@ impl App {
         for lib in &self.libs {
             if let Some(lvl) = lib.nav_stack.last() {
                 if let Some(item) = lvl.items.get(lvl.cursor) {
-                    if item.item_type == "Movie" {
+                    if item.item_type == "Episode" {
                         valid.insert(format!("{}:lib", item.id));
                     }
                 }
@@ -3908,19 +3908,9 @@ impl App {
 
         // Trigger image fetch for selected item before rendering loop
         if let Some((_, item)) = display_items.get(cursor) {
-            let cache_key = format!("{}:lib", item.id);
-            match item.item_type.as_str() {
-                "Movie" | "Series" => {
-                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Logo", "Primary"]);
-                }
-                "Season" => {
-                    self.fetch_card_image(cache_key, item.id.clone(), item.series_id.clone(), &["Logo", "Primary"]);
-                }
-                "Episode" => {
-                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Primary"]);
-                }
-
-                _ => {}
+            if item.item_type == "Episode" {
+                let cache_key = format!("{}:lib", item.id);
+                self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Primary"]);
             }
         }
 
@@ -3932,7 +3922,7 @@ impl App {
             let abs_idx = scroll + vi;
             let row_h = all_heights[abs_idx].min(area.y + area.height - row_y);
             let selected = abs_idx == cursor;
-            let show_img = selected && matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode");
+            let show_img = selected && item.item_type == "Episode";
             let row_rect = Rect { x: area.x, y: row_y, width: area.width, height: row_h };
 
             // Content area excludes the separator line at the bottom of the row.
