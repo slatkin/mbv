@@ -193,6 +193,7 @@ impl App {
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let show_log_tab = client.config.show_log_tab;
+        let start_on_queue = client.config.start_on_queue;
         let ws_url = client.ws_url();
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
         let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
@@ -211,7 +212,7 @@ impl App {
             player,
             player_rx,
             ws_rx,
-            tab_idx: 0,
+            tab_idx: if start_on_queue { 1 } else { 0 },
             hidden_libraries,
             hidden_latest,
             player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
@@ -411,9 +412,13 @@ impl App {
             c.register_capabilities(&self.log);
         }
 
-        match self.fetch_home() {
-            Ok(()) => self.status.clear(),
-            Err(e) => self.status = format!("Error: {e}"),
+        if self.tab_idx == 0 {
+            match self.fetch_home() {
+                Ok(()) => self.status.clear(),
+                Err(e) => self.status = format!("Error: {e}"),
+            }
+        } else {
+            self.status.clear();
         }
         self.restore_playlist();
         terminal.draw(|f| self.render(f))?;

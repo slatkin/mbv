@@ -52,6 +52,9 @@ hidden_latest = ["Music"]
 # When false the log is not accessible. Always false in daemon-connected mode.
 show_log_tab = false
 
+# Open the Queue tab on launch instead of Home (default: false).
+start_on_queue = false
+
 [mpv]
 # Show an mpv window for audio playback (default: false = headless)
 show_audio_window = false

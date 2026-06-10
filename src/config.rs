@@ -16,6 +16,7 @@ pub struct Config {
     pub show_systray_icon: bool,
     pub show_log_tab: bool,
     pub no_scripts: bool,
+    pub start_on_queue: bool,
 }
 
 impl Default for Config {
@@ -34,6 +35,7 @@ impl Default for Config {
             show_systray_icon: true,
             show_log_tab: false,
             no_scripts: false,
+            start_on_queue: false,
         }
     }
 }
@@ -177,6 +179,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let start_on_queue = mbv
+        .and_then(|m| m.get("start_on_queue"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -191,6 +198,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         show_systray_icon,
         show_log_tab,
         no_scripts,
+        start_on_queue,
     })
 }
 
