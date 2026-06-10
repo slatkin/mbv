@@ -83,7 +83,6 @@ mod palette {
     pub const MODAL_BG:      Color = Color::Rgb(30,  30,  30);   // modal background (#1e1e1e)
     pub const MODAL_HEADER:  Color = Color::Rgb(40,  40,  40);   // modal header (#282828)
     pub const FOCUSED:       Color = Color::Rgb(83,  83,  83);   // focused item bg (#535353)
-    pub const STRIPE:        Color = Color::Rgb(58,  58,  58);   // zebra stripe row bg (#3a3a3a)
     pub const RED:           Color = Color::Rgb(220, 60,  60);   // loud volume
 }
 
@@ -2984,10 +2983,7 @@ impl App {
 
         let block = Block::default()
             .borders(Borders::ALL).border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS))
-            .title(Span::styled("Queue",
-                Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)))
-            .title_alignment(Alignment::Center);
+            .border_style(Style::default().fg(palette::IRIS));
         let inner = block.inner(area);
         self.layout_playlist_inner = inner;
         f.render_widget(block, area);
@@ -3019,8 +3015,8 @@ impl App {
             let header_spans = Line::from(vec![
                 Span::raw("  "),
                 Span::styled("Title",              label),
-                Span::raw(" ".repeat(fill + 2)),
-                Span::styled("Length",             label),
+                Span::raw(" ".repeat(fill + 1)),
+                Span::styled(" Length",            label),
                 Span::raw(" "),
                 Span::styled("  Progress",         label),
             ]);
@@ -3028,11 +3024,8 @@ impl App {
         }
 
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
-            let stripe_bg = if i % 2 == 1 { palette::STRIPE } else { Color::Reset };
             let row_style = if i == current_idx && active {
-                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD).bg(stripe_bg)
-            } else if stripe_bg != Color::Reset {
-                Style::default().fg(palette::WHITE).bg(stripe_bg)
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(palette::WHITE)
             };
@@ -3680,7 +3673,7 @@ impl App {
         title: &str, items: &[MediaItem], cursor: usize, focused: bool,
         continue_style: bool,
     ) -> usize {
-        let border_style = if focused { Style::default().fg(palette::IRIS) } else { Style::default().fg(palette::OVERLAY) };
+        let border_style = if focused { Style::default().fg(palette::IRIS) } else { Style::default().fg(palette::WHITE) };
         let title_style = if focused {
             Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)
         } else {
@@ -3689,8 +3682,8 @@ impl App {
         let block = Block::default()
             .borders(Borders::ALL).border_type(BorderType::Rounded)
             .border_style(border_style)
-            .title(Span::styled(title, title_style))
-            .title_alignment(Alignment::Center);
+            .title(Span::styled(format!(" {} ", title), title_style))
+            .title_alignment(Alignment::Left);
         let inner = block.inner(area);
         f.render_widget(block, area);
 
@@ -3720,12 +3713,9 @@ impl App {
     fn render_library(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
         let is_loading = self.libs[lib_idx].nav_stack.last().map(|l| l.loading).unwrap_or(true);
         if is_loading && self.libs[lib_idx].search.is_none() {
-            let lib_name = self.libs[lib_idx].library.name.clone();
             let block = Block::default()
                 .borders(Borders::ALL).border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(palette::IRIS))
-                .title(Span::styled(lib_name, Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)))
-                .title_alignment(Alignment::Center);
+                .border_style(Style::default().fg(palette::IRIS));
             let inner = block.inner(area);
             f.render_widget(block, area);
             let mid = inner.y + inner.height / 2;
@@ -3739,14 +3729,11 @@ impl App {
             return;
         }
 
-        if let Some(s) = &self.libs[lib_idx].search {
+        if let Some(_s) = &self.libs[lib_idx].search {
             self.layout_breadcrumbs.clear();
-            let display = format!("{}█", s.query);
             let block = Block::default()
                 .borders(Borders::ALL).border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(palette::IRIS))
-                .title(Span::styled(display, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)))
-                .title_alignment(Alignment::Center);
+                .border_style(Style::default().fg(palette::IRIS));
             let inner = block.inner(area);
             f.render_widget(block, area);
             self.render_library_table(f, inner, lib_idx);
@@ -3763,10 +3750,9 @@ impl App {
         }
 
         let sep = " > ";
-        let crumb_style = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
         let is_deep = crumb_names.len() > 1;
 
-        // Compute total title width so we can derive the centered x offset for click regions.
+        // Compute total width to derive the centered x offset for click regions.
         let total_title_w: u16 = crumb_names.iter().enumerate().map(|(ci, (name, _))| {
             let w = name.chars().count() as u16;
             if ci + 1 < crumb_names.len() { w + sep.len() as u16 } else { w }
@@ -3774,16 +3760,13 @@ impl App {
         let title_x = area.x + area.width.saturating_sub(total_title_w) / 2;
 
         let mut x = title_x;
-        let mut crumb_spans: Vec<Span> = Vec::new();
         let mut new_breadcrumbs: Vec<(u16, u16, usize)> = Vec::new();
         for (ci, (name, target_depth)) in crumb_names.iter().enumerate() {
             let is_last = ci + 1 == crumb_names.len();
             let w = name.chars().count() as u16;
             new_breadcrumbs.push((x, x + w, *target_depth));
-            crumb_spans.push(Span::styled(*name, crumb_style));
             x += w;
             if !is_last {
-                crumb_spans.push(Span::styled(sep, crumb_style));
                 x += sep.len() as u16;
             }
         }
@@ -3791,9 +3774,7 @@ impl App {
 
         let block = Block::default()
             .borders(Borders::ALL).border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS))
-            .title(Line::from(crumb_spans))
-            .title_alignment(Alignment::Center);
+            .border_style(Style::default().fg(palette::IRIS));
         let inner = block.inner(area);
         f.render_widget(block, area);
         self.render_library_table(f, inner, lib_idx);
