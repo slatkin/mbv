@@ -70,6 +70,7 @@ pub struct MediaItem {
     pub playback_position_ticks: i64,
     pub series_id: String,
     pub series_name: String,
+    pub album_id: String,
     pub index_number: i64,
     pub parent_index_number: i64,
     pub unplayed_item_count: u32,
@@ -147,6 +148,7 @@ fn parse_item(raw: &Value) -> MediaItem {
         playback_position_ticks: ud["PlaybackPositionTicks"].as_i64().unwrap_or(0),
         series_id: raw["SeriesId"].as_str().unwrap_or("").to_string(),
         series_name: raw["SeriesName"].as_str().unwrap_or("").to_string(),
+        album_id: raw["AlbumId"].as_str().unwrap_or("").to_string(),
         index_number: raw["IndexNumber"].as_i64().unwrap_or(0),
         parent_index_number: raw["ParentIndexNumber"].as_i64().unwrap_or(0),
         unplayed_item_count: ud["UnplayedItemCount"].as_u64().unwrap_or(0) as u32,
@@ -350,6 +352,7 @@ impl EmbyClient {
                     playback_position_ticks: 0,
                     series_id: String::new(),
                     series_name: String::new(),
+                    album_id: String::new(),
                     index_number: 0,
                     parent_index_number: 0,
                     unplayed_item_count: 0,
@@ -429,7 +432,7 @@ impl EmbyClient {
         let resp: Value = self.get(&format!("/Users/{}/Items/Latest", self.user_id))
             .query("ParentId", parent_id)
             .query("Limit", &limit.to_string())
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId")
             .call().map_err(|e| e.to_string())?
             .into_json().map_err(|e| e.to_string())?;
         Ok(resp.as_array()
@@ -751,7 +754,7 @@ mod tests {
             id: "id".into(), name: name.into(), item_type: item_type.into(),
             is_folder: false, media_type: "Video".into(), collection_type: String::new(),
             runtime_ticks: 0, played: false, playback_position_ticks: 0,
-            series_id: String::new(), series_name: String::new(),
+            series_id: String::new(), series_name: String::new(), album_id: String::new(),
             index_number: 0, parent_index_number: 0,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),

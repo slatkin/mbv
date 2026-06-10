@@ -3626,27 +3626,41 @@ impl App {
             let c = self.client.lock().unwrap();
             (c.config.server_url.clone(), c.token.clone())
         };
-        // Logo and Backdrop images live on the series item, not the episode.
-        let urls: Vec<String> = types.iter().map(|t| {
-            let src = match *t {
-                "Logo" | "Backdrop" if !series_id.is_empty() => &series_id,
-                _ => &item_id,
-            };
-            match *t {
-                "Backdrop" => format!("{}/Items/{}/Images/Backdrop/0?maxHeight=400&quality=80&api_key={}", server_url, src, token),
-                "Logo"     => format!("{}/Items/{}/Images/Logo?maxHeight=400&quality=80&api_key={}", server_url, src, token),
-                _          => format!("{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}", server_url, src, token),
-            }
-        }).collect();
+        let types_owned: Vec<String> = types.iter().map(|s| s.to_string()).collect();
         let tx = self.card_image_tx.clone();
         let log = self.log.clone();
         std::thread::spawn(move || {
-            let bytes = urls.iter().find_map(|url| {
+            let fetch_url = |url: &str| -> Option<Vec<u8>> {
                 ureq::get(url).call().ok().and_then(|r| {
                     let mut buf = Vec::new();
                     r.into_reader().read_to_end(&mut buf).ok()?;
                     Some(buf)
                 })
+            };
+            let bytes = types_owned.iter().find_map(|t| {
+                // "AudioChild": get the first Audio child of item_id, then fetch its Primary.
+                if t == "AudioChild" {
+                    let child_url = format!("{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=1&api_key={}",
+                        server_url, item_id, token);
+                    let child_id: Option<String> = fetch_url(&child_url)
+                        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+                        .and_then(|v| v["Items"].get(0).and_then(|i| i["Id"].as_str().map(|s| s.to_string())));
+                    let child_id = child_id?;
+                    let url = format!("{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}",
+                        server_url, child_id, token);
+                    return fetch_url(&url);
+                }
+                // Logo and Backdrop images live on the series item, not the episode.
+                let src = match t.as_str() {
+                    "Logo" | "Backdrop" if !series_id.is_empty() => &series_id,
+                    _ => &item_id,
+                };
+                let url = match t.as_str() {
+                    "Backdrop" => format!("{}/Items/{}/Images/Backdrop/0?maxHeight=400&quality=80&api_key={}", server_url, src, token),
+                    "Logo"     => format!("{}/Items/{}/Images/Logo?maxHeight=400&quality=80&api_key={}", server_url, src, token),
+                    _          => format!("{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}", server_url, src, token),
+                };
+                fetch_url(&url)
             });
             let bytes = bytes.map(|b| {
                 match magick_resize(&b) {
@@ -4089,10 +4103,20 @@ impl App {
             for pi in prefetch_start..=prefetch_end {
                 let item = &items[pi];
                 let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-                let types_a: &[&str] = if item.item_type == "Movie" { &["Backdrop", "Primary", "Logo"] } else { &["Primary", "Backdrop", "Logo"] };
+                let types_a: &[&str] = match item.item_type.as_str() {
+                    "MusicAlbum" => &["AudioChild"],
+                    "Audio"      => &["Primary"],
+                    "Movie"      => &["Backdrop", "Primary", "Logo"],
+                    _            => &["Primary", "Backdrop", "Logo"],
+                };
                 self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), types_a);
                 if pi != cursor {
-                    self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
+                    let types_s: &[&str] = match item.item_type.as_str() {
+                        "MusicAlbum" => &["AudioChild"],
+                        "Audio"      => &["Primary"],
+                        _ => &["Logo", "Primary", "Backdrop"],
+                    };
+                    self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, types_s);
                 }
             }
         }
@@ -4115,10 +4139,20 @@ impl App {
             let selected   = i == cursor;
 
             let (cache_key, img_types): (String, &[&str]) = if *is_center {
-                let types: &[&str] = if item.item_type == "Movie" { &["Backdrop", "Primary", "Logo"] } else { &["Primary", "Backdrop", "Logo"] };
+                let types: &[&str] = match item.item_type.as_str() {
+                    "MusicAlbum" => &["AudioChild"],
+                    "Audio"      => &["Primary"],
+                    "Movie"      => &["Backdrop", "Primary", "Logo"],
+                    _            => &["Primary", "Backdrop", "Logo"],
+                };
                 (format!("{}:A", item_id), types)
             } else {
-                (format!("{}:S", item_id), &["Logo", "Primary", "Backdrop"])
+                let types: &[&str] = match item.item_type.as_str() {
+                    "MusicAlbum" => &["AudioChild"],
+                    "Audio"      => &["Primary"],
+                    _ => &["Logo", "Primary", "Backdrop"],
+                };
+                (format!("{}:S", item_id), types)
             };
             if self.images_enabled() {
                 self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
@@ -4972,7 +5006,7 @@ mod tests {
             id: "id".into(), name: name.into(), item_type: item_type.into(),
             is_folder: false, media_type: "Video".into(), collection_type: String::new(),
             runtime_ticks: 0, played: false, playback_position_ticks: 0,
-            series_id: String::new(), series_name: String::new(),
+            series_id: String::new(), series_name: String::new(), album_id: String::new(),
             index_number: 0, parent_index_number: 0,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
