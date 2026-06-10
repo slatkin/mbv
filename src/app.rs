@@ -153,6 +153,10 @@ pub struct App {
     home_card_view: bool,
     last_played_item_id: Option<String>,
     layout_carousel_slots: [(Option<usize>, Rect); 3],
+    layout_carousel_left_arrow: Option<Rect>,
+    layout_carousel_right_arrow: Option<Rect>,
+    layout_carousel_up_arrow: Option<Rect>,
+    layout_carousel_down_arrow: Option<Rect>,
     last_carousel_click_slot: Option<usize>,
     last_carousel_click_time: Instant,
     card_image_states: std::collections::HashMap<String, Option<StatefulProtocol>>,
@@ -331,6 +335,10 @@ impl App {
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
+            layout_carousel_left_arrow: None,
+            layout_carousel_right_arrow: None,
+            layout_carousel_up_arrow: None,
+            layout_carousel_down_arrow: None,
             last_carousel_click_slot: None,
             last_carousel_click_time: Instant::now() - Duration::from_secs(1),
             card_image_states: std::collections::HashMap::new(),
@@ -429,6 +437,10 @@ impl App {
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
+            layout_carousel_left_arrow: None,
+            layout_carousel_right_arrow: None,
+            layout_carousel_up_arrow: None,
+            layout_carousel_down_arrow: None,
             last_carousel_click_slot: None,
             last_carousel_click_time: Instant::now() - Duration::from_secs(1),
             card_image_states: std::collections::HashMap::new(),
@@ -1601,6 +1613,41 @@ impl App {
                 }
 
                 let now = Instant::now();
+
+                // Carousel directional arrow clicks
+                if let Some(r) = self.layout_carousel_left_arrow {
+                    if r.contains((col, row).into()) {
+                        if self.tab_idx == 0 { self.move_home_cursor(-1); }
+                        else { if self.player_tab.playlist_cursor > 0 { self.player_tab.playlist_cursor -= 1; } }
+                        return;
+                    }
+                }
+                if let Some(r) = self.layout_carousel_right_arrow {
+                    if r.contains((col, row).into()) {
+                        if self.tab_idx == 0 { self.move_home_cursor(1); }
+                        else { let n = self.player_tab.items.len(); if self.player_tab.playlist_cursor + 1 < n { self.player_tab.playlist_cursor += 1; } }
+                        return;
+                    }
+                }
+                if let Some(r) = self.layout_carousel_up_arrow {
+                    if r.contains((col, row).into()) {
+                        if self.home.section > 0 {
+                            self.home.section -= 1;
+                            self.ensure_home_section_visible();
+                        }
+                        return;
+                    }
+                }
+                if let Some(r) = self.layout_carousel_down_arrow {
+                    if r.contains((col, row).into()) {
+                        let n_sections = 1 + self.home.latest.len();
+                        if self.home.section + 1 < n_sections {
+                            self.home.section += 1;
+                            self.ensure_home_section_visible();
+                        }
+                        return;
+                    }
+                }
 
                 // Carousel card clicks — own double-click tracking independent of position-exact is_double
                 if self.tab_idx == 1 && self.playlist_card_view {
@@ -3196,6 +3243,10 @@ impl App {
 
     fn render_combined(&mut self, f: &mut ratatui::Frame, area: Rect) {
         self.home_rect = area;
+        self.layout_carousel_left_arrow = None;
+        self.layout_carousel_right_arrow = None;
+        self.layout_carousel_up_arrow = None;
+        self.layout_carousel_down_arrow = None;
         if self.home_card_view {
             self.render_home_cards(f, area);
         } else {
@@ -3397,6 +3448,8 @@ impl App {
     }
 
     fn render_playlist_cards(&mut self, f: &mut ratatui::Frame, area: Rect) {
+        self.layout_carousel_left_arrow = None;
+        self.layout_carousel_right_arrow = None;
         let n = self.player_tab.items.len();
         if n == 0 { return; }
         let expected_max = n * 2;
@@ -3428,10 +3481,10 @@ impl App {
         // Four equal gaps consumed from total width before distributing to panels.
         const GAP: u16 = 1;
         let (center_w, side_w, x_left, x_center, x_right) = if show_sides {
-            let avail_w  = area.width.saturating_sub(GAP * 4);
+            let avail_w  = area.width.saturating_sub(GAP * 4 + 4);
             let cw = (avail_w as u32 * 2 / 5) as u16;
             let sw = avail_w.saturating_sub(cw) / 2;
-            let xl = area.x + GAP;
+            let xl = area.x + GAP + 2;
             let xc = xl + sw + GAP;
             let xr = xc + cw + GAP;
             (cw, sw, xl, xc, xr)
@@ -3444,7 +3497,7 @@ impl App {
         let slots: [(Option<usize>, Rect, bool); 3] = [
             (
                 if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
-                Rect { x: x_left + 1, y: area.y + side_v_pad, width: side_w.saturating_sub(2), height: side_h },
+                Rect { x: x_left + 2, y: area.y + side_v_pad, width: side_w.saturating_sub(3), height: side_h },
                 false,
             ),
             (
@@ -3454,7 +3507,7 @@ impl App {
             ),
             (
                 if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
-                Rect { x: x_right + 1, y: area.y + side_v_pad, width: side_w.saturating_sub(2), height: side_h },
+                Rect { x: x_right + 1, y: area.y + side_v_pad, width: side_w.saturating_sub(3), height: side_h },
                 false,
             ),
         ];
@@ -3515,6 +3568,19 @@ impl App {
             if pi != cursor {
                 self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
             }
+        }
+
+        let lr_arrow_style = Style::default().fg(palette::WHITE);
+        let y_mid = area.y + center_v_pad + center_h / 2;
+        if show_sides && cursor > 0 {
+            let r = Rect { x: x_left, y: y_mid, width: 1, height: 1 };
+            self.layout_carousel_left_arrow = Some(r);
+            f.render_widget(Paragraph::new("◀").style(lr_arrow_style), r);
+        }
+        if show_sides && cursor + 1 < n {
+            let r = Rect { x: x_right + side_w - 1, y: y_mid, width: 1, height: 1 };
+            self.layout_carousel_right_arrow = Some(r);
+            f.render_widget(Paragraph::new("▶").style(lr_arrow_style), r);
         }
     }
 
@@ -3747,10 +3813,10 @@ impl App {
 
         const GAP: u16 = 1;
         let (center_w, side_w, x_left, x_center, x_right) = if show_sides {
-            let avail_w  = cards_area.width.saturating_sub(GAP * 4);
+            let avail_w  = cards_area.width.saturating_sub(GAP * 4 + 4);
             let cw = (avail_w as u32 * 2 / 5) as u16;
             let sw = avail_w.saturating_sub(cw) / 2;
-            let xl = cards_area.x + GAP;
+            let xl = cards_area.x + GAP + 2;
             let xc = xl + sw + GAP;
             let xr = xc + cw + GAP;
             (cw, sw, xl, xc, xr)
@@ -3762,7 +3828,7 @@ impl App {
         let slots: [(Option<usize>, Rect, bool); 3] = [
             (
                 if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
-                Rect { x: x_left + 1, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(2), height: side_h },
+                Rect { x: x_left + 2, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(3), height: side_h },
                 false,
             ),
             (
@@ -3772,7 +3838,7 @@ impl App {
             ),
             (
                 if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
-                Rect { x: x_right + 1, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(2), height: side_h },
+                Rect { x: x_right + 1, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(3), height: side_h },
                 false,
             ),
         ];
@@ -3819,20 +3885,32 @@ impl App {
                 count_label.as_deref(), sec_title_label);
         }
 
+        // Left/right item scroll arrows.
+        let lr_arrow_style = Style::default().fg(palette::WHITE);
+        let y_mid = cards_area.y + center_v_pad + center_h / 2;
+        if show_sides && cursor > 0 {
+            let r = Rect { x: x_left, y: y_mid, width: 1, height: 1 };
+            self.layout_carousel_left_arrow = Some(r);
+            f.render_widget(Paragraph::new("◀").style(lr_arrow_style), r);
+        }
+        if show_sides && cursor + 1 < n {
+            let r = Rect { x: x_right + side_w - 1, y: y_mid, width: 1, height: 1 };
+            self.layout_carousel_right_arrow = Some(r);
+            f.render_widget(Paragraph::new("▶").style(lr_arrow_style), r);
+        }
+
         // Section scroll arrows.
         let n_sections = 1 + self.home.latest.len();
-        let arrow_style = Style::default().fg(palette::IRIS);
+        let ud_arrow_style = Style::default().fg(palette::IRIS);
         if self.home.section > 0 && center_v_pad >= 2 {
-            f.render_widget(
-                Paragraph::new("▲").style(arrow_style).alignment(Alignment::Center),
-                Rect { x: area.x, y: cards_area.y + center_v_pad - 2, width: area.width, height: 1 },
-            );
+            let r = Rect { x: area.x, y: cards_area.y + center_v_pad - 2, width: area.width, height: 1 };
+            self.layout_carousel_up_arrow = Some(r);
+            f.render_widget(Paragraph::new("▲").style(ud_arrow_style).alignment(Alignment::Center), r);
         }
         if self.home.section + 1 < n_sections && gutter_y < area.bottom() {
-            f.render_widget(
-                Paragraph::new("▼").style(arrow_style).alignment(Alignment::Center),
-                Rect { x: area.x, y: gutter_y, width: area.width, height: 1 },
-            );
+            let r = Rect { x: area.x, y: gutter_y, width: area.width, height: 1 };
+            self.layout_carousel_down_arrow = Some(r);
+            f.render_widget(Paragraph::new("▼").style(ud_arrow_style).alignment(Alignment::Center), r);
         }
     }
 
@@ -4792,6 +4870,10 @@ mod tests {
             home_card_view: false,
             last_played_item_id: None,
             layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
+            layout_carousel_left_arrow: None,
+            layout_carousel_right_arrow: None,
+            layout_carousel_up_arrow: None,
+            layout_carousel_down_arrow: None,
             last_carousel_click_slot: None,
             last_carousel_click_time: std::time::Instant::now(),
             card_image_states: std::collections::HashMap::new(),
