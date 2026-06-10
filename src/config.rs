@@ -17,6 +17,7 @@ pub struct Config {
     pub show_log_tab: bool,
     pub no_scripts: bool,
     pub start_on_queue: bool,
+    pub daemon_mode_on_exit: bool,
 }
 
 impl Default for Config {
@@ -36,6 +37,7 @@ impl Default for Config {
             show_log_tab: false,
             no_scripts: false,
             start_on_queue: false,
+            daemon_mode_on_exit: false,
         }
     }
 }
@@ -174,6 +176,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let daemon_mode_on_exit = mbv
+        .and_then(|m| m.get("daemon_mode_on_exit"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let no_scripts = misc
         .and_then(|m| m.get("no_scripts"))
         .and_then(|v| v.as_bool())
@@ -199,7 +206,49 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         show_log_tab,
         no_scripts,
         start_on_queue,
+        daemon_mode_on_exit,
     })
+}
+
+pub fn save_config_settings(cfg: &Config) {
+    let path = config_path();
+    let mut doc: toml::Value = std::fs::read_to_string(&path).ok()
+        .and_then(|s| toml::from_str(&s).ok())
+        .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
+    let table = match doc.as_table_mut() {
+        Some(t) => t,
+        None => return,
+    };
+
+    macro_rules! section {
+        ($name:literal) => {
+            table.entry($name.to_string())
+                .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+                .as_table_mut().unwrap()
+        };
+    }
+
+    let mbv = section!("mbv");
+    mbv.insert("daemon_mode_on_exit".to_string(), toml::Value::Boolean(cfg.daemon_mode_on_exit));
+    mbv.insert("start_on_queue".to_string(),      toml::Value::Boolean(cfg.start_on_queue));
+    mbv.insert("always_play_next".to_string(),    toml::Value::Boolean(cfg.always_play_next));
+    mbv.insert("show_log_tab".to_string(),        toml::Value::Boolean(cfg.show_log_tab));
+    match &cfg.card_image_protocol {
+        Some(p) => { mbv.insert("card_image_protocol".to_string(), toml::Value::String(p.clone())); }
+        None    => { mbv.remove("card_image_protocol"); }
+    }
+
+    let mpv = section!("mpv");
+    mpv.insert("show_audio_window".to_string(), toml::Value::Boolean(cfg.show_audio_window));
+    mpv.insert("use_mpv_config".to_string(),    toml::Value::Boolean(cfg.use_mpv_config));
+    mpv.insert("no_scripts".to_string(),        toml::Value::Boolean(cfg.no_scripts));
+
+    let daemon = section!("daemon");
+    daemon.insert("show_systray_icon".to_string(), toml::Value::Boolean(cfg.show_systray_icon));
+
+    if let Ok(s) = toml::to_string(&doc) {
+        let _ = std::fs::write(path, s);
+    }
 }
 
 #[cfg(test)]
@@ -350,5 +399,17 @@ hidden_latest = ["Movies", "TV SHOWS"]
         // Placing always_play_next under [server] must NOT enable it — wrong section.
         let toml = "[server]\nurl = \"http://host\"\nalways_play_next = true";
         assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [mbv], not [server]");
+    }
+
+    #[test]
+    fn parse_daemon_mode_on_exit_true() {
+        let toml = "[server]\nurl = \"http://host\"\n[mbv]\ndaemon_mode_on_exit = true";
+        assert!(parse_config(toml).unwrap().daemon_mode_on_exit);
+    }
+
+    #[test]
+    fn parse_daemon_mode_on_exit_defaults_false() {
+        let toml = "[emby]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().daemon_mode_on_exit);
     }
 }

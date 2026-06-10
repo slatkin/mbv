@@ -82,8 +82,6 @@ mod palette {
     pub const PINE:          Color = Color::Rgb(61,  139, 55);   // dark green — folders, watched
     pub const FOAM:          Color = Color::Rgb(0,   164, 220);  // emby blue — now-playing item
     pub const IRIS:          Color = Color::Rgb(82,  181, 75);   // emby green — active tab, focused
-    pub const MODAL_BG:      Color = Color::Rgb(30,  30,  30);   // modal background (#1e1e1e)
-    pub const MODAL_HEADER:  Color = Color::Rgb(40,  40,  40);   // modal header (#282828)
     pub const FOCUSED:       Color = Color::Rgb(83,  83,  83);   // focused item bg (#535353)
     pub const RED:           Color = Color::Rgb(220, 60,  60);   // loud volume
 }
@@ -166,9 +164,11 @@ pub struct App {
     context_menu_rect: Option<Rect>,
     show_help: bool,
     show_settings: bool,
+    settings_cursor: usize,
+    settings_scroll: usize,
+    settings_save_at: Option<Instant>,
+    confirm_logout: bool,
     layout_settings_area: Rect,
-    layout_settings_modal: Rect,
-    layout_settings_ok_btn: Rect,
     help_scroll: u16,
     show_log_tab: bool,
     lib_tx: mpsc::Sender<LibEvent>,
@@ -177,6 +177,76 @@ pub struct App {
     tab_scroll: usize,
     ui_volume: u8,
     layout_tabbar_vol_area: Rect,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SettingKey {
+    DaemonModeOnExit,
+    StartOnQueue,
+    AlwaysPlayNext,
+    ShowLogTab,
+    CardImageProtocol,
+    ShowAudioWindow,
+    UseMpvConfig,
+    NoScripts,
+    ShowSysTrayIcon,
+    LogOut,
+}
+
+// Sections rendered as IRIS blocks in a 2×2 grid.
+// LogOut is rendered separately as a plain line below the grid.
+static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
+    ("[mbv]",    &[SettingKey::DaemonModeOnExit, SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ShowLogTab, SettingKey::CardImageProtocol]),
+    ("[mpv]",    &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts]),
+    ("[daemon]", &[SettingKey::ShowSysTrayIcon]),
+    ("[actions]",&[SettingKey::LogOut]),
+];
+
+fn setting_label(key: SettingKey) -> &'static str {
+    match key {
+        SettingKey::DaemonModeOnExit  => "Daemon mode on exit",
+        SettingKey::StartOnQueue      => "Start on queue",
+        SettingKey::AlwaysPlayNext    => "Always play next",
+        SettingKey::ShowLogTab        => "Show log tab",
+        SettingKey::CardImageProtocol => "Card image protocol",
+        SettingKey::ShowAudioWindow   => "Show audio window",
+        SettingKey::UseMpvConfig      => "Use mpv config",
+        SettingKey::NoScripts         => "No scripts",
+        SettingKey::ShowSysTrayIcon   => "Show systray icon",
+        SettingKey::LogOut            => "Log out",
+    }
+}
+
+fn setting_value(key: SettingKey, cfg: &crate::config::Config) -> String {
+    match key {
+        SettingKey::DaemonModeOnExit  => bool_val(cfg.daemon_mode_on_exit),
+        SettingKey::StartOnQueue      => bool_val(cfg.start_on_queue),
+        SettingKey::AlwaysPlayNext    => bool_val(cfg.always_play_next),
+        SettingKey::ShowLogTab        => bool_val(cfg.show_log_tab),
+        SettingKey::CardImageProtocol => cfg.card_image_protocol.clone().unwrap_or_else(|| "none".into()),
+        SettingKey::ShowAudioWindow   => bool_val(cfg.show_audio_window),
+        SettingKey::UseMpvConfig      => bool_val(cfg.use_mpv_config),
+        SettingKey::NoScripts         => bool_val(cfg.no_scripts),
+        SettingKey::ShowSysTrayIcon   => bool_val(cfg.show_systray_icon),
+        SettingKey::LogOut            => String::new(),
+    }
+}
+
+fn bool_val(v: bool) -> String { if v { "on".into() } else { "off".into() } }
+
+fn settings_total_rows() -> usize {
+    SETTING_SECTIONS.iter().map(|(_, keys)| keys.len()).sum()
+}
+
+fn settings_cursor_to_key(cursor: usize) -> SettingKey {
+    let mut idx = 0;
+    for &(_, keys) in SETTING_SECTIONS {
+        for &key in keys {
+            if idx == cursor { return key; }
+            idx += 1;
+        }
+    }
+    SettingKey::LogOut
 }
 
 const HOME_MIN_SECTION_H: u16 = 6; // 2 border rows + 4 content rows
@@ -270,9 +340,11 @@ impl App {
             image_picker: None,
             show_help: false,
             show_settings: false,
+            settings_cursor: 0,
+            settings_scroll: 0,
+            settings_save_at: None,
+            confirm_logout: false,
             layout_settings_area: Rect::default(),
-            layout_settings_modal: Rect::default(),
-            layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab,
             context_menu: None,
@@ -366,9 +438,11 @@ impl App {
             image_picker: None,
             show_help: false,
             show_settings: false,
+            settings_cursor: 0,
+            settings_scroll: 0,
+            settings_save_at: None,
+            confirm_logout: false,
             layout_settings_area: Rect::default(),
-            layout_settings_modal: Rect::default(),
-            layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
             context_menu: None,
@@ -409,13 +483,9 @@ impl App {
             c.register_capabilities(&self.log);
         }
 
-        if self.tab_idx == 0 {
-            match self.fetch_home() {
-                Ok(()) => self.status.clear(),
-                Err(e) => self.status = format!("Error: {e}"),
-            }
-        } else {
-            self.status.clear();
+        match self.fetch_home() {
+            Ok(()) => self.status.clear(),
+            Err(e) => self.status = format!("Error: {e}"),
         }
         self.restore_playlist();
         terminal.draw(|f| self.render(f))?;
@@ -499,6 +569,14 @@ impl App {
 
             while let Ok(ev) = self.ws_rx.try_recv() {
                 self.handle_ws_event(ev);
+            }
+
+            if let Some(at) = self.settings_save_at {
+                if Instant::now() >= at {
+                    let cfg = self.client.lock().unwrap().config.clone();
+                    crate::config::save_config_settings(&cfg);
+                    self.settings_save_at = None;
+                }
             }
 
             if event::poll(Duration::from_millis(50))? {
@@ -588,7 +666,42 @@ impl App {
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
         if self.show_settings {
-            if key.code == KeyCode::Esc { self.show_settings = false; }
+            if self.confirm_logout {
+                if matches!(key.code, KeyCode::Char('y')) {
+                    crate::api::clear_cached_token();
+                    self.confirm_logout = false;
+                    self.show_settings = false;
+                    self.flash_status("Logged out — restart mbv to sign in again".into());
+                } else {
+                    self.confirm_logout = false;
+                }
+                return false;
+            }
+            match key.code {
+                KeyCode::Esc => { self.close_settings(); }
+                KeyCode::Up => {
+                    if self.settings_cursor > 0 {
+                        self.settings_cursor -= 1;
+                        self.settings_scroll_follow();
+                    }
+                }
+                KeyCode::Down => {
+                    if self.settings_cursor + 1 < settings_total_rows() {
+                        self.settings_cursor += 1;
+                        self.settings_scroll_follow();
+                    }
+                }
+                KeyCode::PageUp => {
+                    self.settings_scroll = self.settings_scroll.saturating_sub(10);
+                }
+                KeyCode::PageDown => {
+                    self.settings_scroll += 10;
+                }
+                KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') | KeyCode::Enter => {
+                    self.handle_settings_activate();
+                }
+                _ => {}
+            }
             return false;
         }
         if self.show_help {
@@ -1425,19 +1538,8 @@ impl App {
             return;
         }
 
-        // Settings modal intercepts all mouse events while open
+        // Settings screen intercepts all mouse events while open
         if self.show_settings {
-            if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) {
-                if !self.layout_settings_modal.contains((col, row).into()) {
-                    // Click outside modal: dismiss
-                    self.show_settings = false;
-                } else if self.layout_settings_ok_btn != Rect::default()
-                    && self.layout_settings_ok_btn.contains((col, row).into()) {
-                    // Click on OK button: close
-                    self.show_settings = false;
-                }
-                // Click inside modal but not on OK: swallow
-            }
             return;
         }
 
@@ -2455,6 +2557,7 @@ impl App {
 
     fn render(&mut self, f: &mut ratatui::Frame) {
         if self.show_help { self.render_help_screen(f); return; }
+        if self.show_settings { self.render_settings_screen(f); return; }
         let area = f.area();
         if area.width != self.terminal_width || area.height != self.terminal_height {
             self.card_image_states.clear();
@@ -2630,49 +2733,6 @@ impl App {
         }
 
         self.render_context_menu(f);
-
-        if self.show_settings {
-            let mw = main_area.width / 2;
-            let mh = main_area.height * 4 / 5;
-            let mx = main_area.x + (main_area.width.saturating_sub(mw)) / 2;
-            let my = main_area.y + (main_area.height.saturating_sub(mh)) / 2;
-            let modal_rect = Rect { x: mx, y: my, width: mw, height: mh };
-            self.layout_settings_modal = modal_rect;
-            f.render_widget(Clear, modal_rect);
-            f.render_widget(Block::default().style(Style::default().bg(palette::MODAL_HEADER)), modal_rect);
-            let inner = modal_rect;
-            f.render_widget(
-                Paragraph::new(Span::styled(" mbv client settings", Style::default().fg(palette::SUBTLE).add_modifier(Modifier::BOLD)))
-                    .style(Style::default().bg(palette::MODAL_BG)),
-                Rect { x: inner.x, y: inner.y, width: inner.width, height: 1 },
-            );
-            if inner.height > 0 {
-                f.render_widget(
-                    Paragraph::new("Boo!")
-                        .alignment(Alignment::Center)
-                        .style(Style::default().fg(palette::TEXT)),
-                    Rect { x: inner.x, y: inner.y + inner.height / 2, width: inner.width, height: 1 },
-                );
-            }
-            if inner.height >= 4 {
-                let bottom = inner.bottom();
-                let hr_top_y  = bottom.saturating_sub(3);
-                let btn_y     = bottom.saturating_sub(2);
-                let btn_rect  = Rect { x: inner.x, y: btn_y, width: inner.width, height: 1 };
-                self.layout_settings_ok_btn = btn_rect;
-                f.render_widget(
-                    Paragraph::new(Span::styled("─".repeat(inner.width as usize), Style::default().fg(palette::OVERLAY))),
-                    Rect { x: inner.x, y: hr_top_y, width: inner.width, height: 1 },
-                );
-                f.render_widget(
-                    Paragraph::new(Span::styled("  OK  ", Style::default().fg(palette::BASE).bg(palette::SUBTLE)))
-                        .alignment(Alignment::Center),
-                    btn_rect,
-                );
-            } else {
-                self.layout_settings_ok_btn = Rect::default();
-            }
-        }
     }
 
     fn render_volume_bar(&self, f: &mut ratatui::Frame, area: Rect) {
@@ -2818,6 +2878,168 @@ impl App {
             Paragraph::new(lines)
                 .scroll((self.help_scroll, 0)),
             content_area,
+        );
+    }
+
+    fn close_settings(&mut self) {
+        if self.settings_save_at.take().is_some() {
+            let cfg = self.client.lock().unwrap().config.clone();
+            crate::config::save_config_settings(&cfg);
+        }
+        self.show_settings = false;
+    }
+
+    fn handle_settings_activate(&mut self) {
+        let key = settings_cursor_to_key(self.settings_cursor);
+        match key {
+            SettingKey::LogOut => { self.confirm_logout = true; }
+            SettingKey::CardImageProtocol => {
+                let mut c = self.client.lock().unwrap();
+                c.config.card_image_protocol = match c.config.card_image_protocol.as_deref() {
+                    None               => Some("halfblocks".into()),
+                    Some("halfblocks") => Some("sixel".into()),
+                    Some("sixel")      => Some("kitty".into()),
+                    Some("kitty")      => Some("iterm2".into()),
+                    Some("iterm2")     => Some("auto".into()),
+                    _                  => None,
+                };
+            }
+            SettingKey::ShowLogTab => {
+                let new_val = {
+                    let mut c = self.client.lock().unwrap();
+                    c.config.show_log_tab = !c.config.show_log_tab;
+                    c.config.show_log_tab
+                };
+                self.show_log_tab = new_val;
+            }
+            _ => {
+                let mut c = self.client.lock().unwrap();
+                match key {
+                    SettingKey::DaemonModeOnExit => c.config.daemon_mode_on_exit = !c.config.daemon_mode_on_exit,
+                    SettingKey::StartOnQueue     => c.config.start_on_queue = !c.config.start_on_queue,
+                    SettingKey::AlwaysPlayNext   => c.config.always_play_next = !c.config.always_play_next,
+                    SettingKey::ShowAudioWindow  => c.config.show_audio_window = !c.config.show_audio_window,
+                    SettingKey::UseMpvConfig     => c.config.use_mpv_config = !c.config.use_mpv_config,
+                    SettingKey::NoScripts        => c.config.no_scripts = !c.config.no_scripts,
+                    SettingKey::ShowSysTrayIcon  => c.config.show_systray_icon = !c.config.show_systray_icon,
+                    _ => {}
+                }
+            }
+        }
+        self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
+    }
+
+    fn settings_scroll_follow(&mut self) {} // no-op: grid layout always fits
+
+    fn render_settings_screen(&mut self, f: &mut ratatui::Frame) {
+        let area = f.area();
+
+        let [header_area, sep_area, content_area] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(0),
+        ]).areas(area);
+
+        let title = " \u{22ee}  Settings";
+        let hint  = "\u{2191}\u{2193} \u{b7} Space/Enter \u{b7} Esc to close ";
+        let pad = (area.width as usize).saturating_sub(title.len() + hint.len());
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                Span::raw(" ".repeat(pad)),
+                Span::styled(hint, Style::default().fg(palette::MUTED)),
+            ])),
+            header_area,
+        );
+
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "\u{2500}".repeat(area.width as usize),
+                Style::default().fg(palette::OVERLAY),
+            )),
+            sep_area,
+        );
+
+        let cfg = self.client.lock().unwrap().config.clone();
+        let cursor = self.settings_cursor;
+        let confirm_logout = self.confirm_logout;
+        let label_w = 22usize;
+
+        // Grid sections: first 3 in SETTING_SECTIONS. Last section ([actions]) rendered separately.
+        // Row 0: [mbv], [mpv]. Row 1: [daemon], (empty right).
+        let row0_h = SETTING_SECTIONS[0..2].iter().map(|(_, k)| k.len() as u16 + 2).max().unwrap_or(3);
+        let row1_h = SETTING_SECTIONS[2..3].iter().map(|(_, k)| k.len() as u16 + 2).max().unwrap_or(3);
+
+        let [_, row0_area, _, row1_area, _, logout_area, _] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(row0_h),
+            Constraint::Length(1),
+            Constraint::Length(row1_h),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Min(0),
+        ]).areas(content_area);
+
+        let mut item_idx = 0usize;
+
+        for (row_area, sec_range) in [(row0_area, 0..2usize), (row1_area, 2..3usize)] {
+            let [col0_area, _, col1_area] = Layout::horizontal([
+                Constraint::Fill(1),
+                Constraint::Length(2),
+                Constraint::Fill(1),
+            ]).areas(row_area);
+
+            for (col_i, sec_i) in sec_range.enumerate() {
+                let sec_area = if col_i == 0 { col0_area } else { col1_area };
+                let (sec_name, keys) = SETTING_SECTIONS[sec_i];
+
+                let block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(palette::IRIS))
+                    .title(Span::styled(
+                        format!(" {} ", sec_name),
+                        Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD),
+                    ));
+                let inner = block.inner(sec_area);
+                f.render_widget(block, sec_area);
+
+                let mut lines: Vec<Line> = Vec::new();
+                for &key in keys {
+                    let focused = item_idx == cursor;
+                    let arrow = if focused { "\u{25b8} " } else { "  " };
+                    let label = setting_label(key);
+                    let val = setting_value(key, &cfg);
+                    let label_style = if focused {
+                        Style::default().fg(palette::TEXT)
+                    } else {
+                        Style::default().fg(palette::MUTED)
+                    };
+                    lines.push(Line::from(vec![
+                        Span::raw(arrow),
+                        Span::styled(format!("{:<lw$}", label, lw = label_w), label_style),
+                        Span::styled(val, Style::default().fg(palette::FOAM)),
+                    ]));
+                    item_idx += 1;
+                }
+
+                f.render_widget(Paragraph::new(lines), inner);
+            }
+        }
+
+        // Log out: plain right-aligned line below the grid (cursor = last item index)
+        let logout_cursor = settings_total_rows() - 1;
+        let focused = cursor == logout_cursor;
+        let (text, style) = if confirm_logout && focused {
+            ("Log out? Press y to confirm", Style::default().fg(palette::RED))
+        } else if focused {
+            ("\u{25b8} Log out", Style::default().fg(palette::RED))
+        } else {
+            ("Log out", Style::default().fg(palette::MUTED))
+        };
+        f.render_widget(
+            Paragraph::new(text).style(style).alignment(Alignment::Right),
+            logout_area,
         );
     }
 
@@ -4579,9 +4801,11 @@ mod tests {
             image_picker: None,
             show_help: false,
             show_settings: false,
+            settings_cursor: 0,
+            settings_scroll: 0,
+            settings_save_at: None,
+            confirm_logout: false,
             layout_settings_area: Rect::default(),
-            layout_settings_modal: Rect::default(),
-            layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
             context_menu: None,
