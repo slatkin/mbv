@@ -1715,20 +1715,22 @@ impl App {
         let chrome: u16 = if active { 6 } else { 3 };
         let panel_h = self.terminal_height.saturating_sub(chrome);
 
-        let n_sections = 1 + self.home.latest.len();
-        let visible = if (n_sections as u16) * HOME_MIN_SECTION_H <= panel_h {
-            n_sections
+        let n_latest = self.home.latest.len();
+        let n_rows = 1 + (n_latest + 1) / 2;
+        let visible_rows = if (n_rows as u16) * HOME_MIN_SECTION_H <= panel_h {
+            n_rows
         } else {
             ((panel_h / HOME_MIN_SECTION_H) as usize).max(1)
         };
 
         let sec = self.home.section;
-        if sec < self.home_panel_section_offset {
-            self.home_panel_section_offset = sec;
-        } else if sec >= self.home_panel_section_offset + visible {
-            self.home_panel_section_offset = sec + 1 - visible;
+        let sec_row = if sec == 0 { 0 } else { 1 + (sec - 1) / 2 };
+        if sec_row < self.home_panel_section_offset {
+            self.home_panel_section_offset = sec_row;
+        } else if sec_row >= self.home_panel_section_offset + visible_rows {
+            self.home_panel_section_offset = sec_row + 1 - visible_rows;
         }
-        let max_offset = n_sections.saturating_sub(visible);
+        let max_offset = n_rows.saturating_sub(visible_rows);
         if self.home_panel_section_offset > max_offset {
             self.home_panel_section_offset = max_offset;
         }
@@ -1740,9 +1742,10 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         let chrome: u16 = if active { 6 } else { 3 };
         let panel_h = self.terminal_height.saturating_sub(chrome);
-        let n_sections = 1 + self.home.latest.len();
-        let visible = ((panel_h / HOME_MIN_SECTION_H) as usize).max(1).min(n_sections);
-        let max_offset = n_sections.saturating_sub(visible);
+        let n_latest = self.home.latest.len();
+        let n_rows = 1 + (n_latest + 1) / 2;
+        let visible_rows = ((panel_h / HOME_MIN_SECTION_H) as usize).max(1).min(n_rows);
+        let max_offset = n_rows.saturating_sub(visible_rows);
         if max_offset == 0 { return; }
         let frac = (row.saturating_sub(sb.y)) as f64 / sb.height as f64;
         let new_offset = ((frac * max_offset as f64).round() as usize).min(max_offset);
@@ -3585,75 +3588,106 @@ impl App {
 
     fn render_home_panel(&mut self, f: &mut ratatui::Frame, area: Rect) {
         let home_focused = true;
-        let n_sections = 1 + self.home.latest.len();
-        if n_sections == 0 { return; }
+        let n_latest = self.home.latest.len();
+        let n_sections = 1 + n_latest;
+        let n_rows = 1 + (n_latest + 1) / 2;
 
-        let visible = if (n_sections as u16) * HOME_MIN_SECTION_H <= area.height {
-            n_sections
+        let visible_rows = if (n_rows as u16) * HOME_MIN_SECTION_H <= area.height {
+            n_rows
         } else {
             ((area.height / HOME_MIN_SECTION_H) as usize).max(1)
         };
 
-        let max_offset = n_sections.saturating_sub(visible);
+        let max_offset = n_rows.saturating_sub(visible_rows);
         if self.home_panel_section_offset > max_offset {
             self.home_panel_section_offset = max_offset;
         }
-        let offset = self.home_panel_section_offset;
-        let render_count = visible.min(n_sections - offset);
+        let row_offset = self.home_panel_section_offset;
+        let render_row_count = visible_rows.min(n_rows - row_offset);
 
-        let scrollable = n_sections > visible;
+        let scrollable = n_rows > visible_rows;
         let layout_area = if scrollable && area.width > 2 {
             Rect { width: area.width - 2, ..area }
         } else {
             area
         };
 
-        let constraints: Vec<Constraint> = (0..render_count)
-            .map(|_| Constraint::Ratio(1, render_count as u32))
+        let constraints: Vec<Constraint> = (0..render_row_count)
+            .map(|_| Constraint::Ratio(1, render_row_count as u32))
             .collect();
-        let section_areas = Layout::vertical(constraints).split(layout_area);
+        let row_areas = Layout::vertical(constraints).split(layout_area);
 
-        // layout_section_areas is indexed by logical section; off-screen sections get Rect::default()
+        // layout_section_areas indexed by logical section; off-screen sections get Rect::default()
         let mut areas: Vec<Rect> = vec![Rect::default(); n_sections];
-        for i in 0..render_count {
-            areas[offset + i] = section_areas[i];
-        }
-        self.layout_section_areas = areas;
 
-        let mut scrolls = vec![0usize; n_sections];
-
-        if offset == 0 && render_count > 0 {
-            let cont_focused = home_focused && self.home.section == 0;
-            scrolls[0] = self.render_home_section(
-                f, section_areas[0], "Continue Watching",
-                &self.home.continue_items, self.home.continue_cursor, cont_focused, true,
-            );
-        }
-
-        // Collect to avoid holding &self.home.latest across render calls that need &mut self
+        // Collect latest data before mutable renders
         let latest_data: Vec<(String, Vec<MediaItem>, usize)> = self.home.latest
             .iter()
             .map(|(t, _, items, c)| (t.clone(), items.clone(), *c))
             .collect();
 
-        for render_pos in 0..render_count {
-            let logical = offset + render_pos;
-            if logical == 0 { continue; }
-            let latest_idx = logical - 1;
-            if let Some((title, items, cursor)) = latest_data.get(latest_idx) {
-                let focused = home_focused && self.home.section == logical;
-                scrolls[logical] = self.render_home_section(
-                    f, section_areas[render_pos], title,
-                    items, *cursor, focused, false,
+        let mut scrolls = vec![0usize; n_sections];
+
+        for row_pos in 0..render_row_count {
+            let logical_row = row_offset + row_pos;
+            let row_area = row_areas[row_pos];
+
+            if logical_row == 0 {
+                // Continue Watching — full width
+                areas[0] = row_area;
+                let cont_focused = home_focused && self.home.section == 0;
+                scrolls[0] = self.render_home_section(
+                    f, row_area, "Continue Watching",
+                    &self.home.continue_items, self.home.continue_cursor, cont_focused, true,
                 );
+            } else {
+                // Latest pair — split 50/50
+                let latest_row_idx = logical_row - 1;
+                let left_sec = 1 + latest_row_idx * 2;
+                let right_sec = left_sec + 1;
+
+                let [left_area, right_area] = Layout::horizontal([
+                    Constraint::Percentage(50),
+                    Constraint::Percentage(50),
+                ]).areas(row_area);
+
+                let is_last_odd = right_sec >= n_sections;
+                let render_left_area = if is_last_odd {
+                    Layout::horizontal([
+                        Constraint::Percentage(25),
+                        Constraint::Percentage(50),
+                        Constraint::Percentage(25),
+                    ]).areas::<3>(row_area)[1]
+                } else {
+                    left_area
+                };
+
+                if let Some((title, items, cursor)) = latest_data.get(left_sec - 1) {
+                    areas[left_sec] = render_left_area;
+                    let focused = home_focused && self.home.section == left_sec;
+                    scrolls[left_sec] = self.render_home_section(
+                        f, render_left_area, title, items, *cursor, focused, false,
+                    );
+                }
+                if right_sec < n_sections {
+                    if let Some((title, items, cursor)) = latest_data.get(right_sec - 1) {
+                        areas[right_sec] = right_area;
+                        let focused = home_focused && self.home.section == right_sec;
+                        scrolls[right_sec] = self.render_home_section(
+                            f, right_area, title, items, *cursor, focused, false,
+                        );
+                    }
+                }
             }
         }
+
+        self.layout_section_areas = areas;
         self.layout_home_scrolls = scrolls;
 
         if scrollable {
             let sb_rect = Rect { x: area.x + area.width.saturating_sub(1), y: area.y, width: 1, height: area.height };
             self.layout_home_scrollbar = sb_rect;
-            let mut sb_state = ScrollbarState::new(max_offset + 1).position(offset);
+            let mut sb_state = ScrollbarState::new(max_offset + 1).position(row_offset);
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .thumb_symbol("▐")
@@ -3673,7 +3707,7 @@ impl App {
         title: &str, items: &[MediaItem], cursor: usize, focused: bool,
         continue_style: bool,
     ) -> usize {
-        let border_style = if focused { Style::default().fg(palette::IRIS) } else { Style::default().fg(palette::WHITE) };
+        let border_style = if focused { Style::default().fg(palette::IRIS) } else { Style::default().fg(palette::PINE) };
         let title_style = if focused {
             Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)
         } else {
@@ -3701,7 +3735,9 @@ impl App {
             };
             if sel {
                 li.style(if continue_style { highlight_style_continue(item) } else { highlight_style(item) })
-            } else { li }
+            } else {
+                li.style(Style::default().fg(palette::MUTED))
+            }
         }).collect();
 
         let mut state = ListState::default();
@@ -4677,13 +4713,15 @@ mod tests {
     #[test]
     fn ensure_visible_scrolls_offset_down_when_section_below_window() {
         let mut app = make_app_stub();
-        // panel_h = 24 - 3 = 21; visible = 21/6 = 3; sections=5 => offset must move
+        // panel_h = 24-3 = 21; visible_rows = 21/6 = 3
+        // 8 Latest => n_rows = 1 + (8+1)/2 = 5; max_offset = 2
+        // section 8 (Latest[7]) => sec_row = 1 + 7/2 = 4
+        // 4 >= 0 + 3 => offset = 4 + 1 - 3 = 2
         app.terminal_height = 24;
-        app.home.latest = sections(4); // 5 total sections
-        app.home.section = 4; // last section
+        app.home.latest = sections(8);
+        app.home.section = 8; // last section, row 4
         app.home_panel_section_offset = 0;
         app.ensure_home_section_visible();
-        // offset + visible > section, so offset = section + 1 - visible = 4 + 1 - 3 = 2
         assert_eq!(app.home_panel_section_offset, 2);
     }
 
