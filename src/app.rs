@@ -86,7 +86,7 @@ mod palette {
     pub const MUTED:         Color = Color::Rgb(108, 108, 108);  // dim text, icons
     pub const SUBTLE:        Color = Color::Rgb(158, 158, 158);  // secondary text
     pub const TEXT:          Color = Color::Rgb(230, 230, 230);  // primary text
-    pub const WHITE:         Color = Color::Rgb(253, 253, 253);  // near-white (#fdfdfd)
+    pub const WHITE:         Color = Color::Rgb(230, 230, 230);  // near-white (#e6e6e6)
     pub const YELLOW:        Color = Color::Rgb(250, 220, 70);   // yellow — in-progress, paused
     pub const PINE:          Color = Color::Rgb(61,  139, 55);   // dark green — folders, watched
     pub const FOAM:          Color = Color::Rgb(0,   164, 220);  // emby blue — now-playing item
@@ -156,6 +156,7 @@ pub struct App {
     layout_vol_area: Rect,
     layout_sub_area: Rect,
     layout_sub_indicator_area: Rect,
+    layout_audio_indicator_area: Rect,
     layout_audio_area: Rect,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     confirm_clear_playlist: bool,
@@ -192,6 +193,7 @@ pub struct App {
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
+    pre_mute_volume: Option<u8>,
     layout_tabbar_vol_area: Rect,
 }
 
@@ -297,7 +299,8 @@ impl App {
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
         let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
         let always_play_next = client.config.always_play_next;
-        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, player_tx, Some(ws_send_tx));
+        let subs_off = Self::load_subs_off();
+        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, subs_off, player_tx, Some(ws_send_tx));
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();
         crate::mpris::start(player_status, move |cmd| {
@@ -352,6 +355,7 @@ impl App {
             layout_vol_area: Rect::default(),
             layout_sub_area: Rect::default(),
             layout_sub_indicator_area: Rect::default(),
+            layout_audio_indicator_area: Rect::default(),
             layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
@@ -359,6 +363,7 @@ impl App {
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
+            pre_mute_volume: None,
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
@@ -456,6 +461,7 @@ impl App {
             layout_vol_area: Rect::default(),
             layout_sub_area: Rect::default(),
             layout_sub_indicator_area: Rect::default(),
+            layout_audio_indicator_area: Rect::default(),
             layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
@@ -463,6 +469,7 @@ impl App {
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
+            pre_mute_volume: None,
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             layout_carousel_slots: [(None, Rect::default()); 3],
@@ -1403,12 +1410,18 @@ impl App {
         Self::load_prefs()["ui_volume"].as_u64().unwrap_or(100).min(200) as u8
     }
 
+    fn load_subs_off() -> bool {
+        Self::load_prefs()["subs_off"].as_bool().unwrap_or(true)
+    }
+
     fn save_prefs(&self) {
         let path = crate::config::prefs_path();
+        let subs_off = self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
         let v = serde_json::json!({
             "playlist_card_view": self.playlist_card_view,
             "home_card_view": self.home_card_view,
             "ui_volume": self.ui_volume,
+            "subs_off": subs_off,
         });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
@@ -1792,10 +1805,11 @@ impl App {
                 // Click on info row: exact chip rects
                 if self.layout_sub_area.contains((col, row).into())
                     || self.layout_sub_indicator_area.contains((col, row).into()) {
-                    self.cycle_sub();
+                    self.toggle_sub();
                     return;
                 }
-                if self.layout_audio_area.contains((col, row).into()) {
+                if self.layout_audio_indicator_area.contains((col, row).into())
+                    || self.layout_audio_area.contains((col, row).into()) {
                     self.cycle_audio();
                     return;
                 }
@@ -2028,9 +2042,45 @@ impl App {
             (s.audio_tracks.clone(), s.audio_id)
         };
         if tracks.is_empty() { return; }
-        let cur = tracks.iter().position(|(id, _)| *id == current_id).unwrap_or(0);
-        let next = (cur + 1) % tracks.len();
-        self.player.send_command(PlayerCommand::SetAudio(tracks[next].0));
+        // Cycle: muted → track1 → track2 → … → muted
+        let mut entries: Vec<i64> = vec![0];
+        entries.extend(tracks.iter().map(|(id, _)| *id));
+        let cur = entries.iter().position(|&id| id == current_id).unwrap_or(0);
+        let next = (cur + 1) % entries.len();
+        let next_id = entries[next];
+        if next_id == 0 {
+            self.pre_mute_volume = Some(self.ui_volume);
+            self.player.send_command(PlayerCommand::SetVolume(0));
+            self.ui_volume = 0;
+        } else if current_id == 0 {
+            if let Some(v) = self.pre_mute_volume.take() {
+                self.player.send_command(PlayerCommand::SetVolume(v as i64));
+                self.ui_volume = v;
+            }
+        }
+        self.player.send_command(PlayerCommand::SetAudio(next_id));
+    }
+
+    fn toggle_sub(&mut self) {
+        let (tracks, current_id) = {
+            let s = self.player.status.lock().unwrap();
+            (s.sub_tracks.clone(), s.sub_id)
+        };
+        let currently_off = self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
+        if currently_off {
+            self.player.subs_off.store(false, std::sync::atomic::Ordering::Relaxed);
+            if let Some(&(first_id, _)) = tracks.first() {
+                if current_id == 0 {
+                    self.player.send_command(PlayerCommand::SetSub(first_id));
+                }
+            }
+        } else {
+            self.player.subs_off.store(true, std::sync::atomic::Ordering::Relaxed);
+            if current_id != 0 {
+                self.player.send_command(PlayerCommand::SetSub(0));
+            }
+        }
+        self.save_prefs();
     }
 
     fn cycle_sub(&mut self) {
@@ -2675,7 +2725,7 @@ impl App {
         self.terminal_height = area.height;
 
         let active = self.player.status.lock().unwrap().active;
-        let controls_h: u16 = if active { 3 } else { 0 };
+        let controls_h: u16 = if active { 2 } else { 0 };
 
         let [tabs_area, gap_area, main_area, status_area, controls_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
@@ -2693,56 +2743,62 @@ impl App {
 
         // Thin underline below tab row, with [字] sub and [♪:🏳] audio indicators embedded inline
         {
-            let (sub_active, audio_label) = {
+            let (sub_active, player_active, audio_muted, audio_label) = {
                 let s = self.player.status.lock().unwrap();
-                let sub_on = s.sub_id != 0 && !s.sub_tracks.is_empty();
+                let sub_on = !self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
+                let muted = s.active && s.audio_id == 0;
                 let aud_label = if s.active && s.audio_id != 0 {
                     s.audio_tracks.iter().find(|(id, _)| *id == s.audio_id)
                         .map(|(_, l)| l.clone())
                 } else { None };
-                (sub_on, aud_label)
+                (sub_on, s.active, muted, aud_label)
             };
-            let audio_flag: &str = audio_label.as_deref()
-                .map(crate::player::lang_to_flag)
-                .unwrap_or("");
+            // audio_icon: single 2-cell glyph — muted, flag, or ♫ (padded to 2)
+            let audio_icon: &str = if audio_muted {
+                "\u{1F507}"   // 🔇 muted (2-wide emoji)
+            } else {
+                audio_label.as_deref()
+                    .map(crate::player::lang_to_flag)
+                    .map(|f| if f.is_empty() { "\u{1F509}" } else { f }) // ♫ + space = 2 cells
+                    .unwrap_or("\u{1F509}")
+            };
 
-            // [字]=4 cols, gap=1, [♪:🏳]=6 cols (♪=1, :=1, flag=2, brackets=2)
-            const SUB_W: u16 = 4;
-            const AUD_W: u16 = 6;
-            const SEP_W: u16 = 1;
-            // Right-align: audio indicator's right edge lines up with the '%' at the end of Vol display
-            let aud_end   = gap_area.width.saturating_sub(right_w) as usize + VOL_W as usize - 1;
+            // [♫]=4 cols, gap=1, [字]=4 cols (icon=2, brackets=2), 1 space right padding
+            const SUB_W:     u16 = 4;
+            const AUD_W:     u16 = 4;
+            const SEP_W:     u16 = 1;
+            const RIGHT_PAD: u16 = 3;
+            let sub_end   = (gap_area.width as usize).saturating_sub(RIGHT_PAD as usize);
+            let sub_start = sub_end.saturating_sub(SUB_W as usize);
+            let aud_end   = sub_start.saturating_sub(SEP_W as usize);
             let aud_start = aud_end.saturating_sub(AUD_W as usize);
-            let sub_start = aud_start.saturating_sub((SUB_W + SEP_W) as usize);
-            let right_dashes = (gap_area.width as usize).saturating_sub(aud_end);
+            let right_dashes = RIGHT_PAD as usize;
 
             let dash = Style::default().fg(palette::MUTED);
-            let bra  = Style::default().fg(palette::SUBTLE);
+            let bra  = Style::default().fg(palette::MUTED);
             let mut spans: Vec<Span> = Vec::new();
-            spans.push(Span::styled("─".repeat(sub_start), dash));
-            if sub_active {
-                spans.push(Span::styled("[",  bra));
-                spans.push(Span::styled("字", Style::default().fg(palette::RED)));
-                spans.push(Span::styled("]",  bra));
-            } else {
-                spans.push(Span::styled("─".repeat(SUB_W as usize), dash));
-            }
-            spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
-            if !audio_flag.is_empty() {
-                spans.push(Span::styled("[",         bra));
-                spans.push(Span::styled("\u{266a}",  Style::default().fg(palette::IRIS)));
-                spans.push(Span::styled(":",         bra));
-                spans.push(Span::styled(audio_flag,  Style::default().fg(palette::TEXT)));
-                spans.push(Span::styled("]",         bra));
+            let sub_color = if sub_active { palette::RED } else { palette::MUTED };
+            spans.push(Span::styled("─".repeat(aud_start), dash));
+            if player_active {
+                let icon_color = if audio_muted { palette::MUTED } else { palette::IRIS };
+                spans.push(Span::styled("[",        bra));
+                spans.push(Span::styled(audio_icon, Style::default().fg(icon_color)));
+                spans.push(Span::styled("]",        bra));
             } else {
                 spans.push(Span::styled("─".repeat(AUD_W as usize), dash));
             }
+            spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
+            spans.push(Span::styled("[",  bra));
+            spans.push(Span::styled("字", Style::default().fg(sub_color)));
+            spans.push(Span::styled("]",  bra));
             spans.push(Span::styled("─".repeat(right_dashes), dash));
             f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
 
             let sub_x = gap_area.x + sub_start as u16;
-            self.layout_sub_indicator_area = if sub_active {
-                Rect { x: sub_x, y: gap_area.y, width: SUB_W, height: 1 }
+            self.layout_sub_indicator_area   = Rect { x: sub_x, y: gap_area.y, width: SUB_W, height: 1 };
+            let aud_x = gap_area.x + aud_start as u16;
+            self.layout_audio_indicator_area = if player_active {
+                Rect { x: aud_x, y: gap_area.y, width: AUD_W, height: 1 }
             } else {
                 Rect::default()
             };
@@ -2903,7 +2959,7 @@ impl App {
             else if volume > 60 { palette::YELLOW }
             else { palette::PINE };
         let line = Line::from(vec![
-            Span::styled(" Volume: ", Style::default().fg(Color::Rgb(253, 253, 253))),
+            Span::styled(" Volume: ", Style::default().fg(Color::Rgb(230, 230, 230))),
             Span::styled(format!("{}%", volume), Style::default().fg(color)),
         ]);
         f.render_widget(Paragraph::new(line), area);
@@ -3356,11 +3412,9 @@ impl App {
         let inner_x = area.x + (area.width.saturating_sub(inner_w)) / 2;
         let area = Rect { x: inner_x, y: area.y, width: inner_w, height: area.height };
 
-        let (position_ticks, runtime_ticks, paused,
-             audio_tracks, sub_tracks, audio_id, sub_id) = {
+        let (position_ticks, runtime_ticks, paused) = {
             let s = self.player.status.lock().unwrap();
-            (s.position_ticks, s.runtime_ticks, s.paused,
-             s.audio_tracks.clone(), s.sub_tracks.clone(), s.audio_id, s.sub_id)
+            (s.position_ticks, s.runtime_ticks, s.paused)
         };
 
         let pos_s = position_ticks / TICKS_PER_SECOND;
@@ -3379,39 +3433,17 @@ impl App {
             btn_spans.push(Span::styled(format!("  {icon}  "), style));
         }
 
-        let audio_label = if audio_tracks.is_empty() {
-            "\u{2014}".to_string()
-        } else {
-            let pos = audio_tracks.iter().position(|(id, _)| *id == audio_id).unwrap_or(0);
-            let label = audio_tracks.iter().find(|(id, _)| *id == audio_id)
-                .map(|(_, l)| l.as_str()).unwrap_or("\u{2014}");
-            format!("{} ({}/{})", label, pos + 1, audio_tracks.len())
-        };
-        let sub_label = if sub_id == 0 || sub_tracks.is_empty() { "Off" } else { "On" };
-
         const BTNS_W: u16 = 30; // 6 buttons × 5
         let btn_x = area.x + area.width.saturating_sub(BTNS_W) / 2;
 
-        let pad = 1u16;
-        let p = " ".repeat(pad as usize);
-        let text_style = btn_style;
-
-        let sub_val_inner   = format!("字 {}", sub_label);
-        let audio_val_inner = format!("\u{266a} {}", audio_label);
-        let g1_w = (11usize.max(sub_val_inner.chars().count()) as u16) + pad * 2; // "≡ Subtitles" = 11
-        let g2_w = (6usize.max(audio_val_inner.chars().count()) as u16) + pad * 2;
-
         let btn_row_y = area.y + 1;
-        let val_row_y = area.y + 2;
-        let g1_x = area.x;
-        let g2_x = (area.x + area.width).saturating_sub(g2_w);
 
-        self.layout_seekbar_area = Rect { x: area.x, y: area.y,   width: area.width, height: 1 };
-        self.layout_button_area  = Rect { x: btn_x,  y: btn_row_y, width: BTNS_W,    height: 1 };
-        self.layout_tracks_area  = Rect { x: area.x, y: val_row_y, width: area.width, height: 1 };
+        self.layout_seekbar_area = Rect { x: area.x, y: area.y,    width: area.width, height: 1 };
+        self.layout_button_area  = Rect { x: btn_x,  y: btn_row_y, width: BTNS_W,     height: 1 };
+        self.layout_tracks_area  = Rect::default();
         self.layout_vol_area     = Rect::default();
-        self.layout_sub_area     = Rect { x: g1_x, y: val_row_y, width: g1_w, height: 1 };
-        self.layout_audio_area   = Rect { x: g2_x, y: val_row_y, width: g2_w, height: 1 };
+        self.layout_sub_area     = Rect::default();
+        self.layout_audio_area   = Rect::default();
 
         // Row 0 — seekbar
         let ratio = if runtime_ticks > 0 {
@@ -3431,42 +3463,10 @@ impl App {
         let label_rect = Rect { x: label_x, y: seek_rect.y, width: label_w.min(seek_rect.width), height: 1 };
         f.render_widget(Paragraph::new(Span::styled(label, Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD))), label_rect);
 
-        // Row 1 — "≡ Subs:" label (left) + buttons (center) + "♪ Audio:" label (right)
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::raw(&p),
-                Span::styled("字 ", Style::default().fg(palette::RED)),
-                Span::styled("Subtitles", text_style),
-            ])),
-            Rect { x: g1_x, y: btn_row_y, width: g1_w, height: 1 },
-        );
+        // Row 1 — buttons
         f.render_widget(
             Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
             Rect { x: area.x, y: btn_row_y, width: area.width, height: 1 },
-        );
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled("Audio ", text_style),
-                Span::styled("\u{266a}", Style::default().fg(palette::IRIS)),
-                Span::raw(&p),
-            ])).alignment(Alignment::Right),
-            Rect { x: g2_x, y: btn_row_y, width: g2_w, height: 1 },
-        );
-
-        // Row 2 — sub value (left, under label) + audio value (right, under label)
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::raw(&p),
-                Span::styled(sub_label, text_style),
-            ])),
-            Rect { x: g1_x, y: val_row_y, width: g1_w, height: 1 },
-        );
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(audio_label, text_style),
-                Span::raw(&p),
-            ])).alignment(Alignment::Right),
-            Rect { x: g2_x, y: val_row_y, width: g2_w, height: 1 },
         );
     }
 
@@ -5190,6 +5190,7 @@ mod tests {
             force_clear: false,
             tab_scroll: 0,
             ui_volume: 100,
+            pre_mute_volume: None,
             layout_tabbar_vol_area: Rect::default(),
         }
     }

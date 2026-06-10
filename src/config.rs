@@ -64,6 +64,15 @@ pub fn prefs_path() -> PathBuf {
     config_dir().join("prefs.json")
 }
 
+pub fn load_subs_off() -> bool {
+    let path = prefs_path();
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v["subs_off"].as_bool())
+        .unwrap_or(true)
+}
+
 fn data_dir() -> PathBuf {
     let base = env::var("XDG_DATA_HOME")
         .map(PathBuf::from)

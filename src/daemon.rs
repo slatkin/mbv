@@ -68,6 +68,7 @@ pub fn run(client: EmbyClient) -> ! {
     let (ws_tx_chan, ws_rx)    = mpsc::channel();
     let log = AppLog::new(50);
     let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan, log.clone());
+    let subs_off = crate::config::load_subs_off();
     let player = Player::new(
         client.config.server_url.clone(),
         client.token.clone(),
@@ -75,6 +76,7 @@ pub fn run(client: EmbyClient) -> ! {
         client.config.use_mpv_config,
         client.config.no_scripts,
         client.config.always_play_next,
+        subs_off,
         player_tx,
         Some(ws_send_tx),
     );

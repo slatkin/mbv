@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -132,7 +132,7 @@ pub fn is_english(label: &str) -> bool {
     l == "en" || l == "eng" || l.starts_with("en-") || l.starts_with("english")
 }
 
-fn auto_select_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
+fn auto_select_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, subs_off: bool) {
     refresh_tracks(mpv, status);
 
     let (audio_tracks, audio_id) = {
@@ -151,9 +151,14 @@ fn auto_select_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
         }
     }
 
-    // Always disable subtitles
-    let _ = mpv.set_property("sid", "no".to_string());
-    status.lock().unwrap().sub_id = 0;
+    let sub_tracks: Vec<(i64, String)> = status.lock().unwrap().sub_tracks.clone();
+    if subs_off {
+        let _ = mpv.set_property("sid", "no".to_string());
+        status.lock().unwrap().sub_id = 0;
+    } else if let Some(&(first_id, _)) = sub_tracks.first() {
+        let _ = mpv.set_property("sid", first_id);
+        status.lock().unwrap().sub_id = first_id;
+    }
 
     refresh_tracks(mpv, status);
 }
@@ -218,6 +223,7 @@ pub struct Player {
     no_scripts: bool,
     #[allow(dead_code)]
     pub always_play_next: bool,
+    pub subs_off: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
@@ -234,6 +240,7 @@ impl Player {
         use_mpv_config: bool,
         no_scripts: bool,
         always_play_next: bool,
+        subs_off: bool,
         event_tx: mpsc::Sender<PlayerEvent>,
         ws_tx: Option<mpsc::Sender<String>>,
     ) -> Self {
@@ -244,6 +251,7 @@ impl Player {
             use_mpv_config,
             no_scripts,
             always_play_next,
+            subs_off: Arc::new(AtomicBool::new(subs_off)),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
             cmd_tx: Arc::new(Mutex::new(None)),
@@ -321,6 +329,7 @@ impl Player {
         let event_tx = self.event_tx.clone();
         let status = self.status.clone();
         let ws_tx = self.ws_tx.clone();
+        let subs_off = self.subs_off.clone();
 
         {
             let mut st = status.lock().unwrap();
@@ -525,6 +534,7 @@ impl Player {
                         }
                         PlayerCommand::SetAudio(id) => {
                             if id > 0 { let _ = mpv.set_property("aid", id); }
+                            else { let _ = mpv.set_property("aid", "no".to_string()); }
                             status.lock().unwrap().audio_id = id;
                             refresh_tracks(&mpv, &status);
                         }
@@ -669,7 +679,7 @@ impl Player {
                     Some(Ok(Event::PlaybackRestart)) => {
                         let event_name: &str;
                         if !tracks_initialized {
-                            auto_select_tracks(&mpv, &status);
+                            auto_select_tracks(&mpv, &status, subs_off.load(Ordering::Relaxed));
                             tracks_initialized = true;
                             let _ = mpv.set_property("start", "0");
                             if let Some(secs) = pending_resume_secs.take() {
@@ -807,6 +817,7 @@ impl Player {
         let n = items.len();
         let status = self.status.clone();
         let ws_tx = self.ws_tx.clone();
+        let subs_off = self.subs_off.clone();
         let headless = !self.show_audio_window
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
@@ -1073,6 +1084,7 @@ impl Player {
                         }
                         PlayerCommand::SetAudio(id) => {
                             if id > 0 { let _ = mpv.set_property("aid", id); }
+                            else { let _ = mpv.set_property("aid", "no".to_string()); }
                             status.lock().unwrap().audio_id = id;
                             refresh_tracks(&mpv, &status);
                         }
@@ -1200,7 +1212,7 @@ impl Player {
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
                         if !tracks_initialized {
-                            auto_select_tracks(&mpv, &status);
+                            auto_select_tracks(&mpv, &status, subs_off.load(Ordering::Relaxed));
                             tracks_initialized = true;
                             if let Some(secs) = pending_resume_secs.take() {
                                 let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
@@ -1375,6 +1387,7 @@ enum PlayerProxyInner {
 pub struct PlayerProxy {
     pub always_play_next: bool,
     pub status: Arc<Mutex<PlayerStatus>>,
+    pub subs_off: Arc<AtomicBool>,
     inner: PlayerProxyInner,
 }
 
@@ -1382,18 +1395,20 @@ impl PlayerProxy {
     #[cfg(test)]
     pub fn stub(status: Arc<Mutex<PlayerStatus>>) -> Self {
         let (tx, _rx) = std::sync::mpsc::channel();
-        let player = Player::new(String::new(), String::new(), false, false, false, false, tx, None);
-        PlayerProxy { always_play_next: false, status, inner: PlayerProxyInner::Local(player) }
+        let player = Player::new(String::new(), String::new(), false, false, false, false, true, tx, None);
+        let subs_off = player.subs_off.clone();
+        PlayerProxy { always_play_next: false, status, subs_off, inner: PlayerProxyInner::Local(player) }
     }
 
     pub fn local(player: Player, always_play_next: bool) -> Self {
         let status = player.status.clone();
-        PlayerProxy { always_play_next, status, inner: PlayerProxyInner::Local(player) }
+        let subs_off = player.subs_off.clone();
+        PlayerProxy { always_play_next, status, subs_off, inner: PlayerProxyInner::Local(player) }
     }
 
     pub fn remote(remote: crate::remote_player::RemotePlayer, always_play_next: bool) -> Self {
         let status = remote.status.clone();
-        PlayerProxy { always_play_next, status, inner: PlayerProxyInner::Remote(remote) }
+        PlayerProxy { always_play_next, status, subs_off: Arc::new(AtomicBool::new(true)), inner: PlayerProxyInner::Remote(remote) }
     }
 
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
