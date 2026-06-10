@@ -41,9 +41,15 @@ Optionally create `~/.config/mby/config.toml`:
 url = "http://emby.local:8096"
 
 [mby]
-# Hide libraries from the tab bar (case-insensitive)
+# Hide libraries from the tab bar (case-insensitive). Default: ["Live TV", "Podcasts"]
 hidden_libraries = ["Live TV", "Podcasts"]
-# Show a dedicated log tab (default: false)
+
+# Hide the Latest block for specific libraries on the Home tab (case-insensitive).
+# Does not affect the library tab itself — use hidden_libraries for that. Default: []
+hidden_latest = ["Music"]
+
+# Show a Log tab in the tab bar after all library tabs (default: false).
+# When false the log is not accessible. Always false in daemon-connected mode.
 show_log_tab = false
 
 [mpv]
