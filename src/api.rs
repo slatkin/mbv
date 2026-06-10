@@ -42,7 +42,13 @@ fn device_id_in(data_home: std::path::PathBuf) -> String {
         let id = id.trim().to_string();
         if !id.is_empty() { return id; }
     }
-    let id = uuid::Uuid::new_v4().to_string();
+    // Migrate device_id from the old "mby" directory so Emby recognises this as the same client.
+    let legacy = data_home.join("mby").join("device_id");
+    let id = std::fs::read_to_string(&legacy)
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
     if let Err(e) = std::fs::create_dir_all(&dir) {
         eprintln!("mbv: could not create {}: {}", dir.display(), e);
     } else if let Err(e) = std::fs::write(&path, &id) {
@@ -1076,6 +1082,19 @@ mod tests {
         let id = device_id_in(dir.clone());
         let persisted = std::fs::read_to_string(dir.join("mbv/device_id")).unwrap();
         assert_eq!(persisted.trim(), id);
+    }
+
+    #[test]
+    fn device_id_migrates_from_legacy_mby_dir() {
+        let dir = make_temp_data_dir();
+        let legacy_dir = dir.join("mby");
+        std::fs::create_dir_all(&legacy_dir).unwrap();
+        let legacy_id = uuid::Uuid::new_v4().to_string();
+        std::fs::write(legacy_dir.join("device_id"), &legacy_id).unwrap();
+        let id = device_id_in(dir.clone());
+        assert_eq!(id, legacy_id, "should reuse the legacy mby device_id");
+        let persisted = std::fs::read_to_string(dir.join("mbv/device_id")).unwrap();
+        assert_eq!(persisted.trim(), legacy_id, "should persist migrated id to new location");
     }
 
     fn make_temp_data_dir() -> std::path::PathBuf {
