@@ -122,7 +122,7 @@ pub fn load_config() -> Result<Config, String> {
 pub fn parse_config(text: &str) -> Result<Config, String> {
     let doc: toml::Value = toml::from_str(text).map_err(|e| e.to_string())?;
 
-    let emby = match doc.get("emby") {
+    let server = match doc.get("server") {
         Some(s) => s,
         None => return Ok(Config::default()),
     };
@@ -138,8 +138,8 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     let daemon = doc.get("daemon");
     let mby = doc.get("mby");
 
-    let hidden_libraries: Vec<String> = emby
-        .get("hidden_libraries")
+    let hidden_libraries: Vec<String> = mby
+        .and_then(|m| m.get("hidden_libraries"))
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect())
         .unwrap_or_else(|| vec!["live tv".into(), "podcasts".into()]);
@@ -180,7 +180,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .unwrap_or(false);
 
     Ok(Config {
-        server_url: get_str(emby, "url").trim_end_matches('/').to_string(),
+        server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
         password: String::new(),
         api_key: String::new(),
@@ -202,8 +202,9 @@ mod tests {
     #[test]
     fn parse_full_config() {
         let toml = r#"
-[emby]
+[server]
 url = "http://localhost:8096/"
+[mby]
 hidden_libraries = ["Live TV", "Podcasts", "Music"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -212,7 +213,7 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
     }
 
     #[test]
-    fn parse_missing_emby_section_returns_default() {
+    fn parse_missing_server_section_returns_default() {
         let cfg = parse_config("[mpv]\nshow_audio_window = false").unwrap();
         assert_eq!(cfg.server_url, "");
         assert_eq!(cfg.hidden_libraries, vec!["live tv", "podcasts"]);
@@ -227,8 +228,9 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
     #[test]
     fn parse_hidden_libraries_lowercased() {
         let toml = r#"
-[emby]
+[server]
 url = "http://host"
+[mby]
 hidden_libraries = ["Live TV", "MOVIES"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -237,7 +239,7 @@ hidden_libraries = ["Live TV", "MOVIES"]
 
     #[test]
     fn parse_default_hidden_libraries_when_absent() {
-        let toml = "[emby]\nurl = \"http://host\"";
+        let toml = "[server]\nurl = \"http://host\"";
         let cfg = parse_config(toml).unwrap();
         assert_eq!(cfg.hidden_libraries, vec!["live tv", "podcasts"]);
     }
@@ -249,25 +251,25 @@ hidden_libraries = ["Live TV", "MOVIES"]
 
     #[test]
     fn parse_use_mpv_config_true() {
-        let toml = "[emby]\nurl = \"http://host\"\n[mpv]\nuse_mpv_config = true";
+        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nuse_mpv_config = true";
         assert!(parse_config(toml).unwrap().use_mpv_config);
     }
 
     #[test]
     fn parse_use_mpv_config_defaults_false() {
-        let toml = "[emby]\nurl = \"http://host\"";
+        let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().use_mpv_config);
     }
 
     #[test]
     fn parse_show_audio_window_true() {
-        let toml = "[emby]\nurl = \"http://host\"\n[mpv]\nshow_audio_window = true";
+        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nshow_audio_window = true";
         assert!(parse_config(toml).unwrap().show_audio_window);
     }
 
     #[test]
     fn parse_show_audio_window_defaults_false() {
-        let toml = "[emby]\nurl = \"http://host\"";
+        let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().show_audio_window);
     }
 
@@ -282,45 +284,45 @@ hidden_libraries = ["Live TV", "MOVIES"]
 
     #[test]
     fn parse_show_log_tab_true() {
-        let toml = "[emby]\nurl = \"http://host\"\n[mby]\nshow_log_tab = true";
+        let toml = "[server]\nurl = \"http://host\"\n[mby]\nshow_log_tab = true";
         assert!(parse_config(toml).unwrap().show_log_tab);
     }
 
     #[test]
     fn parse_show_log_tab_defaults_false() {
-        let toml = "[emby]\nurl = \"http://host\"";
+        let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().show_log_tab);
     }
 
     #[test]
     fn parse_no_scripts_true() {
-        let toml = "[emby]\nurl = \"http://host\"\n[mpv]\nno_scripts = true";
+        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nno_scripts = true";
         assert!(parse_config(toml).unwrap().no_scripts);
     }
 
     #[test]
     fn parse_no_scripts_defaults_false() {
-        let toml = "[emby]\nurl = \"http://host\"";
+        let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().no_scripts);
     }
 
     // always_play_next must live in [mpv] — placing it elsewhere silently ignores it.
     #[test]
     fn parse_always_play_next_true_from_mpv_section() {
-        let toml = "[emby]\nurl = \"http://host\"\n[mpv]\nalways_play_next = true";
+        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nalways_play_next = true";
         assert!(parse_config(toml).unwrap().always_play_next);
     }
 
     #[test]
     fn parse_always_play_next_defaults_false() {
-        let toml = "[emby]\nurl = \"http://host\"";
+        let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().always_play_next);
     }
 
     #[test]
     fn parse_always_play_next_in_wrong_section_is_ignored() {
-        // Placing always_play_next under [emby] must NOT enable it — wrong section.
-        let toml = "[emby]\nurl = \"http://host\"\nalways_play_next = true";
-        assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [mpv], not [emby]");
+        // Placing always_play_next under [server] must NOT enable it — wrong section.
+        let toml = "[server]\nurl = \"http://host\"\nalways_play_next = true";
+        assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [mpv], not [server]");
     }
 }

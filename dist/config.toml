@@ -1,6 +1,9 @@
-[emby]
+[server]
 url = "http://emby.local:8096"
+
+[mby]
 hidden_libraries = ["live tv", "podcasts"]
+show_log_tab = false
 
 [mpv]
 use_mpv_config    = false

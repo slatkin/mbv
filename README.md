@@ -36,12 +36,15 @@ On first run a login screen prompts for server URL, username, and password. Cred
 Optionally create `~/.config/mby/config.toml`:
 
 ```toml
-[emby]
+[server]
 # Override the server URL (normally set via the login screen)
 url = "http://emby.local:8096"
 
+[mby]
 # Hide libraries from the tab bar (case-insensitive)
 hidden_libraries = ["Live TV", "Podcasts"]
+# Show a dedicated log tab (default: false)
+show_log_tab = false
 
 [mpv]
 # Show an mpv window for audio playback (default: false = headless)
