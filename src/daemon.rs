@@ -18,14 +18,16 @@ enum DaemonEvent {
 
 type ClientList = Arc<Mutex<Vec<mpsc::Sender<String>>>>;
 
+const TRAY_ICON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tray_icon.bin"));
+
 struct MbyTray;
 
 impl ksni::Tray for MbyTray {
     fn id(&self) -> String {
         "mby".into()
     }
-    fn icon_name(&self) -> String {
-        "applications-multimedia".into()
+    fn icon_pixmap(&self) -> Vec<ksni::Icon> {
+        vec![ksni::Icon { width: 24, height: 24, data: TRAY_ICON.to_vec() }]
     }
     fn title(&self) -> String {
         "mby".into()

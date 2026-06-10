@@ -93,6 +93,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     password: form.fields[2].clone(),
                     api_key: base_config.api_key.clone(),
                     hidden_libraries: base_config.hidden_libraries.clone(),
+                    hidden_latest: base_config.hidden_latest.clone(),
                     show_audio_window: base_config.show_audio_window,
                     use_mpv_config: base_config.use_mpv_config,
                     always_play_next: base_config.always_play_next,

@@ -116,6 +116,7 @@ pub struct App {
     status: String,
     status_expires: Option<Instant>,
     hidden_libraries: Vec<String>,
+    hidden_latest: Vec<String>,
     log: AppLog,
     log_scroll: usize,
     log_pane: LogPane,        // which pane has focus
@@ -168,6 +169,7 @@ pub struct App {
     layout_settings_ok_btn: Rect,
     help_scroll: u16,
     show_log_tab: bool,
+    remote_mode: bool,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
     force_clear: bool,
@@ -187,6 +189,7 @@ impl App {
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
         let hidden_libraries = client.config.hidden_libraries.clone();
+        let hidden_latest = client.config.hidden_latest.clone();
         let show_log_tab = client.config.show_log_tab;
         let ws_url = client.ws_url();
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
@@ -208,6 +211,7 @@ impl App {
             ws_rx,
             tab_idx: 0,
             hidden_libraries,
+            hidden_latest,
             player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
             home: HomePane {
                 continue_items: Vec::new(),
@@ -269,6 +273,7 @@ impl App {
             layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab,
+            remote_mode: false,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
@@ -287,9 +292,9 @@ impl App {
         let (lib_tx, lib_rx) = mpsc::channel();
         let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
         let hidden_libraries = client.config.hidden_libraries.clone();
-        let show_log_tab = client.config.show_log_tab;
+        let hidden_latest = client.config.hidden_latest.clone();
         let always_play_next = client.config.always_play_next;
-        let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
+        let log = AppLog::new(0);
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let player = PlayerProxy::remote(remote, always_play_next);
@@ -300,6 +305,7 @@ impl App {
             ws_rx,
             tab_idx: 0,
             hidden_libraries,
+            hidden_latest,
             player_tab: PlayerTab {
                 items: initial_items,
                 playlist_cursor: initial_cursor,
@@ -363,7 +369,8 @@ impl App {
             layout_settings_modal: Rect::default(),
             layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
-            show_log_tab,
+            show_log_tab: false,
+            remote_mode: true,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
@@ -569,8 +576,9 @@ impl App {
         Ok(())
     }
 
-    fn tab_count(&self) -> usize { 2 + self.libs.len() }
+    fn tab_count(&self) -> usize { 2 + self.libs.len() + if self.show_log_tab { 1 } else { 0 } }
     fn log_tab_idx(&self) -> usize { 2 + self.libs.len() }
+    fn lib_tab_offset(&self) -> usize { 2 }
 
     // ── key handling ────────────────────────────────────────────────────────
 
@@ -599,7 +607,7 @@ impl App {
         // Global c: clear playlist (not when typing in library search)
         let in_lib_search = self.tab_idx > 1
             && self.tab_idx != self.log_tab_idx()
-            && self.libs.get(self.tab_idx - 2).is_some_and(|l| l.search.is_some());
+            && self.libs.get(self.tab_idx - self.lib_tab_offset()).is_some_and(|l| l.search.is_some());
         if self.confirm_clear_playlist {
             self.confirm_clear_playlist = false;
             if matches!(key.code, KeyCode::Char('y')) {
@@ -647,10 +655,6 @@ impl App {
             }
             return false;
         }
-        if self.show_log_tab && key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::ALT) {
-            self.tab_idx = self.log_tab_idx();
-            return false;
-        }
         if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::ALT) {
             self.enqueue_selected();
             return false;
@@ -662,7 +666,7 @@ impl App {
         if self.tab_idx == 0 { return self.handle_combined_key(key); }
         if self.tab_idx == 1 { return self.handle_playlist_key(key); }
         if self.tab_idx == self.log_tab_idx() { return self.handle_log_key(key); }
-        let lib_idx = self.tab_idx - 2;
+        let lib_idx = self.tab_idx - self.lib_tab_offset();
         let alt = key.modifiers.contains(KeyModifiers::ALT);
 
         // When search is active, most keys feed the query
@@ -1046,6 +1050,9 @@ impl App {
         for l in &self.libs {
             w.push(l.library.name.chars().count() as u16 + pad);
         }
+        if self.show_log_tab {
+            w.push("Log".chars().count() as u16 + pad);
+        }
         w
     }
 
@@ -1169,7 +1176,7 @@ impl App {
                 return (self.terminal_width / 2, area.y + 1 + row);
             }
         } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
-            let lib_idx = self.tab_idx - 2;
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
             let lib = &self.libs[lib_idx];
             let cursor = lib.nav_stack.last().map(|lvl| {
                 lib.search.as_ref()
@@ -1356,7 +1363,8 @@ impl App {
                     }
                     found
                 };
-                let lib = &mut self.libs[self.tab_idx - 2];
+                let lib_off = self.lib_tab_offset();
+                let lib = &mut self.libs[self.tab_idx - lib_off];
                 let hit = if let Some(s) = &mut lib.search {
                     if display_pos < s.results.len() { s.cursor = display_pos; true } else { false }
                 } else if let Some(lvl) = lib.nav_stack.last_mut() {
@@ -1591,9 +1599,10 @@ impl App {
                 // Breadcrumb click: navigate back to that depth
                 if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
                     let crumbs = self.layout_breadcrumbs.clone();
+                    let lib_off = self.lib_tab_offset();
                     for (x_start, x_end, target_depth) in crumbs {
                         if col >= x_start && col < x_end {
-                            let lib = &mut self.libs[self.tab_idx - 2];
+                            let lib = &mut self.libs[self.tab_idx - lib_off];
                             lib.nav_stack.truncate(target_depth);
                             lib.search = None;
                             return;
@@ -1671,7 +1680,8 @@ impl App {
     }
 
     fn move_lib_cursor(&mut self, delta: i64) {
-        let lib = &mut self.libs[self.tab_idx - 2];
+        let lib_off = self.lib_tab_offset();
+        let lib = &mut self.libs[self.tab_idx - lib_off];
         if let Some(s) = &mut lib.search {
             let n = s.results.len();
             if n > 0 {
@@ -1688,7 +1698,8 @@ impl App {
     }
 
     fn jump_lib_cursor(&mut self, to_end: bool) {
-        let lib = &mut self.libs[self.tab_idx - 2];
+        let lib_off = self.lib_tab_offset();
+        let lib = &mut self.libs[self.tab_idx - lib_off];
         if let Some(s) = &mut lib.search {
             let n = s.results.len();
             if n > 0 { s.cursor = if to_end { n - 1 } else { 0 }; }
@@ -1781,7 +1792,7 @@ impl App {
     }
 
     fn current_lib_item(&self) -> Option<MediaItem> {
-        let lib = self.libs.get(self.tab_idx - 2)?;
+        let lib = self.libs.get(self.tab_idx - self.lib_tab_offset())?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
         } else {
@@ -1946,7 +1957,7 @@ impl App {
     fn select(&mut self) {
         let Some(item) = self.current_lib_item() else { return };
         if item.is_folder {
-            let lib_idx = self.tab_idx - 2;
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
             let lib = &mut self.libs[lib_idx];
             lib.search = None;
             lib.nav_stack.push(BrowseLevel {
@@ -1970,7 +1981,8 @@ impl App {
 
     fn go_back(&mut self) {
         if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
-            let lib = &mut self.libs[self.tab_idx - 2];
+            let lib_off = self.lib_tab_offset();
+            let lib = &mut self.libs[self.tab_idx - lib_off];
             if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
                 lib.nav_stack.pop();
                 self.layout_lib_scroll = 0;
@@ -2044,7 +2056,7 @@ impl App {
 
     fn refresh_lib(&mut self) {
         if self.tab_idx <= 1 || self.tab_idx == self.log_tab_idx() { return; }
-        let lib_idx = self.tab_idx - 2;
+        let lib_idx = self.tab_idx - self.lib_tab_offset();
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             lvl.loading = true;
             let parent_id = lvl.parent_id.clone();
@@ -2056,7 +2068,7 @@ impl App {
 
     fn shuffle_play(&mut self) {
         if self.tab_idx <= 1 || self.tab_idx == self.log_tab_idx() { return; }
-        let lib_idx = self.tab_idx - 2;
+        let lib_idx = self.tab_idx - self.lib_tab_offset();
         let parent_id = {
             let lib = &self.libs[lib_idx];
             let item = lib.nav_stack.last().and_then(|lvl| {
@@ -2145,7 +2157,7 @@ impl App {
 
     fn ensure_library_loaded(&mut self) {
         if self.tab_idx <= 1 || self.tab_idx == self.log_tab_idx() { return; }
-        let idx = self.tab_idx - 2;
+        let idx = self.tab_idx - self.lib_tab_offset();
         if self.libs[idx].nav_stack.is_empty() {
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();
@@ -2244,6 +2256,11 @@ impl App {
 
         self.home.continue_items = client.get_continue_watching(10).unwrap_or_default();
 
+        if self.remote_mode {
+            drop(client);
+            return Ok(());
+        }
+
         let all_views = client.get_views()?;
         let old_libs: HashMap<String, Vec<BrowseLevel>> = self.libs.drain(..)
             .map(|mut l| (l.library.id.clone(), std::mem::take(&mut l.nav_stack)))
@@ -2267,7 +2284,7 @@ impl App {
 
         let user_views = client.get_user_views().unwrap_or_default();
         let mut latest: Vec<(String, String, Vec<MediaItem>, usize)> = Vec::new();
-        for v in &user_views {
+        for v in user_views.iter().filter(|v| !self.hidden_latest.contains(&v.name.to_lowercase())) {
             let title = format!("Latest {}", v.name);
             let items = if v.collection_type == "tvshows" {
                 client.get_latest_episodes(&v.id, 15).unwrap_or_default()
@@ -2507,8 +2524,9 @@ impl App {
         let all_names: Vec<String> = std::iter::once("Home".to_string())
             .chain(std::iter::once("Queue".to_string()))
             .chain(self.libs.iter().map(|l| l.library.name.clone()))
+            .chain(self.show_log_tab.then(|| "Log".to_string()))
             .collect();
-        let selected_tab = if self.tab_idx == self.log_tab_idx() || self.tab_idx < vis_start || self.tab_idx >= vis_end {
+        let selected_tab = if (!self.show_log_tab && self.tab_idx == self.log_tab_idx()) || self.tab_idx < vis_start || self.tab_idx >= vis_end {
             usize::MAX
         } else {
             self.tab_idx - vis_start
@@ -2598,7 +2616,7 @@ impl App {
         } else if self.tab_idx == self.log_tab_idx() {
             self.render_log(f, main_area);
         } else {
-            self.render_library(f, main_area, self.tab_idx - 2);
+            self.render_library(f, main_area, self.tab_idx - self.lib_tab_offset());
         }
 
         self.render_context_menu(f);
@@ -4506,6 +4524,7 @@ mod tests {
             ws_rx,
             tab_idx: 0,
             hidden_libraries: Vec::new(),
+            hidden_latest: Vec::new(),
             player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
             home: HomePane {
                 continue_items: Vec::new(),
@@ -4565,6 +4584,7 @@ mod tests {
             layout_settings_ok_btn: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
+            remote_mode: false,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,

@@ -8,6 +8,7 @@ pub struct Config {
     pub password: String,
     pub api_key: String,
     pub hidden_libraries: Vec<String>,
+    pub hidden_latest: Vec<String>,
     pub show_audio_window: bool,
     pub use_mpv_config: bool,
     pub always_play_next: bool,
@@ -25,6 +26,7 @@ impl Default for Config {
             password: String::new(),
             api_key: String::new(),
             hidden_libraries: vec!["live tv".into(), "podcasts".into()],
+            hidden_latest: vec![],
             show_audio_window: false,
             use_mpv_config: false,
             always_play_next: false,
@@ -144,6 +146,12 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect())
         .unwrap_or_else(|| vec!["live tv".into(), "podcasts".into()]);
 
+    let hidden_latest: Vec<String> = mby
+        .and_then(|m| m.get("hidden_latest"))
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect())
+        .unwrap_or_default();
+
     let show_audio_window = misc
         .and_then(|m| m.get("show_audio_window"))
         .and_then(|v| v.as_bool())
@@ -185,6 +193,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         password: String::new(),
         api_key: String::new(),
         hidden_libraries,
+        hidden_latest,
         show_audio_window,
         use_mpv_config,
         always_play_next,
@@ -242,6 +251,25 @@ hidden_libraries = ["Live TV", "MOVIES"]
         let toml = "[server]\nurl = \"http://host\"";
         let cfg = parse_config(toml).unwrap();
         assert_eq!(cfg.hidden_libraries, vec!["live tv", "podcasts"]);
+    }
+
+    #[test]
+    fn parse_hidden_latest_lowercased() {
+        let toml = r#"
+[server]
+url = "http://host"
+[mby]
+hidden_latest = ["Movies", "TV SHOWS"]
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert_eq!(cfg.hidden_latest, vec!["movies", "tv shows"]);
+    }
+
+    #[test]
+    fn parse_default_hidden_latest_when_absent() {
+        let toml = "[server]\nurl = \"http://host\"";
+        let cfg = parse_config(toml).unwrap();
+        assert!(cfg.hidden_latest.is_empty());
     }
 
     #[test]
