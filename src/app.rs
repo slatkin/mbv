@@ -4249,7 +4249,7 @@ fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'sta
                     format!(" {pct}%")
                 } else { String::new() };
                 let (name, suf) = split_suffix(&s);
-                let mut spans = vec![Span::styled("• ", yellow), Span::styled(name.to_string(), style)];
+                let mut spans = vec![Span::styled(name.to_string(), style)];
                 if !suf.is_empty() { spans.push(Span::styled(suf.to_string(), subtle)); }
                 if !pct_str.is_empty() { spans.push(Span::styled(pct_str, yellow)); }
                 Line::from(spans)
@@ -4288,7 +4288,7 @@ fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'st
                     format!(" {pct}%")
                 } else { String::new() };
                 let (name, suf) = split_suffix(&s);
-                let mut spans = vec![Span::styled("• ", yellow), Span::styled(name.to_string(), span_style)];
+                let mut spans = vec![Span::styled(name.to_string(), span_style)];
                 if !suf.is_empty() { spans.push(Span::styled(suf.to_string(), subtle)); }
                 if !pct_str.is_empty() { spans.push(Span::styled(pct_str, yellow)); }
                 Line::from(spans)
