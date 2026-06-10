@@ -189,7 +189,7 @@ enum SettingKey {
     StartOnQueue,
     AlwaysPlayNext,
     ShowLogTab,
-    CardImageProtocol,
+    ImageProtocol,
     ShowAudioWindow,
     UseMpvConfig,
     NoScripts,
@@ -200,7 +200,7 @@ enum SettingKey {
 // Sections rendered as IRIS blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
-    ("[mbv]",    &[SettingKey::DaemonModeOnExit, SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ShowLogTab, SettingKey::CardImageProtocol]),
+    ("[mbv]",    &[SettingKey::DaemonModeOnExit, SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ShowLogTab, SettingKey::ImageProtocol]),
     ("[mpv]",    &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts]),
     ("[daemon]", &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",&[SettingKey::LogOut]),
@@ -212,7 +212,7 @@ fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::StartOnQueue      => "Start on queue",
         SettingKey::AlwaysPlayNext    => "Always play next",
         SettingKey::ShowLogTab        => "Show log tab",
-        SettingKey::CardImageProtocol => "Card image protocol",
+        SettingKey::ImageProtocol => "Image protocol",
         SettingKey::ShowAudioWindow   => "Show audio window",
         SettingKey::UseMpvConfig      => "Use mpv config",
         SettingKey::NoScripts         => "No scripts",
@@ -227,7 +227,7 @@ fn setting_value(key: SettingKey, cfg: &crate::config::Config) -> String {
         SettingKey::StartOnQueue      => bool_val(cfg.start_on_queue),
         SettingKey::AlwaysPlayNext    => bool_val(cfg.always_play_next),
         SettingKey::ShowLogTab        => bool_val(cfg.show_log_tab),
-        SettingKey::CardImageProtocol => cfg.card_image_protocol.clone().unwrap_or_else(|| "none".into()),
+        SettingKey::ImageProtocol => cfg.image_protocol.clone().unwrap_or_else(|| "none".into()),
         SettingKey::ShowAudioWindow   => bool_val(cfg.show_audio_window),
         SettingKey::UseMpvConfig      => bool_val(cfg.use_mpv_config),
         SettingKey::NoScripts         => bool_val(cfg.no_scripts),
@@ -472,7 +472,7 @@ impl App {
 
         // Initialise image picker after terminal is in raw mode.
         use ratatui_image::picker::ProtocolType;
-        let protocol_override = self.client.lock().unwrap().config.card_image_protocol.clone();
+        let protocol_override = self.client.lock().unwrap().config.image_protocol.clone();
         let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
         let proto = protocol_override.as_deref()
             .and_then(|s| match s.to_lowercase().as_str() {
@@ -889,9 +889,11 @@ impl App {
                 return false;
             }
             KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::ALT) => {
-                self.home_card_view = !self.home_card_view;
-                self.save_home_card_view();
-                if !self.card_image_states.is_empty() { self.force_clear = true; }
+                if self.images_enabled() {
+                    self.home_card_view = !self.home_card_view;
+                    self.save_home_card_view();
+                    if !self.card_image_states.is_empty() { self.force_clear = true; }
+                }
                 return false;
             }
             KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
@@ -1038,8 +1040,10 @@ impl App {
                 self.open_context_menu();
             }
             KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::ALT) => {
-                self.playlist_card_view = !self.playlist_card_view;
-                self.save_playlist_card_view();
+                if self.images_enabled() {
+                    self.playlist_card_view = !self.playlist_card_view;
+                    self.save_playlist_card_view();
+                }
             }
             KeyCode::Char('.') => {
                 let s = self.player.status.lock().unwrap();
@@ -2940,16 +2944,24 @@ impl App {
         let key = settings_cursor_to_key(self.settings_cursor);
         match key {
             SettingKey::LogOut => { self.confirm_logout = true; }
-            SettingKey::CardImageProtocol => {
-                let mut c = self.client.lock().unwrap();
-                c.config.card_image_protocol = match c.config.card_image_protocol.as_deref() {
-                    None               => Some("halfblocks".into()),
-                    Some("halfblocks") => Some("sixel".into()),
-                    Some("sixel")      => Some("kitty".into()),
-                    Some("kitty")      => Some("iterm2".into()),
-                    Some("iterm2")     => Some("auto".into()),
-                    _                  => None,
+            SettingKey::ImageProtocol => {
+                let now_none = {
+                    let mut c = self.client.lock().unwrap();
+                    c.config.image_protocol = match c.config.image_protocol.as_deref() {
+                        None               => Some("halfblocks".into()),
+                        Some("halfblocks") => Some("sixel".into()),
+                        Some("sixel")      => Some("kitty".into()),
+                        Some("kitty")      => Some("iterm2".into()),
+                        Some("iterm2")     => Some("auto".into()),
+                        _                  => None,
+                    };
+                    c.config.image_protocol.is_none()
                 };
+                if now_none {
+                    self.home_card_view = false;
+                    self.playlist_card_view = false;
+                    self.save_prefs();
+                }
             }
             SettingKey::ShowLogTab => {
                 let new_val = {
@@ -3430,6 +3442,10 @@ impl App {
         });
     }
 
+    fn images_enabled(&self) -> bool {
+        self.client.lock().unwrap().config.image_protocol.is_some()
+    }
+
     fn evict_card_images(&mut self) {
         let mut valid: std::collections::HashSet<String> = self.player_tab.items.iter()
             .flat_map(|item| [format!("{}:A", item.id), format!("{}:S", item.id)])
@@ -3437,9 +3453,7 @@ impl App {
         for lib in &self.libs {
             if let Some(lvl) = lib.nav_stack.last() {
                 if let Some(item) = lvl.items.get(lvl.cursor) {
-                    if item.item_type == "Episode" {
-                        valid.insert(format!("{}:lib", item.id));
-                    }
+                    valid.insert(format!("{}:lib", item.id));
                 }
             }
         }
@@ -3467,9 +3481,10 @@ impl App {
 
         // Panels are 80% of available height, centered vertically, capped 6 rows below area.
         // Side cards are 80% of center height, also centered.
+        let compact    = self.terminal_height < 28;
         let max_h      = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
         let side_h     = ((max_h as u32 * 4 / 5) as u16).max(3);
-        let center_h   = side_h + 2;
+        let center_h   = if compact { side_h } else { side_h + 2 };
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
         let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
 
@@ -3547,7 +3562,9 @@ impl App {
             } else {
                 (format!("{}:S", item_id), &["Logo", "Primary", "Backdrop"])
             };
-            self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+            if self.images_enabled() {
+                self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+            }
 
             let ep_tag = if is_ep { format!("S{:02}E{:02}", season, episode) } else { String::new() };
             let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
@@ -3557,16 +3574,18 @@ impl App {
         }
 
         // Prefetch images for the three items before and after the cursor.
-        let prefetch_start = cursor.saturating_sub(3);
-        let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
-        for pi in prefetch_start..=prefetch_end {
-            let (item_id, series_id) = {
-                let item = &self.player_tab.items[pi];
-                (item.id.clone(), item.series_id.clone())
-            };
-            self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), &["Primary", "Backdrop", "Logo"]);
-            if pi != cursor {
-                self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
+        if self.images_enabled() {
+            let prefetch_start = cursor.saturating_sub(3);
+            let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
+            for pi in prefetch_start..=prefetch_end {
+                let (item_id, series_id) = {
+                    let item = &self.player_tab.items[pi];
+                    (item.id.clone(), item.series_id.clone())
+                };
+                self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), &["Primary", "Backdrop", "Logo"]);
+                if pi != cursor {
+                    self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
+                }
             }
         }
 
@@ -3800,12 +3819,14 @@ impl App {
         let cards_h    = cards_area.height;
 
         // Same geometry as render_playlist_cards.
+        let compact    = self.terminal_height < 28;
         let max_h      = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
         let side_h     = ((max_h as u32 * 4 / 5) as u16).max(3);
-        let center_h   = side_h + 2;
+        let center_h   = if compact { side_h } else { side_h + 2 };
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
         // Row just below the center card — used for ▼ scroll arrow.
-        let gutter_y = (cards_area.y + center_v_pad + center_h + 1).min(area.bottom().saturating_sub(1));
+        let arrow_gap  = if compact { 0 } else { 1 };
+        let gutter_y = (cards_area.y + center_v_pad + center_h + arrow_gap).min(area.bottom().saturating_sub(1));
         let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
 
         const SIDE_HIDE_W: u16 = 60;
@@ -3843,14 +3864,16 @@ impl App {
             ),
         ];
 
-        let prefetch_start = cursor.saturating_sub(3);
-        let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
-        for pi in prefetch_start..=prefetch_end {
-            let item = &items[pi];
-            let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-            self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), &["Primary", "Backdrop", "Logo"]);
-            if pi != cursor {
-                self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
+        if self.images_enabled() {
+            let prefetch_start = cursor.saturating_sub(3);
+            let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
+            for pi in prefetch_start..=prefetch_end {
+                let item = &items[pi];
+                let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
+                self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), &["Primary", "Backdrop", "Logo"]);
+                if pi != cursor {
+                    self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, &["Logo", "Primary", "Backdrop"]);
+                }
             }
         }
 
@@ -3876,7 +3899,9 @@ impl App {
             } else {
                 (format!("{}:S", item_id), &["Logo", "Primary", "Backdrop"])
             };
-            self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+            if self.images_enabled() {
+                self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+            }
 
             let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
             let sec_title_label = if *is_center { Some(sec_title.as_str()) } else { None };
@@ -3902,8 +3927,9 @@ impl App {
         // Section scroll arrows.
         let n_sections = 1 + self.home.latest.len();
         let ud_arrow_style = Style::default().fg(palette::IRIS);
-        if self.home.section > 0 && center_v_pad >= 2 {
-            let r = Rect { x: area.x, y: cards_area.y + center_v_pad - 2, width: area.width, height: 1 };
+        let up_arrow_offset = 1 + arrow_gap;
+        if self.home.section > 0 && center_v_pad >= up_arrow_offset {
+            let r = Rect { x: area.x, y: cards_area.y + center_v_pad - up_arrow_offset, width: area.width, height: 1 };
             self.layout_carousel_up_arrow = Some(r);
             f.render_widget(Paragraph::new("▲").style(ud_arrow_style).alignment(Alignment::Center), r);
         }
@@ -4146,8 +4172,7 @@ impl App {
 
     fn render_library_table(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
         self.layout_lib_table_area = area;
-        const LIB_IMG_W: u16 = 20;
-        const LIB_EP_IMG_W: u16 = 32;
+        const LIB_SELECTED_IMG_W: u16 = 32;
 
         let (display_items, cursor): (Vec<(usize, crate::api::MediaItem)>, usize) = {
             let lib = &self.libs[lib_idx];
@@ -4176,13 +4201,13 @@ impl App {
             return;
         }
 
-        // Row heights: 2 base (+ wrapped overview for episodes) + 1 separator.
-        // Selected row also gets +2 padding (top + bottom).
-        let episode_content_w = area.width.saturating_sub(1) as usize;
-        let episode_selected_content_w = area.width.saturating_sub(1 + LIB_EP_IMG_W) as usize;
+        // Row heights: 2 base + 1 separator. Selected row also gets overview and seekbar
+        // when images are enabled.
+        let images_enabled = self.images_enabled();
+        let content_w_sel = area.width.saturating_sub(1 + LIB_SELECTED_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
-            let base: u16 = if item.item_type == "Episode" {
-                let ew = if i == cursor { episode_selected_content_w } else { episode_content_w };
+            let base: u16 = if images_enabled && i == cursor {
+                let ew = content_w_sel;
                 let ov_lines = if item.overview.is_empty() { 0 }
                     else { wrap(&item.overview, ew.max(1)).len().min(4) as u16 };
                 let seekbar: u16 = if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 { 2 } else { 0 };
@@ -4204,8 +4229,8 @@ impl App {
         self.layout_lib_scroll = scroll;
 
         // Trigger image fetch for selected item before rendering loop
-        if let Some((_, item)) = display_items.get(cursor) {
-            if item.item_type == "Episode" {
+        if images_enabled {
+            if let Some((_, item)) = display_items.get(cursor) {
                 let cache_key = format!("{}:lib", item.id);
                 self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Primary"]);
             }
@@ -4219,7 +4244,7 @@ impl App {
             let abs_idx = scroll + vi;
             let row_h = all_heights[abs_idx].min(area.y + area.height - row_y);
             let selected = abs_idx == cursor;
-            let show_img = selected && item.item_type == "Episode";
+            let show_img = selected && images_enabled;
             let row_rect = Rect { x: area.x, y: row_y, width: area.width, height: row_h };
 
             // Content area excludes the separator line at the bottom of the row.
@@ -4231,12 +4256,7 @@ impl App {
             let cache_key = format!("{}:lib", item.id);
             let img_actual = if show_img {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                    let (img_w, img_h) = if item.item_type == "Episode" {
-                        (LIB_EP_IMG_W, 4u16.min(padded_area.height))
-                    } else {
-                        (LIB_IMG_W, padded_area.height)
-                    };
-                    let avail = ratatui::layout::Size { width: img_w, height: img_h };
+                    let avail = ratatui::layout::Size { width: LIB_SELECTED_IMG_W, height: padded_area.height };
                     Some(state.size_for(ratatui_image::Resize::Fit(None), avail))
                 } else { None }
             } else { None };
@@ -4369,16 +4389,15 @@ impl App {
             };
 
             // Split text_rect vertically into lines
-            let is_ep_in_progress = item.item_type == "Episode"
-                && item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0;
-            let overview_lines: Vec<String> = if item.item_type == "Episode" && !item.overview.is_empty() {
+            let in_progress = item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0;
+            let overview_lines: Vec<String> = if selected && images_enabled && !item.overview.is_empty() {
                 wrap(&item.overview, content_w.max(1))
                     .into_iter()
                     .take(4)
                     .map(|s| s.into_owned())
                     .collect()
             } else { Vec::new() };
-            let seekbar_extra: usize = if is_ep_in_progress { 2 } else { 0 }; // spacer + bar
+            let seekbar_extra: usize = if selected && images_enabled && in_progress { 2 } else { 0 }; // spacer + bar
             let line_count = (2 + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
             if line_count == 0 { continue; }
             let constraints: Vec<Constraint> = (0..line_count).map(|_| Constraint::Length(1)).collect();
@@ -4400,7 +4419,7 @@ impl App {
                 );
             }
             // Seekbar: spacer at line_count-2, bar at line_count-1
-            if is_ep_in_progress && line_count >= 2 + seekbar_extra {
+            if selected && images_enabled && in_progress && line_count >= 2 + seekbar_extra {
                 let bar_w = content_w;
                 let fraction = (item.playback_position_ticks as f64 / item.runtime_ticks as f64).clamp(0.0, 1.0);
                 let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);

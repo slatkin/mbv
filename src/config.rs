@@ -12,7 +12,7 @@ pub struct Config {
     pub show_audio_window: bool,
     pub use_mpv_config: bool,
     pub always_play_next: bool,
-    pub card_image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
+    pub image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
     pub show_systray_icon: bool,
     pub show_log_tab: bool,
     pub no_scripts: bool,
@@ -32,7 +32,7 @@ impl Default for Config {
             show_audio_window: false,
             use_mpv_config: false,
             always_play_next: false,
-            card_image_protocol: None,
+            image_protocol: None,
             show_systray_icon: true,
             show_log_tab: false,
             no_scripts: false,
@@ -161,8 +161,8 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let card_image_protocol = mbv
-        .and_then(|m| m.get("card_image_protocol"))
+    let image_protocol = mbv
+        .and_then(|m| m.get("image_protocol").or_else(|| m.get("card_image_protocol")))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
@@ -201,7 +201,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         show_audio_window,
         use_mpv_config,
         always_play_next,
-        card_image_protocol,
+        image_protocol,
         show_systray_icon,
         show_log_tab,
         no_scripts,
@@ -233,9 +233,10 @@ pub fn save_config_settings(cfg: &Config) {
     mbv.insert("start_on_queue".to_string(),      toml::Value::Boolean(cfg.start_on_queue));
     mbv.insert("always_play_next".to_string(),    toml::Value::Boolean(cfg.always_play_next));
     mbv.insert("show_log_tab".to_string(),        toml::Value::Boolean(cfg.show_log_tab));
-    match &cfg.card_image_protocol {
-        Some(p) => { mbv.insert("card_image_protocol".to_string(), toml::Value::String(p.clone())); }
-        None    => { mbv.remove("card_image_protocol"); }
+    mbv.remove("card_image_protocol"); // remove legacy key if present
+    match &cfg.image_protocol {
+        Some(p) => { mbv.insert("image_protocol".to_string(), toml::Value::String(p.clone())); }
+        None    => { mbv.remove("image_protocol"); }
     }
 
     let mpv = section!("mpv");
