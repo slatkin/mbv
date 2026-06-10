@@ -4461,6 +4461,8 @@ impl App {
         // Row heights: 2 base + 1 separator. Selected row also gets overview and seekbar
         // when images are enabled.
         let images_enabled = self.images_enabled();
+        let lib_ctype = self.libs[lib_idx].library.collection_type.clone();
+        let show_seekbar = !matches!(lib_ctype.as_str(), "channels" | "homevideos");
         let content_w_sel = area.width.saturating_sub(1 + LIB_SELECTED_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
@@ -4470,7 +4472,7 @@ impl App {
                 let ew = content_w_sel;
                 let ov_lines = if item.overview.is_empty() { 0 }
                     else { wrap(&item.overview, ew.max(1)).len().min(4) as u16 };
-                let seekbar: u16 = if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 { 2 } else { 0 };
+                let seekbar: u16 = if show_seekbar && item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 { 2 } else { 0 };
                 2 + ov_lines + seekbar
             } else { 2 };
             base + 1 // +1 for separator line at bottom
@@ -4676,7 +4678,7 @@ impl App {
                     }
                     if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
                         let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                        spans.push(Span::styled(format!("  {pct}%"), Style::default().fg(palette::SUBTLE)));
+                        spans.push(Span::styled(format!("  {pct}%"), Style::default().fg(palette::YELLOW)));
                     }
                     Line::from(spans)
                 }
@@ -4685,13 +4687,17 @@ impl App {
             // Split text_rect vertically into lines
             let in_progress = item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0;
             let overview_lines: Vec<String> = if !is_audio && selected && images_enabled && !item.overview.is_empty() {
-                wrap(&item.overview, content_w.max(1))
-                    .into_iter()
-                    .take(4)
-                    .map(|s| s.into_owned())
-                    .collect()
+                let w = content_w.max(1);
+                let mut lines: Vec<String> = wrap(&item.overview, w).into_iter().map(|s| s.into_owned()).collect();
+                if lines.len() > 4 {
+                    lines.truncate(4);
+                    let last = lines.last_mut().unwrap();
+                    if last.len() + 3 <= w { last.push_str("..."); }
+                    else { last.replace_range(last.len().saturating_sub(3).., "..."); }
+                }
+                lines
             } else { Vec::new() };
-            let seekbar_extra: usize = if !is_audio && selected && images_enabled && in_progress { 2 } else { 0 }; // spacer + bar
+            let seekbar_extra: usize = if !is_audio && selected && images_enabled && show_seekbar && in_progress { 2 } else { 0 }; // spacer + bar
             let artist_extra: usize = if artist_line.is_some() { 1 } else { 0 };
             let base_lines = 2 + artist_extra;
             let line_count = (base_lines + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
@@ -4725,7 +4731,7 @@ impl App {
                 );
             }
             // Seekbar: spacer at line_count-2, bar at line_count-1
-            if !is_audio && selected && images_enabled && in_progress && line_count >= base_lines + seekbar_extra {
+            if !is_audio && selected && images_enabled && show_seekbar && in_progress && line_count >= base_lines + seekbar_extra {
                 let bar_w = content_w;
                 let fraction = (item.playback_position_ticks as f64 / item.runtime_ticks as f64).clamp(0.0, 1.0);
                 let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
