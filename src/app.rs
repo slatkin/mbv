@@ -3469,9 +3469,9 @@ impl App {
         // Side cards are 80% of center height, also centered.
         let max_h      = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
         let side_h     = ((max_h as u32 * 4 / 5) as u16).max(3);
-        let center_h   = side_h;
+        let center_h   = side_h + 2;
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
-        let side_v_pad = center_v_pad;
+        let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
 
         // Below this width threshold, hide side cards and give all space to center.
         const SIDE_HIDE_W: u16 = 60;
@@ -3668,12 +3668,12 @@ impl App {
                 type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
                 if is_center {
                     let avail = ratatui::layout::Size { width: inner.width.saturating_sub(2), height: img_h };
-                    let actual = state.size_for(ratatui_image::Resize::Fit(None), avail);
-                    let img_x = inner.x + (inner.width.saturating_sub(actual.width)) / 2;
-                    let img_y = img_top + (img_h.saturating_sub(actual.height)) / 2;
+                    let actual = state.size_for(ratatui_image::Resize::Scale(None), avail);
+                    let img_x = inner.x + 1 + (avail.width.saturating_sub(actual.width)) / 2;
+                    let img_y = img_top;
                     let img_rect = Rect { x: img_x, y: img_y, width: actual.width, height: actual.height };
                     f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Fit(None)),
+                        SImg::default().resize(ratatui_image::Resize::Scale(None)),
                         img_rect, state,
                     );
                 } else {
@@ -3802,11 +3802,11 @@ impl App {
         // Same geometry as render_playlist_cards.
         let max_h      = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
         let side_h     = ((max_h as u32 * 4 / 5) as u16).max(3);
-        let center_h   = side_h;
+        let center_h   = side_h + 2;
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
         // Row just below the center card — used for ▼ scroll arrow.
         let gutter_y = (cards_area.y + center_v_pad + center_h + 1).min(area.bottom().saturating_sub(1));
-        let side_v_pad = center_v_pad;
+        let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
 
         const SIDE_HIDE_W: u16 = 60;
         let show_sides = cards_area.width >= SIDE_HIDE_W;
