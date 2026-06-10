@@ -1989,11 +1989,10 @@ impl App {
             let s = self.player.status.lock().unwrap();
             (s.sub_tracks.clone(), s.sub_id)
         };
-        // Off + English text subs only
+        if tracks.is_empty() { return; }
+        // Cycle: off → track1 → track2 → … → off
         let mut entries: Vec<i64> = vec![0];
-        entries.extend(tracks.iter()
-            .filter(|(_, l)| crate::player::is_english(l))
-            .map(|(id, _)| *id));
+        entries.extend(tracks.iter().map(|(id, _)| *id));
         let cur = entries.iter().position(|&id| id == current_id).unwrap_or(0);
         let next = (cur + 1) % entries.len();
         self.player.send_command(PlayerCommand::SetSub(entries[next]));
