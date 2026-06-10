@@ -2638,34 +2638,58 @@ impl App {
         const GAP:    u16 = 1;
         let right_w = VOL_W + GAP + SETTINGS_W;
 
-        // Thin underline below tab row, with optional [字] indicator embedded inline
+        // Thin underline below tab row, with [字] sub and [♪:🏳] audio indicators embedded inline
         {
-            let sub_active = {
+            let (sub_active, audio_label) = {
                 let s = self.player.status.lock().unwrap();
-                s.sub_id != 0 && !s.sub_tracks.is_empty()
+                let sub_on = s.sub_id != 0 && !s.sub_tracks.is_empty();
+                let aud_label = if s.active && s.audio_id != 0 {
+                    s.audio_tracks.iter().find(|(id, _)| *id == s.audio_id)
+                        .map(|(_, l)| l.clone())
+                } else { None };
+                (sub_on, aud_label)
             };
-            const IND_W: u16 = 4; // "[字]" = [=1, 字=2, ]=1
-            let dash_style = Style::default().fg(palette::MUTED);
-            let gap_spans: Vec<Span> = if sub_active {
-                let ind_offset = gap_area.width.saturating_sub(right_w + IND_W) as usize;
-                let right_dashes = (gap_area.width as usize).saturating_sub(ind_offset + IND_W as usize);
-                vec![
-                    Span::styled("─".repeat(ind_offset), dash_style),
-                    Span::styled("[",  Style::default().fg(palette::SUBTLE)),
-                    Span::styled("字", Style::default().fg(palette::RED)),
-                    Span::styled("]",  Style::default().fg(palette::SUBTLE)),
-                    Span::styled("─".repeat(right_dashes), dash_style),
-                ]
-            } else {
-                vec![Span::styled("─".repeat(gap_area.width as usize), dash_style)]
-            };
-            f.render_widget(Paragraph::new(Line::from(gap_spans)), gap_area);
+            let audio_flag: &str = audio_label.as_deref()
+                .map(crate::player::lang_to_flag)
+                .unwrap_or("");
+
+            // [字]=4 cols, [♪:🏳]=6 cols (♪=1, :=1, flag=2, brackets=2)
+            const SUB_W: u16 = 4;
+            const AUD_W: u16 = 6;
+            // Sub indicator sits SUB_W before the right_w block; audio immediately after sub
+            let sub_start = (gap_area.width.saturating_sub(right_w + SUB_W)) as usize;
+            let aud_start = sub_start + SUB_W as usize;
+            let right_dashes = (gap_area.width as usize).saturating_sub(aud_start + AUD_W as usize);
+
+            let dash = Style::default().fg(palette::MUTED);
+            let bra  = Style::default().fg(palette::SUBTLE);
+            let mut spans: Vec<Span> = Vec::new();
+            spans.push(Span::styled("─".repeat(sub_start), dash));
             if sub_active {
-                let ind_x = gap_area.x + gap_area.width.saturating_sub(right_w + IND_W);
-                self.layout_sub_indicator_area = Rect { x: ind_x, y: gap_area.y, width: IND_W, height: 1 };
+                spans.push(Span::styled("[",  bra));
+                spans.push(Span::styled("字", Style::default().fg(palette::RED)));
+                spans.push(Span::styled("]",  bra));
             } else {
-                self.layout_sub_indicator_area = Rect::default();
+                spans.push(Span::styled("─".repeat(SUB_W as usize), dash));
             }
+            if !audio_flag.is_empty() {
+                spans.push(Span::styled("[",         bra));
+                spans.push(Span::styled("\u{266a}",  Style::default().fg(palette::IRIS)));
+                spans.push(Span::styled(":",         bra));
+                spans.push(Span::styled(audio_flag,  Style::default().fg(palette::TEXT)));
+                spans.push(Span::styled("]",         bra));
+            } else {
+                spans.push(Span::styled("─".repeat(AUD_W as usize), dash));
+            }
+            spans.push(Span::styled("─".repeat(right_dashes), dash));
+            f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
+
+            let sub_x = gap_area.x + sub_start as u16;
+            self.layout_sub_indicator_area = if sub_active {
+                Rect { x: sub_x, y: gap_area.y, width: SUB_W, height: 1 }
+            } else {
+                Rect::default()
+            };
         }
         let gear_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(SETTINGS_W),
