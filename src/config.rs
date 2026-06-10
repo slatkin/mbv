@@ -157,7 +157,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let card_image_protocol = misc
+    let card_image_protocol = mbv
         .and_then(|m| m.get("card_image_protocol"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
