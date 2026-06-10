@@ -39,6 +39,15 @@ enum ContextAction {
     RemoveFromPlaylist(usize),
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MultiSelectKind { HiddenLibraries, HiddenLatest }
+
+struct MultiSelectPopup {
+    kind: MultiSelectKind,
+    items: Vec<(String, String, bool)>, // (name_lower, display_name, is_hidden)
+    cursor: usize,
+}
+
 struct ContextMenu {
     x: u16,
     y: u16,
@@ -174,6 +183,7 @@ pub struct App {
     settings_scroll: usize,
     settings_save_at: Option<Instant>,
     confirm_logout: bool,
+    multiselect_popup: Option<MultiSelectPopup>,
     layout_settings_area: Rect,
     help_scroll: u16,
     show_log_tab: bool,
@@ -192,6 +202,8 @@ enum SettingKey {
     AlwaysPlayNext,
     ShowLogTab,
     ImageProtocol,
+    HiddenLibraries,
+    HiddenLatest,
     ShowAudioWindow,
     UseMpvConfig,
     NoScripts,
@@ -202,7 +214,7 @@ enum SettingKey {
 // Sections rendered as IRIS blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
-    ("[mbv]",    &[SettingKey::DaemonModeOnExit, SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ShowLogTab, SettingKey::ImageProtocol]),
+    ("[mbv]",    &[SettingKey::DaemonModeOnExit, SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ShowLogTab, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
     ("[mpv]",    &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts]),
     ("[daemon]", &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",&[SettingKey::LogOut]),
@@ -214,7 +226,9 @@ fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::StartOnQueue      => "Start on queue",
         SettingKey::AlwaysPlayNext    => "Always play next",
         SettingKey::ShowLogTab        => "Show log tab",
-        SettingKey::ImageProtocol => "Image protocol",
+        SettingKey::ImageProtocol     => "Image protocol",
+        SettingKey::HiddenLibraries   => "Hidden libraries",
+        SettingKey::HiddenLatest      => "Hidden latest",
         SettingKey::ShowAudioWindow   => "Show audio window",
         SettingKey::UseMpvConfig      => "Use mpv config",
         SettingKey::NoScripts         => "No scripts",
@@ -229,12 +243,22 @@ fn setting_value(key: SettingKey, cfg: &crate::config::Config) -> String {
         SettingKey::StartOnQueue      => bool_val(cfg.start_on_queue),
         SettingKey::AlwaysPlayNext    => bool_val(cfg.always_play_next),
         SettingKey::ShowLogTab        => bool_val(cfg.show_log_tab),
-        SettingKey::ImageProtocol => cfg.image_protocol.clone().unwrap_or_else(|| "none".into()),
+        SettingKey::ImageProtocol     => cfg.image_protocol.clone().unwrap_or_else(|| "none".into()),
+        SettingKey::HiddenLibraries   => fmt_hidden_list(&cfg.hidden_libraries),
+        SettingKey::HiddenLatest      => fmt_hidden_list(&cfg.hidden_latest),
         SettingKey::ShowAudioWindow   => bool_val(cfg.show_audio_window),
         SettingKey::UseMpvConfig      => bool_val(cfg.use_mpv_config),
         SettingKey::NoScripts         => bool_val(cfg.no_scripts),
         SettingKey::ShowSysTrayIcon   => bool_val(cfg.show_systray_icon),
         SettingKey::LogOut            => String::new(),
+    }
+}
+
+fn fmt_hidden_list(list: &[String]) -> String {
+    match list.len() {
+        0 => "none".into(),
+        1 => list[0].clone(),
+        n => format!("{n} hidden"),
     }
 }
 
@@ -355,6 +379,7 @@ impl App {
             settings_scroll: 0,
             settings_save_at: None,
             confirm_logout: false,
+            multiselect_popup: None,
             layout_settings_area: Rect::default(),
             help_scroll: 0,
             show_log_tab,
@@ -458,6 +483,7 @@ impl App {
             settings_scroll: 0,
             settings_save_at: None,
             confirm_logout: false,
+            multiselect_popup: None,
             layout_settings_area: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
@@ -682,6 +708,29 @@ impl App {
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
         if self.show_settings {
+            if self.multiselect_popup.is_some() {
+                match key.code {
+                    KeyCode::Esc | KeyCode::Enter => { self.close_multiselect_popup(); }
+                    KeyCode::Up => {
+                        if let Some(p) = &mut self.multiselect_popup {
+                            if p.cursor > 0 { p.cursor -= 1; }
+                        }
+                    }
+                    KeyCode::Down => {
+                        if let Some(p) = &mut self.multiselect_popup {
+                            if p.cursor + 1 < p.items.len() { p.cursor += 1; }
+                        }
+                    }
+                    KeyCode::Char(' ') => {
+                        if let Some(p) = &mut self.multiselect_popup {
+                            let i = p.cursor;
+                            p.items[i].2 = !p.items[i].2;
+                        }
+                    }
+                    _ => {}
+                }
+                return false;
+            }
             if self.confirm_logout {
                 if matches!(key.code, KeyCode::Char('y')) {
                     crate::api::clear_cached_token();
@@ -2612,7 +2661,11 @@ impl App {
 
     fn render(&mut self, f: &mut ratatui::Frame) {
         if self.show_help { self.render_help_screen(f); return; }
-        if self.show_settings { self.render_settings_screen(f); return; }
+        if self.show_settings {
+            self.render_settings_screen(f);
+            if self.multiselect_popup.is_some() { self.render_multiselect_popup(f); }
+            return;
+        }
         let area = f.area();
         if area.width != self.terminal_width || area.height != self.terminal_height {
             self.card_image_states.clear();
@@ -2997,6 +3050,8 @@ impl App {
     fn handle_settings_activate(&mut self) {
         let key = settings_cursor_to_key(self.settings_cursor);
         match key {
+            SettingKey::HiddenLibraries => { self.open_multiselect_popup(MultiSelectKind::HiddenLibraries); return; }
+            SettingKey::HiddenLatest    => { self.open_multiselect_popup(MultiSelectKind::HiddenLatest);    return; }
             SettingKey::LogOut => { self.confirm_logout = true; }
             SettingKey::ImageProtocol => {
                 let now_none = {
@@ -3043,6 +3098,113 @@ impl App {
     }
 
     fn settings_scroll_follow(&mut self) {} // no-op: grid layout always fits
+
+    fn open_multiselect_popup(&mut self, kind: MultiSelectKind) {
+        let client = self.client.lock().unwrap();
+        let all = match kind {
+            MultiSelectKind::HiddenLibraries => client.get_views().unwrap_or_default(),
+            MultiSelectKind::HiddenLatest    => client.get_user_views().unwrap_or_default(),
+        };
+        let hidden_list = match kind {
+            MultiSelectKind::HiddenLibraries => &client.config.hidden_libraries,
+            MultiSelectKind::HiddenLatest    => &client.config.hidden_latest,
+        };
+        let items: Vec<(String, String, bool)> = all.iter().map(|v| {
+            let lower = v.name.to_lowercase();
+            let is_hidden = hidden_list.contains(&lower);
+            (lower, v.name.clone(), is_hidden)
+        }).collect();
+        drop(client);
+        self.multiselect_popup = Some(MultiSelectPopup { kind, items, cursor: 0 });
+    }
+
+    fn close_multiselect_popup(&mut self) {
+        let Some(popup) = self.multiselect_popup.take() else { return; };
+        let hidden: Vec<String> = popup.items.iter()
+            .filter(|(_, _, is_hidden)| *is_hidden)
+            .map(|(lower, _, _)| lower.clone())
+            .collect();
+        {
+            let mut c = self.client.lock().unwrap();
+            match popup.kind {
+                MultiSelectKind::HiddenLibraries => c.config.hidden_libraries = hidden.clone(),
+                MultiSelectKind::HiddenLatest    => c.config.hidden_latest    = hidden.clone(),
+            }
+        }
+        match popup.kind {
+            MultiSelectKind::HiddenLibraries => self.hidden_libraries = hidden,
+            MultiSelectKind::HiddenLatest    => self.hidden_latest    = hidden,
+        }
+        let cfg = self.client.lock().unwrap().config.clone();
+        crate::config::save_config_settings(&cfg);
+        let _ = self.fetch_home();
+    }
+
+    fn render_multiselect_popup(&mut self, f: &mut ratatui::Frame) {
+        let Some(ref popup) = self.multiselect_popup else { return; };
+        let title = match popup.kind {
+            MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
+            MultiSelectKind::HiddenLatest    => " Hidden Latest ",
+        };
+        let max_name = popup.items.iter().map(|(_, n, _)| n.len()).max().unwrap_or(0);
+        let inner_w = ((max_name + 6) as u16).max(36).min(60); // "▸ [x] " = 6 chars
+        let width = inner_w + 2;
+        let content_h = popup.items.len() as u16 + 1; // items + hint line
+        let area = f.area();
+        let height = (content_h + 2).min(area.height.saturating_sub(2));
+        let x = area.x + area.width.saturating_sub(width) / 2;
+        let y = area.y + area.height.saturating_sub(height) / 2;
+        let rect = Rect { x, y, width, height };
+
+        f.render_widget(Clear, rect);
+
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(palette::IRIS))
+            .title(Span::styled(title, Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)));
+        let inner = block.inner(rect);
+        f.render_widget(block, rect);
+
+        let hint = "Space toggle  \u{b7}  Esc / Enter close";
+        f.render_widget(
+            Paragraph::new(Span::styled(hint, Style::default().fg(palette::MUTED))),
+            Rect { x: inner.x, y: inner.y, width: inner.width, height: 1 },
+        );
+
+        let list_area = Rect {
+            x: inner.x, y: inner.y + 1,
+            width: inner.width, height: inner.height.saturating_sub(1),
+        };
+        let list_h = list_area.height as usize;
+        let cursor = popup.cursor;
+        let scroll = if cursor >= list_h { cursor + 1 - list_h } else { 0 };
+
+        let lines: Vec<Line> = popup.items.iter().enumerate()
+            .skip(scroll).take(list_h)
+            .map(|(i, (_, name, is_hidden))| {
+                let focused = i == cursor;
+                let arrow = if focused { "\u{25b8} " } else { "  " };
+                let check = if *is_hidden { "[x]" } else { "[ ]" };
+                let check_style = if focused {
+                    Style::default().fg(palette::FOAM)
+                } else {
+                    Style::default().fg(palette::MUTED)
+                };
+                let name_style = if focused {
+                    Style::default().fg(palette::TEXT)
+                } else {
+                    Style::default().fg(palette::SUBTLE)
+                };
+                Line::from(vec![
+                    Span::raw(arrow),
+                    Span::styled(check, check_style),
+                    Span::raw(" "),
+                    Span::styled(name.clone(), name_style),
+                ])
+            }).collect();
+        f.render_widget(Paragraph::new(lines), list_area);
+    }
 
     fn render_settings_screen(&mut self, f: &mut ratatui::Frame) {
         let area = f.area();
@@ -4746,9 +4908,13 @@ fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'sta
 }
 
 fn highlight_style(item: &MediaItem) -> Style {
-    if item.is_folder && item.item_type != "Series" { Style::default().fg(palette::BASE).bg(palette::PINE) }
-    else if item.playback_position_ticks > 0 { Style::default().fg(palette::BASE).bg(palette::YELLOW) }
-    else                    { Style::default().fg(palette::WHITE).bg(palette::FOCUSED) }
+    if item.is_folder && item.item_type != "Series" && item.item_type != "MusicAlbum" && item.item_type != "MusicArtist" {
+        Style::default().fg(palette::BASE).bg(palette::PINE)
+    } else if item.playback_position_ticks > 0 {
+        Style::default().fg(palette::BASE).bg(palette::YELLOW)
+    } else {
+        Style::default().fg(palette::WHITE).bg(palette::FOCUSED)
+    }
 }
 
 fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
@@ -5013,6 +5179,7 @@ mod tests {
             settings_scroll: 0,
             settings_save_at: None,
             confirm_logout: false,
+            multiselect_popup: None,
             layout_settings_area: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,

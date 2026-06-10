@@ -233,6 +233,12 @@ pub fn save_config_settings(cfg: &Config) {
     mbv.insert("start_on_queue".to_string(),      toml::Value::Boolean(cfg.start_on_queue));
     mbv.insert("always_play_next".to_string(),    toml::Value::Boolean(cfg.always_play_next));
     mbv.insert("show_log_tab".to_string(),        toml::Value::Boolean(cfg.show_log_tab));
+    mbv.insert("hidden_libraries".to_string(), toml::Value::Array(
+        cfg.hidden_libraries.iter().map(|s| toml::Value::String(s.clone())).collect()
+    ));
+    mbv.insert("hidden_latest".to_string(), toml::Value::Array(
+        cfg.hidden_latest.iter().map(|s| toml::Value::String(s.clone())).collect()
+    ));
     mbv.remove("card_image_protocol"); // remove legacy key if present
     match &cfg.image_protocol {
         Some(p) => { mbv.insert("image_protocol".to_string(), toml::Value::String(p.clone())); }
