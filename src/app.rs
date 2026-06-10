@@ -3562,12 +3562,8 @@ impl App {
             return;
         }
 
-        let block = Block::default()
-            .borders(Borders::ALL).border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS));
-        let inner = block.inner(area);
+        let inner = area;
         self.layout_playlist_inner = inner;
-        f.render_widget(block, area);
 
         if self.player_tab.items.is_empty() {
             f.render_widget(
@@ -3580,27 +3576,28 @@ impl App {
 
         let cursor = self.player_tab.playlist_cursor;
 
-        // Split off one row for the btop-style rule header.
-        let [header_line, table_area] = Layout::vertical([
+        let [_, header_line, table_area] = Layout::vertical([
+            Constraint::Length(1),
             Constraint::Length(1),
             Constraint::Min(0),
         ]).areas(inner);
 
-        // Rule header: ─ fill in OVERLAY, column labels in IRIS.
-        // Column layout: [1, Min(10), 7, 5, 10, 1] spacing 2 → fixed = 34, title = w-34.
+        // Column labels overlaid on a full-width ─ rule.
         {
-            let label = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
+            let label = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
+            let hr    = Style::default().fg(palette::PINE);
             let w = header_line.width as usize;
-            let fill = w.saturating_sub(38);
+            // Fixed chars: 1 + 7 + fill + 8 + 2 + 6 + 2 + 10 = 36 + fill → fill = w - 36
+            let fill = w.saturating_sub(36);
             let header_spans = Line::from(vec![
-                Span::raw("   "),
-                Span::styled("Title",              label),
-                Span::raw(" ".repeat(fill + 1)),
-                Span::styled(" Length",            label),
-                Span::raw("  "),
-                Span::styled(" Type",              label),
-                Span::raw("  "),
-                Span::styled("  Progress",         label),
+                Span::styled("─",                  hr),
+                Span::styled(" Title ",            label),
+                Span::styled("─".repeat(fill),     hr),
+                Span::styled(" Length ",           label),
+                Span::styled("──",                 hr),
+                Span::styled(" Type ",             label),
+                Span::styled("──",                 hr),
+                Span::styled(" Progress ",         label),
             ]);
             f.render_widget(Paragraph::new(header_spans), header_line);
         }
@@ -3633,13 +3630,12 @@ impl App {
                     .round() as usize)
                     .min(BAR_W);
                 let now_playing = i == current_idx && active;
-                let bar_color    = if now_playing { palette::FOAM } else { palette::YELLOW };
-                let unplayed_color = if now_playing { Color::Rgb(0, 80, 128) } else { Color::Rgb(252, 238, 160) };
+                let bar_color    = if now_playing { palette::IRIS } else { palette::FOAM };
+                let unplayed_color = if now_playing { palette::IRIS_DIM } else { Color::Rgb(0, 80, 128) };
                 Cell::from(Line::from(vec![
-                    Span::raw("  "),
                     Span::styled("━".repeat(filled),         Style::default().fg(bar_color)),
                     Span::styled("─".repeat(BAR_W - filled), Style::default().fg(unplayed_color)),
-                ])).style(Style::default())
+                ]).alignment(Alignment::Right)).style(Style::default())
             } else {
                 Cell::from("")
             };
@@ -4055,8 +4051,8 @@ impl App {
             let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
             put(f, text_y, Paragraph::new(Line::from(vec![
                 Span::raw(" ".repeat(pad)),
-                Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::FOAM } else { palette::YELLOW })),
-                Span::styled("─".repeat(bar_w - filled), Style::default().fg(if now_playing { Color::Rgb(0, 80, 128) } else { Color::Rgb(252, 238, 160) })),
+                Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::IRIS } else { palette::FOAM })),
+                Span::styled("─".repeat(bar_w - filled), Style::default().fg(if now_playing { palette::IRIS_DIM } else { Color::Rgb(0, 80, 128) })),
             ])));
             text_y += 1;
             put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
