@@ -207,6 +207,8 @@ pub struct App {
     connected_session_id: Option<String>,
     connected_session_state: Option<crate::api::SessionInfo>,
     last_session_poll: Instant,
+    remote_pos_s: i64,      // monotonic position estimate for the connected remote
+    remote_pos_at: Instant, // when remote_pos_s was last anchored
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -426,6 +428,8 @@ impl App {
             connected_session_id: None,
             connected_session_state: None,
             last_session_poll: Instant::now() - Duration::from_secs(60),
+            remote_pos_s: 0,
+            remote_pos_at: Instant::now(),
             force_clear: false,
             tab_scroll: 0,
         }
@@ -548,6 +552,8 @@ impl App {
             connected_session_id: None,
             connected_session_state: None,
             last_session_poll: Instant::now() - Duration::from_secs(60),
+            remote_pos_s: 0,
+            remote_pos_at: Instant::now(),
             force_clear: false,
             tab_scroll: 0,
         }
@@ -693,6 +699,18 @@ impl App {
                         // Update connected session state; auto-disconnect if gone
                         if let Some(ref conn_id) = self.connected_session_id.clone() {
                             if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
+                                // Maintain a monotonic position estimate:
+                                // take the max of the server-reported value and our running
+                                // extrapolation so we never jump backwards due to a stale poll.
+                                let now = Instant::now();
+                                if s.is_paused {
+                                    self.remote_pos_s = s.position_s;
+                                } else {
+                                    let extrapolated = self.remote_pos_s
+                                        + self.remote_pos_at.elapsed().as_secs() as i64;
+                                    self.remote_pos_s = s.position_s.max(extrapolated);
+                                }
+                                self.remote_pos_at = now;
                                 self.connected_session_state = Some(s.clone());
                                 // Remote hasn't started playing yet — repoll sooner
                                 if s.runtime_s == 0 {
@@ -703,6 +721,7 @@ impl App {
                                 self.flash_status("Remote session ended; disconnected".to_string());
                                 self.connected_session_id = None;
                                 self.connected_session_state = None;
+                                self.remote_pos_s = 0;
                             }
                         }
                     }
@@ -936,6 +955,8 @@ impl App {
                         let name = sess.device_name.clone();
                         self.connected_session_id = Some(id);
                         self.connected_session_state = Some(sess.clone());
+                        self.remote_pos_s = sess.position_s;
+                        self.remote_pos_at = Instant::now();
                         self.show_sessions = false;
                         self.flash_status(format!("Connected to {name}"));
                         self.spawn_sessions_load();
@@ -944,6 +965,7 @@ impl App {
                 KeyCode::Char('d') => {
                     self.connected_session_id = None;
                     self.connected_session_state = None;
+                    self.remote_pos_s = 0;
                     self.show_sessions = false;
                     self.flash_status("Disconnected from remote session".to_string());
                 }
@@ -3405,7 +3427,9 @@ impl App {
     }
 
     fn render_volume_bar(&self, f: &mut ratatui::Frame, area: Rect) {
-        let (volume, _volume_max) = {
+        let (volume, _volume_max) = if let Some(ref remote) = self.connected_session_state {
+            (remote.volume, 100)
+        } else {
             let s = self.player.status.lock().unwrap();
             if s.active { (s.volume, s.volume_max) }
             else { (self.ui_volume as i64, 100) }
@@ -4004,11 +4028,12 @@ impl App {
         let area = Rect { x: inner_x, y: area.y, width: inner_w, height: area.height };
 
         let (position_ticks, runtime_ticks, paused) = if let Some(ref remote) = self.connected_session_state {
-            // Extrapolate position between polls so the seekbar advances smoothly
-            let elapsed_s = if remote.is_paused { 0 } else {
-                self.last_session_poll.elapsed().as_secs() as i64
+            let pos = if remote.is_paused {
+                self.remote_pos_s
+            } else {
+                (self.remote_pos_s + self.remote_pos_at.elapsed().as_secs() as i64)
+                    .min(remote.runtime_s)
             };
-            let pos = (remote.position_s + elapsed_s).min(remote.runtime_s);
             (
                 pos * crate::api::TICKS_PER_SECOND,
                 remote.runtime_s * crate::api::TICKS_PER_SECOND,
