@@ -160,6 +160,7 @@ pub struct App {
     layout_audio_area: Rect,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     confirm_clear_playlist: bool,
+    skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     playlist_card_view: bool,
     home_card_view: bool,
@@ -309,6 +310,8 @@ impl App {
             }
         });
         let player = PlayerProxy::local(raw_player, always_play_next);
+        let mut client = client;
+        client.probe_chapter_api(&log);
         App {
             client: Arc::new(Mutex::new(client)),
             player,
@@ -359,6 +362,7 @@ impl App {
             layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
+            skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
@@ -409,6 +413,8 @@ impl App {
         let hidden_latest = client.config.hidden_latest.clone();
         let always_play_next = client.config.always_play_next;
         let log = AppLog::new(0);
+        let mut client = client;
+        client.probe_chapter_api(&log);
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let player = PlayerProxy::remote(remote, always_play_next);
@@ -465,6 +471,7 @@ impl App {
             layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
+            skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_card_view: Self::load_playlist_card_view(),
             home_card_view: Self::load_home_card_view(),
@@ -545,6 +552,7 @@ impl App {
                     PlayerEvent::Stopped { idx, position_ticks } => {
                         if self.player.is_remote_disconnected() {
                             self.next_up_item = None;
+                            self.skip_intro_end_ticks = None;
                             self.status = "Daemon disconnected — playback stopped".into();
                             self.refresh_after_stop();
                             continue;
@@ -556,10 +564,12 @@ impl App {
                             self.last_played_item_id = Some(item.id.clone());
                         }
                         self.next_up_item = None;
+                        self.skip_intro_end_ticks = None;
                         self.status.clear();
                         self.refresh_after_stop();
                     }
                     PlayerEvent::TrackChanged(idx) => {
+                        self.skip_intro_end_ticks = None;
                         self.player_tab.playlist_cursor = idx;
                         if let Some(item) = self.player_tab.items.get(idx) {
                             self.last_played_item_id = Some(item.id.clone());
@@ -598,6 +608,20 @@ impl App {
                     PlayerEvent::QueueUpdated { items, cursor } => {
                         self.player_tab.items = items;
                         self.player_tab.playlist_cursor = cursor;
+                    }
+                    PlayerEvent::IntroStarted { intro_end_ticks } => {
+                        self.skip_intro_end_ticks = Some(intro_end_ticks);
+                        self.status = "Skip intro? [Y/n]".into();
+                        self.status_expires = None;
+                    }
+                    PlayerEvent::IntroEnded => {
+                        if self.skip_intro_end_ticks.take().is_some() {
+                            self.status.clear();
+                        }
+                    }
+                    PlayerEvent::SkipIntroPlay => {
+                        self.skip_intro_end_ticks = None;
+                        self.status.clear();
                     }
                 }
             }
@@ -805,6 +829,19 @@ impl App {
                 self.player_tab.playlist_cursor = 0;
                 self.flash_status("Playlist cleared".into());
             } else {
+                self.status.clear();
+            }
+            return false;
+        }
+        if self.skip_intro_end_ticks.is_some() {
+            if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y')) {
+                if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
+                    let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
+                    self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                    self.status.clear();
+                }
+            } else {
+                self.skip_intro_end_ticks = None;
                 self.status.clear();
             }
             return false;
@@ -1435,7 +1472,6 @@ impl App {
         let ids: Vec<&str> = self.player_tab.items.iter().map(|i| i.id.as_str()).collect();
         let payload = serde_json::json!({
             "ids": ids,
-            "cursor": self.player_tab.playlist_cursor,
             "last_played_item_id": self.last_played_item_id,
         });
         if let Ok(json) = serde_json::to_string(&payload) {
@@ -1449,17 +1485,16 @@ impl App {
         let Ok(text) = std::fs::read_to_string(&path) else { return };
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return };
 
-        // Support both new format {"ids":[...],"cursor":N} and old format [...]
-        let (ids, saved_cursor, last_played_item_id): (Vec<String>, usize, Option<String>) = if v.is_array() {
+        // Support both new format {"ids":[...]} and old format [...]
+        let (ids, last_played_item_id): (Vec<String>, Option<String>) = if v.is_array() {
             let ids = serde_json::from_value(v).unwrap_or_default();
-            (ids, 0, None)
+            (ids, None)
         } else {
             let ids = v["ids"].as_array()
                 .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
                 .unwrap_or_default();
-            let cursor = v["cursor"].as_u64().unwrap_or(0) as usize;
             let last_id = v["last_played_item_id"].as_str().map(String::from);
-            (ids, cursor, last_id)
+            (ids, last_id)
         };
 
         if ids.is_empty() { return }
@@ -1468,9 +1503,8 @@ impl App {
             // preserve original order (get_items_by_ids may reorder)
             items.sort_by_key(|item| ids.iter().position(|id| id == &item.id).unwrap_or(usize::MAX));
             drop(client);
-            let cursor = saved_cursor.min(items.len().saturating_sub(1));
             self.last_played_item_id = last_played_item_id;
-            self.player_tab.playlist_cursor = cursor;
+            self.player_tab.playlist_cursor = 0;
             self.player_tab.items = items;
         }
     }
@@ -5276,6 +5310,7 @@ mod tests {
             layout_audio_area: ratatui::layout::Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
+            skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_card_view: false,
             home_card_view: false,

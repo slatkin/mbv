@@ -203,6 +203,7 @@ pub struct EmbyClient {
     pub token: String,
     pub device_name: String,
     pub device_id: String,
+    pub chapter_api_available: bool,
     agent: ureq::Agent,
 }
 
@@ -217,6 +218,7 @@ impl EmbyClient {
             token: String::new(),
             device_name: device_name(),
             device_id: device_id(),
+            chapter_api_available: false,
             agent,
         }
     }
@@ -694,6 +696,41 @@ impl EmbyClient {
             ids.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
         items.sort_by_key(|item| order.get(item.id.as_str()).copied().unwrap_or(usize::MAX));
         Ok(items)
+    }
+
+    /// Probes for the Chapter API plugin. Sets `chapter_api_available` on self.
+    /// Any HTTP response (even 500 for a bad id) means the plugin is installed;
+    /// only a 404 or connection failure means it's absent.
+    pub fn probe_chapter_api(&mut self, log: &AppLog) {
+        log.push(Level::Info, "api", "→ ChapterAPI probe");
+        match self.get("/chapter_api/get_chapters").query("id", "0").call() {
+            Ok(_) | Err(ureq::Error::Status(_, _)) => {
+                self.chapter_api_available = true;
+                log.push(Level::Info, "api", "← ChapterAPI available");
+            }
+            Err(e) => {
+                log.push(Level::Info, "api", format!("← ChapterAPI not available: {e}"));
+            }
+        }
+    }
+
+    /// Returns `(intro_start_ticks, intro_end_ticks)` for an item if the Chapter API
+    /// exposes IntroStart and IntroEnd markers.
+    pub fn get_intro_times(&self, item_id: &str, log: &AppLog) -> Option<(i64, i64)> {
+        log.push(Level::Debug, "api", format!("→ ChapterAPI get_chapters item={item_id}"));
+        let resp = self.get("/chapter_api/get_chapters")
+            .query("id", item_id)
+            .call().ok()?;
+        let body: serde_json::Value = resp.into_json().ok()?;
+        let chapters = body["chapters"].as_array()?;
+        let start = chapters.iter()
+            .find(|c| c["MarkerType"].as_str() == Some("IntroStart"))?
+            ["StartPositionTicks"].as_i64()?;
+        let end = chapters.iter()
+            .find(|c| c["MarkerType"].as_str() == Some("IntroEnd"))?
+            ["StartPositionTicks"].as_i64()?;
+        log.push(Level::Info, "api", format!("← ChapterAPI intro start={start} end={end}"));
+        Some((start, end))
     }
 
     /// Returns all episodes of a series starting from `from_item_id` (inclusive), in air order.

@@ -45,6 +45,12 @@ pub enum PlayerEvent {
     PlaylistNextUp { next_idx: usize },
     /// Emitted by RemotePlayer when CtrlState arrives so App can sync player_tab.
     QueueUpdated { items: Vec<crate::api::MediaItem>, cursor: usize },
+    /// Chapter API: playback entered the intro window.
+    IntroStarted { intro_end_ticks: i64 },
+    /// Chapter API: playback passed IntroEnd (or track changed).
+    IntroEnded,
+    /// Chapter API: user clicked the "Skip Intro" button in MPV.
+    SkipIntroPlay,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -497,6 +503,16 @@ impl Player {
             let mut episode_for_next_up  = item.index_number;
             let mut next_up_fired = false;
             let mut next_up_armed_logged = false;
+            let mut intro_start_ticks: i64 = 0;
+            let mut intro_end_ticks: i64   = 0;
+            let mut intro_show_fired = false;
+            let mut intro_hide_fired = false;
+            if client.chapter_api_available {
+                if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
+                    intro_start_ticks = s;
+                    intro_end_ticks   = e;
+                }
+            }
 
             loop {
                 // Process commands before checking the stop signal so that a LoadNew
@@ -601,6 +617,17 @@ impl Player {
                                 log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
                             }
                             let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
+                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+                            intro_show_fired = false;
+                            intro_hide_fired = false;
+                            intro_start_ticks = 0;
+                            intro_end_ticks   = 0;
+                            if client.chapter_api_available {
+                                if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
+                                    intro_start_ticks = s;
+                                    intro_end_ticks   = e;
+                                }
+                            }
                         }
                     }
                 }
@@ -655,6 +682,19 @@ impl Player {
                                     next_up_armed_logged = true;
                                     log.push(Level::Info, "player", format!("next-up: armed series={} runtime={}s", series_id_for_next_up, runtime / TICKS_PER_SECOND));
                                 }
+                            }
+                        }
+                        if intro_end_ticks > intro_start_ticks {
+                            if !intro_show_fired && ticks >= intro_start_ticks {
+                                intro_show_fired = true;
+                                let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
+                                let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
+                                let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                            }
+                            if !intro_hide_fired && ticks >= intro_end_ticks {
+                                intro_hide_fired = true;
+                                let _ = event_tx.send(PlayerEvent::IntroEnded);
+                                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
                             }
                         }
                     }
@@ -756,6 +796,9 @@ impl Player {
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
                         log.push(Level::Info, "player", "next-up: mbv-next-up-play received from Lua");
                         let _ = event_tx.send(PlayerEvent::NextUpPlay);
+                    }
+                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-skip-intro-play") => {
+                        let _ = event_tx.send(PlayerEvent::SkipIntroPlay);
                     }
                     Some(Ok(Event::ClientMessage(args))) if use_mpv_config && args.first().copied() == Some("mouse-moved") => {
                         let show = last_mouse_osd.is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
@@ -994,6 +1037,16 @@ impl Player {
             let mut pending_resume_secs: Option<f64> = None;
             let mut playlist_next_up_fired = false;
             let mut playlist_next_up_armed = false;
+            let mut intro_start_ticks: i64 = 0;
+            let mut intro_end_ticks: i64   = 0;
+            let mut intro_show_fired = false;
+            let mut intro_hide_fired = false;
+            if client.chapter_api_available {
+                if let Some((s, e)) = client.get_intro_times(&items[start_idx].id, &log) {
+                    intro_start_ticks = s;
+                    intro_end_ticks   = e;
+                }
+            }
 
             loop {
                 let mut cancel_stop = false;
@@ -1121,6 +1174,18 @@ impl Player {
                             stop_reported = false;
                             pending_load = true;
 
+                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+                            intro_show_fired = false;
+                            intro_hide_fired = false;
+                            intro_start_ticks = 0;
+                            intro_end_ticks   = 0;
+                            if client.chapter_api_available {
+                                if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
+                                    intro_start_ticks = s;
+                                    intro_end_ticks   = e;
+                                }
+                            }
+
                             if start_pos > 0.0 {
                                 let _ = mpv.set_property("start", format!("{:.0}", start_pos));
                             } else {
@@ -1189,6 +1254,19 @@ impl Player {
                                         log.push(Level::Info, "player", format!("playlist next-up armed idx={}", current_idx + 1));
                                     }
                                 }
+                            }
+                        }
+                        if intro_end_ticks > intro_start_ticks {
+                            if !intro_show_fired && ticks >= intro_start_ticks {
+                                intro_show_fired = true;
+                                let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
+                                let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
+                                let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                            }
+                            if !intro_hide_fired && ticks >= intro_end_ticks {
+                                intro_hide_fired = true;
+                                let _ = event_tx.send(PlayerEvent::IntroEnded);
+                                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
                             }
                         }
                     }
@@ -1318,12 +1396,23 @@ impl Player {
                         let _ = mpv.set_property("start", "0");
                         playlist_next_up_fired = false;
                         playlist_next_up_armed = false;
+                        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+                        intro_show_fired = false;
+                        intro_hide_fired = false;
+                        intro_start_ticks = 0;
+                        intro_end_ticks   = 0;
 
                         let (new_sid, new_msid) = {
                             let (sid, msid) = client.get_playback_info(&items[current_idx].id, &log);
                             client.report_start(&items[current_idx], &msid, &sid, &log);
                             (sid, msid)
                         };
+                        if client.chapter_api_available {
+                            if let Some((s, e)) = client.get_intro_times(&items[current_idx].id, &log) {
+                                intro_start_ticks = s;
+                                intro_end_ticks   = e;
+                            }
+                        }
                         *current_item_id.lock().unwrap() = items[current_idx].id.clone();
                         *current_msid.lock().unwrap()    = new_msid;
                         *session_id.lock().unwrap()      = new_sid;
@@ -1337,6 +1426,9 @@ impl Player {
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
                         log.push(Level::Info, "player", "next-up: mbv-next-up-play received from Lua");
                         let _ = event_tx.send(PlayerEvent::NextUpPlay);
+                    }
+                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-skip-intro-play") => {
+                        let _ = event_tx.send(PlayerEvent::SkipIntroPlay);
                     }
                     Some(Ok(Event::ClientMessage(args))) if use_mpv_config && args.first().copied() == Some("mouse-moved") => {
                         let show = last_mouse_osd.is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));

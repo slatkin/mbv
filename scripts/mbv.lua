@@ -2197,18 +2197,19 @@ set_virt_mouse_area(0, 0, 0, 0, 'window-controls')
 --
 
 local next_up = {
-    visible  = false,
-    item_id  = '',
-    title    = '',
-    osd      = mp.create_osd_overlay('ass-events'),
-    -- Virtual coordinates set at render time; used for hit-testing.
+    visible    = false,
+    item_id    = '',
+    title      = '',
+    mouse_near = false,
+    osd        = mp.create_osd_overlay('ass-events'),
     x1 = 0, y1 = 0, x2 = 0, y2 = 0,
 }
 
 local function next_up_hide()
     if not next_up.visible then return end
-    next_up.visible = false
-    next_up.osd.data = ''
+    next_up.visible    = false
+    next_up.mouse_near = false
+    next_up.osd.data   = ''
     next_up.osd:update()
     set_virt_mouse_area(0, 0, 0, 0, 'next-up')
     mp.disable_key_bindings('next-up')
@@ -2219,13 +2220,34 @@ local function next_up_render()
 
     local pw = osc_param.playresx
     local ph = osc_param.playresy
-    if pw <= 0 or ph <= 0 then return end
+    if pw <= 0 or ph <= 0 then
+        local dim = mp.get_property_native('osd-dimensions')
+        if not dim or dim.w <= 0 or dim.h <= 0 then return end
+        pw = dim.w
+        ph = dim.h
+    end
 
-    local pad      = 16
-    local bw       = math.min(math.floor(pw * 0.38), 500)
-    local bh       = 84
-    local bx       = pw - bw - pad
-    local by       = pad + 25                -- top-right corner
+    local lbl_fs = math.max(11, math.floor(ph / 50))
+    local ttl_fs = math.max(15, math.floor(ph / 36))
+    local bh     = lbl_fs + ttl_fs + 28
+    local r      = bh / 2
+
+    local max_chars     = 28
+    local display_title = next_up.title or ''
+    if #display_title > max_chars then
+        display_title = display_title:sub(1, max_chars - 1) .. '…'
+    end
+    local bw = math.max(r * 2 + 80, ttl_fs * 10)
+    bw = math.min(bw, math.floor(pw * 0.42))
+
+    local pad = 20
+    local bx  = pw - pad - bw
+    local by
+    if next_up.mouse_near then
+        by = ph - 145 - bh
+    else
+        by = ph - pad - bh
+    end
 
     next_up.x1 = bx
     next_up.y1 = by
@@ -2235,52 +2257,30 @@ local function next_up_render()
     set_virt_mouse_area(next_up.x1, next_up.y1, next_up.x2, next_up.y2, 'next-up')
     mp.enable_key_bindings('next-up')
 
-    local label_fs = math.max(10, math.floor(ph / 55))
-    local title_fs = math.max(12, math.floor(ph / 46))
-    local btn_fs   = math.max(11, math.floor(ph / 50))
-
     local ass = assdraw.ass_new()
 
-    -- Semi-transparent dark background
+    -- Solid pill background — OVERLAY palette colour
     ass:new_event()
     ass:pos(bx, by)
     ass:an(7)
-    ass:append('{\\bord0\\blur0\\1c&H0D0D0D&\\1a&H55&}')
+    ass:append('{\\bord0\\blur0\\1c&H3F3F3F&\\1a&H00&}')
     ass:draw_start()
-    ass:rect_cw(0, 0, bw, bh)
+    ass:round_rect_cw(0, 0, bw, bh, r, r)
     ass:draw_stop()
 
-    -- "Next Up" label (top-left)
+    -- "Next Up" label centred in top half
     ass:new_event()
-    ass:pos(bx + 10, by + 8)
-    ass:an(7)
-    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HA09090&\\bold0}', label_fs))
+    ass:pos(bx + bw / 2, by + 9)
+    ass:an(8)
+    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HA09090&\\bold0}', lbl_fs))
     ass:append('Next Up')
 
-    -- Episode title (truncated to fit on one line)
-    local title_y    = by + 8 + label_fs + 4
-    local title_x    = bx + 10
-    local btn_text   = '▶  Play Next'
-    local btn_w_est  = #btn_text * btn_fs * 0.52 + 20
-    local avail_w    = bw - 20 - btn_w_est
-    local max_chars  = math.max(8, math.floor(avail_w / (title_fs * 0.52)))
-    local display_title = next_up.title
-    if #display_title > max_chars then
-        display_title = display_title:sub(1, max_chars - 1) .. '…'
-    end
-
+    -- Episode title centred in bottom half
     ass:new_event()
-    ass:pos(title_x, title_y)
-    ass:an(7)
-    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', title_fs))
-    ass:append(display_title:gsub('{', '\\{'))
-
-    -- "▶ Play Next" button (vertically centred on title row, right edge)
-    ass:new_event()
-    ass:pos(bx + bw - 10, title_y + title_fs / 2)
-    ass:an(6)   -- middle-right
-    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&H52B54B&\\bold1}', btn_fs))
-    ass:append(btn_text)
+    ass:pos(bx + bw / 2, by + bh - 9)
+    ass:an(2)
+    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', ttl_fs))
+    ass:append('▶  ' .. display_title:gsub('{', '\\{'))
 
     next_up.osd.res_x = pw
     next_up.osd.res_y = ph
@@ -2306,9 +2306,30 @@ mp.register_event('seek', function()
     next_up_hide()
 end)
 
--- Re-render whenever playback time changes (keeps banner visible on resizes).
+-- Re-render on window resize.
 mp.observe_property('osd-dimensions', 'native', function()
     if next_up.visible then next_up_render() end
+end)
+
+-- Float above OSC when mouse enters the bottom zone where the OSC appears.
+mp.observe_property('mouse-pos', 'native', function(_, pos)
+    if not next_up.visible then return end
+    if not pos or not pos.hover then
+        if next_up.mouse_near then
+            next_up.mouse_near = false
+            next_up_render()
+        end
+        return
+    end
+    local dim = mp.get_property_native('osd-dimensions')
+    if not dim or dim.h <= 0 then return end
+    local scale = osc_param.playresy / dim.h
+    local vy    = pos.y * scale
+    local near  = vy > osc_param.playresy * 0.78
+    if near ~= next_up.mouse_near then
+        next_up.mouse_near = near
+        next_up_render()
+    end
 end)
 
 mp.set_key_bindings({
@@ -2317,3 +2338,135 @@ mp.set_key_bindings({
         mp.commandv('script-message', 'mbv-next-up-play')
     end},
 }, 'next-up', 'force')
+
+-- Skip Intro overlay
+local skip_intro = {
+    visible    = false,
+    end_secs   = 0,
+    mouse_near = false,  -- true when mouse is in the OSC zone → float above OSC
+    osd        = mp.create_osd_overlay('ass-events'),
+    x1 = 0, y1 = 0, x2 = 0, y2 = 0,
+}
+
+local function skip_intro_hide()
+    if not skip_intro.visible then return end
+    skip_intro.visible = false
+    skip_intro.osd.data = ''
+    skip_intro.osd:update()
+    set_virt_mouse_area(0, 0, 0, 0, 'skip-intro')
+    mp.disable_key_bindings('skip-intro')
+end
+
+local function skip_intro_render()
+    if not skip_intro.visible then return end
+
+    local pw = osc_param.playresx
+    local ph = osc_param.playresy
+
+    -- osc_param is 0 until the OSC render loop first fires; at intro-start=0 the
+    -- script-message arrives before that happens, so fall back to raw pixel dims.
+    if pw <= 0 or ph <= 0 then
+        local dim = mp.get_property_native('osd-dimensions')
+        if not dim or dim.w <= 0 or dim.h <= 0 then return end
+        pw = dim.w
+        ph = dim.h
+    end
+
+    -- Size: pill height drives everything; 50% larger than base
+    local fs = math.max(18, math.floor(ph / 32))
+    local bh = fs + 24                        -- vertical padding around text
+    local r  = bh / 2                         -- full pill radius
+    local bw = math.max(r * 2 + 60, fs * 6)  -- wide enough for "Skip Intro"
+
+    local pad = 20
+    -- Default: lower-right corner; when mouse is near the OSC zone: float above OSC
+    local bx = pw - pad - bw
+    local by
+    if skip_intro.mouse_near then
+        by = ph - 145 - bh  -- OSC top element is ~132px above ph; add 13px margin
+    else
+        by = ph - pad - bh
+    end
+
+    skip_intro.x1 = bx
+    skip_intro.y1 = by
+    skip_intro.x2 = bx + bw
+    skip_intro.y2 = by + bh
+
+    set_virt_mouse_area(skip_intro.x1, skip_intro.y1, skip_intro.x2, skip_intro.y2, 'skip-intro')
+    mp.enable_key_bindings('skip-intro')
+
+    local ass = assdraw.ass_new()
+
+    -- Solid pill background — OVERLAY palette colour (#3F3F3F = Rgb 63,63,63)
+    ass:new_event()
+    ass:pos(bx, by)
+    ass:an(7)
+    ass:append('{\\bord0\\blur0\\1c&H3F3F3F&\\1a&H00&}')
+    ass:draw_start()
+    ass:round_rect_cw(0, 0, bw, bh, r, r)
+    ass:draw_stop()
+
+    -- "Skip Intro" centred in the pill
+    ass:new_event()
+    ass:pos(bx + bw / 2, by + bh / 2)
+    ass:an(5)  -- centre-centre
+    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', fs))
+    ass:append('Skip Intro')
+
+    skip_intro.osd.res_x = pw
+    skip_intro.osd.res_y = ph
+    skip_intro.osd.data  = ass.text
+    skip_intro.osd.z     = 999
+    skip_intro.osd:update()
+end
+
+mp.register_script_message('mbv-skip-intro', function(end_secs_str)
+    skip_intro.end_secs = tonumber(end_secs_str) or 0
+    skip_intro.visible  = true
+    skip_intro_render()
+end)
+
+mp.register_script_message('mbv-skip-intro-dismiss', function()
+    skip_intro_hide()
+end)
+
+-- Dismiss on seek (user is navigating manually)
+mp.register_event('seek', function()
+    skip_intro_hide()
+end)
+
+-- Re-render on window resize
+mp.observe_property('osd-dimensions', 'native', function()
+    if skip_intro.visible then skip_intro_render() end
+end)
+
+-- Float above OSC when mouse enters the bottom zone where the OSC appears
+mp.observe_property('mouse-pos', 'native', function(_, pos)
+    if not skip_intro.visible then return end
+    if not pos or not pos.hover then
+        if skip_intro.mouse_near then
+            skip_intro.mouse_near = false
+            skip_intro_render()
+        end
+        return
+    end
+    local dim = mp.get_property_native('osd-dimensions')
+    if not dim or dim.h <= 0 then return end
+    local scale = osc_param.playresy / dim.h
+    local vy    = pos.y * scale
+    local near  = vy > osc_param.playresy * 0.78
+    if near ~= skip_intro.mouse_near then
+        skip_intro.mouse_near = near
+        skip_intro_render()
+    end
+end)
+
+mp.set_key_bindings({
+    {'mbtn_left', function()
+        local secs = skip_intro.end_secs
+        skip_intro_hide()
+        mp.set_property_number('time-pos', secs)
+        mp.commandv('script-message', 'mbv-skip-intro-play')
+    end},
+}, 'skip-intro', 'force')
