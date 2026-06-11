@@ -3731,12 +3731,8 @@ impl App {
             };
 
             if show_ep_cols {
-                let series_season = if item.item_type == "Episode" {
-                    if item.parent_index_number > 0 {
-                        format!("{} S{}", item.series_name, item.parent_index_number)
-                    } else {
-                        item.series_name.clone()
-                    }
+                let series_season = if item.item_type == "Episode" && item.parent_index_number > 0 {
+                    format!("S{}", item.parent_index_number)
                 } else { String::new() };
                 let episode = if item.item_type == "Episode" && item.index_number > 0 {
                     format!("E{:02}", item.index_number)
@@ -3768,7 +3764,7 @@ impl App {
             Row::new([
                 Cell::from(""),
                 Cell::from("Title").style(header_style),
-                Cell::from("Series (Season)").style(header_style),
+                Cell::from("Series").style(header_style),
                 Cell::from(Line::from("Ep").alignment(Alignment::Right)).style(header_style),
                 Cell::from(Line::from("Length").alignment(Alignment::Right)).style(header_style),
                 Cell::from(Line::from("Type").alignment(Alignment::Right)).style(header_style),
@@ -3791,7 +3787,7 @@ impl App {
         let table = Table::new(rows, [
             Constraint::Length(1),
             Constraint::Min(10),
-            Constraint::Length(if show_ep_cols { 22 } else { 0 }),
+            Constraint::Length(if show_ep_cols { 4 } else { 0 }),
             Constraint::Length(if show_ep_cols { 4 } else { 0 }),
             Constraint::Length(7),
             Constraint::Length(10),
