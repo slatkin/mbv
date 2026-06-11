@@ -694,6 +694,10 @@ impl App {
                         if let Some(ref conn_id) = self.connected_session_id.clone() {
                             if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
                                 self.connected_session_state = Some(s.clone());
+                                // Remote hasn't started playing yet — repoll sooner
+                                if s.runtime_s == 0 {
+                                    self.last_session_poll = Instant::now() - Duration::from_millis(500);
+                                }
                             } else {
                                 self.log.push(Level::Warn, "sessions", "connected session gone; disconnecting");
                                 self.flash_status("Remote session ended; disconnected".to_string());
@@ -733,7 +737,7 @@ impl App {
 
             // Periodic session poll when connected to a remote session
             if self.connected_session_id.is_some()
-                && self.last_session_poll.elapsed() >= Duration::from_secs(3)
+                && self.last_session_poll.elapsed() >= Duration::from_secs(1)
                 && !self.sessions_loading
             {
                 self.spawn_sessions_load();
@@ -3970,9 +3974,14 @@ impl App {
         let area = Rect { x: inner_x, y: area.y, width: inner_w, height: area.height };
 
         let (position_ticks, runtime_ticks, paused) = if let Some(ref remote) = self.connected_session_state {
+            // Extrapolate position between polls so the seekbar advances smoothly
+            let elapsed_s = if remote.is_paused { 0 } else {
+                self.last_session_poll.elapsed().as_secs() as i64
+            };
+            let pos = (remote.position_s + elapsed_s).min(remote.runtime_s);
             (
-                remote.position_s * crate::api::TICKS_PER_SECOND,
-                remote.runtime_s  * crate::api::TICKS_PER_SECOND,
+                pos * crate::api::TICKS_PER_SECOND,
+                remote.runtime_s * crate::api::TICKS_PER_SECOND,
                 remote.is_paused,
             )
         } else {
