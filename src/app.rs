@@ -300,8 +300,9 @@ impl App {
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
         let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
         let always_play_next = client.config.always_play_next;
+        let always_skip_intro = client.config.always_skip_intro;
         let subs_off = Self::load_subs_off();
-        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, subs_off, player_tx, Some(ws_send_tx));
+        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, always_skip_intro, subs_off, player_tx, Some(ws_send_tx));
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();
         crate::mpris::start(player_status, move |cmd| {
