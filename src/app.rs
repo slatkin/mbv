@@ -3040,8 +3040,23 @@ impl App {
             self.status.clear();
             self.status_expires = None;
         }
-        // Toast area: always below the HR divider, yellow centered, blank when no message
-        if !self.status.is_empty() {
+        // Toast area: search query when active, otherwise flash message
+        let search_toast: Option<String> = if self.tab_idx >= self.lib_tab_offset()
+            && self.tab_idx != self.log_tab_idx()
+        {
+            let li = self.tab_idx - self.lib_tab_offset();
+            self.libs.get(li).and_then(|l| l.search.as_ref()).map(|s| format!("{}█", s.query))
+        } else {
+            None
+        };
+        if let Some(ref q) = search_toast {
+            f.render_widget(
+                Paragraph::new(q.as_str())
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
+                toast_area,
+            );
+        } else if !self.status.is_empty() {
             f.render_widget(
                 Paragraph::new(self.status.as_str())
                     .alignment(Alignment::Center)
@@ -4504,20 +4519,6 @@ impl App {
             return;
         }
 
-        if let Some(s) = &self.libs[lib_idx].search {
-            self.layout_breadcrumbs.clear();
-            let display = format!("{}█", s.query);
-            let block = Block::default()
-                .borders(Borders::ALL).border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(palette::IRIS))
-                .title(Span::styled(display, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)))
-                .title_alignment(Alignment::Center);
-            let inner = block.inner(area);
-            f.render_widget(block, area);
-            self.render_library_table(f, inner, lib_idx);
-            return;
-        }
-
         // Build breadcrumb spans and record click regions
         let lib = &self.libs[lib_idx];
         let skip = if lib.nav_stack.first().map(|l| l.title == lib.library.name).unwrap_or(false) { 1 } else { 0 };
@@ -4716,7 +4717,7 @@ impl App {
             };
             let content_w = text_rect.width as usize;
 
-            if selected && img_rect_opt.is_none() {
+            if selected {
                 let bar: Vec<Line> = (0..ind_rect.height)
                     .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::IRIS))))
                     .collect();
