@@ -79,6 +79,11 @@ enum LibEvent {
     Error(String),
 }
 
+enum SessionEvent {
+    Loaded(Vec<crate::api::SessionInfo>),
+    Error(String),
+}
+
 mod palette {
     use ratatui::style::Color;
     pub const BASE:          Color = Color::Rgb(26,  26,  26);   // near-black, for text on colored bg
@@ -159,6 +164,7 @@ pub struct App {
     layout_sub_indicator_area: Rect,
     layout_audio_indicator_area: Rect,
     layout_audio_area: Rect,
+    layout_sessions_btn_area: Rect,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     confirm_clear_playlist: bool,
     skip_intro_end_ticks: Option<i64>,
@@ -192,6 +198,15 @@ pub struct App {
     show_log_tab: bool,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
+    sessions: Vec<crate::api::SessionInfo>,
+    sessions_cursor: usize,
+    sessions_loading: bool,
+    show_sessions: bool,
+    sessions_tx: mpsc::Sender<SessionEvent>,
+    sessions_rx: mpsc::Receiver<SessionEvent>,
+    connected_session_id: Option<String>,
+    connected_session_state: Option<crate::api::SessionInfo>,
+    last_session_poll: Instant,
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -290,6 +305,7 @@ impl App {
         let (player_tx, player_rx) = mpsc::channel();
         let (ws_tx, ws_rx) = mpsc::channel();
         let (lib_tx, lib_rx) = mpsc::channel();
+        let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
@@ -364,6 +380,7 @@ impl App {
             layout_sub_indicator_area: Rect::default(),
             layout_audio_indicator_area: Rect::default(),
             layout_audio_area: Rect::default(),
+            layout_sessions_btn_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
             skip_intro_end_ticks: None,
@@ -400,6 +417,15 @@ impl App {
             context_menu_rect: None,
             lib_tx,
             lib_rx,
+            sessions: Vec::new(),
+            sessions_cursor: 0,
+            sessions_loading: false,
+            show_sessions: false,
+            sessions_tx,
+            sessions_rx,
+            connected_session_id: None,
+            connected_session_state: None,
+            last_session_poll: Instant::now() - Duration::from_secs(60),
             force_clear: false,
             tab_scroll: 0,
         }
@@ -412,6 +438,7 @@ impl App {
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<crate::ws::WsEvent>();
         let (lib_tx, lib_rx) = mpsc::channel();
+        let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
@@ -475,6 +502,7 @@ impl App {
             layout_sub_indicator_area: Rect::default(),
             layout_audio_indicator_area: Rect::default(),
             layout_audio_area: Rect::default(),
+            layout_sessions_btn_area: Rect::default(),
             confirm_remove_idx: None,
             confirm_clear_playlist: false,
             skip_intro_end_ticks: None,
@@ -511,6 +539,15 @@ impl App {
             context_menu_rect: None,
             lib_tx,
             lib_rx,
+            sessions: Vec::new(),
+            sessions_cursor: 0,
+            sessions_loading: false,
+            show_sessions: false,
+            sessions_tx,
+            sessions_rx,
+            connected_session_id: None,
+            connected_session_state: None,
+            last_session_poll: Instant::now() - Duration::from_secs(60),
             force_clear: false,
             tab_scroll: 0,
         }
@@ -636,6 +673,42 @@ impl App {
                 self.handle_lib_event(ev);
             }
 
+            while let Ok(ev) = self.sessions_rx.try_recv() {
+                match ev {
+                    SessionEvent::Loaded(sessions) => {
+                        let old_id = self.sessions.get(self.sessions_cursor).map(|s| s.id.clone());
+                        self.sessions = sessions;
+                        self.sessions_loading = false;
+                        self.last_session_poll = Instant::now();
+                        if let Some(id) = old_id {
+                            if let Some(pos) = self.sessions.iter().position(|s| s.id == id) {
+                                self.sessions_cursor = pos;
+                            } else {
+                                self.sessions_cursor = self.sessions_cursor.min(self.sessions.len().saturating_sub(1));
+                                if !self.sessions.is_empty() {
+                                    self.log.push(Level::Warn, "sessions", "selected session gone; cursor clamped");
+                                }
+                            }
+                        }
+                        // Update connected session state; auto-disconnect if gone
+                        if let Some(ref conn_id) = self.connected_session_id.clone() {
+                            if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
+                                self.connected_session_state = Some(s.clone());
+                            } else {
+                                self.log.push(Level::Warn, "sessions", "connected session gone; disconnecting");
+                                self.flash_status("Remote session ended; disconnected".to_string());
+                                self.connected_session_id = None;
+                                self.connected_session_state = None;
+                            }
+                        }
+                    }
+                    SessionEvent::Error(e) => {
+                        self.sessions_loading = false;
+                        self.flash_status(format!("Sessions error: {e}"));
+                    }
+                }
+            }
+
             while let Ok((item_id, bytes_opt)) = self.card_image_rx.try_recv() {
                 self.card_image_loading.remove(&item_id);
                 let state: Option<StatefulProtocol> = bytes_opt
@@ -656,6 +729,14 @@ impl App {
                     crate::config::save_config_settings(&cfg);
                     self.settings_save_at = None;
                 }
+            }
+
+            // Periodic session poll when connected to a remote session
+            if self.connected_session_id.is_some()
+                && self.last_session_poll.elapsed() >= Duration::from_secs(3)
+                && !self.sessions_loading
+            {
+                self.spawn_sessions_load();
             }
 
             if event::poll(Duration::from_millis(50))? {
@@ -833,8 +914,47 @@ impl App {
             }
             return false;
         }
+        if self.show_sessions {
+            match key.code {
+                KeyCode::Esc => { self.show_sessions = false; }
+                KeyCode::Up => {
+                    self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
+                }
+                KeyCode::Down => {
+                    if !self.sessions.is_empty() {
+                        self.sessions_cursor = (self.sessions_cursor + 1).min(self.sessions.len() - 1);
+                    }
+                }
+                KeyCode::Char('r') => { self.spawn_sessions_load(); }
+                KeyCode::Enter => {
+                    if let Some(sess) = self.sessions.get(self.sessions_cursor) {
+                        let id = sess.id.clone();
+                        let name = sess.device_name.clone();
+                        self.connected_session_id = Some(id);
+                        self.connected_session_state = Some(sess.clone());
+                        self.show_sessions = false;
+                        self.flash_status(format!("Connected to {name}"));
+                        self.spawn_sessions_load();
+                    }
+                }
+                KeyCode::Char('d') => {
+                    self.connected_session_id = None;
+                    self.connected_session_state = None;
+                    self.show_sessions = false;
+                    self.flash_status("Disconnected from remote session".to_string());
+                }
+                _ => {}
+            }
+            return false;
+        }
         if key.code == KeyCode::F(1) {
             self.show_help = true;
+            return false;
+        }
+        // Ctrl+R: open sessions overlay
+        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('r') {
+            self.show_sessions = true;
+            self.spawn_sessions_load();
             return false;
         }
         // Global c: clear playlist (not when typing in library search)
@@ -1073,6 +1193,53 @@ impl App {
     fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
         let active = self.player.status.lock().unwrap().active;
         let alt = key.modifiers.contains(KeyModifiers::ALT);
+        // Route playback controls to the connected remote session when active
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let pos_s = self.connected_session_state.as_ref().map(|s| s.position_s).unwrap_or(0);
+            let vol   = self.connected_session_state.as_ref().map(|s| s.volume).unwrap_or(50);
+            let id = conn_id.clone();
+            match key.code {
+                KeyCode::Char(' ') => {
+                    self.do_session_command(move |c| c.session_transport(&id, "PlayPause"));
+                    return Some(false);
+                }
+                KeyCode::Enter if alt => {
+                    self.do_session_command(move |c| c.session_transport(&id, "Stop"));
+                    return Some(false);
+                }
+                KeyCode::Left if key.modifiers == KeyModifiers::ALT => {
+                    let ticks = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND;
+                    self.do_session_command(move |c| c.session_seek(&id, ticks));
+                    return Some(false);
+                }
+                KeyCode::Right if key.modifiers == KeyModifiers::ALT => {
+                    let ticks = (pos_s + 5) * crate::api::TICKS_PER_SECOND;
+                    self.do_session_command(move |c| c.session_seek(&id, ticks));
+                    return Some(false);
+                }
+                KeyCode::Char('<') => {
+                    let ticks = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND;
+                    self.do_session_command(move |c| c.session_seek(&id, ticks));
+                    return Some(false);
+                }
+                KeyCode::Char('>') => {
+                    let ticks = (pos_s + 5) * crate::api::TICKS_PER_SECOND;
+                    self.do_session_command(move |c| c.session_seek(&id, ticks));
+                    return Some(false);
+                }
+                KeyCode::Char('-') => {
+                    let new_vol = (vol - 5).max(0);
+                    self.do_session_command(move |c| c.session_set_volume(&id, new_vol));
+                    return Some(false);
+                }
+                KeyCode::Char('+') | KeyCode::Char('=') => {
+                    let new_vol = (vol + 5).min(100);
+                    self.do_session_command(move |c| c.session_set_volume(&id, new_vol));
+                    return Some(false);
+                }
+                _ => {}
+            }
+        }
         // Volume works regardless of playback state
         match key.code {
             KeyCode::Char('-') => { self.adjust_volume(-5); return Some(false); }
@@ -1885,6 +2052,11 @@ impl App {
                     if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); }
                     return;
                 }
+                if self.layout_sessions_btn_area.contains((col, row).into()) {
+                    self.show_sessions = true;
+                    self.spawn_sessions_load();
+                    return;
+                }
                 if self.layout_vol_area.contains((col, row).into()) {
                     self.adjust_volume(-5);
                     return;
@@ -2639,6 +2811,33 @@ impl App {
         });
     }
 
+    fn spawn_sessions_load(&mut self) {
+        self.sessions_loading = true;
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.sessions_tx.clone();
+        std::thread::spawn(move || {
+            match client.get_sessions() {
+                Ok(sessions) => { let _ = tx.send(SessionEvent::Loaded(sessions)); }
+                Err(e)       => { let _ = tx.send(SessionEvent::Error(e)); }
+            }
+        });
+    }
+
+    fn do_session_command(&self, f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static) {
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.sessions_tx.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = f(&client) {
+                let _ = tx.send(SessionEvent::Error(e));
+                return;
+            }
+            match client.get_sessions() {
+                Ok(sessions) => { let _ = tx.send(SessionEvent::Loaded(sessions)); }
+                Err(e)       => { let _ = tx.send(SessionEvent::Error(e)); }
+            }
+        });
+    }
+
     fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
             LibEvent::Loaded { lib_idx, parent_id, level } => {
@@ -2878,7 +3077,7 @@ impl App {
         self.terminal_height = area.height;
 
         let active = self.player.status.lock().unwrap().active;
-        let controls_h: u16 = if active { 2 } else { 0 };
+        let controls_h: u16 = if active || self.connected_session_id.is_some() { 2 } else { 0 };
 
         let [tabs_area, gap_area, toast_area, main_area, status_area, controls_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
@@ -2920,22 +3119,24 @@ impl App {
                     .unwrap_or("\u{1F509}")
             };
 
-            // [♫]=4 cols, gap=1, [字]=4 cols (icon=2, brackets=2), 1 space right padding
-            const SUB_W:     u16 = 4;
+            // right-to-left: ───[℻]─[字]─[♫]──── leading dashes
             const AUD_W:     u16 = 4;
+            const SUB_W:     u16 = 4;
+            const SESS_W:    u16 = 3; // [⊕] — ⊕ is 1 col wide
             const SEP_W:     u16 = 1;
             const RIGHT_PAD: u16 = 3;
-            let sub_end   = (gap_area.width as usize).saturating_sub(RIGHT_PAD as usize);
-            let sub_start = sub_end.saturating_sub(SUB_W as usize);
-            let aud_end   = sub_start.saturating_sub(SEP_W as usize);
-            let aud_start = aud_end.saturating_sub(AUD_W as usize);
-            let right_dashes = RIGHT_PAD as usize;
+            let sess_end   = (gap_area.width as usize).saturating_sub(RIGHT_PAD as usize);
+            let sess_start = sess_end.saturating_sub(SESS_W as usize);
+            let sub_end    = sess_start.saturating_sub(SEP_W as usize);
+            let sub_start  = sub_end.saturating_sub(SUB_W as usize);
+            let aud_end    = sub_start.saturating_sub(SEP_W as usize);
+            let aud_start  = aud_end.saturating_sub(AUD_W as usize);
 
-            let dash = Style::default().fg(palette::MUTED);
-            let bra  = Style::default().fg(palette::MUTED);
-            let sub_bra = Style::default().fg(palette::MUTED);
+            let dash      = Style::default().fg(palette::MUTED);
+            let bra       = Style::default().fg(palette::MUTED);
             let mut spans: Vec<Span> = Vec::new();
-            let sub_color = if sub_active { palette::RED } else { palette::MUTED };
+            let sub_color  = if sub_active { palette::RED } else { palette::MUTED };
+            let sess_color = if self.connected_session_id.is_some() { palette::IRIS } else { palette::MUTED };
             spans.push(Span::styled("─".repeat(aud_start), dash));
             if player_active {
                 let icon_color = if audio_muted { palette::MUTED } else { palette::IRIS };
@@ -2946,20 +3147,26 @@ impl App {
                 spans.push(Span::styled("─".repeat(AUD_W as usize), dash));
             }
             spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
-            spans.push(Span::styled("[",  sub_bra));
+            spans.push(Span::styled("[",  bra));
             spans.push(Span::styled("字", Style::default().fg(sub_color)));
-            spans.push(Span::styled("]",  sub_bra));
-            spans.push(Span::styled("─".repeat(right_dashes), dash));
+            spans.push(Span::styled("]",  bra));
+            spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
+            spans.push(Span::styled("[",            bra));
+            spans.push(Span::styled("\u{2295}",     Style::default().fg(sess_color)));
+            spans.push(Span::styled("]",            bra));
+            spans.push(Span::styled("─".repeat(RIGHT_PAD as usize), dash));
             f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
 
-            let sub_x = gap_area.x + sub_start as u16;
-            self.layout_sub_indicator_area   = Rect { x: sub_x, y: gap_area.y, width: SUB_W, height: 1 };
-            let aud_x = gap_area.x + aud_start as u16;
+            let aud_x  = gap_area.x + aud_start as u16;
             self.layout_audio_indicator_area = if player_active {
                 Rect { x: aud_x, y: gap_area.y, width: AUD_W, height: 1 }
             } else {
                 Rect::default()
             };
+            let sub_x  = gap_area.x + sub_start as u16;
+            self.layout_sub_indicator_area   = Rect { x: sub_x,  y: gap_area.y, width: SUB_W,  height: 1 };
+            let sess_x = gap_area.x + sess_start as u16;
+            self.layout_sessions_btn_area    = Rect { x: sess_x, y: gap_area.y, width: SESS_W, height: 1 };
         }
         let gear_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(SETTINGS_W),
@@ -3113,6 +3320,10 @@ impl App {
         }
 
         self.render_context_menu(f);
+
+        if self.show_sessions {
+            self.render_sessions_overlay(f);
+        }
     }
 
     fn render_volume_bar(&self, f: &mut ratatui::Frame, area: Rect) {
@@ -3129,6 +3340,129 @@ impl App {
             Span::styled(format!("{}%", volume), Style::default().fg(color)),
         ]);
         f.render_widget(Paragraph::new(line), area);
+    }
+
+    fn render_sessions_overlay(&self, f: &mut ratatui::Frame) {
+        let full = f.area();
+        let mw = full.width.min(90);
+        let mh = (full.height * 4 / 5).min(20).max(6);
+        let mx = full.x + (full.width.saturating_sub(mw)) / 2;
+        let my = full.y + (full.height.saturating_sub(mh)) / 2;
+        let modal = Rect { x: mx, y: my, width: mw, height: mh };
+
+        f.render_widget(Clear, modal);
+        f.render_widget(Block::default().style(Style::default().bg(palette::BASE)), modal);
+
+        // Header
+        let title = " \u{2295} Remote Sessions";
+        let hints = "r:refresh  Esc:close ";
+        let pad = (mw as usize).saturating_sub(title.len() + hints.len());
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                Span::raw(" ".repeat(pad)),
+                Span::styled(hints, Style::default().fg(palette::MUTED)),
+            ])).style(Style::default().bg(palette::FOCUSED)),
+            Rect { x: mx, y: my, width: mw, height: 1 },
+        );
+
+        // Separator
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "\u{2500}".repeat(mw as usize),
+                Style::default().fg(palette::OVERLAY),
+            )),
+            Rect { x: mx, y: my + 1, width: mw, height: 1 },
+        );
+
+        // Hints footer
+        let footer_y = my + mh - 1;
+        let hint_text = " [Enter]connect  [d]disconnect  [r]refresh  [Esc]close";
+        f.render_widget(
+            Paragraph::new(Span::styled(hint_text, Style::default().fg(palette::MUTED))),
+            Rect { x: mx, y: footer_y, width: mw, height: 1 },
+        );
+
+        let list_area = Rect { x: mx, y: my + 2, width: mw, height: mh.saturating_sub(3) };
+
+        if self.sessions_loading && self.sessions.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE)))
+                    .alignment(Alignment::Center),
+                list_area,
+            );
+            return;
+        }
+        if self.sessions.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(" No other active sessions", Style::default().fg(palette::SUBTLE)))
+                    .alignment(Alignment::Center),
+                list_area,
+            );
+            return;
+        }
+
+        let col_device  = 14u16;
+        let col_client  = 10u16;
+        let col_user    =  8u16;
+        let col_host    = 12u16;
+        let col_state   = 16u16;
+        let col_playing = mw.saturating_sub(2 + col_device + col_client + col_user + col_host + col_state);
+
+        let header_cells = vec![
+            Cell::from("Device").style(Style::default().fg(palette::SUBTLE)),
+            Cell::from("Client").style(Style::default().fg(palette::SUBTLE)),
+            Cell::from("User").style(Style::default().fg(palette::SUBTLE)),
+            Cell::from("Host").style(Style::default().fg(palette::SUBTLE)),
+            Cell::from("Now Playing").style(Style::default().fg(palette::SUBTLE)),
+            Cell::from("State").style(Style::default().fg(palette::SUBTLE)),
+        ];
+        let header = Row::new(header_cells).height(1);
+
+        let rows: Vec<Row> = self.sessions.iter().enumerate().map(|(i, s)| {
+            let selected = i == self.sessions_cursor;
+            let row_style = if selected {
+                Style::default().fg(palette::BASE).bg(palette::IRIS)
+            } else if i % 2 == 1 {
+                Style::default().fg(palette::TEXT).bg(palette::FOCUSED)
+            } else {
+                Style::default().fg(palette::TEXT)
+            };
+            let state_str = if s.now_playing.is_some() {
+                if s.is_paused { format!("\u{23f8} {}/{}", fmt_duration(s.position_s), fmt_duration(s.runtime_s)) }
+                else { format!("\u{25b6} {}/{}", fmt_duration(s.position_s), fmt_duration(s.runtime_s)) }
+            } else {
+                "\u{25a0} idle".to_string()
+            };
+            let playing_str = s.now_playing.as_deref().unwrap_or("\u{2014}").to_string();
+            let prefix = if selected { "\u{25b6} " } else { "  " };
+            Row::new(vec![
+                Cell::from(format!("{}{}", prefix, trunc_str(&s.device_name, col_device as usize - 2))),
+                Cell::from(trunc_str(&s.client,      col_client  as usize)),
+                Cell::from(trunc_str(&s.user_name,   col_user    as usize)),
+                Cell::from(trunc_str(&s.host,        col_host    as usize)),
+                Cell::from(trunc_str(&playing_str,   col_playing as usize)),
+                Cell::from(state_str),
+            ]).style(row_style)
+        }).collect();
+
+        let widths = [
+            Constraint::Length(col_device),
+            Constraint::Length(col_client),
+            Constraint::Length(col_user),
+            Constraint::Length(col_host),
+            Constraint::Length(col_playing),
+            Constraint::Length(col_state),
+        ];
+
+        let mut table_state = TableState::default().with_selected(Some(self.sessions_cursor));
+        f.render_stateful_widget(
+            Table::new(rows, widths)
+                .header(header)
+                .row_highlight_style(Style::default()),
+            list_area,
+            &mut table_state,
+        );
     }
 
     fn render_help_screen(&mut self, f: &mut ratatui::Frame) {
@@ -3233,6 +3567,19 @@ impl App {
             mk("/",                "Search library"),
             mk("w",                "Toggle watched"),
             mk("s",                "Shuffle and play selection"),
+
+            blank(),
+            section("REMOTE SESSIONS"),
+            mk("Ctrl+R",           "Open session picker"),
+            mk("↑ / ↓",            "Select session"),
+            mk("Enter",            "Connect to session (controls route to remote)"),
+            mk("d",                "Disconnect from remote session"),
+            mk("r",                "Refresh session list"),
+            mk("Esc",              "Close panel"),
+            mk("Space",            "Pause / resume (when connected)"),
+            mk("Alt+Enter",        "Stop remote (when connected)"),
+            mk("< / >",            "Seek ±5 seconds (when connected)"),
+            mk("- / +",            "Volume down / up (when connected)"),
 
             blank(),
         ]);
@@ -3578,7 +3925,13 @@ impl App {
         let inner_x = area.x + (area.width.saturating_sub(inner_w)) / 2;
         let area = Rect { x: inner_x, y: area.y, width: inner_w, height: area.height };
 
-        let (position_ticks, runtime_ticks, paused) = {
+        let (position_ticks, runtime_ticks, paused) = if let Some(ref remote) = self.connected_session_state {
+            (
+                remote.position_s * crate::api::TICKS_PER_SECOND,
+                remote.runtime_s  * crate::api::TICKS_PER_SECOND,
+                remote.is_paused,
+            )
+        } else {
             let s = self.player.status.lock().unwrap();
             (s.position_ticks, s.runtime_ticks, s.paused)
         };
@@ -3604,12 +3957,12 @@ impl App {
 
         let btn_row_y = area.y + 1;
 
-        self.layout_seekbar_area = Rect { x: area.x, y: area.y,    width: area.width, height: 1 };
-        self.layout_button_area  = Rect { x: btn_x,  y: btn_row_y, width: BTNS_W,     height: 1 };
-        self.layout_tracks_area  = Rect::default();
-        self.layout_vol_area     = Rect::default();
-        self.layout_sub_area     = Rect::default();
-        self.layout_audio_area   = Rect::default();
+        self.layout_seekbar_area      = Rect { x: area.x, y: area.y,    width: area.width, height: 1 };
+        self.layout_button_area       = Rect { x: btn_x,  y: btn_row_y, width: BTNS_W,     height: 1 };
+        self.layout_tracks_area       = Rect::default();
+        self.layout_vol_area          = Rect::default();
+        self.layout_sub_area          = Rect::default();
+        self.layout_audio_area        = Rect::default();
 
         // Row 0 — seekbar
         let ratio = if runtime_ticks > 0 {
@@ -5072,6 +5425,11 @@ fn is_playable(item: &crate::api::MediaItem) -> bool {
 fn fmt_duration(s: i64) -> String {
     if s >= 3600 { format!("{}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60) }
     else         { format!("{}:{:02}", s / 60, s % 60) }
+}
+
+fn trunc_str(s: &str, max: usize) -> String {
+    if s.chars().count() <= max { s.to_string() }
+    else { format!("{}\u{2026}", s.chars().take(max.saturating_sub(1)).collect::<String>()) }
 }
 
 fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {

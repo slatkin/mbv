@@ -129,6 +129,20 @@ impl MediaItem {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SessionInfo {
+    pub id:            String,
+    pub device_name:   String,
+    pub client:        String,
+    pub user_name:     String,
+    pub host:          String,
+    pub now_playing:   Option<String>,
+    pub position_s:    i64,
+    pub runtime_s:     i64,
+    pub is_paused:     bool,
+    pub volume:        i64,
+}
+
 fn parse_item(raw: &Value) -> MediaItem {
     let ud = raw.get("UserData").unwrap_or(&Value::Null);
     let item_type = raw["Type"].as_str().unwrap_or("").to_string();
@@ -795,6 +809,56 @@ impl EmbyClient {
     }
 
     #[allow(dead_code)]
+    pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
+        let arr: Value = self.get("/Sessions")
+            .query("ActiveWithinSeconds", "600")
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        let sessions = arr.as_array().map(|a| a.iter().filter_map(|v| {
+            if v["DeviceId"].as_str().unwrap_or("") == self.device_id { return None; }
+            if !v["SupportsRemoteControl"].as_bool().unwrap_or(false) { return None; }
+            let ps  = &v["PlayState"];
+            let npi = &v["NowPlayingItem"];
+            let raw_host = v["RemoteEndPoint"].as_str().unwrap_or("");
+            let host = raw_host.rsplit(':').nth(1)
+                .unwrap_or(raw_host)
+                .to_string();
+            Some(SessionInfo {
+                id:          v["Id"].as_str().unwrap_or("").to_string(),
+                device_name: v["DeviceName"].as_str().unwrap_or("").to_string(),
+                client:      v["Client"].as_str().unwrap_or("").to_string(),
+                user_name:   v["UserName"].as_str().unwrap_or("").to_string(),
+                host,
+                now_playing: npi["Name"].as_str().map(str::to_string),
+                position_s:  ps["PositionTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,
+                runtime_s:   npi["RunTimeTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,
+                is_paused:   ps["IsPaused"].as_bool().unwrap_or(false),
+                volume:      ps["VolumeLevel"].as_i64().unwrap_or(100),
+            })
+        }).collect()).unwrap_or_default();
+        Ok(sessions)
+    }
+
+    pub fn session_transport(&self, id: &str, cmd: &str) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Playing/{cmd}"))
+            .send_string("").map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_seek(&self, id: &str, ticks: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Playing/Seek"))
+            .query("SeekPositionTicks", &ticks.to_string())
+            .send_string("").map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_set_volume(&self, id: &str, vol: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Command/SetVolume"))
+            .send_json(ureq::json!({"Arguments":{"Volume": vol.to_string()}}))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn stream_url(&self, item_id: &str) -> String {
         format!("{}/Videos/{}/stream?static=true&api_key={}", self.config.server_url, item_id, self.token)
     }
