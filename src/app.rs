@@ -3764,8 +3764,8 @@ impl App {
             Row::new([
                 Cell::from(""),
                 Cell::from("Title").style(header_style),
-                Cell::from("Series").style(header_style),
-                Cell::from(Line::from("Ep").alignment(Alignment::Right)).style(header_style),
+                Cell::from(""),
+                Cell::from(""),
                 Cell::from(Line::from("Length").alignment(Alignment::Right)).style(header_style),
                 Cell::from(Line::from("Type").alignment(Alignment::Right)).style(header_style),
                 Cell::from(""),
