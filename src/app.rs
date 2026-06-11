@@ -3611,31 +3611,10 @@ impl App {
 
         let cursor = self.player_tab.playlist_cursor;
 
-        let [_, header_line, table_area] = Layout::vertical([
-            Constraint::Length(1),
+        let [_, table_area] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Min(0),
         ]).areas(inner);
-
-        // Column labels overlaid on a full-width ─ rule.
-        {
-            let label = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
-            let hr    = Style::default().fg(palette::PINE);
-            let w = header_line.width as usize;
-            // Fixed chars: 1 + 7 + fill + 8 + 2 + 6 + 2 + 10 = 36 + fill → fill = w - 36
-            let fill = w.saturating_sub(36);
-            let header_spans = Line::from(vec![
-                Span::styled("─",                  hr),
-                Span::styled(" Title ",            label),
-                Span::styled("─".repeat(fill),     hr),
-                Span::styled(" Length ",           label),
-                Span::styled("──",                 hr),
-                Span::styled(" Type ",             label),
-                Span::styled("──",                 hr),
-                Span::styled(" Progress ",         label),
-            ]);
-            f.render_widget(Paragraph::new(header_spans), header_line);
-        }
 
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let row_style = if i == current_idx && active {
@@ -3652,8 +3631,8 @@ impl App {
 
             let title = item.playback_label();
             let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
-            let length = if len_secs > 0 { format!("{:>7}", fmt_duration(len_secs)) } else { format!("{:>7}", "—") };
-            let media_type_str = if !item.media_type.is_empty() { item.media_type.clone() } else { "—".to_string() };
+            let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
+            let media_type_str = if !item.item_type.is_empty() { item.item_type.clone() } else { "—".to_string() };
             let (pos_ticks, rt_ticks) = if i == current_idx && active {
                 (live_pos, live_runtime)
             } else {
@@ -3678,12 +3657,22 @@ impl App {
             Row::new([
                 indicator,
                 Cell::from(title),
-                Cell::from(length),
-                Cell::from(media_type_str).style(Style::default().fg(palette::SUBTLE)),
+                Cell::from(Line::from(length).alignment(Alignment::Right)),
+                Cell::from(Line::from(media_type_str).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
                 progress_cell,
                 Cell::from(""),
             ]).style(row_style)
         }).collect();
+
+        let header_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
+        let header = Row::new([
+            Cell::from(""),
+            Cell::from("Title").style(header_style),
+            Cell::from(Line::from("Length").alignment(Alignment::Right)).style(header_style),
+            Cell::from(Line::from("Type").alignment(Alignment::Right)).style(header_style),
+            Cell::from(Line::from("Progress").alignment(Alignment::Right)).style(header_style),
+            Cell::from(""),
+        ]);
 
         let mut state = TableState::default();
         state.select(Some(cursor));
@@ -3691,10 +3680,11 @@ impl App {
             Constraint::Length(1),
             Constraint::Min(10),
             Constraint::Length(7),
-            Constraint::Length(5),
             Constraint::Length(10),
+            Constraint::Length(9),
             Constraint::Length(1),
         ])
+        .header(header)
         .column_spacing(2)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
@@ -4783,6 +4773,14 @@ impl App {
                     }
                     Line::from(spans)
                 }
+            };
+
+            // Prepend item_type as the first span on the metadata line
+            let meta_line = {
+                let type_str = if !item.item_type.is_empty() { item.item_type.clone() } else { "—".to_string() };
+                let mut spans = vec![Span::styled(format!("{}  ", type_str), Style::default().fg(palette::SUBTLE))];
+                spans.extend(meta_line.spans);
+                Line::from(spans)
             };
 
             // Split text_rect vertically into lines
