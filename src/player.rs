@@ -509,14 +509,17 @@ impl Player {
             let mut next_up_armed_logged = false;
             let mut intro_start_ticks: i64 = 0;
             let mut intro_end_ticks: i64   = 0;
-            let mut intro_show_fired = false;
-            let mut intro_hide_fired = false;
             if client.chapter_api_available {
                 if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
                     intro_start_ticks = s;
                     intro_end_ticks   = e;
                 }
             }
+            // Pre-fire intro flags when resuming at or past the intro window so
+            // a brief time-pos=0 event during seek doesn't incorrectly trigger it.
+            let past_intro = intro_end_ticks > 0 && item_pos >= intro_end_ticks;
+            let mut intro_show_fired = past_intro;
+            let mut intro_hide_fired = past_intro;
 
             loop {
                 // Process commands before checking the stop signal so that a LoadNew
@@ -692,12 +695,14 @@ impl Player {
                             if !intro_show_fired && ticks >= intro_start_ticks {
                                 intro_show_fired = true;
                                 intro_hide_fired = true;
-                                let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
-                                if always_skip_intro {
-                                    let _ = mpv.set_property("time-pos", end_secs);
-                                } else {
-                                    let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
-                                    let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                                if ticks < intro_end_ticks {
+                                    let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
+                                    if always_skip_intro {
+                                        let _ = mpv.set_property("time-pos", end_secs);
+                                    } else {
+                                        let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
+                                        let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                                    }
                                 }
                             }
                             if !intro_hide_fired && ticks >= intro_end_ticks {
@@ -1047,14 +1052,15 @@ impl Player {
             let mut playlist_next_up_armed = false;
             let mut intro_start_ticks: i64 = 0;
             let mut intro_end_ticks: i64   = 0;
-            let mut intro_show_fired = false;
-            let mut intro_hide_fired = false;
             if client.chapter_api_available {
                 if let Some((s, e)) = client.get_intro_times(&items[start_idx].id, &log) {
                     intro_start_ticks = s;
                     intro_end_ticks   = e;
                 }
             }
+            let past_intro = intro_end_ticks > 0 && items[start_idx].playback_position_ticks >= intro_end_ticks;
+            let mut intro_show_fired = past_intro;
+            let mut intro_hide_fired = past_intro;
 
             loop {
                 let mut cancel_stop = false;
@@ -1183,8 +1189,6 @@ impl Player {
                             pending_load = true;
 
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                            intro_show_fired = false;
-                            intro_hide_fired = false;
                             intro_start_ticks = 0;
                             intro_end_ticks   = 0;
                             if client.chapter_api_available {
@@ -1193,6 +1197,9 @@ impl Player {
                                     intro_end_ticks   = e;
                                 }
                             }
+                            let past = intro_end_ticks > 0 && item.playback_position_ticks >= intro_end_ticks;
+                            intro_show_fired = past;
+                            intro_hide_fired = past;
 
                             if start_pos > 0.0 {
                                 let _ = mpv.set_property("start", format!("{:.0}", start_pos));
@@ -1268,12 +1275,14 @@ impl Player {
                             if !intro_show_fired && ticks >= intro_start_ticks {
                                 intro_show_fired = true;
                                 intro_hide_fired = true;
-                                let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
-                                if always_skip_intro {
-                                    let _ = mpv.set_property("time-pos", end_secs);
-                                } else {
-                                    let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
-                                    let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                                if ticks < intro_end_ticks {
+                                    let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
+                                    if always_skip_intro {
+                                        let _ = mpv.set_property("time-pos", end_secs);
+                                    } else {
+                                        let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
+                                        let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                                    }
                                 }
                             }
                             if !intro_hide_fired && ticks >= intro_end_ticks {
@@ -1410,8 +1419,6 @@ impl Player {
                         playlist_next_up_fired = false;
                         playlist_next_up_armed = false;
                         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                        intro_show_fired = false;
-                        intro_hide_fired = false;
                         intro_start_ticks = 0;
                         intro_end_ticks   = 0;
 
@@ -1426,6 +1433,9 @@ impl Player {
                                 intro_end_ticks   = e;
                             }
                         }
+                        let past = intro_end_ticks > 0 && items[current_idx].playback_position_ticks >= intro_end_ticks;
+                        intro_show_fired = past;
+                        intro_hide_fired = past;
                         *current_item_id.lock().unwrap() = items[current_idx].id.clone();
                         *current_msid.lock().unwrap()    = new_msid;
                         *session_id.lock().unwrap()      = new_sid;

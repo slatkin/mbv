@@ -728,11 +728,24 @@ impl App {
 
         // Leave the daemon's player running when the TUI disconnects; only
         // stop the player when we own it locally.
-        let was_playing = self.player.status.lock().unwrap().active;
+        let (was_playing, current_idx, position_ticks) = {
+            let st = self.player.status.lock().unwrap();
+            (st.active, st.current_idx, st.position_ticks)
+        };
         if !self.player.is_remote() {
             self.player.stop();
         }
         self.player.join();
+        // Update the playing item's position before saving — the PlayerEvent::Stopped
+        // that carries this update is never processed after we break out of the event loop.
+        if was_playing {
+            if let Some(item) = self.player_tab.items.get_mut(current_idx) {
+                if position_ticks > 0 {
+                    item.playback_position_ticks = position_ticks;
+                }
+                self.last_played_item_id = Some(item.id.clone());
+            }
+        }
         self.save_playlist(was_playing);
         restore_terminal(terminal)?;
         Ok(())
@@ -1476,9 +1489,8 @@ impl App {
     fn save_home_card_view(&self) { self.save_prefs(); }
 
     fn save_playlist(&self, was_playing: bool) {
-        let ids: Vec<&str> = self.player_tab.items.iter().map(|i| i.id.as_str()).collect();
         let payload = serde_json::json!({
-            "ids": ids,
+            "items": self.player_tab.items,
             "last_played_item_id": self.last_played_item_id,
             "was_playing": was_playing,
         });
@@ -1493,35 +1505,39 @@ impl App {
         let Ok(text) = std::fs::read_to_string(&path) else { return };
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return };
 
-        // Support both new format {"ids":[...]} and old format [...]
         let was_playing = v["was_playing"].as_bool().unwrap_or(false);
-        let (ids, last_played_item_id): (Vec<String>, Option<String>) = if v.is_array() {
-            let ids = serde_json::from_value(v).unwrap_or_default();
-            (ids, None)
+        let last_played_item_id = v["last_played_item_id"].as_str().map(String::from);
+
+        let items: Vec<crate::api::MediaItem> = if let Some(arr) = v["items"].as_array() {
+            arr.iter()
+                .filter_map(|x| serde_json::from_value(x.clone()).ok())
+                .collect()
         } else {
-            let ids = v["ids"].as_array()
-                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
-                .unwrap_or_default();
-            let last_id = v["last_played_item_id"].as_str().map(String::from);
-            (ids, last_id)
+            // old format: re-fetch by IDs
+            let ids: Vec<String> = if v.is_array() {
+                serde_json::from_value(v).unwrap_or_default()
+            } else {
+                v["ids"].as_array()
+                    .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                    .unwrap_or_default()
+            };
+            if ids.is_empty() { return }
+            let client = self.client.lock().unwrap();
+            let Ok(mut fetched) = client.get_items_by_ids(&ids) else { return };
+            fetched.sort_by_key(|item| ids.iter().position(|id| id == &item.id).unwrap_or(usize::MAX));
+            fetched
         };
 
-        if ids.is_empty() { return }
-        let client = self.client.lock().unwrap();
-        if let Ok(mut items) = client.get_items_by_ids(&ids) {
-            // preserve original order (get_items_by_ids may reorder)
-            items.sort_by_key(|item| ids.iter().position(|id| id == &item.id).unwrap_or(usize::MAX));
-            drop(client);
-            self.last_played_item_id = last_played_item_id;
-            self.player_tab.playlist_cursor = if was_playing {
-                self.last_played_item_id.as_deref()
-                    .and_then(|id| items.iter().position(|i| i.id == id))
-                    .unwrap_or(0)
-            } else {
-                0
-            };
-            self.player_tab.items = items;
-        }
+        if items.is_empty() { return }
+        self.last_played_item_id = last_played_item_id;
+        self.player_tab.playlist_cursor = if was_playing {
+            self.last_played_item_id.as_deref()
+                .and_then(|id| items.iter().position(|i| i.id == id))
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        self.player_tab.items = items;
     }
 
     fn seek_to_col(&mut self, col: u16) {
