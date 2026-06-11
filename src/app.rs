@@ -1520,6 +1520,18 @@ impl App {
     }
 
     fn handle_button_click(&mut self, btn: usize) {
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let pos_s = self.connected_session_state.as_ref().map(|s| s.position_s).unwrap_or(0);
+            let id = conn_id.clone();
+            match btn {
+                1 => { let t = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND; self.do_session_command(move |c| c.session_seek(&id, t)); }
+                2 => { self.do_session_command(move |c| c.session_transport(&id, "PlayPause")); }
+                3 => { self.do_session_command(move |c| c.session_transport(&id, "Stop")); }
+                4 => { let t = (pos_s + 5) * crate::api::TICKS_PER_SECOND; self.do_session_command(move |c| c.session_seek(&id, t)); }
+                _ => {}
+            }
+            return;
+        }
         let (active, current_idx) = {
             let s = self.player.status.lock().unwrap();
             (s.active, s.current_idx)
@@ -1731,9 +1743,17 @@ impl App {
     fn seek_to_col(&mut self, col: u16) {
         let bar = self.layout_seekbar_area;
         if bar.width == 0 { return; }
+        let fraction = (col.saturating_sub(bar.x)) as f64 / bar.width as f64;
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let runtime_s = self.connected_session_state.as_ref().map(|s| s.runtime_s).unwrap_or(0);
+            if runtime_s == 0 { return; }
+            let ticks = (fraction * (runtime_s * crate::api::TICKS_PER_SECOND) as f64) as i64;
+            let id = conn_id.clone();
+            self.do_session_command(move |c| c.session_seek(&id, ticks));
+            return;
+        }
         let runtime_ticks = self.player.status.lock().unwrap().runtime_ticks;
         if runtime_ticks == 0 { return; }
-        let fraction = (col.saturating_sub(bar.x)) as f64 / bar.width as f64;
         let target_secs = (fraction * runtime_ticks as f64) / TICKS_PER_SECOND as f64;
         self.player.send_command(PlayerCommand::SeekAbsolute(target_secs));
     }
