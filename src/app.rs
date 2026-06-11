@@ -2860,7 +2860,7 @@ impl App {
             let dash = Style::default().fg(palette::MUTED);
             let bra  = Style::default().fg(palette::MUTED);
             let mut spans: Vec<Span> = Vec::new();
-            let sub_color = if sub_active { palette::RED } else { palette::MUTED };
+            let sub_color = if sub_active { palette::RED } else { palette::OVERLAY };
             spans.push(Span::styled("─".repeat(aud_start), dash));
             if player_active {
                 let icon_color = if audio_muted { palette::MUTED } else { palette::IRIS };
