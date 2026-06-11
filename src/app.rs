@@ -3602,16 +3602,23 @@ impl App {
             Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)),
             Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)),
         ])), seek_rect);
-        let label = format!(" {} / {} ", pos_str, dur_str);
-        let label_w = label.chars().count() as u16;
-        let label_x = seek_rect.x + seek_rect.width.saturating_sub(label_w) / 2;
-        let label_rect = Rect { x: label_x, y: seek_rect.y, width: label_w.min(seek_rect.width), height: 1 };
-        f.render_widget(Paragraph::new(Span::styled(label, Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD))), label_rect);
 
-        // Row 1 — buttons
+        // Row 1 — elapsed (left), buttons (center), total (right)
+        let time_style = Style::default().fg(palette::MUTED);
+        let elapsed_w = pos_str.chars().count() as u16;
+        let total_w   = dur_str.chars().count() as u16;
+        f.render_widget(
+            Paragraph::new(Span::styled(pos_str, time_style)),
+            Rect { x: area.x, y: btn_row_y, width: elapsed_w.min(area.width), height: 1 },
+        );
         f.render_widget(
             Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
             Rect { x: area.x, y: btn_row_y, width: area.width, height: 1 },
+        );
+        let total_x = area.x + area.width.saturating_sub(total_w);
+        f.render_widget(
+            Paragraph::new(Span::styled(dur_str, time_style)),
+            Rect { x: total_x, y: btn_row_y, width: total_w.min(area.width), height: 1 },
         );
     }
 
