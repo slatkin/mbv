@@ -229,6 +229,7 @@ pub struct Player {
     no_scripts: bool,
     #[allow(dead_code)]
     pub always_play_next: bool,
+    pub always_skip_intro: bool,
     pub subs_off: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
@@ -246,6 +247,7 @@ impl Player {
         use_mpv_config: bool,
         no_scripts: bool,
         always_play_next: bool,
+        always_skip_intro: bool,
         subs_off: bool,
         event_tx: mpsc::Sender<PlayerEvent>,
         ws_tx: Option<mpsc::Sender<String>>,
@@ -257,6 +259,7 @@ impl Player {
             use_mpv_config,
             no_scripts,
             always_play_next,
+            always_skip_intro,
             subs_off: Arc::new(AtomicBool::new(subs_off)),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
@@ -331,6 +334,7 @@ impl Player {
         let headless = !self.show_audio_window && (item.media_type == "Audio" || item.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
         let no_scripts = self.no_scripts;
+        let always_skip_intro = self.always_skip_intro;
         let initial_volume = initial_volume;
         let event_tx = self.event_tx.clone();
         let status = self.status.clone();
@@ -687,9 +691,14 @@ impl Player {
                         if intro_end_ticks > intro_start_ticks {
                             if !intro_show_fired && ticks >= intro_start_ticks {
                                 intro_show_fired = true;
+                                intro_hide_fired = true;
                                 let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
-                                let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
-                                let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                                if always_skip_intro {
+                                    let _ = mpv.set_property("time-pos", end_secs);
+                                } else {
+                                    let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
+                                    let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                                }
                             }
                             if !intro_hide_fired && ticks >= intro_end_ticks {
                                 intro_hide_fired = true;
@@ -865,6 +874,7 @@ impl Player {
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
         let no_scripts = self.no_scripts;
+        let always_skip_intro = self.always_skip_intro;
         let initial_volume = initial_volume;
 
         {
@@ -1259,9 +1269,14 @@ impl Player {
                         if intro_end_ticks > intro_start_ticks {
                             if !intro_show_fired && ticks >= intro_start_ticks {
                                 intro_show_fired = true;
+                                intro_hide_fired = true;
                                 let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
-                                let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
-                                let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                                if always_skip_intro {
+                                    let _ = mpv.set_property("time-pos", end_secs);
+                                } else {
+                                    let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
+                                    let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+                                }
                             }
                             if !intro_hide_fired && ticks >= intro_end_ticks {
                                 intro_hide_fired = true;
@@ -1487,7 +1502,7 @@ impl PlayerProxy {
     #[cfg(test)]
     pub fn stub(status: Arc<Mutex<PlayerStatus>>) -> Self {
         let (tx, _rx) = std::sync::mpsc::channel();
-        let player = Player::new(String::new(), String::new(), false, false, false, false, true, tx, None);
+        let player = Player::new(String::new(), String::new(), false, false, false, false, false, true, tx, None);
         let subs_off = player.subs_off.clone();
         PlayerProxy { always_play_next: false, status, subs_off, inner: PlayerProxyInner::Local(player) }
     }

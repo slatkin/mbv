@@ -76,6 +76,7 @@ pub fn run(client: EmbyClient) -> ! {
         client.config.use_mpv_config,
         client.config.no_scripts,
         client.config.always_play_next,
+        client.config.always_skip_intro,
         subs_off,
         player_tx,
         Some(ws_send_tx),

@@ -12,6 +12,7 @@ pub struct Config {
     pub show_audio_window: bool,
     pub use_mpv_config: bool,
     pub always_play_next: bool,
+    pub always_skip_intro: bool,
     pub image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
     pub show_systray_icon: bool,
     pub show_log_tab: bool,
@@ -33,6 +34,7 @@ impl Default for Config {
             show_audio_window: false,
             use_mpv_config: false,
             always_play_next: false,
+            always_skip_intro: false,
             image_protocol: None,
             show_systray_icon: true,
             show_log_tab: false,
@@ -172,6 +174,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let always_skip_intro = mbv
+        .and_then(|m| m.get("always_skip_intro"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let image_protocol = mbv
         .and_then(|m| m.get("image_protocol").or_else(|| m.get("card_image_protocol")))
         .and_then(|v| v.as_str())
@@ -217,6 +224,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         show_audio_window,
         use_mpv_config,
         always_play_next,
+        always_skip_intro,
         image_protocol,
         show_systray_icon,
         show_log_tab,
@@ -249,6 +257,7 @@ pub fn save_config_settings(cfg: &Config) {
     mbv.insert("daemon_mode_on_exit".to_string(), toml::Value::Boolean(cfg.daemon_mode_on_exit));
     mbv.insert("start_on_queue".to_string(),      toml::Value::Boolean(cfg.start_on_queue));
     mbv.insert("always_play_next".to_string(),    toml::Value::Boolean(cfg.always_play_next));
+    mbv.insert("always_skip_intro".to_string(),   toml::Value::Boolean(cfg.always_skip_intro));
     mbv.insert("show_log_tab".to_string(),        toml::Value::Boolean(cfg.show_log_tab));
     mbv.insert("hidden_libraries".to_string(), toml::Value::Array(
         cfg.hidden_libraries.iter().map(|s| toml::Value::String(s.clone())).collect()
@@ -433,9 +442,20 @@ hidden_latest = ["Movies", "TV SHOWS"]
 
     #[test]
     fn parse_always_play_next_in_wrong_section_is_ignored() {
-        // Placing always_play_next under [server] must NOT enable it — wrong section.
         let toml = "[server]\nurl = \"http://host\"\nalways_play_next = true";
         assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [mbv], not [server]");
+    }
+
+    #[test]
+    fn parse_always_skip_intro_true_from_mbv_section() {
+        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nalways_skip_intro = true";
+        assert!(parse_config(toml).unwrap().always_skip_intro);
+    }
+
+    #[test]
+    fn parse_always_skip_intro_defaults_false() {
+        let toml = "[server]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().always_skip_intro);
     }
 
     #[test]

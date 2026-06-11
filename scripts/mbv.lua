@@ -2227,12 +2227,12 @@ local function next_up_render()
         ph = dim.h
     end
 
-    local lbl_fs = math.max(11, math.floor(ph / 50))
-    local ttl_fs = math.max(15, math.floor(ph / 36))
+    local lbl_fs = math.max(10, math.floor(ph / 58))
+    local ttl_fs = math.max(12, math.floor(ph / 46))
     local bh     = lbl_fs + ttl_fs + 28
     local r      = bh / 2
 
-    local max_chars     = 28
+    local max_chars     = 36
     local display_title = next_up.title or ''
     if #display_title > max_chars then
         display_title = display_title:sub(1, max_chars - 1) .. '…'
