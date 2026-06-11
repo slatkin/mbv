@@ -3731,17 +3731,13 @@ impl App {
             };
 
             if show_ep_cols {
-                let series_season = if item.item_type == "Episode" && item.parent_index_number > 0 {
-                    format!("S{}", item.parent_index_number)
-                } else { String::new() };
-                let episode = if item.item_type == "Episode" && item.index_number > 0 {
-                    format!("E{:02}", item.index_number)
+                let ep_tag = if item.item_type == "Episode" && item.parent_index_number > 0 {
+                    format!("S{:02}/E{:02}", item.parent_index_number, item.index_number)
                 } else { String::new() };
                 Row::new([
                     indicator,
                     title_cell,
-                    Cell::from(series_season).style(Style::default().fg(palette::SUBTLE)),
-                    Cell::from(Line::from(episode).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
+                    Cell::from(Line::from(ep_tag).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
                     Cell::from(Line::from(length).alignment(Alignment::Right)),
                     Cell::from(Line::from(media_type_str).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
                     Cell::from(""),
@@ -3751,7 +3747,6 @@ impl App {
                     indicator,
                     title_cell,
                     Cell::from(""),
-                    Cell::from(""),
                     Cell::from(Line::from(length).alignment(Alignment::Right)),
                     Cell::from(Line::from(media_type_str).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
                     Cell::from(""),
@@ -3760,35 +3755,21 @@ impl App {
         }).collect();
 
         let header_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
-        let header = if show_ep_cols {
-            Row::new([
-                Cell::from(""),
-                Cell::from("Title").style(header_style),
-                Cell::from(""),
-                Cell::from(""),
-                Cell::from(Line::from("Length").alignment(Alignment::Right)).style(header_style),
-                Cell::from(Line::from("Type").alignment(Alignment::Right)).style(header_style),
-                Cell::from(""),
-            ])
-        } else {
-            Row::new([
-                Cell::from(""),
-                Cell::from("Title").style(header_style),
-                Cell::from(""),
-                Cell::from(""),
-                Cell::from(Line::from("Length").alignment(Alignment::Right)).style(header_style),
-                Cell::from(Line::from("Type").alignment(Alignment::Right)).style(header_style),
-                Cell::from(""),
-            ])
-        };
+        let header = Row::new([
+            Cell::from(""),
+            Cell::from("Title").style(header_style),
+            Cell::from(""),
+            Cell::from(Line::from("Length").alignment(Alignment::Right)).style(header_style),
+            Cell::from(Line::from("Type").alignment(Alignment::Right)).style(header_style),
+            Cell::from(""),
+        ]);
 
         let mut state = TableState::default();
         state.select(Some(cursor));
         let table = Table::new(rows, [
             Constraint::Length(1),
             Constraint::Min(10),
-            Constraint::Length(if show_ep_cols { 4 } else { 0 }),
-            Constraint::Length(if show_ep_cols { 4 } else { 0 }),
+            Constraint::Length(if show_ep_cols { 8 } else { 0 }),
             Constraint::Length(7),
             Constraint::Length(10),
             Constraint::Length(1),
