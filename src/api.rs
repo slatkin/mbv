@@ -129,6 +129,22 @@ impl MediaItem {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct SessionInfo {
+    pub id:            String,
+    pub device_name:   String,
+    pub client:        String,
+    pub user_name:     String,
+    pub host:          String,
+    pub now_playing:   Option<String>,
+    pub position_s:    i64,
+    pub runtime_s:     i64,
+    pub is_paused:     bool,
+    pub volume:        i64,
+    pub sub_index:     i64,   // -1 = disabled
+    pub audio_index:   i64,   // 1-based; 0 = unknown
+}
+
 fn parse_item(raw: &Value) -> MediaItem {
     let ud = raw.get("UserData").unwrap_or(&Value::Null);
     let item_type = raw["Type"].as_str().unwrap_or("").to_string();
@@ -629,10 +645,10 @@ impl EmbyClient {
             let path = format!("/Users/{}/PlayingItems/{}", self.user_id, item_id);
             log.push(Level::Info, "api", format!("→ DELETE PlayingItem pos={position_ticks}"));
             match self.delete(&path)
-                .query("mediaSourceId", media_source_id)
-                .query("positionTicks", &position_ticks.to_string())
-                .query("playSessionId", session_id)
-                .send_string("")
+                .query("MediaSourceId", media_source_id)
+                .query("PositionTicks", &position_ticks.to_string())
+                .query("PlaySessionId", session_id)
+                .call()
             {
                 Ok(r)  => log.push(Level::Info, "api", format!("← {} PlayingItem", r.status())),
                 Err(e) => log.push(Level::Warn, "api", format!("← ERR PlayingItem: {e}")),
@@ -795,6 +811,83 @@ impl EmbyClient {
     }
 
     #[allow(dead_code)]
+    pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
+        let arr: Value = self.get("/Sessions")
+            .query("ActiveWithinSeconds", "600")
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        let sessions = arr.as_array().map(|a| a.iter().filter_map(|v| {
+            if v["DeviceId"].as_str().unwrap_or("") == self.device_id { return None; }
+            if !v["SupportsRemoteControl"].as_bool().unwrap_or(false) { return None; }
+            let ps  = &v["PlayState"];
+            let npi = &v["NowPlayingItem"];
+            let raw_host = v["RemoteEndPoint"].as_str().unwrap_or("");
+            let host = raw_host.rsplit(':').nth(1)
+                .unwrap_or(raw_host)
+                .to_string();
+            Some(SessionInfo {
+                id:          v["Id"].as_str().unwrap_or("").to_string(),
+                device_name: v["DeviceName"].as_str().unwrap_or("").to_string(),
+                client:      v["Client"].as_str().unwrap_or("").to_string(),
+                user_name:   v["UserName"].as_str().unwrap_or("").to_string(),
+                host,
+                now_playing: npi["Name"].as_str().map(str::to_string),
+                position_s:  ps["PositionTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,
+                runtime_s:   npi["RunTimeTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,
+                is_paused:   ps["IsPaused"].as_bool().unwrap_or(false),
+                volume:      ps["VolumeLevel"].as_i64().unwrap_or(100),
+                sub_index:   ps["SubtitleStreamIndex"].as_i64().unwrap_or(-1),
+                audio_index: ps["AudioStreamIndex"].as_i64().unwrap_or(0),
+            })
+        }).collect()).unwrap_or_default();
+        Ok(sessions)
+    }
+
+    pub fn session_transport(&self, id: &str, cmd: &str) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Playing/{cmd}"))
+            .send_string("").map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_seek(&self, id: &str, ticks: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Playing/Seek"))
+            .query("SeekPositionTicks", &ticks.to_string())
+            .send_string("").map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_set_volume(&self, id: &str, vol: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Command/SetVolume"))
+            .send_json(ureq::json!({"Arguments":{"Volume": vol.to_string()}}))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_set_subtitle_index(&self, id: &str, index: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Command/SetSubtitleStreamIndex"))
+            .send_json(ureq::json!({"Arguments":{"Index": index.to_string()}}))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_set_audio_index(&self, id: &str, index: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Command/SetAudioStreamIndex"))
+            .send_json(ureq::json!({"Arguments":{"Index": index.to_string()}}))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_play(&self, id: &str, item_id: &str, start_ticks: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Playing"))
+            .send_json(ureq::json!({
+                "PlayCommand": "PlayNow",
+                "ItemIds": [item_id],
+                "StartPositionTicks": start_ticks
+            }))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn stream_url(&self, item_id: &str) -> String {
         format!("{}/Videos/{}/stream?static=true&api_key={}", self.config.server_url, item_id, self.token)
     }
