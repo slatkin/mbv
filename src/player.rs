@@ -962,18 +962,16 @@ impl Player {
                 st.volume = v;
             }
 
-            // Set resume position before the first loadfile so mpv applies it immediately.
-            let start_item = &items[start_idx];
-            if start_item.media_type == "Video" && start_item.playback_position_ticks > 0 {
-                let _ = mpv.set_property("start", format!("{:.0}", start_item.resume_seconds()));
-            }
-
             // Load items starting from start_idx so mpv plays the right item
             // immediately with no playlist-pos jump required.
             for (i, item) in items[start_idx..].iter().enumerate() {
                 let url = format!("{}/Videos/{}/stream?static=true&api_key={}", server_url, item.id, token);
                 let mode = if i == 0 { "replace" } else { "append-play" };
-                let title_opt = mpv_title_opt(&item.display_name());
+                let title_opt = if i == 0 && item.playback_position_ticks > 0 {
+                    format!("{},start={:.0}", mpv_title_opt(&item.display_name()), item.resume_seconds())
+                } else {
+                    mpv_title_opt(&item.display_name())
+                };
                 if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
                     log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
                     if i == 0 {
@@ -1110,7 +1108,7 @@ impl Player {
                                     last_valid_pos    = 0;
                                     tracks_initialized = false;
                                     pending_load  = true;
-                                    let resume = if items[idx].media_type == "Video" && items[idx].playback_position_ticks > 0 {
+                                    let resume = if items[idx].playback_position_ticks > 0 {
                                         format!("{:.0}", items[idx].resume_seconds())
                                     } else {
                                         "0".to_string()
@@ -1433,7 +1431,7 @@ impl Player {
                         *session_id.lock().unwrap()      = new_sid;
                         current_osd_title = items[current_idx].display_name();
                         let next = &items[current_idx];
-                        if next.media_type == "Video" && next.playback_position_ticks > 0 {
+                        if next.playback_position_ticks > 0 {
                             pending_resume_secs = Some(next.resume_seconds());
                         }
                         let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));

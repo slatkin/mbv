@@ -728,11 +728,12 @@ impl App {
 
         // Leave the daemon's player running when the TUI disconnects; only
         // stop the player when we own it locally.
+        let was_playing = self.player.status.lock().unwrap().active;
         if !self.player.is_remote() {
             self.player.stop();
         }
         self.player.join();
-        self.save_playlist();
+        self.save_playlist(was_playing);
         restore_terminal(terminal)?;
         Ok(())
     }
@@ -1474,11 +1475,12 @@ impl App {
     fn save_playlist_card_view(&self) { self.save_prefs(); }
     fn save_home_card_view(&self) { self.save_prefs(); }
 
-    fn save_playlist(&self) {
+    fn save_playlist(&self, was_playing: bool) {
         let ids: Vec<&str> = self.player_tab.items.iter().map(|i| i.id.as_str()).collect();
         let payload = serde_json::json!({
             "ids": ids,
             "last_played_item_id": self.last_played_item_id,
+            "was_playing": was_playing,
         });
         if let Ok(json) = serde_json::to_string(&payload) {
             let path = crate::config::playlist_cache_path();
@@ -1492,6 +1494,7 @@ impl App {
         let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return };
 
         // Support both new format {"ids":[...]} and old format [...]
+        let was_playing = v["was_playing"].as_bool().unwrap_or(false);
         let (ids, last_played_item_id): (Vec<String>, Option<String>) = if v.is_array() {
             let ids = serde_json::from_value(v).unwrap_or_default();
             (ids, None)
@@ -1510,7 +1513,13 @@ impl App {
             items.sort_by_key(|item| ids.iter().position(|id| id == &item.id).unwrap_or(usize::MAX));
             drop(client);
             self.last_played_item_id = last_played_item_id;
-            self.player_tab.playlist_cursor = 0;
+            self.player_tab.playlist_cursor = if was_playing {
+                self.last_played_item_id.as_deref()
+                    .and_then(|id| items.iter().position(|i| i.id == id))
+                    .unwrap_or(0)
+            } else {
+                0
+            };
             self.player_tab.items = items;
         }
     }
@@ -2848,11 +2857,12 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         let controls_h: u16 = if active { 2 } else { 0 };
 
-        let [tabs_area, gap_area, main_area, status_area, controls_area] = Layout::vertical([
+        let [tabs_area, gap_area, toast_area, main_area, status_area, controls_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
             Constraint::Length(1),            // spacer
+            Constraint::Length(1),            // toast notifications
             Constraint::Min(0),               // main content
-            Constraint::Length(1),            // status line / now-playing HR
+            Constraint::Length(1),            // now-playing HR
             Constraint::Length(controls_h),   // playback controls (global, when active)
         ]).areas(area);
 
@@ -2900,7 +2910,7 @@ impl App {
 
             let dash = Style::default().fg(palette::MUTED);
             let bra  = Style::default().fg(palette::MUTED);
-            let sub_bra = Style::default().fg(palette::TEXT);
+            let sub_bra = Style::default().fg(palette::MUTED);
             let mut spans: Vec<Span> = Vec::new();
             let sub_color = if sub_active { palette::RED } else { palette::MUTED };
             spans.push(Span::styled("─".repeat(aud_start), dash));
@@ -3014,22 +3024,24 @@ impl App {
             self.status.clear();
             self.status_expires = None;
         }
-        // Any explicit status (flash or persistent prompt) beats now_playing
-        let (status_text, status_color) = if !self.status.is_empty() {
-            let color = if self.status_expires.is_some() { palette::YELLOW } else { palette::YELLOW };
-            (Some(self.status.as_str()), color)
-        } else {
-            (now_playing.as_deref(), palette::FOAM)
-        };
+        // Toast area: always below the HR divider, yellow centered, blank when no message
+        if !self.status.is_empty() {
+            f.render_widget(
+                Paragraph::new(self.status.as_str())
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
+                toast_area,
+            );
+        }
         if active {
-            if let Some(text) = status_text {
+            if let Some(text) = now_playing {
                 f.render_widget(
                     Block::default()
                         .borders(Borders::TOP)
                         .border_style(Style::default().fg(palette::MUTED))
                         .title(Span::styled(
                             format!("  {}  ", text),
-                            Style::default().fg(status_color).add_modifier(Modifier::BOLD),
+                            Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
                         ))
                         .title_alignment(Alignment::Center),
                     status_area,
@@ -3051,14 +3063,6 @@ impl App {
             self.layout_vol_area     = Rect::default();
             self.layout_sub_area     = Rect::default();
             self.layout_audio_area   = Rect::default();
-            if let Some(text) = status_text {
-                f.render_widget(
-                    Paragraph::new(text)
-                        .alignment(Alignment::Center)
-                        .style(Style::default().fg(status_color).add_modifier(Modifier::BOLD)),
-                    status_area,
-                );
-            }
         }
 
         if self.tab_idx == 0 {
@@ -3653,10 +3657,7 @@ impl App {
 
         let cursor = self.player_tab.playlist_cursor;
 
-        let [_, table_area] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ]).areas(inner);
+        let table_area = inner;
 
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let row_style = if i == current_idx && active {
@@ -3680,28 +3681,21 @@ impl App {
             } else {
                 (item.playback_position_ticks, item.runtime_ticks)
             };
-            let progress_cell = if pos_ticks > 0 && rt_ticks > 0 {
-                const BAR_W: usize = 8;
-                let filled = (((pos_ticks as f64 / rt_ticks as f64) * BAR_W as f64)
-                    .round() as usize)
-                    .min(BAR_W);
-                let now_playing = i == current_idx && active;
-                let bar_color    = if now_playing { palette::IRIS } else { palette::FOAM };
-                let unplayed_color = if now_playing { palette::IRIS_DIM } else { Color::Rgb(0, 80, 128) };
+            let title_cell = if pos_ticks > 0 && rt_ticks > 0 {
+                let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
                 Cell::from(Line::from(vec![
-                    Span::styled("━".repeat(filled),         Style::default().fg(bar_color)),
-                    Span::styled("─".repeat(BAR_W - filled), Style::default().fg(unplayed_color)),
-                ]).alignment(Alignment::Right)).style(Style::default())
+                    Span::raw(title),
+                    Span::styled(format!(" {pct}%"), Style::default().fg(palette::YELLOW)),
+                ]))
             } else {
-                Cell::from("")
+                Cell::from(title)
             };
 
             Row::new([
                 indicator,
-                Cell::from(title),
+                title_cell,
                 Cell::from(Line::from(length).alignment(Alignment::Right)),
                 Cell::from(Line::from(media_type_str).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
-                progress_cell,
                 Cell::from(""),
             ]).style(row_style)
         }).collect();
@@ -3712,7 +3706,6 @@ impl App {
             Cell::from("Title").style(header_style),
             Cell::from(Line::from("Length").alignment(Alignment::Right)).style(header_style),
             Cell::from(Line::from("Type").alignment(Alignment::Right)).style(header_style),
-            Cell::from(Line::from("Progress").alignment(Alignment::Right)).style(header_style),
             Cell::from(""),
         ]);
 
@@ -3723,7 +3716,6 @@ impl App {
             Constraint::Min(10),
             Constraint::Length(7),
             Constraint::Length(10),
-            Constraint::Length(9),
             Constraint::Length(1),
         ])
         .header(header)
