@@ -86,6 +86,10 @@ pub struct MediaItem {
 }
 
 impl MediaItem {
+    pub fn is_audio(&self) -> bool {
+        self.media_type == "Audio" || self.item_type == "Audio"
+    }
+
     pub fn resume_seconds(&self) -> f64 {
         self.playback_position_ticks as f64 / TICKS_PER_SECOND as f64
     }

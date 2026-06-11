@@ -327,11 +327,12 @@ impl Player {
             "{}/Videos/{}/stream?static=true&api_key={}",
             self.server_url, item.id, self.token
         );
-        let start_pos = item.resume_seconds();
         let item = item.clone();
-        let item_pos = item.playback_position_ticks;
+        let is_audio = item.is_audio();
+        let start_pos = if is_audio { 0.0 } else { item.resume_seconds() };
+        let item_pos = if is_audio { 0 } else { item.playback_position_ticks };
         let title = item.display_name();
-        let headless = !self.show_audio_window && (item.media_type == "Audio" || item.item_type == "Audio");
+        let headless = !self.show_audio_window && is_audio;
         let use_mpv_config = self.use_mpv_config;
         let no_scripts = self.no_scripts;
         let always_skip_intro = self.always_skip_intro;
@@ -469,14 +470,14 @@ impl Player {
                         Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             ticks += 1;
-                            let (pos, paused) = {
-                                let s = status_p.lock().unwrap();
-                                (s.position_ticks, s.paused)
-                            };
-                            let id   = cid_p.lock().unwrap().clone();
-                            let msid = cmsid_p.lock().unwrap().clone();
-                            let sid  = csid_p.lock().unwrap().clone();
-                            if ticks.is_multiple_of(3) {
+                            let sid = csid_p.lock().unwrap().clone();
+                            if !is_audio && ticks.is_multiple_of(3) {
+                                let (pos, paused) = {
+                                    let s = status_p.lock().unwrap();
+                                    (s.position_ticks, s.paused)
+                                };
+                                let id   = cid_p.lock().unwrap().clone();
+                                let msid = cmsid_p.lock().unwrap().clone();
                                 if let Some(ref tx) = ws_tx_p {
                                     client_progress.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log_p);
                                 } else {
@@ -643,7 +644,7 @@ impl Player {
                         let id   = current_item_id.lock().unwrap().clone();
                         let msid = current_msid.lock().unwrap().clone();
                         let sid  = current_sid.lock().unwrap().clone();
-                        client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
+                        client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid, &log);
                         stop_reported = true;
                     }
                     let _ = mpv.command("quit", &[]);
@@ -784,19 +785,21 @@ impl Player {
                             && status.lock().unwrap().runtime_ticks > 0;
                         let _ = progress_stop_tx.send(());
                         if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                        client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
+                        client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid, &log);
                         stop_reported = true;
                         if natural_end {
-                            match client.mark_played(&id) {
-                                Ok(()) => {
-                                    log.push(Level::Info, "player", format!("mark_played ok id={id}"));
-                                }
-                                Err(e) => {
-                                    log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}; will retry"));
-                                    mark_played_id = Some(id.clone());
+                            if !is_audio {
+                                match client.mark_played(&id) {
+                                    Ok(()) => {
+                                        log.push(Level::Info, "player", format!("mark_played ok id={id}"));
+                                    }
+                                    Err(e) => {
+                                        log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}; will retry"));
+                                        mark_played_id = Some(id.clone());
+                                    }
                                 }
                             }
-                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos });
+                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: if is_audio { 0 } else { last_valid_pos } });
                         }
                     }
                     Some(Ok(Event::LogMessage { prefix, level, text, .. })) => {
@@ -826,7 +829,7 @@ impl Player {
                             let id   = current_item_id.lock().unwrap().clone();
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = current_sid.lock().unwrap().clone();
-                            client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
+                            client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid, &log);
                         }
                         // Retry mark_played in a detached thread so Shutdown never blocks.
                         if let Some(mid) = mark_played_id.take() {
@@ -997,6 +1000,7 @@ impl Player {
             let current_item_id = Arc::new(Mutex::new(items[start_idx].id.clone()));
             let current_msid = Arc::new(Mutex::new(first_msid));
 
+            let current_is_audio = Arc::new(AtomicBool::new(items[start_idx].is_audio()));
             let client_progress = client.clone();
             let cid_p = current_item_id.clone();
             let cmsid_p = current_msid.clone();
@@ -1004,6 +1008,7 @@ impl Player {
             let status_p = status.clone();
             let ws_tx_p = ws_tx.clone();
             let log_p = log.clone();
+            let is_audio_p = current_is_audio.clone();
             let (progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
             let mut progress_handle = Some(thread::spawn(move || {
                 let mut ticks: u32 = 0;
@@ -1012,14 +1017,14 @@ impl Player {
                         Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                         Err(mpsc::RecvTimeoutError::Timeout) => {
                             ticks += 1;
-                            let (pos, paused) = {
-                                let s = status_p.lock().unwrap();
-                                (s.position_ticks, s.paused)
-                            };
-                            let id = cid_p.lock().unwrap().clone();
-                            let msid = cmsid_p.lock().unwrap().clone();
                             let sid = csid_p.lock().unwrap().clone();
-                            if ticks.is_multiple_of(3) {
+                            if !is_audio_p.load(Ordering::Relaxed) && ticks.is_multiple_of(3) {
+                                let (pos, paused) = {
+                                    let s = status_p.lock().unwrap();
+                                    (s.position_ticks, s.paused)
+                                };
+                                let id = cid_p.lock().unwrap().clone();
+                                let msid = cmsid_p.lock().unwrap().clone();
                                 if let Some(ref tx) = ws_tx_p {
                                     client_progress.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log_p);
                                 } else {
@@ -1089,12 +1094,13 @@ impl Player {
                                     let old_id   = current_item_id.lock().unwrap().clone();
                                     let old_msid = current_msid.lock().unwrap().clone();
                                     let old_sid  = session_id.lock().unwrap().clone();
-                                    client.report_stopped(&old_id, &old_msid, last_valid_pos, &old_sid, &log);
+                                    client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid, &log);
                                     let (new_sid, new_msid) = {
                                         let (sid, msid) = client.get_playback_info(&items[idx].id, &log);
                                         client.report_start(&items[idx], &msid, &sid, &log);
                                         (sid, msid)
                                     };
+                                    current_is_audio.store(items[idx].is_audio(), Ordering::Relaxed);
                                     *current_item_id.lock().unwrap() = items[idx].id.clone();
                                     *current_msid.lock().unwrap()    = new_msid;
                                     *session_id.lock().unwrap()      = new_sid;
@@ -1111,7 +1117,7 @@ impl Player {
                                     last_valid_pos    = 0;
                                     tracks_initialized = false;
                                     pending_load  = true;
-                                    let resume = if items[idx].playback_position_ticks > 0 {
+                                    let resume = if !items[idx].is_audio() && items[idx].playback_position_ticks > 0 {
                                         format!("{:.0}", items[idx].resume_seconds())
                                     } else {
                                         "0".to_string()
@@ -1169,13 +1175,14 @@ impl Player {
                             let old_id   = current_item_id.lock().unwrap().clone();
                             let old_msid = current_msid.lock().unwrap().clone();
                             let old_sid  = session_id.lock().unwrap().clone();
-                            client.report_stopped(&old_id, &old_msid, last_valid_pos, &old_sid, &log);
+                            client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid, &log);
 
                             let (new_sid, new_msid) = {
                                 let (sid, msid) = client.get_playback_info(&item.id, &log);
                                 client.report_start(&item, &msid, &sid, &log);
                                 (sid, msid)
                             };
+                            current_is_audio.store(item.is_audio(), Ordering::Relaxed);
                             *current_item_id.lock().unwrap() = item.id.clone();
                             *current_msid.lock().unwrap()    = new_msid;
                             *session_id.lock().unwrap()      = new_sid;
@@ -1322,17 +1329,19 @@ impl Player {
                         let seek_settled = last_seek_at.is_none_or(|t| t.elapsed() > Duration::from_millis(500));
                         if quit_at.is_none() && seek_settled {
                             last_seek_at = None;
-                            let (pos, paused) = {
-                                let s = status.lock().unwrap();
-                                (s.position_ticks, s.paused)
-                            };
-                            let id   = current_item_id.lock().unwrap().clone();
-                            let msid = current_msid.lock().unwrap().clone();
-                            let sid  = session_id.lock().unwrap().clone();
-                            if let Some(ref tx) = ws_tx {
-                                client.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log);
-                            } else {
-                                client.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate", &log);
+                            if !current_is_audio.load(Ordering::Relaxed) {
+                                let (pos, paused) = {
+                                    let s = status.lock().unwrap();
+                                    (s.position_ticks, s.paused)
+                                };
+                                let id   = current_item_id.lock().unwrap().clone();
+                                let msid = current_msid.lock().unwrap().clone();
+                                let sid  = session_id.lock().unwrap().clone();
+                                if let Some(ref tx) = ws_tx {
+                                    client.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log);
+                                } else {
+                                    client.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate", &log);
+                                }
                             }
                         }
                     }
@@ -1352,14 +1361,15 @@ impl Player {
                         let msid = current_msid.lock().unwrap().clone();
                         let sid  = session_id.lock().unwrap().clone();
 
+                        let completed_is_audio = current_is_audio.load(Ordering::Relaxed);
                         if playlist_cancelled {
                             let natural_end = reason == mpv_end_file_reason::Eof
                                 && status.lock().unwrap().runtime_ticks > 0;
                             let _ = progress_stop_tx.send(());
                             if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                            client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
+                            client.report_stopped(&id, &msid, if completed_is_audio { 0 } else { last_valid_pos }, &sid, &log);
                             stop_reported = true;
-                            if natural_end {
+                            if natural_end && !completed_is_audio {
                                 if let Err(e) = client.mark_played(&id) {
                                     log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}"));
                                 }
@@ -1370,7 +1380,7 @@ impl Player {
                         let completed_idx = current_idx;
                         let natural = reason == mpv_end_file_reason::Eof
                             && items[completed_idx].runtime_ticks > 0;
-                        let completed_pos = if natural { 0 } else { last_valid_pos };
+                        let completed_pos = if completed_is_audio || natural { 0 } else { last_valid_pos };
 
                         let next_idx = if let Some(jump_idx) = forced_idx.take() {
                             jump_idx
@@ -1383,7 +1393,7 @@ impl Player {
                             if let Some(h) = progress_handle.take() { let _ = h.join(); }
                             status.lock().unwrap().active = false;
                             client.report_stopped(&id, &msid, completed_pos, &sid, &log);
-                            if natural {
+                            if natural && !completed_is_audio {
                                 if let Err(e) = client.mark_played(&items[completed_idx].id) {
                                     log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
                                 }
@@ -1405,7 +1415,7 @@ impl Player {
                         }
 
                         client.report_stopped(&id, &msid, completed_pos, &sid, &log);
-                        if natural {
+                        if natural && !completed_is_audio {
                             if let Err(e) = client.mark_played(&items[completed_idx].id) {
                                 log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
                             }
@@ -1424,6 +1434,7 @@ impl Player {
                             client.report_start(&items[current_idx], &msid, &sid, &log);
                             (sid, msid)
                         };
+                        current_is_audio.store(items[current_idx].is_audio(), Ordering::Relaxed);
                         intro_start_ticks = 0;
                         intro_end_ticks   = 0;
                         if items[current_idx].playback_position_ticks == 0 && client.chapter_api_available {
@@ -1439,7 +1450,7 @@ impl Player {
                         *session_id.lock().unwrap()      = new_sid;
                         current_osd_title = items[current_idx].display_name();
                         let next = &items[current_idx];
-                        if next.playback_position_ticks > 0 {
+                        if !next.is_audio() && next.playback_position_ticks > 0 {
                             pending_resume_secs = Some(next.resume_seconds());
                         }
                         let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));
@@ -1464,10 +1475,12 @@ impl Player {
                             let id   = current_item_id.lock().unwrap().clone();
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = session_id.lock().unwrap().clone();
-                            client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
+                            let pos  = if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
+                            client.report_stopped(&id, &msid, pos, &sid, &log);
                         }
+                        let pos = if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
                         status.lock().unwrap().active = false;
-                        let _ = event_tx.send(PlayerEvent::Stopped { idx: current_idx, position_ticks: last_valid_pos });
+                        let _ = event_tx.send(PlayerEvent::Stopped { idx: current_idx, position_ticks: pos });
                         return;
                     }
                     Some(Err(e)) => {

@@ -564,7 +564,7 @@ impl App {
                             continue;
                         }
                         if let Some(item) = self.player_tab.items.get_mut(idx) {
-                            if position_ticks > 0 {
+                            if position_ticks > 0 && !item.is_audio() {
                                 item.playback_position_ticks = position_ticks;
                             }
                             self.last_played_item_id = Some(item.id.clone());
@@ -740,7 +740,7 @@ impl App {
         // that carries this update is never processed after we break out of the event loop.
         if was_playing {
             if let Some(item) = self.player_tab.items.get_mut(current_idx) {
-                if position_ticks > 0 {
+                if position_ticks > 0 && !item.is_audio() {
                     item.playback_position_ticks = position_ticks;
                 }
                 self.last_played_item_id = Some(item.id.clone());
@@ -2440,7 +2440,7 @@ impl App {
 
     fn toggle_watched_home(&mut self) {
         let Some(item) = self.current_home_item() else { return };
-        if item.is_folder { return; }
+        if item.is_folder || item.is_audio() { return; }
         let client = self.client.lock().unwrap();
         let result = if item.played { client.mark_unplayed(&item.id) } else { client.mark_played(&item.id) };
         drop(client);
@@ -2452,7 +2452,7 @@ impl App {
 
     fn toggle_watched(&mut self) {
         let Some(item) = self.current_lib_item() else { return };
-        if item.is_folder { return; }
+        if item.is_folder || item.is_audio() { return; }
         let client = self.client.lock().unwrap();
         let result = if item.played { client.mark_unplayed(&item.id) } else { client.mark_played(&item.id) };
         drop(client);
@@ -4809,7 +4809,7 @@ impl App {
                 _ => {
                     // Movie, Audio, and other non-folder types
                     let mut spans: Vec<Span> = Vec::new();
-                    if item.played {
+                    if !is_audio && item.played {
                         spans.push(Span::styled("\u{f00c} ", Style::default().fg(palette::PINE)));
                     }
                     let mut parts: Vec<String> = Vec::new();
@@ -4819,13 +4819,13 @@ impl App {
                         let h = dur_s / 3600; let m = (dur_s % 3600) / 60;
                         parts.push(if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") });
                     }
-                    if item.media_type == "Audio" && !item.container.is_empty() {
+                    if is_audio && !item.container.is_empty() {
                         parts.push(item.container.to_uppercase());
                     }
                     if !parts.is_empty() {
                         spans.push(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)));
                     }
-                    if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
+                    if !is_audio && item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
                         let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
                         spans.push(Span::styled(format!("  {pct}%"), Style::default().fg(palette::YELLOW)));
                     }
@@ -4842,7 +4842,7 @@ impl App {
             };
 
             // Split text_rect vertically into lines
-            let in_progress = item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0;
+            let in_progress = !is_audio && item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0;
             let overview_lines: Vec<String> = if !is_audio && selected && images_enabled && !item.overview.is_empty() {
                 let w = content_w.max(1);
                 let mut lines: Vec<String> = wrap(&item.overview, w).into_iter().map(|s| s.into_owned()).collect();
