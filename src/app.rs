@@ -4566,7 +4566,7 @@ impl App {
     fn render_library_table(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
         self.layout_lib_table_area = area;
         const LIB_SELECTED_IMG_W: u16 = 32;
-        const LIB_AUDIO_IMG_W: u16 = 24;
+        const LIB_AUDIO_IMG_W: u16 = 12;
         // Height for a square image at LIB_AUDIO_IMG_W columns, derived from actual cell pixel ratio.
         let lib_audio_img_h: u16 = self.image_picker.as_ref()
             .map(|p| {
