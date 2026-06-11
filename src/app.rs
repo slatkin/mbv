@@ -958,8 +958,11 @@ impl App {
             KeyCode::End      => self.jump_lib_cursor(true),
             KeyCode::Enter => self.select(),
             KeyCode::Char('w') if alt => self.toggle_watched(),
+            KeyCode::Char('w') if !alt => self.toggle_watched(),
             KeyCode::Char('s') if alt => self.shuffle_play(),
+            KeyCode::Char('s') if !alt => self.shuffle_play(),
             KeyCode::Char('o') if alt => self.open_context_menu(),
+            KeyCode::Char('o') if !alt => self.open_context_menu(),
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);
                 if idx < self.tab_count() { self.set_tab(idx); }
@@ -1005,7 +1008,7 @@ impl App {
                 if self.home_card_view && !self.card_image_states.is_empty() { self.force_clear = true; }
                 return false;
             }
-            KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Char('v') => {
                 if self.images_enabled() {
                     self.home_card_view = !self.home_card_view;
                     self.save_home_card_view();
@@ -1013,7 +1016,7 @@ impl App {
                 }
                 return false;
             }
-            KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Char('o') => {
                 self.open_context_menu(); return false;
             }
             KeyCode::Char(c @ '1'..='9') => {
@@ -1047,7 +1050,7 @@ impl App {
             KeyCode::Left  => { if self.home_card_view { self.move_home_cursor(-1); } }
             KeyCode::Right => { if self.home_card_view { self.move_home_cursor(1); } }
             KeyCode::Enter => self.select_home(),
-            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::ALT) => self.toggle_watched_home(),
+            KeyCode::Char('w') => self.toggle_watched_home(),
             _ => {}
         }
         false
@@ -1082,8 +1085,12 @@ impl App {
             KeyCode::Char(' ') => { self.player.send_command(PlayerCommand::TogglePause); Some(false) }
             KeyCode::Left  if key.modifiers == KeyModifiers::ALT => { self.player.send_command(PlayerCommand::Seek(-5.0)); Some(false) }
             KeyCode::Right if key.modifiers == KeyModifiers::ALT => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
+            KeyCode::Char('<') => { self.player.send_command(PlayerCommand::Seek(-5.0)); Some(false) }
+            KeyCode::Char('>') => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
             KeyCode::Char('a') if alt => { if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); } Some(false) }
+            KeyCode::Char('a') if !alt => { if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); } Some(false) }
             KeyCode::Char('z') if alt => { self.cycle_sub();   Some(false) }
+            KeyCode::Char('z') if !alt => { self.cycle_sub();  Some(false) }
             _ => None,
         }
     }
@@ -1153,10 +1160,10 @@ impl App {
                 let idx = (c as usize) - ('1' as usize);
                 if idx < self.tab_count() { self.set_tab(idx); }
             }
-            KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Char('o') => {
                 self.open_context_menu();
             }
-            KeyCode::Char('v') if key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Char('v') => {
                 if self.images_enabled() {
                     self.playlist_card_view = !self.playlist_card_view;
                     self.save_playlist_card_view();
@@ -3194,7 +3201,7 @@ impl App {
             mk("Home / End",       "First / last"),
             mk("Enter",            "Select / Play / Open"),
             mk("Alt+Q",            "Add item(s) to Queue"),
-            mk("Alt+O",            "Context menu"),
+            mk("o",                "Context menu"),
             mk("c",                "Clear Queue (confirms)"),
             mk("q",                "Quit"),
         ];
@@ -3203,29 +3210,29 @@ impl App {
             blank(),
             section("PLAYBACK"),
             mk("Space",            "Pause / Resume"),
-            mk("Alt+← / →",       "Seek ±5 seconds"),
+            mk("< / >",            "Seek ±5 seconds"),
             mk("Alt+Enter",        "Stop"),
             mk("- / +",            "Volume down / up"),
-            mk("Alt+A",            "Cycle audio track"),
-            mk("Alt+Z",            "Enable subtitles"),
+            mk("a",                "Cycle audio track"),
+            mk("z",                "Enable subtitles"),
 
             blank(),
             section("QUEUE"),
             mk(".",                "Jump to playing item"),
             mk("Del",              "Remove from Queue"),
-            mk("Alt+V",            "Toggle view"),
+            mk("v",                "Toggle view"),
 
             blank(),
             section("HOME"),
             mk("Alt+↑ / ↓",        "Switch sections"),
-            mk("Alt+W",            "Toggle watched"),
+            mk("w",                "Toggle watched"),
 
             blank(),
             section("LIBRARY"),
             mk("Esc / Backspace",  "Go back"),
             mk("/",                "Search library"),
-            mk("Alt+W",            "Toggle watched"),
-            mk("Alt+S",            "Shuffle and play selection"),
+            mk("w",                "Toggle watched"),
+            mk("s",                "Shuffle and play selection"),
 
             blank(),
         ]);
