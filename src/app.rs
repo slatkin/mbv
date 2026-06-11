@@ -3325,15 +3325,25 @@ impl App {
                 toast_area,
             );
         }
-        if active {
-            if let Some(text) = now_playing {
+        let show_controls = active || self.connected_session_id.is_some();
+        if show_controls {
+            // Status / now-playing HR
+            let status_title: Option<String> = if active {
+                now_playing
+            } else if let Some(ref state) = self.connected_session_state {
+                state.now_playing.clone()
+            } else {
+                None
+            };
+            if let Some(text) = status_title {
+                let title_color = if active { palette::FOAM } else { palette::IRIS };
                 f.render_widget(
                     Block::default()
                         .borders(Borders::TOP)
                         .border_style(Style::default().fg(palette::MUTED))
                         .title(Span::styled(
                             format!("  {}  ", text),
-                            Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
+                            Style::default().fg(title_color).add_modifier(Modifier::BOLD),
                         ))
                         .title_alignment(Alignment::Center),
                     status_area,
