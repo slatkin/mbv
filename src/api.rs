@@ -141,6 +141,8 @@ pub struct SessionInfo {
     pub runtime_s:     i64,
     pub is_paused:     bool,
     pub volume:        i64,
+    pub sub_index:     i64,   // -1 = disabled
+    pub audio_index:   i64,   // 1-based; 0 = unknown
 }
 
 fn parse_item(raw: &Value) -> MediaItem {
@@ -643,10 +645,10 @@ impl EmbyClient {
             let path = format!("/Users/{}/PlayingItems/{}", self.user_id, item_id);
             log.push(Level::Info, "api", format!("→ DELETE PlayingItem pos={position_ticks}"));
             match self.delete(&path)
-                .query("mediaSourceId", media_source_id)
-                .query("positionTicks", &position_ticks.to_string())
-                .query("playSessionId", session_id)
-                .send_string("")
+                .query("MediaSourceId", media_source_id)
+                .query("PositionTicks", &position_ticks.to_string())
+                .query("PlaySessionId", session_id)
+                .call()
             {
                 Ok(r)  => log.push(Level::Info, "api", format!("← {} PlayingItem", r.status())),
                 Err(e) => log.push(Level::Warn, "api", format!("← ERR PlayingItem: {e}")),
@@ -834,6 +836,8 @@ impl EmbyClient {
                 runtime_s:   npi["RunTimeTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,
                 is_paused:   ps["IsPaused"].as_bool().unwrap_or(false),
                 volume:      ps["VolumeLevel"].as_i64().unwrap_or(100),
+                sub_index:   ps["SubtitleStreamIndex"].as_i64().unwrap_or(-1),
+                audio_index: ps["AudioStreamIndex"].as_i64().unwrap_or(0),
             })
         }).collect()).unwrap_or_default();
         Ok(sessions)
@@ -855,6 +859,20 @@ impl EmbyClient {
     pub fn session_set_volume(&self, id: &str, vol: i64) -> Result<(), String> {
         self.post(&format!("/Sessions/{id}/Command/SetVolume"))
             .send_json(ureq::json!({"Arguments":{"Volume": vol.to_string()}}))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_set_subtitle_index(&self, id: &str, index: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Command/SetSubtitleStreamIndex"))
+            .send_json(ureq::json!({"Arguments":{"Index": index.to_string()}}))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_set_audio_index(&self, id: &str, index: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Command/SetAudioStreamIndex"))
+            .send_json(ureq::json!({"Arguments":{"Index": index.to_string()}}))
             .map_err(|e| e.to_string())?;
         Ok(())
     }

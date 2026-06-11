@@ -699,11 +699,17 @@ impl App {
                         // Update connected session state; auto-disconnect if gone
                         if let Some(ref conn_id) = self.connected_session_id.clone() {
                             if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
-                                // Maintain a monotonic position estimate:
-                                // take the max of the server-reported value and our running
-                                // extrapolation so we never jump backwards due to a stale poll.
+                                // Maintain a monotonic position estimate within a single video.
+                                // Reset the anchor when the item changes (different runtime or
+                                // title) so the new video's position isn't clamped by the old one.
                                 let now = Instant::now();
-                                if s.is_paused {
+                                let prev_runtime = self.connected_session_state
+                                    .as_ref().map(|p| p.runtime_s).unwrap_or(0);
+                                let prev_title = self.connected_session_state
+                                    .as_ref().and_then(|p| p.now_playing.clone());
+                                let item_changed = s.runtime_s != prev_runtime
+                                    || s.now_playing != prev_title;
+                                if item_changed || s.is_paused {
                                     self.remote_pos_s = s.position_s;
                                 } else {
                                     let extrapolated = self.remote_pos_s
@@ -1203,6 +1209,13 @@ impl App {
     }
 
     fn adjust_volume(&mut self, delta: i64) {
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let vol = self.connected_session_state.as_ref().map(|s| s.volume).unwrap_or(50);
+            let new_vol = (vol + delta).clamp(0, 100);
+            let id = conn_id.clone();
+            self.do_session_command(move |c| c.session_set_volume(&id, new_vol));
+            return;
+        }
         let active = self.player.status.lock().unwrap().active;
         if active {
             let st = self.player.status.lock().unwrap();
@@ -1222,7 +1235,6 @@ impl App {
         // Route playback controls to the connected remote session when active
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             let pos_s = self.connected_session_state.as_ref().map(|s| s.position_s).unwrap_or(0);
-            let vol   = self.connected_session_state.as_ref().map(|s| s.volume).unwrap_or(50);
             let id = conn_id.clone();
             match key.code {
                 KeyCode::Char(' ') => {
@@ -1253,16 +1265,7 @@ impl App {
                     self.do_session_command(move |c| c.session_seek(&id, ticks));
                     return Some(false);
                 }
-                KeyCode::Char('-') => {
-                    let new_vol = (vol - 5).max(0);
-                    self.do_session_command(move |c| c.session_set_volume(&id, new_vol));
-                    return Some(false);
-                }
-                KeyCode::Char('+') | KeyCode::Char('=') => {
-                    let new_vol = (vol + 5).min(100);
-                    self.do_session_command(move |c| c.session_set_volume(&id, new_vol));
-                    return Some(false);
-                }
+                // +/- fall through to adjust_volume which handles remote routing
                 _ => {}
             }
         }
@@ -2376,6 +2379,13 @@ impl App {
     }
 
     fn cycle_audio(&mut self) {
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let cur = self.connected_session_state.as_ref().map(|s| s.audio_index).unwrap_or(1);
+            let next = if cur <= 1 { 2 } else { 1 };
+            let id = conn_id.clone();
+            self.do_session_command(move |c| c.session_set_audio_index(&id, next));
+            return;
+        }
         let (tracks, current_id) = {
             let s = self.player.status.lock().unwrap();
             (s.audio_tracks.clone(), s.audio_id)
@@ -2401,6 +2411,13 @@ impl App {
     }
 
     fn toggle_sub(&mut self) {
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let idx = self.connected_session_state.as_ref().map(|s| s.sub_index).unwrap_or(-1);
+            let next = if idx == -1 { 1i64 } else { -1i64 };
+            let id = conn_id.clone();
+            self.do_session_command(move |c| c.session_set_subtitle_index(&id, next));
+            return;
+        }
         let (tracks, current_id) = {
             let s = self.player.status.lock().unwrap();
             (s.sub_tracks.clone(), s.sub_id)
@@ -2423,6 +2440,11 @@ impl App {
     }
 
     fn cycle_sub(&mut self) {
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            // Without track list from remote, just toggle off/on
+            self.toggle_sub();
+            return;
+        }
         let (tracks, current_id) = {
             let s = self.player.status.lock().unwrap();
             (s.sub_tracks.clone(), s.sub_id)
@@ -3186,16 +3208,21 @@ impl App {
 
         // Thin underline below tab row, with [字] sub and [♪:🏳] audio indicators embedded inline
         {
-            let (sub_active, player_active, audio_muted, audio_label) = {
-                let s = self.player.status.lock().unwrap();
-                let sub_on = !self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
-                let muted = s.active && (s.audio_id == 0 || self.ui_volume == 0);
-                let aud_label = if s.active && s.audio_id != 0 {
-                    s.audio_tracks.iter().find(|(id, _)| *id == s.audio_id)
-                        .map(|(_, l)| l.clone())
-                } else { None };
-                (sub_on, s.active, muted, aud_label)
-            };
+            let (sub_active, player_active, audio_muted, audio_label) =
+                if let Some(ref remote) = self.connected_session_state {
+                    let sub_on = remote.sub_index != -1;
+                    let muted  = remote.volume == 0;
+                    (sub_on, true, muted, None::<String>)
+                } else {
+                    let s = self.player.status.lock().unwrap();
+                    let sub_on = !self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
+                    let muted = s.active && (s.audio_id == 0 || self.ui_volume == 0);
+                    let aud_label = if s.active && s.audio_id != 0 {
+                        s.audio_tracks.iter().find(|(id, _)| *id == s.audio_id)
+                            .map(|(_, l)| l.clone())
+                    } else { None };
+                    (sub_on, s.active, muted, aud_label)
+                };
             let is_audio_item = self.is_audio_item();
             // audio_icon: single 2-cell glyph — muted, speaker (audio), flag, or ♪
             let audio_icon: &str = if audio_muted {
@@ -3212,7 +3239,7 @@ impl App {
             // right-to-left: ───[℻]─[字]─[♫]──── leading dashes
             const AUD_W:     u16 = 4;
             const SUB_W:     u16 = 4;
-            const SESS_W:    u16 = 3; // [⊕] — ⊕ is 1 col wide
+            const SESS_W:    u16 = 3; // [✚] — ✚ is 1 col wide
             const SEP_W:     u16 = 1;
             const RIGHT_PAD: u16 = 3;
             let sess_end   = (gap_area.width as usize).saturating_sub(RIGHT_PAD as usize);
@@ -3242,7 +3269,7 @@ impl App {
             spans.push(Span::styled("]",  bra));
             spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
             spans.push(Span::styled("[",            bra));
-            spans.push(Span::styled("\u{2295}",     Style::default().fg(sess_color)));
+            spans.push(Span::styled("\u{271A}",     Style::default().fg(sess_color)));
             spans.push(Span::styled("]",            bra));
             spans.push(Span::styled("─".repeat(RIGHT_PAD as usize), dash));
             f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
@@ -3446,125 +3473,137 @@ impl App {
 
     fn render_sessions_overlay(&self, f: &mut ratatui::Frame) {
         let full = f.area();
-        let mw = full.width.min(90);
-        let mh = (full.height * 4 / 5).min(20).max(6);
-        let mx = full.x + (full.width.saturating_sub(mw)) / 2;
-        let my = full.y + (full.height.saturating_sub(mh)) / 2;
-        let modal = Rect { x: mx, y: my, width: mw, height: mh };
+        const SW: u16 = 42; // sidebar width
+        let sidebar = Rect { x: full.x, y: full.y, width: SW.min(full.width), height: full.height };
 
-        f.render_widget(Clear, modal);
-        f.render_widget(Block::default().style(Style::default().bg(palette::BASE)), modal);
+        f.render_widget(Clear, sidebar);
+        f.render_widget(Block::default().style(Style::default().bg(palette::BASE)), sidebar);
+
+        // Right border
+        for row in sidebar.y..sidebar.y + sidebar.height {
+            f.render_widget(
+                Paragraph::new(Span::styled("\u{2502}", Style::default().fg(palette::OVERLAY))),
+                Rect { x: sidebar.x + sidebar.width - 1, y: row, width: 1, height: 1 },
+            );
+        }
+
+        let inner_w = sidebar.width.saturating_sub(2); // inside the border
+        let ix = sidebar.x + 1;
 
         // Header
-        let title = " \u{2295} Remote Sessions";
-        let hints = "r:refresh  Esc:close ";
-        let pad = (mw as usize).saturating_sub(title.len() + hints.len());
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
-                Span::raw(" ".repeat(pad)),
-                Span::styled(hints, Style::default().fg(palette::MUTED)),
+                Span::styled("\u{271A} ", Style::default().fg(palette::IRIS)),
+                Span::styled("Remote Sessions", Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD)),
             ])).style(Style::default().bg(palette::FOCUSED)),
-            Rect { x: mx, y: my, width: mw, height: 1 },
+            Rect { x: ix, y: sidebar.y, width: inner_w, height: 1 },
+        );
+        // Header right border fill
+        f.render_widget(
+            Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
+            Rect { x: sidebar.x + sidebar.width - 1, y: sidebar.y, width: 1, height: 1 },
         );
 
-        // Separator
+        // Separator under header
         f.render_widget(
             Paragraph::new(Span::styled(
-                "\u{2500}".repeat(mw as usize),
+                "\u{2500}".repeat(inner_w as usize),
                 Style::default().fg(palette::OVERLAY),
             )),
-            Rect { x: mx, y: my + 1, width: mw, height: 1 },
+            Rect { x: ix, y: sidebar.y + 1, width: inner_w, height: 1 },
         );
 
-        // Hints footer
-        let footer_y = my + mh - 1;
-        let hint_text = " [Enter]connect  [d]disconnect  [r]refresh  [Esc]close";
+        // Footer hints (bottom 2 rows)
+        let footer_y = sidebar.y + sidebar.height - 2;
         f.render_widget(
-            Paragraph::new(Span::styled(hint_text, Style::default().fg(palette::MUTED))),
-            Rect { x: mx, y: footer_y, width: mw, height: 1 },
+            Paragraph::new(Span::styled(
+                "\u{2500}".repeat(inner_w as usize),
+                Style::default().fg(palette::OVERLAY),
+            )),
+            Rect { x: ix, y: footer_y, width: inner_w, height: 1 },
+        );
+        let hints = "[↑↓]select [↵]connect [d]disc [r]refresh [Esc]close";
+        f.render_widget(
+            Paragraph::new(Span::styled(trunc_str(hints, inner_w as usize), Style::default().fg(palette::MUTED))),
+            Rect { x: ix, y: footer_y + 1, width: inner_w, height: 1 },
         );
 
-        let list_area = Rect { x: mx, y: my + 2, width: mw, height: mh.saturating_sub(3) };
+        let list_y = sidebar.y + 2;
+        let list_h = sidebar.height.saturating_sub(4); // header(1) + sep(1) + sep(1) + hints(1)
+        let list_area = Rect { x: ix, y: list_y, width: inner_w, height: list_h };
 
         if self.sessions_loading && self.sessions.is_empty() {
             f.render_widget(
-                Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE)))
-                    .alignment(Alignment::Center),
+                Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE))),
                 list_area,
             );
             return;
         }
         if self.sessions.is_empty() {
             f.render_widget(
-                Paragraph::new(Span::styled(" No other active sessions", Style::default().fg(palette::SUBTLE)))
-                    .alignment(Alignment::Center),
+                Paragraph::new(Span::styled(" No other active sessions", Style::default().fg(palette::SUBTLE))),
                 list_area,
             );
             return;
         }
 
-        let col_device  = 14u16;
-        let col_client  = 10u16;
-        let col_user    =  8u16;
-        let col_host    = 12u16;
-        let col_state   = 16u16;
-        let col_playing = mw.saturating_sub(2 + col_device + col_client + col_user + col_host + col_state);
+        // Each session: 3 lines + 1 divider = 4 rows per entry (last has no divider)
+        const CARD_H: u16 = 3;
+        const DIV_H:  u16 = 1;
+        let entry_h = CARD_H + DIV_H;
+        let iw = inner_w as usize;
 
-        let header_cells = vec![
-            Cell::from("Device").style(Style::default().fg(palette::SUBTLE)),
-            Cell::from("Client").style(Style::default().fg(palette::SUBTLE)),
-            Cell::from("User").style(Style::default().fg(palette::SUBTLE)),
-            Cell::from("Host").style(Style::default().fg(palette::SUBTLE)),
-            Cell::from("Now Playing").style(Style::default().fg(palette::SUBTLE)),
-            Cell::from("State").style(Style::default().fg(palette::SUBTLE)),
-        ];
-        let header = Row::new(header_cells).height(1);
+        for (i, s) in self.sessions.iter().enumerate() {
+            let entry_y = list_y + i as u16 * entry_h;
+            if entry_y + CARD_H > list_y + list_h { break; }
 
-        let rows: Vec<Row> = self.sessions.iter().enumerate().map(|(i, s)| {
             let selected = i == self.sessions_cursor;
-            let row_style = if selected {
-                Style::default().fg(palette::BASE).bg(palette::IRIS)
-            } else if i % 2 == 1 {
-                Style::default().fg(palette::TEXT).bg(palette::FOCUSED)
-            } else {
-                Style::default().fg(palette::TEXT)
-            };
-            let state_str = if s.now_playing.is_some() {
-                if s.is_paused { format!("\u{23f8} {}/{}", fmt_duration(s.position_s), fmt_duration(s.runtime_s)) }
-                else { format!("\u{25b6} {}/{}", fmt_duration(s.position_s), fmt_duration(s.runtime_s)) }
-            } else {
-                "\u{25a0} idle".to_string()
-            };
-            let playing_str = s.now_playing.as_deref().unwrap_or("\u{2014}").to_string();
+            let is_connected = self.connected_session_id.as_deref() == Some(s.id.as_str());
+            let bg = if selected { palette::FOCUSED } else { palette::BASE };
+            let name_color = if selected { palette::IRIS } else { palette::TEXT };
+            let dim = Style::default().fg(palette::MUTED).bg(bg);
+            let card_style = Style::default().bg(bg);
+
+            // Line 1: ▶/space + device name + [connected] badge
             let prefix = if selected { "\u{25b6} " } else { "  " };
-            Row::new(vec![
-                Cell::from(format!("{}{}", prefix, trunc_str(&s.device_name, col_device as usize - 2))),
-                Cell::from(trunc_str(&s.client,      col_client  as usize)),
-                Cell::from(trunc_str(&s.user_name,   col_user    as usize)),
-                Cell::from(trunc_str(&s.host,        col_host    as usize)),
-                Cell::from(trunc_str(&playing_str,   col_playing as usize)),
-                Cell::from(state_str),
-            ]).style(row_style)
-        }).collect();
+            let badge = if is_connected { " \u{271A}" } else { "" };
+            let name_max = iw.saturating_sub(prefix.len() + badge.len());
+            let name_line = Line::from(vec![
+                Span::styled(prefix, Style::default().fg(palette::IRIS).bg(bg)),
+                Span::styled(trunc_str(&s.device_name, name_max), Style::default().fg(name_color).bg(bg).add_modifier(Modifier::BOLD)),
+                Span::styled(badge, Style::default().fg(palette::IRIS).bg(bg)),
+            ]);
+            f.render_widget(Paragraph::new(name_line).style(card_style), Rect { x: ix, y: entry_y, width: inner_w, height: 1 });
 
-        let widths = [
-            Constraint::Length(col_device),
-            Constraint::Length(col_client),
-            Constraint::Length(col_user),
-            Constraint::Length(col_host),
-            Constraint::Length(col_playing),
-            Constraint::Length(col_state),
-        ];
+            // Line 2: client · user @ host
+            let meta = format!("  {} \u{b7} {}@{}", s.client, s.user_name, s.host);
+            f.render_widget(
+                Paragraph::new(Span::styled(trunc_str(&meta, iw), dim.fg(palette::SUBTLE))),
+                Rect { x: ix, y: entry_y + 1, width: inner_w, height: 1 },
+            );
 
-        let mut table_state = TableState::default().with_selected(Some(self.sessions_cursor));
-        f.render_stateful_widget(
-            Table::new(rows, widths)
-                .header(header)
-                .row_highlight_style(Style::default()),
-            list_area,
-            &mut table_state,
-        );
+            // Line 3: now playing + state
+            let state_icon = if s.now_playing.is_some() {
+                if s.is_paused { "\u{23f8}" } else { "\u{25b6}" }
+            } else { "\u{25a0}" };
+            let time = if s.now_playing.is_some() {
+                format!(" {}/{}", fmt_duration(s.position_s), fmt_duration(s.runtime_s))
+            } else { String::new() };
+            let title = s.now_playing.as_deref().unwrap_or("idle");
+            let playing = format!("  {} {}{}", state_icon, trunc_str(title, iw.saturating_sub(12)), time);
+            f.render_widget(
+                Paragraph::new(Span::styled(trunc_str(&playing, iw), dim)),
+                Rect { x: ix, y: entry_y + 2, width: inner_w, height: 1 },
+            );
+
+            // Divider between cards
+            if entry_y + entry_h <= list_y + list_h {
+                f.render_widget(
+                    Paragraph::new(Span::styled("\u{2500}".repeat(iw), Style::default().fg(palette::OVERLAY))),
+                    Rect { x: ix, y: entry_y + CARD_H, width: inner_w, height: 1 },
+                );
+            }
+        }
     }
 
     fn render_help_screen(&mut self, f: &mut ratatui::Frame) {
@@ -5801,6 +5840,7 @@ mod tests {
         let (_, ws_rx)     = std::sync::mpsc::channel();
         let (lib_tx, lib_rx) = std::sync::mpsc::channel();
         let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
+        let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
 
         let player = PlayerProxy::stub(status.clone());
 
@@ -5895,6 +5935,18 @@ mod tests {
             ui_volume: 100,
             pre_mute_volume: None,
             layout_tabbar_vol_area: Rect::default(),
+            sessions: Vec::new(),
+            sessions_cursor: 0,
+            sessions_loading: false,
+            show_sessions: false,
+            sessions_tx,
+            sessions_rx,
+            connected_session_id: None,
+            connected_session_state: None,
+            last_session_poll: std::time::Instant::now(),
+            remote_pos_s: 0,
+            remote_pos_at: std::time::Instant::now(),
+            layout_sessions_btn_area: Rect::default(),
         }
     }
 
