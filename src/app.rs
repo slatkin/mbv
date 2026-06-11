@@ -1309,13 +1309,23 @@ impl App {
                 let t = self.player_tab.playlist_cursor;
                 let n = self.player_tab.items.len();
                 if t < n {
-                    let active = self.player.status.lock().unwrap().active;
-                    if active {
-                        self.player.send_command(PlayerCommand::JumpTo(t));
-                    } else if !self.player_tab.items.is_empty() {
-                        let items = self.player_tab.items.clone();
-                        let c = Arc::new(self.client.lock().unwrap().clone());
-                        self.player.play_playlist(items, t, c, self.log.clone(), self.ui_volume);
+                    if let Some(ref conn_id) = self.connected_session_id.clone() {
+                        let item = self.player_tab.items[t].clone();
+                        let id = conn_id.clone();
+                        let item_id = item.id.clone();
+                        let start_ticks = item.playback_position_ticks;
+                        let label = item.playback_label();
+                        self.flash_status(format!("Playing on remote: {label}"));
+                        self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
+                    } else {
+                        let active = self.player.status.lock().unwrap().active;
+                        if active {
+                            self.player.send_command(PlayerCommand::JumpTo(t));
+                        } else if !self.player_tab.items.is_empty() {
+                            let items = self.player_tab.items.clone();
+                            let c = Arc::new(self.client.lock().unwrap().clone());
+                            self.player.play_playlist(items, t, c, self.log.clone(), self.ui_volume);
+                        }
                     }
                 }
             }
@@ -2026,7 +2036,17 @@ impl App {
                     } else if self.tab_idx == 1 {
                         let t = self.player_tab.playlist_cursor;
                         if t < self.player_tab.items.len() {
-                            self.player.send_command(PlayerCommand::JumpTo(t));
+                            if let Some(ref conn_id) = self.connected_session_id.clone() {
+                                let item = self.player_tab.items[t].clone();
+                                let id = conn_id.clone();
+                                let item_id = item.id.clone();
+                                let start_ticks = item.playback_position_ticks;
+                                let label = item.playback_label();
+                                self.flash_status(format!("Playing on remote: {label}"));
+                                self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
+                            } else {
+                                self.player.send_command(PlayerCommand::JumpTo(t));
+                            }
                         }
                     } else if self.tab_idx != self.log_tab_idx() {
                         self.select();
@@ -2400,6 +2420,15 @@ impl App {
     /// to the full series queue starting from this episode — matching Emby Web's model.
     fn play_item(&mut self, item: MediaItem) {
         let label = item.playback_label();
+        // Route to connected remote session instead of local player
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let id = conn_id.clone();
+            let item_id = item.id.clone();
+            let start_ticks = item.playback_position_ticks;
+            self.flash_status(format!("Playing on remote: {label}"));
+            self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
+            return;
+        }
         if !item.series_id.is_empty() && self.player.always_play_next {
             let c = self.client.lock().unwrap();
             let episodes = c.get_episodes_from(&item.series_id, &item.id, &self.log);
@@ -2579,7 +2608,22 @@ impl App {
         match action {
             Some(ContextAction::Play) => {
                 if self.tab_idx == 0 { self.select_home(); }
-                else if self.tab_idx == 1 { self.player.send_command(PlayerCommand::JumpTo(self.player_tab.playlist_cursor)); }
+                else if self.tab_idx == 1 {
+                    let t = self.player_tab.playlist_cursor;
+                    if t < self.player_tab.items.len() {
+                        if let Some(ref conn_id) = self.connected_session_id.clone() {
+                            let item = self.player_tab.items[t].clone();
+                            let id = conn_id.clone();
+                            let item_id = item.id.clone();
+                            let start_ticks = item.playback_position_ticks;
+                            let label = item.playback_label();
+                            self.flash_status(format!("Playing on remote: {label}"));
+                            self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
+                        } else {
+                            self.player.send_command(PlayerCommand::JumpTo(t));
+                        }
+                    }
+                }
                 else { self.select(); }
             }
             Some(ContextAction::PlayFolder(id)) => self.play_folder(&id),

@@ -859,6 +859,17 @@ impl EmbyClient {
         Ok(())
     }
 
+    pub fn session_play(&self, id: &str, item_id: &str, start_ticks: i64) -> Result<(), String> {
+        self.post(&format!("/Sessions/{id}/Playing"))
+            .send_json(ureq::json!({
+                "PlayCommand": "PlayNow",
+                "ItemIds": [item_id],
+                "StartPositionTicks": start_ticks
+            }))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn stream_url(&self, item_id: &str) -> String {
         format!("{}/Videos/{}/stream?static=true&api_key={}", self.config.server_url, item_id, self.token)
     }
