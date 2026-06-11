@@ -20,6 +20,7 @@ pub struct Config {
     pub start_on_queue: bool,
     pub daemon_mode_on_exit: bool,
     pub autoload: bool,
+    pub music_levels: Vec<String>,
 }
 
 impl Default for Config {
@@ -42,6 +43,7 @@ impl Default for Config {
             start_on_queue: false,
             daemon_mode_on_exit: false,
             autoload: false,
+            music_levels: vec![],
         }
     }
 }
@@ -146,6 +148,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     let misc = doc.get("mpv");
     let daemon = doc.get("daemon");
     let mbv = doc.get("mbv");
+    let music = doc.get("music");
 
     let hidden_libraries: Vec<String> = mbv
         .and_then(|m| m.get("hidden_libraries"))
@@ -214,6 +217,12 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let music_levels: Vec<String> = music
+        .and_then(|m| m.get("levels"))
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(String::from).collect())
+        .unwrap_or_default();
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -232,6 +241,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         start_on_queue,
         daemon_mode_on_exit,
         autoload,
+        music_levels,
     })
 }
 
@@ -425,6 +435,26 @@ hidden_latest = ["Movies", "TV SHOWS"]
     fn parse_autoload_defaults_false() {
         let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().autoload);
+    }
+
+    #[test]
+    fn parse_music_levels_group_album() {
+        let toml = "[server]\nurl = \"http://host\"\n[music]\nlevels = [\"group\", \"album\"]";
+        let cfg = parse_config(toml).unwrap();
+        assert_eq!(cfg.music_levels, vec!["group", "album"]);
+    }
+
+    #[test]
+    fn parse_music_levels_album_only() {
+        let toml = "[server]\nurl = \"http://host\"\n[music]\nlevels = [\"album\"]";
+        let cfg = parse_config(toml).unwrap();
+        assert_eq!(cfg.music_levels, vec!["album"]);
+    }
+
+    #[test]
+    fn parse_music_levels_missing_defaults_empty() {
+        let toml = "[server]\nurl = \"http://host\"";
+        assert!(parse_config(toml).unwrap().music_levels.is_empty());
     }
 
     // always_play_next must live in [mbv] — placing it elsewhere silently ignores it.

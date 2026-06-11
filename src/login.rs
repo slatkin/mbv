@@ -104,6 +104,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     start_on_queue: base_config.start_on_queue,
                     daemon_mode_on_exit: base_config.daemon_mode_on_exit,
                     autoload: base_config.autoload,
+                    music_levels: base_config.music_levels.clone(),
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {

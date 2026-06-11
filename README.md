@@ -70,6 +70,12 @@ use_mpv_config = false
 [daemon]
 # Show a system tray icon when running in daemon mode (default: true)
 show_systray_icon = true
+
+# [music]
+# Describe the folder layout of your music library so mbv can identify albums.
+# Each entry names one level of nesting. The track/file level is always implied
+# and should not be included. See "Music libraries" under Features for details.
+# levels = ["group", "album"]
 ```
 
 Press `F1` at any time to open the reference screen.
@@ -113,6 +119,40 @@ Libraries of type `homevideos` get special treatment when first opened:
 - **Unplayed only** — the item list is restricted to content you haven't watched yet, keeping the view uncluttered.
 
 This is applied automatically based on the library's collection type as reported by the Emby server. No configuration is required.
+
+#### Music libraries
+
+mbv browses music libraries in plain file/folder mode (not Emby's metadata-organised artist/album views). To let mbv understand your folder structure, declare the nesting layout in `config.toml`:
+
+```toml
+[music]
+levels = ["group", "album"]
+```
+
+Each entry names one level of folder depth. The track/file level at the bottom is always implied and should not be included. The following keywords are reserved:
+
+| Keyword | Meaning |
+|---------|---------|
+| `"album"` | This level's folders are albums. Entering one activates album behaviour. |
+| `"artist"` | Reserved for future use. |
+| `"group"` | Reserved for future use (genre/organisational groupings). |
+
+**Album behaviour** — when you navigate into an album folder, selecting any track auto-enqueues the entire album and starts playback from that track. Tracks are ordered by track number when available, otherwise by filename.
+
+**Common layouts:**
+
+```toml
+# Organisational groupings → albums → tracks
+levels = ["group", "album"]
+
+# Conventional artist → album → tracks
+levels = ["artist", "album"]
+
+# Albums at the library root → tracks
+levels = ["album"]
+```
+
+If `[music]` is omitted, the music library behaves like any other folder library.
 
 ## Mouse
 

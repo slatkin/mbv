@@ -127,6 +127,7 @@ pub struct App {
     status_expires: Option<Instant>,
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
+    music_levels: Vec<String>,
     log: AppLog,
     log_scroll: usize,
     log_pane: LogPane,        // which pane has focus
@@ -294,6 +295,7 @@ impl App {
         let token = client.token.clone();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
+        let music_levels = client.config.music_levels.clone();
         let show_log_tab = client.config.show_log_tab;
         let start_on_queue = client.config.start_on_queue;
         let ws_url = client.ws_url();
@@ -321,6 +323,7 @@ impl App {
             tab_idx: if start_on_queue { 1 } else { 0 },
             hidden_libraries,
             hidden_latest,
+            music_levels,
             player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
             home: HomePane {
                 continue_items: Vec::new(),
@@ -412,6 +415,7 @@ impl App {
         let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
+        let music_levels = client.config.music_levels.clone();
         let always_play_next = client.config.always_play_next;
         let log = AppLog::new(0);
         let mut client = client;
@@ -427,6 +431,7 @@ impl App {
             tab_idx: 0,
             hidden_libraries,
             hidden_latest,
+            music_levels,
             player_tab: PlayerTab {
                 items: initial_items,
                 playlist_cursor: initial_cursor,
@@ -2071,6 +2076,15 @@ impl App {
         }
     }
 
+    fn is_album_level(&self, lib_idx: usize) -> bool {
+        let lib = &self.libs[lib_idx];
+        if lib.library.collection_type != "music" { return false; }
+        if self.music_levels.is_empty() { return false; }
+        let stack_len = lib.nav_stack.len();
+        if stack_len < 2 { return false; }
+        self.music_levels.get(stack_len - 2).map(|s| s == "album").unwrap_or(false)
+    }
+
     fn is_audio_item(&self) -> bool {
         let idx = self.player_tab.playlist_cursor;
         self.player_tab.items.get(idx)
@@ -2296,9 +2310,30 @@ impl App {
                     .and_then(|mut v| if v.is_empty() { None } else { Some(v.remove(0)) })
                     .unwrap_or(item)
             };
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            if self.libs[lib_idx].search.is_none() && self.is_album_level(lib_idx) {
+                let level_items = self.libs[lib_idx].nav_stack.last()
+                    .map(|l| l.items.clone())
+                    .unwrap_or_default();
+                let mut tracks: Vec<MediaItem> = level_items.into_iter()
+                    .filter(|i| is_playable(i))
+                    .collect();
+                tracks.sort_by_key(|i| {
+                    if i.index_number > 0 { (0i64, i.index_number, String::new()) }
+                    else { (1i64, 0, natural_sort_key(i.sort_key())) }
+                });
+                if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
+                    let label = fresh.playback_label();
+                    let c = Arc::new(self.client.lock().unwrap().clone());
+                    self.player_tab.items = tracks.clone();
+                    self.player_tab.playlist_cursor = 0;
+                    self.flash_status(label);
+                    self.player.play_playlist(tracks, start_idx, c, self.log.clone(), self.ui_volume);
+                    return;
+                }
+            }
             let autoload = self.client.lock().unwrap().config.autoload;
             if autoload {
-                let lib_idx = self.tab_idx - self.lib_tab_offset();
                 if let Some(parent_id) = self.libs[lib_idx].nav_stack.last().map(|l| l.parent_id.clone()) {
                     let client = self.client.lock().unwrap();
                     match client.get_direct_playable(&parent_id) {
@@ -2582,6 +2617,12 @@ impl App {
                         }
                     }
                 }
+                if self.is_album_level(lib_idx) {
+                    let title = self.libs[lib_idx].nav_stack.last()
+                        .map(|l| l.title.clone())
+                        .unwrap_or_default();
+                    self.log.push(Level::Debug, "app", format!("album: entered «{title}»"));
+                }
             }
             LibEvent::Refreshed { lib_idx, parent_id, items } => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
@@ -2859,8 +2900,9 @@ impl App {
 
             let dash = Style::default().fg(palette::MUTED);
             let bra  = Style::default().fg(palette::MUTED);
+            let sub_bra = Style::default().fg(palette::TEXT);
             let mut spans: Vec<Span> = Vec::new();
-            let sub_color = if sub_active { palette::RED } else { palette::OVERLAY };
+            let sub_color = if sub_active { palette::RED } else { palette::MUTED };
             spans.push(Span::styled("─".repeat(aud_start), dash));
             if player_active {
                 let icon_color = if audio_muted { palette::MUTED } else { palette::IRIS };
@@ -2871,9 +2913,9 @@ impl App {
                 spans.push(Span::styled("─".repeat(AUD_W as usize), dash));
             }
             spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
-            spans.push(Span::styled("[",  bra));
+            spans.push(Span::styled("[",  sub_bra));
             spans.push(Span::styled("字", Style::default().fg(sub_color)));
-            spans.push(Span::styled("]",  bra));
+            spans.push(Span::styled("]",  sub_bra));
             spans.push(Span::styled("─".repeat(right_dashes), dash));
             f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
 
@@ -5267,6 +5309,7 @@ mod tests {
             tab_idx: 0,
             hidden_libraries: Vec::new(),
             hidden_latest: Vec::new(),
+            music_levels: Vec::new(),
             player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
             home: HomePane {
                 continue_items: Vec::new(),
