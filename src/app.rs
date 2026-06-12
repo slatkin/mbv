@@ -1356,7 +1356,7 @@ impl App {
                     self.do_session_command(move |c| c.session_seek(&id, ticks));
                     return Some(false);
                 }
-                KeyCode::Char('z') => {
+                KeyCode::Char('z') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                     self.cycle_sub();
                     return Some(false);
                 }
@@ -1368,7 +1368,7 @@ impl App {
         match key.code {
             KeyCode::Char('-') => { self.adjust_volume(-5); return Some(false); }
             KeyCode::Char('+') | KeyCode::Char('=') => { self.adjust_volume(5); return Some(false); }
-            KeyCode::Char('z') => { self.toggle_sub(); return Some(false); }
+            KeyCode::Char('z') if !key.modifiers.contains(KeyModifiers::CONTROL) => { self.toggle_sub(); return Some(false); }
             _ => {}
         }
         if !active { return None; }
