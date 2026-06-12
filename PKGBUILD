@@ -1,6 +1,6 @@
 # Maintainer: slatkin@woims.net
 pkgname=mbv
-pkgver=0.4.9
+pkgver=0.4.10
 pkgrel=1
 pkgdesc="Terminal client for Emby media server"
 arch=('x86_64')
