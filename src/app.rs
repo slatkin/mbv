@@ -245,6 +245,10 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[actions]",   &[SettingKey::LogOut]),
 ];
 
+const SESSIONS_PANEL_W: u16 = 42;
+const HELP_PANEL_W:     u16 = 58;
+const SETTINGS_PANEL_W: u16 = 56;
+
 fn setting_label(key: SettingKey) -> &'static str {
     match key {
         SettingKey::DaemonModeOnExit  => "Daemon mode on exit",
@@ -3265,12 +3269,6 @@ impl App {
     // ── rendering ────────────────────────────────────────────────────────────
 
     fn render(&mut self, f: &mut ratatui::Frame) {
-        if self.show_help { self.render_help_screen(f); return; }
-        if self.show_settings {
-            self.render_settings_screen(f);
-            if self.multiselect_popup.is_some() { self.render_multiselect_popup(f); }
-            return;
-        }
         let area = f.area();
         if area.width != self.terminal_width || area.height != self.terminal_height {
             self.card_image_states.clear();
@@ -3528,8 +3526,11 @@ impl App {
 
         self.render_context_menu(f);
 
-        if self.show_sessions {
-            self.render_sessions_overlay(f);
+        if self.show_sessions  { self.render_sessions_overlay(f); }
+        if self.show_help      { self.render_help_panel(f); }
+        if self.show_settings  {
+            self.render_settings_panel(f);
+            if self.multiselect_popup.is_some() { self.render_multiselect_popup(f); }
         }
     }
 
@@ -3551,66 +3552,64 @@ impl App {
         f.render_widget(Paragraph::new(line), area);
     }
 
-    fn render_sessions_overlay(&self, f: &mut ratatui::Frame) {
-        let full = f.area();
-        const SW: u16 = 42; // sidebar width
-        let sidebar = Rect { x: full.x, y: full.y, width: SW.min(full.width), height: full.height };
-
+    fn render_panel_shell(
+        f: &mut ratatui::Frame,
+        full: Rect,
+        width: u16,
+        icon: &str,
+        title: &str,
+        hints: &str,
+    ) -> Rect {
+        let sidebar = Rect { x: full.x, y: full.y, width: width.min(full.width), height: full.height };
         f.render_widget(Clear, sidebar);
         f.render_widget(Block::default().style(Style::default().bg(palette::BASE)), sidebar);
-
-        // Right border
         for row in sidebar.y..sidebar.y + sidebar.height {
             f.render_widget(
                 Paragraph::new(Span::styled("\u{2502}", Style::default().fg(palette::OVERLAY))),
                 Rect { x: sidebar.x + sidebar.width - 1, y: row, width: 1, height: 1 },
             );
         }
-
-        let inner_w = sidebar.width.saturating_sub(2); // inside the border
+        let inner_w = sidebar.width.saturating_sub(2);
         let ix = sidebar.x + 1;
-
-        // Header
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled("\u{271A} ", Style::default().fg(palette::IRIS)),
-                Span::styled("Remote Sessions", Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD)),
+                Span::styled(format!("{} ", icon), Style::default().fg(palette::IRIS)),
+                Span::styled(title.to_owned(), Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD)),
             ])).style(Style::default().bg(palette::FOCUSED)),
             Rect { x: ix, y: sidebar.y, width: inner_w, height: 1 },
         );
-        // Header right border fill
         f.render_widget(
             Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
             Rect { x: sidebar.x + sidebar.width - 1, y: sidebar.y, width: 1, height: 1 },
         );
-
-        // Separator under header
         f.render_widget(
-            Paragraph::new(Span::styled(
-                "\u{2500}".repeat(inner_w as usize),
-                Style::default().fg(palette::OVERLAY),
-            )),
+            Paragraph::new(Span::styled("\u{2500}".repeat(inner_w as usize), Style::default().fg(palette::OVERLAY))),
             Rect { x: ix, y: sidebar.y + 1, width: inner_w, height: 1 },
         );
-
-        // Footer hints (bottom 2 rows)
         let footer_y = sidebar.y + sidebar.height - 2;
         f.render_widget(
-            Paragraph::new(Span::styled(
-                "\u{2500}".repeat(inner_w as usize),
-                Style::default().fg(palette::OVERLAY),
-            )),
+            Paragraph::new(Span::styled("\u{2500}".repeat(inner_w as usize), Style::default().fg(palette::OVERLAY))),
             Rect { x: ix, y: footer_y, width: inner_w, height: 1 },
         );
-        let hints = "[↑↓]select [↵]connect [d]disc [r]refresh [Esc]close";
         f.render_widget(
             Paragraph::new(Span::styled(trunc_str(hints, inner_w as usize), Style::default().fg(palette::MUTED))),
             Rect { x: ix, y: footer_y + 1, width: inner_w, height: 1 },
         );
+        Rect { x: ix, y: sidebar.y + 2, width: inner_w, height: sidebar.height.saturating_sub(4) }
+    }
 
-        let list_y = sidebar.y + 2;
-        let list_h = sidebar.height.saturating_sub(4); // header(1) + sep(1) + sep(1) + hints(1)
-        let list_area = Rect { x: ix, y: list_y, width: inner_w, height: list_h };
+    fn render_sessions_overlay(&self, f: &mut ratatui::Frame) {
+        let content = Self::render_panel_shell(
+            f, f.area(), SESSIONS_PANEL_W,
+            "\u{271A}", "Remote Sessions",
+            "[↑↓]select [↵]connect [d]disc [r]refresh [Esc]close",
+        );
+        let ix = content.x;
+        let inner_w = content.width;
+        let iw = inner_w as usize;
+        let list_y = content.y;
+        let list_h = content.height;
+        let list_area = content;
 
         if self.sessions_loading && self.sessions.is_empty() {
             f.render_widget(
@@ -3627,11 +3626,9 @@ impl App {
             return;
         }
 
-        // Each session: 3 lines + 1 divider = 4 rows per entry (last has no divider)
         const CARD_H: u16 = 3;
         const DIV_H:  u16 = 1;
         let entry_h = CARD_H + DIV_H;
-        let iw = inner_w as usize;
 
         for (i, s) in self.sessions.iter().enumerate() {
             let entry_y = list_y + i as u16 * entry_h;
@@ -3644,7 +3641,6 @@ impl App {
             let dim = Style::default().fg(palette::MUTED).bg(bg);
             let card_style = Style::default().bg(bg);
 
-            // Line 1: ▶/space + device name + [connected] badge
             let prefix = if selected { "\u{25b6} " } else { "  " };
             let badge = if is_connected { " \u{271A}" } else { "" };
             let name_max = iw.saturating_sub(prefix.len() + badge.len());
@@ -3655,14 +3651,12 @@ impl App {
             ]);
             f.render_widget(Paragraph::new(name_line).style(card_style), Rect { x: ix, y: entry_y, width: inner_w, height: 1 });
 
-            // Line 2: client · user @ host
             let meta = format!("  {} \u{b7} {}@{}", s.client, s.user_name, s.host);
             f.render_widget(
                 Paragraph::new(Span::styled(trunc_str(&meta, iw), dim.fg(palette::SUBTLE))),
                 Rect { x: ix, y: entry_y + 1, width: inner_w, height: 1 },
             );
 
-            // Line 3: now playing + state
             let state_icon = if s.now_playing.is_some() {
                 if s.is_paused { "\u{23f8}" } else { "\u{25b6}" }
             } else { "\u{25a0}" };
@@ -3676,7 +3670,6 @@ impl App {
                 Rect { x: ix, y: entry_y + 2, width: inner_w, height: 1 },
             );
 
-            // Divider between cards
             if entry_y + entry_h <= list_y + list_h {
                 f.render_widget(
                     Paragraph::new(Span::styled("\u{2500}".repeat(iw), Style::default().fg(palette::OVERLAY))),
@@ -3686,39 +3679,14 @@ impl App {
         }
     }
 
-    fn render_help_screen(&mut self, f: &mut ratatui::Frame) {
-        let area = f.area();
 
-        let [header_area, sep_area, content_area] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ]).areas(area);
-
-        // Header bar: title left, hint right
-        let title = " ⌨  Keyboard Shortcuts";
-        let hint  = "↑↓ / mouse · Esc to close ";
-        let pad = (area.width as usize).saturating_sub(title.len() + hint.len());
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
-                Span::raw(" ".repeat(pad)),
-                Span::styled(hint, Style::default().fg(palette::MUTED)),
-            ])),
-            header_area,
+    fn render_help_panel(&mut self, f: &mut ratatui::Frame) {
+        let content = Self::render_panel_shell(
+            f, f.area(), HELP_PANEL_W,
+            "\u{2328}", "Keyboard Shortcuts",
+            "[↑↓]scroll [Esc]close",
         );
-
-        // Separator
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                "─".repeat(area.width as usize),
-                Style::default().fg(palette::OVERLAY),
-            )),
-            sep_area,
-        );
-
-        // Build content lines
-        let w = content_area.width as usize;
+        let w = content.width as usize;
         let key_w = 20usize;
 
         let mk = |key: &str, desc: &str| -> Line<'static> {
@@ -3764,7 +3732,6 @@ impl App {
             mk("q",                "Quit"),
         ];
         lines.extend(vec![
-
             blank(),
             section("PLAYBACK"),
             mk("Space",            "Pause / Resume"),
@@ -3809,14 +3776,9 @@ impl App {
         }
 
         let total = lines.len();
-        let visible = content_area.height as usize;
+        let visible = content.height as usize;
         self.help_scroll = self.help_scroll.min(total.saturating_sub(visible) as u16);
-
-        f.render_widget(
-            Paragraph::new(lines)
-                .scroll((self.help_scroll, 0)),
-            content_area,
-        );
+        f.render_widget(Paragraph::new(lines).scroll((self.help_scroll, 0)), content);
     }
 
     fn close_settings(&mut self) {
@@ -3988,116 +3950,70 @@ impl App {
         f.render_widget(Paragraph::new(lines), list_area);
     }
 
-    fn render_settings_screen(&mut self, f: &mut ratatui::Frame) {
-        let area = f.area();
-
-        let [header_area, sep_area, content_area] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ]).areas(area);
-
-        let title = " \u{22ee}  Settings";
-        let hint  = "\u{2191}\u{2193} \u{b7} Space/Enter \u{b7} Esc to close ";
-        let pad = (area.width as usize).saturating_sub(title.len() + hint.len());
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
-                Span::raw(" ".repeat(pad)),
-                Span::styled(hint, Style::default().fg(palette::MUTED)),
-            ])),
-            header_area,
+    fn render_settings_panel(&mut self, f: &mut ratatui::Frame) {
+        let content = Self::render_panel_shell(
+            f, f.area(), SETTINGS_PANEL_W,
+            "\u{22ee}", "Settings",
+            "[↑↓]navigate [Space/\u{21b5}]toggle [Esc]close",
         );
-
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                "\u{2500}".repeat(area.width as usize),
-                Style::default().fg(palette::OVERLAY),
-            )),
-            sep_area,
-        );
-
         let cfg = self.client.lock().unwrap().config.clone();
         let cursor = self.settings_cursor;
         let confirm_logout = self.confirm_logout;
         let label_w = 22usize;
+        let w = content.width as usize;
 
-        // Grid sections: first 3 in SETTING_SECTIONS. Last section ([actions]) rendered separately.
-        // Row 0: [mbv], [mpv]. Row 1: [daemon], (empty right).
-        let row0_h = SETTING_SECTIONS[0..2].iter().map(|(_, k)| k.len() as u16 + 2).max().unwrap_or(3);
-        let row1_h = SETTING_SECTIONS[2..3].iter().map(|(_, k)| k.len() as u16 + 2).max().unwrap_or(3);
+        let data_sections = &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1];
 
-        let [_, row0_area, _, row1_area, _, logout_area, _] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(row0_h),
-            Constraint::Length(1),
-            Constraint::Length(row1_h),
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Min(0),
-        ]).areas(content_area);
-
+        let mut lines: Vec<Line> = vec![Line::from("")];
+        let mut cursor_line = 0usize;
         let mut item_idx = 0usize;
 
-        for (row_area, sec_range) in [(row0_area, 0..2usize), (row1_area, 2..3usize)] {
-            let [col0_area, _, col1_area] = Layout::horizontal([
-                Constraint::Fill(1),
-                Constraint::Length(2),
-                Constraint::Fill(1),
-            ]).areas(row_area);
-
-            for (col_i, sec_i) in sec_range.enumerate() {
-                let sec_area = if col_i == 0 { col0_area } else { col1_area };
-                let (sec_name, keys) = SETTING_SECTIONS[sec_i];
-
-                let block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(palette::IRIS))
-                    .title(Span::styled(
-                        format!(" {} ", sec_name),
-                        Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD),
-                    ));
-                let inner = block.inner(sec_area);
-                f.render_widget(block, sec_area);
-
-                let mut lines: Vec<Line> = Vec::new();
-                for &key in keys {
-                    let focused = item_idx == cursor;
-                    let arrow = if focused { "\u{25b8} " } else { "  " };
-                    let label = setting_label(key);
-                    let val = setting_value(key, &cfg);
-                    let label_style = if focused {
-                        Style::default().fg(palette::TEXT)
-                    } else {
-                        Style::default().fg(palette::MUTED)
-                    };
-                    lines.push(Line::from(vec![
-                        Span::raw(arrow),
-                        Span::styled(format!("{:<lw$}", label, lw = label_w), label_style),
-                        Span::styled(val, Style::default().fg(palette::FOAM)),
-                    ]));
-                    item_idx += 1;
-                }
-
-                f.render_widget(Paragraph::new(lines), inner);
+        for (sec_name, keys) in data_sections {
+            let dash_count = w.saturating_sub(2 + sec_name.len() + 1);
+            lines.push(Line::from(vec![
+                Span::raw("  "),
+                Span::styled((*sec_name).to_owned(), Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                Span::styled(format!(" {}", "\u{2500}".repeat(dash_count)), Style::default().fg(palette::OVERLAY)),
+            ]));
+            for &key in *keys {
+                if item_idx == cursor { cursor_line = lines.len(); }
+                let focused = item_idx == cursor;
+                let arrow = if focused { "\u{25b8} " } else { "  " };
+                let label = setting_label(key);
+                let val = setting_value(key, &cfg);
+                let label_style = if focused { Style::default().fg(palette::TEXT) } else { Style::default().fg(palette::MUTED) };
+                lines.push(Line::from(vec![
+                    Span::raw(arrow),
+                    Span::styled(format!("{:<lw$}", label, lw = label_w), label_style),
+                    Span::styled(val, Style::default().fg(palette::FOAM)),
+                ]));
+                item_idx += 1;
             }
+            lines.push(Line::from(""));
         }
 
-        // Log out: plain right-aligned line below the grid (cursor = last item index)
-        let logout_cursor = settings_total_rows() - 1;
-        let focused = cursor == logout_cursor;
-        let (text, style) = if confirm_logout && focused {
-            ("Log out? Press y to confirm", Style::default().fg(palette::RED))
+        let logout_cursor_idx = settings_total_rows() - 1;
+        if cursor == logout_cursor_idx { cursor_line = lines.len(); }
+        let focused = cursor == logout_cursor_idx;
+        let (logout_text, logout_style) = if confirm_logout && focused {
+            ("\u{25b8} Log out? Press y to confirm", Style::default().fg(palette::RED))
         } else if focused {
             ("\u{25b8} Log out", Style::default().fg(palette::RED))
         } else {
-            ("Log out", Style::default().fg(palette::MUTED))
+            ("  Log out", Style::default().fg(palette::MUTED))
         };
-        f.render_widget(
-            Paragraph::new(text).style(style).alignment(Alignment::Right),
-            logout_area,
-        );
+        lines.push(Line::from(Span::styled(logout_text, logout_style)));
+
+        let visible = content.height as usize;
+        if cursor_line < self.settings_scroll {
+            self.settings_scroll = cursor_line;
+        } else if cursor_line >= self.settings_scroll + visible {
+            self.settings_scroll = cursor_line + 1 - visible;
+        }
+        let total = lines.len();
+        self.settings_scroll = self.settings_scroll.min(total.saturating_sub(visible));
+
+        f.render_widget(Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)), content);
     }
 
     fn render_context_menu(&mut self, f: &mut ratatui::Frame) {
