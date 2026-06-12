@@ -3284,11 +3284,9 @@ impl App {
             Constraint::Length(controls_h),   // playback controls (global, when active)
         ]).areas(area);
 
-        // Right side: Vol (14) + gear (2) = 16 cols total
+        // Right side: Vol (14) cols total
         const VOL_W:  u16 = 14; // " Volume: XXX%"
-        const SETTINGS_W: u16 = 2;  // "⋮ "
-        const GAP:    u16 = 0;
-        let right_w = VOL_W + GAP + SETTINGS_W;
+        let right_w = VOL_W;
 
         // Thin underline below tab row, with [字] sub and [♪:🏳] audio indicators embedded inline
         {
@@ -3369,23 +3367,12 @@ impl App {
             let sess_x = gap_area.x + sess_start as u16;
             self.layout_sessions_btn_area    = Rect { x: sess_x, y: gap_area.y, width: SESS_W, height: 1 };
         }
-        let gear_area = Rect {
-            x: tabs_area.x + tabs_area.width.saturating_sub(SETTINGS_W),
-            y: tabs_area.y, width: SETTINGS_W, height: 1,
-        };
         let vol_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
             y: tabs_area.y, width: VOL_W, height: 1,
         };
-        self.layout_settings_area = gear_area;
         self.layout_tabbar_vol_area = vol_area;
         self.render_volume_bar(f, vol_area);
-        let gear_style = if self.show_settings {
-            Style::default().fg(palette::IRIS)
-        } else {
-            Style::default().fg(palette::WHITE)
-        };
-        f.render_widget(Paragraph::new("⋮ ").style(gear_style), gear_area);
         let tabs_area = Rect { width: tabs_area.width.saturating_sub(right_w), ..tabs_area };
         self.layout_tabs_area = tabs_area;
 
@@ -3460,7 +3447,9 @@ impl App {
             && self.tab_idx != self.log_tab_idx()
         {
             let li = self.tab_idx - self.lib_tab_offset();
-            self.libs.get(li).and_then(|l| l.search.as_ref()).map(|s| format!("{}█", s.query))
+            self.libs.get(li).and_then(|l| {
+                l.search.as_ref().map(|s| format!("Search {}: {}█", l.library.name, s.query))
+            })
         } else {
             None
         };
