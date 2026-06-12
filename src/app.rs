@@ -654,7 +654,11 @@ impl App {
                             }
                         }
                         let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
-                        if is_video && self.client.lock().unwrap().config.consume_videos {
+                        let runtime  = self.player_tab.items.get(idx).map_or(0, |i| i.runtime_ticks);
+                        let consumed_enough = played
+                            || runtime == 0
+                            || position_ticks * 20 >= runtime;
+                        if is_video && consumed_enough && self.client.lock().unwrap().config.consume_videos {
                             self.pending_queue_removal = Some(idx);
                         }
                     }
