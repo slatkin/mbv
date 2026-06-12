@@ -4596,7 +4596,8 @@ impl App {
         let left_area  = Rect { x: area.x, y: inner_y, width: left_w, height: inner_h };
         let right_area = Rect { x: right_x, y: inner_y, width: right_w, height: inner_h };
 
-        let show_controls = active || self.connected_session_id.is_some();
+        let now_playing_cursor = active && active_idx == cursor;
+        let show_controls = now_playing_cursor || self.connected_session_id.is_some();
 
         // Left panel: borderless card for cursor item.
         // Returns the seekbar Y so we can place buttons on the very next row.
@@ -4670,7 +4671,16 @@ impl App {
         } else {
             self.layout_button_area = Rect::default();
         }
-        self.layout_seekbar_area = Rect::default();
+        // Register the seekbar rect so mouse click/drag seeks work the same as the playback panel.
+        // Mirrors the bar geometry computed inside render_card_slot (no_border → inner == left_area).
+        self.layout_seekbar_area = if let Some(sy) = seekbar_y {
+            let full_w = left_area.width as usize;
+            let bar_w  = (full_w as u32 * 3 / 5) as usize;
+            let pad    = (full_w.saturating_sub(bar_w)) / 2;
+            Rect { x: left_area.x + pad as u16, y: sy, width: bar_w as u16, height: 1 }
+        } else {
+            Rect::default()
+        };
         self.layout_tracks_area  = Rect::default();
         self.layout_vol_area     = Rect::default();
         self.layout_sub_area     = Rect::default();
@@ -4694,45 +4704,138 @@ impl App {
             }
         }
 
-        // Right panel: single-column list (title only)
+        // Restrict click detection to the right panel only (not the left card area).
+        self.layout_playlist_inner = right_area;
+
+        // Right panel: single-column list with show-name grouping.
+        // Runs of ≥3 consecutive episodes from the same series get a group header row;
+        // items in those runs show only the episode title (no repeated show name).
         let title_col_w = right_w as usize;
-        let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
-            let row_style = if i == active_idx && active {
-                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::WHITE)
-            };
-            let (pos_ticks, rt_ticks) = if i == active_idx && active {
-                (live_pos, live_runtime)
-            } else {
-                (item.playback_position_ticks, item.runtime_ticks)
-            };
-            let pct_str = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
-                let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
-                format!(" {pct}%")
-            } else {
-                String::new()
-            };
-            // marker(1) + title + pct must fit in title_col_w
-            let max_title = title_col_w.saturating_sub(1 + pct_str.chars().count());
-            let title = trunc_str(&item.playback_label(), max_title);
-            let marker = if i == cursor {
-                Span::styled("▌", Style::default().fg(palette::IRIS))
-            } else {
-                Span::raw(" ")
-            };
-            let mut spans = vec![marker, Span::raw(title)];
-            if !pct_str.is_empty() {
-                spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
+
+        enum PRow {
+            Header(String),
+            Item {
+                label:     String,
+                pos_ticks: i64,
+                rt_ticks:  i64,
+                is_audio:  bool,
+                is_active: bool,
+                is_cursor: bool,
+                in_group:  bool,
+            },
+        }
+
+        let mut prows: Vec<PRow> = Vec::with_capacity(n + 4);
+        let mut visual_cursor: usize = 0;
+
+        {
+            let items = &self.player_tab.items;
+            let mut i = 0usize;
+            while i < n {
+                let item = &items[i];
+                let is_episode = item.item_type == "Episode" && !item.series_name.is_empty();
+                let is_audio   = item.is_audio() && !item.album_id.is_empty();
+                // Find run of consecutive items sharing the same grouping key
+                let run_end = if is_episode {
+                    let series = &item.series_name;
+                    let mut j = i + 1;
+                    while j < n && items[j].item_type == "Episode" && &items[j].series_name == series {
+                        j += 1;
+                    }
+                    j
+                } else if is_audio {
+                    let aid = &item.album_id;
+                    let mut j = i + 1;
+                    while j < n && items[j].is_audio() && &items[j].album_id == aid {
+                        j += 1;
+                    }
+                    j
+                } else {
+                    i + 1
+                };
+                let use_group = (is_episode || is_audio) && (run_end - i) > 2;
+                if use_group {
+                    let header = if is_audio {
+                        if item.artist.is_empty() {
+                            item.album.clone()
+                        } else {
+                            format!("{} - {}", item.artist, item.album)
+                        }
+                    } else {
+                        item.series_name.clone()
+                    };
+                    prows.push(PRow::Header(header));
+                }
+                for j in i..run_end {
+                    let it = &items[j];
+                    let (pt, rt) = if j == active_idx && active {
+                        (live_pos, live_runtime)
+                    } else {
+                        (it.playback_position_ticks, it.runtime_ticks)
+                    };
+                    let label = if use_group { it.name.clone() } else { it.playback_label() };
+                    if j == cursor { visual_cursor = prows.len(); }
+                    prows.push(PRow::Item {
+                        label,
+                        pos_ticks: pt,
+                        rt_ticks:  rt,
+                        is_audio:  it.is_audio(),
+                        is_active: j == active_idx && active,
+                        is_cursor: j == cursor,
+                        in_group:  use_group,
+                    });
+                }
+                i = run_end;
             }
-            let title_cell = Cell::from(Line::from(spans));
-            Row::new([title_cell]).style(row_style)
+        }
+
+        let rows: Vec<Row> = prows.iter().map(|prow| match prow {
+            PRow::Header(series) => {
+                let cell = Cell::from(Line::from(vec![
+                    Span::raw("  "),
+                    Span::raw(trunc_str(series, title_col_w.saturating_sub(2))),
+                ]));
+                Row::new([cell]).style(
+                    Style::default()
+                        .fg(palette::YELLOW)
+                        .add_modifier(Modifier::BOLD),
+                )
+            }
+            PRow::Item { label, pos_ticks, rt_ticks, is_audio, is_active, is_cursor, in_group } => {
+                let row_style = if *is_active {
+                    Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(palette::WHITE)
+                };
+                let pct_str = if *pos_ticks > 0 && *rt_ticks > 0 && !*is_audio {
+                    let pct = (*pos_ticks * 100 / (*rt_ticks).max(1)) as u64;
+                    format!(" {pct}%")
+                } else {
+                    String::new()
+                };
+                // marker(1) + group-indent(2) + title + pct must fit in title_col_w
+                let indent_w = if *in_group { 2usize } else { 0 };
+                let max_title = title_col_w.saturating_sub(1 + indent_w + pct_str.chars().count());
+                let title = trunc_str(label, max_title);
+                let marker = if *is_cursor {
+                    Span::styled("▌", Style::default().fg(palette::IRIS))
+                } else {
+                    Span::raw(" ")
+                };
+                let mut spans = vec![marker];
+                if *in_group { spans.push(Span::raw("  ")); }
+                spans.push(Span::raw(title));
+                if !pct_str.is_empty() {
+                    spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
+                }
+                Row::new([Cell::from(Line::from(spans))]).style(row_style)
+            }
         }).collect();
 
         let mut state = TableState::default();
-        state.select(Some(cursor));
+        state.select(Some(visual_cursor));
         let table = Table::new(rows, [Constraint::Min(10)])
-        .row_highlight_style(Style::default());
+            .row_highlight_style(Style::default());
         f.render_stateful_widget(table, right_area, &mut state);
     }
 

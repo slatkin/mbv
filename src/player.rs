@@ -1174,7 +1174,9 @@ impl Player {
                                 }
                             }
                             let _ = mpv.set_property("start", "0");
-                            pending_load = start_idx > 0;
+                            // loadfile "replace" always displaces the current file and fires
+                            // EndFile — always swallow it regardless of start_idx.
+                            pending_load = true;
                             if start_idx > 0 {
                                 let _ = mpv.set_property("playlist-pos", start_idx as i64);
                             }
