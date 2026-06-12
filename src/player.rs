@@ -65,7 +65,7 @@ pub enum PlayerCommand {
     SetAudio(i64),
     SetSub(i64), // 0 = off
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
-    NextUpShow { item_id: String, title: String },
+    NextUpShow { item_id: String, show_title: String, ep_title: String },
 }
 
 pub fn lang_to_flag(s: &str) -> &'static str {
@@ -532,9 +532,9 @@ impl Player {
                 let mut cancel_stop = false;
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
-                        PlayerCommand::NextUpShow { item_id, title } => {
-                            log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} title={title}"));
-                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &title]);
+                        PlayerCommand::NextUpShow { item_id, show_title, ep_title } => {
+                            log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}"));
+                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title]);
                             log.push(Level::Warn, "player", format!("next-up: script-message result={r:?}"));
                         }
                         PlayerCommand::TogglePause => {
@@ -1086,9 +1086,9 @@ impl Player {
                 let mut cancel_stop = false;
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
-                        PlayerCommand::NextUpShow { item_id, title } => {
-                            log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} title={title}"));
-                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &title]);
+                        PlayerCommand::NextUpShow { item_id, show_title, ep_title } => {
+                            log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}"));
+                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title]);
                             log.push(Level::Warn, "player", format!("next-up: script-message result={r:?}"));
                         }
                         PlayerCommand::TogglePause => {

@@ -2227,17 +2227,19 @@ local function next_up_render()
         ph = dim.h
     end
 
-    local lbl_fs = math.max(10, math.floor(ph / 58))
-    local ttl_fs = math.max(12, math.floor(ph / 46))
-    local bh     = lbl_fs + ttl_fs + 28
-    local r      = bh / 2
+    local lbl_fs  = math.max(9,  math.floor(ph / 66))
+    local show_fs = math.max(10, math.floor(ph / 56))
+    local ep_fs   = math.max(10, math.floor(ph / 56))
+    local vpad    = 10
+    local bh      = lbl_fs + show_fs + ep_fs + vpad * 2
+    local r       = math.min(bh / 2, 14)
 
-    local max_chars     = 36
-    local display_title = next_up.title or ''
-    if #display_title > max_chars then
-        display_title = display_title:sub(1, max_chars - 1) .. '…'
-    end
-    local bw = math.max(r * 2 + 80, ttl_fs * 10)
+    local max_chars  = 36
+    local show_title = next_up.show_title or ''
+    local ep_title   = next_up.ep_title   or ''
+    if #show_title > max_chars then show_title = show_title:sub(1, max_chars - 1) .. '…' end
+    if #ep_title   > max_chars then ep_title   = ep_title:sub(1,   max_chars - 1) .. '…' end
+    local bw = math.max(r * 2 + 80, show_fs * 10)
     bw = math.min(bw, math.floor(pw * 0.42))
 
     local pad = 20
@@ -2259,7 +2261,7 @@ local function next_up_render()
 
     local ass = assdraw.ass_new()
 
-    -- Solid pill background — OVERLAY palette colour
+    -- Solid rounded-rect background
     ass:new_event()
     ass:pos(bx, by)
     ass:an(7)
@@ -2268,19 +2270,29 @@ local function next_up_render()
     ass:round_rect_cw(0, 0, bw, bh, r, r)
     ass:draw_stop()
 
-    -- "Next Up" label centred in top half
+    local cx  = bx + bw / 2
+    local ty  = by + vpad   -- top of text block
+
+    -- "Next Up" label
     ass:new_event()
-    ass:pos(bx + bw / 2, by + 9)
+    ass:pos(cx, ty)
     ass:an(8)
     ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HA09090&\\bold0}', lbl_fs))
     ass:append('Next Up')
 
-    -- Episode title centred in bottom half
+    -- Show title (dim)
     ass:new_event()
-    ass:pos(bx + bw / 2, by + bh - 9)
-    ass:an(2)
-    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', ttl_fs))
-    ass:append('▶  ' .. display_title:gsub('{', '\\{'))
+    ass:pos(cx, ty + lbl_fs)
+    ass:an(8)
+    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HC8B8B8&\\bold0}', show_fs))
+    ass:append(show_title:gsub('{', '\\{'))
+
+    -- Episode title (bright)
+    ass:new_event()
+    ass:pos(cx, ty + lbl_fs + show_fs)
+    ass:an(8)
+    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', ep_fs))
+    ass:append(ep_title:gsub('{', '\\{'))
 
     next_up.osd.res_x = pw
     next_up.osd.res_y = ph
@@ -2289,10 +2301,11 @@ local function next_up_render()
     next_up.osd:update()
 end
 
-mp.register_script_message('mbv-next-up', function(item_id, title)
-    msg.warn('next-up: received mbv-next-up id=' .. tostring(item_id) .. ' title=' .. tostring(title))
-    next_up.item_id = item_id or ''
-    next_up.title   = title   or ''
+mp.register_script_message('mbv-next-up', function(item_id, show_title, ep_title)
+    msg.warn('next-up: received mbv-next-up id=' .. tostring(item_id) .. ' show=' .. tostring(show_title) .. ' ep=' .. tostring(ep_title))
+    next_up.item_id     = item_id    or ''
+    next_up.show_title  = show_title or ''
+    next_up.ep_title    = ep_title   or ''
     next_up.visible = true
     next_up_render()
 end)

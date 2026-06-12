@@ -676,12 +676,13 @@ impl App {
                     }
                     PlayerEvent::PlaylistNextUp { next_idx } => {
                         if let Some(item) = self.player_tab.items.get(next_idx) {
-                            let item_id = item.id.clone();
-                            let title   = item.display_name();
+                            let item_id    = item.id.clone();
+                            let show_title = item.series_name.clone();
+                            let ep_title   = item.name.clone();
                             self.next_up_item = Some(item.clone());
                             // Daemon sends NextUpShow to mpv directly; only send from local player.
                             if !self.player.is_remote() {
-                                self.player.send_command(PlayerCommand::NextUpShow { item_id, title });
+                                self.player.send_command(PlayerCommand::NextUpShow { item_id, show_title, ep_title });
                             }
                         }
                     }

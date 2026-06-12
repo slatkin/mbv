@@ -65,6 +65,10 @@ pub fn osc_script_path() -> PathBuf {
     if user.exists() {
         return user;
     }
+    let dev = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/mbv.lua"));
+    if dev.exists() {
+        return dev;
+    }
     PathBuf::from("/usr/share/mbv/scripts/mbv.lua")
 }
 

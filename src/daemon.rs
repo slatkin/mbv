@@ -204,8 +204,9 @@ pub fn run(client: EmbyClient) -> ! {
             DaemonEvent::Player(PlayerEvent::NextUpThreshold { series_id, season, episode }) => {
                 if let Some(item) = items.get(cursor + 1) {
                     player.send_command(PlayerCommand::NextUpShow {
-                        item_id: item.id.clone(),
-                        title: item.display_name(),
+                        item_id:    item.id.clone(),
+                        show_title: item.series_name.clone(),
+                        ep_title:   item.name.clone(),
                     });
                 }
                 broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::NextUpThreshold {
@@ -215,8 +216,9 @@ pub fn run(client: EmbyClient) -> ! {
             DaemonEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }) => {
                 if let Some(item) = items.get(next_idx) {
                     player.send_command(PlayerCommand::NextUpShow {
-                        item_id: item.id.clone(),
-                        title: item.display_name(),
+                        item_id:    item.id.clone(),
+                        show_title: item.series_name.clone(),
+                        ep_title:   item.name.clone(),
                     });
                 }
                 broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }));
