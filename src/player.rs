@@ -67,6 +67,7 @@ pub enum PlayerCommand {
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
     NextUpShow { item_id: String, show_title: String, ep_title: String },
     SkipIntroDismiss,
+    ReplacePlaylist { items: Vec<MediaItem>, start_idx: usize },
 }
 
 pub fn lang_to_flag(s: &str) -> &'static str {
@@ -234,6 +235,7 @@ pub struct Player {
     pub always_play_next: bool,
     pub always_skip_intro: bool,
     pub subs_off: Arc<AtomicBool>,
+    is_playlist_mode: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
@@ -264,6 +266,7 @@ impl Player {
             always_play_next,
             always_skip_intro,
             subs_off: Arc::new(AtomicBool::new(subs_off)),
+            is_playlist_mode: Arc::new(AtomicBool::new(false)),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
             cmd_tx: Arc::new(Mutex::new(None)),
@@ -344,6 +347,7 @@ impl Player {
         let status = self.status.clone();
         let ws_tx = self.ws_tx.clone();
         let subs_off = self.subs_off.clone();
+        let is_playlist_mode = self.is_playlist_mode.clone();
 
         {
             let mut st = status.lock().unwrap();
@@ -362,6 +366,7 @@ impl Player {
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
         let handle = thread::spawn(move || {
+            is_playlist_mode.store(false, Ordering::Relaxed);
             let (session_id_str, msid_str) = {
                 let (sid, msid) = client.get_playback_info(&item.id, &log);
                 client.report_start(&item, &msid, &sid, &log);
@@ -556,6 +561,7 @@ impl Player {
                         }
                         PlayerCommand::JumpTo(_) => {}
                         PlayerCommand::PlaylistRemove(_) => {}
+                        PlayerCommand::ReplacePlaylist { .. } => {}
                         PlayerCommand::Seek(secs) => {
                             let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
                             last_seek_at = Some(Instant::now());
@@ -873,30 +879,19 @@ impl Player {
 
     pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
         if items.is_empty() { return; }
-        // If a video is already playing, load the starting item into the existing mpv window
-        // rather than destroying and recreating it.
-        if self.status.lock().unwrap().active {
-            if let Some(item) = items.get(start_idx) {
-                let url = format!(
-                    "{}/Videos/{}/stream?static=true&api_key={}",
-                    self.server_url, item.id, self.token
-                );
-                let start_pos = item.resume_seconds();
-                {
-                    let mut st = self.status.lock().unwrap();
-                    st.position_ticks = item.playback_position_ticks;
-                    st.runtime_ticks = item.runtime_ticks;
-                    st.paused = false;
-                    st.current_idx = 0;
-                    st.title = item.display_name();
-                }
-                self.send_command(PlayerCommand::LoadNew {
-                    url,
-                    start_pos,
-                    item: Box::new(item.clone()),
-                });
-                return;
+        if self.status.lock().unwrap().active && self.is_playlist_mode.load(Ordering::Relaxed) {
+            // Playlist loop running — replace its playlist in-place, no window close.
+            let start_idx = start_idx.min(items.len() - 1);
+            {
+                let mut st = self.status.lock().unwrap();
+                st.position_ticks = items[start_idx].playback_position_ticks;
+                st.runtime_ticks  = items[start_idx].runtime_ticks;
+                st.paused         = false;
+                st.current_idx    = start_idx;
+                st.title          = items[start_idx].display_name();
             }
+            self.send_command(PlayerCommand::ReplacePlaylist { items, start_idx });
+            return;
         }
         self.stop();
         self.join();
@@ -915,6 +910,7 @@ impl Player {
         let status = self.status.clone();
         let ws_tx = self.ws_tx.clone();
         let subs_off = self.subs_off.clone();
+        let is_playlist_mode = self.is_playlist_mode.clone();
         let headless = !self.show_audio_window
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
         let use_mpv_config = self.use_mpv_config;
@@ -933,6 +929,7 @@ impl Player {
         }
 
         let handle = thread::spawn(move || {
+            is_playlist_mode.store(true, Ordering::Relaxed);
             let mut items = items;
             let (session_id_str, first_msid) = {
                 let (sid, msid) = client.get_playback_info(&items[start_idx].id, &log);
@@ -1157,6 +1154,69 @@ impl Player {
                         }
                         PlayerCommand::SkipIntroDismiss => {
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+                        }
+                        PlayerCommand::ReplacePlaylist { items: new_items, start_idx } => {
+                            cancel_stop = true;
+                            let old_id   = current_item_id.lock().unwrap().clone();
+                            let old_msid = current_msid.lock().unwrap().clone();
+                            let old_sid  = session_id.lock().unwrap().clone();
+                            client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid, &log);
+
+                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+
+                            let start_idx = start_idx.min(new_items.len() - 1);
+                            for (i, item) in new_items.iter().enumerate() {
+                                let url = format!("{}/Videos/{}/stream?static=true&api_key={}", server_url, item.id, token);
+                                let mode = if i == 0 { "replace" } else { "append-play" };
+                                let title_opt = mpv_title_opt(&item.display_name());
+                                if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
+                                    log.push(Level::Warn, "player", format!("ReplacePlaylist loadfile error: {}", mpv_err_str(&e)));
+                                }
+                            }
+                            let _ = mpv.set_property("start", "0");
+                            pending_load = start_idx > 0;
+                            if start_idx > 0 {
+                                let _ = mpv.set_property("playlist-pos", start_idx as i64);
+                            }
+
+                            items                  = new_items;
+                            n                      = items.len();
+                            current_idx            = start_idx;
+                            last_valid_pos         = items[start_idx].playback_position_ticks;
+                            tracks_initialized     = false;
+                            stop_reported          = false;
+                            playlist_cancelled     = false;
+                            forced_idx             = None;
+                            playlist_next_up_fired = false;
+                            playlist_next_up_armed = false;
+                            current_osd_title      = items[start_idx].display_name();
+                            pending_resume_secs    = if !items[start_idx].is_audio() && items[start_idx].playback_position_ticks > 0 {
+                                Some(items[start_idx].resume_seconds())
+                            } else {
+                                None
+                            };
+
+                            intro_start_ticks = 0;
+                            intro_end_ticks   = 0;
+                            if client.chapter_api_available {
+                                if let Some((s, e)) = client.get_intro_times(&items[start_idx].id, &log) {
+                                    intro_start_ticks = s;
+                                    intro_end_ticks   = e;
+                                }
+                            }
+                            let pi = intro_end_ticks > 0 && items[start_idx].playback_position_ticks >= intro_end_ticks;
+                            intro_show_fired = pi;
+                            intro_hide_fired = pi;
+
+                            let (new_sid, new_msid) = {
+                                let (sid, msid) = client.get_playback_info(&items[start_idx].id, &log);
+                                client.report_start(&items[start_idx], &msid, &sid, &log);
+                                (sid, msid)
+                            };
+                            current_is_audio.store(items[start_idx].is_audio(), Ordering::Relaxed);
+                            *current_item_id.lock().unwrap() = items[start_idx].id.clone();
+                            *current_msid.lock().unwrap()    = new_msid;
+                            *session_id.lock().unwrap()      = new_sid;
                         }
                         PlayerCommand::SetVolume(v) => {
                             let vol_max = status.lock().unwrap().volume_max;
