@@ -1047,7 +1047,7 @@ impl Player {
             let mut forced_idx: Option<usize> = None;
             let mut quit_at: Option<Instant> = None;
             let mut last_seek_at: Option<Instant> = None;
-            let mut last_valid_pos: i64 = 0;
+            let mut last_valid_pos: i64 = items[start_idx].playback_position_ticks;
             let mut tracks_initialized = false;
             let mut playlist_cancelled = false;
             let mut pending_load = false;
@@ -1366,7 +1366,7 @@ impl Player {
                         let sid  = session_id.lock().unwrap().clone();
 
                         let completed_is_audio = current_is_audio.load(Ordering::Relaxed);
-                        if playlist_cancelled {
+                        if playlist_cancelled || reason == mpv_end_file_reason::Quit {
                             let natural_end = reason == mpv_end_file_reason::Eof
                                 && status.lock().unwrap().runtime_ticks > 0;
                             let _ = progress_stop_tx.send(());
@@ -1408,7 +1408,7 @@ impl Player {
 
                         // Update UI to the next track immediately, before slow network calls
                         current_idx = next_idx;
-                        last_valid_pos = 0;
+                        last_valid_pos = items[current_idx].playback_position_ticks;
                         tracks_initialized = false;
                         {
                             let mut s = status.lock().unwrap();
