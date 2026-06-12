@@ -2778,7 +2778,14 @@ impl App {
             let lib_off = self.lib_tab_offset();
             let lib = &mut self.libs[self.tab_idx - lib_off];
             if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
+                let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
                 lib.nav_stack.pop();
+                // Select the folder we just came from in the parent level.
+                if let (Some(folder_id), Some(parent)) = (child_folder_id, lib.nav_stack.last_mut()) {
+                    if let Some(idx) = parent.items.iter().position(|i| i.id == folder_id) {
+                        parent.cursor = idx;
+                    }
+                }
                 self.layout_lib_scroll = 0;
             }
         }
