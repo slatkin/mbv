@@ -1113,10 +1113,12 @@ impl App {
                 if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
                     let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                    self.player.send_command(PlayerCommand::SkipIntroDismiss);
                     self.status.clear();
                 }
             } else {
                 self.skip_intro_end_ticks = None;
+                self.player.send_command(PlayerCommand::SkipIntroDismiss);
                 self.status.clear();
             }
             return false;
@@ -5417,8 +5419,7 @@ impl App {
         // Row heights: 2 base + 1 separator. Selected row also gets overview and seekbar
         // when images are enabled.
         let images_enabled = self.images_enabled();
-        let lib_ctype = self.libs[lib_idx].library.collection_type.clone();
-        let show_seekbar = !matches!(lib_ctype.as_str(), "channels" | "homevideos");
+        let show_seekbar = false;
         let content_w_sel = area.width.saturating_sub(1 + LIB_SELECTED_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
@@ -5602,6 +5603,10 @@ impl App {
                     }
                     if !parts.is_empty() {
                         spans.push(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)));
+                    }
+                    if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
+                        let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+                        spans.push(Span::styled(format!("  {pct}%"), Style::default().fg(palette::YELLOW)));
                     }
                     Line::from(spans)
                 }

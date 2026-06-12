@@ -66,6 +66,7 @@ pub enum PlayerCommand {
     SetSub(i64), // 0 = off
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
     NextUpShow { item_id: String, show_title: String, ep_title: String },
+    SkipIntroDismiss,
 }
 
 pub fn lang_to_flag(s: &str) -> &'static str {
@@ -550,6 +551,9 @@ impl Player {
                             status.lock().unwrap().volume = v;
                             let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
                         }
+                        PlayerCommand::SkipIntroDismiss => {
+                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+                        }
                         PlayerCommand::JumpTo(_) => {}
                         PlayerCommand::PlaylistRemove(_) => {}
                         PlayerCommand::Seek(secs) => {
@@ -868,9 +872,34 @@ impl Player {
     }
 
     pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
+        if items.is_empty() { return; }
+        // If a video is already playing, load the starting item into the existing mpv window
+        // rather than destroying and recreating it.
+        if self.status.lock().unwrap().active {
+            if let Some(item) = items.get(start_idx) {
+                let url = format!(
+                    "{}/Videos/{}/stream?static=true&api_key={}",
+                    self.server_url, item.id, self.token
+                );
+                let start_pos = item.resume_seconds();
+                {
+                    let mut st = self.status.lock().unwrap();
+                    st.position_ticks = item.playback_position_ticks;
+                    st.runtime_ticks = item.runtime_ticks;
+                    st.paused = false;
+                    st.current_idx = 0;
+                    st.title = item.display_name();
+                }
+                self.send_command(PlayerCommand::LoadNew {
+                    url,
+                    start_pos,
+                    item: Box::new(item.clone()),
+                });
+                return;
+            }
+        }
         self.stop();
         self.join();
-        if items.is_empty() { return; }
         let start_idx = start_idx.min(items.len() - 1);
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
@@ -1125,6 +1154,9 @@ impl Player {
                                                  else { Some(fi) };
                                 }
                             }
+                        }
+                        PlayerCommand::SkipIntroDismiss => {
+                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
                         }
                         PlayerCommand::SetVolume(v) => {
                             let vol_max = status.lock().unwrap().volume_max;
