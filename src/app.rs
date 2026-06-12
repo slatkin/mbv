@@ -1001,8 +1001,11 @@ impl App {
             self.show_help = true;
             return false;
         }
-        // Ctrl+R: open sessions overlay
-        if key.modifiers.contains(KeyModifiers::CONTROL) && key.code == KeyCode::Char('r') {
+        if key.code == KeyCode::F(2) {
+            self.show_settings = !self.show_settings;
+            return false;
+        }
+        if key.code == KeyCode::F(3) {
             self.show_sessions = true;
             self.spawn_sessions_load();
             return false;
@@ -1077,6 +1080,10 @@ impl App {
         }
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;
+            return false;
+        }
+        if key.code == KeyCode::F(5) {
+            self.refresh_current_view();
             return false;
         }
         if self.tab_idx == 0 { return self.handle_combined_key(key); }
@@ -2781,6 +2788,36 @@ impl App {
         }
     }
 
+    fn refresh_queue(&mut self) {
+        if self.player_tab.items.is_empty() { return; }
+        let ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+        let client = self.client.lock().unwrap();
+        if let Ok(fetched) = client.get_items_by_ids(&ids) {
+            let mut map: std::collections::HashMap<String, crate::api::MediaItem> =
+                fetched.into_iter().map(|i| (i.id.clone(), i)).collect();
+            for item in &mut self.player_tab.items {
+                if let Some(fresh) = map.remove(&item.id) {
+                    *item = fresh;
+                }
+            }
+        }
+    }
+
+    fn refresh_current_view(&mut self) {
+        self.force_clear = true;
+        if self.tab_idx == 0 {
+            match self.fetch_home() {
+                Ok(()) => self.flash_status("Home refreshed".into()),
+                Err(e) => self.flash_status(format!("Refresh error: {e}")),
+            }
+        } else if self.tab_idx == 1 {
+            self.refresh_queue();
+            self.flash_status("Queue refreshed".into());
+        } else if self.tab_idx != self.log_tab_idx() {
+            self.refresh_lib();
+        }
+    }
+
     fn shuffle_play(&mut self) {
         if self.tab_idx <= 1 || self.tab_idx == self.log_tab_idx() { return; }
         let lib_idx = self.tab_idx - self.lib_tab_offset();
@@ -2991,6 +3028,9 @@ impl App {
                             last.loading = false;
                         }
                     }
+                }
+                if self.tab_idx == lib_idx + self.lib_tab_offset() {
+                    self.flash_status("Refreshed".into());
                 }
             }
             LibEvent::Error(e) => {
@@ -3685,6 +3725,9 @@ impl App {
             blank(),
             section("GLOBAL"),
             mk("F1",               "Help"),
+            mk("F2",               "Settings"),
+            mk("F3",               "Remote sessions"),
+            mk("F5",               "Refresh current view"),
             mk("Tab",              "Cycle menu"),
             mk("1 – 9",            "Jump to tab"),
             mk("↑ / ↓",            "Move cursor"),
@@ -3724,19 +3767,6 @@ impl App {
             mk("/",                "Search library"),
             mk("w",                "Toggle watched"),
             mk("s",                "Shuffle and play selection"),
-
-            blank(),
-            section("REMOTE SESSIONS"),
-            mk("Ctrl+R",           "Open session picker"),
-            mk("↑ / ↓",            "Select session"),
-            mk("Enter",            "Connect to session (controls route to remote)"),
-            mk("d",                "Disconnect from remote session"),
-            mk("r",                "Refresh session list"),
-            mk("Esc",              "Close panel"),
-            mk("Space",            "Pause / resume (when connected)"),
-            mk("Alt+Enter",        "Stop remote (when connected)"),
-            mk("< / >",            "Seek ±5 seconds (when connected)"),
-            mk("- / +",            "Volume down / up (when connected)"),
 
             blank(),
         ]);
