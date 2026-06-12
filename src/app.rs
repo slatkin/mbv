@@ -628,7 +628,9 @@ impl App {
                             if played {
                                 item.playback_position_ticks = 0;
                                 item.played = true;
-                            } else if position_ticks > 0 && !item.is_audio() {
+                            } else if position_ticks >= 300_000_000 && !item.is_audio() {
+                                // Only update local position for meaningful progress (≥ 30 s).
+                                // Startup noise from mpv (< 30 s) keeps the previous value intact.
                                 item.playback_position_ticks = position_ticks;
                             }
                         }
@@ -1749,23 +1751,21 @@ impl App {
         let was_playing = v["was_playing"].as_bool().unwrap_or(false);
         let last_played_item_id = v["last_played_item_id"].as_str().map(String::from);
 
-        let items: Vec<crate::api::MediaItem> = if let Some(arr) = v["items"].as_array() {
-            arr.iter()
-                .filter_map(|x| serde_json::from_value(x.clone()).ok())
-                .collect()
+        // Extract IDs from whatever format is present, then re-fetch from server
+        // so positions and played flags are always authoritative from Emby.
+        let ids: Vec<String> = if let Some(arr) = v["items"].as_array() {
+            arr.iter().filter_map(|x| x["id"].as_str().map(String::from)).collect()
+        } else if v.is_array() {
+            serde_json::from_value(v).unwrap_or_default()
         } else {
-            // old format: re-fetch by IDs
-            let ids: Vec<String> = if v.is_array() {
-                serde_json::from_value(v).unwrap_or_default()
-            } else {
-                v["ids"].as_array()
-                    .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
-                    .unwrap_or_default()
-            };
-            if ids.is_empty() { return }
+            v["ids"].as_array()
+                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
+                .unwrap_or_default()
+        };
+        if ids.is_empty() { return }
+        let items: Vec<crate::api::MediaItem> = {
             let client = self.client.lock().unwrap();
-            let Ok(mut fetched) = client.get_items_by_ids(&ids) else { return };
-            fetched.sort_by_key(|item| ids.iter().position(|id| id == &item.id).unwrap_or(usize::MAX));
+            let Ok(fetched) = client.get_items_by_ids(&ids) else { return };
             fetched
         };
 

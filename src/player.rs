@@ -512,14 +512,17 @@ impl Player {
             let mut next_up_armed_logged = false;
             let mut intro_start_ticks: i64 = 0;
             let mut intro_end_ticks: i64   = 0;
-            if item_pos == 0 && client.chapter_api_available {
+            if client.chapter_api_available {
                 if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
                     intro_start_ticks = s;
                     intro_end_ticks   = e;
                 }
             }
-            let mut intro_show_fired = false;
-            let mut intro_hide_fired = false;
+            // Pre-fire when resuming past the intro so mpv's brief time-pos=0 during seek
+            // doesn't incorrectly trigger the skip-intro handler.
+            let past_intro = intro_end_ticks > 0 && item_pos >= intro_end_ticks;
+            let mut intro_show_fired = past_intro;
+            let mut intro_hide_fired = past_intro;
 
             loop {
                 // Process commands before checking the stop signal so that a LoadNew
@@ -973,16 +976,11 @@ impl Player {
                 st.volume = v;
             }
 
-            // Load items starting from start_idx so mpv plays the right item
-            // immediately with no playlist-pos jump required.
-            for (i, item) in items[start_idx..].iter().enumerate() {
+            // Load the full playlist into mpv so every index matches items[i] directly.
+            for (i, item) in items.iter().enumerate() {
                 let url = format!("{}/Videos/{}/stream?static=true&api_key={}", server_url, item.id, token);
                 let mode = if i == 0 { "replace" } else { "append-play" };
-                let title_opt = if i == 0 && item.playback_position_ticks > 0 {
-                    format!("{},start={:.0}", mpv_title_opt(&item.display_name()), item.resume_seconds())
-                } else {
-                    mpv_title_opt(&item.display_name())
-                };
+                let title_opt = mpv_title_opt(&item.display_name());
                 if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
                     log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
                     if i == 0 {
@@ -1044,30 +1042,42 @@ impl Player {
             }));
 
             let mut current_idx = start_idx;
-            let mut mpv_offset = start_idx; // mpv playlist pos k == items[mpv_offset + k]
             let mut forced_idx: Option<usize> = None;
             let mut quit_at: Option<Instant> = None;
             let mut last_seek_at: Option<Instant> = None;
             let mut last_valid_pos: i64 = items[start_idx].playback_position_ticks;
             let mut tracks_initialized = false;
             let mut playlist_cancelled = false;
-            let mut pending_load = false;
+            // pending_load=true when we set playlist-pos to start_idx (or during a jump
+            // reload) so the resulting EndFile from the displaced item is skipped.
+            let mut pending_load = start_idx > 0;
             let mut stop_reported = false;
             let mut current_osd_title = items[start_idx].display_name();
             let mut last_mouse_osd: Option<Instant> = None;
-            let mut pending_resume_secs: Option<f64> = None;
+            let mut pending_resume_secs: Option<f64> =
+                if !items[start_idx].is_audio() && items[start_idx].playback_position_ticks > 0 {
+                    Some(items[start_idx].resume_seconds())
+                } else {
+                    None
+                };
             let mut playlist_next_up_fired = false;
             let mut playlist_next_up_armed = false;
             let mut intro_start_ticks: i64 = 0;
             let mut intro_end_ticks: i64   = 0;
-            if items[start_idx].playback_position_ticks == 0 && client.chapter_api_available {
+            if client.chapter_api_available {
                 if let Some((s, e)) = client.get_intro_times(&items[start_idx].id, &log) {
                     intro_start_ticks = s;
                     intro_end_ticks   = e;
                 }
             }
-            let mut intro_show_fired = false;
-            let mut intro_hide_fired = false;
+            let past_intro = intro_end_ticks > 0 && items[start_idx].playback_position_ticks >= intro_end_ticks;
+            let mut intro_show_fired = past_intro;
+            let mut intro_hide_fired = past_intro;
+
+            // Jump mpv to the starting item; the EndFile from item[0] is swallowed by pending_load.
+            if start_idx > 0 {
+                let _ = mpv.set_property("playlist-pos", start_idx as i64);
+            }
 
             loop {
                 let mut cancel_stop = false;
@@ -1084,63 +1094,17 @@ impl Player {
                         }
                         PlayerCommand::JumpTo(idx) => {
                             if idx < n {
-                                if idx >= mpv_offset {
-                                    forced_idx = Some(idx);
-                                    {
-                                        let mut s = status.lock().unwrap();
-                                        s.current_idx    = idx;
-                                        s.position_ticks = 0;
-                                        s.runtime_ticks  = items[idx].runtime_ticks;
-                                        s.title          = items[idx].display_name();
-                                    }
-                                    let _ = mpv.set_property("playlist-pos", (idx - mpv_offset) as i64);
-                                } else {
-                                    // Backward jump: reload mpv playlist from idx
-                                    let old_id   = current_item_id.lock().unwrap().clone();
-                                    let old_msid = current_msid.lock().unwrap().clone();
-                                    let old_sid  = session_id.lock().unwrap().clone();
-                                    let old_is_audio = current_is_audio.load(Ordering::Relaxed);
-                                    let old_pos = if old_is_audio { 0 } else { last_valid_pos };
-                                    client.report_stopped(&old_id, &old_msid, old_pos, &old_sid, &log);
-                                    let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: current_idx, position_ticks: old_pos, played: false });
-                                    let (new_sid, new_msid) = {
-                                        let (sid, msid) = client.get_playback_info(&items[idx].id, &log);
-                                        client.report_start(&items[idx], &msid, &sid, &log);
-                                        (sid, msid)
-                                    };
-                                    current_is_audio.store(items[idx].is_audio(), Ordering::Relaxed);
-                                    *current_item_id.lock().unwrap() = items[idx].id.clone();
-                                    *current_msid.lock().unwrap()    = new_msid;
-                                    *session_id.lock().unwrap()      = new_sid;
-                                    {
-                                        let mut s = status.lock().unwrap();
-                                        s.position_ticks = 0;
-                                        s.runtime_ticks  = items[idx].runtime_ticks;
-                                        s.current_idx    = idx;
-                                        s.title          = items[idx].display_name();
-                                    }
-                                    current_idx   = idx;
-                                    mpv_offset    = idx;
-                                    current_osd_title = items[idx].display_name();
-                                    last_valid_pos    = 0;
-                                    tracks_initialized = false;
-                                    pending_load  = true;
-                                    let resume = if !items[idx].is_audio() && items[idx].playback_position_ticks > 0 {
-                                        format!("{:.0}", items[idx].resume_seconds())
-                                    } else {
-                                        "0".to_string()
-                                    };
-                                    let _ = mpv.set_property("start", resume);
-                                    for (i, item) in items[idx..].iter().enumerate() {
-                                        let url = format!("{}/Videos/{}/stream?static=true&api_key={}", server_url, item.id, token);
-                                        let mode = if i == 0 { "replace" } else { "append-play" };
-                                        let title_opt = mpv_title_opt(&item.display_name());
-                                        if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
-                                            log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
-                                        }
-                                    }
-                                    let _ = event_tx.send(PlayerEvent::TrackChanged(idx));
+                                // mpv playlist indices match items indices directly, so any
+                                // jump is a simple playlist-pos set. EndFile handles the rest.
+                                forced_idx = Some(idx);
+                                {
+                                    let mut s = status.lock().unwrap();
+                                    s.current_idx    = idx;
+                                    s.position_ticks = 0;
+                                    s.runtime_ticks  = items[idx].runtime_ticks;
+                                    s.title          = items[idx].display_name();
                                 }
+                                let _ = mpv.set_property("playlist-pos", idx as i64);
                             }
                         }
                         PlayerCommand::SetVolume(v) => {
@@ -1203,14 +1167,15 @@ impl Player {
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
                             intro_start_ticks = 0;
                             intro_end_ticks   = 0;
-                            if item.playback_position_ticks == 0 && client.chapter_api_available {
+                            if client.chapter_api_available {
                                 if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
                                     intro_start_ticks = s;
                                     intro_end_ticks   = e;
                                 }
                             }
-                            intro_show_fired = false;
-                            intro_hide_fired = false;
+                            let pi = intro_end_ticks > 0 && item.playback_position_ticks >= intro_end_ticks;
+                            intro_show_fired = pi;
+                            intro_hide_fired = pi;
 
                             if start_pos > 0.0 {
                                 let _ = mpv.set_property("start", format!("{:.0}", start_pos));
@@ -1255,7 +1220,7 @@ impl Player {
                     Some(Ok(Event::PropertyChange { change: PropertyData::Double(pos_secs), .. })) => {
                         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
                         status.lock().unwrap().position_ticks = ticks;
-                        if pos_secs > 0.0 { last_valid_pos = ticks; }
+                        if pos_secs > 0.0 && pending_resume_secs.is_none() { last_valid_pos = ticks; }
                         // Playlist next-up: match Emby Web's timing from videoosd.js.
                         // 90 s before end regardless of runtime length.
                         // Minimum episode: 10 min. Minimum remaining when shown: 20 s.
@@ -1388,7 +1353,12 @@ impl Player {
                         let completed_idx = current_idx;
                         let natural = reason == mpv_end_file_reason::Eof
                             && items[completed_idx].runtime_ticks > 0;
-                        let completed_pos = if completed_is_audio || natural { 0 } else { last_valid_pos };
+                        // Also treat as played if user jumped away within the last 10% of runtime.
+                        let near_end = !natural && !completed_is_audio
+                            && items[completed_idx].runtime_ticks > 0
+                            && last_valid_pos * 10 / items[completed_idx].runtime_ticks >= 9;
+                        let played_out = (natural || near_end) && !completed_is_audio;
+                        let completed_pos = if completed_is_audio || natural || near_end { 0 } else { last_valid_pos };
 
                         let next_idx = if let Some(jump_idx) = forced_idx.take() {
                             jump_idx
@@ -1401,12 +1371,12 @@ impl Player {
                             if let Some(h) = progress_handle.take() { let _ = h.join(); }
                             status.lock().unwrap().active = false;
                             client.report_stopped(&id, &msid, completed_pos, &sid, &log);
-                            if natural && !completed_is_audio {
+                            if played_out {
                                 if let Err(e) = client.mark_played(&items[completed_idx].id) {
                                     log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
                                 }
                             }
-                            let _ = event_tx.send(PlayerEvent::Stopped { idx: completed_idx, position_ticks: completed_pos, played: natural && !completed_is_audio });
+                            let _ = event_tx.send(PlayerEvent::Stopped { idx: completed_idx, position_ticks: completed_pos, played: played_out });
                             return;
                         }
 
@@ -1423,7 +1393,7 @@ impl Player {
                         }
 
                         client.report_stopped(&id, &msid, completed_pos, &sid, &log);
-                        if natural && !completed_is_audio {
+                        if played_out {
                             if let Err(e) = client.mark_played(&items[completed_idx].id) {
                                 log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
                             }
@@ -1443,14 +1413,15 @@ impl Player {
                         current_is_audio.store(items[current_idx].is_audio(), Ordering::Relaxed);
                         intro_start_ticks = 0;
                         intro_end_ticks   = 0;
-                        if items[current_idx].playback_position_ticks == 0 && client.chapter_api_available {
+                        if client.chapter_api_available {
                             if let Some((s, e)) = client.get_intro_times(&items[current_idx].id, &log) {
                                 intro_start_ticks = s;
                                 intro_end_ticks   = e;
                             }
                         }
-                        intro_show_fired = false;
-                        intro_hide_fired = false;
+                        let pi = intro_end_ticks > 0 && items[current_idx].playback_position_ticks >= intro_end_ticks;
+                        intro_show_fired = pi;
+                        intro_hide_fired = pi;
                         *current_item_id.lock().unwrap() = items[current_idx].id.clone();
                         *current_msid.lock().unwrap()    = new_msid;
                         *session_id.lock().unwrap()      = new_sid;
@@ -1459,7 +1430,7 @@ impl Player {
                         if !next.is_audio() && next.playback_position_ticks > 0 {
                             pending_resume_secs = Some(next.resume_seconds());
                         }
-                        let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: completed_idx, position_ticks: completed_pos, played: natural && !completed_is_audio });
+                        let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: completed_idx, position_ticks: completed_pos, played: played_out });
                         let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));
                     }
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
