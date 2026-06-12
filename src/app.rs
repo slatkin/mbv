@@ -4704,17 +4704,25 @@ impl App {
             let title = item.playback_label();
             let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
             let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
-            let title_cell = if i == cursor {
-                Cell::from(Line::from(vec![
-                    Span::styled("▌", Style::default().fg(palette::IRIS)),
-                    Span::raw(title),
-                ]))
+            let (pos_ticks, rt_ticks) = if i == active_idx && active {
+                (live_pos, live_runtime)
             } else {
-                Cell::from(Line::from(vec![
-                    Span::raw(" "),
-                    Span::raw(title),
-                ]))
+                (item.playback_position_ticks, item.runtime_ticks)
             };
+            let pct_span = if pos_ticks > 0 && rt_ticks > 0 && !item.played && !item.is_audio() {
+                let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
+                Some(Span::styled(format!(" {pct}%"), Style::default().fg(palette::YELLOW)))
+            } else {
+                None
+            };
+            let marker = if i == cursor {
+                Span::styled("▌", Style::default().fg(palette::IRIS))
+            } else {
+                Span::raw(" ")
+            };
+            let mut spans = vec![marker, Span::raw(title)];
+            if let Some(pct) = pct_span { spans.push(pct); }
+            let title_cell = Cell::from(Line::from(spans));
             Row::new([
                 title_cell,
                 Cell::from(Line::from(length).alignment(Alignment::Right)),
