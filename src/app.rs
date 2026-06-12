@@ -1427,9 +1427,16 @@ impl App {
                         self.flash_status(format!("Playing on remote: {label}"));
                         self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
                     } else {
-                        let active = self.player.status.lock().unwrap().active;
+                        let st = self.player.status.lock().unwrap();
+                        let active = st.active;
+                        let current_idx = st.current_idx;
+                        drop(st);
                         if active {
-                            self.player.send_command(PlayerCommand::JumpTo(t));
+                            if t == current_idx {
+                                self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
+                            } else {
+                                self.player.send_command(PlayerCommand::JumpTo(t));
+                            }
                         } else if !self.player_tab.items.is_empty() {
                             let items = self.player_tab.items.clone();
                             let c = Arc::new(self.client.lock().unwrap().clone());
@@ -3313,15 +3320,17 @@ impl App {
         self.terminal_height = area.height;
 
         let active = self.player.status.lock().unwrap().active;
-        let controls_h: u16 = if active || self.connected_session_id.is_some() { 2 } else { 0 };
+        let show_controls = active || self.connected_session_id.is_some();
+        let status_h:   u16 = if show_controls { 1 } else { 0 };
+        let controls_h: u16 = if show_controls { 2 } else { 0 };
 
-        let [tabs_area, gap_area, toast_area, main_area, status_area, controls_area] = Layout::vertical([
+        let [tabs_area, gap_area, toast_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
             Constraint::Length(1),            // spacer
             Constraint::Length(1),            // toast notifications
+            Constraint::Length(controls_h),   // playback controls (when active)
+            Constraint::Length(status_h),     // now-playing title bar (when active)
             Constraint::Min(0),               // main content
-            Constraint::Length(1),            // now-playing HR
-            Constraint::Length(controls_h),   // playback controls (global, when active)
         ]).areas(area);
 
         // Right side: Vol (14) cols total
@@ -3482,7 +3491,19 @@ impl App {
             self.status.clear();
             self.status_expires = None;
         }
-        // Toast area: search query when active, otherwise flash message
+        // Compute now-playing title for use in toast row fallback
+        let now_playing_title: Option<(String, ratatui::style::Color)> = if show_controls {
+            if active {
+                now_playing.map(|t| (t, palette::FOAM))
+            } else if let Some(ref state) = self.connected_session_state {
+                state.now_playing.clone().map(|t| (t, palette::IRIS))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        // Toast area: search query when active, then flash message, then now-playing title
         let search_toast: Option<String> = if self.tab_idx >= self.lib_tab_offset()
             && self.tab_idx != self.log_tab_idx()
         {
@@ -3506,39 +3527,23 @@ impl App {
                     .style(Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
                 toast_area,
             );
+        } else if let Some((ref title, color)) = now_playing_title {
+            f.render_widget(
+                Paragraph::new(title.as_str())
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                toast_area,
+            );
         }
-        let show_controls = active || self.connected_session_id.is_some();
         if show_controls {
-            // Status / now-playing HR
-            let status_title: Option<String> = if active {
-                now_playing
-            } else if let Some(ref state) = self.connected_session_state {
-                state.now_playing.clone()
-            } else {
-                None
-            };
-            if let Some(text) = status_title {
-                let title_color = if active { palette::FOAM } else { palette::IRIS };
-                f.render_widget(
-                    Block::default()
-                        .borders(Borders::TOP)
-                        .border_style(Style::default().fg(palette::MUTED))
-                        .title(Span::styled(
-                            format!("  {}  ", text),
-                            Style::default().fg(title_color).add_modifier(Modifier::BOLD),
-                        ))
-                        .title_alignment(Alignment::Center),
-                    status_area,
-                );
-            } else {
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        "─".repeat(area.width as usize),
-                        Style::default().fg(palette::MUTED),
-                    )),
-                    status_area,
-                );
-            }
+            // Status / now-playing HR (title now lives in the toast row)
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    "─".repeat(area.width as usize),
+                    Style::default().fg(palette::MUTED),
+                )),
+                status_area,
+            );
             self.render_playback_controls(f, controls_area);
         } else {
             self.layout_seekbar_area = Rect::default();
