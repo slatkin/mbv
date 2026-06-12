@@ -85,7 +85,7 @@ impl RemotePlayer {
             }
             disconnected_r.store(true, Ordering::SeqCst);
             // Notify TUI that connection is gone
-            let _ = event_tx_r.send(PlayerEvent::Stopped { idx: 0, position_ticks: 0 });
+            let _ = event_tx_r.send(PlayerEvent::Stopped { idx: 0, position_ticks: 0, played: false });
         });
 
         // Writer thread: serializes CtrlCmd to daemon

@@ -598,7 +598,7 @@ impl App {
         'outer: loop {
             if let Ok(ev) = self.player_rx.try_recv() {
                 match ev {
-                    PlayerEvent::Stopped { idx, position_ticks } => {
+                    PlayerEvent::Stopped { idx, position_ticks, played } => {
                         if self.player.is_remote_disconnected() {
                             self.next_up_item = None;
                             self.skip_intro_end_ticks = None;
@@ -607,7 +607,10 @@ impl App {
                             continue;
                         }
                         if let Some(item) = self.player_tab.items.get_mut(idx) {
-                            if position_ticks > 0 && !item.is_audio() {
+                            if played {
+                                item.playback_position_ticks = 0;
+                                item.played = true;
+                            } else if position_ticks > 0 && !item.is_audio() {
                                 item.playback_position_ticks = position_ticks;
                             }
                             self.last_played_item_id = Some(item.id.clone());
@@ -2440,7 +2443,7 @@ impl App {
     }
 
     fn cycle_sub(&mut self) {
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
+        if let Some(ref _conn_id) = self.connected_session_id.clone() {
             // Without track list from remote, just toggle off/on
             self.toggle_sub();
             return;

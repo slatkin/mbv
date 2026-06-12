@@ -888,6 +888,7 @@ impl EmbyClient {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn stream_url(&self, item_id: &str) -> String {
         format!("{}/Videos/{}/stream?static=true&api_key={}", self.config.server_url, item_id, self.token)
     }

@@ -38,7 +38,7 @@ pub struct PlayerStatus {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum PlayerEvent {
-    Stopped { idx: usize, position_ticks: i64 },
+    Stopped { idx: usize, position_ticks: i64, played: bool },
     TrackChanged(usize),
     NextUpThreshold { series_id: String, season: i64, episode: i64 },
     NextUpPlay,
@@ -493,6 +493,7 @@ impl Player {
 
             let mut quit_at: Option<Instant> = None;
             let mut stop_reported = false;
+            let mut stopped_event_sent = false;
             let mut mark_played_id: Option<String> = None; // set when natural end; retry in Shutdown if needed
             let mut pending_load = false;
             let mut pending_resume_secs: Option<f64> = None;
@@ -653,7 +654,7 @@ impl Player {
 
                 if quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
                     status.lock().unwrap().active = false;
-                    let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos });
+                    let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos, played: false });
                     return;
                 }
 
@@ -799,7 +800,8 @@ impl Player {
                                     }
                                 }
                             }
-                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: if is_audio { 0 } else { last_valid_pos } });
+                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: 0, played: !is_audio });
+                            stopped_event_sent = true;
                         }
                     }
                     Some(Ok(Event::LogMessage { prefix, level, text, .. })) => {
@@ -844,7 +846,9 @@ impl Player {
                             });
                         }
                         status.lock().unwrap().active = false;
-                        let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos });
+                        if !stopped_event_sent {
+                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos, played: false });
+                        }
                         return;
                     }
                     Some(Err(e)) => {
@@ -1236,7 +1240,7 @@ impl Player {
                     status.lock().unwrap().active = false;
                     let stopped_idx = current_idx;
                     let stopped_pos = last_valid_pos;
-                    let _ = event_tx.send(PlayerEvent::Stopped { idx: stopped_idx, position_ticks: stopped_pos });
+                    let _ = event_tx.send(PlayerEvent::Stopped { idx: stopped_idx, position_ticks: stopped_pos, played: false });
                     return;
                 }
 
@@ -1398,7 +1402,7 @@ impl Player {
                                     log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
                                 }
                             }
-                            let _ = event_tx.send(PlayerEvent::Stopped { idx: completed_idx, position_ticks: completed_pos });
+                            let _ = event_tx.send(PlayerEvent::Stopped { idx: completed_idx, position_ticks: completed_pos, played: natural && !completed_is_audio });
                             return;
                         }
 
@@ -1426,8 +1430,6 @@ impl Player {
                         playlist_next_up_fired = false;
                         playlist_next_up_armed = false;
                         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                        intro_start_ticks = 0;
-                        intro_end_ticks   = 0;
 
                         let (new_sid, new_msid) = {
                             let (sid, msid) = client.get_playback_info(&items[current_idx].id, &log);
@@ -1480,7 +1482,7 @@ impl Player {
                         }
                         let pos = if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
                         status.lock().unwrap().active = false;
-                        let _ = event_tx.send(PlayerEvent::Stopped { idx: current_idx, position_ticks: pos });
+                        let _ = event_tx.send(PlayerEvent::Stopped { idx: current_idx, position_ticks: pos, played: false });
                         return;
                     }
                     Some(Err(e)) => {
