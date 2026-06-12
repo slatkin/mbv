@@ -170,7 +170,7 @@ pub struct App {
     confirm_clear_playlist: bool,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
-    playlist_card_view: bool,
+    playlist_view: u8,
     home_card_view: bool,
     last_played_item_id: Option<String>,
     layout_carousel_slots: [(Option<usize>, Rect); 3],
@@ -401,7 +401,7 @@ impl App {
             confirm_clear_playlist: false,
             skip_intro_end_ticks: None,
             next_up_item: None,
-            playlist_card_view: Self::load_playlist_card_view(),
+            playlist_view: Self::load_playlist_view(),
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
@@ -527,7 +527,7 @@ impl App {
             confirm_clear_playlist: false,
             skip_intro_end_ticks: None,
             next_up_item: None,
-            playlist_card_view: Self::load_playlist_card_view(),
+            playlist_view: Self::load_playlist_view(),
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
@@ -1049,6 +1049,7 @@ impl App {
         if self.tab_idx > 1
             && self.tab_idx != self.log_tab_idx()
             && !key.modifiers.contains(KeyModifiers::ALT)
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
             && self.libs.get(self.tab_idx - self.lib_tab_offset()).is_some_and(|l| l.search.is_some())
         {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
@@ -1156,10 +1157,6 @@ impl App {
             }
             return false;
         }
-        if key.code == KeyCode::Char('q') && key.modifiers.contains(KeyModifiers::ALT) {
-            self.enqueue_selected();
-            return false;
-        }
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;
             return false;
@@ -1175,6 +1172,7 @@ impl App {
         let alt = key.modifiers.contains(KeyModifiers::ALT);
 
         match key.code {
+            KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => self.enqueue_selected(),
             KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
@@ -1185,11 +1183,16 @@ impl App {
             KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
             KeyCode::Home     => self.jump_lib_cursor(false),
             KeyCode::End      => self.jump_lib_cursor(true),
+            KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let item = self.current_lib_item();
+                if let Some(item) = item {
+                    if item.is_folder { self.play_folder(&item.id.clone()); }
+                    else { self.select(); }
+                }
+            }
             KeyCode::Enter => self.select(),
-            KeyCode::Char('w') if alt => self.toggle_watched(),
-            KeyCode::Char('w') if !alt => self.toggle_watched(),
-            KeyCode::Char('s') if alt => self.shuffle_play(),
-            KeyCode::Char('s') if !alt => self.shuffle_play(),
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self.toggle_watched(),
+            KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => self.shuffle_play(),
             KeyCode::Char('o') if alt => self.open_context_menu(),
             KeyCode::Char('o') if !alt => self.open_context_menu(),
             KeyCode::Char(c @ '1'..='9') => {
@@ -1278,8 +1281,10 @@ impl App {
             }
             KeyCode::Left  => { if self.home_card_view { self.move_home_cursor(-1); } }
             KeyCode::Right => { if self.home_card_view { self.move_home_cursor(1); } }
+            KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => self.enqueue_selected(),
             KeyCode::Enter => self.select_home(),
-            KeyCode::Char('w') => self.toggle_watched_home(),
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self.toggle_watched_home(),
+            KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => self.enqueue_selected(),
             _ => {}
         }
         false
@@ -1390,12 +1395,12 @@ impl App {
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Up | KeyCode::Left
-                if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_card_view) => {
+                if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_view == 1) => {
                     self.player_tab.playlist_cursor -= 1;
                 }
             KeyCode::Down | KeyCode::Right
                 if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len()
-                && (key.code == KeyCode::Down || self.playlist_card_view) => {
+                && (key.code == KeyCode::Down || self.playlist_view == 1) => {
                     self.player_tab.playlist_cursor += 1;
                 }
             KeyCode::PageUp => {
@@ -1457,10 +1462,9 @@ impl App {
                 self.open_context_menu();
             }
             KeyCode::Char('v') => {
-                if self.images_enabled() {
-                    self.playlist_card_view = !self.playlist_card_view;
-                    self.save_playlist_card_view();
-                }
+                self.playlist_view = (self.playlist_view + 1) % 3;
+                self.save_playlist_view();
+                if !self.card_image_states.is_empty() { self.force_clear = true; }
             }
             KeyCode::Char('.') => {
                 let s = self.player.status.lock().unwrap();
@@ -1728,7 +1732,7 @@ impl App {
     }
 
     fn context_menu_spawn_point(&self) -> (u16, u16) {
-        if (self.tab_idx == 0 && self.home_card_view) || (self.tab_idx == 1 && self.playlist_card_view) {
+        if (self.tab_idx == 0 && self.home_card_view) || (self.tab_idx == 1 && self.playlist_view == 1) {
             let center = self.layout_carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
@@ -1767,8 +1771,12 @@ impl App {
             .unwrap_or_default()
     }
 
-    fn load_playlist_card_view() -> bool {
-        Self::load_prefs()["playlist_card_view"].as_bool().unwrap_or(false)
+    fn load_playlist_view() -> u8 {
+        let prefs = Self::load_prefs();
+        if let Some(v) = prefs["playlist_view"].as_u64() {
+            return v.min(2) as u8;
+        }
+        prefs["playlist_card_view"].as_bool().unwrap_or(false) as u8
     }
 
     fn load_home_card_view() -> bool {
@@ -1787,7 +1795,7 @@ impl App {
         let path = crate::config::prefs_path();
         let subs_off = self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
         let v = serde_json::json!({
-            "playlist_card_view": self.playlist_card_view,
+            "playlist_view": self.playlist_view,
             "home_card_view": self.home_card_view,
             "ui_volume": self.ui_volume,
             "subs_off": subs_off,
@@ -1797,7 +1805,7 @@ impl App {
         }
     }
 
-    fn save_playlist_card_view(&self) { self.save_prefs(); }
+    fn save_playlist_view(&self) { self.save_prefs(); }
     fn save_home_card_view(&self) { self.save_prefs(); }
 
     fn save_playlist(&self, was_playing: bool) {
@@ -2113,7 +2121,7 @@ impl App {
                 }
 
                 // Carousel card clicks — own double-click tracking independent of position-exact is_double
-                if self.tab_idx == 1 && self.playlist_card_view {
+                if self.tab_idx == 1 && self.playlist_view == 1 {
                     let slots = self.layout_carousel_slots;
                     self.log.push(Level::Info, "mouse", format!(
                         "carousel click ({col},{row}): slots=[({:?},{:?}),({:?},{:?}),({:?},{:?})]",
@@ -2255,7 +2263,7 @@ impl App {
                     self.adjust_volume(5);
                     return;
                 }
-                if (self.tab_idx == 1 && self.playlist_card_view) || (self.tab_idx == 0 && self.home_card_view) {
+                if (self.tab_idx == 1 && self.playlist_view == 1) || (self.tab_idx == 0 && self.home_card_view) {
                     let slots = self.layout_carousel_slots;
                     for (maybe_item_idx, card_rect) in slots.iter() {
                         if card_rect.contains((col, row).into()) {
@@ -3766,7 +3774,6 @@ impl App {
             mk("PgUp / PgDn",      "Page scroll"),
             mk("Home / End",       "First / last"),
             mk("Enter",            "Select / Play / Open"),
-            mk("Alt+Q",            "Add item(s) to Queue"),
             mk("o",                "Context menu"),
             mk("c",                "Clear Queue (confirms)"),
             mk("q",                "Quit"),
@@ -3790,14 +3797,17 @@ impl App {
             blank(),
             section("HOME"),
             mk("Alt+↑ / ↓",        "Switch sections"),
-            mk("w",                "Toggle watched"),
+            mk("Ctrl+W",           "Toggle watched"),
+            mk("Ctrl+Q",           "Add to Queue"),
 
             blank(),
             section("LIBRARY"),
             mk("Esc / Backspace",  "Go back"),
             mk("/",                "Search library"),
-            mk("w",                "Toggle watched"),
-            mk("s",                "Shuffle and play selection"),
+            mk("Ctrl+W",           "Toggle watched"),
+            mk("Ctrl+S",           "Shuffle and play selection"),
+            mk("Ctrl+P",           "Play all (recursive)"),
+            mk("Ctrl+Q",           "Add to Queue"),
 
             blank(),
         ]);
@@ -3850,7 +3860,7 @@ impl App {
                 };
                 if now_none {
                     self.home_card_view = false;
-                    self.playlist_card_view = false;
+                    self.playlist_view = 0;
                     self.save_prefs();
                 }
             }
@@ -4192,7 +4202,7 @@ impl App {
 
         self.playlist_rect = area;
 
-        if self.playlist_card_view {
+        if self.playlist_view == 1 {
             let v_pad: u16 = if area.height >= 30 { 2 } else if area.height >= 20 { 1 } else { 0 };
             let inner = Rect {
                 x: area.x,
@@ -4212,6 +4222,22 @@ impl App {
             }
 
             self.render_playlist_cards(f, inner);
+            return;
+        }
+
+        if self.playlist_view == 2 {
+            self.layout_playlist_inner = area;
+
+            if self.player_tab.items.is_empty() {
+                f.render_widget(
+                    Paragraph::new("Add items with p from Home or library tabs")
+                        .style(Style::default().fg(palette::MUTED)),
+                    area,
+                );
+                return;
+            }
+
+            self.render_playlist_presentation(f, area);
             return;
         }
 
@@ -4505,7 +4531,7 @@ impl App {
 
             let ep_tag = if is_ep { format!("S{:02}E{:02}", season, episode) } else { String::new() };
             let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
-            self.render_card_slot(f, *card_rect, *is_center, selected, now_playing,
+            self.render_card_slot(f, *card_rect, *is_center, selected, now_playing, false, false,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
                 count_label.as_deref(), None);
         }
@@ -4540,6 +4566,117 @@ impl App {
         }
     }
 
+    fn render_playlist_presentation(&mut self, f: &mut ratatui::Frame, area: Rect) {
+        let n = self.player_tab.items.len();
+        if n == 0 { return; }
+
+        let (active, active_idx, live_pos, live_runtime) = {
+            let s = self.player.status.lock().unwrap();
+            (s.active, s.current_idx, s.position_ticks, s.runtime_ticks)
+        };
+
+        let cursor = self.player_tab.playlist_cursor;
+
+        // Horizontal split: left card panel | right list (1-row top padding)
+        let top_pad: u16 = 1;
+        let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
+        let right_x = area.x + left_w + 1;
+        let right_w = area.width.saturating_sub(left_w + 1);
+        let inner_y = area.y + top_pad;
+        let inner_h = area.height.saturating_sub(top_pad);
+        let left_area  = Rect { x: area.x, y: inner_y, width: left_w, height: inner_h };
+        let right_area = Rect { x: right_x, y: inner_y, width: right_w, height: inner_h };
+
+        // Left panel: borderless card for cursor item
+        {
+            let item = &self.player_tab.items[cursor];
+            let item_id   = item.id.clone();
+            let series_id = item.series_id.clone();
+            let name      = item.name.clone();
+            let series    = item.series_name.clone();
+            let is_ep     = item.item_type == "Episode" && item.parent_index_number > 0;
+            let ep_tag    = if is_ep { format!("S{:02}E{:02}", item.parent_index_number, item.index_number) } else { String::new() };
+            let runtime   = item.runtime_ticks;
+            let now_playing = active && active_idx == cursor;
+            let (pos_ticks, rt_ticks) = if now_playing {
+                (live_pos, live_runtime)
+            } else {
+                (item.playback_position_ticks, item.runtime_ticks)
+            };
+            let played = item.played;
+            let img_types: &[&str] = match item.item_type.as_str() {
+                "MusicAlbum" => &["AudioChild"],
+                "Audio"      => &["Primary"],
+                "Movie"      => &["Backdrop", "Primary", "Logo"],
+                _            => &["Primary", "Backdrop", "Logo"],
+            };
+            let cache_key = format!("{}:A", item_id);
+            if self.images_enabled() {
+                self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+            }
+            self.render_card_slot(f, left_area, true, true, now_playing, true, true,
+                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
+                None, None);
+        }
+
+        // Prefetch images for 3 items before and after the cursor.
+        if self.images_enabled() {
+            let prefetch_start = cursor.saturating_sub(3);
+            let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
+            for pi in prefetch_start..=prefetch_end {
+                if pi == cursor { continue; } // already fetched above
+                let item = &self.player_tab.items[pi];
+                let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
+                let img_types: &[&str] = match item.item_type.as_str() {
+                    "MusicAlbum" => &["AudioChild"],
+                    "Audio"      => &["Primary"],
+                    "Movie"      => &["Backdrop", "Primary", "Logo"],
+                    _            => &["Primary", "Backdrop", "Logo"],
+                };
+                self.fetch_card_image(format!("{}:A", item_id), item_id, series_id, img_types);
+            }
+        }
+
+        // Right panel: simple 2-column table (title + length)
+        let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
+            let row_style = if i == active_idx && active {
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::WHITE)
+            };
+            let title = item.playback_label();
+            let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
+            let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
+            let title_cell = if i == cursor {
+                Cell::from(Line::from(vec![
+                    Span::styled("▌", Style::default().fg(palette::IRIS)),
+                    Span::raw(title),
+                ]))
+            } else {
+                Cell::from(Line::from(vec![
+                    Span::raw(" "),
+                    Span::raw(title),
+                ]))
+            };
+            Row::new([
+                title_cell,
+                Cell::from(Line::from(length).alignment(Alignment::Right)),
+                Cell::from(""),
+            ]).style(row_style)
+        }).collect();
+
+        let mut state = TableState::default();
+        state.select(Some(cursor));
+        let table = Table::new(rows, [
+            Constraint::Min(10),
+            Constraint::Length(7),
+            Constraint::Length(1),
+        ])
+        .column_spacing(2)
+        .row_highlight_style(Style::default());
+        f.render_stateful_widget(table, right_area, &mut state);
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn render_card_slot(
         &mut self,
@@ -4548,6 +4685,8 @@ impl App {
         is_center: bool,
         selected: bool,
         now_playing: bool,
+        no_border: bool,
+        text_top_aligned: bool,
         cache_key: &str,
         name: &str,
         series: &str,
@@ -4559,28 +4698,33 @@ impl App {
         count_label: Option<&str>,
         section_title: Option<&str>,
     ) {
-        let border_fg = if selected { palette::IRIS } else { palette::WHITE };
-        let mut block = Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(border_fg));
-        if let Some(title) = section_title {
-            block = block
-                .title(Span::styled(format!(" {} ", title), Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)))
-                .title_alignment(Alignment::Center);
-        } else if now_playing {
-            block = block
-                .title(Span::styled(" Now Playing ", Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)))
-                .title_alignment(Alignment::Center);
-        }
-        if let Some(label) = count_label {
-            block = block.title_bottom(
-                Line::from(Span::styled(format!(" {} ", label), Style::default().fg(palette::MUTED)))
-                    .centered()
-            );
-        }
-        let inner = block.inner(card_rect);
-        f.render_widget(block, card_rect);
+        let inner = if no_border {
+            card_rect
+        } else {
+            let border_fg = if selected { palette::IRIS } else { palette::WHITE };
+            let mut block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(border_fg));
+            if let Some(title) = section_title {
+                block = block
+                    .title(Span::styled(format!(" {} ", title), Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)))
+                    .title_alignment(Alignment::Center);
+            } else if now_playing {
+                block = block
+                    .title(Span::styled(" Now Playing ", Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)))
+                    .title_alignment(Alignment::Center);
+            }
+            if let Some(label) = count_label {
+                block = block.title_bottom(
+                    Line::from(Span::styled(format!(" {} ", label), Style::default().fg(palette::MUTED)))
+                        .centered()
+                );
+            }
+            let inner = block.inner(card_rect);
+            f.render_widget(block, card_rect);
+            inner
+        };
 
         if inner.height < 2 || inner.width == 0 { return; }
 
@@ -4623,7 +4767,7 @@ impl App {
         let img_h      = img_bottom.saturating_sub(img_top);
 
         // Render image if available and there is space.
-        let mut text_y = img_bottom; // text always pinned to bottom
+        let mut actual_img_h: u16 = 0;
         if img_h >= 2 {
             if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
                 type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
@@ -4631,12 +4775,12 @@ impl App {
                     let avail = ratatui::layout::Size { width: inner.width.saturating_sub(2), height: img_h };
                     let actual = state.size_for(ratatui_image::Resize::Scale(None), avail);
                     let img_x = inner.x + 1 + (avail.width.saturating_sub(actual.width)) / 2;
-                    let img_y = img_top;
-                    let img_rect = Rect { x: img_x, y: img_y, width: actual.width, height: actual.height };
+                    let img_rect = Rect { x: img_x, y: img_top, width: actual.width, height: actual.height };
                     f.render_stateful_widget(
                         SImg::default().resize(ratatui_image::Resize::Scale(None)),
                         img_rect, state,
                     );
+                    actual_img_h = actual.height;
                 } else {
                     let w     = (inner.width as u32 * 36 / 100) as u16;
                     let avail = ratatui::layout::Size { width: w, height: img_h };
@@ -4648,10 +4792,15 @@ impl App {
                         SImg::default().resize(ratatui_image::Resize::Fit(None)),
                         img_rect, state,
                     );
+                    actual_img_h = actual.height;
                 }
-                text_y = img_bottom;
             }
         }
+        let mut text_y = if text_top_aligned {
+            img_top + actual_img_h
+        } else {
+            img_bottom
+        };
 
         // Title line: "Bold Title (dim 43m)"
         {
@@ -4894,7 +5043,7 @@ impl App {
 
             let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
             let sec_title_label = if *is_center { Some(sec_title.as_str()) } else { None };
-            self.render_card_slot(f, *card_rect, *is_center, selected, false,
+            self.render_card_slot(f, *card_rect, *is_center, selected, false, false, false,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
                 count_label.as_deref(), sec_title_label);
         }
@@ -5966,7 +6115,7 @@ mod tests {
             confirm_clear_playlist: false,
             skip_intro_end_ticks: None,
             next_up_item: None,
-            playlist_card_view: false,
+            playlist_view: 0,
             home_card_view: false,
             last_played_item_id: None,
             layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
