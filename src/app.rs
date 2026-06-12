@@ -4695,13 +4695,14 @@ impl App {
         }
 
         // Right panel: simple 2-column table (title + length)
+        // Columns: title(Min) | length(7) | pad(1); column_spacing 2; 2 gaps = 4 overhead
+        let title_col_w = (right_w as usize).saturating_sub(12); // 7 + 1 + 4
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let row_style = if i == active_idx && active {
                 Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(palette::WHITE)
             };
-            let title = item.playback_label();
             let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
             let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
             let (pos_ticks, rt_ticks) = if i == active_idx && active {
@@ -4709,19 +4710,24 @@ impl App {
             } else {
                 (item.playback_position_ticks, item.runtime_ticks)
             };
-            let pct_span = if pos_ticks > 0 && rt_ticks > 0 && !item.played && !item.is_audio() {
+            let pct_str = if pos_ticks > 0 && rt_ticks > 0 && !item.played && !item.is_audio() {
                 let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
-                Some(Span::styled(format!(" {pct}%"), Style::default().fg(palette::YELLOW)))
+                format!(" {pct}%")
             } else {
-                None
+                String::new()
             };
+            // marker(1) + title + pct must fit in title_col_w
+            let max_title = title_col_w.saturating_sub(1 + pct_str.chars().count());
+            let title = trunc_str(&item.playback_label(), max_title);
             let marker = if i == cursor {
                 Span::styled("▌", Style::default().fg(palette::IRIS))
             } else {
                 Span::raw(" ")
             };
             let mut spans = vec![marker, Span::raw(title)];
-            if let Some(pct) = pct_span { spans.push(pct); }
+            if !pct_str.is_empty() {
+                spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
+            }
             let title_cell = Cell::from(Line::from(spans));
             Row::new([
                 title_cell,
