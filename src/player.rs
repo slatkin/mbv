@@ -40,6 +40,7 @@ pub struct PlayerStatus {
 pub enum PlayerEvent {
     Stopped { idx: usize, position_ticks: i64, played: bool },
     TrackChanged(usize),
+    TrackCompleted { idx: usize, position_ticks: i64, played: bool },
     NextUpThreshold { series_id: String, season: i64, episode: i64 },
     NextUpPlay,
     PlaylistNextUp { next_idx: usize },
@@ -1098,7 +1099,10 @@ impl Player {
                                     let old_id   = current_item_id.lock().unwrap().clone();
                                     let old_msid = current_msid.lock().unwrap().clone();
                                     let old_sid  = session_id.lock().unwrap().clone();
-                                    client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid, &log);
+                                    let old_is_audio = current_is_audio.load(Ordering::Relaxed);
+                                    let old_pos = if old_is_audio { 0 } else { last_valid_pos };
+                                    client.report_stopped(&old_id, &old_msid, old_pos, &old_sid, &log);
+                                    let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: current_idx, position_ticks: old_pos, played: false });
                                     let (new_sid, new_msid) = {
                                         let (sid, msid) = client.get_playback_info(&items[idx].id, &log);
                                         client.report_start(&items[idx], &msid, &sid, &log);
@@ -1455,6 +1459,7 @@ impl Player {
                         if !next.is_audio() && next.playback_position_ticks > 0 {
                             pending_resume_secs = Some(next.resume_seconds());
                         }
+                        let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: completed_idx, position_ticks: completed_pos, played: natural && !completed_is_audio });
                         let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));
                     }
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {

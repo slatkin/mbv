@@ -623,6 +623,16 @@ impl App {
                         self.status.clear();
                         self.refresh_after_stop();
                     }
+                    PlayerEvent::TrackCompleted { idx, position_ticks, played } => {
+                        if let Some(item) = self.player_tab.items.get_mut(idx) {
+                            if played {
+                                item.playback_position_ticks = 0;
+                                item.played = true;
+                            } else if position_ticks > 0 && !item.is_audio() {
+                                item.playback_position_ticks = position_ticks;
+                            }
+                        }
+                    }
                     PlayerEvent::TrackChanged(idx) => {
                         self.skip_intro_end_ticks = None;
                         self.player_tab.playlist_cursor = idx;
