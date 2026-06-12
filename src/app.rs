@@ -1025,6 +1025,39 @@ impl App {
             }
             return false;
         }
+        // When library search is active, unmodified keys feed the search; Alt-shortcuts pass through
+        if self.tab_idx > 1
+            && self.tab_idx != self.log_tab_idx()
+            && !key.modifiers.contains(KeyModifiers::ALT)
+            && self.libs.get(self.tab_idx - self.lib_tab_offset()).is_some_and(|l| l.search.is_some())
+        {
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            let alt = key.modifiers.contains(KeyModifiers::ALT);
+            match key.code {
+                KeyCode::Esc => { self.libs[lib_idx].search = None; }
+                KeyCode::Backspace => {
+                    let empty = self.libs[lib_idx].search.as_ref().is_none_or(|s| s.query.is_empty());
+                    if empty { self.libs[lib_idx].search = None; }
+                    else {
+                        self.libs[lib_idx].search.as_mut().unwrap().query.pop();
+                        self.update_lib_search(lib_idx);
+                    }
+                }
+                KeyCode::Up       => self.move_lib_cursor(-1),
+                KeyCode::Down     => self.move_lib_cursor(1),
+                KeyCode::PageUp   => { let p = self.lib_page_size(); self.move_lib_cursor(-(p as i64)); }
+                KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
+                KeyCode::Home     => self.jump_lib_cursor(false),
+                KeyCode::End      => self.jump_lib_cursor(true),
+                KeyCode::Enter => self.select(),
+                KeyCode::Char(c) if !alt => {
+                    self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
+                    self.update_lib_search(lib_idx);
+                }
+                _ => {}
+            }
+            return false;
+        }
         if key.code == KeyCode::F(1) {
             self.show_help = true;
             return false;
@@ -1081,7 +1114,7 @@ impl App {
         // Context menu intercepts all keys while open
         if self.context_menu.is_some() {
             match key.code {
-                KeyCode::Esc => { self.context_menu = None; }
+                KeyCode::Esc => { self.context_menu = None; self.force_clear = true; }
                 KeyCode::Up   => {
                     if let Some(m) = &mut self.context_menu {
                         if m.cursor > 0 { m.cursor -= 1; }
@@ -1094,6 +1127,7 @@ impl App {
                 }
                 KeyCode::Enter => {
                     if let Some(m) = self.context_menu.take() {
+                        self.force_clear = true;
                         let action = m.actions.get(m.cursor).cloned();
                         self.execute_context_action(action);
                     }
@@ -1119,36 +1153,6 @@ impl App {
         if self.tab_idx == self.log_tab_idx() { return self.handle_log_key(key); }
         let lib_idx = self.tab_idx - self.lib_tab_offset();
         let alt = key.modifiers.contains(KeyModifiers::ALT);
-
-        // When search is active, most keys feed the query
-        if self.libs[lib_idx].search.is_some() {
-            match key.code {
-                KeyCode::Esc => { self.libs[lib_idx].search = None; }
-                KeyCode::Backspace => {
-                    let empty = self.libs[lib_idx].search.as_ref().is_none_or(|s| s.query.is_empty());
-                    if empty { self.libs[lib_idx].search = None; }
-                    else {
-                        self.libs[lib_idx].search.as_mut().unwrap().query.pop();
-                        self.update_lib_search(lib_idx);
-                    }
-                }
-                KeyCode::Up       => self.move_lib_cursor(-1),
-                KeyCode::Down     => self.move_lib_cursor(1),
-                KeyCode::PageUp   => { let p = self.lib_page_size(); self.move_lib_cursor(-(p as i64)); }
-                KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
-                KeyCode::Home     => self.jump_lib_cursor(false),
-                KeyCode::End      => self.jump_lib_cursor(true),
-                KeyCode::Enter => self.select(),
-                KeyCode::Char('s') if alt => self.shuffle_play(),
-                KeyCode::Char('o') if alt => self.open_context_menu(),
-                KeyCode::Char(c) if !alt => {
-                    self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
-                    self.update_lib_search(lib_idx);
-                }
-                _ => {}
-            }
-            return false;
-        }
 
         match key.code {
             KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
@@ -2020,14 +2024,17 @@ impl App {
                                 let action = self.context_menu.as_ref().unwrap().actions.get(idx).cloned();
                                 self.context_menu = None;
                                 self.context_menu_rect = None;
+                                self.force_clear = true;
                                 self.execute_context_action(action);
                             } else {
                                 self.context_menu = None;
+                                self.force_clear = true;
                             }
                             return;
                         }
                     }
                     self.context_menu = None;
+                    self.force_clear = true;
                     return;
                 }
 
@@ -4836,6 +4843,12 @@ impl App {
                 Rect { x: x_right + 1, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(3), height: side_h },
                 false,
             ),
+        ];
+
+        self.layout_carousel_slots = [
+            (slots[0].0, slots[0].1),
+            (slots[1].0, slots[1].1),
+            (slots[2].0, slots[2].1),
         ];
 
         if self.images_enabled() {
