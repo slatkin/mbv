@@ -12,6 +12,7 @@ pub struct Config {
     pub show_audio_window: bool,
     pub use_mpv_config: bool,
     pub always_play_next: bool,
+    pub consume_videos: bool,
     pub always_skip_intro: bool,
     pub image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
     pub show_systray_icon: bool,
@@ -35,6 +36,7 @@ impl Default for Config {
             show_audio_window: false,
             use_mpv_config: false,
             always_play_next: false,
+            consume_videos: false,
             always_skip_intro: false,
             image_protocol: None,
             show_systray_icon: true,
@@ -182,6 +184,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .or_else(|| general.and_then(|m| m.get("always_play_next")).and_then(|v| v.as_bool()))
         .unwrap_or(false);
 
+    let consume_videos = queue
+        .and_then(|q| q.get("consume_videos"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let start_on_queue = queue
         .and_then(|q| q.get("start_on_queue"))
         .and_then(|v| v.as_bool())
@@ -239,6 +246,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         show_audio_window,
         use_mpv_config,
         always_play_next,
+        consume_videos,
         always_skip_intro,
         image_protocol,
         show_systray_icon,
@@ -294,8 +302,9 @@ pub fn save_config_settings(cfg: &Config) {
     }
 
     let queue = section!("queue");
-    queue.insert("always_play_next".to_string(), toml::Value::Boolean(cfg.always_play_next));
-    queue.insert("start_on_queue".to_string(),   toml::Value::Boolean(cfg.start_on_queue));
+    queue.insert("always_play_next".to_string(),      toml::Value::Boolean(cfg.always_play_next));
+    queue.insert("consume_videos".to_string(), toml::Value::Boolean(cfg.consume_videos));
+    queue.insert("start_on_queue".to_string(),         toml::Value::Boolean(cfg.start_on_queue));
 
     let mpv = section!("mpv");
     mpv.insert("show_audio_window".to_string(), toml::Value::Boolean(cfg.show_audio_window));
@@ -532,5 +541,17 @@ hidden_latest = ["Movies", "TV SHOWS"]
     fn parse_daemon_mode_on_exit_defaults_false() {
         let toml = "[emby]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().daemon_mode_on_exit);
+    }
+
+    #[test]
+    fn parse_consume_videos_true_from_queue_section() {
+        let toml = "[server]\nurl = \"http://host\"\n[queue]\nconsume_videos = true";
+        assert!(parse_config(toml).unwrap().consume_videos);
+    }
+
+    #[test]
+    fn parse_consume_videos_defaults_false() {
+        let toml = "[server]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().consume_videos);
     }
 }

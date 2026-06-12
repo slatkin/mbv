@@ -58,6 +58,7 @@ pub enum PlayerEvent {
 pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
+    PlaylistRemove(usize),
     SetVolume(i64),
     Seek(f64),
     SeekAbsolute(f64),
@@ -550,6 +551,7 @@ impl Player {
                             let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
                         }
                         PlayerCommand::JumpTo(_) => {}
+                        PlayerCommand::PlaylistRemove(_) => {}
                         PlayerCommand::Seek(secs) => {
                             let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
                             last_seek_at = Some(Instant::now());
@@ -880,7 +882,7 @@ impl Player {
         let event_tx = self.event_tx.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
-        let n = items.len();
+        let mut n = items.len();
         let status = self.status.clone();
         let ws_tx = self.ws_tx.clone();
         let subs_off = self.subs_off.clone();
@@ -902,6 +904,7 @@ impl Player {
         }
 
         let handle = thread::spawn(move || {
+            let mut items = items;
             let (session_id_str, first_msid) = {
                 let (sid, msid) = client.get_playback_info(&items[start_idx].id, &log);
                 client.report_start(&items[start_idx], &msid, &sid, &log);
@@ -1105,6 +1108,22 @@ impl Player {
                                     s.title          = items[idx].display_name();
                                 }
                                 let _ = mpv.set_property("playlist-pos", idx as i64);
+                            }
+                        }
+                        PlayerCommand::PlaylistRemove(idx) => {
+                            if idx < n {
+                                let _ = mpv.command("playlist-remove", &[&idx.to_string()]);
+                                items.remove(idx);
+                                n -= 1;
+                                if idx < current_idx {
+                                    current_idx -= 1;
+                                    status.lock().unwrap().current_idx = current_idx;
+                                }
+                                if let Some(fi) = forced_idx {
+                                    forced_idx = if idx == fi { None }
+                                                 else if idx < fi { Some(fi - 1) }
+                                                 else { Some(fi) };
+                                }
                             }
                         }
                         PlayerCommand::SetVolume(v) => {

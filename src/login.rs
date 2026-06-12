@@ -96,6 +96,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     show_audio_window: base_config.show_audio_window,
                     use_mpv_config: base_config.use_mpv_config,
                     always_play_next: base_config.always_play_next,
+                    consume_videos: base_config.consume_videos,
                     always_skip_intro: base_config.always_skip_intro,
                     image_protocol: base_config.image_protocol.clone(),
                     show_systray_icon: base_config.show_systray_icon,

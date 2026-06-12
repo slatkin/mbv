@@ -165,7 +165,8 @@ pub struct App {
     layout_audio_indicator_area: Rect,
     layout_audio_area: Rect,
     layout_sessions_btn_area: Rect,
-    confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
+    confirm_remove_idx: Option<usize>,     // playlist index pending removal confirmation
+    pending_queue_removal: Option<usize>,  // deferred removal after TrackChanged index-shifts
     confirm_clear_playlist: bool,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
@@ -221,6 +222,7 @@ enum SettingKey {
     DaemonModeOnExit,
     StartOnQueue,
     AlwaysPlayNext,
+    ConsumeVideos,
     AlwaysSkipIntro,
     ShowLogTab,
     ImageProtocol,
@@ -237,7 +239,7 @@ enum SettingKey {
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
-    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext]),
+    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos]),
     ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts]),
     ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",   &[SettingKey::LogOut]),
@@ -247,8 +249,9 @@ fn setting_label(key: SettingKey) -> &'static str {
     match key {
         SettingKey::DaemonModeOnExit  => "Daemon mode on exit",
         SettingKey::StartOnQueue      => "Start on queue",
-        SettingKey::AlwaysPlayNext    => "Always play next",
-        SettingKey::AlwaysSkipIntro   => "Always skip intro",
+        SettingKey::AlwaysPlayNext       => "Always play next",
+        SettingKey::ConsumeVideos  => "Consume videos",
+        SettingKey::AlwaysSkipIntro      => "Always skip intro",
         SettingKey::ShowLogTab        => "Show log tab",
         SettingKey::ImageProtocol     => "Image protocol",
         SettingKey::HiddenLibraries   => "Hidden libraries",
@@ -265,8 +268,9 @@ fn setting_value(key: SettingKey, cfg: &crate::config::Config) -> String {
     match key {
         SettingKey::DaemonModeOnExit  => bool_val(cfg.daemon_mode_on_exit),
         SettingKey::StartOnQueue      => bool_val(cfg.start_on_queue),
-        SettingKey::AlwaysPlayNext    => bool_val(cfg.always_play_next),
-        SettingKey::AlwaysSkipIntro   => bool_val(cfg.always_skip_intro),
+        SettingKey::AlwaysPlayNext       => bool_val(cfg.always_play_next),
+        SettingKey::ConsumeVideos  => bool_val(cfg.consume_videos),
+        SettingKey::AlwaysSkipIntro      => bool_val(cfg.always_skip_intro),
         SettingKey::ShowLogTab        => bool_val(cfg.show_log_tab),
         SettingKey::ImageProtocol     => cfg.image_protocol.clone().unwrap_or_else(|| "none".into()),
         SettingKey::HiddenLibraries   => fmt_hidden_list(&cfg.hidden_libraries),
@@ -388,6 +392,7 @@ impl App {
             layout_audio_area: Rect::default(),
             layout_sessions_btn_area: Rect::default(),
             confirm_remove_idx: None,
+            pending_queue_removal: None,
             confirm_clear_playlist: false,
             skip_intro_end_ticks: None,
             next_up_item: None,
@@ -512,6 +517,7 @@ impl App {
             layout_audio_area: Rect::default(),
             layout_sessions_btn_area: Rect::default(),
             confirm_remove_idx: None,
+            pending_queue_removal: None,
             confirm_clear_playlist: false,
             skip_intro_end_ticks: None,
             next_up_item: None,
@@ -622,6 +628,14 @@ impl App {
                         self.next_up_item = None;
                         self.skip_intro_end_ticks = None;
                         self.status.clear();
+                        let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+                        if played && is_video && self.client.lock().unwrap().config.consume_videos {
+                            if idx < self.player_tab.items.len() {
+                                self.player_tab.items.remove(idx);
+                                self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
+                                    .min(self.player_tab.items.len().saturating_sub(1));
+                            }
+                        }
                         self.refresh_after_stop();
                     }
                     PlayerEvent::TrackCompleted { idx, position_ticks, played } => {
@@ -635,11 +649,24 @@ impl App {
                                 item.playback_position_ticks = position_ticks;
                             }
                         }
+                        let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+                        if is_video && self.client.lock().unwrap().config.consume_videos {
+                            self.pending_queue_removal = Some(idx);
+                        }
                     }
                     PlayerEvent::TrackChanged(idx) => {
                         self.skip_intro_end_ticks = None;
-                        self.player_tab.playlist_cursor = idx;
-                        if let Some(item) = self.player_tab.items.get(idx) {
+                        let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
+                            if remove_idx < self.player_tab.items.len() {
+                                self.player_tab.items.remove(remove_idx);
+                            }
+                            self.player.send_command(PlayerCommand::PlaylistRemove(remove_idx));
+                            if remove_idx < idx { idx - 1 } else { idx }
+                        } else {
+                            idx
+                        };
+                        self.player_tab.playlist_cursor = adjusted;
+                        if let Some(item) = self.player_tab.items.get(adjusted) {
                             self.last_played_item_id = Some(item.id.clone());
                         }
                     }
@@ -3842,8 +3869,9 @@ impl App {
                 match key {
                     SettingKey::DaemonModeOnExit => c.config.daemon_mode_on_exit = !c.config.daemon_mode_on_exit,
                     SettingKey::StartOnQueue     => c.config.start_on_queue = !c.config.start_on_queue,
-                    SettingKey::AlwaysPlayNext   => c.config.always_play_next = !c.config.always_play_next,
-                    SettingKey::AlwaysSkipIntro  => c.config.always_skip_intro = !c.config.always_skip_intro,
+                    SettingKey::AlwaysPlayNext      => c.config.always_play_next = !c.config.always_play_next,
+                    SettingKey::ConsumeVideos => c.config.consume_videos = !c.config.consume_videos,
+                    SettingKey::AlwaysSkipIntro     => c.config.always_skip_intro = !c.config.always_skip_intro,
                     SettingKey::ShowAudioWindow  => c.config.show_audio_window = !c.config.show_audio_window,
                     SettingKey::UseMpvConfig     => c.config.use_mpv_config = !c.config.use_mpv_config,
                     SettingKey::NoScripts        => c.config.no_scripts = !c.config.no_scripts,
@@ -5952,6 +5980,7 @@ mod tests {
             layout_audio_indicator_area: ratatui::layout::Rect::default(),
             layout_audio_area: ratatui::layout::Rect::default(),
             confirm_remove_idx: None,
+            pending_queue_removal: None,
             confirm_clear_playlist: false,
             skip_intro_end_ticks: None,
             next_up_item: None,
