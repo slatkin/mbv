@@ -4542,7 +4542,7 @@ impl App {
             let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
             self.render_card_slot(f, *card_rect, *is_center, selected, now_playing, false, false, false,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
-                count_label.as_deref(), None);
+                count_label.as_deref(), None, false);
         }
 
         // Prefetch images for the three items before and after the cursor.
@@ -4601,31 +4601,40 @@ impl App {
         // Left panel: borderless card for cursor item.
         // Returns the seekbar Y so we can place buttons on the very next row.
         let seekbar_y = {
-            let item = &self.player_tab.items[cursor];
-            let item_id   = item.id.clone();
-            let series_id = item.series_id.clone();
-
-            let label     = item.playback_label();
-            let now_playing = active && active_idx == cursor;
-            let (pos_ticks, rt_ticks) = if now_playing {
-                (live_pos, live_runtime)
-            } else {
-                (item.playback_position_ticks, item.runtime_ticks)
-            };
-            let played = item.played;
-            let img_types: &[&str] = match item.item_type.as_str() {
-                "MusicAlbum" => &["AudioChild"],
-                "Audio"      => &["Primary"],
-                "Movie"      => &["Backdrop", "Primary", "Logo"],
-                _            => &["Primary", "Backdrop", "Logo"],
+            let (item_id, series_id, now_playing, pos_ticks, rt_ticks, played, img_types,
+                 card_name, card_series, card_ep_tag, stack_subs) = {
+                let item = &self.player_tab.items[cursor];
+                let now_playing = active && active_idx == cursor;
+                let (pos_ticks, rt_ticks) = if now_playing {
+                    (live_pos, live_runtime)
+                } else {
+                    (item.playback_position_ticks, item.runtime_ticks)
+                };
+                let img_types: &[&str] = match item.item_type.as_str() {
+                    "MusicAlbum" => &["AudioChild"],
+                    "Audio"      => &["Primary"],
+                    "Movie"      => &["Backdrop", "Primary", "Logo"],
+                    _            => &["Primary", "Backdrop", "Logo"],
+                };
+                let (card_name, card_series, card_ep_tag, stack_subs) =
+                    if item.item_type == "Episode" && !item.series_name.is_empty() {
+                        let ep_tag = format!("Series {:02} Episode {:02}",
+                            item.parent_index_number, item.index_number);
+                        (item.series_name.clone(), item.name.clone(), ep_tag, true)
+                    } else {
+                        (item.playback_label(), String::new(), String::new(), false)
+                    };
+                (item.id.clone(), item.series_id.clone(), now_playing,
+                 pos_ticks, rt_ticks, item.played, img_types,
+                 card_name, card_series, card_ep_tag, stack_subs)
             };
             let cache_key = format!("{}:A", item_id);
             if self.images_enabled() {
                 self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
             }
             self.render_card_slot(f, left_area, true, true, now_playing, true, true, true,
-                &cache_key, &label, "", "", 0, pos_ticks, rt_ticks, played,
-                None, None)
+                &cache_key, &card_name, &card_series, &card_ep_tag, 0, pos_ticks, rt_ticks, played,
+                None, None, stack_subs)
         };
 
         // Playback buttons on the row immediately below the seekbar.
@@ -4746,6 +4755,7 @@ impl App {
         played: bool,
         count_label: Option<&str>,
         section_title: Option<&str>,
+        stack_subtitles: bool,
     ) -> Option<u16> {
         let inner = if no_border {
             card_rect
@@ -4888,7 +4898,18 @@ impl App {
             }
         }
 
-        if text_rows >= 3 && (!series.is_empty() || !ep_tag.is_empty()) {
+        if stack_subtitles && !series.is_empty() {
+            put(f, text_y, Paragraph::new(Line::from(
+                Span::styled(trunc(series), Style::default().fg(palette::SUBTLE))
+            )).alignment(Alignment::Center));
+            text_y += 1;
+            if !ep_tag.is_empty() {
+                put(f, text_y, Paragraph::new(Line::from(
+                    Span::styled(ep_tag.to_string(), Style::default().fg(palette::MUTED))
+                )).alignment(Alignment::Center));
+                text_y += 1;
+            }
+        } else if text_rows >= 3 && (!series.is_empty() || !ep_tag.is_empty()) {
             let line = if !series.is_empty() && !ep_tag.is_empty() {
                 Line::from(vec![
                     Span::styled(trunc(series), Style::default().fg(palette::SUBTLE)),
@@ -5118,7 +5139,7 @@ impl App {
             let sec_title_label = if *is_center { Some(sec_title.as_str()) } else { None };
             self.render_card_slot(f, *card_rect, *is_center, selected, false, false, false, false,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
-                count_label.as_deref(), sec_title_label);
+                count_label.as_deref(), sec_title_label, false);
         }
 
         // Left/right item scroll arrows.
