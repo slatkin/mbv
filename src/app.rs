@@ -4710,7 +4710,7 @@ impl App {
             } else {
                 (item.playback_position_ticks, item.runtime_ticks)
             };
-            let pct_str = if pos_ticks > 0 && rt_ticks > 0 && !item.played && !item.is_audio() {
+            let pct_str = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
                 let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
                 format!(" {pct}%")
             } else {
