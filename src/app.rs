@@ -215,6 +215,7 @@ pub struct App {
     ui_volume: u8,
     pre_mute_volume: Option<u8>,
     layout_tabbar_vol_area: Rect,
+    last_scroll_at: Instant,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -445,6 +446,7 @@ impl App {
             remote_pos_at: Instant::now(),
             force_clear: false,
             tab_scroll: 0,
+            last_scroll_at: Instant::now() - Duration::from_secs(1),
         }
     }
 
@@ -570,6 +572,7 @@ impl App {
             remote_pos_at: Instant::now(),
             force_clear: false,
             tab_scroll: 0,
+            last_scroll_at: Instant::now() - Duration::from_secs(1),
         }
     }
 
@@ -1331,14 +1334,19 @@ impl App {
                     self.do_session_command(move |c| c.session_seek(&id, ticks));
                     return Some(false);
                 }
+                KeyCode::Char('z') => {
+                    self.cycle_sub();
+                    return Some(false);
+                }
                 // +/- fall through to adjust_volume which handles remote routing
                 _ => {}
             }
         }
-        // Volume works regardless of playback state
+        // Volume and subtitle preference work regardless of playback state
         match key.code {
             KeyCode::Char('-') => { self.adjust_volume(-5); return Some(false); }
             KeyCode::Char('+') | KeyCode::Char('=') => { self.adjust_volume(5); return Some(false); }
+            KeyCode::Char('z') => { self.toggle_sub(); return Some(false); }
             _ => {}
         }
         if !active { return None; }
@@ -1351,8 +1359,6 @@ impl App {
             KeyCode::Char('>') => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
             KeyCode::Char('a') if alt => { if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); } Some(false) }
             KeyCode::Char('a') if !alt => { if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); } Some(false) }
-            KeyCode::Char('z') if alt => { self.cycle_sub();   Some(false) }
-            KeyCode::Char('z') if !alt => { self.cycle_sub();  Some(false) }
             _ => None,
         }
     }
@@ -1947,6 +1953,13 @@ impl App {
         use crossterm::event::{MouseEventKind, MouseButton};
         let col = mouse.column;
         let row = mouse.row;
+        if matches!(mouse.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
+            let now = Instant::now();
+            if now.duration_since(self.last_scroll_at) < Duration::from_millis(120) {
+                return;
+            }
+            self.last_scroll_at = now;
+        }
 
         if self.show_help {
             match mouse.kind {
@@ -2450,6 +2463,9 @@ impl App {
             let cur = self.connected_session_state.as_ref().map(|s| s.audio_index).unwrap_or(1);
             let next = if cur <= 1 { 2 } else { 1 };
             let id = conn_id.clone();
+            if let Some(ref mut state) = self.connected_session_state {
+                state.audio_index = next;
+            }
             self.do_session_command(move |c| c.session_set_audio_index(&id, next));
             return;
         }
@@ -2482,6 +2498,9 @@ impl App {
             let idx = self.connected_session_state.as_ref().map(|s| s.sub_index).unwrap_or(-1);
             let next = if idx == -1 { 1i64 } else { -1i64 };
             let id = conn_id.clone();
+            if let Some(ref mut state) = self.connected_session_state {
+                state.sub_index = next;
+            }
             self.do_session_command(move |c| c.session_set_subtitle_index(&id, next));
             return;
         }
@@ -2522,7 +2541,10 @@ impl App {
         entries.extend(tracks.iter().map(|(id, _)| *id));
         let cur = entries.iter().position(|&id| id == current_id).unwrap_or(0);
         let next = (cur + 1) % entries.len();
-        self.player.send_command(PlayerCommand::SetSub(entries[next]));
+        let next_id = entries[next];
+        self.player.subs_off.store(next_id == 0, std::sync::atomic::Ordering::Relaxed);
+        self.player.send_command(PlayerCommand::SetSub(next_id));
+        self.save_prefs();
     }
 
 

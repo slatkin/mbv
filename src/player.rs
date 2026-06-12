@@ -572,8 +572,8 @@ impl Player {
                             } else {
                                 let _ = mpv.set_property("sid", id);
                             }
-                            status.lock().unwrap().sub_id = id;
                             refresh_tracks(&mpv, &status);
+                            status.lock().unwrap().sub_id = id;
                         }
                         PlayerCommand::LoadNew { url, start_pos, item } => {
                             // Cancel any pending quit so the new file loads in the same window.
@@ -1155,8 +1155,8 @@ impl Player {
                             } else {
                                 let _ = mpv.set_property("sid", id);
                             }
-                            status.lock().unwrap().sub_id = id;
                             refresh_tracks(&mpv, &status);
+                            status.lock().unwrap().sub_id = id;
                         }
                         PlayerCommand::LoadNew { url, start_pos, item } => {
                             cancel_stop = true;
