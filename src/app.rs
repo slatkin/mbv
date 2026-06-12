@@ -3329,8 +3329,9 @@ impl App {
 
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
-        let status_h:   u16 = if show_controls { 1 } else { 0 };
-        let controls_h: u16 = if show_controls { 2 } else { 0 };
+        let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
+        let status_h:   u16 = if show_controls && !in_presentation { 1 } else { 0 };
+        let controls_h: u16 = if show_controls && !in_presentation { 2 } else { 0 };
 
         let [tabs_area, gap_area, toast_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
@@ -3500,7 +3501,7 @@ impl App {
             self.status_expires = None;
         }
         // Compute now-playing title for use in toast row fallback
-        let now_playing_title: Option<(String, ratatui::style::Color)> = if show_controls {
+        let now_playing_title: Option<(String, ratatui::style::Color)> = if show_controls && !in_presentation {
             if active {
                 now_playing.map(|t| (t, palette::FOAM))
             } else if let Some(ref state) = self.connected_session_state {
@@ -3543,7 +3544,7 @@ impl App {
                 toast_area,
             );
         }
-        if show_controls {
+        if show_controls && !in_presentation {
             // Status / now-playing HR (title now lives in the toast row)
             f.render_widget(
                 Paragraph::new(Span::styled(
@@ -3553,7 +3554,8 @@ impl App {
                 status_area,
             );
             self.render_playback_controls(f, controls_area);
-        } else {
+        } else if !in_presentation {
+            // Presentation view manages its own layout areas; only clear when not in it.
             self.layout_seekbar_area = Rect::default();
             self.layout_button_area  = Rect::default();
             self.layout_tracks_area  = Rect::default();
@@ -4442,14 +4444,12 @@ impl App {
 
         let cards_h = area.height;
 
-        // Panels are 80% of available height, centered vertically, capped 6 rows below area.
-        // Side cards are 80% of center height, also centered.
-        let compact    = self.terminal_height < 28;
-        let max_h      = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
-        let side_h     = ((max_h as u32 * 4 / 5) as u16).max(3);
-        let center_h   = if compact { side_h } else { side_h + 2 };
-        let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
-        let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
+        // Center card: full height minus 1 row top and bottom.
+        // Side cards: 80% of center height, centered vertically.
+        let center_h     = cards_h.saturating_sub(1).max(4);
+        let center_v_pad: u16 = 1;
+        let side_h       = ((center_h as u32 * 4 / 5) as u16).max(3);
+        let side_v_pad   = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
 
         // Below this width threshold, hide side cards and give all space to center.
         const SIDE_HIDE_W: u16 = 60;
@@ -4531,7 +4531,7 @@ impl App {
 
             let ep_tag = if is_ep { format!("S{:02}E{:02}", season, episode) } else { String::new() };
             let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
-            self.render_card_slot(f, *card_rect, *is_center, selected, now_playing, false, false,
+            self.render_card_slot(f, *card_rect, *is_center, selected, now_playing, false, false, false,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
                 count_label.as_deref(), None);
         }
@@ -4587,16 +4587,16 @@ impl App {
         let left_area  = Rect { x: area.x, y: inner_y, width: left_w, height: inner_h };
         let right_area = Rect { x: right_x, y: inner_y, width: right_w, height: inner_h };
 
-        // Left panel: borderless card for cursor item
-        {
+        let show_controls = active || self.connected_session_id.is_some();
+
+        // Left panel: borderless card for cursor item.
+        // Returns the seekbar Y so we can place buttons on the very next row.
+        let seekbar_y = {
             let item = &self.player_tab.items[cursor];
             let item_id   = item.id.clone();
             let series_id = item.series_id.clone();
-            let name      = item.name.clone();
-            let series    = item.series_name.clone();
-            let is_ep     = item.item_type == "Episode" && item.parent_index_number > 0;
-            let ep_tag    = if is_ep { format!("S{:02}E{:02}", item.parent_index_number, item.index_number) } else { String::new() };
-            let runtime   = item.runtime_ticks;
+
+            let label     = item.playback_label();
             let now_playing = active && active_idx == cursor;
             let (pos_ticks, rt_ticks) = if now_playing {
                 (live_pos, live_runtime)
@@ -4614,10 +4614,49 @@ impl App {
             if self.images_enabled() {
                 self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
             }
-            self.render_card_slot(f, left_area, true, true, now_playing, true, true,
-                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
-                None, None);
+            self.render_card_slot(f, left_area, true, true, now_playing, true, true, true,
+                &cache_key, &label, "", "", 0, pos_ticks, rt_ticks, played,
+                None, None)
+        };
+
+        // Playback buttons on the row immediately below the seekbar.
+        if show_controls {
+            let paused = if let Some(ref remote) = self.connected_session_state {
+                remote.is_paused
+            } else {
+                self.player.status.lock().unwrap().paused
+            };
+            let btn_style = Style::default().fg(Color::Rgb(203, 212, 241));
+            let pp_icon   = if !paused { "\u{f04c}" } else { "\u{f04b}" };
+            let btn_icons = ["\u{f048}", "\u{f04a}", pp_icon, "\u{f04d}", "\u{f04e}", "\u{f051}"];
+            let mut btn_spans: Vec<Span> = Vec::new();
+            for icon in btn_icons.iter() {
+                btn_spans.push(Span::styled(format!("  {icon}  "), btn_style));
+            }
+            const BTNS_W: u16 = 30;
+            if let Some(sy) = seekbar_y {
+                let btn_y = sy + 1;
+                let btn_x = left_area.x + left_area.width.saturating_sub(BTNS_W) / 2;
+                if btn_y < left_area.bottom() {
+                    f.render_widget(
+                        Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
+                        Rect { x: left_area.x, y: btn_y, width: left_area.width, height: 1 },
+                    );
+                    self.layout_button_area = Rect { x: btn_x, y: btn_y, width: BTNS_W, height: 1 };
+                } else {
+                    self.layout_button_area = Rect::default();
+                }
+            } else {
+                self.layout_button_area = Rect::default();
+            }
+        } else {
+            self.layout_button_area = Rect::default();
         }
+        self.layout_seekbar_area = Rect::default();
+        self.layout_tracks_area  = Rect::default();
+        self.layout_vol_area     = Rect::default();
+        self.layout_sub_area     = Rect::default();
+        self.layout_audio_area   = Rect::default();
 
         // Prefetch images for 3 items before and after the cursor.
         if self.images_enabled() {
@@ -4687,6 +4726,7 @@ impl App {
         now_playing: bool,
         no_border: bool,
         text_top_aligned: bool,
+        times_inline: bool,
         cache_key: &str,
         name: &str,
         series: &str,
@@ -4697,7 +4737,7 @@ impl App {
         played: bool,
         count_label: Option<&str>,
         section_title: Option<&str>,
-    ) {
+    ) -> Option<u16> {
         let inner = if no_border {
             card_rect
         } else {
@@ -4726,7 +4766,7 @@ impl App {
             inner
         };
 
-        if inner.height < 2 || inner.width == 0 { return; }
+        if inner.height < 2 || inner.width == 0 { return None; }
 
         let trunc = |s: &str| -> String {
             let w = inner.width as usize;
@@ -4756,12 +4796,14 @@ impl App {
         };
 
         // Text rows pinned to the bottom, scaled to available height:
-        //   >=8 rows inner: title(2) + series(1) + progress(2) = 5
+        //   >=8 rows inner: title(2) + series(1) + seekbar(1) + times(1) = 5
+        //                   (times_inline collapses times into seekbar row: 4)
         //   >=5 rows inner: title(2) + series(1) = 3  (drop progress bar)
         //   <5  rows inner: title(1) only = 1
-        let text_rows = if inner.height >= 8 { 5u16 }
+        let text_rows = if inner.height >= 8 { if times_inline { 4u16 } else { 5u16 } }
                         else if inner.height >= 5 { 3 }
                         else { 1 };
+        let show_seekbar = text_rows >= 5 || (times_inline && text_rows >= 4);
         let img_top    = inner.y;
         let img_bottom = inner.bottom().saturating_sub(text_rows);
         let img_h      = img_bottom.saturating_sub(img_top);
@@ -4853,45 +4895,67 @@ impl App {
             text_y += 1;
         }
 
-        if text_rows >= 5 && pos_ticks > 0 && rt_ticks > 0 {
+        if show_seekbar && pos_ticks > 0 && rt_ticks > 0 {
             let full_w = inner.width as usize;
             let bar_w  = (full_w as u32 * 3 / 5) as usize;
             let pad    = (full_w.saturating_sub(bar_w)) / 2;
             let fraction = (pos_ticks as f64 / rt_ticks as f64).clamp(0.0, 1.0);
             let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
-            put(f, text_y, Paragraph::new(Line::from(vec![
+            let seekbar_y = text_y;
+            put(f, seekbar_y, Paragraph::new(Line::from(vec![
                 Span::raw(" ".repeat(pad)),
                 Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::IRIS } else { palette::FOAM })),
                 Span::styled("─".repeat(bar_w - filled), Style::default().fg(if now_playing { palette::IRIS_DIM } else { Color::Rgb(0, 80, 128) })),
             ])));
-            text_y += 1;
-            if now_playing && text_y < inner.bottom() {
-                let time_style = Style::default().fg(palette::MUTED);
-                let elapsed_str = fmt_ms(pos_ticks);
-                let total_str   = fmt_ms(rt_ticks);
-                let elapsed_w   = elapsed_str.chars().count() as u16;
-                let total_w     = total_str.chars().count() as u16;
-                let bar_x       = inner.x + pad as u16;
-                let bar_end_x   = bar_x + bar_w as u16;
-                f.render_widget(
-                    Paragraph::new(Span::styled(elapsed_str, time_style)),
-                    Rect { x: bar_x, y: text_y, width: elapsed_w.min(bar_w as u16), height: 1 },
-                );
-                let total_x = bar_end_x.saturating_sub(total_w);
-                f.render_widget(
-                    Paragraph::new(Span::styled(total_str, time_style)),
-                    Rect { x: total_x, y: text_y, width: total_w.min(bar_w as u16), height: 1 },
-                );
+            let time_style = Style::default().fg(palette::MUTED);
+            let elapsed_str = fmt_ms(pos_ticks);
+            let total_str   = fmt_ms(rt_ticks);
+            let elapsed_w   = elapsed_str.chars().count() as u16;
+            let total_w     = total_str.chars().count() as u16;
+            let bar_x       = inner.x + pad as u16;
+            let bar_end_x   = bar_x + bar_w as u16;
+            if times_inline {
+                // Overlay elapsed/total on the seekbar row, 1 cell outside the bar.
+                if seekbar_y < inner.bottom() {
+                    let elapsed_x = bar_x.saturating_sub(elapsed_w + 1).max(inner.x);
+                    f.render_widget(
+                        Paragraph::new(Span::styled(elapsed_str, time_style)),
+                        Rect { x: elapsed_x, y: seekbar_y, width: elapsed_w.min(bar_x.saturating_sub(elapsed_x + 1)), height: 1 },
+                    );
+                    let total_x = bar_end_x + 1;
+                    let total_avail = (inner.x + inner.width).saturating_sub(total_x);
+                    if total_x < inner.x + inner.width {
+                        f.render_widget(
+                            Paragraph::new(Span::styled(total_str, time_style)),
+                            Rect { x: total_x, y: seekbar_y, width: total_w.min(total_avail), height: 1 },
+                        );
+                    }
+                }
+                return Some(seekbar_y);
             } else {
-                put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
-                    .style(Style::default().fg(palette::MUTED))
-                    .alignment(Alignment::Center));
+                text_y += 1;
+                if now_playing && text_y < inner.bottom() {
+                    f.render_widget(
+                        Paragraph::new(Span::styled(elapsed_str, time_style)),
+                        Rect { x: bar_x, y: text_y, width: elapsed_w.min(bar_w as u16), height: 1 },
+                    );
+                    let total_x = bar_end_x.saturating_sub(total_w);
+                    f.render_widget(
+                        Paragraph::new(Span::styled(total_str, time_style)),
+                        Rect { x: total_x, y: text_y, width: total_w.min(bar_w as u16), height: 1 },
+                    );
+                } else {
+                    put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
+                        .style(Style::default().fg(palette::MUTED))
+                        .alignment(Alignment::Center));
+                }
             }
-        } else if text_rows >= 5 && played {
+        } else if show_seekbar && played {
             put(f, text_y, Paragraph::new("Played")
                 .style(Style::default().fg(palette::MUTED))
                 .alignment(Alignment::Center));
         }
+        None
     }
 
     fn render_home_cards(&mut self, f: &mut ratatui::Frame, area: Rect) {
@@ -5043,7 +5107,7 @@ impl App {
 
             let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
             let sec_title_label = if *is_center { Some(sec_title.as_str()) } else { None };
-            self.render_card_slot(f, *card_rect, *is_center, selected, false, false, false,
+            self.render_card_slot(f, *card_rect, *is_center, selected, false, false, false, false,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
                 count_label.as_deref(), sec_title_label);
         }
