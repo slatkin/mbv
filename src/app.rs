@@ -4695,16 +4695,16 @@ impl App {
         }
 
         // Right panel: simple 2-column table (title + length)
-        // Columns: title(Min) | length(7) | pad(1); column_spacing 2; 2 gaps = 4 overhead
-        let title_col_w = (right_w as usize).saturating_sub(12); // 7 + 1 + 4
+        // Columns: title(Min); length column hidden for now
+        let title_col_w = right_w as usize;
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let row_style = if i == active_idx && active {
                 Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(palette::WHITE)
             };
-            let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
-            let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
+            // let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
+            // let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
             let (pos_ticks, rt_ticks) = if i == active_idx && active {
                 (live_pos, live_runtime)
             } else {
@@ -4731,8 +4731,8 @@ impl App {
             let title_cell = Cell::from(Line::from(spans));
             Row::new([
                 title_cell,
-                Cell::from(Line::from(length).alignment(Alignment::Right)),
-                Cell::from(""),
+                // Cell::from(Line::from(length).alignment(Alignment::Right)),
+                // Cell::from(""),
             ]).style(row_style)
         }).collect();
 
@@ -4740,8 +4740,8 @@ impl App {
         state.select(Some(cursor));
         let table = Table::new(rows, [
             Constraint::Min(10),
-            Constraint::Length(7),
-            Constraint::Length(1),
+            // Constraint::Length(7),
+            // Constraint::Length(1),
         ])
         .column_spacing(2)
         .row_highlight_style(Style::default());
