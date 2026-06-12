@@ -169,6 +169,7 @@ pub struct App {
     confirm_remove_idx: Option<usize>,     // playlist index pending removal confirmation
     pending_queue_removal: Option<usize>,  // deferred removal after TrackChanged index-shifts
     confirm_clear_playlist: bool,
+    playlist_undo_stack: Vec<(usize, MediaItem)>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
@@ -401,6 +402,7 @@ impl App {
             confirm_remove_idx: None,
             pending_queue_removal: None,
             confirm_clear_playlist: false,
+            playlist_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: Self::load_playlist_view(),
@@ -528,6 +530,7 @@ impl App {
             confirm_remove_idx: None,
             pending_queue_removal: None,
             confirm_clear_playlist: false,
+            playlist_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: Self::load_playlist_view(),
@@ -1105,6 +1108,7 @@ impl App {
                 self.player.stop();
                 self.player_tab.items.clear();
                 self.player_tab.playlist_cursor = 0;
+                self.playlist_undo_stack.clear();
                 self.flash_status("Playlist cleared".into());
             } else {
                 self.status.clear();
@@ -1458,6 +1462,15 @@ impl App {
             KeyCode::Delete => {
                 let t = self.player_tab.playlist_cursor;
                 if t < self.player_tab.items.len() { self.remove_from_playlist(t); }
+            }
+            KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if let Some((idx, item)) = self.playlist_undo_stack.pop() {
+                    let name = item.display_name();
+                    let idx = idx.min(self.player_tab.items.len());
+                    self.player_tab.items.insert(idx, item);
+                    self.player_tab.playlist_cursor = idx;
+                    self.flash_status(format!("Restored: {name}"));
+                }
             }
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);
@@ -2611,8 +2624,9 @@ impl App {
             self.confirm_remove_idx = Some(pos);
             return;
         }
-        let name = self.player_tab.items[pos].display_name();
-        self.player_tab.items.remove(pos);
+        let item = self.player_tab.items.remove(pos);
+        let name = item.display_name();
+        self.playlist_undo_stack.push((pos, item));
         if !self.player_tab.items.is_empty() {
             self.player_tab.playlist_cursor =
                 self.player_tab.playlist_cursor.min(self.player_tab.items.len() - 1);
@@ -6377,6 +6391,7 @@ mod tests {
             confirm_remove_idx: None,
             pending_queue_removal: None,
             confirm_clear_playlist: false,
+            playlist_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: 0,

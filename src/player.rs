@@ -237,6 +237,7 @@ pub struct Player {
     pub always_skip_intro: bool,
     pub subs_off: Arc<AtomicBool>,
     is_playlist_mode: Arc<AtomicBool>,
+    current_is_headless: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
@@ -268,6 +269,7 @@ impl Player {
             always_skip_intro,
             subs_off: Arc::new(AtomicBool::new(subs_off)),
             is_playlist_mode: Arc::new(AtomicBool::new(false)),
+            current_is_headless: Arc::new(AtomicBool::new(false)),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
             cmd_tx: Arc::new(Mutex::new(None)),
@@ -350,6 +352,7 @@ impl Player {
         let ws_tx = self.ws_tx.clone();
         let subs_off = self.subs_off.clone();
         let is_playlist_mode = self.is_playlist_mode.clone();
+        self.current_is_headless.store(headless, Ordering::Relaxed);
 
         {
             let mut st = status.lock().unwrap();
@@ -885,8 +888,14 @@ impl Player {
 
     pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
         if items.is_empty() { return; }
-        if self.status.lock().unwrap().active && self.is_playlist_mode.load(Ordering::Relaxed) {
+        let new_is_headless = !self.show_audio_window
+            && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
+        if self.status.lock().unwrap().active
+            && self.is_playlist_mode.load(Ordering::Relaxed)
+            && !(self.current_is_headless.load(Ordering::Relaxed) && !new_is_headless)
+        {
             // Playlist loop running — replace its playlist in-place, no window close.
+            // Skip if mpv was spawned headless but new items need a window.
             let start_idx = start_idx.min(items.len() - 1);
             {
                 let mut st = self.status.lock().unwrap();
@@ -917,8 +926,10 @@ impl Player {
         let ws_tx = self.ws_tx.clone();
         let subs_off = self.subs_off.clone();
         let is_playlist_mode = self.is_playlist_mode.clone();
+        let current_is_headless = self.current_is_headless.clone();
         let headless = !self.show_audio_window
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
+        current_is_headless.store(headless, Ordering::Relaxed);
         let use_mpv_config = self.use_mpv_config;
         let no_scripts = self.no_scripts;
         let always_skip_intro = self.always_skip_intro;
