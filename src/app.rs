@@ -962,7 +962,10 @@ impl App {
                 return false;
             }
             match key.code {
+                KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
                 KeyCode::Esc => { self.close_settings(); }
+                KeyCode::F(1) => { self.close_settings(); self.show_help = true; }
+                KeyCode::F(3) => { self.close_settings(); self.show_sessions = true; }
                 KeyCode::Up => {
                     if self.settings_cursor > 0 {
                         self.settings_cursor -= 1;
@@ -992,6 +995,8 @@ impl App {
             match key.code {
                 KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
                 KeyCode::Esc | KeyCode::F(1) => { self.show_help = false; }
+                KeyCode::F(2) => { self.show_help = false; self.show_settings = true; }
+                KeyCode::F(3) => { self.show_help = false; self.show_sessions = true; }
                 KeyCode::Up       => { self.help_scroll = self.help_scroll.saturating_sub(1); }
                 KeyCode::Down     => { self.help_scroll += 1; }
                 KeyCode::PageUp   => { self.help_scroll = self.help_scroll.saturating_sub(10); }
@@ -1003,7 +1008,10 @@ impl App {
         }
         if self.show_sessions {
             match key.code {
+                KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
                 KeyCode::Esc => { self.show_sessions = false; }
+                KeyCode::F(1) => { self.show_sessions = false; self.show_help = true; }
+                KeyCode::F(2) => { self.show_sessions = false; self.show_settings = true; }
                 KeyCode::Up => {
                     self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
                 }
