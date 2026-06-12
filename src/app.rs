@@ -4622,6 +4622,8 @@ impl App {
                         let ep_tag = format!("Series {:02} Episode {:02}",
                             item.parent_index_number, item.index_number);
                         (item.series_name.clone(), item.name.clone(), ep_tag, true)
+                    } else if item.is_audio() && !item.artist.is_empty() {
+                        (item.artist.clone(), item.name.clone(), item.album.clone(), true)
                     } else {
                         (item.playback_label(), String::new(), String::new(), false)
                     };
