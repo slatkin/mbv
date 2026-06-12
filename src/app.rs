@@ -1302,8 +1302,8 @@ impl App {
             self.ui_volume = v;
         } else {
             self.ui_volume = (self.ui_volume as i64 + delta).clamp(0, 200) as u8;
-            self.save_prefs();
         }
+        self.save_prefs();
     }
 
     fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
@@ -3372,7 +3372,7 @@ impl App {
             const SUB_W:     u16 = 4;
             const SESS_W:    u16 = 3; // [✚] — ✚ is 1 col wide
             const SEP_W:     u16 = 1;
-            const RIGHT_PAD: u16 = 3;
+            const RIGHT_PAD: u16 = 1;
             let sess_end   = (gap_area.width as usize).saturating_sub(RIGHT_PAD as usize);
             let sess_start = sess_end.saturating_sub(SESS_W as usize);
             let sub_end    = sess_start.saturating_sub(SEP_W as usize);
