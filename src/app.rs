@@ -4592,6 +4592,11 @@ impl App {
             if s >= 3600 { format!("{}h{:02}m", s/3600, (s%3600)/60) }
             else         { format!("{}m", s/60) }
         };
+        let fmt_ms = |t: i64| -> String {
+            let s = t / TICKS_PER_SECOND;
+            if s >= 3600 { format!("{}:{:02}:{:02}", s/3600, (s%3600)/60, s%60) }
+            else         { format!("{}:{:02}", s/60, s%60) }
+        };
 
         // Text rows pinned to the bottom, scaled to available height:
         //   >=8 rows inner: title(2) + series(1) + progress(2) = 5
@@ -4698,9 +4703,28 @@ impl App {
                 Span::styled("─".repeat(bar_w - filled), Style::default().fg(if now_playing { palette::IRIS_DIM } else { Color::Rgb(0, 80, 128) })),
             ])));
             text_y += 1;
-            put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
-                .style(Style::default().fg(palette::MUTED))
-                .alignment(Alignment::Center));
+            if now_playing && text_y < inner.bottom() {
+                let time_style = Style::default().fg(palette::MUTED);
+                let elapsed_str = fmt_ms(pos_ticks);
+                let total_str   = fmt_ms(rt_ticks);
+                let elapsed_w   = elapsed_str.chars().count() as u16;
+                let total_w     = total_str.chars().count() as u16;
+                let bar_x       = inner.x + pad as u16;
+                let bar_end_x   = bar_x + bar_w as u16;
+                f.render_widget(
+                    Paragraph::new(Span::styled(elapsed_str, time_style)),
+                    Rect { x: bar_x, y: text_y, width: elapsed_w.min(bar_w as u16), height: 1 },
+                );
+                let total_x = bar_end_x.saturating_sub(total_w);
+                f.render_widget(
+                    Paragraph::new(Span::styled(total_str, time_style)),
+                    Rect { x: total_x, y: text_y, width: total_w.min(bar_w as u16), height: 1 },
+                );
+            } else {
+                put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
+                    .style(Style::default().fg(palette::MUTED))
+                    .alignment(Alignment::Center));
+            }
         } else if text_rows >= 5 && played {
             put(f, text_y, Paragraph::new("Played")
                 .style(Style::default().fg(palette::MUTED))
