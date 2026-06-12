@@ -34,6 +34,7 @@ pub struct PlayerStatus {
     pub sub_tracks: Vec<(i64, String)>,
     pub audio_id: i64, // 0 = none/unknown
     pub sub_id: i64,   // 0 = off
+    pub muted: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -283,6 +284,7 @@ impl Player {
                 sub_tracks: Vec::new(),
                 audio_id: 0,
                 sub_id: 0,
+                muted: false,
             })),
             thread_handle: Mutex::new(None),
             ws_tx,
@@ -459,6 +461,7 @@ impl Player {
             let _ = mpv.observe_property("pause", Format::Flag, 1);
             let _ = mpv.observe_property("volume", Format::Double, 2);
             let _ = mpv.observe_property("sid", Format::Int64, 3);
+            let _ = mpv.observe_property("mute", Format::Flag, 4);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -746,6 +749,9 @@ impl Player {
                     Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
                         status.lock().unwrap().sub_id = id;
                     }
+                    Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
+                        status.lock().unwrap().muted = m;
+                    }
                     Some(Ok(Event::PlaybackRestart)) => {
                         let event_name: &str;
                         if !tracks_initialized {
@@ -1025,6 +1031,7 @@ impl Player {
             let _ = mpv.observe_property("pause", Format::Flag, 1);
             let _ = mpv.observe_property("volume", Format::Double, 2);
             let _ = mpv.observe_property("sid", Format::Int64, 3);
+            let _ = mpv.observe_property("mute", Format::Flag, 4);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -1400,6 +1407,9 @@ impl Player {
                     Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
                         status.lock().unwrap().sub_id = id;
                     }
+                    Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
+                        status.lock().unwrap().muted = m;
+                    }
                     Some(Ok(Event::PlaybackRestart)) => {
                         if !tracks_initialized {
                             auto_select_tracks(&mpv, &status, subs_off.load(Ordering::Relaxed));
@@ -1750,7 +1760,7 @@ mod tests {
             runtime_ticks: 3600 * crate::api::TICKS_PER_SECOND,
             played: false, playback_position_ticks: 0,
             series_id: "series1".into(), series_name: "Show".into(), album_id: String::new(),
-            index_number: 2, parent_index_number: 1,
+            album: String::new(), index_number: 2, parent_index_number: 1,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),

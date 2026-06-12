@@ -34,6 +34,7 @@ impl RemotePlayer {
             sub_tracks: Vec::new(),
             audio_id: 0,
             sub_id: 0,
+            muted: false,
         }));
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
         let disconnected = Arc::new(AtomicBool::new(false));

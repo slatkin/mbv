@@ -3365,7 +3365,7 @@ impl App {
                 } else {
                     let s = self.player.status.lock().unwrap();
                     let sub_on = !self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
-                    let muted = s.active && (s.audio_id == 0 || self.ui_volume == 0);
+                    let muted = s.active && (s.audio_id == 0 || self.ui_volume == 0 || s.muted);
                     let aud_label = if s.active && s.audio_id != 0 {
                         s.audio_tracks.iter().find(|(id, _)| *id == s.audio_id)
                             .map(|(_, l)| l.clone())
@@ -6129,7 +6129,7 @@ mod tests {
             is_folder: false, media_type: "Video".into(), collection_type: String::new(),
             runtime_ticks: 0, played: false, playback_position_ticks: 0,
             series_id: String::new(), series_name: String::new(), album_id: String::new(),
-            index_number: 0, parent_index_number: 0,
+            album: String::new(), index_number: 0, parent_index_number: 0,
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),
@@ -6254,7 +6254,7 @@ mod tests {
             position_ticks: 0, runtime_ticks: 0, paused: false,
             volume: 100, volume_max: 100, current_idx: 0, active: false,
             title: String::new(), audio_tracks: Vec::new(), sub_tracks: Vec::new(),
-            audio_id: 0, sub_id: 0,
+            audio_id: 0, sub_id: 0, muted: false,
         }));
 
         let (_, player_rx) = std::sync::mpsc::channel();
