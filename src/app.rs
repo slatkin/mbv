@@ -150,6 +150,7 @@ pub struct App {
     layout_lib_row_heights: Vec<u16>, // height of each visible row, from scroll
     layout_home_scrolls: Vec<usize>,
     layout_home_scrollbar: Rect,
+    layout_presentation_sb: Rect,
     home_panel_section_offset: usize,
     layout_lib_table_area: Rect,
     layout_breadcrumbs: Vec<(u16, u16, u16, usize)>, // (x_start, x_end, row, target nav_stack len)
@@ -381,6 +382,7 @@ impl App {
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
             layout_home_scrollbar: Rect::default(),
+            layout_presentation_sb: Rect::default(),
             home_panel_section_offset: 0,
             layout_lib_table_area: Rect::default(),
             layout_breadcrumbs: Vec::new(),
@@ -507,6 +509,7 @@ impl App {
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
             layout_home_scrollbar: Rect::default(),
+            layout_presentation_sb: Rect::default(),
             home_panel_section_offset: 0,
             layout_lib_table_area: Rect::default(),
             layout_breadcrumbs: Vec::new(),
@@ -2245,6 +2248,15 @@ impl App {
                     }
                 }
 
+                // Presentation view queue scrollbar click
+                if self.tab_idx == 1 && self.playlist_view == 2 {
+                    let sb = self.layout_presentation_sb;
+                    if sb.width > 0 && sb.contains((col, row).into()) {
+                        self.presentation_scrollbar_seek(row);
+                        return;
+                    }
+                }
+
                 // Breadcrumb click: navigate back to that depth
                 if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
                     let crumbs = self.layout_breadcrumbs.clone();
@@ -2295,6 +2307,13 @@ impl App {
                     sb.width > 0 && sb.contains((col, row).into())
                 } => {
                     self.home_scrollbar_seek(row);
+                }
+            MouseEventKind::Drag(MouseButton::Left)
+                if self.tab_idx == 1 && self.playlist_view == 2 && {
+                    let sb = self.layout_presentation_sb;
+                    sb.width > 0 && sb.contains((col, row).into())
+                } => {
+                    self.presentation_scrollbar_seek(row);
                 }
             MouseEventKind::Drag(MouseButton::Left)
                 if self.layout_seekbar_area.contains((col, row).into())
@@ -2394,6 +2413,16 @@ impl App {
         if self.home_panel_section_offset > max_offset {
             self.home_panel_section_offset = max_offset;
         }
+    }
+
+    fn presentation_scrollbar_seek(&mut self, row: u16) {
+        let sb = self.layout_presentation_sb;
+        if sb.height == 0 { return; }
+        let n = self.player_tab.items.len();
+        if n == 0 { return; }
+        let frac = (row.saturating_sub(sb.y)) as f64 / sb.height as f64;
+        let target = ((frac * n as f64).round() as usize).min(n - 1);
+        self.player_tab.playlist_cursor = target;
     }
 
     fn home_scrollbar_seek(&mut self, row: u16) {
@@ -4839,6 +4868,31 @@ impl App {
         let table = Table::new(rows, [Constraint::Min(10)])
             .row_highlight_style(Style::default());
         f.render_stateful_widget(table, right_area, &mut state);
+
+        let total_rows = prows.len();
+        let visible_rows = right_area.height as usize;
+        if total_rows > visible_rows {
+            let max_offset = total_rows.saturating_sub(visible_rows);
+            let mut sb_state = ScrollbarState::new(max_offset + 1).position(state.offset());
+            self.layout_presentation_sb = Rect {
+                x: right_area.x + right_area.width.saturating_sub(1),
+                y: right_area.y,
+                width: 1,
+                height: right_area.height,
+            };
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("▐")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .style(Style::default().fg(palette::YELLOW)),
+                right_area,
+                &mut sb_state,
+            );
+        } else {
+            self.layout_presentation_sb = Rect::default();
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -5390,7 +5444,8 @@ impl App {
                     .thumb_symbol("▐")
                     .track_symbol(Some(" "))
                     .begin_symbol(None)
-                    .end_symbol(None),
+                    .end_symbol(None)
+                    .style(Style::default().fg(palette::YELLOW)),
                 area,
                 &mut sb_state,
             );
@@ -6304,6 +6359,7 @@ mod tests {
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
             layout_home_scrollbar: Rect::default(),
+            layout_presentation_sb: Rect::default(),
             home_panel_section_offset: 0,
             layout_lib_table_area: ratatui::layout::Rect::default(),
             layout_breadcrumbs: Vec::new(),
