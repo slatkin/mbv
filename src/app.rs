@@ -4994,10 +4994,14 @@ impl App {
                         .alignment(Alignment::Center));
                 }
             }
-        } else if show_seekbar && played {
-            put(f, text_y, Paragraph::new("Played")
-                .style(Style::default().fg(palette::MUTED))
-                .alignment(Alignment::Center));
+        } else if show_seekbar && rt_ticks > 0 {
+            let status_str = if played { "Played" } else { "Unplayed" };
+            let length_str = fmt_m(rt_ticks);
+            put(f, text_y, Paragraph::new(Line::from(vec![
+                Span::styled(status_str, Style::default().fg(palette::MUTED)),
+                Span::styled(" • ", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                Span::styled(length_str, Style::default().fg(palette::MUTED)),
+            ])).alignment(Alignment::Center));
         }
         None
     }
