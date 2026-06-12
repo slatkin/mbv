@@ -6007,6 +6007,7 @@ mod tests {
             remote_pos_s: 0,
             remote_pos_at: std::time::Instant::now(),
             layout_sessions_btn_area: Rect::default(),
+            last_scroll_at: Instant::now() - Duration::from_secs(1),
         }
     }
 
