@@ -221,6 +221,7 @@ enum SettingKey {
     DaemonModeOnExit,
     StartOnQueue,
     AlwaysPlayNext,
+    AlwaysSkipIntro,
     ShowLogTab,
     ImageProtocol,
     HiddenLibraries,
@@ -235,7 +236,7 @@ enum SettingKey {
 // Sections rendered as IRIS blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
-    ("[mbv]",    &[SettingKey::DaemonModeOnExit, SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ShowLogTab, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
+    ("[mbv]",    &[SettingKey::DaemonModeOnExit, SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
     ("[mpv]",    &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts]),
     ("[daemon]", &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",&[SettingKey::LogOut]),
@@ -246,6 +247,7 @@ fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::DaemonModeOnExit  => "Daemon mode on exit",
         SettingKey::StartOnQueue      => "Start on queue",
         SettingKey::AlwaysPlayNext    => "Always play next",
+        SettingKey::AlwaysSkipIntro   => "Always skip intro",
         SettingKey::ShowLogTab        => "Show log tab",
         SettingKey::ImageProtocol     => "Image protocol",
         SettingKey::HiddenLibraries   => "Hidden libraries",
@@ -263,6 +265,7 @@ fn setting_value(key: SettingKey, cfg: &crate::config::Config) -> String {
         SettingKey::DaemonModeOnExit  => bool_val(cfg.daemon_mode_on_exit),
         SettingKey::StartOnQueue      => bool_val(cfg.start_on_queue),
         SettingKey::AlwaysPlayNext    => bool_val(cfg.always_play_next),
+        SettingKey::AlwaysSkipIntro   => bool_val(cfg.always_skip_intro),
         SettingKey::ShowLogTab        => bool_val(cfg.show_log_tab),
         SettingKey::ImageProtocol     => cfg.image_protocol.clone().unwrap_or_else(|| "none".into()),
         SettingKey::HiddenLibraries   => fmt_hidden_list(&cfg.hidden_libraries),
@@ -3799,6 +3802,7 @@ impl App {
                     SettingKey::DaemonModeOnExit => c.config.daemon_mode_on_exit = !c.config.daemon_mode_on_exit,
                     SettingKey::StartOnQueue     => c.config.start_on_queue = !c.config.start_on_queue,
                     SettingKey::AlwaysPlayNext   => c.config.always_play_next = !c.config.always_play_next,
+                    SettingKey::AlwaysSkipIntro  => c.config.always_skip_intro = !c.config.always_skip_intro,
                     SettingKey::ShowAudioWindow  => c.config.show_audio_window = !c.config.show_audio_window,
                     SettingKey::UseMpvConfig     => c.config.use_mpv_config = !c.config.use_mpv_config,
                     SettingKey::NoScripts        => c.config.no_scripts = !c.config.no_scripts,
