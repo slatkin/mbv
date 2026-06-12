@@ -147,16 +147,20 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
 
     let misc = doc.get("mpv");
     let daemon = doc.get("daemon");
-    let mbv = doc.get("mbv");
+    // [general] is the new name; fall back to legacy [mbv] for existing configs.
+    let general = doc.get("general").or_else(|| doc.get("mbv"));
+    // [queue] is the new name; fall back to legacy [mbv.queue] then [mbv] for existing configs.
+    let queue = doc.get("queue")
+        .or_else(|| general.and_then(|m| m.get("queue")));
     let music = doc.get("music");
 
-    let hidden_libraries: Vec<String> = mbv
+    let hidden_libraries: Vec<String> = general
         .and_then(|m| m.get("hidden_libraries"))
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect())
         .unwrap_or_else(|| vec!["live tv".into(), "podcasts".into()]);
 
-    let hidden_latest: Vec<String> = mbv
+    let hidden_latest: Vec<String> = general
         .and_then(|m| m.get("hidden_latest"))
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect())
@@ -172,17 +176,24 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let always_play_next = mbv
-        .and_then(|m| m.get("always_play_next"))
+    let always_play_next = queue
+        .and_then(|q| q.get("always_play_next"))
         .and_then(|v| v.as_bool())
+        .or_else(|| general.and_then(|m| m.get("always_play_next")).and_then(|v| v.as_bool()))
         .unwrap_or(false);
 
-    let always_skip_intro = mbv
+    let start_on_queue = queue
+        .and_then(|q| q.get("start_on_queue"))
+        .and_then(|v| v.as_bool())
+        .or_else(|| general.and_then(|m| m.get("start_on_queue")).and_then(|v| v.as_bool()))
+        .unwrap_or(false);
+
+    let always_skip_intro = general
         .and_then(|m| m.get("always_skip_intro"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let image_protocol = mbv
+    let image_protocol = general
         .and_then(|m| m.get("image_protocol").or_else(|| m.get("card_image_protocol")))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
@@ -192,12 +203,12 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let show_log_tab = mbv
+    let show_log_tab = general
         .and_then(|m| m.get("show_log_tab"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let daemon_mode_on_exit = mbv
+    let daemon_mode_on_exit = general
         .and_then(|m| m.get("daemon_mode_on_exit"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
@@ -209,11 +220,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
 
     let autoload = misc
         .and_then(|m| m.get("autoload"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
-    let start_on_queue = mbv
-        .and_then(|m| m.get("start_on_queue"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
@@ -263,23 +269,33 @@ pub fn save_config_settings(cfg: &Config) {
         };
     }
 
-    let mbv = section!("mbv");
-    mbv.insert("daemon_mode_on_exit".to_string(), toml::Value::Boolean(cfg.daemon_mode_on_exit));
-    mbv.insert("start_on_queue".to_string(),      toml::Value::Boolean(cfg.start_on_queue));
-    mbv.insert("always_play_next".to_string(),    toml::Value::Boolean(cfg.always_play_next));
-    mbv.insert("always_skip_intro".to_string(),   toml::Value::Boolean(cfg.always_skip_intro));
-    mbv.insert("show_log_tab".to_string(),        toml::Value::Boolean(cfg.show_log_tab));
-    mbv.insert("hidden_libraries".to_string(), toml::Value::Array(
+    // Migrate legacy [mbv] keys to new section names.
+    if let Some(old) = table.get_mut("mbv").and_then(|v| v.as_table_mut()) {
+        for key in &["daemon_mode_on_exit", "always_skip_intro", "show_log_tab",
+                     "hidden_libraries", "hidden_latest", "image_protocol",
+                     "card_image_protocol", "always_play_next", "start_on_queue", "queue"] {
+            old.remove(*key);
+        }
+    }
+
+    let general = section!("general");
+    general.insert("daemon_mode_on_exit".to_string(), toml::Value::Boolean(cfg.daemon_mode_on_exit));
+    general.insert("always_skip_intro".to_string(),   toml::Value::Boolean(cfg.always_skip_intro));
+    general.insert("show_log_tab".to_string(),        toml::Value::Boolean(cfg.show_log_tab));
+    general.insert("hidden_libraries".to_string(), toml::Value::Array(
         cfg.hidden_libraries.iter().map(|s| toml::Value::String(s.clone())).collect()
     ));
-    mbv.insert("hidden_latest".to_string(), toml::Value::Array(
+    general.insert("hidden_latest".to_string(), toml::Value::Array(
         cfg.hidden_latest.iter().map(|s| toml::Value::String(s.clone())).collect()
     ));
-    mbv.remove("card_image_protocol"); // remove legacy key if present
     match &cfg.image_protocol {
-        Some(p) => { mbv.insert("image_protocol".to_string(), toml::Value::String(p.clone())); }
-        None    => { mbv.remove("image_protocol"); }
+        Some(p) => { general.insert("image_protocol".to_string(), toml::Value::String(p.clone())); }
+        None    => { general.remove("image_protocol"); }
     }
+
+    let queue = section!("queue");
+    queue.insert("always_play_next".to_string(), toml::Value::Boolean(cfg.always_play_next));
+    queue.insert("start_on_queue".to_string(),   toml::Value::Boolean(cfg.start_on_queue));
 
     let mpv = section!("mpv");
     mpv.insert("show_audio_window".to_string(), toml::Value::Boolean(cfg.show_audio_window));
@@ -304,7 +320,7 @@ mod tests {
         let toml = r#"
 [server]
 url = "http://localhost:8096/"
-[mbv]
+[general]
 hidden_libraries = ["Live TV", "Podcasts", "Music"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -330,7 +346,7 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
         let toml = r#"
 [server]
 url = "http://host"
-[mbv]
+[general]
 hidden_libraries = ["Live TV", "MOVIES"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -349,7 +365,7 @@ hidden_libraries = ["Live TV", "MOVIES"]
         let toml = r#"
 [server]
 url = "http://host"
-[mbv]
+[general]
 hidden_latest = ["Movies", "TV SHOWS"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -403,7 +419,7 @@ hidden_latest = ["Movies", "TV SHOWS"]
 
     #[test]
     fn parse_show_log_tab_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nshow_log_tab = true";
+        let toml = "[server]\nurl = \"http://host\"\n[general]\nshow_log_tab = true";
         assert!(parse_config(toml).unwrap().show_log_tab);
     }
 
@@ -457,10 +473,10 @@ hidden_latest = ["Movies", "TV SHOWS"]
         assert!(parse_config(toml).unwrap().music_levels.is_empty());
     }
 
-    // always_play_next must live in [mbv] — placing it elsewhere silently ignores it.
+    // always_play_next and start_on_queue live in [queue].
     #[test]
-    fn parse_always_play_next_true_from_mbv_section() {
-        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nalways_play_next = true";
+    fn parse_always_play_next_true_from_queue_section() {
+        let toml = "[server]\nurl = \"http://host\"\n[queue]\nalways_play_next = true";
         assert!(parse_config(toml).unwrap().always_play_next);
     }
 
@@ -473,12 +489,30 @@ hidden_latest = ["Movies", "TV SHOWS"]
     #[test]
     fn parse_always_play_next_in_wrong_section_is_ignored() {
         let toml = "[server]\nurl = \"http://host\"\nalways_play_next = true";
-        assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [mbv], not [server]");
+        assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [queue], not [server]");
     }
 
     #[test]
-    fn parse_always_skip_intro_true_from_mbv_section() {
-        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nalways_skip_intro = true";
+    fn parse_always_play_next_legacy_mbv_section_still_works() {
+        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nalways_play_next = true";
+        assert!(parse_config(toml).unwrap().always_play_next, "backward compat: [mbv] fallback");
+    }
+
+    #[test]
+    fn parse_start_on_queue_true_from_queue_section() {
+        let toml = "[server]\nurl = \"http://host\"\n[queue]\nstart_on_queue = true";
+        assert!(parse_config(toml).unwrap().start_on_queue);
+    }
+
+    #[test]
+    fn parse_start_on_queue_legacy_mbv_section_still_works() {
+        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nstart_on_queue = true";
+        assert!(parse_config(toml).unwrap().start_on_queue, "backward compat: [mbv] fallback");
+    }
+
+    #[test]
+    fn parse_always_skip_intro_true_from_general_section() {
+        let toml = "[server]\nurl = \"http://host\"\n[general]\nalways_skip_intro = true";
         assert!(parse_config(toml).unwrap().always_skip_intro);
     }
 
@@ -490,7 +524,7 @@ hidden_latest = ["Movies", "TV SHOWS"]
 
     #[test]
     fn parse_daemon_mode_on_exit_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[mbv]\ndaemon_mode_on_exit = true";
+        let toml = "[server]\nurl = \"http://host\"\n[general]\ndaemon_mode_on_exit = true";
         assert!(parse_config(toml).unwrap().daemon_mode_on_exit);
     }
 

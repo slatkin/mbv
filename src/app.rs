@@ -236,10 +236,11 @@ enum SettingKey {
 // Sections rendered as IRIS blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
-    ("[mbv]",    &[SettingKey::DaemonModeOnExit, SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
-    ("[mpv]",    &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts]),
-    ("[daemon]", &[SettingKey::ShowSysTrayIcon]),
-    ("[actions]",&[SettingKey::LogOut]),
+    ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
+    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext]),
+    ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts]),
+    ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
+    ("[actions]",   &[SettingKey::LogOut]),
 ];
 
 fn setting_label(key: SettingKey) -> &'static str {
@@ -4252,6 +4253,10 @@ impl App {
 
         let show_ep_cols = self.player_tab.items.iter().any(|it| it.item_type == "Episode");
 
+        // Fixed column widths + 5 inter-column gaps of 2 = 10 overhead
+        let title_col_width = (table_area.width as i32
+            - if show_ep_cols { 37 } else { 29 }).max(0) as usize;
+
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let row_style = if i == current_idx && active {
                 Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
@@ -4276,12 +4281,14 @@ impl App {
             };
             let title_cell = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
                 let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
+                let pct_str = format!(" {pct}%");
+                let max_title = title_col_width.saturating_sub(pct_str.chars().count());
                 Cell::from(Line::from(vec![
-                    Span::raw(title),
-                    Span::styled(format!(" {pct}%"), Style::default().fg(palette::YELLOW)),
+                    Span::raw(trunc_str(&title, max_title)),
+                    Span::styled(pct_str, Style::default().fg(palette::YELLOW)),
                 ]))
             } else {
-                Cell::from(title)
+                Cell::from(trunc_str(&title, title_col_width))
             };
 
             if show_ep_cols {
