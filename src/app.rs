@@ -81,6 +81,7 @@ enum LibEvent {
 
 enum SessionEvent {
     Loaded(Vec<crate::api::SessionInfo>),
+    ItemRefreshed(String, crate::api::MediaItem), // (item_id, fresh)
     Error(String),
 }
 
@@ -787,6 +788,23 @@ impl App {
                                     .as_ref().and_then(|p| p.now_playing.clone());
                                 let item_changed = s.runtime_s != prev_runtime
                                     || s.now_playing != prev_title;
+                                if item_changed {
+                                    // Refresh the previous item so played/progress reflects
+                                    // what the remote client reported to the server.
+                                    if let Some(prev_id) = self.connected_session_state
+                                        .as_ref().and_then(|p| p.now_playing_item_id.clone())
+                                    {
+                                        let client = self.client.lock().unwrap().clone();
+                                        let tx = self.sessions_tx.clone();
+                                        std::thread::spawn(move || {
+                                            if let Ok(mut items) = client.get_items_by_ids(std::slice::from_ref(&prev_id)) {
+                                                if let Some(fresh) = items.pop() {
+                                                    let _ = tx.send(SessionEvent::ItemRefreshed(prev_id, fresh));
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
                                 if item_changed || s.is_paused {
                                     self.remote_pos_s = s.position_s;
                                 } else {
@@ -814,6 +832,11 @@ impl App {
                                     self.log.push(Level::Warn, "sessions", format!("connected session not in poll ({}/3); holding", self.session_miss_count));
                                 }
                             }
+                        }
+                    }
+                    SessionEvent::ItemRefreshed(item_id, fresh) => {
+                        if let Some(slot) = self.player_tab.items.iter_mut().find(|i| i.id == item_id) {
+                            *slot = fresh;
                         }
                     }
                     SessionEvent::Error(e) => {
