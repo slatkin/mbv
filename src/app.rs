@@ -4752,10 +4752,11 @@ impl App {
         // Restrict click detection to the right panel only (not the left card area).
         self.layout_playlist_inner = right_area;
 
-        // Right panel: single-column list with show-name grouping.
+        // Right panel: title + optional length column (shown when right panel > 80 wide).
         // Runs of ≥3 consecutive episodes from the same series get a group header row;
         // items in those runs show only the episode title (no repeated show name).
-        let title_col_w = right_w as usize;
+        let show_length = area.width > 80;
+        let title_col_w = (right_w as usize).saturating_sub(if show_length { 9 } else { 0 });
 
         enum PRow {
             Header(String),
@@ -4767,6 +4768,7 @@ impl App {
                 is_active: bool,
                 is_cursor: bool,
                 in_group:  bool,
+                length:    String,
             },
         }
 
@@ -4819,6 +4821,8 @@ impl App {
                         (it.playback_position_ticks, it.runtime_ticks)
                     };
                     let label = if use_group { it.name.clone() } else { it.playback_label() };
+                    let len_secs = it.runtime_ticks / TICKS_PER_SECOND;
+                    let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
                     if j == cursor { visual_cursor = prows.len(); }
                     prows.push(PRow::Item {
                         label,
@@ -4828,6 +4832,7 @@ impl App {
                         is_active: j == active_idx && active,
                         is_cursor: j == cursor,
                         in_group:  use_group,
+                        length,
                     });
                 }
                 i = run_end;
@@ -4846,7 +4851,7 @@ impl App {
                         .add_modifier(Modifier::BOLD),
                 )
             }
-            PRow::Item { label, pos_ticks, rt_ticks, is_audio, is_active, is_cursor, in_group } => {
+            PRow::Item { label, pos_ticks, rt_ticks, is_audio, is_active, is_cursor, in_group, length } => {
                 let row_style = if *is_active {
                     Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
                 } else {
@@ -4873,14 +4878,22 @@ impl App {
                 if !pct_str.is_empty() {
                     spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
                 }
-                Row::new([Cell::from(Line::from(spans))]).style(row_style)
+                Row::new([
+                    Cell::from(Line::from(spans)),
+                    Cell::from(Line::from(length.as_str()).alignment(Alignment::Right)),
+                ]).style(row_style)
             }
         }).collect();
 
         let mut state = TableState::default();
         state.select(Some(visual_cursor));
-        let table = Table::new(rows, [Constraint::Min(10)])
-            .row_highlight_style(Style::default());
+        let table = Table::new(rows, [
+            Constraint::Min(10),
+            Constraint::Length(if show_length { 7 } else { 0 }),
+            Constraint::Length(1),
+        ])
+        .column_spacing(2)
+        .row_highlight_style(Style::default());
         f.render_stateful_widget(table, right_area, &mut state);
 
         let total_rows = prows.len();
