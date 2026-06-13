@@ -256,8 +256,8 @@ impl EmbyClient {
 
     fn auth_header(&self) -> String {
         format!(
-            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"0.1.0\", Token=\"{}\"",
-            self.device_name, self.device_id, self.token
+            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"{}\"",
+            self.device_name, self.device_id, env!("CARGO_PKG_VERSION"), self.token
         )
     }
 
@@ -312,7 +312,7 @@ impl EmbyClient {
         if !self.config.password.is_empty() {
             let resp: Value = self.agent
                 .post(&self.url("/Users/AuthenticateByName"))
-                .set("Authorization", &format!("Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"0.1.0\"", self.device_name, self.device_id))
+                .set("Authorization", &format!("Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\"", self.device_name, self.device_id, env!("CARGO_PKG_VERSION")))
                 .send_json(ureq::json!({
                     "Username": self.config.username,
                     "Pw": self.config.password,

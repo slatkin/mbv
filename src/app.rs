@@ -829,6 +829,7 @@ impl App {
                                         "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
                                         s.position_s, self.remote_pos_s, s.position_s));
                                     self.remote_pos_s = s.position_s;
+                                    self.remote_api_pos_advanced_at = now;
                                 } else if api_active {
                                     let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
                                     let extrapolated = self.remote_pos_s + elapsed.round() as i64;
@@ -2805,6 +2806,9 @@ impl App {
         let item = self.player_tab.items.remove(pos);
         let name = item.display_name();
         self.playlist_undo_stack.push((pos, item));
+        if active {
+            self.player.send_command(PlayerCommand::PlaylistRemove(pos));
+        }
         if !self.player_tab.items.is_empty() {
             self.player_tab.playlist_cursor =
                 self.player_tab.playlist_cursor.min(self.player_tab.items.len() - 1);
