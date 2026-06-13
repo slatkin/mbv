@@ -1782,6 +1782,8 @@ mod tests {
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),
             premiere_date: String::new(), total_count: 0, container: String::new(),
+            director: String::new(), video_info: String::new(), audio_info: String::new(),
+            genre: String::new(),
         }
     }
 
