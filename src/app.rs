@@ -613,7 +613,7 @@ impl App {
 
         match self.fetch_home() {
             Ok(()) => self.status.clear(),
-            Err(e) => self.status = format!("Error: {e}"),
+            Err(e) => self.flash_status(format!("Error: {e}")),
         }
         self.restore_playlist();
         terminal.draw(|f| self.render(f))?;
@@ -625,7 +625,7 @@ impl App {
                         if self.player.is_remote_disconnected() {
                             self.next_up_item = None;
                             self.skip_intro_end_ticks = None;
-                            self.status = "Daemon disconnected — playback stopped".into();
+                            self.flash_status("Daemon disconnected — playback stopped".into());
                             self.refresh_after_stop();
                             continue;
                         }
@@ -2878,7 +2878,7 @@ impl App {
             Ok(()) => {
                 if self.tab_idx == 0 { let _ = self.fetch_home(); } else { self.refresh_lib(); }
             }
-            Err(e) => self.status = format!("Error: {e}"),
+            Err(e) => self.flash_status(format!("Error: {e}")),
         }
     }
 
@@ -2889,7 +2889,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => { let _ = self.fetch_home(); }
-            Err(e) => self.status = format!("Error: {e}"),
+            Err(e) => self.flash_status(format!("Error: {e}")),
         }
     }
 
@@ -2901,7 +2901,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => { let _ = self.fetch_home(); }
-            Err(e) => self.status = format!("Error: {e}"),
+            Err(e) => self.flash_status(format!("Error: {e}")),
         }
     }
 
@@ -2913,7 +2913,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => self.refresh_lib(),
-            Err(e) => self.status = format!("Error: {e}"),
+            Err(e) => self.flash_status(format!("Error: {e}")),
         }
     }
 
@@ -2979,7 +2979,7 @@ impl App {
         match client.get_all_videos_recursive(&parent_id) {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
-                if items.is_empty() { self.status = "Nothing to shuffle".into(); return; }
+                if items.is_empty() { drop(client); self.flash_status("Nothing to shuffle".into()); return; }
                 items.shuffle(&mut rand::rng());
                 let count = items.len();
                 let c = Arc::new(client.clone());
@@ -2990,7 +2990,7 @@ impl App {
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
             }
-            Err(e) => self.status = format!("Error: {e}"),
+            Err(e) => { let msg = format!("Error: {e}"); drop(client); self.flash_status(msg); }
         }
     }
 
@@ -3000,7 +3000,7 @@ impl App {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
                 items.sort_by_key(|a| natural_sort_key(a.sort_key()));
-                if items.is_empty() { drop(client); self.status = "Nothing to play".into(); return; }
+                if items.is_empty() { drop(client); self.flash_status("Nothing to play".into()); return; }
                 let count = items.len();
                 let c = Arc::new(client.clone());
                 drop(client);
@@ -3008,9 +3008,9 @@ impl App {
                 self.player_tab.playlist_cursor = 0;
                 self.player.play_playlist(items, 0, c, self.log.clone(), self.ui_volume);
                 self.tab_idx = 1;
-                self.status = format!("Playing {count} items");
+                self.flash_status(format!("Playing {count} items"));
             }
-            Err(e) => { drop(client); self.status = format!("Error: {e}"); }
+            Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
         }
     }
 
@@ -3019,7 +3019,7 @@ impl App {
         match client.get_all_playable_recursive(folder_id) {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
-                if items.is_empty() { drop(client); self.status = "Nothing to shuffle".into(); return; }
+                if items.is_empty() { drop(client); self.flash_status("Nothing to shuffle".into()); return; }
                 items.shuffle(&mut rand::rng());
                 let count = items.len();
                 let c = Arc::new(client.clone());
@@ -3030,7 +3030,7 @@ impl App {
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
             }
-            Err(e) => { drop(client); self.status = format!("Error: {e}"); }
+            Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
         }
     }
 
@@ -3175,7 +3175,7 @@ impl App {
                 }
             }
             LibEvent::Error(e) => {
-                self.status = format!("Error: {e}");
+                self.flash_status(format!("Error: {e}"));
             }
         }
     }
@@ -3242,7 +3242,7 @@ impl App {
                     let c = self.client.lock().unwrap();
                     match c.get_items_by_ids(&item_ids) {
                         Ok(v) => v,
-                        Err(e) => { self.status = format!("WS play error: {e}"); return; }
+                        Err(e) => { let msg = format!("WS play error: {e}"); drop(c); self.flash_status(msg); return; }
                     }
                 };
                 if items.is_empty() {
@@ -3263,7 +3263,7 @@ impl App {
                     let count = items.len();
                     self.player_tab.items = items.clone();
                     self.player_tab.playlist_cursor = start_idx;
-                    self.status = format!("Playing {count} items");
+                    self.flash_status(format!("Playing {count} items"));
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     let active = self.player.status.lock().unwrap().active;
                     self.log.push(Level::Info, "ws", format!("Play multi: active={active}, count={count}, start_idx={start_idx}"));
