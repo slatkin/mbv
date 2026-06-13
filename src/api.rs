@@ -422,12 +422,13 @@ impl EmbyClient {
             .unwrap_or_default())
     }
 
-    pub fn get_items(&self, parent_id: &str, item_types: Option<&str>, unplayed_only: bool) -> Result<(Vec<MediaItem>, usize), String> {
+    pub fn get_items(&self, parent_id: &str, item_types: Option<&str>, unplayed_only: bool, start_index: usize, limit: usize) -> Result<(Vec<MediaItem>, usize), String> {
         let mut req = self.get(&format!("/Users/{}/Items", self.user_id))
             .query("ParentId", parent_id)
             .query("SortBy", "SortName")
             .query("SortOrder", "Ascending")
-            .query("Limit", "5000")
+            .query("StartIndex", &start_index.to_string())
+            .query("Limit", &limit.to_string())
             .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,ChildCount,RecursiveItemCount,Container")
             .query("EnableUserData", "true");
         if let Some(types) = item_types {

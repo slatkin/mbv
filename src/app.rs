@@ -67,15 +67,20 @@ struct BrowseLevel {
     parent_id: String,
     title: String,
     items: Vec<MediaItem>,
+    total_count: usize,
     cursor: usize,
     item_types: Option<String>,
     unplayed_only: bool,
     loading: bool,
 }
 
+const PAGE_SIZE: usize = 100;
+const PREFETCH_AHEAD: usize = 25;
+
 enum LibEvent {
     Loaded { lib_idx: usize, parent_id: String, level: BrowseLevel },
-    Refreshed { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
+    PageAppended { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
+    Refreshed { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
     Error(String),
 }
 
@@ -2465,7 +2470,8 @@ impl App {
 
     fn move_lib_cursor(&mut self, delta: i64) {
         let lib_off = self.lib_tab_offset();
-        let lib = &mut self.libs[self.tab_idx - lib_off];
+        let lib_idx = self.tab_idx - lib_off;
+        let lib = &mut self.libs[lib_idx];
         if let Some(s) = &mut lib.search {
             let n = s.results.len();
             if n > 0 {
@@ -2479,11 +2485,13 @@ impl App {
                 lvl.cursor = (lvl.cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
             }
         }
+        self.maybe_fetch_next_page(lib_idx);
     }
 
     fn jump_lib_cursor(&mut self, to_end: bool) {
         let lib_off = self.lib_tab_offset();
-        let lib = &mut self.libs[self.tab_idx - lib_off];
+        let lib_idx = self.tab_idx - lib_off;
+        let lib = &mut self.libs[lib_idx];
         if let Some(s) = &mut lib.search {
             let n = s.results.len();
             if n > 0 { s.cursor = if to_end { n - 1 } else { 0 }; }
@@ -2493,6 +2501,7 @@ impl App {
             let n = lvl.items.len();
             if n > 0 { lvl.cursor = if to_end { n - 1 } else { 0 }; }
         }
+        self.maybe_fetch_next_page(lib_idx);
     }
 
     fn move_home_cursor(&mut self, delta: i64) {
@@ -2893,7 +2902,7 @@ impl App {
                         lib.search = None;
                         lib.nav_stack.push(BrowseLevel {
                             parent_id: item.id.clone(), title: item.name.clone(),
-                            items: vec![], cursor: 0,
+                            items: vec![], total_count: 0, cursor: 0,
                             item_types: None, unplayed_only: false, loading: true,
                         });
                         self.set_tab(lib_idx + 2);
@@ -2923,7 +2932,7 @@ impl App {
             lib.search = None;
             lib.nav_stack.push(BrowseLevel {
                 parent_id: item.id.clone(), title: item.name.clone(),
-                items: vec![], cursor: 0,
+                items: vec![], total_count: 0, cursor: 0,
                 item_types: None, unplayed_only: false, loading: true,
             });
             self.layout_lib_scroll = 0;
@@ -3087,7 +3096,8 @@ impl App {
             let parent_id = lvl.parent_id.clone();
             let item_types = lvl.item_types.clone();
             let unplayed_only = lvl.unplayed_only;
-            self.spawn_refresh(lib_idx, parent_id, item_types, unplayed_only);
+            let loaded_count = lvl.items.len();
+            self.spawn_refresh(lib_idx, parent_id, item_types, unplayed_only, loaded_count);
         }
     }
 
@@ -3220,7 +3230,7 @@ impl App {
             };
             self.libs[idx].nav_stack.push(BrowseLevel {
                 parent_id: lib_id.clone(), title: lib_name.clone(),
-                items: vec![], cursor: 0,
+                items: vec![], total_count: 0, cursor: 0,
                 item_types: item_types.clone(), unplayed_only, loading: true,
             });
             self.spawn_browse(idx, lib_id, lib_name, item_types, unplayed_only);
@@ -3229,13 +3239,13 @@ impl App {
 
     fn refresh_after_stop(&mut self) {
         let _ = self.fetch_home();
-        let fetches: Vec<(usize, String, Option<String>, bool)> = self.libs.iter().enumerate()
+        let fetches: Vec<(usize, String, Option<String>, bool, usize)> = self.libs.iter().enumerate()
             .filter_map(|(i, lib)| lib.nav_stack.last().map(|lvl| {
-                (i, lvl.parent_id.clone(), lvl.item_types.clone(), lvl.unplayed_only)
+                (i, lvl.parent_id.clone(), lvl.item_types.clone(), lvl.unplayed_only, lvl.items.len())
             }))
             .collect();
-        for (lib_idx, parent_id, item_types, unplayed_only) in fetches {
-            self.spawn_refresh(lib_idx, parent_id, item_types, unplayed_only);
+        for (lib_idx, parent_id, item_types, unplayed_only, loaded_count) in fetches {
+            self.spawn_refresh(lib_idx, parent_id, item_types, unplayed_only, loaded_count);
         }
     }
 
@@ -3244,14 +3254,13 @@ impl App {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            match client.get_items(&parent_id, item_types.as_deref(), unplayed_only) {
-                Ok((mut items, _)) => {
-                    items.sort_by_key(|a| natural_sort_key(a.sort_key()));
+            match client.get_items(&parent_id, item_types.as_deref(), unplayed_only, 0, PAGE_SIZE) {
+                Ok((items, total_count)) => {
                     let _ = tx.send(LibEvent::Loaded {
                         lib_idx,
                         parent_id: parent_id.clone(),
                         level: BrowseLevel {
-                            parent_id, title, items, cursor: 0,
+                            parent_id, title, items, total_count, cursor: 0,
                             item_types, unplayed_only, loading: false,
                         },
                     });
@@ -3261,19 +3270,48 @@ impl App {
         });
     }
 
-    fn spawn_refresh(&self, lib_idx: usize, parent_id: String,
-                     item_types: Option<String>, unplayed_only: bool) {
+    fn spawn_browse_page(&self, lib_idx: usize, parent_id: String, start_index: usize,
+                         item_types: Option<String>, unplayed_only: bool) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            match client.get_items(&parent_id, item_types.as_deref(), unplayed_only) {
-                Ok((mut items, _)) => {
-                    items.sort_by_key(|a| natural_sort_key(a.sort_key()));
-                    let _ = tx.send(LibEvent::Refreshed { lib_idx, parent_id, items });
+            match client.get_items(&parent_id, item_types.as_deref(), unplayed_only, start_index, PAGE_SIZE) {
+                Ok((items, total_count)) => {
+                    let _ = tx.send(LibEvent::PageAppended { lib_idx, parent_id, items, total_count });
                 }
                 Err(e) => { let _ = tx.send(LibEvent::Error(e)); }
             }
         });
+    }
+
+    fn spawn_refresh(&self, lib_idx: usize, parent_id: String,
+                     item_types: Option<String>, unplayed_only: bool, loaded_count: usize) {
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        let limit = loaded_count.max(PAGE_SIZE);
+        std::thread::spawn(move || {
+            match client.get_items(&parent_id, item_types.as_deref(), unplayed_only, 0, limit) {
+                Ok((items, total_count)) => {
+                    let _ = tx.send(LibEvent::Refreshed { lib_idx, parent_id, items, total_count });
+                }
+                Err(e) => { let _ = tx.send(LibEvent::Error(e)); }
+            }
+        });
+    }
+
+    fn maybe_fetch_next_page(&mut self, lib_idx: usize) {
+        let lib = &self.libs[lib_idx];
+        if lib.search.is_some() { return; }
+        let lvl = match lib.nav_stack.last() { Some(l) => l, None => return };
+        if lvl.loading { return; }
+        if lvl.items.len() >= lvl.total_count { return; }
+        if lvl.cursor + PREFETCH_AHEAD < lvl.items.len() { return; }
+        let start_index = lvl.items.len();
+        let parent_id = lvl.parent_id.clone();
+        let item_types = lvl.item_types.clone();
+        let unplayed_only = lvl.unplayed_only;
+        if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() { last.loading = true; }
+        self.spawn_browse_page(lib_idx, parent_id, start_index, item_types, unplayed_only);
     }
 
     fn spawn_sessions_load(&mut self) {
@@ -3346,12 +3384,26 @@ impl App {
                         .unwrap_or_default();
                     self.log.push(Level::Debug, "app", format!("album: entered «{title}»"));
                 }
+                self.maybe_fetch_next_page(lib_idx);
             }
-            LibEvent::Refreshed { lib_idx, parent_id, items } => {
+            LibEvent::PageAppended { lib_idx, parent_id, items, total_count } => {
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    if let Some(last) = lib.nav_stack.last_mut() {
+                        if last.parent_id == parent_id && last.loading {
+                            last.items.extend(items);
+                            last.total_count = total_count;
+                            last.loading = false;
+                        }
+                    }
+                }
+                self.maybe_fetch_next_page(lib_idx);
+            }
+            LibEvent::Refreshed { lib_idx, parent_id, items, total_count } => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if let Some(last) = lib.nav_stack.last_mut() {
                         if last.parent_id == parent_id {
                             last.items = items;
+                            last.total_count = total_count;
                             last.loading = false;
                         }
                     }
@@ -3380,7 +3432,7 @@ impl App {
             let stack = old_libs.get(&view.id)
                 .map(|s| s.iter().map(|lvl| BrowseLevel {
                     parent_id: lvl.parent_id.clone(), title: lvl.title.clone(),
-                    items: lvl.items.clone(), cursor: lvl.cursor,
+                    items: lvl.items.clone(), total_count: lvl.total_count, cursor: lvl.cursor,
                     item_types: lvl.item_types.clone(), unplayed_only: lvl.unplayed_only,
                     loading: false,
                 }).collect())
@@ -6153,7 +6205,9 @@ impl App {
         let content_w_sel = area.width.saturating_sub(1 + LIB_SELECTED_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
-            let base: u16 = if is_audio {
+            let base: u16 = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
+                1
+            } else if is_audio {
                 if i == cursor { LIB_AUDIO_IMG_H.max(3) } else { 3 }
             } else if images_enabled && i == cursor {
                 let ew = content_w_sel;
@@ -6289,6 +6343,13 @@ impl App {
                         item.name.clone()
                     }
                 }
+                _ if item.is_folder && item.item_type != "Series" && item.item_type != "Season" => {
+                    if item.total_count > 0 {
+                        format!("{} ({})", item.name, item.total_count)
+                    } else {
+                        item.name.clone()
+                    }
+                }
                 _ => item.name.clone(),
             };
             let title_display = wrap(&title_line, content_w.max(1))
@@ -6377,8 +6438,10 @@ impl App {
                 }
             };
 
-            // Prepend item_type as the first span on the metadata line
-            let meta_line = {
+            // Prepend item_type as the first span on the metadata line (skip for generic folders)
+            let meta_line = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
+                meta_line
+            } else {
                 let type_str = if !item.item_type.is_empty() { item.item_type.clone() } else { "—".to_string() };
                 let mut spans = vec![Span::styled(format!("{}  ", type_str), Style::default().fg(palette::SUBTLE))];
                 spans.extend(meta_line.spans);
@@ -6400,7 +6463,8 @@ impl App {
             } else { Vec::new() };
             let seekbar_extra: usize = if !is_audio && selected && images_enabled && show_seekbar && in_progress { 2 } else { 0 }; // spacer + bar
             let artist_extra: usize = if artist_line.is_some() { 1 } else { 0 };
-            let base_lines = 2 + artist_extra;
+            let is_generic_folder = item.is_folder && item.item_type != "Series" && item.item_type != "Season";
+            let base_lines = if is_generic_folder { 1 } else { 2 + artist_extra };
             let line_count = (base_lines + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
             if line_count == 0 { continue; }
             let v_offset = if is_audio && selected {
