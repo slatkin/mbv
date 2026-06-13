@@ -6241,7 +6241,7 @@ impl App {
         let is_loading = self.libs[lib_idx].nav_stack.last().map(|l| l.loading).unwrap_or(true);
         if is_loading && self.libs[lib_idx].search.is_none() {
             let block = Block::default()
-                .borders(Borders::ALL).border_type(BorderType::Rounded)
+                .borders(Borders::TOP).border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(palette::IRIS));
             let inner = block.inner(area);
             f.render_widget(block, area);
@@ -6289,7 +6289,7 @@ impl App {
         self.layout_breadcrumbs = if is_deep { new_breadcrumbs } else { Vec::new() };
 
         let mut block = Block::default()
-            .borders(Borders::ALL).border_type(BorderType::Rounded)
+            .borders(Borders::TOP).border_type(BorderType::Rounded)
             .border_style(Style::default().fg(palette::IRIS));
         if is_deep {
             crumb_spans.insert(0, Span::raw(" "));
@@ -6495,8 +6495,8 @@ impl App {
                 let fs = p.font_size();
                 ((LIB_SELECTED_IMG_W as f32 * fs.width as f32 * 1.5) / fs.height as f32).ceil() as u16
             })
-            .unwrap_or(14)
-            .min(14);
+            .unwrap_or(12)
+            .min(12);
         #[allow(non_snake_case)]
         let LIB_SELECTED_IMG_H = lib_movie_img_h;
         // Height for a 16:9 thumbnail at LIB_EPISODE_IMG_W columns (episodes use landscape thumbnails).
@@ -6511,6 +6511,32 @@ impl App {
         let LIB_EPISODE_IMG_H = lib_episode_img_h;
         let at_album_folders = self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none();
         let is_homevideo_lib = matches!(self.libs[lib_idx].library.collection_type.as_str(), "homevideos" | "channels");
+
+        // Pre-compute the actual rendered height for the selected item's image so the row
+        // height matches what the image will really occupy (Resize::Fit may produce a smaller
+        // image than the theoretical maximum when the aspect ratio doesn't fill the cell box).
+        let actual_sel_img_h: u16 = if images_enabled {
+            if let Some((_, item)) = display_items.get(cursor) {
+                let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
+                let is_album_folder = at_album_folders && item.is_folder;
+                if !is_audio && !is_album_folder {
+                    let is_episode_like = item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video");
+                    let (img_w, img_h) = if is_episode_like {
+                        (LIB_EPISODE_IMG_W, LIB_EPISODE_IMG_H)
+                    } else {
+                        (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
+                    };
+                    let cache_key = format!("{}:lib", item.id);
+                    if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
+                        let avail = ratatui::layout::Size { width: img_w, height: img_h };
+                        state.size_for(ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3)), avail).height
+                    } else {
+                        img_h
+                    }
+                } else { 0 }
+            } else { 0 }
+        } else { 0 };
+
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
             let base: u16 = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
@@ -6537,7 +6563,8 @@ impl App {
                     (true, true) => 0,
                     _ => 1,
                 };
-                (2 + tech + ov_lines + dir_lines).max(sel_img_h)
+                let img_h_for_layout = if actual_sel_img_h > 0 { actual_sel_img_h } else { sel_img_h };
+                (2 + tech + ov_lines + dir_lines).max(img_h_for_layout)
             } else { 2 };
             base + 1 // +1 for separator line at bottom
         }).collect();
