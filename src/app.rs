@@ -4666,7 +4666,7 @@ impl App {
         let right_area = Rect { x: right_x,  y: area.y,   width: right_w, height: area.height };
 
         let now_playing_cursor = active && active_idx == cursor;
-        let show_controls = now_playing_cursor || self.connected_session_id.is_some();
+        let show_controls = active || self.connected_session_id.is_some();
 
         if now_playing_cursor {
             f.render_widget(
@@ -4677,18 +4677,26 @@ impl App {
             );
         }
 
+        // When controls are visible, reserve 2 rows at the bottom of the left panel
+        // (seekbar + buttons), and shrink the card area to avoid overlap.
+        const CTRL_ROWS: u16 = 2;
+        let card_area = if show_controls && left_area.height > CTRL_ROWS {
+            Rect { height: left_area.height - CTRL_ROWS, ..left_area }
+        } else {
+            left_area
+        };
+        let seekbar_row = left_area.bottom().saturating_sub(2);
+        let buttons_row = left_area.bottom().saturating_sub(1);
+
         // Left panel: borderless card for cursor item.
-        // Returns the seekbar Y so we can place buttons on the very next row.
-        let seekbar_y = {
+        // pos_ticks suppressed (0) when controls are shown — seekbar rendered at fixed bottom.
+        {
             let (item_id, series_id, now_playing, pos_ticks, rt_ticks, played, img_types,
                  card_name, card_series, card_ep_tag, stack_subs) = {
                 let item = &self.player_tab.items[cursor];
                 let now_playing = active && active_idx == cursor;
-                let (pos_ticks, rt_ticks) = if now_playing {
-                    (live_pos, live_runtime)
-                } else {
-                    (item.playback_position_ticks, item.runtime_ticks)
-                };
+                let rt_ticks = if now_playing { live_runtime } else { item.runtime_ticks };
+                let pos_ticks = if show_controls { 0 } else if now_playing { live_pos } else { item.playback_position_ticks };
                 let img_types: &[&str] = match item.item_type.as_str() {
                     "MusicAlbum" => &["AudioChild"],
                     "Audio"      => &["Primary"],
@@ -4713,13 +4721,50 @@ impl App {
             if self.images_enabled() {
                 self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
             }
-            self.render_card_slot(f, left_area, true, true, now_playing, true, true, true,
+            self.render_card_slot(f, card_area, true, true, now_playing, true, true, true,
                 &cache_key, &card_name, &card_series, &card_ep_tag, 0, pos_ticks, rt_ticks, played,
-                None, None, stack_subs)
+                None, None, stack_subs);
         };
 
-        // Playback buttons on the row immediately below the seekbar.
-        if show_controls {
+        // Sticky seekbar: always at the bottom of the left panel when playing.
+        if show_controls && live_pos > 0 && live_runtime > 0 && seekbar_row < left_area.bottom() {
+            let full_w  = left_area.width as usize;
+            let bar_w   = (full_w as u32 * 3 / 5) as usize;
+            let pad     = (full_w.saturating_sub(bar_w)) / 2;
+            let fraction = (live_pos as f64 / live_runtime as f64).clamp(0.0, 1.0);
+            let filled  = ((fraction * bar_w as f64).round() as usize).min(bar_w);
+            let fmt_ms = |t: i64| -> String {
+                let s = t / crate::api::TICKS_PER_SECOND;
+                if s >= 3600 { format!("{}:{:02}:{:02}", s/3600, (s%3600)/60, s%60) }
+                else         { format!("{}:{:02}", s/60, s%60) }
+            };
+            let bar_x   = left_area.x + pad as u16;
+            let bar_end = bar_x + bar_w as u16;
+            f.render_widget(Paragraph::new(Line::from(vec![
+                Span::raw(" ".repeat(pad)),
+                Span::styled("━".repeat(filled),         Style::default().fg(palette::IRIS)),
+                Span::styled("─".repeat(bar_w - filled), Style::default().fg(palette::IRIS_DIM)),
+            ])), Rect { x: left_area.x, y: seekbar_row, width: left_area.width, height: 1 });
+            let elapsed_str = fmt_ms(live_pos);
+            let total_str   = fmt_ms(live_runtime);
+            let elapsed_w   = elapsed_str.chars().count() as u16;
+            let total_w     = total_str.chars().count() as u16;
+            let time_style  = Style::default().fg(palette::MUTED);
+            let elapsed_x   = bar_x.saturating_sub(elapsed_w + 1).max(left_area.x);
+            f.render_widget(Paragraph::new(Span::styled(elapsed_str, time_style)),
+                Rect { x: elapsed_x, y: seekbar_row, width: elapsed_w, height: 1 });
+            let total_x = bar_end + 1;
+            if total_x + total_w <= left_area.x + left_area.width {
+                f.render_widget(Paragraph::new(Span::styled(total_str, time_style)),
+                    Rect { x: total_x, y: seekbar_row, width: total_w, height: 1 });
+            }
+            self.layout_seekbar_area = Rect { x: bar_x, y: seekbar_row, width: bar_w as u16, height: 1 };
+        } else {
+            self.layout_seekbar_area = Rect::default();
+        }
+
+        // Sticky playback buttons: always at the very bottom of the left panel when playing.
+        if show_controls && buttons_row < left_area.bottom() {
             let paused = if let Some(ref remote) = self.connected_session_state {
                 remote.is_paused
             } else {
@@ -4733,34 +4778,15 @@ impl App {
                 btn_spans.push(Span::styled(format!("  {icon}  "), btn_style));
             }
             const BTNS_W: u16 = 30;
-            if let Some(sy) = seekbar_y {
-                let btn_y = sy + 1;
-                let btn_x = left_area.x + left_area.width.saturating_sub(BTNS_W) / 2;
-                if btn_y < left_area.bottom() {
-                    f.render_widget(
-                        Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
-                        Rect { x: left_area.x, y: btn_y, width: left_area.width, height: 1 },
-                    );
-                    self.layout_button_area = Rect { x: btn_x, y: btn_y, width: BTNS_W, height: 1 };
-                } else {
-                    self.layout_button_area = Rect::default();
-                }
-            } else {
-                self.layout_button_area = Rect::default();
-            }
+            let btn_x = left_area.x + left_area.width.saturating_sub(BTNS_W) / 2;
+            f.render_widget(
+                Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
+                Rect { x: left_area.x, y: buttons_row, width: left_area.width, height: 1 },
+            );
+            self.layout_button_area = Rect { x: btn_x, y: buttons_row, width: BTNS_W, height: 1 };
         } else {
             self.layout_button_area = Rect::default();
         }
-        // Register the seekbar rect so mouse click/drag seeks work the same as the playback panel.
-        // Mirrors the bar geometry computed inside render_card_slot (no_border → inner == left_area).
-        self.layout_seekbar_area = if let Some(sy) = seekbar_y {
-            let full_w = left_area.width as usize;
-            let bar_w  = (full_w as u32 * 3 / 5) as usize;
-            let pad    = (full_w.saturating_sub(bar_w)) / 2;
-            Rect { x: left_area.x + pad as u16, y: sy, width: bar_w as u16, height: 1 }
-        } else {
-            Rect::default()
-        };
         self.layout_tracks_area  = Rect::default();
         self.layout_vol_area     = Rect::default();
         self.layout_sub_area     = Rect::default();
