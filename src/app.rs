@@ -3641,7 +3641,7 @@ impl App {
             (remote.volume, 100)
         } else {
             let s = self.player.status.lock().unwrap();
-            if s.active { (s.volume, s.volume_max) }
+            if s.active { (if s.muted { 0 } else { s.volume }, s.volume_max) }
             else { (self.ui_volume as i64, 100) }
         };
         let color = if volume > 100 { palette::RED }
