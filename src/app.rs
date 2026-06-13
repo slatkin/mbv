@@ -152,6 +152,8 @@ pub struct App {
     layout_home_scrollbar: Rect,
     layout_presentation_sb: Rect,
     home_panel_section_offset: usize,
+    home_cards_section_offset: usize,
+    layout_home_card_strips: Vec<(usize, Rect)>,
     layout_lib_table_area: Rect,
     layout_breadcrumbs: Vec<(u16, u16, u16, usize)>, // (x_start, x_end, row, target nav_stack len)
     last_click_time: Instant,
@@ -387,6 +389,8 @@ impl App {
             layout_home_scrollbar: Rect::default(),
             layout_presentation_sb: Rect::default(),
             home_panel_section_offset: 0,
+            home_cards_section_offset: 0,
+            layout_home_card_strips: Vec::new(),
             layout_lib_table_area: Rect::default(),
             layout_breadcrumbs: Vec::new(),
             last_click_time: Instant::now(),
@@ -517,6 +521,8 @@ impl App {
             layout_home_scrollbar: Rect::default(),
             layout_presentation_sb: Rect::default(),
             home_panel_section_offset: 0,
+            home_cards_section_offset: 0,
+            layout_home_card_strips: Vec::new(),
             layout_lib_table_area: Rect::default(),
             layout_breadcrumbs: Vec::new(),
             last_click_time: Instant::now(),
@@ -1285,8 +1291,7 @@ impl App {
         match key.code {
             KeyCode::Up => {
                 if self.home_card_view {
-                    let n = 1 + self.home.latest.len();
-                    self.home.section = (self.home.section + n - 1) % n;
+                    self.home.section = self.home.section.saturating_sub(1);
                     self.ensure_home_section_visible();
                     if !self.card_image_states.is_empty() { self.force_clear = true; }
                 } else {
@@ -1296,7 +1301,7 @@ impl App {
             KeyCode::Down => {
                 if self.home_card_view {
                     let n = 1 + self.home.latest.len();
-                    self.home.section = (self.home.section + 1) % n;
+                    self.home.section = (self.home.section + 1).min(n.saturating_sub(1));
                     self.ensure_home_section_visible();
                     if !self.card_image_states.is_empty() { self.force_clear = true; }
                 } else {
@@ -2076,7 +2081,15 @@ impl App {
                         self.home_panel_section_offset =
                             (self.home_panel_section_offset as i64 + delta).clamp(0, max_offset as i64) as usize;
                     } else if self.home_rect.contains((col, row).into()) {
-                        self.move_home_cursor(delta);
+                        if self.home_card_view {
+                            let n = 1 + self.home.latest.len();
+                            self.home.section = (self.home.section as i64 + delta)
+                                .clamp(0, n as i64 - 1) as usize;
+                            self.ensure_home_section_visible();
+                            if !self.card_image_states.is_empty() { self.force_clear = true; }
+                        } else {
+                            self.move_home_cursor(delta);
+                        }
                     }
                 } else if self.tab_idx == 1 {
                     let n = self.player_tab.items.len();
@@ -2131,6 +2144,16 @@ impl App {
                         if self.tab_idx == 0 { self.move_home_cursor(1); }
                         else { let n = self.player_tab.items.len(); if self.player_tab.playlist_cursor + 1 < n { self.player_tab.playlist_cursor += 1; } }
                         return;
+                    }
+                }
+                if self.tab_idx == 0 && self.home_card_view {
+                    let strips = self.layout_home_card_strips.clone();
+                    for (sec_idx, strip_rect) in &strips {
+                        if strip_rect.contains((col, row).into()) && *sec_idx != self.home.section {
+                            self.home.section = *sec_idx;
+                            if !self.card_image_states.is_empty() { self.force_clear = true; }
+                            return;
+                        }
                     }
                 }
                 if let Some(r) = self.layout_carousel_up_arrow {
@@ -2432,6 +2455,29 @@ impl App {
         let panel_h = self.terminal_height.saturating_sub(chrome);
 
         let n_latest = self.home.latest.len();
+        let n_sections = 1 + n_latest;
+
+        if self.home_card_view {
+            let compact = self.terminal_height < 28;
+            let max_h_full = if panel_h < 12 { panel_h }
+                             else { ((panel_h as u32 * 24 / 25) as u16).min(24) }.max(4);
+            let side_h_full   = ((max_h_full as u32 * 4 / 5) as u16).max(3);
+            let center_h_full = if compact { side_h_full } else { side_h_full + 2 };
+            let visible = (panel_h / center_h_full).max(1).min(n_sections as u16) as usize;
+            let sec = self.home.section;
+            if sec < self.home_cards_section_offset {
+                self.home_cards_section_offset = sec;
+            } else if sec >= self.home_cards_section_offset + visible {
+                self.home_cards_section_offset = sec + 1 - visible;
+            }
+            let max_offset = n_sections.saturating_sub(visible);
+            if self.home_cards_section_offset > max_offset {
+                self.home_cards_section_offset = max_offset;
+            }
+            return;
+        }
+
+        let _ = n_sections; // used above
         let n_rows = 1 + (n_latest + 1) / 2;
         let visible_rows = if (n_rows as u16) * HOME_MIN_SECTION_H <= panel_h {
             n_rows
@@ -4353,6 +4399,7 @@ impl App {
         self.layout_carousel_right_arrow = None;
         self.layout_carousel_up_arrow = None;
         self.layout_carousel_down_arrow = None;
+        self.layout_home_card_strips.clear();
         if self.home_card_view {
             self.render_home_cards(f, area);
         } else {
@@ -4608,11 +4655,11 @@ impl App {
 
         let cards_h = area.height;
 
-        // Center card: full height minus 1 row top and bottom.
-        // Side cards: 80% of center height, centered vertically.
-        let center_h     = cards_h.saturating_sub(1).max(4);
-        let center_v_pad: u16 = 1;
-        let side_h       = ((center_h as u32 * 4 / 5) as u16).max(3);
+        let compact      = self.terminal_height < 28;
+        let max_h        = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
+        let side_h       = ((max_h as u32 * 4 / 5) as u16).max(3);
+        let center_h     = if compact { side_h } else { side_h + 2 };
+        let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
         let side_v_pad   = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
 
         // Below this width threshold, hide side cards and give all space to center.
@@ -5338,53 +5385,117 @@ impl App {
         let n_sections = 1 + self.home.latest.len();
         if n_sections == 0 { return; }
 
-        // Clamp section index in case data changed.
         if self.home.section >= n_sections { self.home.section = 0; }
+
+        // Compute card height as if the full area were one section, then see how
+        // many sections of that height actually fit.  This keeps cards the same
+        // size as the original single-section view.
+        let compact = self.terminal_height < 28;
+        let max_h_full = if area.height < 12 { area.height }
+                         else { ((area.height as u32 * 24 / 25) as u16).min(24) }.max(4);
+        let side_h_full  = ((max_h_full as u32 * 4 / 5) as u16).max(3);
+        let center_h_full = if compact { side_h_full } else { side_h_full + 2 };
+        let visible = (area.height / center_h_full).max(1).min(n_sections as u16) as usize;
+
+        // Keep active section in the visible window.
         let sec = self.home.section;
+        if sec < self.home_cards_section_offset {
+            self.home_cards_section_offset = sec;
+        } else if sec >= self.home_cards_section_offset + visible {
+            self.home_cards_section_offset = sec + 1 - visible;
+        }
+        let max_offset = n_sections.saturating_sub(visible);
+        if self.home_cards_section_offset > max_offset {
+            self.home_cards_section_offset = max_offset;
+        }
+        let offset = self.home_cards_section_offset;
 
-        // Get current section's title, items, and cursor.
-        let (sec_title, items, cursor) = if sec == 0 {
-            (
-                "Continue Watching".to_string(),
-                self.home.continue_items.clone(),
-                self.home.continue_cursor,
-            )
-        } else {
-            let (t, _, items, c) = &self.home.latest[sec - 1];
-            (t.clone(), items.clone(), *c)
-        };
+        let arrow_top = offset > 0;
+        let arrow_bot = offset + visible < n_sections;
 
-        let n = items.len();
-        if n == 0 {
-            f.render_widget(
-                Paragraph::new("(empty)").style(Style::default().fg(palette::MUTED)).alignment(Alignment::Center),
-                area,
-            );
-            return;
+        // Strips fill the entire area; arrows are rendered at area.y / area.bottom()-1
+        // and naturally land in the outermost strips' center_v_pad space — no gap.
+        let constraints: Vec<ratatui::layout::Constraint> =
+            (0..visible).map(|_| ratatui::layout::Constraint::Ratio(1, visible as u32)).collect();
+        let content_rect = area;
+        let strips = ratatui::layout::Layout::vertical(constraints).split(content_rect);
+
+        // Clone section data before the render loop (avoids borrow conflicts).
+        let mut section_data: Vec<(String, Vec<crate::api::MediaItem>, usize)> = Vec::with_capacity(visible);
+        for i in 0..visible {
+            let s = offset + i;
+            let (title, items, cursor) = if s == 0 {
+                (
+                    "Continue Watching".to_string(),
+                    self.home.continue_items.clone(),
+                    self.home.continue_cursor,
+                )
+            } else {
+                let (t, _, items, c) = &self.home.latest[s - 1];
+                (t.clone(), items.clone(), *c)
+            };
+            section_data.push((title, items, cursor));
         }
 
+        for i in 0..visible {
+            let s = offset + i;
+            let is_active = s == self.home.section;
+            let (ref title, ref items, cursor) = section_data[i];
+            let strip = strips[i];
+            if items.is_empty() {
+                f.render_widget(
+                    Paragraph::new("(empty)")
+                        .style(Style::default().fg(palette::MUTED))
+                        .alignment(Alignment::Center),
+                    strip,
+                );
+                self.layout_home_card_strips.push((s, strip));
+                continue;
+            }
+            let slots = self.render_home_cards_section(f, strip, title, items, cursor, is_active);
+            if is_active {
+                self.layout_carousel_slots = slots;
+            }
+            self.layout_home_card_strips.push((s, strip));
+        }
+
+        let ud_arrow_style = Style::default().fg(palette::IRIS);
+        if arrow_top {
+            let r = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+            self.layout_carousel_up_arrow = Some(r);
+            f.render_widget(Paragraph::new("▲").style(ud_arrow_style).alignment(Alignment::Center), r);
+        }
+        if arrow_bot {
+            let r = Rect { x: area.x, y: area.bottom().saturating_sub(1), width: area.width, height: 1 };
+            self.layout_carousel_down_arrow = Some(r);
+            f.render_widget(Paragraph::new("▼").style(ud_arrow_style).alignment(Alignment::Center), r);
+        }
+    }
+
+    fn render_home_cards_section(
+        &mut self, f: &mut ratatui::Frame, area: Rect,
+        sec_title: &str, items: &[crate::api::MediaItem], cursor: usize, is_active: bool,
+    ) -> [(Option<usize>, Rect); 3] {
+        let n = items.len();
+        if n == 0 { return [(None, Rect::default()); 3]; }
         let cursor = cursor.min(n - 1);
 
         let cards_area = area;
         let cards_h    = cards_area.height;
 
-        // Same geometry as render_playlist_cards.
-        let compact    = self.terminal_height < 28;
-        let max_h      = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
-        let side_h     = ((max_h as u32 * 4 / 5) as u16).max(3);
-        let center_h   = if compact { side_h } else { side_h + 2 };
+        let compact      = self.terminal_height < 28;
+        let max_h        = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
+        let side_h       = ((max_h as u32 * 4 / 5) as u16).max(3);
+        let center_h     = if compact { side_h } else { side_h + 2 };
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
-        // Row just below the center card — used for ▼ scroll arrow.
-        let arrow_gap  = if compact { 0 } else { 1 };
-        let gutter_y = (cards_area.y + center_v_pad + center_h + arrow_gap).min(area.bottom().saturating_sub(1));
-        let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
+        let side_v_pad   = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
 
         const SIDE_HIDE_W: u16 = 60;
         let show_sides = cards_area.width >= SIDE_HIDE_W;
 
         const GAP: u16 = 1;
         let (center_w, side_w, x_left, x_center, x_right) = if show_sides {
-            let avail_w  = cards_area.width.saturating_sub(GAP * 4 + 4);
+            let avail_w = cards_area.width.saturating_sub(GAP * 4 + 4);
             let cw = (avail_w as u32 * 2 / 5) as u16;
             let sw = avail_w.saturating_sub(cw) / 2;
             let xl = cards_area.x + GAP + 2;
@@ -5412,12 +5523,6 @@ impl App {
                 Rect { x: x_right + 1, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(3), height: side_h },
                 false,
             ),
-        ];
-
-        self.layout_carousel_slots = [
-            (slots[0].0, slots[0].1),
-            (slots[1].0, slots[1].1),
-            (slots[2].0, slots[2].1),
         ];
 
         if self.images_enabled() {
@@ -5451,15 +5556,15 @@ impl App {
             let item = &items[i];
             let is_ep = item.item_type == "Episode" && item.parent_index_number > 0;
             let ep_tag = if is_ep { format!("S{:02}E{:02}", item.parent_index_number, item.index_number) } else { String::new() };
-            let name       = item.name.clone();
-            let series     = item.series_name.clone();
-            let runtime    = item.runtime_ticks;
-            let pos_ticks  = item.playback_position_ticks;
-            let rt_ticks   = item.runtime_ticks;
-            let played     = item.played;
-            let item_id    = item.id.clone();
-            let series_id  = item.series_id.clone();
-            let selected   = i == cursor;
+            let name      = item.name.clone();
+            let series    = item.series_name.clone();
+            let runtime   = item.runtime_ticks;
+            let pos_ticks = item.playback_position_ticks;
+            let rt_ticks  = item.runtime_ticks;
+            let played    = item.played;
+            let item_id   = item.id.clone();
+            let series_id = item.series_id.clone();
+            let selected  = i == cursor && is_active;
 
             let (cache_key, img_types): (String, &[&str]) = if *is_center {
                 let types: &[&str] = match item.item_type.as_str() {
@@ -5481,41 +5586,30 @@ impl App {
                 self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
             }
 
-            let count_label = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
-            let sec_title_label = if *is_center { Some(sec_title.as_str()) } else { None };
+            let count_label     = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
+            let sec_title_label = if *is_center { Some(sec_title) } else { None };
             self.render_card_slot(f, *card_rect, *is_center, selected, false, false, false, false,
                 &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
                 count_label.as_deref(), sec_title_label, false);
         }
 
-        // Left/right item scroll arrows.
-        let lr_arrow_style = Style::default().fg(palette::WHITE);
-        let y_mid = cards_area.y + center_v_pad + center_h / 2;
-        if show_sides && cursor > 0 {
-            let r = Rect { x: x_left, y: y_mid, width: 1, height: 1 };
-            self.layout_carousel_left_arrow = Some(r);
-            f.render_widget(Paragraph::new("◀").style(lr_arrow_style), r);
-        }
-        if show_sides && cursor + 1 < n {
-            let r = Rect { x: x_right + side_w - 1, y: y_mid, width: 1, height: 1 };
-            self.layout_carousel_right_arrow = Some(r);
-            f.render_widget(Paragraph::new("▶").style(lr_arrow_style), r);
+        // Left/right item navigation arrows — only for the active section.
+        if is_active {
+            let lr_arrow_style = Style::default().fg(palette::WHITE);
+            let y_mid = cards_area.y + center_v_pad + center_h / 2;
+            if show_sides && cursor > 0 {
+                let r = Rect { x: x_left, y: y_mid, width: 1, height: 1 };
+                self.layout_carousel_left_arrow = Some(r);
+                f.render_widget(Paragraph::new("◀").style(lr_arrow_style), r);
+            }
+            if show_sides && cursor + 1 < n {
+                let r = Rect { x: x_right + side_w - 1, y: y_mid, width: 1, height: 1 };
+                self.layout_carousel_right_arrow = Some(r);
+                f.render_widget(Paragraph::new("▶").style(lr_arrow_style), r);
+            }
         }
 
-        // Section scroll arrows.
-        let n_sections = 1 + self.home.latest.len();
-        let ud_arrow_style = Style::default().fg(palette::IRIS);
-        let up_arrow_offset = 1 + arrow_gap;
-        if self.home.section > 0 && center_v_pad >= up_arrow_offset {
-            let r = Rect { x: area.x, y: cards_area.y + center_v_pad - up_arrow_offset, width: area.width, height: 1 };
-            self.layout_carousel_up_arrow = Some(r);
-            f.render_widget(Paragraph::new("▲").style(ud_arrow_style).alignment(Alignment::Center), r);
-        }
-        if self.home.section + 1 < n_sections && gutter_y < area.bottom() {
-            let r = Rect { x: area.x, y: gutter_y, width: area.width, height: 1 };
-            self.layout_carousel_down_arrow = Some(r);
-            f.render_widget(Paragraph::new("▼").style(ud_arrow_style).alignment(Alignment::Center), r);
-        }
+        [(slots[0].0, slots[0].1), (slots[1].0, slots[1].1), (slots[2].0, slots[2].1)]
     }
 
     fn render_home_panel(&mut self, f: &mut ratatui::Frame, area: Rect) {
@@ -6542,6 +6636,8 @@ mod tests {
             layout_home_scrollbar: Rect::default(),
             layout_presentation_sb: Rect::default(),
             home_panel_section_offset: 0,
+            home_cards_section_offset: 0,
+            layout_home_card_strips: Vec::new(),
             layout_lib_table_area: ratatui::layout::Rect::default(),
             layout_breadcrumbs: Vec::new(),
             last_click_time: std::time::Instant::now(),
