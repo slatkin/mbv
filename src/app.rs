@@ -2103,6 +2103,17 @@ impl App {
                         }
                     }
                 } else if self.tab_idx == 1 {
+                    if self.playlist_view == 2 {
+                        let sb = self.layout_presentation_sb;
+                        if sb.width > 0 && sb.contains((col, row).into()) {
+                            let n = self.player_tab.items.len();
+                            if n > 0 {
+                                self.player_tab.playlist_cursor =
+                                    (self.player_tab.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                            }
+                            return;
+                        }
+                    }
                     let n = self.player_tab.items.len();
                     if n > 0 {
                         self.player_tab.playlist_cursor =
@@ -2729,6 +2740,30 @@ impl App {
     fn flash_status(&mut self, msg: String) {
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(3));
+    }
+
+    /// Returns effective playback state for queue rendering, preferring a connected remote
+    /// session over the local player. Returns (active, active_idx, pos_ticks, runtime_ticks, paused).
+    fn effective_playback_state(&self) -> (bool, usize, i64, i64, bool) {
+        if let Some(ref remote) = self.connected_session_state {
+            let active_idx = remote.now_playing_item_id.as_ref()
+                .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id))
+                .unwrap_or(0);
+            let pos = if remote.is_paused {
+                self.remote_pos_s
+            } else {
+                (self.remote_pos_s + self.remote_pos_at.elapsed().as_secs() as i64)
+                    .min(remote.runtime_s)
+            };
+            (remote.now_playing.is_some(),
+             active_idx,
+             pos * crate::api::TICKS_PER_SECOND,
+             remote.runtime_s * crate::api::TICKS_PER_SECOND,
+             remote.is_paused)
+        } else {
+            let s = self.player.status.lock().unwrap();
+            (s.active, s.current_idx, s.position_ticks, s.runtime_ticks, s.paused)
+        }
     }
 
     /// Play a single item. For series episodes with always_play_next, expands
@@ -4428,10 +4463,7 @@ impl App {
     }
 
     fn render_playlist_panel(&mut self, f: &mut ratatui::Frame, area: Rect) {
-        let (active, current_idx, live_pos, live_runtime) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.current_idx, s.position_ticks, s.runtime_ticks)
-        };
+        let (active, current_idx, live_pos, live_runtime, _live_paused) = self.effective_playback_state();
 
         self.playlist_rect = area;
 
@@ -4669,10 +4701,7 @@ impl App {
         }
 
         let cursor = self.player_tab.playlist_cursor;
-        let (active, active_idx) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.current_idx)
-        };
+        let (active, active_idx, ..) = self.effective_playback_state();
 
         // Filmstrip layout: large active card on top + scrolling strip below.
         // Only activates when there is enough vertical room.
@@ -4959,10 +4988,7 @@ impl App {
         let n = self.player_tab.items.len();
         if n == 0 { return; }
 
-        let (active, active_idx, live_pos, live_runtime) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.current_idx, s.position_ticks, s.runtime_ticks)
-        };
+        let (active, active_idx, live_pos, live_runtime, live_paused) = self.effective_playback_state();
 
         let cursor = self.player_tab.playlist_cursor;
 
@@ -5027,15 +5053,22 @@ impl App {
         };
 
         // Title of now-playing item, one row above the seekbar.
-        if show_controls && active && title_row < left_area.bottom() {
-            let playing_title = self.player_tab.items.get(active_idx)
-                .map(|it| it.name.clone())
-                .unwrap_or_default();
+        if show_controls && title_row < left_area.bottom() {
+            let playing_title = if let Some(ref remote) = self.connected_session_state {
+                remote.now_playing.clone().unwrap_or_default()
+            } else {
+                self.player_tab.items.get(active_idx)
+                    .map(|it| it.name.clone())
+                    .unwrap_or_default()
+            };
+            if !playing_title.is_empty() {
             let title_trunc = trunc_str(&playing_title, left_area.width as usize);
+            let title_color = if self.connected_session_id.is_some() { palette::IRIS } else { palette::FOAM };
             f.render_widget(Paragraph::new(Line::from(
-                Span::styled(title_trunc, Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
+                Span::styled(title_trunc, Style::default().fg(title_color).add_modifier(Modifier::BOLD)),
             )).alignment(Alignment::Center),
             Rect { x: left_area.x, y: title_row, width: left_area.width, height: 1 });
+            }
         }
 
         // Sticky seekbar: always at the bottom of the left panel when playing.
@@ -5077,11 +5110,7 @@ impl App {
 
         // Sticky playback buttons: always at the very bottom of the left panel when playing.
         if show_controls && buttons_row < left_area.bottom() {
-            let paused = if let Some(ref remote) = self.connected_session_state {
-                remote.is_paused
-            } else {
-                self.player.status.lock().unwrap().paused
-            };
+            let paused = live_paused;
             let btn_style = Style::default().fg(Color::Rgb(203, 212, 241));
             let pp_icon   = if !paused { "\u{f04c}" } else { "\u{f04b}" };
             let btn_icons = ["\u{f048}", "\u{f04a}", pp_icon, "\u{f04d}", "\u{f04e}", "\u{f051}"];

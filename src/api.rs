@@ -136,18 +136,19 @@ impl MediaItem {
 
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
-    pub id:            String,
-    pub device_name:   String,
-    pub client:        String,
-    pub user_name:     String,
-    pub host:          String,
-    pub now_playing:   Option<String>,
-    pub position_s:    i64,
-    pub runtime_s:     i64,
-    pub is_paused:     bool,
-    pub volume:        i64,
-    pub sub_index:     i64,   // -1 = disabled
-    pub audio_index:   i64,   // 1-based; 0 = unknown
+    pub id:                  String,
+    pub device_name:         String,
+    pub client:              String,
+    pub user_name:           String,
+    pub host:                String,
+    pub now_playing:         Option<String>,
+    pub now_playing_item_id: Option<String>,
+    pub position_s:          i64,
+    pub runtime_s:           i64,
+    pub is_paused:           bool,
+    pub volume:              i64,
+    pub sub_index:           i64,   // -1 = disabled
+    pub audio_index:         i64,   // 1-based; 0 = unknown
 }
 
 fn parse_item(raw: &Value) -> MediaItem {
@@ -838,8 +839,9 @@ impl EmbyClient {
                 client:      v["Client"].as_str().unwrap_or("").to_string(),
                 user_name:   v["UserName"].as_str().unwrap_or("").to_string(),
                 host,
-                now_playing: npi["Name"].as_str().map(str::to_string),
-                position_s:  ps["PositionTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,
+                now_playing:         npi["Name"].as_str().map(str::to_string),
+                now_playing_item_id: npi["Id"].as_str().map(str::to_string),
+                position_s:          ps["PositionTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,
                 runtime_s:   npi["RunTimeTicks"].as_i64().unwrap_or(0) / TICKS_PER_SECOND,
                 is_paused:   ps["IsPaused"].as_bool().unwrap_or(false),
                 volume:      ps["VolumeLevel"].as_i64().unwrap_or(100),
