@@ -4880,7 +4880,7 @@ impl App {
                 }
                 Row::new([
                     Cell::from(Line::from(spans)),
-                    Cell::from(Line::from(length.as_str()).alignment(Alignment::Right)),
+                    Cell::from(Line::from(length.as_str()).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
                 ]).style(row_style)
             }
         }).collect();
