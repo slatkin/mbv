@@ -2962,10 +2962,7 @@ impl App {
                 let mut tracks: Vec<MediaItem> = level_items.into_iter()
                     .filter(|i| is_playable(i))
                     .collect();
-                tracks.sort_by_key(|i| {
-                    if i.index_number > 0 { (0i64, i.index_number, String::new()) }
-                    else { (1i64, 0, natural_sort_key(i.sort_key())) }
-                });
+                sort_audio_tracks(&mut tracks);
                 if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
                     self.player_tab.items = tracks.clone();
                     self.player_tab.playlist_cursor = 0;
@@ -3392,6 +3389,9 @@ impl App {
                         .map(|l| l.title.clone())
                         .unwrap_or_default();
                     self.log.push(Level::Debug, "app", format!("album: entered «{title}»"));
+                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                        sort_audio_tracks(&mut last.items);
+                    }
                 }
                 self.maybe_fetch_next_page(lib_idx);
             }
@@ -3405,6 +3405,11 @@ impl App {
                         }
                     }
                 }
+                if self.is_album_level(lib_idx) {
+                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                        sort_audio_tracks(&mut last.items);
+                    }
+                }
                 self.maybe_fetch_next_page(lib_idx);
             }
             LibEvent::Refreshed { lib_idx, parent_id, items, total_count } => {
@@ -3415,6 +3420,11 @@ impl App {
                             last.total_count = total_count;
                             last.loading = false;
                         }
+                    }
+                }
+                if self.is_album_level(lib_idx) {
+                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+                        sort_audio_tracks(&mut last.items);
                     }
                 }
                 if self.tab_idx == lib_idx + self.lib_tab_offset() {
@@ -6658,6 +6668,21 @@ fn natural_sort_key(s: &str) -> String {
 
 fn is_playable(item: &crate::api::MediaItem) -> bool {
     matches!(item.media_type.as_str(), "Video" | "Audio")
+}
+
+fn sort_audio_tracks(items: &mut Vec<crate::api::MediaItem>) {
+    let has_track_nums = items.iter().any(|i| i.index_number > 0);
+    if has_track_nums {
+        items.sort_by_key(|i| {
+            if i.index_number > 0 {
+                (0i64, i.parent_index_number, i.index_number, String::new())
+            } else {
+                (1i64, 0, 0, natural_sort_key(i.sort_key()))
+            }
+        });
+    } else {
+        items.sort_by_key(|i| natural_sort_key(i.sort_key()));
+    }
 }
 
 
