@@ -3841,7 +3841,8 @@ impl App {
         let blank = || Line::from("");
 
         let show_log = self.show_log_tab;
-        let mut lines: Vec<Line> = vec![
+
+        let sec_global = vec![
             blank(),
             section("GLOBAL"),
             mk("F1",               "Help"),
@@ -3858,7 +3859,7 @@ impl App {
             mk("c",                "Clear Queue (confirms)"),
             mk("q",                "Quit"),
         ];
-        lines.extend(vec![
+        let sec_playback = vec![
             blank(),
             section("PLAYBACK"),
             mk("Space",            "Pause / Resume"),
@@ -3867,19 +3868,22 @@ impl App {
             mk("- / +",            "Volume down / up"),
             mk("a",                "Cycle audio track"),
             mk("z",                "Enable subtitles"),
-
+        ];
+        let sec_queue = vec![
             blank(),
             section("QUEUE"),
             mk(".",                "Jump to playing item"),
             mk("Del",              "Remove from Queue"),
             mk("v",                "Toggle view"),
-
+        ];
+        let sec_home = vec![
             blank(),
             section("HOME"),
             mk("Alt+↑ / ↓",        "Switch sections"),
             mk("Ctrl+W",           "Toggle watched"),
             mk("Ctrl+Q",           "Add to Queue"),
-
+        ];
+        let sec_library = vec![
             blank(),
             section("LIBRARY"),
             mk("Esc / Backspace",  "Go back"),
@@ -3888,11 +3892,10 @@ impl App {
             mk("Ctrl+S",           "Shuffle and play selection"),
             mk("Ctrl+P",           "Play all (recursive)"),
             mk("Ctrl+Q",           "Add to Queue"),
-
-            blank(),
-        ]);
-        if show_log {
-            lines.extend(vec![
+        ];
+        let sec_log = if show_log {
+            vec![
+                blank(),
                 section("LOG"),
                 mk("Alt+L",            "Open Log"),
                 mk("← / →",            "Switch pane (Sources / Log)"),
@@ -3900,10 +3903,58 @@ impl App {
                 mk("PgUp / PgDn",      "Page scroll"),
                 mk("Space",            "Toggle source on/off"),
                 mk("c",                "Copy log to clipboard"),
-                blank(),
-                blank(),
-            ]);
+            ]
+        } else {
+            vec![]
+        };
+
+        // Determine context: which section to surface first.
+        let is_log = show_log && self.tab_idx == self.log_tab_idx();
+        let is_lib = self.tab_idx >= self.lib_tab_offset()
+            && self.tab_idx < self.log_tab_idx();
+        let is_queue = self.tab_idx == 1;
+        let is_home = self.tab_idx == 0;
+
+        let mut ordered: Vec<Vec<Line>> = Vec::new();
+        if is_home {
+            ordered.push(sec_home);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_library);
+            ordered.push(sec_log);
+        } else if is_queue {
+            ordered.push(sec_queue);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_home);
+            ordered.push(sec_library);
+            ordered.push(sec_log);
+        } else if is_lib {
+            ordered.push(sec_library);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_home);
+            ordered.push(sec_log);
+        } else if is_log {
+            ordered.push(sec_log);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_home);
+            ordered.push(sec_library);
+        } else {
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_home);
+            ordered.push(sec_library);
+            ordered.push(sec_log);
         }
+
+        let mut lines: Vec<Line> = ordered.into_iter().flatten().collect();
+        lines.push(blank());
 
         let total = lines.len();
         let visible = content.height as usize;
@@ -4718,7 +4769,7 @@ impl App {
         // Title of now-playing item, one row above the seekbar.
         if show_controls && active && title_row < left_area.bottom() {
             let playing_title = self.player_tab.items.get(active_idx)
-                .map(|it| it.playback_label())
+                .map(|it| it.name.clone())
                 .unwrap_or_default();
             let title_trunc = trunc_str(&playing_title, left_area.width as usize);
             f.render_widget(Paragraph::new(Line::from(
