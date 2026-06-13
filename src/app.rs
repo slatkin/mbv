@@ -2630,8 +2630,12 @@ impl App {
 
     fn cycle_audio(&mut self) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let cur = self.connected_session_state.as_ref().map(|s| s.audio_index).unwrap_or(1);
-            let next = if cur <= 1 { 2 } else { 1 };
+            let (cur_idx, streams) = self.connected_session_state.as_ref()
+                .map(|s| (s.audio_index, s.audio_streams.clone()))
+                .unwrap_or((0, vec![]));
+            if streams.is_empty() { return; }
+            let cur = streams.iter().position(|(i, _)| *i == cur_idx).unwrap_or(0);
+            let next = streams[(cur + 1) % streams.len()].0;
             let id = conn_id.clone();
             if let Some(ref mut state) = self.connected_session_state {
                 state.audio_index = next;
@@ -2665,8 +2669,10 @@ impl App {
 
     fn toggle_sub(&mut self) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let idx = self.connected_session_state.as_ref().map(|s| s.sub_index).unwrap_or(-1);
-            let next = if idx == -1 { 1i64 } else { -1i64 };
+            let (cur_idx, first_sub) = self.connected_session_state.as_ref()
+                .map(|s| (s.sub_index, s.subtitle_streams.first().map(|(i, _)| *i)))
+                .unwrap_or((-1, None));
+            let next = if cur_idx == -1 { first_sub.unwrap_or(1) } else { -1 };
             let id = conn_id.clone();
             if let Some(ref mut state) = self.connected_session_state {
                 state.sub_index = next;
@@ -2696,9 +2702,20 @@ impl App {
     }
 
     fn cycle_sub(&mut self) {
-        if let Some(ref _conn_id) = self.connected_session_id.clone() {
-            // Without track list from remote, just toggle off/on
-            self.toggle_sub();
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let (cur_idx, streams) = self.connected_session_state.as_ref()
+                .map(|s| (s.sub_index, s.subtitle_streams.clone()))
+                .unwrap_or((-1, vec![]));
+            if streams.is_empty() { self.toggle_sub(); return; }
+            // Cycle: off → stream0 → stream1 → … → off
+            let entries: Vec<i64> = std::iter::once(-1).chain(streams.iter().map(|(i, _)| *i)).collect();
+            let cur = entries.iter().position(|&i| i == cur_idx).unwrap_or(0);
+            let next = entries[(cur + 1) % entries.len()];
+            let id = conn_id.clone();
+            if let Some(ref mut state) = self.connected_session_state {
+                state.sub_index = next;
+            }
+            self.do_session_command(move |c| c.session_set_subtitle_index(&id, next));
             return;
         }
         let (tracks, current_id) = {
