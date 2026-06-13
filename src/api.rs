@@ -7,6 +7,14 @@ use crate::config::Config;
 
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
 
+fn decode_html_entities(s: &str) -> String {
+    s.replace("&quot;", "\"")
+     .replace("&apos;", "'")
+     .replace("&lt;", "<")
+     .replace("&gt;", ">")
+     .replace("&amp;", "&")
+}
+
 
 pub fn gen_session_id() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -193,7 +201,7 @@ fn parse_item(raw: &Value) -> MediaItem {
             .and_then(|s| s.get(..4))
             .and_then(|s| s.parse().ok())
             .unwrap_or(0),
-        overview: raw["Overview"].as_str().unwrap_or("").to_string(),
+        overview: decode_html_entities(raw["Overview"].as_str().unwrap_or("")),
         premiere_date: raw["PremiereDate"].as_str()
             .and_then(|s| s.get(..10))
             .map(|s| s.to_string())

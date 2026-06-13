@@ -61,6 +61,7 @@ struct LibSearch {
     items: Vec<crate::api::MediaItem>,
     results: Vec<usize>,               // indices into items, sorted by score desc
     cursor: usize,                     // position within results
+    loading: bool,                     // true while full-library fetch is in flight
 }
 
 struct BrowseLevel {
@@ -83,6 +84,7 @@ enum LibEvent {
     Loaded { lib_idx: usize, parent_id: String, level: BrowseLevel },
     PageAppended { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
     Refreshed { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
+    SearchItemsLoaded { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
     Error(String),
 }
 
@@ -1308,8 +1310,8 @@ impl App {
                 if idx < self.tab_count() { self.set_tab(idx); }
             }
             KeyCode::Char('/') => {
-                let items = self.libs[lib_idx].nav_stack.last()
-                    .map(|l| l.items.clone())
+                let (items, needs_full_load) = self.libs[lib_idx].nav_stack.last()
+                    .map(|l| (l.items.clone(), l.items.len() < l.total_count))
                     .unwrap_or_default();
                 let n = items.len();
                 self.libs[lib_idx].search = Some(LibSearch {
@@ -1317,7 +1319,11 @@ impl App {
                     items,
                     results: (0..n).collect(),
                     cursor: 0,
+                    loading: needs_full_load,
                 });
+                if needs_full_load {
+                    self.spawn_search_items_load(lib_idx);
+                }
                 self.update_lib_search(lib_idx);
             }
             _ => {}
@@ -3351,6 +3357,27 @@ impl App {
         });
     }
 
+    fn spawn_search_items_load(&self, lib_idx: usize) {
+        let lib = &self.libs[lib_idx];
+        let lvl = match lib.nav_stack.last() { Some(l) => l, None => return };
+        let parent_id = lvl.parent_id.clone();
+        let total_count = lvl.total_count;
+        let item_types = lvl.item_types.clone();
+        let unplayed_only = lvl.unplayed_only;
+        let sort_by = lvl.sort_by.clone();
+        let sort_order = lvl.sort_order.clone();
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            match client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, 0, total_count, &sort_by, &sort_order) {
+                Ok((items, _)) => {
+                    let _ = tx.send(LibEvent::SearchItemsLoaded { lib_idx, parent_id, items });
+                }
+                Err(_) => {}
+            }
+        });
+    }
+
     fn spawn_refresh(&self, lib_idx: usize, parent_id: String,
                      item_types: Option<String>, unplayed_only: bool,
                      sort_by: String, sort_order: String, loaded_count: usize) {
@@ -3509,6 +3536,18 @@ impl App {
                 if self.tab_idx == lib_idx + self.lib_tab_offset() {
                     self.flash_status("Refreshed".into());
                 }
+            }
+            LibEvent::SearchItemsLoaded { lib_idx, parent_id, items } => {
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    let current_parent = lib.nav_stack.last().map(|l| l.parent_id.as_str());
+                    if current_parent == Some(&parent_id) {
+                        if let Some(s) = lib.search.as_mut() {
+                            s.items = items;
+                            s.loading = false;
+                        }
+                    }
+                }
+                self.update_lib_search(lib_idx);
             }
             LibEvent::Error(e) => {
                 self.flash_status(format!("Error: {e}"));
@@ -3917,7 +3956,13 @@ impl App {
         {
             let li = self.tab_idx - self.lib_tab_offset();
             self.libs.get(li).and_then(|l| {
-                l.search.as_ref().map(|s| format!("Search {}: {}█", l.library.name, s.query))
+                l.search.as_ref().map(|s| {
+                if s.loading {
+                    format!("Search {} (loading…): {}█", l.library.name, s.query)
+                } else {
+                    format!("Search {}: {}█", l.library.name, s.query)
+                }
+            })
             })
         } else {
             None
