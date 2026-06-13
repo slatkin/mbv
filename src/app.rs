@@ -4685,6 +4685,7 @@ impl App {
                 let now_playing = active && active_idx == cursor;
                 let rt_ticks = if now_playing { live_runtime } else { item.runtime_ticks };
                 let pos_ticks = if show_controls { 0 } else if now_playing { live_pos } else { item.playback_position_ticks };
+                let rt_ticks = if item.is_audio() { 0 } else { rt_ticks };
                 let img_types: &[&str] = match item.item_type.as_str() {
                     "MusicAlbum" => &["AudioChild"],
                     "Audio"      => &["Primary"],
