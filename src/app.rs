@@ -2276,7 +2276,7 @@ impl App {
                         if self.home_rect.contains((col, row).into()) { self.select_home(); }
                     } else if self.tab_idx == 1 {
                         let t = self.player_tab.playlist_cursor;
-                        if t < self.player_tab.items.len() {
+                        if t < self.player_tab.items.len() && self.layout_playlist_inner.contains((col, row).into()) {
                             if let Some(ref conn_id) = self.connected_session_id.clone() {
                                 let item = self.player_tab.items[t].clone();
                                 let id = conn_id.clone();
