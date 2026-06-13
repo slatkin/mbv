@@ -1466,11 +1466,11 @@ impl App {
                     if let Some(ref conn_id) = self.connected_session_id.clone() {
                         let item = self.player_tab.items[t].clone();
                         let id = conn_id.clone();
-                        let item_id = item.id.clone();
+                        let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
                         let start_ticks = item.playback_position_ticks;
                         let label = item.playback_label();
                         self.flash_status(format!("Playing on remote: {label}"));
-                        self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
+                        self.do_session_command(move |c| c.session_play_items(&id, &item_ids, t, start_ticks));
                     } else {
                         let st = self.player.status.lock().unwrap();
                         let active = st.active;
@@ -2278,11 +2278,11 @@ impl App {
                             if let Some(ref conn_id) = self.connected_session_id.clone() {
                                 let item = self.player_tab.items[t].clone();
                                 let id = conn_id.clone();
-                                let item_id = item.id.clone();
+                                let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
                                 let start_ticks = item.playback_position_ticks;
                                 let label = item.playback_label();
                                 self.flash_status(format!("Playing on remote: {label}"));
-                                self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
+                                self.do_session_command(move |c| c.session_play_items(&id, &item_ids, t, start_ticks));
                             } else {
                                 self.player.send_command(PlayerCommand::JumpTo(t));
                             }
@@ -2981,11 +2981,11 @@ impl App {
                         if let Some(ref conn_id) = self.connected_session_id.clone() {
                             let item = self.player_tab.items[t].clone();
                             let id = conn_id.clone();
-                            let item_id = item.id.clone();
+                            let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
                             let start_ticks = item.playback_position_ticks;
                             let label = item.playback_label();
                             self.flash_status(format!("Playing on remote: {label}"));
-                            self.do_session_command(move |c| c.session_play(&id, &item_id, start_ticks));
+                            self.do_session_command(move |c| c.session_play_items(&id, &item_ids, t, start_ticks));
                         } else {
                             self.player.send_command(PlayerCommand::JumpTo(t));
                         }
