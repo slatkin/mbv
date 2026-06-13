@@ -1689,12 +1689,12 @@ impl App {
             let pos_s = self.connected_session_state.as_ref().map(|s| s.position_s).unwrap_or(0);
             let id = conn_id.clone();
             match btn {
-                0 => { self.do_session_command(move |c| c.session_transport(&id, "PreviousTrack")); }
+                0 => { self.session_jump_track(&id, -1, "PreviousTrack"); }
                 1 => { let t = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND; self.do_session_command(move |c| c.session_seek(&id, t)); }
                 2 => { self.do_session_command(move |c| c.session_transport(&id, "PlayPause")); }
                 3 => { self.do_session_command(move |c| c.session_transport(&id, "Stop")); }
                 4 => { let t = (pos_s + 5) * crate::api::TICKS_PER_SECOND; self.do_session_command(move |c| c.session_seek(&id, t)); }
-                5 => { self.do_session_command(move |c| c.session_transport(&id, "NextTrack")); }
+                5 => { self.session_jump_track(&id, 1, "NextTrack"); }
                 _ => {}
             }
             return;
@@ -3261,6 +3261,26 @@ impl App {
                 Err(e)       => { let _ = tx.send(SessionEvent::Error(e)); }
             }
         });
+    }
+
+    fn session_jump_track(&mut self, conn_id: &str, delta: i64, fallback_cmd: &'static str) {
+        let id = conn_id.to_string();
+        let current_remote_id = self.connected_session_state.as_ref()
+            .and_then(|s| s.now_playing_item_id.as_deref())
+            .map(str::to_string);
+        let target = current_remote_id
+            .and_then(|rid| self.player_tab.items.iter().position(|i| i.id == rid))
+            .and_then(|idx| {
+                let t = idx as i64 + delta;
+                if t >= 0 && (t as usize) < self.player_tab.items.len() { Some(t as usize) } else { None }
+            })
+            .map(|t| (t, self.player_tab.items[t].playback_position_ticks));
+        if let Some((target_idx, start_ticks)) = target {
+            let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+            self.do_session_command(move |c| c.session_play_items(&id, &item_ids, target_idx, start_ticks));
+        } else {
+            self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
+        }
     }
 
     fn do_session_command(&self, f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static) {
