@@ -84,6 +84,10 @@ pub struct MediaItem {
     pub premiere_date: String,
     pub total_count: u32,
     pub container: String,
+    pub director: String,
+    pub video_info: String,
+    pub audio_info: String,
+    pub genre: String,
 }
 
 impl MediaItem {
@@ -196,6 +200,73 @@ fn parse_item(raw: &Value) -> MediaItem {
             .unwrap_or_default(),
         total_count,
         container: raw["Container"].as_str().unwrap_or("").to_string(),
+        genre: raw["Genres"].as_array()
+            .and_then(|g| g.first().and_then(|v| v.as_str()))
+            .unwrap_or("").to_string(),
+        director: raw["People"].as_array()
+            .and_then(|people| people.iter()
+                .find(|p| p["Type"].as_str() == Some("Director"))
+                .and_then(|p| p["Name"].as_str()))
+            .unwrap_or("").to_string(),
+        video_info: raw["MediaStreams"].as_array()
+            .and_then(|streams| streams.iter().find(|s| s["Type"].as_str() == Some("Video")))
+            .map(|s| {
+                let width  = s["Width"].as_u64().unwrap_or(0);
+                let height = s["Height"].as_u64().unwrap_or(0);
+                let dim = width.max(height);
+                let res = match dim {
+                    3840.. => "4K".to_string(),
+                    1920.. => "1080p".to_string(),
+                    1280.. => "720p".to_string(),
+                    720..  => "480p".to_string(),
+                    d if d > 0 => format!("{}p", height),
+                    _ => String::new(),
+                };
+                let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
+                match (res.is_empty(), codec.is_empty()) {
+                    (false, false) => format!("{} {}", res, codec),
+                    (false, true)  => res,
+                    (true, false)  => codec,
+                    (true, true)   => String::new(),
+                }
+            })
+            .unwrap_or_default(),
+        audio_info: raw["MediaStreams"].as_array()
+            .map(|streams| {
+                let mut parts: Vec<String> = Vec::new();
+                for s in streams.iter().filter(|s| s["Type"].as_str() == Some("Audio")) {
+                    let lang = s["Language"].as_str().unwrap_or("");
+                    let lang_name = match lang {
+                        "eng" => "English",
+                        "chi" | "zho" => "Chinese",
+                        "jpn" => "Japanese",
+                        "fre" | "fra" => "French",
+                        "ger" | "deu" => "German",
+                        "spa" => "Spanish",
+                        "ita" => "Italian",
+                        "kor" => "Korean",
+                        "por" => "Portuguese",
+                        "rus" => "Russian",
+                        other if !other.is_empty() => other,
+                        _ => "",
+                    };
+                    let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
+                    let layout = s["ChannelLayout"].as_str().unwrap_or("");
+                    let layout_str = match layout {
+                        "mono"   => "Mono",
+                        "stereo" => "Stereo",
+                        "5.1"    => "5.1",
+                        "7.1"    => "7.1",
+                        other if !other.is_empty() => other,
+                        _ => "",
+                    };
+                    let track: Vec<&str> = [lang_name, &codec, layout_str]
+                        .iter().filter(|s| !s.is_empty()).copied().collect();
+                    if !track.is_empty() { parts.push(track.join(" ")); }
+                }
+                parts.join("  |  ")
+            })
+            .unwrap_or_default(),
     }
 }
 
@@ -395,6 +466,10 @@ impl EmbyClient {
                     premiere_date: String::new(),
                     total_count: 0,
                     container: String::new(),
+                    director: String::new(),
+                    video_info: String::new(),
+                    audio_info: String::new(),
+                    genre: String::new(),
                 };
                 seen.insert(id);
                 items.push(item);
@@ -429,7 +504,7 @@ impl EmbyClient {
             .query("SortOrder", "Ascending")
             .query("StartIndex", &start_index.to_string())
             .query("Limit", &limit.to_string())
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,ChildCount,RecursiveItemCount,Container")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres")
             .query("EnableUserData", "true");
         if let Some(types) = item_types {
             req = req.query("IncludeItemTypes", types).query("Recursive", "true");
@@ -932,6 +1007,10 @@ mod tests {
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),
             premiere_date: String::new(), total_count: 0, container: String::new(),
+            director: String::new(),
+            video_info: String::new(),
+            audio_info: String::new(),
+            genre: String::new(),
         }
     }
 

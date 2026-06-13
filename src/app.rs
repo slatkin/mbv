@@ -6254,10 +6254,19 @@ impl App {
             return;
         }
 
-        // Row heights: 2 base + 1 separator. Selected row also gets overview and seekbar
+        // Row heights: 2 base + 1 separator. Selected row also gets overview
         // when images are enabled.
         let images_enabled = self.images_enabled();
-        let show_seekbar = false;
+        // Height for a 2:3 poster at LIB_SELECTED_IMG_W columns, derived from actual cell pixel ratio.
+        let lib_movie_img_h: u16 = self.image_picker.as_ref()
+            .map(|p| {
+                let fs = p.font_size();
+                ((LIB_SELECTED_IMG_W as f32 * fs.width as f32 * 1.5) / fs.height as f32).ceil() as u16
+            })
+            .unwrap_or(14)
+            .min(14);
+        #[allow(non_snake_case)]
+        let LIB_SELECTED_IMG_H = lib_movie_img_h;
         let at_album_folders = self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none();
         let content_w_sel = area.width.saturating_sub(1 + LIB_SELECTED_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
@@ -6273,9 +6282,13 @@ impl App {
             } else if images_enabled && i == cursor {
                 let ew = content_w_sel;
                 let ov_lines = if item.overview.is_empty() { 0 }
-                    else { wrap(&item.overview, ew.max(1)).len().min(4) as u16 };
-                let seekbar: u16 = if show_seekbar && item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 { 2 } else { 0 };
-                2 + ov_lines + seekbar
+                    else { wrap(&item.overview, ew.max(1)).len() as u16 };
+                let dir_lines: u16 = if item.director.is_empty() { 0 } else { 2 };
+                let tech: u16 = match (item.video_info.is_empty(), item.audio_info.is_empty()) {
+                    (true, true) => 0,
+                    _ => 1,
+                };
+                (2 + tech + ov_lines + dir_lines).max(LIB_SELECTED_IMG_H)
             } else { 2 };
             base + 1 // +1 for separator line at bottom
         }).collect();
@@ -6331,7 +6344,7 @@ impl App {
                     let (img_w, img_h) = if is_audio || is_album_folder {
                         (LIB_AUDIO_IMG_W, LIB_AUDIO_IMG_H)
                     } else {
-                        (LIB_SELECTED_IMG_W, padded_area.height)
+                        (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
                     };
                     let avail = ratatui::layout::Size { width: img_w, height: img_h.min(padded_area.height) };
                     Some(state.size_for(ratatui_image::Resize::Fit(None), avail))
@@ -6377,7 +6390,7 @@ impl App {
             };
             let content_w = text_rect.width as usize;
 
-            if selected {
+            if selected && item.item_type != "Movie" {
                 let bar: Vec<Line> = (0..ind_rect.height)
                     .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::IRIS))))
                     .collect();
@@ -6392,7 +6405,9 @@ impl App {
                 }
             }
 
-            let text_color = if selected { palette::WHITE } else { palette::TEXT };
+            let text_color = if selected && item.item_type == "Movie" { palette::IRIS }
+                else if selected { palette::WHITE }
+                else { palette::TEXT };
 
             // Build title line (line 1)
             let title_line = match item.item_type.as_str() {
@@ -6504,34 +6519,45 @@ impl App {
                 }
             };
 
-            // Prepend item_type as the first span on the metadata line (skip for generic folders)
+            // Prepend type/genre as the first span on the metadata line (skip for generic folders)
             let meta_line = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
                 meta_line
             } else {
-                let type_str = if !item.item_type.is_empty() { item.item_type.clone() } else { "—".to_string() };
-                let mut spans = vec![Span::styled(format!("{}  ", type_str), Style::default().fg(palette::SUBTLE))];
-                spans.extend(meta_line.spans);
-                Line::from(spans)
+                let type_str = if item.item_type == "Movie" {
+                    if !item.genre.is_empty() { item.genre.clone() } else { String::new() }
+                } else if !item.item_type.is_empty() {
+                    item.item_type.clone()
+                } else {
+                    "—".to_string()
+                };
+                if type_str.is_empty() {
+                    meta_line
+                } else {
+                    let mut spans = vec![Span::styled(format!("{}  ", type_str), Style::default().fg(palette::SUBTLE))];
+                    spans.extend(meta_line.spans);
+                    Line::from(spans)
+                }
             };
 
             // Split text_rect vertically into lines
-            let in_progress = !is_audio && item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0;
             let overview_lines: Vec<String> = if !is_audio && selected && images_enabled && !item.overview.is_empty() {
                 let w = content_w.max(1);
-                let mut lines: Vec<String> = wrap(&item.overview, w).into_iter().map(|s| s.into_owned()).collect();
-                if lines.len() > 4 {
-                    lines.truncate(4);
-                    let last = lines.last_mut().unwrap();
-                    if last.len() + 3 <= w { last.push_str("..."); }
-                    else { let i = last.char_indices().rev().nth(2).map(|(i, _)| i).unwrap_or(0); last.replace_range(i.., "..."); }
-                }
-                lines
+                wrap(&item.overview, w).into_iter().map(|s| s.into_owned()).collect()
             } else { Vec::new() };
-            let seekbar_extra: usize = if !is_audio && selected && images_enabled && show_seekbar && in_progress { 2 } else { 0 }; // spacer + bar
             let artist_extra: usize = if artist_line.is_some() { 1 } else { 0 };
             let is_generic_folder = item.is_folder && item.item_type != "Series" && item.item_type != "Season";
-            let base_lines = if is_generic_folder { 1 } else { 2 + artist_extra };
-            let line_count = (base_lines + overview_lines.len() + seekbar_extra).min(text_rect.height as usize);
+            let tech_line: String = if selected && !is_audio && !is_generic_folder {
+                match (item.video_info.is_empty(), item.audio_info.is_empty()) {
+                    (false, false) => format!("{}  {}", item.video_info, item.audio_info),
+                    (false, true)  => item.video_info.clone(),
+                    (true, false)  => item.audio_info.clone(),
+                    (true, true)   => String::new(),
+                }
+            } else { String::new() };
+            let tech_lines: usize = if tech_line.is_empty() { 0 } else { 1 };
+            let base_lines = if is_generic_folder { 1 } else { 2 + artist_extra + tech_lines };
+            let dir_lines: usize = if selected && !is_audio && !item.director.is_empty() { 2 } else { 0 };
+            let line_count = (base_lines + overview_lines.len() + dir_lines).min(text_rect.height as usize);
             if line_count == 0 { continue; }
             let v_offset = if is_audio && selected {
                 (text_rect.height as usize).saturating_sub(line_count) / 2
@@ -6545,7 +6571,10 @@ impl App {
             let line_rects = Layout::vertical(constraints).split(centered_text_rect);
 
             f.render_widget(
-                Paragraph::new(Line::from(Span::styled(title_display, Style::default().fg(text_color)))),
+                Paragraph::new(Line::from(Span::styled(title_display, {
+                    let s = Style::default().fg(text_color);
+                    if selected && item.item_type == "Movie" { s.add_modifier(Modifier::BOLD) } else { s }
+                }))),
                 line_rects[0],
             );
             if let Some(ref a) = artist_line {
@@ -6561,26 +6590,35 @@ impl App {
             } else if line_count >= 2 {
                 f.render_widget(Paragraph::new(meta_line), line_rects[1]);
             }
+            if tech_lines > 0 {
+                let ti = 2 + artist_extra;
+                if ti < line_count {
+                    f.render_widget(
+                        Paragraph::new(Span::styled(tech_line.as_str(), Style::default().fg(palette::SUBTLE))),
+                        line_rects[ti],
+                    );
+                }
+            }
             for (j, ov_line) in overview_lines.iter().enumerate() {
                 let idx = base_lines + j;
                 if idx >= line_count { break; }
                 f.render_widget(
-                    Paragraph::new(Span::styled(ov_line.as_str(), Style::default().fg(palette::MUTED))),
+                    Paragraph::new(Span::styled(ov_line.as_str(), Style::default().fg(palette::WHITE))),
                     line_rects[idx],
                 );
             }
-            // Seekbar: spacer at line_count-2, bar at line_count-1
-            if !is_audio && selected && images_enabled && show_seekbar && in_progress && line_count >= base_lines + seekbar_extra {
-                let bar_w = content_w;
-                let fraction = (item.playback_position_ticks as f64 / item.runtime_ticks as f64).clamp(0.0, 1.0);
-                let filled = ((fraction * bar_w as f64).round() as usize).min(bar_w);
-                let seekbar_line = Line::from(vec![
-                    Span::styled("━".repeat(filled),           Style::default().fg(palette::YELLOW)),
-                    Span::styled("─".repeat(bar_w - filled),   Style::default().fg(palette::MUTED)),
-                ]);
-                f.render_widget(Paragraph::new(seekbar_line), line_rects[line_count - 1]);
+            if dir_lines > 0 {
+                let dir_idx = base_lines + overview_lines.len() + 1; // +1 skips blank line
+                if dir_idx < line_count {
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::styled("Director: ", Style::default().fg(palette::SUBTLE)),
+                            Span::styled(item.director.clone(), Style::default().fg(palette::TEXT)),
+                        ])),
+                        line_rects[dir_idx],
+                    );
+                }
             }
-
             // Separator line at the bottom of each row
             let sep_y = row_y + row_h - 1;
             if sep_y < area.y + area.height {
