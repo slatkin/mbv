@@ -215,6 +215,7 @@ pub struct App {
     connected_session_id: Option<String>,
     connected_session_state: Option<crate::api::SessionInfo>,
     last_session_poll: Instant,
+    session_miss_count: u8, // consecutive polls that didn't find the connected session
     remote_pos_s: i64,      // monotonic position estimate for the connected remote
     remote_pos_at: Instant, // when remote_pos_s was last anchored
     force_clear: bool,
@@ -456,6 +457,7 @@ impl App {
             connected_session_id: None,
             connected_session_state: None,
             last_session_poll: Instant::now() - Duration::from_secs(60),
+            session_miss_count: 0,
             remote_pos_s: 0,
             remote_pos_at: Instant::now(),
             force_clear: false,
@@ -589,6 +591,7 @@ impl App {
             connected_session_id: None,
             connected_session_state: None,
             last_session_poll: Instant::now() - Duration::from_secs(60),
+            session_miss_count: 0,
             remote_pos_s: 0,
             remote_pos_at: Instant::now(),
             force_clear: false,
@@ -793,16 +796,23 @@ impl App {
                                 }
                                 self.remote_pos_at = now;
                                 self.connected_session_state = Some(s.clone());
+                                self.session_miss_count = 0;
                                 // Remote hasn't started playing yet — repoll sooner
                                 if s.runtime_s == 0 {
                                     self.last_session_poll = Instant::now() - Duration::from_millis(500);
                                 }
                             } else {
-                                self.log.push(Level::Warn, "sessions", "connected session gone; disconnecting");
-                                self.flash_status("Remote session ended; disconnected".to_string());
-                                self.connected_session_id = None;
-                                self.connected_session_state = None;
-                                self.remote_pos_s = 0;
+                                self.session_miss_count += 1;
+                                if self.session_miss_count >= 3 {
+                                    self.log.push(Level::Warn, "sessions", "connected session gone; disconnecting");
+                                    self.flash_status("Remote session ended; disconnected".to_string());
+                                    self.connected_session_id = None;
+                                    self.connected_session_state = None;
+                                    self.session_miss_count = 0;
+                                    self.remote_pos_s = 0;
+                                } else {
+                                    self.log.push(Level::Warn, "sessions", format!("connected session not in poll ({}/3); holding", self.session_miss_count));
+                                }
                             }
                         }
                     }
@@ -1044,6 +1054,7 @@ impl App {
                         let name = sess.device_name.clone();
                         self.connected_session_id = Some(id);
                         self.connected_session_state = Some(sess.clone());
+                        self.session_miss_count = 0;
                         self.remote_pos_s = sess.position_s;
                         self.remote_pos_at = Instant::now();
                         self.show_sessions = false;
@@ -1054,6 +1065,7 @@ impl App {
                 KeyCode::Char('d') => {
                     self.connected_session_id = None;
                     self.connected_session_state = None;
+                    self.session_miss_count = 0;
                     self.remote_pos_s = 0;
                     self.show_sessions = false;
                     self.flash_status("Disconnected from remote session".to_string());
@@ -6869,6 +6881,7 @@ mod tests {
             connected_session_id: None,
             connected_session_state: None,
             last_session_poll: std::time::Instant::now(),
+            session_miss_count: 0,
             remote_pos_s: 0,
             remote_pos_at: std::time::Instant::now(),
             layout_sessions_btn_area: Rect::default(),
