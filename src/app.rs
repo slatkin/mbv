@@ -2232,8 +2232,8 @@ impl App {
                                             self.player.send_command(PlayerCommand::JumpTo(*item_idx));
                                         } else if !self.player_tab.items.is_empty() {
                                             let items = self.player_tab.items.clone();
-                                            let c = Arc::new(self.client.lock().unwrap().clone());
-                                            self.player.play_playlist(items, *item_idx, c, self.log.clone(), self.ui_volume);
+                                            let item_idx = *item_idx;
+                                            self.play_items_routed(items, item_idx);
                                         }
                                     }
                                 }
@@ -2766,6 +2766,22 @@ impl App {
         }
     }
 
+    /// Play a list of items. Routes to the connected remote Emby session when one is active;
+    /// otherwise plays locally. All multi-item play paths should go through this.
+    fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
+        if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let id = conn_id.clone();
+            let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
+            let start_ticks = items.get(start_idx).map_or(0, |i| i.playback_position_ticks);
+            let label = items.get(start_idx).map(|i| i.playback_label()).unwrap_or_default();
+            self.flash_status(format!("Playing on remote: {label}"));
+            self.do_session_command(move |c| c.session_play_items(&id, &item_ids, start_idx, start_ticks));
+            return;
+        }
+        let c = Arc::new(self.client.lock().unwrap().clone());
+        self.player.play_playlist(items, start_idx, c, self.log.clone(), self.ui_volume);
+    }
+
     /// Play a single item. For series episodes with always_play_next, expands
     /// to the full series queue starting from this episode — matching Emby Web's model.
     fn play_item(&mut self, item: MediaItem) {
@@ -2906,12 +2922,9 @@ impl App {
                     else { (1i64, 0, natural_sort_key(i.sort_key())) }
                 });
                 if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
-                    let label = fresh.playback_label();
-                    let c = Arc::new(self.client.lock().unwrap().clone());
                     self.player_tab.items = tracks.clone();
                     self.player_tab.playlist_cursor = 0;
-                    self.flash_status(label);
-                    self.player.play_playlist(tracks, start_idx, c, self.log.clone(), self.ui_volume);
+                    self.play_items_routed(tracks, start_idx);
                     return;
                 }
             }
@@ -2924,13 +2937,10 @@ impl App {
                             siblings.retain(|i| !i.is_folder);
                             siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
                             if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) {
-                                let label = fresh.playback_label();
-                                let c = Arc::new(client.clone());
                                 drop(client);
                                 self.player_tab.items = siblings.clone();
                                 self.player_tab.playlist_cursor = 0;
-                                self.flash_status(label);
-                                self.player.play_playlist(siblings, start_idx, c, self.log.clone(), self.ui_volume);
+                                self.play_items_routed(siblings, start_idx);
                                 return;
                             }
                             drop(client);
@@ -3107,13 +3117,12 @@ impl App {
                 if items.is_empty() { drop(client); self.flash_status("Nothing to shuffle".into()); return; }
                 items.shuffle(&mut rand::rng());
                 let count = items.len();
-                let c = Arc::new(client.clone());
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
-                self.player.play_playlist(items, 0, c, self.log.clone(), self.ui_volume);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
+                self.play_items_routed(items, 0);
             }
             Err(e) => { let msg = format!("Error: {e}"); drop(client); self.flash_status(msg); }
         }
@@ -3127,13 +3136,12 @@ impl App {
                 items.sort_by_key(|a| natural_sort_key(a.sort_key()));
                 if items.is_empty() { drop(client); self.flash_status("Nothing to play".into()); return; }
                 let count = items.len();
-                let c = Arc::new(client.clone());
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
-                self.player.play_playlist(items, 0, c, self.log.clone(), self.ui_volume);
                 self.tab_idx = 1;
                 self.flash_status(format!("Playing {count} items"));
+                self.play_items_routed(items, 0);
             }
             Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
         }
@@ -3147,13 +3155,12 @@ impl App {
                 if items.is_empty() { drop(client); self.flash_status("Nothing to shuffle".into()); return; }
                 items.shuffle(&mut rand::rng());
                 let count = items.len();
-                let c = Arc::new(client.clone());
                 drop(client);
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = 0;
-                self.player.play_playlist(items, 0, c, self.log.clone(), self.ui_volume);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
+                self.play_items_routed(items, 0);
             }
             Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
         }
