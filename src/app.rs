@@ -2633,7 +2633,7 @@ impl App {
         } else {
             self.player_tab.playlist_cursor = 0;
         }
-        self.status = format!("Removed: {name}");
+        self.flash_status(format!("Removed: {name}"));
     }
 
     fn flash_status(&mut self, msg: String) {
@@ -4641,6 +4641,15 @@ impl App {
 
         let now_playing_cursor = active && active_idx == cursor;
         let show_controls = now_playing_cursor || self.connected_session_id.is_some();
+
+        if now_playing_cursor {
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled("Now Playing", Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
+                ])).alignment(Alignment::Center),
+                Rect { x: area.x, y: area.y, width: left_w, height: 1 },
+            );
+        }
 
         // Left panel: borderless card for cursor item.
         // Returns the seekbar Y so we can place buttons on the very next row.
