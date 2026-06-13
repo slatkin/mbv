@@ -41,7 +41,7 @@ pub struct PlayerStatus {
 pub enum PlayerEvent {
     Stopped { idx: usize, position_ticks: i64, played: bool },
     TrackChanged(usize),
-    TrackCompleted { idx: usize, position_ticks: i64, played: bool },
+    TrackCompleted { idx: usize, position_ticks: i64, played: bool, consume: bool },
     NextUpThreshold { series_id: String, season: i64, episode: i64 },
     NextUpPlay,
     PlaylistNextUp { next_idx: usize },
@@ -1109,6 +1109,7 @@ impl Player {
                 };
             let mut playlist_next_up_fired = false;
             let mut playlist_next_up_armed = false;
+            let mut next_up_jump = false;
             let mut intro_start_ticks: i64 = 0;
             let mut intro_end_ticks: i64   = 0;
             if client.chapter_api_available {
@@ -1209,6 +1210,7 @@ impl Player {
                             forced_idx             = None;
                             playlist_next_up_fired = false;
                             playlist_next_up_armed = false;
+                            next_up_jump           = false;
                             current_osd_title      = items[start_idx].display_name();
                             pending_resume_secs    = if !items[start_idx].is_audio() && items[start_idx].playback_position_ticks > 0 {
                                 Some(items[start_idx].resume_seconds())
@@ -1491,8 +1493,11 @@ impl Player {
                         let near_end = !natural && !completed_is_audio
                             && items[completed_idx].runtime_ticks > 0
                             && last_valid_pos * 10 / items[completed_idx].runtime_ticks >= 9;
-                        let played_out = (natural || near_end) && !completed_is_audio;
-                        let completed_pos = if completed_is_audio || natural || near_end { 0 } else { last_valid_pos };
+                        let was_next_up = std::mem::replace(&mut next_up_jump, false);
+                        let played_out = (natural || near_end || was_next_up) && !completed_is_audio;
+                        // Only consume (remove from queue) on genuine completion or explicit Next Up.
+                        let consume_track = (natural || was_next_up) && !completed_is_audio;
+                        let completed_pos = if completed_is_audio || natural || near_end || was_next_up { 0 } else { last_valid_pos };
 
                         let next_idx = if let Some(jump_idx) = forced_idx.take() {
                             jump_idx
@@ -1564,11 +1569,12 @@ impl Player {
                         if !next.is_audio() && next.playback_position_ticks > 0 {
                             pending_resume_secs = Some(next.resume_seconds());
                         }
-                        let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: completed_idx, position_ticks: completed_pos, played: played_out });
+                        let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: completed_idx, position_ticks: completed_pos, played: played_out, consume: consume_track });
                         let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));
                     }
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
                         log.push(Level::Info, "player", "next-up: mbv-next-up-play received from Lua");
+                        next_up_jump = true;
                         let _ = event_tx.send(PlayerEvent::NextUpPlay);
                     }
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-skip-intro-play") => {
