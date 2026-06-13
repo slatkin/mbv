@@ -724,7 +724,7 @@ impl App {
                     }
                     PlayerEvent::IntroStarted { intro_end_ticks } => {
                         self.skip_intro_end_ticks = Some(intro_end_ticks);
-                        self.status = "Skip intro? [Y/n]".into();
+                        self.status = "Skip intro? (Y/n)".into();
                         self.status_expires = None;
                     }
                     PlayerEvent::IntroEnded => {
@@ -1104,7 +1104,7 @@ impl App {
             && self.libs.get(self.tab_idx - self.lib_tab_offset()).is_some_and(|l| l.search.is_some());
         if self.confirm_clear_playlist {
             self.confirm_clear_playlist = false;
-            if matches!(key.code, KeyCode::Char('y')) {
+            if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter) {
                 self.player.stop();
                 self.player_tab.items.clear();
                 self.player_tab.playlist_cursor = 0;
@@ -1116,7 +1116,7 @@ impl App {
             return false;
         }
         if self.skip_intro_end_ticks.is_some() {
-            if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y')) {
+            if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter) {
                 if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
                     let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
@@ -1133,7 +1133,7 @@ impl App {
         if self.tab_idx != self.log_tab_idx() {
             if key.code == KeyCode::Char('c') && !key.modifiers.contains(KeyModifiers::ALT) && !in_lib_search {
                 if self.player_tab.items.is_empty() { return false; }
-                self.status = "Clear playlist? (y/N)".into();
+                self.status = "Clear playlist? (Y/n)".into();
                 self.confirm_clear_playlist = true;
                 return false;
             }
@@ -3583,9 +3583,8 @@ impl App {
             );
         } else if !self.status.is_empty() {
             f.render_widget(
-                Paragraph::new(self.status.as_str())
-                    .alignment(Alignment::Center)
-                    .style(Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
+                Paragraph::new(Self::toast_line(&self.status))
+                    .alignment(Alignment::Center),
                 toast_area,
             );
         } else if let Some((ref title, color)) = now_playing_title {
@@ -3634,6 +3633,34 @@ impl App {
             self.render_settings_panel(f);
             if self.multiselect_popup.is_some() { self.render_multiselect_popup(f); }
         }
+    }
+
+    fn toast_line(s: &str) -> Line<'static> {
+        let text_style   = Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD);
+        let yellow_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
+        let open = s.find(|c| c == '[' || c == '(');
+        if let Some(i) = open {
+            let close = s[i..].find(|c| c == ']' || c == ')').map(|j| i + j);
+            if let Some(j) = close {
+                let mut spans = vec![
+                    Span::styled(s[..i].to_string(),     text_style),
+                    Span::styled(s[i..i+1].to_string(),  text_style),
+                ];
+                for c in s[i+1..j].chars() {
+                    spans.push(if c == '/' {
+                        Span::styled("/", text_style)
+                    } else {
+                        Span::styled(c.to_string(), yellow_style)
+                    });
+                }
+                spans.push(Span::styled(s[j..j+1].to_string(), text_style));
+                if j + 1 < s.len() {
+                    spans.push(Span::styled(s[j+1..].to_string(), text_style));
+                }
+                return Line::from(spans);
+            }
+        }
+        Line::from(Span::styled(s.to_string(), text_style))
     }
 
     fn render_volume_bar(&self, f: &mut ratatui::Frame, area: Rect) {
