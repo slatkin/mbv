@@ -6243,8 +6243,18 @@ impl App {
             base + 1 // +1 for separator line at bottom
         }).collect();
 
-        // Scroll: keep existing scroll, only adjust to keep cursor visible.
-        let scroll = cursor;
+        // Browse: pin cursor to top. Search: scroll just enough to keep cursor visible.
+        let scroll = if self.libs[lib_idx].search.is_some() {
+            let mut s = self.layout_lib_scroll.min(cursor);
+            loop {
+                let visible_h: u16 = all_heights[s..=cursor].iter().sum();
+                if visible_h <= area.height { break; }
+                s += 1;
+            }
+            s
+        } else {
+            cursor
+        };
         self.layout_lib_scroll = scroll;
 
         // Trigger image fetch for selected item before rendering loop
