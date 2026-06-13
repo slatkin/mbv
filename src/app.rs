@@ -6435,8 +6435,17 @@ impl App {
             .min(14);
         #[allow(non_snake_case)]
         let LIB_SELECTED_IMG_H = lib_movie_img_h;
+        // Height for a 16:9 thumbnail at LIB_EPISODE_IMG_W columns (episodes use landscape thumbnails).
+        const LIB_EPISODE_IMG_W: u16 = 40;
+        let lib_episode_img_h: u16 = self.image_picker.as_ref()
+            .map(|p| {
+                let fs = p.font_size();
+                ((LIB_EPISODE_IMG_W as f32 * fs.width as f32 * (9.0 / 16.0)) / fs.height as f32).ceil() as u16
+            })
+            .unwrap_or(9);
+        #[allow(non_snake_case)]
+        let LIB_EPISODE_IMG_H = lib_episode_img_h;
         let at_album_folders = self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none();
-        let content_w_sel = area.width.saturating_sub(1 + LIB_SELECTED_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
             let base: u16 = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
@@ -6448,7 +6457,13 @@ impl App {
             } else if is_audio {
                 if i == cursor { LIB_AUDIO_IMG_H.max(3) } else { 3 }
             } else if images_enabled && i == cursor {
-                let ew = content_w_sel;
+                let is_episode = item.item_type == "Episode";
+                let (sel_img_w, sel_img_h) = if is_episode {
+                    (LIB_EPISODE_IMG_W, LIB_EPISODE_IMG_H)
+                } else {
+                    (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
+                };
+                let ew = area.width.saturating_sub(1 + sel_img_w) as usize;
                 let ov_lines = if item.overview.is_empty() { 0 }
                     else { wrap(&item.overview, ew.max(1)).len() as u16 };
                 let dir_lines: u16 = if item.item_type == "Movie" && !item.director.is_empty() { 2 } else { 0 };
@@ -6456,7 +6471,7 @@ impl App {
                     (true, true) => 0,
                     _ => 1,
                 };
-                (2 + tech + ov_lines + dir_lines).max(LIB_SELECTED_IMG_H)
+                (2 + tech + ov_lines + dir_lines).max(sel_img_h)
             } else { 2 };
             base + 1 // +1 for separator line at bottom
         }).collect();
@@ -6475,15 +6490,19 @@ impl App {
         };
         self.layout_lib_scroll = scroll;
 
-        // Trigger image fetch for selected item before rendering loop
+        // Trigger image fetch for selected item and nearby items before rendering loop
         {
-            if let Some((_, item)) = display_items.get(cursor) {
-                let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
-                let is_album_folder = at_album_folders && item.is_folder;
-                if images_enabled || is_audio || is_album_folder {
-                    let cache_key = format!("{}:lib", item.id);
-                    let img_types: &[&str] = if is_album_folder { &["AudioChild", "Primary"] } else { &["Primary"] };
-                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), img_types);
+            let prefetch_start = cursor.saturating_sub(3);
+            let prefetch_end = (cursor + 3).min(display_items.len().saturating_sub(1));
+            for pi in prefetch_start..=prefetch_end {
+                if let Some((_, item)) = display_items.get(pi) {
+                    let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
+                    let is_album_folder = at_album_folders && item.is_folder;
+                    if images_enabled || is_audio || is_album_folder {
+                        let cache_key = format!("{}:lib", item.id);
+                        let img_types: &[&str] = if is_album_folder { &["AudioChild", "Primary"] } else { &["Primary"] };
+                        self.fetch_card_image(cache_key, item.id.clone(), String::new(), img_types);
+                    }
                 }
             }
         }
@@ -6511,6 +6530,8 @@ impl App {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
                     let (img_w, img_h) = if is_audio || is_album_folder {
                         (LIB_AUDIO_IMG_W, LIB_AUDIO_IMG_H)
+                    } else if item.item_type == "Episode" {
+                        (LIB_EPISODE_IMG_W, LIB_EPISODE_IMG_H)
                     } else {
                         (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
                     };
