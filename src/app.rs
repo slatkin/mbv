@@ -4655,36 +4655,24 @@ impl App {
 
         let cursor = self.player_tab.playlist_cursor;
 
-        // Horizontal split: left card panel | right list (1-row top padding)
-        let top_pad: u16 = 1;
+        // Horizontal split: left card panel | right list
         let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
         let right_x = area.x + left_w + 1;
         let right_w = area.width.saturating_sub(left_w + 1);
-        let inner_y = area.y + top_pad;
-        let inner_h = area.height.saturating_sub(top_pad);
-        let left_area  = Rect { x: area.x,   y: inner_y,  width: left_w,  height: inner_h };
-        let right_area = Rect { x: right_x,  y: area.y,   width: right_w, height: area.height };
+        let left_area  = Rect { x: area.x,  y: area.y, width: left_w,  height: area.height };
+        let right_area = Rect { x: right_x, y: area.y, width: right_w, height: area.height };
 
-        let now_playing_cursor = active && active_idx == cursor;
         let show_controls = active || self.connected_session_id.is_some();
 
-        if now_playing_cursor {
-            f.render_widget(
-                Paragraph::new(Line::from(vec![
-                    Span::styled("Now Playing", Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
-                ])).alignment(Alignment::Center),
-                Rect { x: area.x, y: area.y, width: left_w, height: 1 },
-            );
-        }
-
-        // When controls are visible, reserve 2 rows at the bottom of the left panel
-        // (seekbar + buttons), and shrink the card area to avoid overlap.
-        const CTRL_ROWS: u16 = 2;
+        // When controls are visible, reserve 3 rows at the bottom of the left panel
+        // (now-playing title + seekbar + buttons), and shrink the card area to avoid overlap.
+        const CTRL_ROWS: u16 = 3;
         let card_area = if show_controls && left_area.height > CTRL_ROWS {
             Rect { height: left_area.height - CTRL_ROWS, ..left_area }
         } else {
             left_area
         };
+        let title_row   = left_area.bottom().saturating_sub(3);
         let seekbar_row = left_area.bottom().saturating_sub(2);
         let buttons_row = left_area.bottom().saturating_sub(1);
 
@@ -4725,6 +4713,18 @@ impl App {
                 &cache_key, &card_name, &card_series, &card_ep_tag, 0, pos_ticks, rt_ticks, played,
                 None, None, stack_subs);
         };
+
+        // Title of now-playing item, one row above the seekbar.
+        if show_controls && active && title_row < left_area.bottom() {
+            let playing_title = self.player_tab.items.get(active_idx)
+                .map(|it| it.playback_label())
+                .unwrap_or_default();
+            let title_trunc = trunc_str(&playing_title, left_area.width as usize);
+            f.render_widget(Paragraph::new(Line::from(
+                Span::styled(title_trunc, Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
+            )).alignment(Alignment::Center),
+            Rect { x: left_area.x, y: title_row, width: left_area.width, height: 1 });
+        }
 
         // Sticky seekbar: always at the bottom of the left panel when playing.
         if show_controls && live_pos > 0 && live_runtime > 0 && seekbar_row < left_area.bottom() {
