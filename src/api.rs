@@ -147,10 +147,8 @@ pub struct SessionInfo {
     pub runtime_s:           i64,
     pub is_paused:           bool,
     pub volume:              i64,
-    pub sub_index:           i64,              // -1 = disabled
-    pub audio_index:         i64,              // 1-based; 0 = unknown
-    pub subtitle_streams:    Vec<(i64, String)>, // (stream index, label)
-    pub audio_streams:       Vec<(i64, String)>, // (stream index, label)
+    pub sub_index:           i64,   // -1 = disabled
+    pub audio_index:         i64,   // 1-based; 0 = unknown
 }
 
 fn parse_item(raw: &Value) -> MediaItem {
@@ -835,25 +833,6 @@ impl EmbyClient {
             let host = raw_host.rsplit(':').nth(1)
                 .unwrap_or(raw_host)
                 .to_string();
-            let streams = npi["MediaStreams"].as_array();
-            let subtitle_streams = streams.map(|a| a.iter().filter_map(|s| {
-                if s["Type"].as_str() != Some("Subtitle") { return None; }
-                let idx = s["Index"].as_i64()?;
-                let label = s["DisplayTitle"].as_str()
-                    .or_else(|| s["Language"].as_str())
-                    .unwrap_or("Unknown")
-                    .to_string();
-                Some((idx, label))
-            }).collect()).unwrap_or_default();
-            let audio_streams = streams.map(|a| a.iter().filter_map(|s| {
-                if s["Type"].as_str() != Some("Audio") { return None; }
-                let idx = s["Index"].as_i64()?;
-                let label = s["DisplayTitle"].as_str()
-                    .or_else(|| s["Language"].as_str())
-                    .unwrap_or("Unknown")
-                    .to_string();
-                Some((idx, label))
-            }).collect()).unwrap_or_default();
             Some(SessionInfo {
                 id:          v["Id"].as_str().unwrap_or("").to_string(),
                 device_name: v["DeviceName"].as_str().unwrap_or("").to_string(),
@@ -868,8 +847,6 @@ impl EmbyClient {
                 volume:      ps["VolumeLevel"].as_i64().unwrap_or(100),
                 sub_index:   ps["SubtitleStreamIndex"].as_i64().unwrap_or(-1),
                 audio_index: ps["AudioStreamIndex"].as_i64().unwrap_or(0),
-                subtitle_streams,
-                audio_streams,
             })
         }).collect()).unwrap_or_default();
         Ok(sessions)
