@@ -1996,7 +1996,7 @@ impl App {
         let row = mouse.row;
         if matches!(mouse.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
             let now = Instant::now();
-            if now.duration_since(self.last_scroll_at) < Duration::from_millis(120) {
+            if now.duration_since(self.last_scroll_at) < Duration::from_millis(30) {
                 return;
             }
             self.last_scroll_at = now;
