@@ -6446,6 +6446,7 @@ impl App {
         #[allow(non_snake_case)]
         let LIB_EPISODE_IMG_H = lib_episode_img_h;
         let at_album_folders = self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none();
+        let is_homevideo_lib = matches!(self.libs[lib_idx].library.collection_type.as_str(), "homevideos" | "channels");
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
             let base: u16 = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
@@ -6457,8 +6458,8 @@ impl App {
             } else if is_audio {
                 if i == cursor { LIB_AUDIO_IMG_H.max(3) } else { 3 }
             } else if images_enabled && i == cursor {
-                let is_episode = item.item_type == "Episode";
-                let (sel_img_w, sel_img_h) = if is_episode {
+                let is_episode_like = item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video");
+                let (sel_img_w, sel_img_h) = if is_episode_like {
                     (LIB_EPISODE_IMG_W, LIB_EPISODE_IMG_H)
                 } else {
                     (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
@@ -6530,7 +6531,7 @@ impl App {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
                     let (img_w, img_h) = if is_audio || is_album_folder {
                         (LIB_AUDIO_IMG_W, LIB_AUDIO_IMG_H)
-                    } else if item.item_type == "Episode" {
+                    } else if item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video") {
                         (LIB_EPISODE_IMG_W, LIB_EPISODE_IMG_H)
                     } else {
                         (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
@@ -6579,7 +6580,8 @@ impl App {
             };
             let content_w = text_rect.width as usize;
 
-            if selected && !matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") {
+            let is_episode_like = item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video");
+            if selected && !matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") && !is_episode_like {
                 let bar: Vec<Line> = (0..ind_rect.height)
                     .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::IRIS))))
                     .collect();
@@ -6594,7 +6596,7 @@ impl App {
                 }
             }
 
-            let text_color = if selected && matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") { palette::IRIS }
+            let text_color = if selected && (matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") || is_episode_like) { palette::IRIS }
                 else if selected { palette::WHITE }
                 else { palette::TEXT };
 
@@ -6631,7 +6633,30 @@ impl App {
             } else { None };
 
             // Build metadata line (line 2 for non-audio, line 3 for audio)
-            let meta_line: Line = match item.item_type.as_str() {
+            let episode_meta_line = |item: &crate::api::MediaItem| -> Line<'static> {
+                let mut spans: Vec<Span> = Vec::new();
+                if item.played {
+                    spans.push(Span::styled("\u{f00c} ", Style::default().fg(palette::PINE)));
+                }
+                let mut parts: Vec<String> = Vec::new();
+                if !item.premiere_date.is_empty() { parts.push(item.premiere_date.clone()); }
+                let dur_s = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
+                if dur_s > 0 {
+                    let h = dur_s / 3600; let m = (dur_s % 3600) / 60;
+                    parts.push(if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") });
+                }
+                if !parts.is_empty() {
+                    spans.push(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)));
+                }
+                if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
+                    let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+                    spans.push(Span::styled(format!("  {pct}%"), Style::default().fg(palette::YELLOW)));
+                }
+                Line::from(spans)
+            };
+            let meta_line: Line = if is_episode_like && item.item_type != "Episode" {
+                episode_meta_line(item)
+            } else { match item.item_type.as_str() {
                 "Series" => {
                     let year_str = if item.production_year > 0 && item.end_year > 0 && item.end_year != item.production_year {
                         format!("{} \u{2013} {}", item.production_year, item.end_year)
@@ -6650,27 +6675,7 @@ impl App {
                     if item.production_year > 0 { parts.push(format!("{}", item.production_year)); }
                     Line::from(Span::styled(parts.join(" \u{b7} "), Style::default().fg(palette::SUBTLE)))
                 }
-                "Episode" => {
-                    let mut spans: Vec<Span> = Vec::new();
-                    if item.played {
-                        spans.push(Span::styled("\u{f00c} ", Style::default().fg(palette::PINE)));
-                    }
-                    let mut parts: Vec<String> = Vec::new();
-                    if !item.premiere_date.is_empty() { parts.push(item.premiere_date.clone()); }
-                    let dur_s = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
-                    if dur_s > 0 {
-                        let h = dur_s / 3600; let m = (dur_s % 3600) / 60;
-                        parts.push(if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") });
-                    }
-                    if !parts.is_empty() {
-                        spans.push(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)));
-                    }
-                    if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
-                        let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                        spans.push(Span::styled(format!("  {pct}%"), Style::default().fg(palette::YELLOW)));
-                    }
-                    Line::from(spans)
-                }
+                "Episode" => episode_meta_line(item),
                 _ if item.is_folder && item.item_type != "Series" && item.item_type != "Season" => {
                     if item.total_count > 0 {
                         Line::from(Span::styled(
@@ -6706,7 +6711,7 @@ impl App {
                     }
                     Line::from(spans)
                 }
-            };
+            }}; // close else { match
 
             // Prepend type/genre as the first span on the metadata line (skip for generic folders)
             let meta_line = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
@@ -6714,7 +6719,7 @@ impl App {
             } else {
                 let type_str = if matches!(item.item_type.as_str(), "Movie" | "Series") {
                     if !item.genre.is_empty() { item.genre.clone() } else { String::new() }
-                } else if item.item_type == "Episode" {
+                } else if item.item_type == "Episode" || is_episode_like {
                     String::new()
                 } else if !item.item_type.is_empty() {
                     item.item_type.clone()
@@ -6764,7 +6769,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(title_display, {
                     let s = Style::default().fg(text_color);
-                    if selected && matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") { s.add_modifier(Modifier::BOLD) } else { s }
+                    if selected && (matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") || is_episode_like) { s.add_modifier(Modifier::BOLD) } else { s }
                 }))),
                 line_rects[0],
             );
