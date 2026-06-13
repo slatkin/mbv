@@ -205,6 +205,8 @@ pub struct App {
     sessions_cursor: usize,
     sessions_loading: bool,
     show_sessions: bool,
+    show_playback_panel: bool,
+    layout_playback_indicator_area: Rect,
     sessions_tx: mpsc::Sender<SessionEvent>,
     sessions_rx: mpsc::Receiver<SessionEvent>,
     connected_session_id: Option<String>,
@@ -441,6 +443,8 @@ impl App {
             sessions_cursor: 0,
             sessions_loading: false,
             show_sessions: false,
+            show_playback_panel: true,
+            layout_playback_indicator_area: Rect::default(),
             sessions_tx,
             sessions_rx,
             connected_session_id: None,
@@ -569,6 +573,8 @@ impl App {
             sessions_cursor: 0,
             sessions_loading: false,
             show_sessions: false,
+            show_playback_panel: true,
+            layout_playback_indicator_area: Rect::default(),
             sessions_tx,
             sessions_rx,
             connected_session_id: None,
@@ -1096,6 +1102,15 @@ impl App {
         if key.code == KeyCode::F(3) {
             self.show_sessions = true;
             self.spawn_sessions_load();
+            return false;
+        }
+        if key.code == KeyCode::Char('h') {
+            let active = self.player.status.lock().unwrap().active;
+            let show_controls = active || self.connected_session_id.is_some();
+            let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
+            if show_controls && !in_presentation {
+                self.show_playback_panel = !self.show_playback_panel;
+            }
             return false;
         }
         // Global c: clear playlist (not when typing in library search)
@@ -2247,6 +2262,15 @@ impl App {
                     self.spawn_sessions_load();
                     return;
                 }
+                if self.layout_playback_indicator_area.contains((col, row).into()) {
+                    let active = self.player.status.lock().unwrap().active;
+                    let show_controls = active || self.connected_session_id.is_some();
+                    let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
+                    if show_controls && !in_presentation {
+                        self.show_playback_panel = !self.show_playback_panel;
+                    }
+                    return;
+                }
                 if self.layout_vol_area.contains((col, row).into()) {
                     self.adjust_volume(-5);
                     return;
@@ -3382,8 +3406,8 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
         let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
-        let status_h:   u16 = if show_controls && !in_presentation { 1 } else { 0 };
-        let controls_h: u16 = if show_controls && !in_presentation { 2 } else { 0 };
+        let status_h:   u16 = if show_controls && !in_presentation && self.show_playback_panel { 1 } else { 0 };
+        let controls_h: u16 = if show_controls && !in_presentation && self.show_playback_panel { 2 } else { 0 };
 
         let [tabs_area, gap_area, toast_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
@@ -3428,13 +3452,16 @@ impl App {
                     .unwrap_or("\u{1F509}")
             };
 
-            // right-to-left: ───[℻]─[字]─[♫]──── leading dashes
+            // right-to-left: ───[▶]─[✚]─[字]─[♫]──── leading dashes
             const AUD_W:     u16 = 4;
             const SUB_W:     u16 = 4;
             const SESS_W:    u16 = 3; // [✚] — ✚ is 1 col wide
+            const PLAY_W:    u16 = 3; // [▶] — ▶ is 1 col wide
             const SEP_W:     u16 = 1;
             const RIGHT_PAD: u16 = 1;
-            let sess_end   = (gap_area.width as usize).saturating_sub(RIGHT_PAD as usize);
+            let play_end   = (gap_area.width as usize).saturating_sub(RIGHT_PAD as usize);
+            let play_start = play_end.saturating_sub(PLAY_W as usize);
+            let sess_end   = play_start.saturating_sub(SEP_W as usize);
             let sess_start = sess_end.saturating_sub(SESS_W as usize);
             let sub_end    = sess_start.saturating_sub(SEP_W as usize);
             let sub_start  = sub_end.saturating_sub(SUB_W as usize);
@@ -3446,6 +3473,7 @@ impl App {
             let mut spans: Vec<Span> = Vec::new();
             let sub_color  = if sub_active { palette::RED } else { palette::MUTED };
             let sess_color = if self.connected_session_id.is_some() { palette::IRIS } else { palette::MUTED };
+            let play_color = if show_controls { palette::IRIS } else { palette::MUTED };
             spans.push(Span::styled("─".repeat(aud_start), dash));
             if player_active {
                 let icon_color = if audio_muted { palette::MUTED } else { palette::IRIS };
@@ -3463,6 +3491,10 @@ impl App {
             spans.push(Span::styled("[",            bra));
             spans.push(Span::styled("\u{271A}",     Style::default().fg(sess_color)));
             spans.push(Span::styled("]",            bra));
+            spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
+            spans.push(Span::styled("[",  bra));
+            spans.push(Span::styled("▶",  Style::default().fg(play_color)));
+            spans.push(Span::styled("]",  bra));
             spans.push(Span::styled("─".repeat(RIGHT_PAD as usize), dash));
             f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
 
@@ -3476,6 +3508,8 @@ impl App {
             self.layout_sub_indicator_area   = Rect { x: sub_x,  y: gap_area.y, width: SUB_W,  height: 1 };
             let sess_x = gap_area.x + sess_start as u16;
             self.layout_sessions_btn_area    = Rect { x: sess_x, y: gap_area.y, width: SESS_W, height: 1 };
+            let play_x = gap_area.x + play_start as u16;
+            self.layout_playback_indicator_area = Rect { x: play_x, y: gap_area.y, width: PLAY_W, height: 1 };
         }
         let vol_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
@@ -3553,7 +3587,7 @@ impl App {
             self.status_expires = None;
         }
         // Compute now-playing title for use in toast row fallback
-        let now_playing_title: Option<(String, ratatui::style::Color)> = if show_controls && !in_presentation {
+        let now_playing_title: Option<(String, ratatui::style::Color)> = if show_controls && !in_presentation && self.show_playback_panel {
             if active {
                 now_playing.map(|t| (t, palette::FOAM))
             } else if let Some(ref state) = self.connected_session_state {
@@ -3594,7 +3628,7 @@ impl App {
                 toast_area,
             );
         }
-        if show_controls && !in_presentation {
+        if show_controls && !in_presentation && self.show_playback_panel {
             // Status / now-playing HR (title now lives in the toast row)
             f.render_widget(
                 Paragraph::new(Span::styled(
@@ -3868,6 +3902,7 @@ impl App {
             mk("- / +",            "Volume down / up"),
             mk("a",                "Cycle audio track"),
             mk("z",                "Enable subtitles"),
+            mk("h",                "Hide / show playback panel"),
         ];
         let sec_queue = vec![
             blank(),
@@ -6564,6 +6599,8 @@ mod tests {
             sessions_cursor: 0,
             sessions_loading: false,
             show_sessions: false,
+            show_playback_panel: true,
+            layout_playback_indicator_area: Rect::default(),
             sessions_tx,
             sessions_rx,
             connected_session_id: None,
