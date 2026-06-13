@@ -5419,8 +5419,9 @@ impl App {
                 } else {
                     Span::raw(" ")
                 };
-                let mut spans = vec![marker];
+                let mut spans = vec![];
                 if *in_group { spans.push(Span::raw("  ")); }
+                spans.push(marker);
                 spans.push(Span::raw(title));
                 if !pct_str.is_empty() {
                     spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
