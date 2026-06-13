@@ -5578,7 +5578,7 @@ impl App {
                     .track_symbol(Some(" "))
                     .begin_symbol(None)
                     .end_symbol(None)
-                    .style(Style::default().fg(palette::YELLOW)),
+                    .style(Style::default().fg(palette::SUBTLE)),
                 right_area,
                 &mut sb_state,
             );
@@ -6184,7 +6184,7 @@ impl App {
                     .track_symbol(Some(" "))
                     .begin_symbol(None)
                     .end_symbol(None)
-                    .style(Style::default().fg(palette::YELLOW)),
+                    .style(Style::default().fg(palette::SUBTLE)),
                 area,
                 &mut sb_state,
             );
@@ -6434,7 +6434,12 @@ impl App {
             use ratatui::widgets::{Scrollbar, ScrollbarOrientation, ScrollbarState};
             let mut state = ScrollbarState::new(total_rows).position(scroll_row);
             f.render_stateful_widget(
-                Scrollbar::default().orientation(ScrollbarOrientation::VerticalRight),
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("▐")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
                 area,
                 &mut state,
             );
@@ -6554,7 +6559,7 @@ impl App {
                 } else {
                     (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
                 };
-                let ew = area.width.saturating_sub(1 + sel_img_w) as usize;
+                let ew = area.width.saturating_sub(2 + sel_img_w) as usize;
                 let overview = trunc_overview(&item.overview);
                 let ov_lines = if overview.is_empty() { 0 }
                     else { wrap(&overview, ew.max(1)).len() as u16 };
@@ -6600,6 +6605,10 @@ impl App {
             }
         }
 
+        let total_h: u16 = all_heights.iter().sum();
+        let needs_scrollbar = total_h > area.height;
+        let sep_w = if needs_scrollbar { area.width.saturating_sub(1) } else { area.width };
+
         // Render visible rows, accumulating y
         let mut row_y = area.y;
         let mut rendered_heights: Vec<u16> = Vec::new();
@@ -6611,7 +6620,8 @@ impl App {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
             let is_album_folder = at_album_folders && item.is_folder;
             let show_img = selected && (images_enabled || is_audio || is_album_folder);
-            let row_rect = Rect { x: area.x, y: row_y, width: area.width, height: row_h };
+            let row_w = if needs_scrollbar { area.width.saturating_sub(1) } else { area.width };
+            let row_rect = Rect { x: area.x, y: row_y, width: row_w, height: row_h };
 
             // Content area excludes the separator line at the bottom of the row.
             let content_area = Rect { height: row_h.saturating_sub(1), ..row_rect };
@@ -6633,8 +6643,7 @@ impl App {
                 } else { None }
             } else { None };
 
-            // Split padded_area: for audio, image LEFT; for others, image RIGHT
-            // Layout: indicator(1) | [image + gap] | text | [gap + image]
+            // Split padded_area: image LEFT for all cases, indicator(1) | img | gap | text
             let (ind_rect, text_rect, img_rect_opt) = if is_audio || is_album_folder {
                 if let Some(actual) = img_actual {
                     let [a, b, _, c] = Layout::horizontal([
@@ -6657,12 +6666,12 @@ impl App {
             } else if let Some(actual) = img_actual {
                 let [a, b, _, c] = Layout::horizontal([
                     Constraint::Length(1),
-                    Constraint::Min(0),
-                    Constraint::Length(2),
                     Constraint::Length(actual.width),
+                    Constraint::Length(1),
+                    Constraint::Min(0),
                 ]).areas(padded_area);
-                let img_rect = Rect { height: actual.height.min(c.height), ..c };
-                (a, b, Some(img_rect))
+                let img_rect = Rect { height: actual.height.min(b.height), ..b };
+                (a, c, Some(img_rect))
             } else {
                 let [a, c] = Layout::horizontal([
                     Constraint::Length(1),
@@ -6910,8 +6919,8 @@ impl App {
             // Separator line at the bottom of each row
             let sep_y = row_y + row_h - 1;
             if sep_y < area.y + area.height {
-                let sep_rect = Rect { x: area.x, y: sep_y, width: area.width, height: 1 };
-                let sep_str: String = "\u{2500}".repeat(area.width as usize);
+                let sep_rect = Rect { x: area.x, y: sep_y, width: sep_w, height: 1 };
+                let sep_str: String = "\u{2500}".repeat(sep_w as usize);
                 f.render_widget(
                     Paragraph::new(Span::styled(sep_str, Style::default().fg(palette::MUTED))),
                     sep_rect,
@@ -6922,6 +6931,21 @@ impl App {
             row_y += row_h;
         }
         self.layout_lib_row_heights = rendered_heights;
+
+        // Vertical scrollbar — only when content overflows.
+        if needs_scrollbar {
+            let mut sb_state = ScrollbarState::new(items_len).position(scroll);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("▐")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                area,
+                &mut sb_state,
+            );
+        }
     }
 
     fn render_log(&self, f: &mut ratatui::Frame, area: Rect) {
