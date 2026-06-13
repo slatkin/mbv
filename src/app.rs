@@ -222,8 +222,9 @@ pub struct App {
     connected_session_state: Option<crate::api::SessionInfo>,
     last_session_poll: Instant,
     session_miss_count: u8, // consecutive polls that didn't find the connected session
-    remote_pos_s: i64,      // monotonic position estimate for the connected remote
-    remote_pos_at: Instant, // when remote_pos_s was last anchored
+    remote_pos_s: i64,               // monotonic position estimate for the connected remote
+    remote_pos_at: Instant,          // when remote_pos_s was last anchored
+    remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -466,6 +467,7 @@ impl App {
             session_miss_count: 0,
             remote_pos_s: 0,
             remote_pos_at: Instant::now(),
+            remote_api_pos_advanced_at: Instant::now() - Duration::from_secs(60),
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -600,6 +602,7 @@ impl App {
             session_miss_count: 0,
             remote_pos_s: 0,
             remote_pos_at: Instant::now(),
+            remote_api_pos_advanced_at: Instant::now() - Duration::from_secs(60),
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -784,15 +787,15 @@ impl App {
                         if let Some(ref conn_id) = self.connected_session_id.clone() {
                             if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
                                 // Maintain a monotonic position estimate within a single video.
-                                // Reset the anchor when the item changes (different runtime or
-                                // title) so the new video's position isn't clamped by the old one.
+                                // Reset the anchor only when the playing item ID changes.
+                                // Avoid keying on runtime or title — the API occasionally returns
+                                // missing RunTimeTicks (as_i64 returns None → 0) or a slightly
+                                // different name, which would spuriously reset the position anchor
+                                // every poll and prevent smooth interpolation.
                                 let now = Instant::now();
-                                let prev_runtime = self.connected_session_state
-                                    .as_ref().map(|p| p.runtime_s).unwrap_or(0);
-                                let prev_title = self.connected_session_state
-                                    .as_ref().and_then(|p| p.now_playing.clone());
-                                let item_changed = s.runtime_s != prev_runtime
-                                    || s.now_playing != prev_title;
+                                let prev_item_id = self.connected_session_state
+                                    .as_ref().and_then(|p| p.now_playing_item_id.as_deref());
+                                let item_changed = s.now_playing_item_id.as_deref() != prev_item_id;
                                 if item_changed {
                                     // Refresh the previous item so played/progress reflects
                                     // what the remote client reported to the server.
@@ -810,12 +813,35 @@ impl App {
                                         });
                                     }
                                 }
-                                if item_changed || s.is_paused {
+                                // Detect playback via API position advancing, not IsPaused.
+                                // Some Emby clients always report IsPaused=true even while playing;
+                                // the only reliable signal is that PositionTicks keeps moving.
+                                let prev_api_pos = self.connected_session_state
+                                    .as_ref().map_or(0, |p| p.position_s);
+                                if s.position_s > prev_api_pos {
+                                    self.remote_api_pos_advanced_at = now;
+                                }
+                                // Extrapolate if API advanced recently (within 2× the ~11s report
+                                // interval). After that window lapses we treat it as paused/stopped.
+                                let api_active = self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
+                                if item_changed {
+                                    self.log.push(Level::Debug, "sessions", format!(
+                                        "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
+                                        s.position_s, self.remote_pos_s, s.position_s));
                                     self.remote_pos_s = s.position_s;
+                                } else if api_active {
+                                    let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
+                                    let extrapolated = self.remote_pos_s + elapsed.round() as i64;
+                                    let new_pos = s.position_s.max(extrapolated);
+                                    self.log.push(Level::Debug, "sessions", format!(
+                                        "pos extrap: api={}s paused={} elapsed={:.2}s → remote_pos_s {}s→{}s",
+                                        s.position_s, s.is_paused, elapsed, self.remote_pos_s, new_pos));
+                                    self.remote_pos_s = new_pos;
                                 } else {
-                                    let extrapolated = self.remote_pos_s
-                                        + self.remote_pos_at.elapsed().as_secs() as i64;
-                                    self.remote_pos_s = s.position_s.max(extrapolated);
+                                    self.log.push(Level::Debug, "sessions", format!(
+                                        "pos idle (no api advance in 22s): api_pos={}s → remote_pos_s {}s→{}s",
+                                        s.position_s, self.remote_pos_s, s.position_s));
+                                    self.remote_pos_s = s.position_s;
                                 }
                                 self.remote_pos_at = now;
                                 if item_changed {
@@ -1092,6 +1118,7 @@ impl App {
                         self.session_miss_count = 0;
                         self.remote_pos_s = sess.position_s;
                         self.remote_pos_at = Instant::now();
+                        self.remote_api_pos_advanced_at = Instant::now();
                         self.show_sessions = false;
                         self.flash_status(format!("Connected to {name}"));
                         self.spawn_sessions_load();
@@ -2799,15 +2826,14 @@ impl App {
             let active_idx = remote.now_playing_item_id.as_ref()
                 .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id))
                 .unwrap_or(0);
-            let pos = if remote.is_paused {
-                self.remote_pos_s
-            } else {
-                (self.remote_pos_s + self.remote_pos_at.elapsed().as_secs() as i64)
-                    .min(remote.runtime_s)
+            let pos_ticks = {
+                let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
+                let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
+                (pos_s * crate::api::TICKS_PER_SECOND as f64) as i64
             };
             (remote.now_playing.is_some(),
              active_idx,
-             pos * crate::api::TICKS_PER_SECOND,
+             pos_ticks,
              remote.runtime_s * crate::api::TICKS_PER_SECOND,
              remote.is_paused)
         } else {
@@ -4511,14 +4537,13 @@ impl App {
         let area = Rect { x: inner_x, y: area.y, width: inner_w, height: area.height };
 
         let (position_ticks, runtime_ticks, paused) = if let Some(ref remote) = self.connected_session_state {
-            let pos = if remote.is_paused {
-                self.remote_pos_s
-            } else {
-                (self.remote_pos_s + self.remote_pos_at.elapsed().as_secs() as i64)
-                    .min(remote.runtime_s)
+            let pos_ticks = {
+                let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
+                let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
+                (pos_s * crate::api::TICKS_PER_SECOND as f64) as i64
             };
             (
-                pos * crate::api::TICKS_PER_SECOND,
+                pos_ticks,
                 remote.runtime_s * crate::api::TICKS_PER_SECOND,
                 remote.is_paused,
             )
@@ -7090,6 +7115,7 @@ mod tests {
             session_miss_count: 0,
             remote_pos_s: 0,
             remote_pos_at: std::time::Instant::now(),
+            remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
             layout_sessions_btn_area: Rect::default(),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
         }
