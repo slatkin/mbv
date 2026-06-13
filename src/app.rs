@@ -235,6 +235,7 @@ pub struct App {
     pre_mute_volume: Option<u8>,
     layout_tabbar_vol_area: Rect,
     last_scroll_at: Instant,
+    last_nav_at: Instant,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -475,6 +476,7 @@ impl App {
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
+            last_nav_at: Instant::now() - Duration::from_secs(1),
         }
     }
 
@@ -610,6 +612,7 @@ impl App {
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
+            last_nav_at: Instant::now() - Duration::from_secs(1),
         }
     }
 
@@ -1509,11 +1512,13 @@ impl App {
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Up | KeyCode::Left
                 if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_view == 1) => {
+                    self.last_nav_at = Instant::now();
                     self.player_tab.playlist_cursor -= 1;
                 }
             KeyCode::Down | KeyCode::Right
                 if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len()
                 && (key.code == KeyCode::Down || self.playlist_view == 1) => {
+                    self.last_nav_at = Instant::now();
                     self.player_tab.playlist_cursor += 1;
                 }
             KeyCode::PageUp => {
@@ -2514,6 +2519,9 @@ impl App {
     }
 
     fn move_lib_cursor(&mut self, delta: i64) {
+        let now = Instant::now();
+        let idle = now.duration_since(self.last_nav_at) >= Duration::from_millis(150);
+        self.last_nav_at = now;
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
         let lib = &mut self.libs[lib_idx];
@@ -2530,7 +2538,7 @@ impl App {
                 lvl.cursor = (lvl.cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
             }
         }
-        self.maybe_fetch_next_page(lib_idx);
+        if idle { self.maybe_fetch_next_page(lib_idx); }
     }
 
     fn jump_lib_cursor(&mut self, to_end: bool) {
@@ -5062,8 +5070,9 @@ impl App {
                 count_label.as_deref(), None, false);
         }
 
-        // Prefetch images for the three items before and after the cursor.
-        if self.images_enabled() {
+        // Prefetch images for the three items before and after the cursor,
+        // gated on nav idle to avoid flooding the server while holding an arrow key.
+        if self.images_enabled() && self.last_nav_at.elapsed() >= Duration::from_millis(150) {
             let prefetch_start = cursor.saturating_sub(3);
             let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
             for pi in prefetch_start..=prefetch_end {
@@ -6588,8 +6597,10 @@ impl App {
         };
         self.layout_lib_scroll = scroll;
 
-        // Trigger image fetch for selected item and nearby items before rendering loop
-        {
+        // Trigger image fetch for selected item and nearby items before rendering loop,
+        // but only when navigation has been idle for 150ms to avoid flooding the server
+        // while the user holds an arrow key.
+        if self.last_nav_at.elapsed() >= Duration::from_millis(150) {
             let prefetch_start = cursor.saturating_sub(3);
             let prefetch_end = (cursor + 3).min(display_items.len().saturating_sub(1));
             for pi in prefetch_start..=prefetch_end {
@@ -7537,6 +7548,7 @@ mod tests {
             remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
             layout_sessions_btn_area: Rect::default(),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
+            last_nav_at: Instant::now() - Duration::from_secs(1),
         }
     }
 
