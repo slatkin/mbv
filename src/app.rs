@@ -2772,6 +2772,7 @@ impl App {
     /// otherwise plays locally. All multi-item play paths should go through this.
     fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
+            self.clear_playback_overlays();
             let id = conn_id.clone();
             let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
             let start_ticks = items.get(start_idx).map_or(0, |i| i.playback_position_ticks);
@@ -2790,6 +2791,7 @@ impl App {
         let label = item.playback_label();
         // Route to connected remote session instead of local player
         if let Some(ref conn_id) = self.connected_session_id.clone() {
+            self.clear_playback_overlays();
             let id = conn_id.clone();
             let item_id = item.id.clone();
             let start_ticks = item.playback_position_ticks;
@@ -3264,6 +3266,7 @@ impl App {
     }
 
     fn session_jump_track(&mut self, conn_id: &str, delta: i64, fallback_cmd: &'static str) {
+        self.clear_playback_overlays();
         let id = conn_id.to_string();
         let current_remote_id = self.connected_session_state.as_ref()
             .and_then(|s| s.now_playing_item_id.as_deref())
@@ -3281,6 +3284,12 @@ impl App {
         } else {
             self.do_session_command(move |c| c.session_transport(&id, fallback_cmd));
         }
+    }
+
+    fn clear_playback_overlays(&mut self) {
+        self.skip_intro_end_ticks = None;
+        self.next_up_item = None;
+        self.status.clear();
     }
 
     fn do_session_command(&self, f: impl FnOnce(&EmbyClient) -> Result<(), String> + Send + 'static) {
