@@ -3583,8 +3583,7 @@ impl App {
             );
         } else if !self.status.is_empty() {
             f.render_widget(
-                Paragraph::new(Self::toast_line(&self.status))
-                    .alignment(Alignment::Center),
+                Paragraph::new(Self::toast_line(&self.status)),
                 toast_area,
             );
         } else if let Some((ref title, color)) = now_playing_title {
@@ -3647,10 +3646,10 @@ impl App {
                     Span::styled(s[i..i+1].to_string(),  text_style),
                 ];
                 for c in s[i+1..j].chars() {
-                    spans.push(if c == '/' {
-                        Span::styled("/", text_style)
-                    } else {
+                    spans.push(if c.is_uppercase() {
                         Span::styled(c.to_string(), yellow_style)
+                    } else {
+                        Span::styled(c.to_string(), text_style)
                     });
                 }
                 spans.push(Span::styled(s[j..j+1].to_string(), text_style));
