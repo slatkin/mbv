@@ -6234,15 +6234,7 @@ impl App {
         }).collect();
 
         // Scroll: keep existing scroll, only adjust to keep cursor visible.
-        let scroll = {
-            let mut s = self.layout_lib_scroll.min(cursor);
-            loop {
-                let visible_h: u16 = all_heights[s..=cursor].iter().sum();
-                if visible_h <= area.height { break; }
-                s += 1;
-            }
-            s
-        };
+        let scroll = cursor;
         self.layout_lib_scroll = scroll;
 
         // Trigger image fetch for selected item before rendering loop
