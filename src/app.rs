@@ -4636,8 +4636,8 @@ impl App {
         let right_w = area.width.saturating_sub(left_w + 1);
         let inner_y = area.y + top_pad;
         let inner_h = area.height.saturating_sub(top_pad);
-        let left_area  = Rect { x: area.x, y: inner_y, width: left_w, height: inner_h };
-        let right_area = Rect { x: right_x, y: inner_y, width: right_w, height: inner_h };
+        let left_area  = Rect { x: area.x,   y: inner_y,  width: left_w,  height: inner_h };
+        let right_area = Rect { x: right_x,  y: area.y,   width: right_w, height: area.height };
 
         let now_playing_cursor = active && active_idx == cursor;
         let show_controls = now_playing_cursor || self.connected_session_id.is_some();
@@ -4765,7 +4765,7 @@ impl App {
         // Runs of ≥3 consecutive episodes from the same series get a group header row;
         // items in those runs show only the episode title (no repeated show name).
         let show_length = area.width > 80;
-        let title_col_w = (right_w as usize).saturating_sub(if show_length { 9 } else { 0 });
+        let title_col_w = (right_w as usize).saturating_sub(if show_length { 10 } else { 0 });
 
         enum PRow {
             Header(String),
@@ -4850,15 +4850,21 @@ impl App {
 
         let rows: Vec<Row> = prows.iter().map(|prow| match prow {
             PRow::Header(series) => {
-                let cell = Cell::from(Line::from(vec![
-                    Span::raw("  "),
-                    Span::raw(trunc_str(series, title_col_w.saturating_sub(2))),
+                let prefix = "  ";
+                let name = trunc_str(series, title_col_w.saturating_sub(2));
+                let dash_w = title_col_w.saturating_sub(prefix.len() + name.chars().count() + 1);
+                let line_style = Style::default().fg(palette::IRIS);
+                let title_cell = Cell::from(Line::from(vec![
+                    Span::raw(prefix),
+                    Span::styled(name, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
+                    Span::raw(" "),
+                    Span::styled("─".repeat(dash_w), line_style),
                 ]));
-                Row::new([cell]).style(
-                    Style::default()
-                        .fg(palette::YELLOW)
-                        .add_modifier(Modifier::BOLD),
-                )
+                let len_cell = Cell::from(
+                    Line::from("─".repeat(9)).alignment(Alignment::Right)
+                ).style(line_style);
+                let trail_cell = Cell::from(Span::styled("─", line_style));
+                Row::new([title_cell, len_cell, trail_cell])
             }
             PRow::Item { label, pos_ticks, rt_ticks, is_audio, is_active, is_cursor, in_group, length } => {
                 let row_style = if *is_active {
@@ -4898,10 +4904,10 @@ impl App {
         state.select(Some(visual_cursor));
         let table = Table::new(rows, [
             Constraint::Min(10),
-            Constraint::Length(if show_length { 7 } else { 0 }),
+            Constraint::Length(if show_length { 9 } else { 0 }),
             Constraint::Length(1),
         ])
-        .column_spacing(2)
+        .column_spacing(0)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, right_area, &mut state);
 
