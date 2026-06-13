@@ -818,6 +818,13 @@ impl App {
                                     self.remote_pos_s = s.position_s.max(extrapolated);
                                 }
                                 self.remote_pos_at = now;
+                                if item_changed {
+                                    if let Some(new_idx) = s.now_playing_item_id.as_ref()
+                                        .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id))
+                                    {
+                                        self.player_tab.playlist_cursor = new_idx;
+                                    }
+                                }
                                 self.connected_session_state = Some(s.clone());
                                 self.session_miss_count = 0;
                                 // Remote hasn't started playing yet — repoll sooner
