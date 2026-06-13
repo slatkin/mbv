@@ -2640,6 +2640,15 @@ impl App {
         self.music_levels.get(stack_len - 2).map(|s| s == "album").unwrap_or(false)
     }
 
+    fn is_viewing_album_folders(&self, lib_idx: usize) -> bool {
+        let lib = &self.libs[lib_idx];
+        if lib.library.collection_type != "music" { return false; }
+        if self.music_levels.is_empty() { return false; }
+        let stack_len = lib.nav_stack.len();
+        if stack_len < 1 { return false; }
+        self.music_levels.get(stack_len - 1).map(|s| s == "album").unwrap_or(false)
+    }
+
     fn is_audio_item(&self) -> bool {
         let idx = self.player_tab.playlist_cursor;
         self.player_tab.items.get(idx)
@@ -6202,11 +6211,16 @@ impl App {
         // when images are enabled.
         let images_enabled = self.images_enabled();
         let show_seekbar = false;
+        let at_album_folders = self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none();
         let content_w_sel = area.width.saturating_sub(1 + LIB_SELECTED_IMG_W) as usize;
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
             let base: u16 = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
-                1
+                if at_album_folders && i == cursor && images_enabled {
+                    LIB_AUDIO_IMG_H.max(3)
+                } else {
+                    1
+                }
             } else if is_audio {
                 if i == cursor { LIB_AUDIO_IMG_H.max(3) } else { 3 }
             } else if images_enabled && i == cursor {
@@ -6235,9 +6249,11 @@ impl App {
         {
             if let Some((_, item)) = display_items.get(cursor) {
                 let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
-                if images_enabled || is_audio {
+                let is_album_folder = at_album_folders && item.is_folder;
+                if images_enabled || is_audio || is_album_folder {
                     let cache_key = format!("{}:lib", item.id);
-                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), &["Primary"]);
+                    let img_types: &[&str] = if is_album_folder { &["AudioChild", "Primary"] } else { &["Primary"] };
+                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), img_types);
                 }
             }
         }
@@ -6251,7 +6267,8 @@ impl App {
             let row_h = all_heights[abs_idx].min(area.y + area.height - row_y);
             let selected = abs_idx == cursor;
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
-            let show_img = selected && (images_enabled || is_audio);
+            let is_album_folder = at_album_folders && item.is_folder;
+            let show_img = selected && (images_enabled || is_audio || is_album_folder);
             let row_rect = Rect { x: area.x, y: row_y, width: area.width, height: row_h };
 
             // Content area excludes the separator line at the bottom of the row.
@@ -6262,7 +6279,7 @@ impl App {
             let cache_key = format!("{}:lib", item.id);
             let img_actual = if show_img {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                    let (img_w, img_h) = if is_audio {
+                    let (img_w, img_h) = if is_audio || is_album_folder {
                         (LIB_AUDIO_IMG_W, LIB_AUDIO_IMG_H)
                     } else {
                         (LIB_SELECTED_IMG_W, padded_area.height)
@@ -6274,7 +6291,7 @@ impl App {
 
             // Split padded_area: for audio, image LEFT; for others, image RIGHT
             // Layout: indicator(1) | [image + gap] | text | [gap + image]
-            let (ind_rect, text_rect, img_rect_opt) = if is_audio {
+            let (ind_rect, text_rect, img_rect_opt) = if is_audio || is_album_folder {
                 if let Some(actual) = img_actual {
                     let [a, b, _, c] = Layout::horizontal([
                         Constraint::Length(1),
