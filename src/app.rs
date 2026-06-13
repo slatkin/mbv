@@ -71,6 +71,8 @@ struct BrowseLevel {
     cursor: usize,
     item_types: Option<String>,
     unplayed_only: bool,
+    sort_by: String,
+    sort_order: String,
     loading: bool,
 }
 
@@ -2958,10 +2960,12 @@ impl App {
                         lib.nav_stack.push(BrowseLevel {
                             parent_id: item.id.clone(), title: item.name.clone(),
                             items: vec![], total_count: 0, cursor: 0,
-                            item_types: None, unplayed_only: false, loading: true,
+                            item_types: None, unplayed_only: false,
+                            sort_by: "SortName".into(), sort_order: "Ascending".into(),
+                            loading: true,
                         });
                         self.set_tab(lib_idx + 2);
-                        self.spawn_browse(lib_idx, item.id, item.name, None, false);
+                        self.spawn_browse(lib_idx, item.id, item.name, None, false, "SortName".into(), "Ascending".into());
                     }
                 }
             }
@@ -2988,10 +2992,12 @@ impl App {
             lib.nav_stack.push(BrowseLevel {
                 parent_id: item.id.clone(), title: item.name.clone(),
                 items: vec![], total_count: 0, cursor: 0,
-                item_types: None, unplayed_only: false, loading: true,
+                item_types: None, unplayed_only: false,
+                sort_by: "SortName".into(), sort_order: "Ascending".into(),
+                loading: true,
             });
             self.layout_lib_scroll = 0;
-            self.spawn_browse(lib_idx, item.id, item.name, None, false);
+            self.spawn_browse(lib_idx, item.id, item.name, None, false, "SortName".into(), "Ascending".into());
         } else if is_playable(&item) {
             let fresh = {
                 let c = self.client.lock().unwrap();
@@ -3148,8 +3154,10 @@ impl App {
             let parent_id = lvl.parent_id.clone();
             let item_types = lvl.item_types.clone();
             let unplayed_only = lvl.unplayed_only;
+            let sort_by = lvl.sort_by.clone();
+            let sort_order = lvl.sort_order.clone();
             let loaded_count = lvl.items.len();
-            self.spawn_refresh(lib_idx, parent_id, item_types, unplayed_only, loaded_count);
+            self.spawn_refresh(lib_idx, parent_id, item_types, unplayed_only, sort_by, sort_order, loaded_count);
         }
     }
 
@@ -3275,45 +3283,51 @@ impl App {
         if self.libs[idx].nav_stack.is_empty() {
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();
-            let (item_types, unplayed_only) = match self.libs[idx].library.collection_type.as_str() {
-                "movies"               => (Some("Movie".to_string()), false),
-                "channels"|"homevideos" if lib_name == "Youtube" => (Some("Video".to_string()), true),
-                _                      => (None, false),
+            let (item_types, unplayed_only, sort_by, sort_order) = match self.libs[idx].library.collection_type.as_str() {
+                "movies"               => (Some("Movie".to_string()), false, "SortName", "Ascending"),
+                "channels"|"homevideos" if lib_name == "Youtube" => (Some("Video".to_string()), true, "DateCreated", "Ascending"),
+                _                      => (None, false, "SortName", "Ascending"),
             };
             self.libs[idx].nav_stack.push(BrowseLevel {
                 parent_id: lib_id.clone(), title: lib_name.clone(),
                 items: vec![], total_count: 0, cursor: 0,
-                item_types: item_types.clone(), unplayed_only, loading: true,
+                item_types: item_types.clone(), unplayed_only,
+                sort_by: sort_by.into(), sort_order: sort_order.into(),
+                loading: true,
             });
-            self.spawn_browse(idx, lib_id, lib_name, item_types, unplayed_only);
+            self.spawn_browse(idx, lib_id, lib_name, item_types, unplayed_only, sort_by.into(), sort_order.into());
         }
     }
 
     fn refresh_after_stop(&mut self) {
         let _ = self.fetch_home();
-        let fetches: Vec<(usize, String, Option<String>, bool, usize)> = self.libs.iter().enumerate()
+        let fetches: Vec<(usize, String, Option<String>, bool, String, String, usize)> = self.libs.iter().enumerate()
             .filter_map(|(i, lib)| lib.nav_stack.last().map(|lvl| {
-                (i, lvl.parent_id.clone(), lvl.item_types.clone(), lvl.unplayed_only, lvl.items.len())
+                (i, lvl.parent_id.clone(), lvl.item_types.clone(), lvl.unplayed_only,
+                 lvl.sort_by.clone(), lvl.sort_order.clone(), lvl.items.len())
             }))
             .collect();
-        for (lib_idx, parent_id, item_types, unplayed_only, loaded_count) in fetches {
-            self.spawn_refresh(lib_idx, parent_id, item_types, unplayed_only, loaded_count);
+        for (lib_idx, parent_id, item_types, unplayed_only, sort_by, sort_order, loaded_count) in fetches {
+            self.spawn_refresh(lib_idx, parent_id, item_types, unplayed_only, sort_by, sort_order, loaded_count);
         }
     }
 
     fn spawn_browse(&self, lib_idx: usize, parent_id: String, title: String,
-                    item_types: Option<String>, unplayed_only: bool) {
+                    item_types: Option<String>, unplayed_only: bool,
+                    sort_by: String, sort_order: String) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            match client.get_items(&parent_id, item_types.as_deref(), unplayed_only, 0, PAGE_SIZE) {
+            match client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, 0, PAGE_SIZE, &sort_by, &sort_order) {
                 Ok((items, total_count)) => {
                     let _ = tx.send(LibEvent::Loaded {
                         lib_idx,
                         parent_id: parent_id.clone(),
                         level: BrowseLevel {
                             parent_id, title, items, total_count, cursor: 0,
-                            item_types, unplayed_only, loading: false,
+                            item_types, unplayed_only,
+                            sort_by, sort_order,
+                            loading: false,
                         },
                     });
                 }
@@ -3323,11 +3337,12 @@ impl App {
     }
 
     fn spawn_browse_page(&self, lib_idx: usize, parent_id: String, start_index: usize,
-                         item_types: Option<String>, unplayed_only: bool) {
+                         item_types: Option<String>, unplayed_only: bool,
+                         sort_by: String, sort_order: String) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            match client.get_items(&parent_id, item_types.as_deref(), unplayed_only, start_index, PAGE_SIZE) {
+            match client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, start_index, PAGE_SIZE, &sort_by, &sort_order) {
                 Ok((items, total_count)) => {
                     let _ = tx.send(LibEvent::PageAppended { lib_idx, parent_id, items, total_count });
                 }
@@ -3337,12 +3352,13 @@ impl App {
     }
 
     fn spawn_refresh(&self, lib_idx: usize, parent_id: String,
-                     item_types: Option<String>, unplayed_only: bool, loaded_count: usize) {
+                     item_types: Option<String>, unplayed_only: bool,
+                     sort_by: String, sort_order: String, loaded_count: usize) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         let limit = loaded_count.max(PAGE_SIZE);
         std::thread::spawn(move || {
-            match client.get_items(&parent_id, item_types.as_deref(), unplayed_only, 0, limit) {
+            match client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, 0, limit, &sort_by, &sort_order) {
                 Ok((items, total_count)) => {
                     let _ = tx.send(LibEvent::Refreshed { lib_idx, parent_id, items, total_count });
                 }
@@ -3362,8 +3378,10 @@ impl App {
         let parent_id = lvl.parent_id.clone();
         let item_types = lvl.item_types.clone();
         let unplayed_only = lvl.unplayed_only;
+        let sort_by = lvl.sort_by.clone();
+        let sort_order = lvl.sort_order.clone();
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() { last.loading = true; }
-        self.spawn_browse_page(lib_idx, parent_id, start_index, item_types, unplayed_only);
+        self.spawn_browse_page(lib_idx, parent_id, start_index, item_types, unplayed_only, sort_by, sort_order);
     }
 
     fn spawn_sessions_load(&mut self) {
@@ -3514,6 +3532,7 @@ impl App {
                     parent_id: lvl.parent_id.clone(), title: lvl.title.clone(),
                     items: lvl.items.clone(), total_count: lvl.total_count, cursor: lvl.cursor,
                     item_types: lvl.item_types.clone(), unplayed_only: lvl.unplayed_only,
+                    sort_by: lvl.sort_by.clone(), sort_order: lvl.sort_order.clone(),
                     loading: false,
                 }).collect())
                 .unwrap_or_default();
@@ -6465,8 +6484,9 @@ impl App {
                     (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
                 };
                 let ew = area.width.saturating_sub(1 + sel_img_w) as usize;
-                let ov_lines = if item.overview.is_empty() { 0 }
-                    else { wrap(&item.overview, ew.max(1)).len() as u16 };
+                let overview = trunc_overview(&item.overview);
+                let ov_lines = if overview.is_empty() { 0 }
+                    else { wrap(&overview, ew.max(1)).len() as u16 };
                 let dir_lines: u16 = if item.item_type == "Movie" && !item.director.is_empty() { 2 } else { 0 };
                 let tech: u16 = match (item.video_info.is_empty(), item.audio_info.is_empty()) {
                     (true, true) => 0,
@@ -6738,7 +6758,7 @@ impl App {
             // Split text_rect vertically into lines
             let overview_lines: Vec<String> = if !is_audio && selected && images_enabled && !item.overview.is_empty() {
                 let w = content_w.max(1);
-                wrap(&item.overview, w).into_iter().map(|s| s.into_owned()).collect()
+                wrap(&trunc_overview(&item.overview), w).into_iter().map(|s| s.into_owned()).collect()
             } else { Vec::new() };
             let artist_extra: usize = if artist_line.is_some() { 1 } else { 0 };
             let is_generic_folder = item.is_folder && item.item_type != "Series" && item.item_type != "Season";
@@ -6974,6 +6994,65 @@ fn sort_audio_tracks(items: &mut Vec<crate::api::MediaItem>) {
 fn fmt_duration(s: i64) -> String {
     if s >= 3600 { format!("{}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60) }
     else         { format!("{}:{:02}", s / 60, s % 60) }
+}
+
+fn trunc_overview(s: &str) -> String {
+    let stripped = regex_strip_urls(s);
+    trunc_str(stripped.trim(), 300)
+}
+
+fn regex_strip_urls(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        // Detect http:// or https://
+        if c == 'h' {
+            let mut buf = String::from(c);
+            for expected in "ttp".chars() {
+                match chars.peek() {
+                    Some(&nc) if nc == expected => { buf.push(chars.next().unwrap()); }
+                    _ => { out.push_str(&buf); buf.clear(); break; }
+                }
+            }
+            if buf == "http" {
+                // optional 's'
+                if chars.peek() == Some(&'s') { buf.push(chars.next().unwrap()); }
+                // ://
+                let mut ok = true;
+                for expected in "://".chars() {
+                    match chars.peek() {
+                        Some(&nc) if nc == expected => { buf.push(chars.next().unwrap()); }
+                        _ => { ok = false; break; }
+                    }
+                }
+                if ok {
+                    // skip until whitespace
+                    while chars.peek().is_some_and(|&c| !c.is_whitespace()) {
+                        chars.next();
+                    }
+                } else {
+                    out.push_str(&buf);
+                }
+            } else if !buf.is_empty() {
+                out.push_str(&buf);
+            }
+        } else {
+            out.push(c);
+        }
+    }
+    // collapse runs of whitespace left by removed URLs
+    let mut result = String::with_capacity(out.len());
+    let mut prev_space = false;
+    for c in out.chars() {
+        if c.is_whitespace() {
+            if !prev_space { result.push(' '); }
+            prev_space = true;
+        } else {
+            result.push(c);
+            prev_space = false;
+        }
+    }
+    result
 }
 
 fn trunc_str(s: &str, max: usize) -> String {
