@@ -5623,23 +5623,23 @@ impl App {
                 type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
                 if is_center {
                     let avail = ratatui::layout::Size { width: inner.width.saturating_sub(2), height: img_h };
-                    let actual = state.size_for(ratatui_image::Resize::Scale(None), avail);
+                    let actual = state.size_for(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail);
                     let img_x = inner.x + 1 + (avail.width.saturating_sub(actual.width)) / 2;
                     let img_rect = Rect { x: img_x, y: img_top, width: actual.width, height: actual.height };
                     f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Scale(None)),
+                        SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
                         img_rect, state,
                     );
                     actual_img_h = actual.height;
                 } else {
                     let w     = (inner.width as u32 * 36 / 100) as u16;
                     let avail = ratatui::layout::Size { width: w, height: img_h };
-                    let actual = state.size_for(ratatui_image::Resize::Fit(None), avail);
+                    let actual = state.size_for(ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3)), avail);
                     let img_x = inner.x + (inner.width.saturating_sub(actual.width)) / 2;
                     let img_y = img_top + (img_h.saturating_sub(actual.height)) / 2;
                     let img_rect = Rect { x: img_x, y: img_y, width: actual.width, height: actual.height };
                     f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Fit(None)),
+                        SImg::default().resize(ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3))),
                         img_rect, state,
                     );
                     actual_img_h = actual.height;
@@ -6322,14 +6322,14 @@ impl App {
                     let avail = ratatui::layout::Size { width: cell_w, height: img_h };
                     let actual = self.card_image_states.get_mut(&key)
                         .and_then(|s| s.as_mut())
-                        .map(|s| s.size_for(ratatui_image::Resize::Fit(None), avail));
+                        .map(|s| s.size_for(ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3)), avail));
                     if let Some(actual) = actual {
                         let ix = cell_x + (cell_w.saturating_sub(actual.width)) / 2;
                         let iy = row_y + (img_h.saturating_sub(actual.height)) / 2;
                         let img_rect = Rect { x: ix, y: iy, width: actual.width, height: actual.height.min((area.y + area.height).saturating_sub(iy)) };
                         if let Some(Some(state)) = self.card_image_states.get_mut(&key) {
                             type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                            f.render_stateful_widget(SImg::default().resize(ratatui_image::Resize::Fit(None)), img_rect, state);
+                            f.render_stateful_widget(SImg::default().resize(ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3))), img_rect, state);
                         }
                     }
                 }
@@ -6515,7 +6515,7 @@ impl App {
                         (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
                     };
                     let avail = ratatui::layout::Size { width: img_w, height: img_h.min(padded_area.height) };
-                    Some(state.size_for(ratatui_image::Resize::Fit(None), avail))
+                    Some(state.size_for(ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3)), avail))
                 } else { None }
             } else { None };
 
@@ -6569,7 +6569,7 @@ impl App {
             if let Some(img_rect) = img_rect_opt {
                 type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
                 if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                    f.render_stateful_widget(SImg::default().resize(ratatui_image::Resize::Fit(None)), img_rect, state);
+                    f.render_stateful_widget(SImg::default().resize(ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3))), img_rect, state);
                 }
             }
 
