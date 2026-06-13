@@ -1689,10 +1689,12 @@ impl App {
             let pos_s = self.connected_session_state.as_ref().map(|s| s.position_s).unwrap_or(0);
             let id = conn_id.clone();
             match btn {
+                0 => { self.do_session_command(move |c| c.session_transport(&id, "PreviousTrack")); }
                 1 => { let t = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND; self.do_session_command(move |c| c.session_seek(&id, t)); }
                 2 => { self.do_session_command(move |c| c.session_transport(&id, "PlayPause")); }
                 3 => { self.do_session_command(move |c| c.session_transport(&id, "Stop")); }
                 4 => { let t = (pos_s + 5) * crate::api::TICKS_PER_SECOND; self.do_session_command(move |c| c.session_seek(&id, t)); }
+                5 => { self.do_session_command(move |c| c.session_transport(&id, "NextTrack")); }
                 _ => {}
             }
             return;
