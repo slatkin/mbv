@@ -75,6 +75,7 @@ struct BrowseLevel {
     sort_by: String,
     sort_order: String,
     loading: bool,
+    all_items: Option<Vec<MediaItem>>, // prefetched full list for instant search
 }
 
 enum SavePlaylistStage {
@@ -95,6 +96,7 @@ enum LibEvent {
     PageAppended { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
     Refreshed { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
     SearchItemsLoaded { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
+    AllItemsPrefetched { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
     AlbumYearFetched { album_id: String, year: u32 },
     Error(String),
 }
@@ -1360,7 +1362,11 @@ impl App {
             }
             KeyCode::Char('/') => {
                 let (items, needs_full_load) = self.libs[lib_idx].nav_stack.last()
-                    .map(|l| (l.items.clone(), l.items.len() < l.total_count))
+                    .map(|l| {
+                        let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
+                        let needs = l.all_items.is_none() && l.items.len() < l.total_count;
+                        (all, needs)
+                    })
                     .unwrap_or_default();
                 let n = items.len();
                 self.libs[lib_idx].search = Some(LibSearch {
@@ -3104,7 +3110,7 @@ impl App {
                             items: vec![], total_count: 0, cursor: 0,
                             item_types: None, unplayed_only: false,
                             sort_by: "SortName".into(), sort_order: "Ascending".into(),
-                            loading: true,
+                            loading: true, all_items: None,
                         });
                         self.set_tab(lib_idx + 2);
                         self.spawn_browse(lib_idx, item.id, item.name, None, false, "SortName".into(), "Ascending".into());
@@ -3136,7 +3142,7 @@ impl App {
                 items: vec![], total_count: 0, cursor: 0,
                 item_types: None, unplayed_only: false,
                 sort_by: "SortName".into(), sort_order: "Ascending".into(),
-                loading: true,
+                loading: true, all_items: None,
             });
             self.layout_lib_scroll = 0;
             self.spawn_browse(lib_idx, item.id, item.name, None, false, "SortName".into(), "Ascending".into());
@@ -3435,7 +3441,7 @@ impl App {
                 items: vec![], total_count: 0, cursor: 0,
                 item_types: item_types.clone(), unplayed_only,
                 sort_by: sort_by.into(), sort_order: sort_order.into(),
-                loading: true,
+                loading: true, all_items: None,
             });
             self.spawn_browse(idx, lib_id, lib_name, item_types, unplayed_only, sort_by.into(), sort_order.into());
         }
@@ -3469,7 +3475,7 @@ impl App {
                             parent_id, title, items, total_count, cursor: 0,
                             item_types, unplayed_only,
                             sort_by, sort_order,
-                            loading: false,
+                            loading: false, all_items: None,
                         },
                     });
                 }
@@ -3489,6 +3495,25 @@ impl App {
                     let _ = tx.send(LibEvent::PageAppended { lib_idx, parent_id, items, total_count });
                 }
                 Err(e) => { let _ = tx.send(LibEvent::Error(e)); }
+            }
+        });
+    }
+
+    fn spawn_all_items_prefetch(&self, lib_idx: usize) {
+        let lib = &self.libs[lib_idx];
+        let lvl = match lib.nav_stack.last() { Some(l) => l, None => return };
+        if lvl.items.len() >= lvl.total_count { return; } // already have everything
+        let parent_id = lvl.parent_id.clone();
+        let total_count = lvl.total_count;
+        let item_types = lvl.item_types.clone();
+        let unplayed_only = lvl.unplayed_only;
+        let sort_by = lvl.sort_by.clone();
+        let sort_order = lvl.sort_order.clone();
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            if let Ok((items, _)) = client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, 0, total_count, &sort_by, &sort_order) {
+                let _ = tx.send(LibEvent::AllItemsPrefetched { lib_idx, parent_id, items });
             }
         });
     }
@@ -3626,6 +3651,7 @@ impl App {
                     }
                 }
                 self.maybe_fetch_next_page(lib_idx);
+                self.spawn_all_items_prefetch(lib_idx);
             }
             LibEvent::PageAppended { lib_idx, parent_id, items, total_count } => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
@@ -3672,6 +3698,7 @@ impl App {
                 if self.tab_idx == lib_idx + self.lib_tab_offset() {
                     self.flash_status("Refreshed".into());
                 }
+                self.spawn_all_items_prefetch(lib_idx);
             }
             LibEvent::SearchItemsLoaded { lib_idx, parent_id, items } => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
@@ -3684,6 +3711,15 @@ impl App {
                     }
                 }
                 self.update_lib_search(lib_idx);
+            }
+            LibEvent::AllItemsPrefetched { lib_idx, parent_id, items } => {
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    if let Some(last) = lib.nav_stack.last_mut() {
+                        if last.parent_id == parent_id {
+                            last.all_items = Some(items);
+                        }
+                    }
+                }
             }
             LibEvent::AlbumYearFetched { album_id, year } => {
                 self.album_year_loading.remove(&album_id);
@@ -3712,7 +3748,7 @@ impl App {
                     items: lvl.items.clone(), total_count: lvl.total_count, cursor: lvl.cursor,
                     item_types: lvl.item_types.clone(), unplayed_only: lvl.unplayed_only,
                     sort_by: lvl.sort_by.clone(), sort_order: lvl.sort_order.clone(),
-                    loading: false,
+                    loading: false, all_items: lvl.all_items.clone(),
                 }).collect())
                 .unwrap_or_default();
             self.libs.push(LibraryTab { library: view.clone(), nav_stack: stack, search: None });
