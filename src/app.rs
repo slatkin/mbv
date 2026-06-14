@@ -77,6 +77,16 @@ struct BrowseLevel {
     loading: bool,
 }
 
+enum SavePlaylistStage {
+    EnterName,
+    ConfirmOverwrite { existing_id: String },
+}
+
+struct SavePlaylistDialog {
+    input: String,
+    stage: SavePlaylistStage,
+}
+
 const PAGE_SIZE: usize = 100;
 const PREFETCH_AHEAD: usize = 25;
 
@@ -239,6 +249,7 @@ pub struct App {
     last_nav_at: Instant,
     album_year_cache: std::collections::HashMap<String, u32>,
     album_year_loading: std::collections::HashSet<String>,
+    save_playlist_dialog: Option<SavePlaylistDialog>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -485,6 +496,7 @@ impl App {
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
             album_year_loading: std::collections::HashSet::new(),
+            save_playlist_dialog: None,
         }
     }
 
@@ -623,6 +635,7 @@ impl App {
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
             album_year_loading: std::collections::HashSet::new(),
+            save_playlist_dialog: None,
         }
     }
 
@@ -1032,6 +1045,9 @@ impl App {
     // ── key handling ────────────────────────────────────────────────────────
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
+        if self.save_playlist_dialog.is_some() {
+            return self.handle_save_playlist_key(key);
+        }
         if self.show_settings {
             if self.multiselect_popup.is_some() {
                 match key.code {
@@ -1612,7 +1628,89 @@ impl App {
                     self.flash_status("Nothing is playing".into());
                 }
             }
+            KeyCode::Char('s') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                if !self.player_tab.items.is_empty() {
+                    self.save_playlist_dialog = Some(SavePlaylistDialog {
+                        input: String::new(),
+                        stage: SavePlaylistStage::EnterName,
+                    });
+                }
+            }
             _ => {}
+        }
+        false
+    }
+
+    fn handle_save_playlist_key(&mut self, key: KeyEvent) -> bool {
+        let Some(ref dialog) = self.save_playlist_dialog else { return false; };
+        match &dialog.stage {
+            SavePlaylistStage::EnterName => {
+                match key.code {
+                    KeyCode::Esc => { self.save_playlist_dialog = None; }
+                    KeyCode::Backspace => {
+                        if let Some(d) = &mut self.save_playlist_dialog { d.input.pop(); }
+                    }
+                    KeyCode::Char(c) if key.modifiers == crossterm::event::KeyModifiers::NONE
+                                     || key.modifiers == crossterm::event::KeyModifiers::SHIFT => {
+                        if let Some(d) = &mut self.save_playlist_dialog { d.input.push(c); }
+                    }
+                    KeyCode::Enter => {
+                        let name = dialog.input.trim().to_string();
+                        if name.is_empty() { return false; }
+                        let playlists = {
+                            let c = self.client.lock().unwrap();
+                            c.get_playlists().unwrap_or_default()
+                        };
+                        let existing = playlists.into_iter()
+                            .find(|p| p.name.to_lowercase() == name.to_lowercase());
+                        if let Some(existing) = existing {
+                            self.save_playlist_dialog = Some(SavePlaylistDialog {
+                                input: name,
+                                stage: SavePlaylistStage::ConfirmOverwrite { existing_id: existing.id },
+                            });
+                        } else {
+                            let ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+                            let result = {
+                                let c = self.client.lock().unwrap();
+                                c.create_playlist(&name, &ids)
+                            };
+                            self.save_playlist_dialog = None;
+                            match result {
+                                Ok(_) => self.flash_status(format!("Saved as playlist \"{name}\"")),
+                                Err(e) => self.flash_status(format!("Error: {e}")),
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            SavePlaylistStage::ConfirmOverwrite { existing_id } => {
+                let existing_id = existing_id.clone();
+                match key.code {
+                    KeyCode::Char('y') => {
+                        let name = dialog.input.clone();
+                        let ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+                        let result = {
+                            let c = self.client.lock().unwrap();
+                            c.delete_playlist(&existing_id)
+                                .and_then(|_| c.create_playlist(&name, &ids))
+                        };
+                        self.save_playlist_dialog = None;
+                        match result {
+                            Ok(_) => self.flash_status(format!("Saved as playlist \"{name}\"")),
+                            Err(e) => self.flash_status(format!("Error: {e}")),
+                        }
+                    }
+                    KeyCode::Esc => {
+                        let input = dialog.input.clone();
+                        self.save_playlist_dialog = Some(SavePlaylistDialog {
+                            input,
+                            stage: SavePlaylistStage::EnterName,
+                        });
+                    }
+                    _ => {}
+                }
+            }
         }
         false
     }
@@ -4046,6 +4144,7 @@ impl App {
             self.render_settings_panel(f);
             if self.multiselect_popup.is_some() { self.render_multiselect_popup(f); }
         }
+        if self.save_playlist_dialog.is_some() { self.render_save_playlist_dialog(f); }
     }
 
     fn toast_line(s: &str) -> Line<'static> {
@@ -4479,6 +4578,59 @@ impl App {
         let cfg = self.client.lock().unwrap().config.clone();
         crate::config::save_config_settings(&cfg);
         let _ = self.fetch_home();
+    }
+
+    fn render_save_playlist_dialog(&mut self, f: &mut ratatui::Frame) {
+        let Some(ref dialog) = self.save_playlist_dialog else { return; };
+        let full = f.area();
+        let w: u16 = 52;
+        let h: u16 = 7;
+        let x = full.x + full.width.saturating_sub(w) / 2;
+        let y = full.y + full.height.saturating_sub(h) / 2;
+        let rect = Rect { x, y, width: w, height: h };
+        f.render_widget(Clear, rect);
+        let block = Block::default()
+            .title(Span::styled(" Save as Playlist ", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)))
+            .title_alignment(Alignment::Center)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(palette::IRIS));
+        let inner = block.inner(rect);
+        f.render_widget(block, rect);
+        match &dialog.stage {
+            SavePlaylistStage::EnterName => {
+                let label = "Name: ";
+                let cursor = "\u{258f}";
+                let max_input = inner.width as usize - label.len() - cursor.len() - 2;
+                let visible: String = dialog.input.chars().rev().take(max_input).collect::<String>().chars().rev().collect();
+                let input_line = format!("{}{}{}", label, visible, cursor);
+                let hint = "Enter to save · Esc to cancel";
+                let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
+                let hint_y = input_y + 2;
+                f.render_widget(
+                    Paragraph::new(Span::styled(input_line, Style::default().fg(palette::WHITE))),
+                    Rect { x: inner.x + 1, y: input_y, width: inner.width.saturating_sub(2), height: 1 },
+                );
+                f.render_widget(
+                    Paragraph::new(Span::styled(hint, Style::default().fg(palette::SUBTLE))),
+                    Rect { x: inner.x + 1, y: hint_y, width: inner.width.saturating_sub(2), height: 1 },
+                );
+            }
+            SavePlaylistStage::ConfirmOverwrite { .. } => {
+                let name = trunc_str(&dialog.input, inner.width as usize - 4);
+                let line1 = format!("\"{}\" already exists.", name);
+                let line2 = "Press y to overwrite · Esc to go back";
+                let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
+                f.render_widget(
+                    Paragraph::new(Span::styled(line1, Style::default().fg(palette::WHITE))),
+                    Rect { x: inner.x + 1, y: base_y, width: inner.width.saturating_sub(2), height: 1 },
+                );
+                f.render_widget(
+                    Paragraph::new(Span::styled(line2, Style::default().fg(palette::SUBTLE))),
+                    Rect { x: inner.x + 1, y: base_y + 2, width: inner.width.saturating_sub(2), height: 1 },
+                );
+            }
+        }
     }
 
     fn render_multiselect_popup(&mut self, f: &mut ratatui::Frame) {
@@ -5349,7 +5501,8 @@ impl App {
                  card_name, card_series, card_ep_tag, stack_subs)
             };
             let cache_key = format!("{}:A", item_id);
-            if self.images_enabled() {
+            let is_music_item = matches!(img_types, &["Primary"] | &["AudioChild"]);
+            if self.images_enabled() || is_music_item {
                 self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
             }
             self.render_card_slot(f, card_area, true, true, now_playing, true, true, true,
@@ -5439,7 +5592,7 @@ impl App {
         self.layout_audio_area   = Rect::default();
 
         // Prefetch images for 3 items before and after the cursor.
-        if self.images_enabled() {
+        {
             let prefetch_start = cursor.saturating_sub(3);
             let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
             for pi in prefetch_start..=prefetch_end {
@@ -5452,7 +5605,10 @@ impl App {
                     "Movie"      => &["Backdrop", "Primary", "Logo"],
                     _            => &["Primary", "Backdrop", "Logo"],
                 };
-                self.fetch_card_image(format!("{}:A", item_id), item_id, series_id, img_types);
+                let is_music = matches!(item.item_type.as_str(), "Audio" | "MusicAlbum");
+                if self.images_enabled() || is_music {
+                    self.fetch_card_image(format!("{}:A", item_id), item_id, series_id, img_types);
+                }
             }
         }
 

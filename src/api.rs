@@ -799,6 +799,38 @@ impl EmbyClient {
         }
     }
 
+    pub fn get_playlists(&self) -> Result<Vec<MediaItem>, String> {
+        let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
+            .query("IncludeItemTypes", "Playlist")
+            .query("Recursive", "true")
+            .query("Fields", "")
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        Ok(resp["Items"].as_array()
+            .map(|arr| arr.iter().map(parse_item).collect())
+            .unwrap_or_default())
+    }
+
+    pub fn create_playlist(&self, name: &str, item_ids: &[String]) -> Result<String, String> {
+        let body = ureq::json!({
+            "Name": name,
+            "Ids": item_ids,
+            "UserId": self.user_id,
+            "MediaType": "Unknown",
+        });
+        let resp: Value = self.post("/Playlists")
+            .send_json(body).map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        resp["Id"].as_str().map(|s| s.to_string())
+            .ok_or_else(|| "no Id in response".to_string())
+    }
+
+    pub fn delete_playlist(&self, playlist_id: &str) -> Result<(), String> {
+        self.delete(&format!("/Items/{}", playlist_id))
+            .call().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn get_items_by_ids(&self, ids: &[String]) -> Result<Vec<MediaItem>, String> {
         if ids.is_empty() { return Ok(vec![]); }
         let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
