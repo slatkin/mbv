@@ -252,6 +252,7 @@ enum SettingKey {
     ShowAudioWindow,
     UseMpvConfig,
     NoScripts,
+    Autoload,
     ShowSysTrayIcon,
     LogOut,
 }
@@ -261,7 +262,7 @@ enum SettingKey {
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
     ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos]),
-    ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts]),
+    ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
     ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",   &[SettingKey::LogOut]),
 ];
@@ -284,6 +285,7 @@ fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::ShowAudioWindow   => "Show audio window",
         SettingKey::UseMpvConfig      => "Use mpv config",
         SettingKey::NoScripts         => "No scripts",
+        SettingKey::Autoload          => "Autoload siblings",
         SettingKey::ShowSysTrayIcon   => "Show systray icon",
         SettingKey::LogOut            => "Log out",
     }
@@ -303,6 +305,7 @@ fn setting_value(key: SettingKey, cfg: &crate::config::Config) -> String {
         SettingKey::ShowAudioWindow   => bool_val(cfg.show_audio_window),
         SettingKey::UseMpvConfig      => bool_val(cfg.use_mpv_config),
         SettingKey::NoScripts         => bool_val(cfg.no_scripts),
+        SettingKey::Autoload          => bool_val(cfg.autoload),
         SettingKey::ShowSysTrayIcon   => bool_val(cfg.show_systray_icon),
         SettingKey::LogOut            => String::new(),
     }
@@ -3031,7 +3034,7 @@ impl App {
                 sort_audio_tracks(&mut tracks);
                 if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
                     self.player_tab.items = tracks.clone();
-                    self.player_tab.playlist_cursor = 0;
+                    self.player_tab.playlist_cursor = start_idx;
                     self.play_items_routed(tracks, start_idx);
                     return;
                 }
@@ -3047,7 +3050,7 @@ impl App {
                             if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) {
                                 drop(client);
                                 self.player_tab.items = siblings.clone();
-                                self.player_tab.playlist_cursor = 0;
+                                self.player_tab.playlist_cursor = start_idx;
                                 self.play_items_routed(siblings, start_idx);
                                 return;
                             }
@@ -4415,6 +4418,7 @@ impl App {
                     SettingKey::ShowAudioWindow  => c.config.show_audio_window = !c.config.show_audio_window,
                     SettingKey::UseMpvConfig     => c.config.use_mpv_config = !c.config.use_mpv_config,
                     SettingKey::NoScripts        => c.config.no_scripts = !c.config.no_scripts,
+                    SettingKey::Autoload         => c.config.autoload = !c.config.autoload,
                     SettingKey::ShowSysTrayIcon  => c.config.show_systray_icon = !c.config.show_systray_icon,
                     _ => {}
                 }
