@@ -4090,12 +4090,13 @@ impl App {
         if let Some(ref q) = search_toast {
             f.render_widget(
                 Paragraph::new(q.as_str())
+                    .alignment(Alignment::Center)
                     .style(Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
                 toast_area,
             );
         } else if !self.status.is_empty() {
             f.render_widget(
-                Paragraph::new(Self::toast_line(&self.status)),
+                Paragraph::new(Self::toast_line(&self.status)).alignment(Alignment::Center),
                 toast_area,
             );
         } else if let Some((ref title, color)) = now_playing_title {
