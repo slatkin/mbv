@@ -407,6 +407,7 @@ impl Player {
                 opt!("wayland-app-id", "mbv");
                 opt!("demuxer-max-bytes", "50M");
                 opt!("demuxer-max-back-bytes", "10M");
+                opt!("gapless-audio", "weak");
                 if no_scripts || !use_mpv_config {
                     opt!("load-scripts", "no");
                     opt!("osc", "no");
@@ -983,6 +984,7 @@ impl Player {
                 opt!("wayland-app-id", "mbv");
                 opt!("demuxer-max-bytes", "50M");
                 opt!("demuxer-max-back-bytes", "10M");
+                opt!("gapless-audio", "weak");
                 if no_scripts || !use_mpv_config {
                     opt!("load-scripts", "no");
                     opt!("osc", "no");
