@@ -22,6 +22,7 @@ pub struct Config {
     pub daemon_mode_on_exit: bool,
     pub autoload: bool,
     pub music_levels: Vec<String>,
+    pub system_notifications: bool,
 }
 
 impl Default for Config {
@@ -46,6 +47,7 @@ impl Default for Config {
             daemon_mode_on_exit: false,
             autoload: false,
             music_levels: vec![],
+            system_notifications: false,
         }
     }
 }
@@ -264,6 +266,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(String::from).collect())
         .unwrap_or_default();
 
+    let system_notifications = general
+        .and_then(|m| m.get("system_notifications"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -284,6 +291,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         daemon_mode_on_exit,
         autoload,
         music_levels,
+        system_notifications,
     })
 }
 
@@ -315,9 +323,10 @@ pub fn save_config_settings(cfg: &Config) {
     }
 
     let general = section!("general");
-    general.insert("daemon_mode_on_exit".to_string(), toml::Value::Boolean(cfg.daemon_mode_on_exit));
-    general.insert("always_skip_intro".to_string(),   toml::Value::Boolean(cfg.always_skip_intro));
-    general.insert("show_log_tab".to_string(),        toml::Value::Boolean(cfg.show_log_tab));
+    general.insert("daemon_mode_on_exit".to_string(),     toml::Value::Boolean(cfg.daemon_mode_on_exit));
+    general.insert("always_skip_intro".to_string(),       toml::Value::Boolean(cfg.always_skip_intro));
+    general.insert("show_log_tab".to_string(),            toml::Value::Boolean(cfg.show_log_tab));
+    general.insert("system_notifications".to_string(),    toml::Value::Boolean(cfg.system_notifications));
     general.insert("hidden_libraries".to_string(), toml::Value::Array(
         cfg.hidden_libraries.iter().map(|s| toml::Value::String(s.clone())).collect()
     ));
@@ -580,5 +589,17 @@ hidden_latest = ["Movies", "TV SHOWS"]
     fn parse_consume_videos_defaults_false() {
         let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().consume_videos);
+    }
+
+    #[test]
+    fn parse_system_notifications_true() {
+        let toml = "[server]\nurl = \"http://host\"\n[general]\nsystem_notifications = true";
+        assert!(parse_config(toml).unwrap().system_notifications);
+    }
+
+    #[test]
+    fn parse_system_notifications_defaults_false() {
+        let toml = "[server]\nurl = \"http://host\"";
+        assert!(!parse_config(toml).unwrap().system_notifications);
     }
 }

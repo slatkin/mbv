@@ -225,6 +225,9 @@ pub struct App {
     layout_settings_area: Rect,
     help_scroll: u16,
     show_log_tab: bool,
+    system_notifications: bool,
+    notif_action_tx: mpsc::Sender<String>,
+    notif_action_rx: mpsc::Receiver<String>,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
     sessions: Vec<crate::api::SessionInfo>,
@@ -270,13 +273,14 @@ enum SettingKey {
     NoScripts,
     Autoload,
     ShowSysTrayIcon,
+    SystemNotifications,
     LogOut,
 }
 
 // Sections rendered as IRIS blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
-    ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
+    ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
     ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos]),
     ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
     ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
@@ -302,8 +306,9 @@ fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::UseMpvConfig      => "Use mpv config",
         SettingKey::NoScripts         => "No scripts",
         SettingKey::Autoload          => "autoload",
-        SettingKey::ShowSysTrayIcon   => "Show systray icon",
-        SettingKey::LogOut            => "Log out",
+        SettingKey::ShowSysTrayIcon        => "Show systray icon",
+        SettingKey::SystemNotifications    => "System notifications",
+        SettingKey::LogOut                 => "Log out",
     }
 }
 
@@ -322,8 +327,9 @@ fn setting_value(key: SettingKey, cfg: &crate::config::Config) -> String {
         SettingKey::UseMpvConfig      => bool_val(cfg.use_mpv_config),
         SettingKey::NoScripts         => bool_val(cfg.no_scripts),
         SettingKey::Autoload          => bool_val(cfg.autoload),
-        SettingKey::ShowSysTrayIcon   => bool_val(cfg.show_systray_icon),
-        SettingKey::LogOut            => String::new(),
+        SettingKey::ShowSysTrayIcon        => bool_val(cfg.show_systray_icon),
+        SettingKey::SystemNotifications    => bool_val(cfg.system_notifications),
+        SettingKey::LogOut                 => String::new(),
     }
 }
 
@@ -361,12 +367,14 @@ impl App {
         let (lib_tx, lib_rx) = mpsc::channel();
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
+        let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let show_log_tab = client.config.show_log_tab;
+        let system_notifications = client.config.system_notifications;
         let start_on_queue = client.config.start_on_queue;
         let ws_url = client.ws_url();
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
@@ -473,6 +481,9 @@ impl App {
             layout_settings_area: Rect::default(),
             help_scroll: 0,
             show_log_tab,
+            system_notifications,
+            notif_action_tx,
+            notif_action_rx,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
@@ -511,6 +522,7 @@ impl App {
         let (lib_tx, lib_rx) = mpsc::channel();
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
+        let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
@@ -612,6 +624,9 @@ impl App {
             layout_settings_area: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
+            system_notifications: false,
+            notif_action_tx,
+            notif_action_rx,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
@@ -749,7 +764,9 @@ impl App {
                             let ep_title   = item.name.clone();
                             let label = item.playback_label();
                             self.next_up_item = Some(item.clone());
-                            self.status = format!("Next up: {} (Y/n)", label);
+                            let next_up_msg = format!("Next up: {} (Y/n)", label);
+                            self.notify_system(&next_up_msg);
+                            self.status = next_up_msg;
                             self.status_expires = None;
                             // Daemon sends NextUpShow to mpv directly; only send from local player.
                             if !self.player.is_remote() {
@@ -782,6 +799,7 @@ impl App {
                     }
                     PlayerEvent::IntroStarted { intro_end_ticks } => {
                         self.skip_intro_end_ticks = Some(intro_end_ticks);
+                        self.notify_with_actions("Skip intro?", &[("skip", "Skip"), ("ignore", "Ignore")]);
                         self.status = "Skip intro? (Y/n)".into();
                         self.status_expires = None;
                     }
@@ -795,6 +813,18 @@ impl App {
                         self.status.clear();
                     }
                 }
+            }
+
+            while let Ok(action) = self.notif_action_rx.try_recv() {
+                if action == "skip" {
+                    if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
+                        let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
+                        self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                        self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                        self.status.clear();
+                    }
+                }
+                // "ignore", dismissed, or empty: leave TUI prompt untouched
             }
 
             while let Ok(ev) = self.lib_rx.try_recv() {
@@ -2974,12 +3004,49 @@ impl App {
         } else {
             self.player_tab.playlist_cursor = 0;
         }
-        self.flash_status(format!("Removed: {name}"));
+    }
+
+    fn notify_system(&self, msg: &str) {
+        if self.system_notifications {
+            let _ = std::process::Command::new("notify-send")
+                .arg("mbv")
+                .arg(msg)
+                .spawn();
+        }
+    }
+
+    // Sends a notification with action buttons. Spawns a thread that waits
+    // for the user's choice and sends the chosen action name (or empty string
+    // for dismiss) back via notif_action_tx.
+    fn notify_with_actions(&self, msg: &str, actions: &[(&str, &str)]) {
+        if !self.system_notifications { return; }
+        let mut cmd = std::process::Command::new("notify-send");
+        cmd.arg("mbv").arg(msg);
+        for (id, label) in actions {
+            cmd.arg(format!("--action={}={}", id, label));
+        }
+        let tx = self.notif_action_tx.clone();
+        std::thread::spawn(move || {
+            if let Ok(out) = cmd.output() {
+                let chosen = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let _ = tx.send(chosen);
+            }
+        });
     }
 
     fn flash_status(&mut self, msg: String) {
+        self.notify_system(&msg);
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(3));
+    }
+
+    fn sync_config_mirrors(&mut self) {
+        let c = self.client.lock().unwrap();
+        self.show_log_tab = c.config.show_log_tab;
+        self.system_notifications = c.config.system_notifications;
+        self.hidden_libraries = c.config.hidden_libraries.clone();
+        self.hidden_latest = c.config.hidden_latest.clone();
+        self.music_levels = c.config.music_levels.clone();
     }
 
     /// Returns effective playback state for queue rendering, preferring a connected remote
@@ -4559,6 +4626,14 @@ impl App {
                     c.config.show_log_tab
                 };
                 self.show_log_tab = new_val;
+            }
+            SettingKey::SystemNotifications => {
+                let new_val = {
+                    let mut c = self.client.lock().unwrap();
+                    c.config.system_notifications = !c.config.system_notifications;
+                    c.config.system_notifications
+                };
+                self.system_notifications = new_val;
             }
             _ => {
                 let mut c = self.client.lock().unwrap();
@@ -7820,6 +7895,7 @@ mod tests {
         let (_, ws_rx)     = std::sync::mpsc::channel();
         let (lib_tx, lib_rx) = std::sync::mpsc::channel();
         let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
+        let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
         let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
 
         let player = PlayerProxy::stub(status.clone());
@@ -7912,6 +7988,9 @@ mod tests {
             layout_settings_area: Rect::default(),
             help_scroll: 0,
             show_log_tab: false,
+            system_notifications: false,
+            notif_action_tx,
+            notif_action_rx,
             context_menu: None,
             context_menu_rect: None,
             lib_tx,
