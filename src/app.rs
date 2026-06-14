@@ -765,7 +765,7 @@ impl App {
                             let label = item.playback_label();
                             self.next_up_item = Some(item.clone());
                             let next_up_msg = format!("Next up: {} (Y/n)", label);
-                            self.notify_system(&next_up_msg);
+                            self.notify_with_actions(&item.name, "Next up?", &[("next_up:play", "Play Now"), ("next_up:skip", "Skip")]);
                             self.status = next_up_msg;
                             self.status_expires = None;
                             // Daemon sends NextUpShow to mpv directly; only send from local player.
@@ -803,7 +803,7 @@ impl App {
                             .get(self.player_tab.playlist_cursor)
                             .map(|i| i.name.clone())
                             .unwrap_or_else(|| "mbv".into());
-                        self.notify_with_actions(&playing_title, "Skip intro?", &[("skip", "Skip"), ("ignore", "Ignore")]);
+                        self.notify_with_actions(&playing_title, "Skip intro?", &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")]);
                         self.status = "Skip intro? (Y/n)".into();
                         self.status_expires = None;
                     }
@@ -820,15 +820,43 @@ impl App {
             }
 
             while let Ok(action) = self.notif_action_rx.try_recv() {
-                if action == "skip" {
-                    if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                        let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
-                        self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-                        self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                match action.as_str() {
+                    "skip_intro:skip" => {
+                        if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
+                            let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
+                            self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                            self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                            self.status.clear();
+                        }
+                    }
+                    "next_up:play" => {
+                        if let Some(item) = self.next_up_item.take() {
+                            if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
+                                let label = item.playback_label();
+                                self.player.send_command(PlayerCommand::JumpTo(idx));
+                                self.player_tab.playlist_cursor = idx;
+                                self.flash_status(label);
+                            }
+                        }
                         self.status.clear();
                     }
+                    "next_up:skip" => {
+                        self.next_up_item = None;
+                        self.player.send_command(PlayerCommand::NextUpDismiss);
+                        self.status.clear();
+                    }
+                    "clear:yes" => {
+                        if self.confirm_clear_playlist {
+                            self.confirm_clear_playlist = false;
+                            self.player.stop();
+                            self.player_tab.items.clear();
+                            self.player_tab.playlist_cursor = 0;
+                            self.playlist_undo_stack.clear();
+                            self.flash_status("Playlist cleared".into());
+                        }
+                    }
+                    _ => {} // dismissed, "ignore", "cancel", or empty: leave TUI prompt untouched
                 }
-                // "ignore", dismissed, or empty: leave TUI prompt untouched
             }
 
             while let Ok(ev) = self.lib_rx.try_recv() {
@@ -1317,6 +1345,7 @@ impl App {
         if self.tab_idx != self.log_tab_idx() {
             if key.code == KeyCode::Char('c') && !key.modifiers.contains(KeyModifiers::ALT) && !in_lib_search {
                 if self.player_tab.items.is_empty() { return false; }
+                self.notify_with_actions("mbv", "Clear playlist?", &[("clear:yes", "Clear"), ("clear:no", "Cancel")]);
                 self.status = "Clear playlist? (Y/n)".into();
                 self.confirm_clear_playlist = true;
                 return false;
