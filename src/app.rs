@@ -6355,9 +6355,9 @@ impl App {
     }
 
     fn render_album_view(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
-        let (items, cursor) = {
+        let (items, cursor, album_id) = {
             let lvl = match self.libs[lib_idx].nav_stack.last() { Some(l) => l, None => return };
-            (lvl.items.clone(), lvl.cursor)
+            (lvl.items.clone(), lvl.cursor, lvl.parent_id.clone())
         };
         let n = items.len();
         if n == 0 {
@@ -6370,7 +6370,6 @@ impl App {
             .map(|l| l.title.clone()).unwrap_or_else(|| first.album.clone());
         let artist = first.artist.clone();
         let year = first.production_year;
-        let album_id = first.album_id.clone();
 
         // Horizontal split matching presentation view ratio
         let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
