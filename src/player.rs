@@ -67,6 +67,7 @@ pub enum PlayerCommand {
     SetSub(i64), // 0 = off
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
     NextUpShow { item_id: String, show_title: String, ep_title: String },
+    NextUpDismiss,
     SkipIntroDismiss,
     ReplacePlaylist { items: Vec<MediaItem>, start_idx: usize },
 }
@@ -561,6 +562,9 @@ impl Player {
                             let _ = mpv.set_property("volume", raw as f64);
                             status.lock().unwrap().volume = v;
                             let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
+                        }
+                        PlayerCommand::NextUpDismiss => {
+                            let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
                         }
                         PlayerCommand::SkipIntroDismiss => {
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
@@ -1172,6 +1176,9 @@ impl Player {
                                                  else { Some(fi) };
                                 }
                             }
+                        }
+                        PlayerCommand::NextUpDismiss => {
+                            let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
                         }
                         PlayerCommand::SkipIntroDismiss => {
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);

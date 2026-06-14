@@ -2314,11 +2314,6 @@ mp.register_script_message('mbv-next-up-dismiss', function()
     next_up_hide()
 end)
 
--- Dismiss on seek (user is navigating, not finishing the episode).
-mp.register_event('seek', function()
-    next_up_hide()
-end)
-
 -- Re-render on window resize.
 mp.observe_property('osd-dimensions', 'native', function()
     if next_up.visible then next_up_render() end

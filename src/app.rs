@@ -745,7 +745,10 @@ impl App {
                             let item_id    = item.id.clone();
                             let show_title = item.series_name.clone();
                             let ep_title   = item.name.clone();
+                            let label = item.playback_label();
                             self.next_up_item = Some(item.clone());
+                            self.status = format!("Next up: {} (Y/n)", label);
+                            self.status_expires = None;
                             // Daemon sends NextUpShow to mpv directly; only send from local player.
                             if !self.player.is_remote() {
                                 self.player.send_command(PlayerCommand::NextUpShow { item_id, show_title, ep_title });
@@ -1254,6 +1257,23 @@ impl App {
             } else {
                 self.skip_intro_end_ticks = None;
                 self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                self.status.clear();
+            }
+            return false;
+        }
+        if self.next_up_item.is_some() {
+            if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter) {
+                if let Some(item) = self.next_up_item.take() {
+                    if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
+                        let label = item.playback_label();
+                        self.player.send_command(PlayerCommand::JumpTo(idx));
+                        self.player_tab.playlist_cursor = idx;
+                        self.flash_status(label);
+                    }
+                }
+            } else {
+                self.next_up_item = None;
+                self.player.send_command(PlayerCommand::NextUpDismiss);
                 self.status.clear();
             }
             return false;
@@ -4070,31 +4090,8 @@ impl App {
         } else {
             None
         };
-        // Toast area: search query when active, then flash message, then now-playing title
-        let search_toast: Option<String> = if self.tab_idx >= self.lib_tab_offset()
-            && self.tab_idx != self.log_tab_idx()
-        {
-            let li = self.tab_idx - self.lib_tab_offset();
-            self.libs.get(li).and_then(|l| {
-                l.search.as_ref().map(|s| {
-                if s.loading {
-                    format!("Search {} (loading…): {}█", l.library.name, s.query)
-                } else {
-                    format!("Search {}: {}█", l.library.name, s.query)
-                }
-            })
-            })
-        } else {
-            None
-        };
-        if let Some(ref q) = search_toast {
-            f.render_widget(
-                Paragraph::new(q.as_str())
-                    .alignment(Alignment::Center)
-                    .style(Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
-                toast_area,
-            );
-        } else if !self.status.is_empty() {
+        // Toast area: flash message, then now-playing title
+        if !self.status.is_empty() {
             f.render_widget(
                 Paragraph::new(Self::toast_line(&self.status)).alignment(Alignment::Center),
                 toast_area,
@@ -6491,7 +6488,23 @@ impl App {
         let mut block = Block::default()
             .borders(Borders::TOP).border_type(BorderType::Rounded)
             .border_style(Style::default().fg(palette::IRIS));
-        if is_deep {
+        let search_ref = self.libs[lib_idx].search.as_ref();
+        if let Some(s) = search_ref {
+            let label = if s.loading {
+                format!("Search {} (loading…): {}█", self.libs[lib_idx].library.name, s.query)
+            } else {
+                format!("Search {}: {}█", self.libs[lib_idx].library.name, s.query)
+            };
+            let border_style = Style::default().fg(palette::IRIS);
+            let text_style   = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
+            let title_spans = Line::from(vec![
+                Span::styled("─", border_style),
+                Span::raw(" "),
+                Span::styled(label, text_style),
+                Span::raw(" "),
+            ]);
+            block = block.title(title_spans);
+        } else if is_deep {
             crumb_spans.insert(0, Span::raw(" "));
             crumb_spans.push(Span::raw(" "));
             block = block.title(Line::from(crumb_spans));
