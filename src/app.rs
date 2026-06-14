@@ -5458,21 +5458,11 @@ impl App {
 
         let show_controls = active || self.connected_session_id.is_some();
 
-        // When controls are visible, reserve 3 rows at the bottom of the left panel
-        // (now-playing title + seekbar + buttons), and shrink the card area to avoid overlap.
-        const CTRL_ROWS: u16 = 3;
-        let card_area = if show_controls && left_area.height > CTRL_ROWS {
-            Rect { height: left_area.height - CTRL_ROWS, ..left_area }
-        } else {
-            left_area
-        };
-        let title_row   = left_area.bottom().saturating_sub(3);
-        let seekbar_row = left_area.bottom().saturating_sub(2);
-        let buttons_row = left_area.bottom().saturating_sub(1);
+        let card_area = left_area;
 
         // Left panel: borderless card for cursor item.
-        // pos_ticks suppressed (0) when controls are shown — seekbar rendered at fixed bottom.
-        {
+        // pos_ticks suppressed (0) when controls are shown — seekbar rendered separately.
+        let text_bottom = {
             let (item_id, series_id, now_playing, pos_ticks, rt_ticks, played, img_types,
                  card_name, card_series, card_ep_tag, stack_subs) = {
                 let item = &self.player_tab.items[cursor];
@@ -5507,8 +5497,11 @@ impl App {
             }
             self.render_card_slot(f, card_area, true, true, now_playing, true, true, true,
                 &cache_key, &card_name, &card_series, &card_ep_tag, 0, pos_ticks, rt_ticks, played,
-                None, None, stack_subs);
+                None, None, stack_subs).unwrap_or(left_area.bottom().saturating_sub(3))
         };
+        let title_row   = text_bottom + 2;
+        let seekbar_row = text_bottom + 3;
+        let buttons_row = text_bottom + 4;
 
         // Title of now-playing item, one row above the seekbar.
         if show_controls && title_row < left_area.bottom() {
@@ -6046,8 +6039,9 @@ impl App {
                 Span::styled(" • ", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
                 Span::styled(length_str, Style::default().fg(palette::MUTED)),
             ])).alignment(Alignment::Center));
+            text_y += 1;
         }
-        None
+        Some(text_y)
     }
 
     fn render_home_cards(&mut self, f: &mut ratatui::Frame, area: Rect) {
