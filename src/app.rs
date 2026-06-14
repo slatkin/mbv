@@ -3147,6 +3147,16 @@ impl App {
             self.layout_lib_scroll = 0;
             self.spawn_browse(lib_idx, item.id, item.name, None, false, "SortName".into(), "Ascending".into());
         } else if is_playable(&item) {
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            if self.libs[lib_idx].search.is_some() {
+                self.libs[lib_idx].search = None;
+                if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                    if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
+                        lvl.cursor = pos;
+                    }
+                }
+                self.layout_lib_scroll = 0;
+            }
             let fresh = {
                 let c = self.client.lock().unwrap();
                 c.get_items_by_ids(std::slice::from_ref(&item.id))
@@ -3154,7 +3164,6 @@ impl App {
                     .and_then(|mut v| if v.is_empty() { None } else { Some(v.remove(0)) })
                     .unwrap_or(item)
             };
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
             if self.libs[lib_idx].search.is_none() && self.is_album_level(lib_idx) {
                 let level_items = self.libs[lib_idx].nav_stack.last()
                     .map(|l| l.items.clone())

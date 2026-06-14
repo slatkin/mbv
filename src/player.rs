@@ -310,9 +310,10 @@ impl Player {
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
         // If a video is already playing, load the new file into the existing mpv window
         if self.status.lock().unwrap().active {
+            let ep = if item.is_audio() { "Audio" } else { "Videos" };
             let url = format!(
-                "{}/Videos/{}/stream?static=true&api_key={}",
-                self.server_url, item.id, self.token
+                "{}/{}/{}/stream?static=true&api_key={}",
+                self.server_url, ep, item.id, self.token
             );
             let start_pos = item.resume_seconds();
             {
@@ -334,12 +335,13 @@ impl Player {
         self.stop();
         self.join();
 
-        let url = format!(
-            "{}/Videos/{}/stream?static=true&api_key={}",
-            self.server_url, item.id, self.token
-        );
         let item = item.clone();
         let is_audio = item.is_audio();
+        let ep = if is_audio { "Audio" } else { "Videos" };
+        let url = format!(
+            "{}/{}/{}/stream?static=true&api_key={}",
+            self.server_url, ep, item.id, self.token
+        );
         let start_pos = if is_audio { 0.0 } else { item.resume_seconds() };
         let item_pos = if is_audio { 0 } else { item.playback_position_ticks };
         let title = item.display_name();
@@ -680,8 +682,10 @@ impl Player {
                 }
 
                 if quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
+                    let runtime = status.lock().unwrap().runtime_ticks;
+                    let near_end = !is_audio && runtime > 0 && last_valid_pos * 20 / runtime >= 19;
                     status.lock().unwrap().active = false;
-                    let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos, played: false });
+                    let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos, played: near_end });
                     return;
                 }
 
@@ -875,9 +879,23 @@ impl Player {
                                 }
                             });
                         }
+                        let runtime = status.lock().unwrap().runtime_ticks;
+                        let near_end = !is_audio && runtime > 0 && last_valid_pos * 20 / runtime >= 19;
+                        if near_end {
+                            let id = current_item_id.lock().unwrap().clone();
+                            let c2 = client.clone();
+                            let l2 = log.clone();
+                            std::thread::spawn(move || {
+                                if let Err(e) = c2.mark_played(&id) {
+                                    l2.push(Level::Warn, "player", format!("mark_played near_end failed id={id}: {e}"));
+                                } else {
+                                    l2.push(Level::Info, "player", format!("mark_played near_end ok id={id}"));
+                                }
+                            });
+                        }
                         status.lock().unwrap().active = false;
                         if !stopped_event_sent {
-                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos, played: false });
+                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos, played: near_end });
                         }
                         return;
                     }
@@ -1030,7 +1048,8 @@ impl Player {
 
             // Load the full playlist into mpv so every index matches items[i] directly.
             for (i, item) in items.iter().enumerate() {
-                let url = format!("{}/Videos/{}/stream?static=true&api_key={}", server_url, item.id, token);
+                let ep = if item.is_audio() { "Audio" } else { "Videos" };
+                let url = format!("{}/{}/{}/stream?static=true&api_key={}", server_url, ep, item.id, token);
                 let mode = if i == 0 { "replace" } else { "append-play" };
                 let title_opt = mpv_title_opt(&item.display_name());
                 if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
@@ -1119,6 +1138,7 @@ impl Player {
             let mut playlist_next_up_fired = false;
             let mut playlist_next_up_armed = false;
             let mut next_up_jump = false;
+            let mut stopped_near_end = false;
             let mut intro_start_ticks: i64 = 0;
             let mut intro_end_ticks: i64   = 0;
             if client.chapter_api_available {
@@ -1201,7 +1221,8 @@ impl Player {
 
                             let start_idx = start_idx.min(new_items.len() - 1);
                             for (i, item) in new_items.iter().enumerate() {
-                                let url = format!("{}/Videos/{}/stream?static=true&api_key={}", server_url, item.id, token);
+                                let ep = if item.is_audio() { "Audio" } else { "Videos" };
+                                let url = format!("{}/{}/{}/stream?static=true&api_key={}", server_url, ep, item.id, token);
                                 let mode = if i == 0 { "replace" } else { "append-play" };
                                 let title_opt = mpv_title_opt(&item.display_name());
                                 if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
@@ -1359,7 +1380,7 @@ impl Player {
                     status.lock().unwrap().active = false;
                     let stopped_idx = current_idx;
                     let stopped_pos = last_valid_pos;
-                    let _ = event_tx.send(PlayerEvent::Stopped { idx: stopped_idx, position_ticks: stopped_pos, played: false });
+                    let _ = event_tx.send(PlayerEvent::Stopped { idx: stopped_idx, position_ticks: stopped_pos, played: stopped_near_end });
                     return;
                 }
 
@@ -1497,31 +1518,34 @@ impl Player {
 
                         let completed_is_audio = current_is_audio.load(Ordering::Relaxed);
                         if playlist_cancelled || reason == mpv_end_file_reason::Quit {
-                            let natural_end = reason == mpv_end_file_reason::Eof
-                                && status.lock().unwrap().runtime_ticks > 0;
+                            let runtime = status.lock().unwrap().runtime_ticks;
+                            let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
+                            let near_end = !natural_end && !completed_is_audio
+                                && runtime > 0
+                                && last_valid_pos * 20 / runtime >= 19;
                             let _ = progress_stop_tx.send(());
                             if let Some(h) = progress_handle.take() { let _ = h.join(); }
                             client.report_stopped(&id, &msid, if completed_is_audio { 0 } else { last_valid_pos }, &sid, &log);
                             stop_reported = true;
-                            if natural_end && !completed_is_audio {
+                            if (natural_end || near_end) && !completed_is_audio {
                                 if let Err(e) = client.mark_played(&id) {
                                     log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}"));
                                 }
                             }
+                            stopped_near_end = near_end;
                             continue; // wait for Shutdown to fire PlayerEvent::Stopped
                         }
 
                         let completed_idx = current_idx;
                         let natural = reason == mpv_end_file_reason::Eof
                             && items[completed_idx].runtime_ticks > 0;
-                        // Also treat as played if user jumped away within the last 10% of runtime.
+                        // Also treat as played/consumed if user skipped within the last 5% of runtime.
                         let near_end = !natural && !completed_is_audio
                             && items[completed_idx].runtime_ticks > 0
-                            && last_valid_pos * 10 / items[completed_idx].runtime_ticks >= 9;
+                            && last_valid_pos * 20 / items[completed_idx].runtime_ticks >= 19;
                         let was_next_up = std::mem::replace(&mut next_up_jump, false);
                         let played_out = (natural || near_end || was_next_up) && !completed_is_audio;
-                        // Only consume (remove from queue) on genuine completion or explicit Next Up.
-                        let consume_track = (natural || was_next_up) && !completed_is_audio;
+                        let consume_track = (natural || near_end || was_next_up) && !completed_is_audio;
                         let completed_pos = if completed_is_audio || natural || near_end || was_next_up { 0 } else { last_valid_pos };
 
                         let next_idx = if let Some(jump_idx) = forced_idx.take() {
@@ -1623,7 +1647,7 @@ impl Player {
                         }
                         let pos = if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
                         status.lock().unwrap().active = false;
-                        let _ = event_tx.send(PlayerEvent::Stopped { idx: current_idx, position_ticks: pos, played: false });
+                        let _ = event_tx.send(PlayerEvent::Stopped { idx: current_idx, position_ticks: pos, played: stopped_near_end });
                         return;
                     }
                     Some(Err(e)) => {
