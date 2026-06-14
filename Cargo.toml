@@ -28,4 +28,4 @@ ratatui-image = { version = "11", default-features = false, features = ["crosste
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif"] }
 
 [build-dependencies]
-resvg = "0.44"
+resvg = "0.47"
