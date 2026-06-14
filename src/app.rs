@@ -7880,6 +7880,9 @@ mod tests {
             layout_sessions_btn_area: Rect::default(),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
+            album_year_cache: std::collections::HashMap::new(),
+            album_year_loading: std::collections::HashSet::new(),
+            save_playlist_dialog: None,
         }
     }
 
