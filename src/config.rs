@@ -60,6 +60,30 @@ fn config_dir() -> PathBuf {
     base.join("mbv")
 }
 
+fn cache_dir() -> PathBuf {
+    let base = env::var("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".cache")
+        });
+    base.join("mbv")
+}
+
+fn migrate_to_cache(filename: &str) -> PathBuf {
+    let cache = cache_dir().join(filename);
+    if !cache.exists() {
+        let old = config_dir().join(filename);
+        if old.exists() {
+            if let Some(parent) = cache.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let _ = std::fs::rename(&old, &cache);
+        }
+    }
+    cache
+}
+
 pub fn osc_script_path() -> PathBuf {
     let user = data_dir().join("scripts").join("mbv.lua");
     if user.exists() {
@@ -73,7 +97,7 @@ pub fn osc_script_path() -> PathBuf {
 }
 
 pub fn prefs_path() -> PathBuf {
-    config_dir().join("prefs.json")
+    migrate_to_cache("prefs.json")
 }
 
 pub fn load_subs_off() -> bool {
@@ -116,11 +140,11 @@ pub fn control_socket_path() -> String {
 }
 
 pub fn playlist_cache_path() -> PathBuf {
-    config_dir().join("playlist.json")
+    migrate_to_cache("playlist.json")
 }
 
 pub fn token_cache_path() -> PathBuf {
-    config_dir().join("token.json")
+    migrate_to_cache("token.json")
 }
 
 pub fn config_path() -> PathBuf {
@@ -423,11 +447,10 @@ hidden_latest = ["Movies", "TV SHOWS"]
 
     #[test]
     fn token_cache_path_uses_xdg() {
-        // XDG_CONFIG_HOME takes precedence over HOME
-        std::env::set_var("XDG_CONFIG_HOME", "/tmp/xdg-test");
+        std::env::set_var("XDG_CACHE_HOME", "/tmp/xdg-test-cache");
         let path = token_cache_path();
-        std::env::remove_var("XDG_CONFIG_HOME");
-        assert_eq!(path.to_str().unwrap(), "/tmp/xdg-test/mbv/token.json");
+        std::env::remove_var("XDG_CACHE_HOME");
+        assert_eq!(path.to_str().unwrap(), "/tmp/xdg-test-cache/mbv/token.json");
     }
 
     #[test]
