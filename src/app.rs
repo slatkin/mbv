@@ -85,6 +85,7 @@ enum LibEvent {
     PageAppended { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
     Refreshed { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
     SearchItemsLoaded { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
+    AlbumYearFetched { album_id: String, year: u32 },
     Error(String),
 }
 
@@ -236,6 +237,8 @@ pub struct App {
     layout_tabbar_vol_area: Rect,
     last_scroll_at: Instant,
     last_nav_at: Instant,
+    album_year_cache: std::collections::HashMap<String, u32>,
+    album_year_loading: std::collections::HashSet<String>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -285,7 +288,7 @@ fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::ShowAudioWindow   => "Show audio window",
         SettingKey::UseMpvConfig      => "Use mpv config",
         SettingKey::NoScripts         => "No scripts",
-        SettingKey::Autoload          => "Autoload siblings",
+        SettingKey::Autoload          => "autoload",
         SettingKey::ShowSysTrayIcon   => "Show systray icon",
         SettingKey::LogOut            => "Log out",
     }
@@ -480,6 +483,8 @@ impl App {
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
+            album_year_cache: std::collections::HashMap::new(),
+            album_year_loading: std::collections::HashSet::new(),
         }
     }
 
@@ -616,6 +621,8 @@ impl App {
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
+            album_year_cache: std::collections::HashMap::new(),
+            album_year_loading: std::collections::HashSet::new(),
         }
     }
 
@@ -3560,6 +3567,10 @@ impl App {
                 }
                 self.update_lib_search(lib_idx);
             }
+            LibEvent::AlbumYearFetched { album_id, year } => {
+                self.album_year_loading.remove(&album_id);
+                self.album_year_cache.insert(album_id, year);
+            }
             LibEvent::Error(e) => {
                 self.flash_status(format!("Error: {e}"));
             }
@@ -4878,6 +4889,31 @@ impl App {
         .column_spacing(2)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
+    }
+
+    fn fetch_album_year(&mut self, album_id: String) {
+        if self.album_year_loading.contains(&album_id) || self.album_year_cache.contains_key(&album_id) {
+            return;
+        }
+        self.album_year_loading.insert(album_id.clone());
+        let (server_url, token) = {
+            let c = self.client.lock().unwrap();
+            (c.config.server_url.clone(), c.token.clone())
+        };
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let url = format!("{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=1&Fields=ProductionYear,Year&api_key={}",
+                server_url, album_id, token);
+            let year: u32 = ureq::get(&url).call().ok()
+                .and_then(|r| r.into_json::<serde_json::Value>().ok())
+                .and_then(|v| v["Items"].get(0).cloned())
+                .and_then(|item| {
+                    item["ProductionYear"].as_u64()
+                        .or_else(|| item["Year"].as_u64())
+                })
+                .unwrap_or(0) as u32;
+            let _ = tx.send(LibEvent::AlbumYearFetched { album_id, year });
+        });
     }
 
     fn fetch_card_image(&mut self, cache_key: String, item_id: String, series_id: String, types: &[&str]) {
@@ -6311,7 +6347,114 @@ impl App {
         }
         let inner = block.inner(area);
         f.render_widget(block, area);
-        self.render_library_table(f, inner, lib_idx);
+        if self.is_album_level(lib_idx) && self.libs[lib_idx].search.is_none() {
+            self.render_album_view(f, inner, lib_idx);
+        } else {
+            self.render_library_table(f, inner, lib_idx);
+        }
+    }
+
+    fn render_album_view(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
+        let (items, cursor) = {
+            let lvl = match self.libs[lib_idx].nav_stack.last() { Some(l) => l, None => return };
+            (lvl.items.clone(), lvl.cursor)
+        };
+        let n = items.len();
+        if n == 0 {
+            f.render_widget(Paragraph::new("  (empty)").style(Style::default().fg(palette::MUTED)), area);
+            return;
+        }
+
+        let first = &items[0];
+        let album_name = self.libs[lib_idx].nav_stack.last()
+            .map(|l| l.title.clone()).unwrap_or_else(|| first.album.clone());
+        let artist = first.artist.clone();
+        let year = first.production_year;
+        let album_id = first.album_id.clone();
+
+        // Horizontal split matching presentation view ratio
+        let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
+        let right_x = area.x + left_w + 1;
+        let right_w = area.width.saturating_sub(left_w + 1);
+        let left_area  = Rect { x: area.x,  y: area.y, width: left_w,  height: area.height };
+        let right_area = Rect { x: right_x, y: area.y, width: right_w, height: area.height };
+
+        // Left panel: album art via render_card_slot
+        let cache_key = format!("{}:lib", album_id);
+        self.fetch_card_image(cache_key.clone(), album_id, String::new(), &["AudioChild", "Primary"]);
+        let mut meta_parts: Vec<String> = Vec::new();
+        if year > 0 { meta_parts.push(format!("{}", year)); }
+        meta_parts.push(format!("{} tracks", n));
+        let ep_tag = meta_parts.join("  ");
+        self.render_card_slot(f, left_area, true, true, false, true, true, false,
+            &cache_key, &album_name, &artist, &ep_tag, 0, 0, 0, false, None, None, true);
+
+        // Right panel: track list
+        let show_length = right_w > 40;
+        let dur_col_w: usize = if show_length { 7 } else { 0 };
+        let title_col_w = (right_w as usize).saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
+
+        let rows: Vec<Row> = items.iter().enumerate().map(|(i, item)| {
+            let is_cursor = i == cursor;
+            let row_style = Style::default().fg(palette::WHITE);
+            let marker = if is_cursor {
+                Span::styled("▌", Style::default().fg(palette::IRIS))
+            } else {
+                Span::raw(" ")
+            };
+            let track_num = if item.index_number > 0 {
+                format!("{}. ", item.index_number)
+            } else {
+                format!("{}. ", i + 1)
+            };
+            let num_w = track_num.chars().count();
+            let title = trunc_str(&item.name, title_col_w.saturating_sub(num_w));
+            let title_cell = Cell::from(Line::from(vec![
+                marker,
+                Span::styled(track_num, Style::default().fg(palette::SUBTLE)),
+                Span::raw(title),
+            ]));
+            let len_secs = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
+            let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
+            if show_length {
+                Row::new([
+                    title_cell,
+                    Cell::from(Line::from(length).alignment(Alignment::Right))
+                        .style(Style::default().fg(palette::SUBTLE)),
+                    Cell::from(""),
+                ]).style(row_style)
+            } else {
+                Row::new([title_cell, Cell::from(""), Cell::from("")]).style(row_style)
+            }
+        }).collect();
+
+        let mut state = TableState::default();
+        state.select(Some(cursor));
+        let table = Table::new(rows, [
+            Constraint::Min(10),
+            Constraint::Length(if show_length { dur_col_w as u16 } else { 0 }),
+            Constraint::Length(1),
+        ])
+        .column_spacing(1)
+        .row_highlight_style(Style::default());
+        f.render_stateful_widget(table, right_area, &mut state);
+
+        let total_rows = n;
+        let visible_rows = right_area.height as usize;
+        if total_rows > visible_rows {
+            let max_offset = total_rows.saturating_sub(visible_rows);
+            let mut sb_state = ScrollbarState::new(max_offset + 1).position(state.offset());
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("▐")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                right_area,
+                &mut sb_state,
+            );
+        }
     }
 
     fn render_season_grid(&mut self, f: &mut ratatui::Frame, area: Rect, lib_idx: usize) {
@@ -6558,8 +6701,8 @@ impl App {
         let all_heights: Vec<u16> = display_items.iter().enumerate().map(|(i, (_, item))| {
             let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
             let base: u16 = if item.is_folder && item.item_type != "Series" && item.item_type != "Season" {
-                if at_album_folders && i == cursor && images_enabled {
-                    LIB_AUDIO_IMG_H.max(3)
+                if at_album_folders && i == cursor {
+                    if images_enabled { LIB_AUDIO_IMG_H.max(3) } else { 3 }
                 } else {
                     1
                 }
@@ -6615,6 +6758,9 @@ impl App {
                         let cache_key = format!("{}:lib", item.id);
                         let img_types: &[&str] = if is_album_folder { &["AudioChild", "Primary"] } else { &["Primary"] };
                         self.fetch_card_image(cache_key, item.id.clone(), String::new(), img_types);
+                    }
+                    if is_album_folder && pi == cursor && item.production_year == 0 {
+                        self.fetch_album_year(item.id.clone());
                     }
                 }
             }
@@ -6732,7 +6878,9 @@ impl App {
                     }
                 }
                 _ if item.is_folder && item.item_type != "Series" && item.item_type != "Season" => {
-                    if item.total_count > 0 {
+                    if is_album_folder {
+                        item.name.clone()
+                    } else if item.total_count > 0 {
                         format!("{} ({})", item.name, item.total_count)
                     } else {
                         item.name.clone()
@@ -6793,7 +6941,17 @@ impl App {
                 }
                 "Episode" => episode_meta_line(item),
                 _ if item.is_folder && item.item_type != "Series" && item.item_type != "Season" => {
-                    if item.total_count > 0 {
+                    if is_album_folder {
+                        let mut parts: Vec<String> = Vec::new();
+                        let year = if item.production_year > 0 {
+                            item.production_year
+                        } else {
+                            self.album_year_cache.get(&item.id).copied().unwrap_or(0)
+                        };
+                        if year > 0 { parts.push(format!("{}", year)); }
+                        if item.total_count > 0 { parts.push(format!("{} tracks", item.total_count)); }
+                        Line::from(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)))
+                    } else if item.total_count > 0 {
                         Line::from(Span::styled(
                             format!("{} items", item.total_count),
                             Style::default().fg(palette::SUBTLE),
@@ -6867,7 +7025,7 @@ impl App {
                 }
             } else { String::new() };
             let tech_lines: usize = if tech_line.is_empty() { 0 } else { 1 };
-            let base_lines = if is_generic_folder { 1 } else { 2 + artist_extra + tech_lines };
+            let base_lines = if is_album_folder { 2 } else if is_generic_folder { 1 } else { 2 + artist_extra + tech_lines };
             let dir_lines: usize = if selected && item.item_type == "Movie" && !item.director.is_empty() { 2 } else { 0 };
             let line_count = (base_lines + overview_lines.len() + dir_lines).min(text_rect.height as usize);
             if line_count == 0 { continue; }

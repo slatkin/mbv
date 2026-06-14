@@ -196,7 +196,9 @@ fn parse_item(raw: &Value) -> MediaItem {
             .or_else(|| raw["Artists"].get(0).and_then(|v| v.as_str()))
             .unwrap_or("").to_string(),
         sort_name: raw["SortName"].as_str().unwrap_or("").to_string(),
-        production_year: raw["ProductionYear"].as_u64().unwrap_or(0) as u32,
+        production_year: raw["ProductionYear"].as_u64()
+            .or_else(|| raw["Year"].as_u64())
+            .unwrap_or(0) as u32,
         end_year: raw["EndDate"].as_str()
             .and_then(|s| s.get(..4))
             .and_then(|s| s.parse().ok())
