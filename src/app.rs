@@ -799,7 +799,11 @@ impl App {
                     }
                     PlayerEvent::IntroStarted { intro_end_ticks } => {
                         self.skip_intro_end_ticks = Some(intro_end_ticks);
-                        self.notify_with_actions("Skip intro?", &[("skip", "Skip"), ("ignore", "Ignore")]);
+                        let playing_title = self.player_tab.items
+                            .get(self.player_tab.playlist_cursor)
+                            .map(|i| i.name.clone())
+                            .unwrap_or_else(|| "mbv".into());
+                        self.notify_with_actions(&playing_title, "Skip intro?", &[("skip", "Skip"), ("ignore", "Ignore")]);
                         self.status = "Skip intro? (Y/n)".into();
                         self.status_expires = None;
                     }
@@ -3009,6 +3013,7 @@ impl App {
     fn notify_system(&self, msg: &str) {
         if self.system_notifications {
             let _ = std::process::Command::new("notify-send")
+                .arg("--app-name=mbv")
                 .arg("mbv")
                 .arg(msg)
                 .spawn();
@@ -3018,10 +3023,10 @@ impl App {
     // Sends a notification with action buttons. Spawns a thread that waits
     // for the user's choice and sends the chosen action name (or empty string
     // for dismiss) back via notif_action_tx.
-    fn notify_with_actions(&self, msg: &str, actions: &[(&str, &str)]) {
+    fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
         if !self.system_notifications { return; }
         let mut cmd = std::process::Command::new("notify-send");
-        cmd.arg("mbv").arg(msg);
+        cmd.arg("--app-name=mbv").arg(title).arg(body);
         for (id, label) in actions {
             cmd.arg(format!("--action={}={}", id, label));
         }
@@ -4012,11 +4017,15 @@ impl App {
         let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
         let status_h:   u16 = if show_controls && !in_presentation && self.show_playback_panel { 1 } else { 0 };
         let controls_h: u16 = if show_controls && !in_presentation && self.show_playback_panel { 2 } else { 0 };
+        let playback_panel_visible = show_controls && !in_presentation && self.show_playback_panel;
+        // When system notifications are on the toast row is only needed for the
+        // now-playing title that lives there while the playback panel is visible.
+        let toast_h: u16 = if self.system_notifications && !playback_panel_visible { 0 } else { 1 };
 
         let [tabs_area, gap_area, toast_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
             Constraint::Length(1),            // spacer
-            Constraint::Length(1),            // toast notifications
+            Constraint::Length(toast_h),      // toast notifications / now-playing title
             Constraint::Length(controls_h),   // playback controls (when active)
             Constraint::Length(status_h),     // now-playing title bar (when active)
             Constraint::Min(0),               // main content
@@ -4202,8 +4211,8 @@ impl App {
         } else {
             None
         };
-        // Toast area: flash message, then now-playing title
-        if !self.status.is_empty() {
+        // Toast area: flash message (suppressed when system_notifications on), then now-playing title
+        if !self.system_notifications && !self.status.is_empty() {
             f.render_widget(
                 Paragraph::new(Self::toast_line(&self.status)).alignment(Alignment::Center),
                 toast_area,
