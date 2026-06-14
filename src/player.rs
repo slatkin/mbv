@@ -1095,9 +1095,12 @@ impl Player {
             let mut last_valid_pos: i64 = items[start_idx].playback_position_ticks;
             let mut tracks_initialized = false;
             let mut playlist_cancelled = false;
-            // pending_load=true when we set playlist-pos to start_idx (or during a jump
-            // reload) so the resulting EndFile from the displaced item is skipped.
-            let mut pending_load = start_idx > 0;
+            // If we need to start at start_idx > 0, we can't set playlist-pos before the event
+            // loop because mpv ignores it during initialization (loadfile "replace" always wins).
+            // Instead, we wait for the first PlaybackRestart (mpv is now in active playback
+            // state) and do the jump then, where it's honored.
+            let mut pending_load: u8 = 0;
+            let mut pending_initial_jump = start_idx > 0;
             let mut stop_reported = false;
             let mut current_osd_title = items[start_idx].display_name();
             let mut last_mouse_osd: Option<Instant> = None;
@@ -1122,10 +1125,9 @@ impl Player {
             let mut intro_show_fired = past_intro;
             let mut intro_hide_fired = past_intro;
 
-            // Jump mpv to the starting item; the EndFile from item[0] is swallowed by pending_load.
-            if start_idx > 0 {
-                let _ = mpv.set_property("playlist-pos", start_idx as i64);
-            }
+            // NOTE: Do NOT set playlist-pos here. mpv ignores property changes before the
+            // event loop starts (loadfile "replace" overwrites any pre-loop playlist-pos set).
+            // The jump happens in the PlaybackRestart handler below instead.
 
             loop {
                 let mut cancel_stop = false;
@@ -1182,6 +1184,11 @@ impl Player {
                             client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid, &log);
 
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+                            // Remove all old playlist entries except the current one so that
+                            // the subsequent loadfile "replace" starts from a clean slate.
+                            // Without this, old entries remain and playlist-pos = start_idx
+                            // lands on a stale file instead of new_items[start_idx].
+                            let _ = mpv.command("playlist-clear", &[]);
 
                             let start_idx = start_idx.min(new_items.len() - 1);
                             for (i, item) in new_items.iter().enumerate() {
@@ -1193,10 +1200,11 @@ impl Player {
                                 }
                             }
                             let _ = mpv.set_property("start", "0");
-                            // loadfile "replace" always displaces the current file and fires
-                            // EndFile — always swallow it regardless of start_idx.
-                            pending_load = true;
+                            // loadfile "replace" displaces the current file (EndFile #1).
+                            // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
+                            pending_load += 1;
                             if start_idx > 0 {
+                                pending_load += 1;
                                 let _ = mpv.set_property("playlist-pos", start_idx as i64);
                             }
 
@@ -1295,7 +1303,7 @@ impl Player {
                             last_valid_pos = item.playback_position_ticks;
                             tracks_initialized = false;
                             stop_reported = false;
-                            pending_load = true;
+                            pending_load = 1;
 
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
                             intro_start_ticks = 0;
@@ -1424,7 +1432,15 @@ impl Player {
                         status.lock().unwrap().muted = m;
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
-                        if !tracks_initialized {
+                        if pending_initial_jump {
+                            // mpv ignored playlist-pos before the event loop started; now that
+                            // playback is live (first PlaybackRestart), the jump is honored.
+                            pending_initial_jump = false;
+                            pending_load += 1;
+                            let _ = mpv.set_property("playlist-pos", start_idx as i64);
+                            // Skip normal PlaybackRestart handling; wait for the next one
+                            // (which fires for start_idx item after the jump).
+                        } else if !tracks_initialized {
                             auto_select_tracks(&mpv, &status, subs_off.load(Ordering::Relaxed));
                             tracks_initialized = true;
                             if let Some(secs) = pending_resume_secs.take() {
@@ -1462,7 +1478,7 @@ impl Player {
                     }
                     Some(Ok(Event::EndFile(reason))) => {
                         if quit_at.is_some() { continue; }
-                        if pending_load { pending_load = false; continue; }
+                        if pending_load > 0 { pending_load -= 1; continue; }
                         if reason == mpv_end_file_reason::Error {
                             log.push(Level::Warn, "player", "EndFile: playback error (file may be unreadable or format unsupported)");
                         }
