@@ -90,6 +90,7 @@ pub struct MediaItem {
     pub end_year: u32,
     pub overview: String,
     pub premiere_date: String,
+    pub date_added: String,
     pub total_count: u32,
     pub container: String,
     pub director: String,
@@ -205,6 +206,10 @@ fn parse_item(raw: &Value) -> MediaItem {
             .unwrap_or(0),
         overview: decode_html_entities(raw["Overview"].as_str().unwrap_or("")),
         premiere_date: raw["PremiereDate"].as_str()
+            .and_then(|s| s.get(..10))
+            .map(|s| s.to_string())
+            .unwrap_or_default(),
+        date_added: raw["DateCreated"].as_str()
             .and_then(|s| s.get(..10))
             .map(|s| s.to_string())
             .unwrap_or_default(),
@@ -474,6 +479,7 @@ impl EmbyClient {
                     end_year: 0,
                     overview: String::new(),
                     premiere_date: String::new(),
+                    date_added: String::new(),
                     total_count: 0,
                     container: String::new(),
                     director: String::new(),
@@ -518,7 +524,7 @@ impl EmbyClient {
             .query("SortOrder", sort_order)
             .query("StartIndex", &start_index.to_string())
             .query("Limit", &limit.to_string())
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres")
             .query("EnableUserData", "true");
         if let Some(types) = item_types {
             req = req.query("IncludeItemTypes", types).query("Recursive", "true");
@@ -1052,7 +1058,8 @@ mod tests {
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),
-            premiere_date: String::new(), total_count: 0, container: String::new(),
+            premiere_date: String::new(), date_added: String::new(),
+            total_count: 0, container: String::new(),
             director: String::new(),
             video_info: String::new(),
             audio_info: String::new(),

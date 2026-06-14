@@ -7240,6 +7240,21 @@ impl App {
                 }
                 let mut parts: Vec<String> = Vec::new();
                 if !item.premiere_date.is_empty() { parts.push(item.premiere_date.clone()); }
+                if is_homevideo_lib && !item.date_added.is_empty() {
+                    const MONTHS: [&str; 12] = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                    let formatted = item.date_added.splitn(3, '-')
+                        .collect::<Vec<_>>()
+                        .as_slice()
+                        .windows(3)
+                        .next()
+                        .and_then(|p| {
+                            let y = p[0]; let d: u32 = p[2].parse().ok()?;
+                            let m: usize = p[1].parse::<usize>().ok()?.checked_sub(1)?;
+                            Some(format!("Added {} {}, {}", d, MONTHS.get(m)?, y))
+                        })
+                        .unwrap_or_else(|| item.date_added.clone());
+                    parts.push(formatted);
+                }
                 let dur_s = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
                 if dur_s > 0 {
                     let h = dur_s / 3600; let m = (dur_s % 3600) / 60;
