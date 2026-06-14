@@ -4017,15 +4017,10 @@ impl App {
         let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
         let status_h:   u16 = if show_controls && !in_presentation && self.show_playback_panel { 1 } else { 0 };
         let controls_h: u16 = if show_controls && !in_presentation && self.show_playback_panel { 2 } else { 0 };
-        let playback_panel_visible = show_controls && !in_presentation && self.show_playback_panel;
-        // When system notifications are on the toast row is only needed for the
-        // now-playing title that lives there while the playback panel is visible.
-        let toast_h: u16 = if self.system_notifications && !playback_panel_visible { 0 } else { 1 };
-
         let [tabs_area, gap_area, toast_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
             Constraint::Length(1),            // spacer
-            Constraint::Length(toast_h),      // toast notifications / now-playing title
+            Constraint::Length(1),            // toast notifications / now-playing title
             Constraint::Length(controls_h),   // playback controls (when active)
             Constraint::Length(status_h),     // now-playing title bar (when active)
             Constraint::Min(0),               // main content
