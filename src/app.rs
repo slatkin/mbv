@@ -6389,13 +6389,25 @@ impl App {
             &cache_key, &album_name, &artist, &ep_tag, 0, 0, 0, false, None, None, true);
 
         // Right panel: track list
+        let (active, active_idx, _, _, _) = self.effective_playback_state();
+        let now_playing_id: Option<String> = if active {
+            self.player_tab.items.get(active_idx).map(|i| i.id.clone())
+        } else {
+            None
+        };
+
         let show_length = right_w > 40;
         let dur_col_w: usize = if show_length { 7 } else { 0 };
         let title_col_w = (right_w as usize).saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
 
         let rows: Vec<Row> = items.iter().enumerate().map(|(i, item)| {
             let is_cursor = i == cursor;
-            let row_style = Style::default().fg(palette::WHITE);
+            let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
+            let row_style = if is_playing {
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::WHITE)
+            };
             let marker = if is_cursor {
                 Span::styled("▌", Style::default().fg(palette::IRIS))
             } else {
@@ -6649,6 +6661,12 @@ impl App {
         // Row heights: 2 base + 1 separator. Selected row also gets overview
         // when images are enabled.
         let images_enabled = self.images_enabled();
+        let (lib_active, lib_active_idx, _, _, _) = self.effective_playback_state();
+        let lib_now_playing_id: Option<String> = if lib_active {
+            self.player_tab.items.get(lib_active_idx).map(|i| i.id.clone())
+        } else {
+            None
+        };
         // Height for a 2:3 poster at LIB_SELECTED_IMG_W columns, derived from actual cell pixel ratio.
         let lib_movie_img_h: u16 = self.image_picker.as_ref()
             .map(|p| {
@@ -6857,7 +6875,9 @@ impl App {
                 }
             }
 
-            let text_color = if selected && (matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") || is_episode_like) { palette::IRIS }
+            let is_now_playing = lib_now_playing_id.as_deref() == Some(item.id.as_str());
+            let text_color = if is_now_playing { palette::FOAM }
+                else if selected && (matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") || is_episode_like) { palette::IRIS }
                 else if selected { palette::WHITE }
                 else { palette::TEXT };
 
