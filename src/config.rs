@@ -76,6 +76,45 @@ pub fn cache_dir() -> PathBuf {
     base.join("mbv")
 }
 
+fn state_dir() -> PathBuf {
+    let base = env::var("XDG_STATE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".local").join("state")
+        });
+    base.join("mbv")
+}
+
+fn queue_state_path() -> PathBuf {
+    state_dir().join("queue_state.json")
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct QueueState {
+    pub playlist_id: Option<String>,
+    pub playlist_name: String,
+    pub item_ids: Vec<String>,
+    pub cursor: usize,
+}
+
+pub fn save_queue_state(state: &QueueState) {
+    let path = queue_state_path();
+    if let Some(dir) = path.parent() { let _ = std::fs::create_dir_all(dir); }
+    if let Ok(json) = serde_json::to_string(state) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+pub fn load_queue_state() -> Option<QueueState> {
+    let text = std::fs::read_to_string(queue_state_path()).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+pub fn clear_queue_state() {
+    let _ = std::fs::remove_file(queue_state_path());
+}
+
 pub fn image_disk_cache_dir() -> PathBuf {
     cache_dir().join("images")
 }
