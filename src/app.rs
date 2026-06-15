@@ -102,7 +102,7 @@ enum LibEvent {
     NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
     PlaylistsLoaded(Vec<MediaItem>),
     PlaylistItemsLoaded { playlist_id: String, items: Vec<MediaItem> },
-    QueueRestored { items: Vec<MediaItem>, playlist_id: Option<String>, playlist_name: String, saved_cursor: usize },
+    QueueRestored { items: Vec<MediaItem>, playlist_id: Option<String>, playlist_name: String, saved_cursor: usize, last_played_item_id: Option<String> },
     Error(String),
 }
 
@@ -4343,15 +4343,17 @@ impl App {
                     self.playlists_open_loading = false;
                 }
             }
-            LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor } => {
+            LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor, last_played_item_id } => {
                 if items.is_empty() {
                     crate::config::clear_queue_state();
                     return;
                 }
-                // Determine cursor: stay on saved item if in-progress, else advance to next unplayed
-                let cursor = if let Some(item) = items.get(saved_cursor) {
+                // If nothing was played in this queue instance, always start from item 0.
+                // Otherwise restore the saved cursor, advancing past any completed items.
+                let cursor = if last_played_item_id.is_none() {
+                    0
+                } else if let Some(item) = items.get(saved_cursor) {
                     if item.played {
-                        // find next unplayed after saved_cursor
                         items.iter().skip(saved_cursor + 1).position(|i| !i.played)
                             .map(|offset| saved_cursor + 1 + offset)
                             .unwrap_or(items.len().saturating_sub(1))
@@ -4361,6 +4363,7 @@ impl App {
                 } else {
                     items.len().saturating_sub(1)
                 };
+                self.last_played_item_id = last_played_item_id;
                 self.player_tab.items = items;
                 self.player_tab.playlist_cursor = cursor;
                 self.queue_playlist_id = playlist_id;
@@ -4455,6 +4458,7 @@ impl App {
             playlist_name: self.queue_playlist_name.clone(),
             item_ids: self.player_tab.items.iter().map(|i| i.id.clone()).collect(),
             cursor: self.player_tab.playlist_cursor,
+            last_played_item_id: self.last_played_item_id.clone(),
         };
         if state.item_ids.is_empty() {
             crate::config::clear_queue_state();
@@ -4465,10 +4469,10 @@ impl App {
 
     fn spawn_restore_queue_state(&mut self) {
         // Try new state file first; fall back to legacy playlist cache for migration.
-        let (item_ids, playlist_id, playlist_name, saved_cursor) =
+        let (item_ids, playlist_id, playlist_name, saved_cursor, last_played_item_id) =
             if let Some(state) = crate::config::load_queue_state() {
                 if state.item_ids.is_empty() { return; }
-                (state.item_ids, state.playlist_id, state.playlist_name, state.cursor)
+                (state.item_ids, state.playlist_id, state.playlist_name, state.cursor, state.last_played_item_id)
             } else {
                 // One-time migration from ~/.cache/mbv/playlist.json
                 let path = crate::config::playlist_cache_path();
@@ -4487,13 +4491,14 @@ impl App {
                 let cursor = v["cursor"].as_u64().map(|n| n as usize).unwrap_or(0);
                 let pl_id = v["playlist_id"].as_str().map(String::from);
                 let pl_name = v["playlist_name"].as_str().unwrap_or("").to_string();
-                (ids, pl_id, pl_name, cursor)
+                let last_played = v["last_played_item_id"].as_str().map(String::from);
+                (ids, pl_id, pl_name, cursor, last_played)
             };
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let items = client.get_items_by_ids(&item_ids).unwrap_or_default();
-            let _ = tx.send(LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor });
+            let _ = tx.send(LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor, last_played_item_id });
         });
     }
 
