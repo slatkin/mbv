@@ -231,6 +231,7 @@ pub struct App {
     help_scroll: u16,
     show_log_tab: bool,
     system_notifications: bool,
+    notif_failed: bool,
     notif_action_tx: mpsc::Sender<String>,
     notif_action_rx: mpsc::Receiver<String>,
     lib_tx: mpsc::Sender<LibEvent>,
@@ -490,6 +491,7 @@ impl App {
             help_scroll: 0,
             show_log_tab,
             system_notifications,
+            notif_failed: false,
             notif_action_tx,
             notif_action_rx,
             context_menu: None,
@@ -639,6 +641,7 @@ impl App {
             help_scroll: 0,
             show_log_tab: false,
             system_notifications: false,
+            notif_failed: false,
             notif_action_tx,
             notif_action_rx,
             context_menu: None,
@@ -871,6 +874,7 @@ impl App {
                             self.flash_status("Playlist cleared".into());
                         }
                     }
+                    "__notif_failed__" => { self.notif_failed = true; }
                     _ => {} // dismissed, "ignore", "cancel", or empty: leave TUI prompt untouched
                 }
             }
@@ -3129,11 +3133,15 @@ impl App {
 
     fn notify_system(&self, msg: &str) {
         if self.system_notifications {
-            let _ = std::process::Command::new("notify-send")
-                .arg("--app-name=mbv")
-                .arg("mbv")
-                .arg(msg)
-                .spawn();
+            let tx = self.notif_action_tx.clone();
+            let mut cmd = std::process::Command::new("notify-send");
+            cmd.arg("--app-name=mbv").arg("mbv").arg(msg)
+                .stderr(std::process::Stdio::null());
+            std::thread::spawn(move || {
+                if cmd.output().map(|o| o.status.success()).unwrap_or(false) == false {
+                    let _ = tx.send("__notif_failed__".into());
+                }
+            });
         }
     }
 
@@ -3143,15 +3151,19 @@ impl App {
     fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
         if !self.system_notifications { return; }
         let mut cmd = std::process::Command::new("notify-send");
-        cmd.arg("--app-name=mbv").arg(title).arg(body);
+        cmd.arg("--app-name=mbv").arg(title).arg(body)
+            .stderr(std::process::Stdio::null());
         for (id, label) in actions {
             cmd.arg(format!("--action={}={}", id, label));
         }
         let tx = self.notif_action_tx.clone();
         std::thread::spawn(move || {
-            if let Ok(out) = cmd.output() {
-                let chosen = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                let _ = tx.send(chosen);
+            match cmd.output() {
+                Ok(out) if out.status.success() => {
+                    let chosen = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    let _ = tx.send(chosen);
+                }
+                _ => { let _ = tx.send("__notif_failed__".into()); }
             }
         });
     }
@@ -4382,8 +4394,8 @@ impl App {
         } else {
             None
         };
-        // Toast area: flash message (suppressed when system_notifications on), then now-playing title
-        if !self.system_notifications && !self.status.is_empty() {
+        // Toast area: flash message, then now-playing title
+        if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {
             f.render_widget(
                 Paragraph::new(Self::toast_line(&self.status)).alignment(Alignment::Center),
                 toast_area,
@@ -8199,6 +8211,7 @@ mod tests {
             help_scroll: 0,
             show_log_tab: false,
             system_notifications: false,
+            notif_failed: false,
             notif_action_tx,
             notif_action_rx,
             context_menu: None,
