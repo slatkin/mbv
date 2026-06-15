@@ -4486,7 +4486,7 @@ impl App {
             Paragraph::new(Line::from(
                 Span::styled(title.to_owned(), Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD)),
             )).style(Style::default().bg(palette::FOCUSED)),
-            Rect { x: ix, y: sidebar.y, width: inner_w, height: 1 },
+            Rect { x: sidebar.x, y: sidebar.y, width: sidebar.width.saturating_sub(1), height: 1 },
         );
         f.render_widget(
             Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
