@@ -225,6 +225,7 @@ pub struct App {
     confirm_logout: bool,
     multiselect_popup: Option<MultiSelectPopup>,
     layout_settings_area: Rect,
+    settings_line_of_cursor: Vec<usize>,
     help_scroll: u16,
     show_log_tab: bool,
     system_notifications: bool,
@@ -481,6 +482,7 @@ impl App {
             confirm_logout: false,
             multiselect_popup: None,
             layout_settings_area: Rect::default(),
+            settings_line_of_cursor: Vec::new(),
             help_scroll: 0,
             show_log_tab,
             system_notifications,
@@ -625,6 +627,7 @@ impl App {
             confirm_logout: false,
             multiselect_popup: None,
             layout_settings_area: Rect::default(),
+            settings_line_of_cursor: Vec::new(),
             help_scroll: 0,
             show_log_tab: false,
             system_notifications: false,
@@ -2326,13 +2329,68 @@ impl App {
             self.last_scroll_at = now;
         }
 
-        if self.show_help {
-            match mouse.kind {
-                MouseEventKind::ScrollDown => { self.help_scroll += 3; }
-                MouseEventKind::ScrollUp   => { self.help_scroll = self.help_scroll.saturating_sub(3); }
-                _ => {}
+        // ── Open side panel intercept ────────────────────────────────────────
+        let panel_w: u16 = if self.show_help     { HELP_PANEL_W }
+                           else if self.show_settings { SETTINGS_PANEL_W }
+                           else if self.show_sessions { SESSIONS_PANEL_W }
+                           else { 0 };
+        if panel_w > 0 {
+            let pw = panel_w.min(self.terminal_width);
+            let inside_panel = col < pw;
+            if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && !inside_panel {
+                if self.show_settings { self.close_settings(); } else { self.show_help = false; self.show_sessions = false; }
+                return;
             }
-            return;
+            if self.show_help {
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => { self.help_scroll += 3; }
+                    MouseEventKind::ScrollUp   => { self.help_scroll = self.help_scroll.saturating_sub(3); }
+                    _ => {}
+                }
+                return;
+            }
+            if self.show_settings && self.multiselect_popup.is_none() {
+                // content starts at row 1 (title), ends before footer (last 2 rows)
+                let content_top: u16 = 1;
+                let content_bottom = self.terminal_height.saturating_sub(2);
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => { self.settings_scroll += 3; }
+                    MouseEventKind::ScrollUp   => { self.settings_scroll = self.settings_scroll.saturating_sub(3); }
+                    MouseEventKind::Down(MouseButton::Left) if row >= content_top && row < content_bottom => {
+                        let lines_idx = (row - content_top) as usize + self.settings_scroll;
+                        if let Some(cur) = self.settings_line_of_cursor.iter().position(|&l| l == lines_idx) {
+                            self.settings_cursor = cur;
+                            self.settings_scroll_follow();
+                            self.handle_settings_activate();
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            if self.show_sessions {
+                const ENTRY_H: u16 = 4; // 3 card rows + 1 divider
+                let content_top: u16 = 1;
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => {
+                        if !self.sessions.is_empty() {
+                            self.sessions_cursor = (self.sessions_cursor + 1).min(self.sessions.len() - 1);
+                        }
+                    }
+                    MouseEventKind::ScrollUp => {
+                        self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
+                    }
+                    MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
+                        let idx = ((row - content_top) / ENTRY_H) as usize;
+                        if idx < self.sessions.len() {
+                            self.sessions_cursor = idx;
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            return; // swallow remaining events while any panel is open
         }
 
         // Tab bar — always consume clicks in this row
@@ -2357,11 +2415,6 @@ impl App {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout_settings_area.contains((col, row).into()) {
             self.show_settings = !self.show_settings;
-            return;
-        }
-
-        // Settings screen intercepts all mouse events while open
-        if self.show_settings {
             return;
         }
 
@@ -4415,7 +4468,6 @@ impl App {
         f: &mut ratatui::Frame,
         full: Rect,
         width: u16,
-        icon: &str,
         title: &str,
         hints: &str,
     ) -> Rect {
@@ -4431,19 +4483,14 @@ impl App {
         let inner_w = sidebar.width.saturating_sub(2);
         let ix = sidebar.x + 1;
         f.render_widget(
-            Paragraph::new(Line::from(vec![
-                Span::styled(format!("{} ", icon), Style::default().fg(palette::IRIS)),
+            Paragraph::new(Line::from(
                 Span::styled(title.to_owned(), Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD)),
-            ])).style(Style::default().bg(palette::FOCUSED)),
+            )).style(Style::default().bg(palette::FOCUSED)),
             Rect { x: ix, y: sidebar.y, width: inner_w, height: 1 },
         );
         f.render_widget(
             Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
             Rect { x: sidebar.x + sidebar.width - 1, y: sidebar.y, width: 1, height: 1 },
-        );
-        f.render_widget(
-            Paragraph::new(Span::styled("\u{2500}".repeat(inner_w as usize), Style::default().fg(palette::OVERLAY))),
-            Rect { x: ix, y: sidebar.y + 1, width: inner_w, height: 1 },
         );
         let footer_y = sidebar.y + sidebar.height - 2;
         f.render_widget(
@@ -4454,13 +4501,13 @@ impl App {
             Paragraph::new(Span::styled(trunc_str(hints, inner_w as usize), Style::default().fg(palette::MUTED))),
             Rect { x: ix, y: footer_y + 1, width: inner_w, height: 1 },
         );
-        Rect { x: ix, y: sidebar.y + 2, width: inner_w, height: sidebar.height.saturating_sub(4) }
+        Rect { x: ix, y: sidebar.y + 1, width: inner_w, height: sidebar.height.saturating_sub(3) }
     }
 
     fn render_sessions_overlay(&self, f: &mut ratatui::Frame) {
         let content = Self::render_panel_shell(
             f, f.area(), SESSIONS_PANEL_W,
-            "\u{271A}", "Remote Sessions",
+            "Remote Sessions",
             "[↑↓]select [↵]connect [d]disc [r]refresh [Esc]close",
         );
         let ix = content.x;
@@ -4542,7 +4589,7 @@ impl App {
     fn render_help_panel(&mut self, f: &mut ratatui::Frame) {
         let content = Self::render_panel_shell(
             f, f.area(), HELP_PANEL_W,
-            "\u{2328}", "Keyboard Shortcuts",
+            "Keyboard Shortcuts",
             "[↑↓]scroll [Esc]close",
         );
         let w = content.width as usize;
@@ -4929,7 +4976,7 @@ impl App {
     fn render_settings_panel(&mut self, f: &mut ratatui::Frame) {
         let content = Self::render_panel_shell(
             f, f.area(), SETTINGS_PANEL_W,
-            "\u{22ee}", "Settings",
+            "Settings",
             "[↑↓]navigate [Space/\u{21b5}]toggle [Esc]close",
         );
         let cfg = self.client.lock().unwrap().config.clone();
@@ -4943,6 +4990,7 @@ impl App {
         let mut lines: Vec<Line> = vec![Line::from("")];
         let mut cursor_line = 0usize;
         let mut item_idx = 0usize;
+        let mut line_of_cursor: Vec<usize> = Vec::new();
 
         for (sec_name, keys) in data_sections {
             let dash_count = w.saturating_sub(2 + sec_name.len() + 1);
@@ -4952,6 +5000,7 @@ impl App {
                 Span::styled(format!(" {}", "\u{2500}".repeat(dash_count)), Style::default().fg(palette::OVERLAY)),
             ]));
             for &key in *keys {
+                line_of_cursor.push(lines.len());
                 if item_idx == cursor { cursor_line = lines.len(); }
                 let focused = item_idx == cursor;
                 let arrow = if focused { "\u{25b8} " } else { "  " };
@@ -4969,6 +5018,7 @@ impl App {
         }
 
         let logout_cursor_idx = settings_total_rows() - 1;
+        line_of_cursor.push(lines.len());
         if cursor == logout_cursor_idx { cursor_line = lines.len(); }
         let focused = cursor == logout_cursor_idx;
         let (logout_text, logout_style) = if confirm_logout && focused {
@@ -4988,6 +5038,7 @@ impl App {
         }
         let total = lines.len();
         self.settings_scroll = self.settings_scroll.min(total.saturating_sub(visible));
+        self.settings_line_of_cursor = line_of_cursor;
 
         f.render_widget(Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)), content);
     }
@@ -8117,6 +8168,7 @@ mod tests {
             confirm_logout: false,
             multiselect_popup: None,
             layout_settings_area: Rect::default(),
+            settings_line_of_cursor: Vec::new(),
             help_scroll: 0,
             show_log_tab: false,
             system_notifications: false,
