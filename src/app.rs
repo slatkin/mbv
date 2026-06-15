@@ -4464,14 +4464,33 @@ impl App {
     }
 
     fn spawn_restore_queue_state(&mut self) {
-        let Some(state) = crate::config::load_queue_state() else { return };
-        if state.item_ids.is_empty() { return; }
+        // Try new state file first; fall back to legacy playlist cache for migration.
+        let (item_ids, playlist_id, playlist_name, saved_cursor) =
+            if let Some(state) = crate::config::load_queue_state() {
+                if state.item_ids.is_empty() { return; }
+                (state.item_ids, state.playlist_id, state.playlist_name, state.cursor)
+            } else {
+                // One-time migration from ~/.cache/mbv/playlist.json
+                let path = crate::config::playlist_cache_path();
+                let Ok(text) = std::fs::read_to_string(&path) else { return };
+                let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return };
+                let ids: Vec<String> = if let Some(arr) = v["items"].as_array() {
+                    arr.iter().filter_map(|x| x["id"].as_str().map(String::from)).collect()
+                } else if let Some(arr) = v["ids"].as_array() {
+                    arr.iter().filter_map(|x| x.as_str().map(String::from)).collect()
+                } else if v.is_array() {
+                    serde_json::from_value::<Vec<String>>(v.clone()).unwrap_or_default()
+                } else {
+                    return;
+                };
+                if ids.is_empty() { return; }
+                let cursor = v["cursor"].as_u64().map(|n| n as usize).unwrap_or(0);
+                let pl_id = v["playlist_id"].as_str().map(String::from);
+                let pl_name = v["playlist_name"].as_str().unwrap_or("").to_string();
+                (ids, pl_id, pl_name, cursor)
+            };
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
-        let playlist_id = state.playlist_id;
-        let playlist_name = state.playlist_name;
-        let saved_cursor = state.cursor;
-        let item_ids = state.item_ids;
         std::thread::spawn(move || {
             let items = client.get_items_by_ids(&item_ids).unwrap_or_default();
             let _ = tx.send(LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor });
