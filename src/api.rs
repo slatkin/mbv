@@ -854,6 +854,16 @@ impl EmbyClient {
         Ok(items)
     }
 
+    pub fn get_ancestors(&self, item_id: &str) -> Result<Vec<MediaItem>, String> {
+        let resp: Value = self.get(&format!("/Users/{}/Items/{}/Ancestors", self.user_id, item_id))
+            .query("Fields", "SortName")
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        Ok(resp.as_array()
+            .map(|arr| arr.iter().map(parse_item).collect())
+            .unwrap_or_default())
+    }
+
     /// Probes for the Chapter API plugin. Sets `chapter_api_available` on self.
     /// Any HTTP response (even 500 for a bad id) means the plugin is installed;
     /// only a 404 or connection failure means it's absent.

@@ -98,6 +98,7 @@ enum LibEvent {
     SearchItemsLoaded { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
     AllItemsPrefetched { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
     AlbumYearFetched { album_id: String, year: u32 },
+    NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
     Error(String),
 }
 
@@ -1700,6 +1701,17 @@ impl App {
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);
                 if idx < self.tab_count() { self.set_tab(idx); }
+            }
+            KeyCode::Char('i') => {
+                let cursor = self.player_tab.playlist_cursor;
+                if let Some(item) = self.player_tab.items.get(cursor) {
+                    let item_id = item.id.clone();
+                    let lib_ids: Vec<(usize, String)> = self.libs.iter().enumerate()
+                        .map(|(i, lib)| (i, lib.library.id.clone()))
+                        .collect();
+                    self.flash_status("Navigating to library\u{2026}".into());
+                    self.spawn_navigate_to_item(item_id, lib_ids);
+                }
             }
             KeyCode::Char('o') => {
                 self.open_context_menu();
@@ -3595,6 +3607,50 @@ impl App {
         });
     }
 
+    fn spawn_navigate_to_item(&self, item_id: String, lib_ids: Vec<(usize, String)>) {
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let ancestors = match client.get_ancestors(&item_id) {
+                Ok(a) => a,
+                Err(e) => { let _ = tx.send(LibEvent::Error(e)); return; }
+            };
+            // ancestors[0] = direct parent, ancestors[last] = library root (CollectionFolder)
+            let lib_root_id = match ancestors.last() {
+                Some(a) => a.id.clone(),
+                None => { let _ = tx.send(LibEvent::Error("Item has no ancestors".into())); return; }
+            };
+            let lib_idx = match lib_ids.iter().find(|(_, id)| *id == lib_root_id) {
+                Some(&(idx, _)) => idx,
+                None => { let _ = tx.send(LibEvent::Error("Item not found in any library".into())); return; }
+            };
+            // chain: [library_root, ..., direct_parent] (root to leaf order)
+            let chain: Vec<&crate::api::MediaItem> = ancestors.iter().rev().collect();
+            let mut nav_stack: Vec<BrowseLevel> = Vec::new();
+            for i in 0..chain.len() {
+                let parent_id = chain[i].id.clone();
+                let title = chain[i].name.clone();
+                let target_id = if i + 1 < chain.len() { chain[i + 1].id.clone() } else { item_id.clone() };
+                let (mut items, total_count) = match client.get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending") {
+                    Ok(x) => x,
+                    Err(e) => { let _ = tx.send(LibEvent::Error(e)); return; }
+                };
+                // Episodes need special sort to land on the right one
+                if items.first().map(|it| it.item_type == "Episode").unwrap_or(false) {
+                    sort_episodes(&mut items);
+                }
+                let cursor = items.iter().position(|it| it.id == target_id).unwrap_or(0);
+                nav_stack.push(BrowseLevel {
+                    parent_id, title, items, total_count, cursor,
+                    item_types: None, unplayed_only: false,
+                    sort_by: "SortName".into(), sort_order: "Ascending".into(),
+                    loading: false, all_items: None,
+                });
+            }
+            let _ = tx.send(LibEvent::NavigateTo { lib_idx, nav_stack });
+        });
+    }
+
     fn spawn_browse_page(&self, lib_idx: usize, parent_id: String, start_index: usize,
                          item_types: Option<String>, unplayed_only: bool,
                          sort_by: String, sort_order: String) {
@@ -3835,6 +3891,14 @@ impl App {
             LibEvent::AlbumYearFetched { album_id, year } => {
                 self.album_year_loading.remove(&album_id);
                 self.album_year_cache.insert(album_id, year);
+            }
+            LibEvent::NavigateTo { lib_idx, nav_stack } => {
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    lib.nav_stack = nav_stack;
+                    lib.search = None;
+                }
+                let target_tab = lib_idx + self.lib_tab_offset();
+                self.set_tab(target_tab);
             }
             LibEvent::Error(e) => {
                 self.flash_status(format!("Error: {e}"));
@@ -4531,6 +4595,7 @@ impl App {
             blank(),
             section("QUEUE"),
             mk(".",                "Jump to playing item"),
+            mk("i",                "Go to item in library"),
             mk("Del",              "Remove from Queue"),
             mk("v",                "Toggle view"),
         ];
@@ -5902,7 +5967,7 @@ impl App {
                 }
                 Row::new([
                     Cell::from(Line::from(spans)),
-                    Cell::from(Line::from(length.as_str()).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
+                    Cell::from(Line::from(length.as_str()).alignment(Alignment::Right)).style(Style::default().fg(if *is_active { palette::FOAM } else { palette::SUBTLE })),
                 ]).style(row_style)
             }
         }).collect();
