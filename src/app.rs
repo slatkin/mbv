@@ -252,6 +252,12 @@ pub struct App {
     playlists_open_cursor: usize,
     playlists_open_scroll: usize,
     playlists_open_loading: bool,
+    queue_playlist_id: Option<String>,         // id of the playlist currently loaded into the queue
+    queue_playlist_name: String,
+    queue_dirty: bool,
+    pending_queue_action: Option<PendingQueueAction>,
+    show_save_playlist_modal: bool,
+    autosave_playlist: bool,
     show_playback_panel: bool,
     layout_playback_indicator_area: Rect,
     ws_send_tx: Option<mpsc::Sender<String>>,
@@ -278,12 +284,19 @@ pub struct App {
     save_playlist_dialog: Option<SavePlaylistDialog>,
 }
 
+enum PendingQueueAction {
+    PlayItems { items: Vec<MediaItem>, start_idx: usize, playlist_id: Option<String>, playlist_name: String },
+    ClearQueue,
+    Quit,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingKey {
     DaemonModeOnExit,
     StartOnQueue,
     AlwaysPlayNext,
     ConsumeVideos,
+    AutosavePlaylist,
     AlwaysSkipIntro,
     ShowLogTab,
     ImageProtocol,
@@ -302,7 +315,7 @@ enum SettingKey {
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
-    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos]),
+    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::AutosavePlaylist]),
     ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
     ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",   &[SettingKey::LogOut]),
@@ -319,6 +332,7 @@ fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::StartOnQueue      => "Start on queue",
         SettingKey::AlwaysPlayNext       => "Always play next",
         SettingKey::ConsumeVideos  => "Consume videos",
+        SettingKey::AutosavePlaylist      => "Autosave playlist changes",
         SettingKey::AlwaysSkipIntro      => "Always skip intro",
         SettingKey::ShowLogTab        => "Show log tab",
         SettingKey::ImageProtocol     => "Image protocol",
@@ -340,6 +354,7 @@ fn setting_value(key: SettingKey, cfg: &crate::config::Config) -> String {
         SettingKey::StartOnQueue      => bool_val(cfg.start_on_queue),
         SettingKey::AlwaysPlayNext       => bool_val(cfg.always_play_next),
         SettingKey::ConsumeVideos  => bool_val(cfg.consume_videos),
+        SettingKey::AutosavePlaylist      => bool_val(cfg.autosave_playlist),
         SettingKey::AlwaysSkipIntro      => bool_val(cfg.always_skip_intro),
         SettingKey::ShowLogTab        => bool_val(cfg.show_log_tab),
         SettingKey::ImageProtocol     => cfg.image_protocol.clone().unwrap_or_else(|| "none".into()),
@@ -398,6 +413,7 @@ impl App {
         let show_log_tab = client.config.show_log_tab;
         let system_notifications = client.config.system_notifications;
         let image_cache_size = client.config.image_cache_size;
+        let autosave_playlist = client.config.autosave_playlist;
         crate::config::evict_old_image_cache();
         let start_on_queue = client.config.start_on_queue;
         let ws_url = client.ws_url();
@@ -529,6 +545,12 @@ impl App {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
+            queue_playlist_id: None,
+            queue_playlist_name: String::new(),
+            queue_dirty: false,
+            pending_queue_action: None,
+            show_save_playlist_modal: false,
+            autosave_playlist,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: Some(ws_send_tx_app),
@@ -571,6 +593,7 @@ impl App {
         let always_play_next = client.config.always_play_next;
         let start_on_queue = client.config.start_on_queue;
         let image_cache_size = client.config.image_cache_size;
+        let autosave_playlist = client.config.autosave_playlist;
         crate::config::evict_old_image_cache();
         let log = AppLog::new(0);
         let mut client = client;
@@ -692,6 +715,12 @@ impl App {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
+            queue_playlist_id: None,
+            queue_playlist_name: String::new(),
+            queue_dirty: false,
+            pending_queue_action: None,
+            show_save_playlist_modal: false,
+            autosave_playlist,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: None,
@@ -910,11 +939,10 @@ impl App {
                     "clear:yes" => {
                         if self.confirm_clear_playlist {
                             self.confirm_clear_playlist = false;
-                            self.player.stop();
-                            self.player_tab.items.clear();
-                            self.player_tab.playlist_cursor = 0;
-                            self.playlist_undo_stack.clear();
-                            self.flash_status("Playlist cleared".into());
+                            self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+                            if !self.show_save_playlist_modal {
+                                self.flash_status("Playlist cleared".into());
+                            }
                         }
                     }
                     "__notif_failed__" => { self.notif_failed = true; }
@@ -1200,6 +1228,32 @@ impl App {
     // ── key handling ────────────────────────────────────────────────────────
 
     fn handle_key(&mut self, key: KeyEvent) -> bool {
+        if self.show_save_playlist_modal {
+            let quit_after = matches!(self.pending_queue_action, Some(PendingQueueAction::Quit));
+            match key.code {
+                KeyCode::Char('s') | KeyCode::Char('S') => {
+                    self.save_playlist_to_emby();
+                    self.show_save_playlist_modal = false;
+                    if let Some(action) = self.pending_queue_action.take() {
+                        self.execute_pending_queue_action(action);
+                    }
+                    if quit_after { return true; }
+                }
+                KeyCode::Char('d') | KeyCode::Char('D') => {
+                    self.show_save_playlist_modal = false;
+                    if let Some(action) = self.pending_queue_action.take() {
+                        self.execute_pending_queue_action(action);
+                    }
+                    if quit_after { return true; }
+                }
+                KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
+                    self.show_save_playlist_modal = false;
+                    self.pending_queue_action = None;
+                }
+                _ => {}
+            }
+            return false;
+        }
         if self.save_playlist_dialog.is_some() {
             return self.handle_save_playlist_key(key);
         }
@@ -1239,7 +1293,7 @@ impl App {
                 return false;
             }
             match key.code {
-                KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+                KeyCode::Char('q') => { return self.try_quit(); }
                 KeyCode::Esc => { self.close_settings(); }
                 KeyCode::F(1) => { self.close_settings(); self.show_help = true; }
                 KeyCode::F(3) => { self.close_settings(); self.show_sessions = true; }
@@ -1271,7 +1325,7 @@ impl App {
         }
         if self.show_help {
             match key.code {
-                KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+                KeyCode::Char('q') => { return self.try_quit(); }
                 KeyCode::Esc | KeyCode::F(1) => { self.show_help = false; }
                 KeyCode::F(2) => { self.show_help = false; self.show_settings = true; }
                 KeyCode::F(3) => { self.show_help = false; self.show_sessions = true; }
@@ -1287,7 +1341,7 @@ impl App {
         }
         if self.show_sessions {
             match key.code {
-                KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+                KeyCode::Char('q') => { return self.try_quit(); }
                 KeyCode::Esc | KeyCode::F(3) => { self.show_sessions = false; }
                 KeyCode::F(1) => { self.show_sessions = false; self.show_help = true; }
                 KeyCode::F(2) => { self.show_sessions = false; self.show_settings = true; }
@@ -1330,7 +1384,7 @@ impl App {
         }
         if self.show_playlists {
             match key.code {
-                KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+                KeyCode::Char('q') => { return self.try_quit(); }
                 KeyCode::Esc | KeyCode::F(4) => {
                     if self.playlists_open.is_some() {
                         self.playlists_open = None;
@@ -1352,15 +1406,9 @@ impl App {
                     if self.playlists_open.is_some() {
                         if self.playlists_open_cursor > 0 {
                             self.playlists_open_cursor -= 1;
-                            if self.playlists_open_cursor < self.playlists_open_scroll {
-                                self.playlists_open_scroll = self.playlists_open_cursor;
-                            }
                         }
                     } else if self.playlists_cursor > 0 {
                         self.playlists_cursor -= 1;
-                        if self.playlists_cursor < self.playlists_scroll {
-                            self.playlists_scroll = self.playlists_cursor;
-                        }
                     }
                 }
                 KeyCode::Down => {
@@ -1372,19 +1420,66 @@ impl App {
                         self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
                     }
                 }
+                KeyCode::PageUp => {
+                    let page = (self.terminal_height as usize).saturating_sub(4);
+                    if self.playlists_open.is_some() {
+                        self.playlists_open_cursor = self.playlists_open_cursor.saturating_sub(page);
+                    } else {
+                        self.playlists_cursor = self.playlists_cursor.saturating_sub(page);
+                    }
+                }
+                KeyCode::PageDown => {
+                    let page = (self.terminal_height as usize).saturating_sub(4);
+                    if self.playlists_open.is_some() {
+                        if !self.playlists_open_items.is_empty() {
+                            self.playlists_open_cursor = (self.playlists_open_cursor + page).min(self.playlists_open_items.len() - 1);
+                        }
+                    } else if !self.playlists.is_empty() {
+                        self.playlists_cursor = (self.playlists_cursor + page).min(self.playlists.len() - 1);
+                    }
+                }
+                KeyCode::Home => {
+                    if self.playlists_open.is_some() { self.playlists_open_cursor = 0; }
+                    else { self.playlists_cursor = 0; }
+                }
+                KeyCode::End => {
+                    if self.playlists_open.is_some() {
+                        self.playlists_open_cursor = self.playlists_open_items.len().saturating_sub(1);
+                    } else {
+                        self.playlists_cursor = self.playlists.len().saturating_sub(1);
+                    }
+                }
+                KeyCode::Right => {
+                    if self.playlists_open.is_none() {
+                        if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
+                            self.spawn_open_playlist(pl);
+                        }
+                    }
+                }
+                KeyCode::Left => {
+                    if self.playlists_open.is_some() {
+                        self.playlists_open = None;
+                        self.playlists_open_items = Vec::new();
+                    }
+                }
                 KeyCode::Enter => {
                     if self.playlists_open.is_some() {
-                        // play from this position in the open playlist
+                        let selected_id = self.playlists_open_items.get(self.playlists_open_cursor).map(|i| i.id.clone());
+                        let playlist_id = self.playlists_open.as_ref().map(|p| p.id.clone());
+                        let playlist_name = self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default();
                         let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
                         if !items.is_empty() {
-                            let start = self.playlists_open_cursor.min(items.len() - 1);
-                            self.player_tab.items = items.clone();
-                            self.player_tab.playlist_cursor = start;
-                            self.play_items_routed(items, start);
-                            self.show_playlists = false;
+                            let start = selected_id.as_deref()
+                                .and_then(|id| items.iter().position(|i| i.id == id))
+                                .unwrap_or(0);
+                            let action = PendingQueueAction::PlayItems {
+                                items, start_idx: start, playlist_id, playlist_name,
+                            };
+                            self.replace_queue_or_prompt(action);
+                            if !self.show_save_playlist_modal { self.show_playlists = false; }
                         }
                     } else if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
-                        self.spawn_open_playlist(pl);
+                        self.load_and_play_playlist(pl.id);
                     }
                 }
                 KeyCode::Char('r') => {
@@ -1468,11 +1563,10 @@ impl App {
         if self.confirm_clear_playlist {
             self.confirm_clear_playlist = false;
             if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter) {
-                self.player.stop();
-                self.player_tab.items.clear();
-                self.player_tab.playlist_cursor = 0;
-                self.playlist_undo_stack.clear();
-                self.flash_status("Playlist cleared".into());
+                self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+                if !self.show_save_playlist_modal {
+                    self.flash_status("Playlist cleared".into());
+                }
             } else {
                 self.status.clear();
             }
@@ -1563,7 +1657,7 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => self.enqueue_selected(),
-            KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+            KeyCode::Char('q') => { return self.try_quit(); }
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Esc | KeyCode::Backspace => self.go_back(),
@@ -1619,7 +1713,7 @@ impl App {
 
     fn handle_combined_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
-            KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+            KeyCode::Char('q') => { return self.try_quit(); }
             KeyCode::Tab => {
                 let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); return false;
             }
@@ -1790,7 +1884,7 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+            KeyCode::Char('q') => { return self.try_quit(); }
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Up | KeyCode::Left
@@ -1861,6 +1955,7 @@ impl App {
                     let idx = idx.min(self.player_tab.items.len());
                     self.player_tab.items.insert(idx, item);
                     self.player_tab.playlist_cursor = idx;
+                    self.queue_dirty = true;
                     self.flash_status(format!("Restored: {name}"));
                 }
             }
@@ -1985,7 +2080,7 @@ impl App {
 
     fn handle_log_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
-            KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+            KeyCode::Char('q') => { return self.try_quit(); }
             KeyCode::Tab | KeyCode::BackTab => { self.set_tab(0); }
             KeyCode::Left  => { self.log_pane = LogPane::Sources; }
             KeyCode::Right => { self.log_pane = LogPane::Log; }
@@ -2566,21 +2661,40 @@ impl App {
                             self.playlists_open_cursor = self.playlists_open_cursor.saturating_sub(1);
                         }
                         MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
-                            let idx = (row - content_top) as usize + self.playlists_open_scroll;
+                            let click_line = (row - content_top) as usize;
+                            let mut y = 0usize;
+                            let mut idx = self.playlists_open_scroll;
+                            for i in self.playlists_open_items[self.playlists_open_scroll..].iter() {
+                                let pw = PLAYLISTS_PANEL_W.min(self.terminal_width) as usize;
+                                let h = if i.display_name().len() <= pw.saturating_sub(6) { 1 } else { 2 };
+                                if click_line < y + h { break; }
+                                y += h;
+                                idx += 1;
+                            }
                             if idx < self.playlists_open_items.len() {
                                 if self.playlists_open_cursor == idx {
+                                    let selected_id = self.playlists_open_items.get(idx).map(|i| i.id.clone());
+                                    let playlist_id = self.playlists_open.as_ref().map(|p| p.id.clone());
+                                    let playlist_name = self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default();
                                     let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
                                     if !items.is_empty() {
-                                        let start = idx.min(items.len() - 1);
-                                        self.player_tab.items = items.clone();
-                                        self.player_tab.playlist_cursor = start;
-                                        self.play_items_routed(items, start);
-                                        self.show_playlists = false;
+                                        let start = selected_id.as_deref()
+                                            .and_then(|id| items.iter().position(|i| i.id == id))
+                                            .unwrap_or(0);
+                                        let action = PendingQueueAction::PlayItems {
+                                            items, start_idx: start, playlist_id, playlist_name,
+                                        };
+                                        self.replace_queue_or_prompt(action);
+                                        if !self.show_save_playlist_modal { self.show_playlists = false; }
                                     }
                                 } else {
                                     self.playlists_open_cursor = idx;
                                 }
                             }
+                        }
+                        MouseEventKind::Down(MouseButton::Right) if row >= content_top => {
+                            self.playlists_open = None;
+                            self.playlists_open_items = Vec::new();
                         }
                         _ => {}
                     }
@@ -2598,9 +2712,8 @@ impl App {
                             let idx = (row - content_top) as usize + self.playlists_scroll;
                             if idx < self.playlists.len() {
                                 if self.playlists_cursor == idx {
-                                    if let Some(pl) = self.playlists.get(idx).cloned() {
-                                        self.spawn_open_playlist(pl);
-                                    }
+                                    let id = self.playlists[idx].id.clone();
+                                    self.load_and_play_playlist(id);
                                 } else {
                                     self.playlists_cursor = idx;
                                 }
@@ -3317,6 +3430,7 @@ impl App {
         }
         let item = self.player_tab.items.remove(pos);
         let name = item.display_name();
+        self.queue_dirty = true;
         self.playlist_undo_stack.push((pos, item));
         if active {
             self.player.send_command(PlayerCommand::PlaylistRemove(pos));
@@ -3407,6 +3521,7 @@ impl App {
     /// Play a list of items. Routes to the connected remote Emby session when one is active;
     /// otherwise plays locally. All multi-item play paths should go through this.
     fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
+        self.on_queue_replace_silent();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
             let id = conn_id.clone();
@@ -3424,6 +3539,7 @@ impl App {
     /// Play a single item. For series episodes with always_play_next, expands
     /// to the full series queue starting from this episode — matching Emby Web's model.
     fn play_item(&mut self, item: MediaItem) {
+        self.on_queue_replace_silent();
         let label = item.playback_label();
         // Route to connected remote session instead of local player
         if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -3462,6 +3578,7 @@ impl App {
             if !is_playable(&item) { return; }
             let name = item.display_name();
             self.player_tab.items.push(item);
+            self.queue_dirty = true;
             self.flash_status(format!("Added: {name}"));
         } else if self.tab_idx >= 2 && self.tab_idx != self.log_tab_idx() {
             let Some(item) = self.current_lib_item() else { return };
@@ -3469,6 +3586,7 @@ impl App {
             if !is_playable(&item) { return; }
             let name = item.display_name();
             self.player_tab.items.push(item);
+            self.queue_dirty = true;
             self.flash_status(format!("Added: {name}"));
         }
     }
@@ -3483,6 +3601,7 @@ impl App {
                 drop(client);
                 if count == 0 { self.flash_status("Nothing to enqueue".into()); return; }
                 for i in items { self.player_tab.items.push(i); }
+                self.queue_dirty = true;
                 self.flash_status(format!("Enqueued {count} items from {}", item.display_name()));
             }
             Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
@@ -3742,13 +3861,11 @@ impl App {
     fn refresh_current_view(&mut self) {
         self.force_clear = true;
         if self.tab_idx == 0 {
-            match self.fetch_home() {
-                Ok(()) => self.flash_status("Home refreshed".into()),
-                Err(e) => self.flash_status(format!("Refresh error: {e}")),
+            if let Err(e) = self.fetch_home() {
+                self.flash_status(format!("Refresh error: {e}"));
             }
         } else if self.tab_idx == 1 {
             self.refresh_queue();
-            self.flash_status("Queue refreshed".into());
         } else if self.tab_idx != self.log_tab_idx() {
             self.refresh_lib();
         }
@@ -4154,9 +4271,6 @@ impl App {
                         sort_episodes(&mut last.items);
                     }
                 }
-                if self.tab_idx == lib_idx + self.lib_tab_offset() {
-                    self.flash_status("Refreshed".into());
-                }
                 self.spawn_all_items_prefetch(lib_idx);
             }
             LibEvent::SearchItemsLoaded { lib_idx, parent_id, items } => {
@@ -4209,6 +4323,79 @@ impl App {
         }
     }
 
+    /// Called whenever the queue is being replaced by a non-interactive action
+    /// (play from library, shuffle, WS Play). Auto-saves if enabled, otherwise discards.
+    /// Returns true if the app should quit. Prompts to save if queue is dirty.
+    fn try_quit(&mut self) -> bool {
+        if !self.player.is_remote() { self.player.stop(); }
+        if self.queue_dirty && self.queue_playlist_id.is_some() {
+            self.replace_queue_or_prompt(PendingQueueAction::Quit);
+            false // modal is showing; actual quit happens after user responds
+        } else {
+            true
+        }
+    }
+
+    fn on_queue_replace_silent(&mut self) {
+        if self.queue_dirty && self.queue_playlist_id.is_some() {
+            if self.autosave_playlist {
+                self.save_playlist_to_emby();
+            }
+        }
+        self.queue_playlist_id = None;
+        self.queue_playlist_name = String::new();
+        self.queue_dirty = false;
+    }
+
+    /// For interactive actions that can be cancelled (clear, quit): prompts if dirty.
+    fn replace_queue_or_prompt(&mut self, action: PendingQueueAction) {
+        if self.queue_dirty && self.queue_playlist_id.is_some() {
+            self.pending_queue_action = Some(action);
+            self.show_save_playlist_modal = true;
+        } else {
+            self.execute_pending_queue_action(action);
+        }
+    }
+
+    fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {
+        self.queue_dirty = false;
+        match action {
+            PendingQueueAction::PlayItems { items, start_idx, playlist_id, playlist_name } => {
+                self.queue_playlist_id = playlist_id;
+                self.queue_playlist_name = playlist_name;
+                self.player_tab.items = items.clone();
+                self.player_tab.playlist_cursor = start_idx;
+                let c = Arc::new(self.client.lock().unwrap().clone());
+                self.player.play_playlist(items, start_idx, c, self.log.clone(), self.ui_volume);
+            }
+            PendingQueueAction::ClearQueue => {
+                self.queue_playlist_id = None;
+                self.queue_playlist_name = String::new();
+                self.player.stop();
+                self.player_tab.items.clear();
+                self.player_tab.playlist_cursor = 0;
+                self.playlist_undo_stack.clear();
+            }
+            PendingQueueAction::Quit => {
+                self.queue_playlist_id = None;
+                self.queue_playlist_name = String::new();
+            }
+        }
+    }
+
+    fn save_playlist_to_emby(&self) {
+        let Some(ref playlist_id) = self.queue_playlist_id else { return };
+        let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+        let client = self.client.lock().unwrap().clone();
+        let playlist_id = playlist_id.clone();
+        let log = self.log.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = client.update_playlist_items(&playlist_id, &item_ids) {
+                log.push(Level::Error, "playlist", format!("Failed to save playlist: {e}"));
+            }
+        });
+    }
+
     fn spawn_load_playlists(&mut self) {
         if self.playlists_loading { return; }
         self.playlists_loading = true;
@@ -4249,11 +4436,9 @@ impl App {
     }
 
     fn load_and_play_playlist(&mut self, playlist_id: String) {
+        let playlist_name = self.playlists.iter().find(|p| p.id == playlist_id)
+            .map(|p| p.name.clone()).unwrap_or_default();
         let client = self.client.lock().unwrap().clone();
-        let log = self.log.clone();
-        let volume = self.ui_volume;
-        let always_play_next = self.player.always_play_next;
-        // Fetch all items in the playlist then hand off to the player
         let (items, _) = match client.get_items_sorted(&playlist_id, None, false, 0, 5000, "IndexNumber", "Ascending") {
             Ok(r) => r,
             Err(e) => { self.flash_status(format!("Playlist load failed: {e}")); return; }
@@ -4261,10 +4446,14 @@ impl App {
         if items.is_empty() { self.flash_status("Playlist is empty".into()); return; }
         let playable: Vec<MediaItem> = items.into_iter().filter(|i| !i.is_folder).collect();
         if playable.is_empty() { self.flash_status("No playable items in playlist".into()); return; }
-        self.player_tab.items = playable.clone();
-        self.player_tab.playlist_cursor = 0;
-        self.play_items_routed(playable, 0);
-        self.show_playlists = false;
+        let action = PendingQueueAction::PlayItems {
+            items: playable, start_idx: 0,
+            playlist_id: Some(playlist_id), playlist_name,
+        };
+        self.replace_queue_or_prompt(action);
+        if !self.show_save_playlist_modal {
+            self.show_playlists = false;
+        }
     }
 
     fn fetch_home(&mut self) -> Result<(), String> {
@@ -4328,6 +4517,7 @@ impl App {
             WsEvent::Play { item_ids, play_now, start_position_ticks, start_index } => {
                 self.log.push(Level::Info, "ws", format!("Play: {} id(s), play_now={play_now}", item_ids.len()));
                 if !play_now { return; }
+                self.on_queue_replace_silent();
                 let items = {
                     let c = self.client.lock().unwrap();
                     match c.get_items_by_ids(&item_ids) {
@@ -4717,6 +4907,7 @@ impl App {
             if self.multiselect_popup.is_some() { self.render_multiselect_popup(f); }
         }
         if self.save_playlist_dialog.is_some() { self.render_save_playlist_dialog(f); }
+        if self.show_save_playlist_modal { self.render_dirty_playlist_modal(f); }
     }
 
     fn toast_line(s: &str) -> Line<'static> {
@@ -4890,9 +5081,9 @@ impl App {
     fn render_playlists_panel(&mut self, f: &mut ratatui::Frame) {
         let (title, hint) = if self.playlists_open.is_some() {
             let name = self.playlists_open.as_ref().map(|p| p.name.as_str()).unwrap_or("Playlist");
-            (name.to_string(), "[↑↓]select [↵]play [⌫]back [Esc]close".to_string())
+            (name.to_string(), "[↑↓]select [↵]play [←]back [Esc]close".to_string())
         } else {
-            ("Playlists".to_string(), "[↑↓]select [↵]open [r]refresh [Esc]close".to_string())
+            ("Playlists".to_string(), "[↑↓]select [↵]play [→]browse [r]refresh [Esc]close".to_string())
         };
 
         let content = Self::render_panel_shell(
@@ -4921,29 +5112,60 @@ impl App {
                 return;
             }
 
-            if self.playlists_open_cursor < self.playlists_open_scroll {
+            // Compute line height for an item (1 if fits, 2 if wraps)
+            let item_lines = |label: &str| -> usize {
+                let text_w = iw.saturating_sub(6); // "  " (2) + "XX. " (4)
+                if label.len() <= text_w { 1 } else { 2 }
+            };
+
+            // Scroll cursor into view (line-based)
+            while self.playlists_open_scroll > self.playlists_open_cursor {
                 self.playlists_open_scroll = self.playlists_open_cursor;
-            } else if self.playlists_open_cursor >= self.playlists_open_scroll + list_h {
-                self.playlists_open_scroll = self.playlists_open_cursor + 1 - list_h;
+            }
+            loop {
+                let lines_to_cursor: usize = self.playlists_open_items
+                    [self.playlists_open_scroll..=self.playlists_open_cursor]
+                    .iter().map(|i| item_lines(&i.display_name())).sum();
+                if lines_to_cursor <= list_h { break; }
+                self.playlists_open_scroll += 1;
             }
 
+            let mut y = 0usize;
             for (vi, item) in self.playlists_open_items[self.playlists_open_scroll..].iter().enumerate() {
-                if vi >= list_h { break; }
+                if y >= list_h { break; }
                 let abs_idx = self.playlists_open_scroll + vi;
                 let selected = abs_idx == self.playlists_open_cursor;
                 let bg = if selected { palette::FOCUSED } else { palette::BASE };
                 let fg = if selected { palette::IRIS } else { palette::TEXT };
                 let prefix = if selected { "\u{25b6} " } else { "  " };
-                let num_str = if item.index_number > 0 { format!("{:>2}. ", item.index_number) } else { "    ".to_string() };
-                let name_max = iw.saturating_sub(prefix.len() + num_str.len());
-                let line = Line::from(vec![
+                let num_str = format!("{:>2}. ", abs_idx + 1);
+                let indent = " ".repeat(prefix.len() + num_str.len());
+                let label = item.display_name();
+                let text_w = iw.saturating_sub(prefix.len() + num_str.len());
+                let (line1, line2) = if label.len() <= text_w {
+                    (label, String::new())
+                } else {
+                    let wrap_at = label[..text_w].rfind(' ').unwrap_or(text_w);
+                    (label[..wrap_at].to_string(), label[wrap_at..].trim_start().to_string())
+                };
+                let row_y = content.y + y as u16;
+                let row1 = Line::from(vec![
                     Span::styled(prefix, Style::default().fg(palette::IRIS).bg(bg)),
                     Span::styled(num_str, Style::default().fg(palette::MUTED).bg(bg)),
-                    Span::styled(trunc_str(&item.name, name_max), Style::default().fg(fg).bg(bg)),
+                    Span::styled(line1, Style::default().fg(fg).bg(bg)),
                 ]);
-                let row_y = content.y + vi as u16;
-                f.render_widget(Paragraph::new(line).style(Style::default().bg(bg)),
+                f.render_widget(Paragraph::new(row1).style(Style::default().bg(bg)),
                     Rect { x: ix, y: row_y, width: content.width, height: 1 });
+                y += 1;
+                if !line2.is_empty() && y < list_h {
+                    let row2 = Line::from(vec![
+                        Span::styled(indent, Style::default().bg(bg)),
+                        Span::styled(trunc_str(&line2, text_w), Style::default().fg(palette::SUBTLE).bg(bg)),
+                    ]);
+                    f.render_widget(Paragraph::new(row2).style(Style::default().bg(bg)),
+                        Rect { x: ix, y: row_y + 1, width: content.width, height: 1 });
+                    y += 1;
+                }
             }
             return;
         }
@@ -5204,6 +5426,10 @@ impl App {
                     SettingKey::StartOnQueue     => c.config.start_on_queue = !c.config.start_on_queue,
                     SettingKey::AlwaysPlayNext      => c.config.always_play_next = !c.config.always_play_next,
                     SettingKey::ConsumeVideos => c.config.consume_videos = !c.config.consume_videos,
+                    SettingKey::AutosavePlaylist => {
+                        c.config.autosave_playlist = !c.config.autosave_playlist;
+                        self.autosave_playlist = c.config.autosave_playlist;
+                    }
                     SettingKey::AlwaysSkipIntro     => c.config.always_skip_intro = !c.config.always_skip_intro,
                     SettingKey::ShowAudioWindow  => c.config.show_audio_window = !c.config.show_audio_window,
                     SettingKey::UseMpvConfig     => c.config.use_mpv_config = !c.config.use_mpv_config,
@@ -5313,6 +5539,41 @@ impl App {
                 );
             }
         }
+    }
+
+    fn render_dirty_playlist_modal(&self, f: &mut ratatui::Frame) {
+        let name = trunc_str(&self.queue_playlist_name, 36);
+        let is_quit = matches!(self.pending_queue_action, Some(PendingQueueAction::Quit));
+        let full = f.area();
+        let w: u16 = 56;
+        let h: u16 = 7;
+        let x = full.x + full.width.saturating_sub(w) / 2;
+        let y = full.y + full.height.saturating_sub(h) / 2;
+        let rect = Rect { x, y, width: w, height: h };
+        f.render_widget(Clear, rect);
+        let block = Block::default()
+            .title(Span::styled(" Unsaved Playlist Changes ", Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)))
+            .title_alignment(Alignment::Center)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(palette::YELLOW));
+        let inner = block.inner(rect);
+        f.render_widget(block, rect);
+        let line1 = format!("Save changes to \"{}\"?", name);
+        let line2 = if is_quit {
+            "[s]Save  [d]Discard & quit  [Esc]Cancel"
+        } else {
+            "[s]Save  [d]Discard  [Esc]Cancel"
+        };
+        let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
+        f.render_widget(
+            Paragraph::new(Span::styled(line1, Style::default().fg(palette::WHITE))),
+            Rect { x: inner.x + 1, y: base_y, width: inner.width.saturating_sub(2), height: 1 },
+        );
+        f.render_widget(
+            Paragraph::new(Span::styled(line2, Style::default().fg(palette::SUBTLE))),
+            Rect { x: inner.x + 1, y: base_y + 2, width: inner.width.saturating_sub(2), height: 1 },
+        );
     }
 
     fn render_multiselect_popup(&mut self, f: &mut ratatui::Frame) {
@@ -8366,6 +8627,7 @@ mod tests {
             premiere_date: String::new(), date_added: String::new(), total_count: 0, container: String::new(),
             director: String::new(), video_info: String::new(), audio_info: String::new(),
             genre: String::new(),
+            playlist_item_id: String::new(),
         }
     }
 
@@ -8614,6 +8876,12 @@ mod tests {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
+            queue_playlist_id: None,
+            queue_playlist_name: String::new(),
+            queue_dirty: false,
+            pending_queue_action: None,
+            show_save_playlist_modal: false,
+            autosave_playlist: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: None,

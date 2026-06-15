@@ -97,6 +97,7 @@ pub struct MediaItem {
     pub video_info: String,
     pub audio_info: String,
     pub genre: String,
+    pub playlist_item_id: String,
 }
 
 impl MediaItem {
@@ -246,6 +247,7 @@ fn parse_item(raw: &Value) -> MediaItem {
                 }
             })
             .unwrap_or_default(),
+        playlist_item_id: raw["PlaylistItemId"].as_str().unwrap_or("").to_string(),
         audio_info: raw["MediaStreams"].as_array()
             .map(|streams| {
                 let mut parts: Vec<String> = Vec::new();
@@ -486,6 +488,7 @@ impl EmbyClient {
                     video_info: String::new(),
                     audio_info: String::new(),
                     genre: String::new(),
+                    playlist_item_id: String::new(),
                 };
                 seen.insert(id);
                 items.push(item);
@@ -843,6 +846,36 @@ impl EmbyClient {
         Ok(())
     }
 
+    /// Replace a playlist's contents with the given item ids (in order).
+    /// Fetches current entry ids, deletes them all, then adds the new set.
+    pub fn update_playlist_items(&self, playlist_id: &str, item_ids: &[String]) -> Result<(), String> {
+        // Get current playlist entry ids
+        let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", playlist_id))
+            .query("UserId", &self.user_id)
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        let entry_ids: Vec<String> = resp["Items"].as_array()
+            .map(|arr| arr.iter()
+                .filter_map(|v| v["PlaylistItemId"].as_str())
+                .map(|s| s.to_string())
+                .collect())
+            .unwrap_or_default();
+        // Delete existing entries
+        if !entry_ids.is_empty() {
+            self.delete(&format!("/Playlists/{}/Items", playlist_id))
+                .query("EntryIds", &entry_ids.join(","))
+                .call().map_err(|e| e.to_string())?;
+        }
+        // Add new items in order
+        if !item_ids.is_empty() {
+            self.post(&format!("/Playlists/{}/Items", playlist_id))
+                .query("Ids", &item_ids.join(","))
+                .query("UserId", &self.user_id)
+                .call().map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
+
     pub fn get_items_by_ids(&self, ids: &[String]) -> Result<Vec<MediaItem>, String> {
         if ids.is_empty() { return Ok(vec![]); }
         let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
@@ -1080,6 +1113,7 @@ mod tests {
             video_info: String::new(),
             audio_info: String::new(),
             genre: String::new(),
+            playlist_item_id: String::new(),
         }
     }
 

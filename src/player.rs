@@ -1834,6 +1834,7 @@ mod tests {
             premiere_date: String::new(), date_added: String::new(), total_count: 0, container: String::new(),
             director: String::new(), video_info: String::new(), audio_info: String::new(),
             genre: String::new(),
+            playlist_item_id: String::new(),
         }
     }
 

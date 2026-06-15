@@ -24,6 +24,7 @@ pub struct Config {
     pub music_levels: Vec<String>,
     pub system_notifications: bool,
     pub image_cache_size: usize,
+    pub autosave_playlist: bool,
 }
 
 impl Default for Config {
@@ -50,6 +51,7 @@ impl Default for Config {
             music_levels: vec![],
             system_notifications: false,
             image_cache_size: 50,
+            autosave_playlist: false,
         }
     }
 }
@@ -315,6 +317,12 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .map(|v| v.max(1) as usize)
         .unwrap_or(50);
 
+    let autosave_playlist = queue
+        .and_then(|q| q.get("autosave_playlist"))
+        .and_then(|v| v.as_bool())
+        .or_else(|| general.and_then(|m| m.get("autosave_playlist")).and_then(|v| v.as_bool()))
+        .unwrap_or(false);
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -337,6 +345,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         music_levels,
         system_notifications,
         image_cache_size,
+        autosave_playlist,
     })
 }
 
@@ -387,6 +396,7 @@ pub fn save_config_settings(cfg: &Config) {
     queue.insert("always_play_next".to_string(),      toml::Value::Boolean(cfg.always_play_next));
     queue.insert("consume_videos".to_string(), toml::Value::Boolean(cfg.consume_videos));
     queue.insert("start_on_queue".to_string(),         toml::Value::Boolean(cfg.start_on_queue));
+    queue.insert("autosave_playlist".to_string(),      toml::Value::Boolean(cfg.autosave_playlist));
 
     let mpv = section!("mpv");
     mpv.insert("show_audio_window".to_string(), toml::Value::Boolean(cfg.show_audio_window));
