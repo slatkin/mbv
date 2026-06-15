@@ -139,7 +139,8 @@ fn main() {
     }
 
     // If a daemon is running, try to connect to it instead of standalone mode.
-    if daemon_running() {
+    let daemon_existed = daemon_running();
+    if daemon_existed {
         match remote_player::RemotePlayer::connect() {
             Ok((remote, player_rx)) => {
                 if let Err(e) = App::new_remote(client, remote, player_rx).run() {
@@ -160,7 +161,7 @@ fn main() {
     }
 
     if let Ok(cfg) = load_config() {
-        if cfg.daemon_mode_on_exit && !daemon_running() {
+        if cfg.daemon_mode_on_exit && !daemon_existed && !daemon_running() {
             let exe = std::env::current_exe().expect("cannot locate binary");
             #[allow(clippy::zombie_processes)]
             let _ = std::process::Command::new(exe)
