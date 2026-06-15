@@ -97,6 +97,7 @@ pub struct QueueState {
     pub item_ids: Vec<String>,
     pub cursor: usize,
     pub last_played_item_id: Option<String>,
+    pub last_played_completed: bool,
 }
 
 pub fn save_queue_state(state: &QueueState) {

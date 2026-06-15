@@ -102,7 +102,7 @@ enum LibEvent {
     NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
     PlaylistsLoaded(Vec<MediaItem>),
     PlaylistItemsLoaded { playlist_id: String, items: Vec<MediaItem> },
-    QueueRestored { items: Vec<MediaItem>, playlist_id: Option<String>, playlist_name: String, saved_cursor: usize, last_played_item_id: Option<String> },
+    QueueRestored { items: Vec<MediaItem>, playlist_id: Option<String>, playlist_name: String, saved_cursor: usize, last_played_item_id: Option<String>, last_played_completed: bool },
     Error(String),
 }
 
@@ -205,6 +205,7 @@ pub struct App {
     playlist_view: u8,
     home_card_view: bool,
     last_played_item_id: Option<String>,
+    last_played_completed: bool,
     layout_carousel_slots: [(Option<usize>, Rect); 3],
     layout_queue_strip_slots: Vec<(usize, Rect)>,
     layout_carousel_left_arrow: Option<Rect>,
@@ -500,6 +501,7 @@ impl App {
             pre_mute_volume: None,
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
+            last_played_completed: false,
             layout_carousel_slots: [(None, Rect::default()); 3],
             layout_queue_strip_slots: Vec::new(),
             layout_carousel_left_arrow: None,
@@ -670,6 +672,7 @@ impl App {
             pre_mute_volume: None,
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
+            last_played_completed: false,
             layout_carousel_slots: [(None, Rect::default()); 3],
             layout_queue_strip_slots: Vec::new(),
             layout_carousel_left_arrow: None,
@@ -803,6 +806,7 @@ impl App {
                                 item.playback_position_ticks = position_ticks;
                             }
                             self.last_played_item_id = Some(item.id.clone());
+                            self.last_played_completed = played;
                         }
                         self.next_up_item = None;
                         self.skip_intro_end_ticks = None;
@@ -4343,20 +4347,18 @@ impl App {
                     self.playlists_open_loading = false;
                 }
             }
-            LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor, last_played_item_id } => {
+            LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor, last_played_item_id, last_played_completed } => {
                 if items.is_empty() {
                     crate::config::clear_queue_state();
                     return;
                 }
-                // Find the last-played item by ID (not by saved scroll position).
-                // If nothing was played, start from 0.
-                // If the last-played item is fully played, advance to the next unplayed one.
+                // Find the last-played item by ID. Never use Emby's played flag —
+                // it reflects prior sessions and causes false advancement.
+                // If the item completed in our session, advance one position.
                 let cursor = if let Some(ref id) = last_played_item_id {
                     let idx = items.iter().position(|i| &i.id == id).unwrap_or(0);
-                    if items.get(idx).map(|i| i.played).unwrap_or(false) {
-                        items.iter().skip(idx + 1).position(|i| !i.played)
-                            .map(|offset| idx + 1 + offset)
-                            .unwrap_or(items.len().saturating_sub(1))
+                    if last_played_completed {
+                        (idx + 1).min(items.len().saturating_sub(1))
                     } else {
                         idx
                     }
@@ -4364,6 +4366,7 @@ impl App {
                     0
                 };
                 self.last_played_item_id = last_played_item_id;
+                self.last_played_completed = last_played_completed;
                 self.player_tab.items = items;
                 self.player_tab.playlist_cursor = cursor;
                 self.queue_playlist_id = playlist_id;
@@ -4459,6 +4462,7 @@ impl App {
             item_ids: self.player_tab.items.iter().map(|i| i.id.clone()).collect(),
             cursor: self.player_tab.playlist_cursor,
             last_played_item_id: self.last_played_item_id.clone(),
+            last_played_completed: self.last_played_completed,
         };
         if state.item_ids.is_empty() {
             crate::config::clear_queue_state();
@@ -4469,10 +4473,10 @@ impl App {
 
     fn spawn_restore_queue_state(&mut self) {
         // Try new state file first; fall back to legacy playlist cache for migration.
-        let (item_ids, playlist_id, playlist_name, saved_cursor, last_played_item_id) =
+        let (item_ids, playlist_id, playlist_name, saved_cursor, last_played_item_id, last_played_completed) =
             if let Some(state) = crate::config::load_queue_state() {
                 if state.item_ids.is_empty() { return; }
-                (state.item_ids, state.playlist_id, state.playlist_name, state.cursor, state.last_played_item_id)
+                (state.item_ids, state.playlist_id, state.playlist_name, state.cursor, state.last_played_item_id, state.last_played_completed)
             } else {
                 // One-time migration from ~/.cache/mbv/playlist.json
                 let path = crate::config::playlist_cache_path();
@@ -4492,13 +4496,13 @@ impl App {
                 let pl_id = v["playlist_id"].as_str().map(String::from);
                 let pl_name = v["playlist_name"].as_str().unwrap_or("").to_string();
                 let last_played = v["last_played_item_id"].as_str().map(String::from);
-                (ids, pl_id, pl_name, cursor, last_played)
+                (ids, pl_id, pl_name, cursor, last_played, false)
             };
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let items = client.get_items_by_ids(&item_ids).unwrap_or_default();
-            let _ = tx.send(LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor, last_played_item_id });
+            let _ = tx.send(LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor, last_played_item_id, last_played_completed });
         });
     }
 
@@ -8931,6 +8935,7 @@ mod tests {
             playlist_view: 0,
             home_card_view: false,
             last_played_item_id: None,
+            last_played_completed: false,
             layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
             layout_queue_strip_slots: Vec::new(),
             layout_carousel_left_arrow: None,
