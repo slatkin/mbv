@@ -820,12 +820,18 @@ impl EmbyClient {
     pub fn create_playlist(&self, name: &str, item_ids: &[String]) -> Result<String, String> {
         let body = ureq::json!({
             "Name": name,
-            "Ids": item_ids,
+            "Ids": item_ids.join(","),
             "UserId": self.user_id,
-            "MediaType": "Unknown",
         });
         let resp: Value = self.post("/Playlists")
-            .send_json(body).map_err(|e| e.to_string())?
+            .send_json(body)
+            .map_err(|e| match e {
+                ureq::Error::Status(code, r) => {
+                    let body = r.into_string().unwrap_or_default();
+                    format!("HTTP {code}: {body}")
+                }
+                e => e.to_string(),
+            })?
             .into_json().map_err(|e| e.to_string())?;
         resp["Id"].as_str().map(|s| s.to_string())
             .ok_or_else(|| "no Id in response".to_string())
