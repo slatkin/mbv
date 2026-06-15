@@ -100,6 +100,7 @@ enum LibEvent {
     AllItemsPrefetched { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
     AlbumYearFetched { album_id: String, year: u32 },
     NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
+    PlaylistsLoaded(Vec<MediaItem>),
     Error(String),
 }
 
@@ -240,6 +241,11 @@ pub struct App {
     sessions_cursor: usize,
     sessions_loading: bool,
     show_sessions: bool,
+    playlists: Vec<MediaItem>,
+    playlists_cursor: usize,
+    playlists_scroll: usize,
+    playlists_loading: bool,
+    show_playlists: bool,
     show_playback_panel: bool,
     layout_playback_indicator_area: Rect,
     sessions_tx: mpsc::Sender<SessionEvent>,
@@ -293,9 +299,10 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[actions]",   &[SettingKey::LogOut]),
 ];
 
-const SESSIONS_PANEL_W: u16 = 42;
-const HELP_PANEL_W:     u16 = 58;
-const SETTINGS_PANEL_W: u16 = 56;
+const SESSIONS_PANEL_W:  u16 = 42;
+const HELP_PANEL_W:      u16 = 58;
+const SETTINGS_PANEL_W:  u16 = 56;
+const PLAYLISTS_PANEL_W: u16 = 48;
 
 fn setting_label(key: SettingKey) -> &'static str {
     match key {
@@ -502,6 +509,11 @@ impl App {
             sessions_cursor: 0,
             sessions_loading: false,
             show_sessions: false,
+            playlists: Vec::new(),
+            playlists_cursor: 0,
+            playlists_scroll: 0,
+            playlists_loading: false,
+            show_playlists: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             sessions_tx,
@@ -652,6 +664,11 @@ impl App {
             sessions_cursor: 0,
             sessions_loading: false,
             show_sessions: false,
+            playlists: Vec::new(),
+            playlists_cursor: 0,
+            playlists_scroll: 0,
+            playlists_loading: false,
+            show_playlists: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             sessions_tx,
@@ -1184,6 +1201,7 @@ impl App {
                 KeyCode::Esc => { self.close_settings(); }
                 KeyCode::F(1) => { self.close_settings(); self.show_help = true; }
                 KeyCode::F(3) => { self.close_settings(); self.show_sessions = true; }
+                KeyCode::F(4) => { self.close_settings(); self.open_playlists_panel(); }
                 KeyCode::Up => {
                     if self.settings_cursor > 0 {
                         self.settings_cursor -= 1;
@@ -1215,6 +1233,7 @@ impl App {
                 KeyCode::Esc | KeyCode::F(1) => { self.show_help = false; }
                 KeyCode::F(2) => { self.show_help = false; self.show_settings = true; }
                 KeyCode::F(3) => { self.show_help = false; self.show_sessions = true; }
+                KeyCode::F(4) => { self.show_help = false; self.open_playlists_panel(); }
                 KeyCode::Up       => { self.help_scroll = self.help_scroll.saturating_sub(1); }
                 KeyCode::Down     => { self.help_scroll += 1; }
                 KeyCode::PageUp   => { self.help_scroll = self.help_scroll.saturating_sub(10); }
@@ -1227,9 +1246,10 @@ impl App {
         if self.show_sessions {
             match key.code {
                 KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
-                KeyCode::Esc => { self.show_sessions = false; }
+                KeyCode::Esc | KeyCode::F(3) => { self.show_sessions = false; }
                 KeyCode::F(1) => { self.show_sessions = false; self.show_help = true; }
                 KeyCode::F(2) => { self.show_sessions = false; self.show_settings = true; }
+                KeyCode::F(4) => { self.show_sessions = false; self.open_playlists_panel(); }
                 KeyCode::Up => {
                     self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
                 }
@@ -1262,6 +1282,36 @@ impl App {
                     self.show_sessions = false;
                     self.flash_status("Disconnected from remote session".to_string());
                 }
+                _ => {}
+            }
+            return false;
+        }
+        if self.show_playlists {
+            match key.code {
+                KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
+                KeyCode::Esc | KeyCode::F(4) => { self.show_playlists = false; }
+                KeyCode::F(1) => { self.show_playlists = false; self.show_help = true; }
+                KeyCode::F(2) => { self.show_playlists = false; self.show_settings = true; }
+                KeyCode::F(3) => { self.show_playlists = false; self.show_sessions = true; }
+                KeyCode::Up => {
+                    if self.playlists_cursor > 0 {
+                        self.playlists_cursor -= 1;
+                        if self.playlists_cursor < self.playlists_scroll {
+                            self.playlists_scroll = self.playlists_cursor;
+                        }
+                    }
+                }
+                KeyCode::Down => {
+                    if !self.playlists.is_empty() {
+                        self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
+                    }
+                }
+                KeyCode::Enter => {
+                    if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
+                        self.load_and_play_playlist(pl.id);
+                    }
+                }
+                KeyCode::Char('r') => { self.spawn_load_playlists(); }
                 _ => {}
             }
             return false;
@@ -1311,6 +1361,10 @@ impl App {
         if key.code == KeyCode::F(3) {
             self.show_sessions = true;
             self.spawn_sessions_load();
+            return false;
+        }
+        if key.code == KeyCode::F(4) {
+            self.open_playlists_panel();
             return false;
         }
         if key.code == KeyCode::Char('h') {
@@ -2353,15 +2407,16 @@ impl App {
         }
 
         // ── Open side panel intercept ────────────────────────────────────────
-        let panel_w: u16 = if self.show_help     { HELP_PANEL_W }
-                           else if self.show_settings { SETTINGS_PANEL_W }
-                           else if self.show_sessions { SESSIONS_PANEL_W }
+        let panel_w: u16 = if self.show_help      { HELP_PANEL_W }
+                           else if self.show_settings  { SETTINGS_PANEL_W }
+                           else if self.show_sessions  { SESSIONS_PANEL_W }
+                           else if self.show_playlists { PLAYLISTS_PANEL_W }
                            else { 0 };
         if panel_w > 0 {
             let pw = panel_w.min(self.terminal_width);
             let inside_panel = col < pw;
             if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && !inside_panel {
-                if self.show_settings { self.close_settings(); } else { self.show_help = false; self.show_sessions = false; }
+                if self.show_settings { self.close_settings(); } else { self.show_help = false; self.show_sessions = false; self.show_playlists = false; }
                 return;
             }
             if self.show_help {
@@ -2407,6 +2462,32 @@ impl App {
                         let idx = ((row - content_top) / ENTRY_H) as usize;
                         if idx < self.sessions.len() {
                             self.sessions_cursor = idx;
+                        }
+                    }
+                    _ => {}
+                }
+                return;
+            }
+            if self.show_playlists {
+                let content_top: u16 = 1;
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => {
+                        if !self.playlists.is_empty() {
+                            self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
+                        }
+                    }
+                    MouseEventKind::ScrollUp => {
+                        self.playlists_cursor = self.playlists_cursor.saturating_sub(1);
+                    }
+                    MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
+                        let idx = (row - content_top) as usize + self.playlists_scroll;
+                        if idx < self.playlists.len() {
+                            if self.playlists_cursor == idx {
+                                let id = self.playlists[idx].id.clone();
+                                self.load_and_play_playlist(id);
+                            } else {
+                                self.playlists_cursor = idx;
+                            }
                         }
                     }
                     _ => {}
@@ -3994,10 +4075,55 @@ impl App {
                 let target_tab = lib_idx + self.lib_tab_offset();
                 self.set_tab(target_tab);
             }
+            LibEvent::PlaylistsLoaded(items) => {
+                self.playlists = items;
+                self.playlists_loading = false;
+                self.playlists_cursor = self.playlists_cursor.min(self.playlists.len().saturating_sub(1));
+            }
             LibEvent::Error(e) => {
                 self.flash_status(format!("Error: {e}"));
             }
         }
+    }
+
+    fn spawn_load_playlists(&mut self) {
+        if self.playlists_loading { return; }
+        self.playlists_loading = true;
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let items = client.get_playlists().unwrap_or_default();
+            let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+        });
+    }
+
+    fn open_playlists_panel(&mut self) {
+        self.show_help = false;
+        self.show_sessions = false;
+        self.close_settings();
+        self.show_playlists = true;
+        if self.playlists.is_empty() && !self.playlists_loading {
+            self.spawn_load_playlists();
+        }
+    }
+
+    fn load_and_play_playlist(&mut self, playlist_id: String) {
+        let client = self.client.lock().unwrap().clone();
+        let log = self.log.clone();
+        let volume = self.ui_volume;
+        let always_play_next = self.player.always_play_next;
+        // Fetch all items in the playlist then hand off to the player
+        let (items, _) = match client.get_items_sorted(&playlist_id, None, false, 0, 5000, "IndexNumber", "Ascending") {
+            Ok(r) => r,
+            Err(e) => { self.flash_status(format!("Playlist load failed: {e}")); return; }
+        };
+        if items.is_empty() { self.flash_status("Playlist is empty".into()); return; }
+        let playable: Vec<MediaItem> = items.into_iter().filter(|i| !i.is_folder).collect();
+        if playable.is_empty() { self.flash_status("No playable items in playlist".into()); return; }
+        self.player_tab.items = playable.clone();
+        self.player_tab.playlist_cursor = 0;
+        self.play_items_routed(playable, 0);
+        self.show_playlists = false;
     }
 
     fn fetch_home(&mut self) -> Result<(), String> {
@@ -4010,7 +4136,7 @@ impl App {
             .map(|mut l| (l.library.id.clone(), std::mem::take(&mut l.nav_stack)))
             .collect();
 
-        for view in all_views.iter().filter(|v| !self.hidden_libraries.contains(&v.name.to_lowercase())) {
+        for view in all_views.iter().filter(|v| v.collection_type != "playlists" && !self.hidden_libraries.contains(&v.name.to_lowercase())) {
             let stack = old_libs.get(&view.id)
                 .map(|s| s.iter().map(|lvl| BrowseLevel {
                     parent_id: lvl.parent_id.clone(), title: lvl.title.clone(),
@@ -4031,7 +4157,9 @@ impl App {
         let mut latest: Vec<(String, String, Vec<MediaItem>, usize)> = Vec::new();
         for v in user_views.iter().filter(|v| {
             let lower = v.name.to_lowercase();
-            !self.hidden_latest.contains(&lower) && !self.hidden_libraries.contains(&lower)
+            v.collection_type != "playlists"
+                && !self.hidden_latest.contains(&lower)
+                && !self.hidden_libraries.contains(&lower)
         }) {
             let title = format!("Latest {}", v.name);
             let items = if v.collection_type == "tvshows" {
@@ -4441,6 +4569,7 @@ impl App {
         self.render_context_menu(f);
 
         if self.show_sessions  { self.render_sessions_overlay(f); }
+        if self.show_playlists { self.render_playlists_panel(f); }
         if self.show_help      { self.render_help_panel(f); }
         if self.show_settings  {
             self.render_settings_panel(f);
@@ -4617,6 +4746,58 @@ impl App {
     }
 
 
+    fn render_playlists_panel(&mut self, f: &mut ratatui::Frame) {
+        let content = Self::render_panel_shell(
+            f, f.area(), PLAYLISTS_PANEL_W,
+            "Playlists",
+            "[↑↓]select [↵]play [r]refresh [Esc]close",
+        );
+        let ix = content.x;
+        let iw = content.width as usize;
+        let list_h = content.height as usize;
+
+        if self.playlists_loading && self.playlists.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE))),
+                content,
+            );
+            return;
+        }
+        if self.playlists.is_empty() {
+            f.render_widget(
+                Paragraph::new(Span::styled(" No playlists found", Style::default().fg(palette::SUBTLE))),
+                content,
+            );
+            return;
+        }
+
+        // Scroll to keep cursor visible
+        if self.playlists_cursor < self.playlists_scroll {
+            self.playlists_scroll = self.playlists_cursor;
+        } else if self.playlists_cursor >= self.playlists_scroll + list_h {
+            self.playlists_scroll = self.playlists_cursor + 1 - list_h;
+        }
+
+        for (vi, pl) in self.playlists[self.playlists_scroll..].iter().enumerate() {
+            if vi >= list_h { break; }
+            let abs_idx = self.playlists_scroll + vi;
+            let selected = abs_idx == self.playlists_cursor;
+            let bg = if selected { palette::FOCUSED } else { palette::BASE };
+            let fg = if selected { palette::IRIS } else { palette::TEXT };
+            let prefix = if selected { "\u{25b6} " } else { "  " };
+            let count_str = if pl.total_count > 0 { format!(" ({})", pl.total_count) } else { String::new() };
+            let name_max = iw.saturating_sub(prefix.len() + count_str.len());
+            let line = Line::from(vec![
+                Span::styled(prefix, Style::default().fg(palette::IRIS).bg(bg)),
+                Span::styled(trunc_str(&pl.name, name_max), Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD)),
+                Span::styled(count_str, Style::default().fg(palette::MUTED).bg(bg)),
+            ]);
+            let row_y = content.y + vi as u16;
+            f.render_widget(Paragraph::new(line).style(Style::default().bg(bg)),
+                Rect { x: ix, y: row_y, width: content.width, height: 1 });
+        }
+    }
+
     fn render_help_panel(&mut self, f: &mut ratatui::Frame) {
         let content = Self::render_panel_shell(
             f, f.area(), HELP_PANEL_W,
@@ -4657,6 +4838,7 @@ impl App {
             mk("F1",               "Help"),
             mk("F2",               "Settings"),
             mk("F3",               "Remote sessions"),
+            mk("F4",               "Playlists"),
             mk("F5",               "Refresh current view"),
             mk("Tab",              "Cycle menu"),
             mk("1 – 9",            "Jump to tab"),
@@ -8227,6 +8409,11 @@ mod tests {
             sessions_cursor: 0,
             sessions_loading: false,
             show_sessions: false,
+            playlists: Vec::new(),
+            playlists_cursor: 0,
+            playlists_scroll: 0,
+            playlists_loading: false,
+            show_playlists: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             sessions_tx,
