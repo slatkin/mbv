@@ -248,6 +248,9 @@ pub struct App {
     show_playlists: bool,
     show_playback_panel: bool,
     layout_playback_indicator_area: Rect,
+    ws_send_tx: Option<mpsc::Sender<String>>,
+    last_keepalive: Instant,
+    last_capabilities: Instant,
     sessions_tx: mpsc::Sender<SessionEvent>,
     sessions_rx: mpsc::Receiver<SessionEvent>,
     connected_session_id: Option<String>,
@@ -394,6 +397,7 @@ impl App {
         let ws_url = client.ws_url();
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
         let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
+        let ws_send_tx_app = ws_send_tx.clone();
         let always_play_next = client.config.always_play_next;
         let always_skip_intro = client.config.always_skip_intro;
         let subs_off = Self::load_subs_off();
@@ -516,6 +520,9 @@ impl App {
             show_playlists: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
+            ws_send_tx: Some(ws_send_tx_app),
+            last_keepalive: Instant::now(),
+            last_capabilities: Instant::now(),
             sessions_tx,
             sessions_rx,
             connected_session_id: None,
@@ -671,6 +678,9 @@ impl App {
             show_playlists: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
+            ws_send_tx: None,
+            last_keepalive: Instant::now(),
+            last_capabilities: Instant::now(),
             sessions_tx,
             sessions_rx,
             connected_session_id: None,
@@ -1056,6 +1066,22 @@ impl App {
                 && !self.sessions_loading
             {
                 self.spawn_sessions_load();
+            }
+
+            // Keep this session visible to other Emby clients
+            if let Some(ref tx) = self.ws_send_tx {
+                if self.last_keepalive.elapsed() >= Duration::from_secs(30) {
+                    let _ = tx.send("{\"MessageType\":\"KeepAlive\"}".to_string());
+                    self.last_keepalive = Instant::now();
+                }
+            }
+            if self.ws_send_tx.is_some()
+                && self.last_capabilities.elapsed() >= Duration::from_secs(600)
+            {
+                let client = self.client.lock().unwrap().clone();
+                let log = self.log.clone();
+                std::thread::spawn(move || client.register_capabilities(&log));
+                self.last_capabilities = Instant::now();
             }
 
             if event::poll(Duration::from_millis(50))? {
@@ -8416,6 +8442,9 @@ mod tests {
             show_playlists: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
+            ws_send_tx: None,
+            last_keepalive: Instant::now(),
+            last_capabilities: Instant::now(),
             sessions_tx,
             sessions_rx,
             connected_session_id: None,
