@@ -7254,7 +7254,7 @@ impl App {
                         let img_types: &[&str] = if is_album_folder { &["AudioChild", "Primary"] } else { &["Primary"] };
                         self.fetch_card_image(cache_key, item.id.clone(), String::new(), img_types);
                     }
-                    if is_album_folder && pi == cursor && item.production_year == 0 {
+                    if is_album_folder && item.production_year == 0 {
                         self.fetch_album_year(item.id.clone());
                     }
                 }
@@ -7338,7 +7338,7 @@ impl App {
             let content_w = text_rect.width as usize;
 
             let is_episode_like = item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video");
-            if selected && !matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") && !is_episode_like {
+            if selected && !is_album_folder && !matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") && !is_episode_like {
                 let bar: Vec<Line> = (0..ind_rect.height)
                     .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::IRIS))))
                     .collect();
