@@ -4435,10 +4435,7 @@ impl App {
                 self.player_tab.playlist_cursor = 0;
                 self.playlist_undo_stack.clear();
             }
-            PendingQueueAction::Quit => {
-                self.queue_playlist_id = None;
-                self.queue_playlist_name = String::new();
-            }
+            PendingQueueAction::Quit => {}
         }
     }
 
