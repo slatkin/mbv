@@ -23,6 +23,7 @@ pub struct Config {
     pub autoload: bool,
     pub music_levels: Vec<String>,
     pub system_notifications: bool,
+    pub image_cache_size: usize,
 }
 
 impl Default for Config {
@@ -48,6 +49,7 @@ impl Default for Config {
             autoload: false,
             music_levels: vec![],
             system_notifications: false,
+            image_cache_size: 50,
         }
     }
 }
@@ -62,7 +64,7 @@ fn config_dir() -> PathBuf {
     base.join("mbv")
 }
 
-fn cache_dir() -> PathBuf {
+pub fn cache_dir() -> PathBuf {
     let base = env::var("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
@@ -70,6 +72,42 @@ fn cache_dir() -> PathBuf {
             PathBuf::from(home).join(".cache")
         });
     base.join("mbv")
+}
+
+pub fn image_disk_cache_dir() -> PathBuf {
+    cache_dir().join("images")
+}
+
+pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {
+    let path = image_disk_cache_dir().join(safe_cache_filename(key));
+    std::fs::read(path).ok()
+}
+
+pub fn write_image_disk_cache(key: &str, bytes: &[u8]) {
+    let dir = image_disk_cache_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(dir.join(safe_cache_filename(key)), bytes);
+}
+
+pub fn evict_old_image_cache() {
+    std::thread::spawn(|| {
+        let dir = image_disk_cache_dir();
+        let Ok(entries) = std::fs::read_dir(&dir) else { return };
+        let cutoff = std::time::SystemTime::now()
+            .checked_sub(std::time::Duration::from_secs(30 * 24 * 3600))
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        for entry in entries.flatten() {
+            if let Ok(meta) = entry.metadata() {
+                if meta.modified().map(|m| m < cutoff).unwrap_or(false) {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+    });
+}
+
+fn safe_cache_filename(key: &str) -> String {
+    key.chars().map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
 
 fn migrate_to_cache(filename: &str) -> PathBuf {
@@ -271,6 +309,12 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let image_cache_size = general
+        .and_then(|m| m.get("image_cache_size"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v.max(1) as usize)
+        .unwrap_or(50);
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -292,6 +336,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         autoload,
         music_levels,
         system_notifications,
+        image_cache_size,
     })
 }
 

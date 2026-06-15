@@ -211,6 +211,8 @@ pub struct App {
     last_carousel_click_slot: Option<usize>,
     last_carousel_click_time: Instant,
     card_image_states: std::collections::HashMap<String, Option<StatefulProtocol>>,
+    image_lru: std::collections::VecDeque<String>,
+    image_cache_size: usize,
     card_image_loading: std::collections::HashSet<String>,
     card_image_tx: mpsc::Sender<(String, Option<Vec<u8>>)>,
     card_image_rx: mpsc::Receiver<(String, Option<Vec<u8>>)>,
@@ -378,6 +380,8 @@ impl App {
         let music_levels = client.config.music_levels.clone();
         let show_log_tab = client.config.show_log_tab;
         let system_notifications = client.config.system_notifications;
+        let image_cache_size = client.config.image_cache_size;
+        crate::config::evict_old_image_cache();
         let start_on_queue = client.config.start_on_queue;
         let ws_url = client.ws_url();
         let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
@@ -514,6 +518,8 @@ impl App {
             album_year_cache: std::collections::HashMap::new(),
             album_year_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
+            image_lru: std::collections::VecDeque::new(),
+            image_cache_size,
         }
     }
 
@@ -532,6 +538,8 @@ impl App {
         let music_levels = client.config.music_levels.clone();
         let always_play_next = client.config.always_play_next;
         let start_on_queue = client.config.start_on_queue;
+        let image_cache_size = client.config.image_cache_size;
+        crate::config::evict_old_image_cache();
         let log = AppLog::new(0);
         let mut client = client;
         client.probe_chapter_api(&log);
@@ -659,6 +667,8 @@ impl App {
             album_year_cache: std::collections::HashMap::new(),
             album_year_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
+            image_lru: std::collections::VecDeque::new(),
+            image_cache_size,
         }
     }
 
@@ -995,6 +1005,15 @@ impl App {
                     .and_then(|dyn_img| {
                         self.image_picker.as_ref().map(|p| p.new_resize_protocol(dyn_img))
                     });
+                if state.is_some() {
+                    self.image_lru.retain(|k| k != &item_id);
+                    self.image_lru.push_back(item_id.clone());
+                    while self.image_lru.len() > self.image_cache_size {
+                        if let Some(evict) = self.image_lru.pop_front() {
+                            self.card_image_states.remove(&evict);
+                        }
+                    }
+                }
                 self.card_image_states.insert(item_id, state);
             }
 
@@ -5359,6 +5378,11 @@ impl App {
         let tx = self.card_image_tx.clone();
         let log = self.log.clone();
         std::thread::spawn(move || {
+            // Check disk cache first
+            if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
+                let _ = tx.send((cache_key, Some(cached)));
+                return;
+            }
             let fetch_url = |url: &str| -> Option<Vec<u8>> {
                 ureq::get(url).call().ok().and_then(|r| {
                     let mut buf = Vec::new();
@@ -5400,6 +5424,9 @@ impl App {
                     }
                 }
             });
+            if let Some(ref b) = bytes {
+                crate::config::write_image_disk_cache(&cache_key, b);
+            }
             let _ = tx.send((cache_key, bytes));
         });
     }
@@ -7947,7 +7974,7 @@ mod tests {
             unplayed_item_count: 0,
             path: String::new(), artist: String::new(), sort_name: String::new(),
             production_year: 0, end_year: 0, overview: String::new(),
-            premiere_date: String::new(), total_count: 0, container: String::new(),
+            premiere_date: String::new(), date_added: String::new(), total_count: 0, container: String::new(),
             director: String::new(), video_info: String::new(), audio_info: String::new(),
             genre: String::new(),
         }
@@ -8204,6 +8231,8 @@ mod tests {
             album_year_cache: std::collections::HashMap::new(),
             album_year_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
+            image_lru: std::collections::VecDeque::new(),
+            image_cache_size: 50,
         }
     }
 
