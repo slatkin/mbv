@@ -10,6 +10,7 @@ use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
+    pub subs_off: Arc<AtomicBool>,
     pub items: Arc<Mutex<Vec<MediaItem>>>,
     cmd_tx: mpsc::Sender<CtrlCmd>,
     disconnected: Arc<AtomicBool>,
@@ -36,6 +37,7 @@ impl RemotePlayer {
             sub_id: 0,
             muted: false,
         }));
+        let subs_off = Arc::new(AtomicBool::new(true));
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
         let disconnected = Arc::new(AtomicBool::new(false));
 
@@ -44,6 +46,7 @@ impl RemotePlayer {
 
         // Reader thread: deserializes CtrlEvent lines from daemon
         let status_r = status.clone();
+        let subs_off_r = subs_off.clone();
         let items_r = items.clone();
         let disconnected_r = disconnected.clone();
         let event_tx_r = event_tx;
@@ -58,9 +61,11 @@ impl RemotePlayer {
                         let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else { continue };
                         match ev {
                             CtrlEvent::StatusOnly(s) => {
+                                subs_off_r.store(s.sub_id == 0, Ordering::Relaxed);
                                 *status_r.lock().unwrap() = s;
                             }
                             CtrlEvent::State(s) => {
+                                subs_off_r.store(s.status.sub_id == 0, Ordering::Relaxed);
                                 *status_r.lock().unwrap() = s.status;
                                 *items_r.lock().unwrap() = s.items.clone();
                                 let _ = event_tx_r.send(PlayerEvent::QueueUpdated {
@@ -100,7 +105,7 @@ impl RemotePlayer {
             }
         });
 
-        Ok((RemotePlayer { status, items, cmd_tx, disconnected }, event_rx))
+        Ok((RemotePlayer { status, subs_off, items, cmd_tx, disconnected }, event_rx))
     }
 
     pub fn is_disconnected(&self) -> bool {

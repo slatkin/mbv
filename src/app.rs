@@ -527,6 +527,7 @@ impl App {
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let always_play_next = client.config.always_play_next;
+        let start_on_queue = client.config.start_on_queue;
         let log = AppLog::new(0);
         let mut client = client;
         client.probe_chapter_api(&log);
@@ -538,7 +539,7 @@ impl App {
             player,
             player_rx,
             ws_rx,
-            tab_idx: 0,
+            tab_idx: if start_on_queue { 1 } else { 0 },
             hidden_libraries,
             hidden_latest,
             music_levels,
@@ -5609,7 +5610,14 @@ impl App {
 
         let show_controls = active || self.connected_session_id.is_some();
 
-        let card_area = left_area;
+        // When controls are shown, cap the card area so the image can shrink when
+        // the terminal is short instead of pushing the controls off screen.
+        // Controls sit 2 rows below card text: gap(2) + title(1) + seekbar(1) + buttons(1) = 5.
+        let card_area = if show_controls {
+            Rect { height: left_area.height.saturating_sub(5), ..left_area }
+        } else {
+            left_area
+        };
 
         // Left panel: borderless card for cursor item.
         // pos_ticks suppressed (0) when controls are shown — seekbar rendered separately.

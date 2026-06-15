@@ -1701,7 +1701,8 @@ impl PlayerProxy {
 
     pub fn remote(remote: crate::remote_player::RemotePlayer, always_play_next: bool) -> Self {
         let status = remote.status.clone();
-        PlayerProxy { always_play_next, status, subs_off: Arc::new(AtomicBool::new(true)), inner: PlayerProxyInner::Remote(remote) }
+        let subs_off = remote.subs_off.clone();
+        PlayerProxy { always_play_next, status, subs_off, inner: PlayerProxyInner::Remote(remote) }
     }
 
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
