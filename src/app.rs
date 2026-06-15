@@ -101,6 +101,7 @@ enum LibEvent {
     AlbumYearFetched { album_id: String, year: u32 },
     NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
     PlaylistsLoaded(Vec<MediaItem>),
+    PlaylistItemsLoaded { playlist_id: String, items: Vec<MediaItem> },
     Error(String),
 }
 
@@ -246,6 +247,11 @@ pub struct App {
     playlists_scroll: usize,
     playlists_loading: bool,
     show_playlists: bool,
+    playlists_open: Option<MediaItem>,         // playlist currently being browsed
+    playlists_open_items: Vec<MediaItem>,
+    playlists_open_cursor: usize,
+    playlists_open_scroll: usize,
+    playlists_open_loading: bool,
     show_playback_panel: bool,
     layout_playback_indicator_area: Rect,
     ws_send_tx: Option<mpsc::Sender<String>>,
@@ -518,6 +524,11 @@ impl App {
             playlists_scroll: 0,
             playlists_loading: false,
             show_playlists: false,
+            playlists_open: None,
+            playlists_open_items: Vec::new(),
+            playlists_open_cursor: 0,
+            playlists_open_scroll: 0,
+            playlists_open_loading: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: Some(ws_send_tx_app),
@@ -676,6 +687,11 @@ impl App {
             playlists_scroll: 0,
             playlists_loading: false,
             show_playlists: false,
+            playlists_open: None,
+            playlists_open_items: Vec::new(),
+            playlists_open_cursor: 0,
+            playlists_open_scroll: 0,
+            playlists_open_loading: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: None,
@@ -1315,12 +1331,32 @@ impl App {
         if self.show_playlists {
             match key.code {
                 KeyCode::Char('q') => { if !self.player.is_remote() { self.player.stop(); } return true; }
-                KeyCode::Esc | KeyCode::F(4) => { self.show_playlists = false; }
+                KeyCode::Esc | KeyCode::F(4) => {
+                    if self.playlists_open.is_some() {
+                        self.playlists_open = None;
+                        self.playlists_open_items = Vec::new();
+                    } else {
+                        self.show_playlists = false;
+                    }
+                }
+                KeyCode::Backspace => {
+                    if self.playlists_open.is_some() {
+                        self.playlists_open = None;
+                        self.playlists_open_items = Vec::new();
+                    }
+                }
                 KeyCode::F(1) => { self.show_playlists = false; self.show_help = true; }
                 KeyCode::F(2) => { self.show_playlists = false; self.show_settings = true; }
                 KeyCode::F(3) => { self.show_playlists = false; self.show_sessions = true; }
                 KeyCode::Up => {
-                    if self.playlists_cursor > 0 {
+                    if self.playlists_open.is_some() {
+                        if self.playlists_open_cursor > 0 {
+                            self.playlists_open_cursor -= 1;
+                            if self.playlists_open_cursor < self.playlists_open_scroll {
+                                self.playlists_open_scroll = self.playlists_open_cursor;
+                            }
+                        }
+                    } else if self.playlists_cursor > 0 {
                         self.playlists_cursor -= 1;
                         if self.playlists_cursor < self.playlists_scroll {
                             self.playlists_scroll = self.playlists_cursor;
@@ -1328,16 +1364,39 @@ impl App {
                     }
                 }
                 KeyCode::Down => {
-                    if !self.playlists.is_empty() {
+                    if self.playlists_open.is_some() {
+                        if !self.playlists_open_items.is_empty() {
+                            self.playlists_open_cursor = (self.playlists_open_cursor + 1).min(self.playlists_open_items.len() - 1);
+                        }
+                    } else if !self.playlists.is_empty() {
                         self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
                     }
                 }
                 KeyCode::Enter => {
-                    if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
-                        self.load_and_play_playlist(pl.id);
+                    if self.playlists_open.is_some() {
+                        // play from this position in the open playlist
+                        let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
+                        if !items.is_empty() {
+                            let start = self.playlists_open_cursor.min(items.len() - 1);
+                            self.player_tab.items = items.clone();
+                            self.player_tab.playlist_cursor = start;
+                            self.play_items_routed(items, start);
+                            self.show_playlists = false;
+                        }
+                    } else if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
+                        self.spawn_open_playlist(pl);
                     }
                 }
-                KeyCode::Char('r') => { self.spawn_load_playlists(); }
+                KeyCode::Char('r') => {
+                    if self.playlists_open.is_some() {
+                        if let Some(pl) = self.playlists_open.clone() {
+                            self.playlists_open = None;
+                            self.spawn_open_playlist(pl);
+                        }
+                    } else {
+                        self.spawn_load_playlists();
+                    }
+                }
                 _ => {}
             }
             return false;
@@ -2496,27 +2555,59 @@ impl App {
             }
             if self.show_playlists {
                 let content_top: u16 = 1;
-                match mouse.kind {
-                    MouseEventKind::ScrollDown => {
-                        if !self.playlists.is_empty() {
-                            self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
-                        }
-                    }
-                    MouseEventKind::ScrollUp => {
-                        self.playlists_cursor = self.playlists_cursor.saturating_sub(1);
-                    }
-                    MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
-                        let idx = (row - content_top) as usize + self.playlists_scroll;
-                        if idx < self.playlists.len() {
-                            if self.playlists_cursor == idx {
-                                let id = self.playlists[idx].id.clone();
-                                self.load_and_play_playlist(id);
-                            } else {
-                                self.playlists_cursor = idx;
+                if self.playlists_open.is_some() {
+                    match mouse.kind {
+                        MouseEventKind::ScrollDown => {
+                            if !self.playlists_open_items.is_empty() {
+                                self.playlists_open_cursor = (self.playlists_open_cursor + 1).min(self.playlists_open_items.len() - 1);
                             }
                         }
+                        MouseEventKind::ScrollUp => {
+                            self.playlists_open_cursor = self.playlists_open_cursor.saturating_sub(1);
+                        }
+                        MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
+                            let idx = (row - content_top) as usize + self.playlists_open_scroll;
+                            if idx < self.playlists_open_items.len() {
+                                if self.playlists_open_cursor == idx {
+                                    let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
+                                    if !items.is_empty() {
+                                        let start = idx.min(items.len() - 1);
+                                        self.player_tab.items = items.clone();
+                                        self.player_tab.playlist_cursor = start;
+                                        self.play_items_routed(items, start);
+                                        self.show_playlists = false;
+                                    }
+                                } else {
+                                    self.playlists_open_cursor = idx;
+                                }
+                            }
+                        }
+                        _ => {}
                     }
-                    _ => {}
+                } else {
+                    match mouse.kind {
+                        MouseEventKind::ScrollDown => {
+                            if !self.playlists.is_empty() {
+                                self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
+                            }
+                        }
+                        MouseEventKind::ScrollUp => {
+                            self.playlists_cursor = self.playlists_cursor.saturating_sub(1);
+                        }
+                        MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
+                            let idx = (row - content_top) as usize + self.playlists_scroll;
+                            if idx < self.playlists.len() {
+                                if self.playlists_cursor == idx {
+                                    if let Some(pl) = self.playlists.get(idx).cloned() {
+                                        self.spawn_open_playlist(pl);
+                                    }
+                                } else {
+                                    self.playlists_cursor = idx;
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
                 }
                 return;
             }
@@ -4106,6 +4197,12 @@ impl App {
                 self.playlists_loading = false;
                 self.playlists_cursor = self.playlists_cursor.min(self.playlists.len().saturating_sub(1));
             }
+            LibEvent::PlaylistItemsLoaded { playlist_id, items } => {
+                if self.playlists_open.as_ref().map(|p| p.id == playlist_id).unwrap_or(false) {
+                    self.playlists_open_items = items;
+                    self.playlists_open_loading = false;
+                }
+            }
             LibEvent::Error(e) => {
                 self.flash_status(format!("Error: {e}"));
             }
@@ -4120,6 +4217,24 @@ impl App {
         std::thread::spawn(move || {
             let items = client.get_playlists().unwrap_or_default();
             let _ = tx.send(LibEvent::PlaylistsLoaded(items));
+        });
+    }
+
+    fn spawn_open_playlist(&mut self, playlist: MediaItem) {
+        if self.playlists_open_loading { return; }
+        self.playlists_open_loading = true;
+        self.playlists_open = Some(playlist.clone());
+        self.playlists_open_items = Vec::new();
+        self.playlists_open_cursor = 0;
+        self.playlists_open_scroll = 0;
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        let playlist_id = playlist.id.clone();
+        std::thread::spawn(move || {
+            let items = client.get_items_sorted(&playlist_id, None, false, 0, 5000, "IndexNumber", "Ascending")
+                .map(|(v, _)| v)
+                .unwrap_or_default();
+            let _ = tx.send(LibEvent::PlaylistItemsLoaded { playlist_id, items });
         });
     }
 
@@ -4773,15 +4888,67 @@ impl App {
 
 
     fn render_playlists_panel(&mut self, f: &mut ratatui::Frame) {
+        let (title, hint) = if self.playlists_open.is_some() {
+            let name = self.playlists_open.as_ref().map(|p| p.name.as_str()).unwrap_or("Playlist");
+            (name.to_string(), "[↑↓]select [↵]play [⌫]back [Esc]close".to_string())
+        } else {
+            ("Playlists".to_string(), "[↑↓]select [↵]open [r]refresh [Esc]close".to_string())
+        };
+
         let content = Self::render_panel_shell(
             f, f.area(), PLAYLISTS_PANEL_W,
-            "Playlists",
-            "[↑↓]select [↵]play [r]refresh [Esc]close",
+            &title,
+            &hint,
         );
         let ix = content.x;
         let iw = content.width as usize;
         let list_h = content.height as usize;
 
+        if self.playlists_open.is_some() {
+            // Show contents of the open playlist
+            if self.playlists_open_loading && self.playlists_open_items.is_empty() {
+                f.render_widget(
+                    Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE))),
+                    content,
+                );
+                return;
+            }
+            if self.playlists_open_items.is_empty() {
+                f.render_widget(
+                    Paragraph::new(Span::styled(" Playlist is empty", Style::default().fg(palette::SUBTLE))),
+                    content,
+                );
+                return;
+            }
+
+            if self.playlists_open_cursor < self.playlists_open_scroll {
+                self.playlists_open_scroll = self.playlists_open_cursor;
+            } else if self.playlists_open_cursor >= self.playlists_open_scroll + list_h {
+                self.playlists_open_scroll = self.playlists_open_cursor + 1 - list_h;
+            }
+
+            for (vi, item) in self.playlists_open_items[self.playlists_open_scroll..].iter().enumerate() {
+                if vi >= list_h { break; }
+                let abs_idx = self.playlists_open_scroll + vi;
+                let selected = abs_idx == self.playlists_open_cursor;
+                let bg = if selected { palette::FOCUSED } else { palette::BASE };
+                let fg = if selected { palette::IRIS } else { palette::TEXT };
+                let prefix = if selected { "\u{25b6} " } else { "  " };
+                let num_str = if item.index_number > 0 { format!("{:>2}. ", item.index_number) } else { "    ".to_string() };
+                let name_max = iw.saturating_sub(prefix.len() + num_str.len());
+                let line = Line::from(vec![
+                    Span::styled(prefix, Style::default().fg(palette::IRIS).bg(bg)),
+                    Span::styled(num_str, Style::default().fg(palette::MUTED).bg(bg)),
+                    Span::styled(trunc_str(&item.name, name_max), Style::default().fg(fg).bg(bg)),
+                ]);
+                let row_y = content.y + vi as u16;
+                f.render_widget(Paragraph::new(line).style(Style::default().bg(bg)),
+                    Rect { x: ix, y: row_y, width: content.width, height: 1 });
+            }
+            return;
+        }
+
+        // Show playlist list
         if self.playlists_loading && self.playlists.is_empty() {
             f.render_widget(
                 Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE))),
@@ -5062,11 +5229,13 @@ impl App {
             MultiSelectKind::HiddenLibraries => &client.config.hidden_libraries,
             MultiSelectKind::HiddenLatest    => &client.config.hidden_latest,
         };
-        let items: Vec<(String, String, bool)> = all.iter().map(|v| {
-            let lower = v.name.to_lowercase();
-            let is_hidden = hidden_list.contains(&lower);
-            (lower, v.name.clone(), is_hidden)
-        }).collect();
+        let items: Vec<(String, String, bool)> = all.iter()
+            .filter(|v| v.collection_type != "playlists")
+            .map(|v| {
+                let lower = v.name.to_lowercase();
+                let is_hidden = hidden_list.contains(&lower);
+                (lower, v.name.clone(), is_hidden)
+            }).collect();
         drop(client);
         self.multiselect_popup = Some(MultiSelectPopup { kind, items, cursor: 0 });
     }
@@ -8440,6 +8609,11 @@ mod tests {
             playlists_scroll: 0,
             playlists_loading: false,
             show_playlists: false,
+            playlists_open: None,
+            playlists_open_items: Vec::new(),
+            playlists_open_cursor: 0,
+            playlists_open_scroll: 0,
+            playlists_open_loading: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: None,
