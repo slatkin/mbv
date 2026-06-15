@@ -762,7 +762,7 @@ impl EmbyClient {
 
     pub fn register_capabilities(&self, log: &AppLog) {
         let body = ureq::json!({
-            "PlayableMediaTypes": ["Video"],
+            "PlayableMediaTypes": ["Audio", "Video"],
             "SupportedCommands": [
                 "Play","Stop","Pause","Unpause","NextTrack","PreviousTrack",
                 "Seek","SetVolume","VolumeUp","VolumeDown","Mute","Unmute","ToggleMute",
