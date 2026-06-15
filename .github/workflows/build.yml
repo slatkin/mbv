@@ -29,6 +29,7 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin/cargo-deb
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
@@ -58,6 +59,13 @@ jobs:
           echo "TARBALL=${DIST}-linux-x86_64.tar.gz" >> "$GITHUB_ENV"
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
 
+      - name: Build .deb package
+        run: |
+          cargo install cargo-deb --locked
+          cargo deb --no-build --deb-version "${PKGVER}"
+          DEB=$(ls target/debian/mbv_*.deb | head -1)
+          echo "DEB=${DEB}" >> "$GITHUB_ENV"
+
       - name: Upload release asset
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         env:
@@ -67,6 +75,7 @@ jobs:
           gh release view "v${PKGVER}" > /dev/null 2>&1 || \
             gh release create "v${PKGVER}" --title "v${PKGVER}" --generate-notes
           gh release upload "v${PKGVER}" "${TARBALL}" --clobber
+          gh release upload "v${PKGVER}" "${DEB}" --clobber
 
       - name: Update PKGBUILD sha256 on main
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
@@ -110,5 +119,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: mbv-linux-x86_64
-          path: "*.tar.gz"
+          path: |
+            *.tar.gz
+            target/debian/*.deb
           if-no-files-found: error
