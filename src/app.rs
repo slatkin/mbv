@@ -4348,20 +4348,20 @@ impl App {
                     crate::config::clear_queue_state();
                     return;
                 }
-                // If nothing was played in this queue instance, always start from item 0.
-                // Otherwise restore the saved cursor, advancing past any completed items.
-                let cursor = if last_played_item_id.is_none() {
-                    0
-                } else if let Some(item) = items.get(saved_cursor) {
-                    if item.played {
-                        items.iter().skip(saved_cursor + 1).position(|i| !i.played)
-                            .map(|offset| saved_cursor + 1 + offset)
+                // Find the last-played item by ID (not by saved scroll position).
+                // If nothing was played, start from 0.
+                // If the last-played item is fully played, advance to the next unplayed one.
+                let cursor = if let Some(ref id) = last_played_item_id {
+                    let idx = items.iter().position(|i| &i.id == id).unwrap_or(0);
+                    if items.get(idx).map(|i| i.played).unwrap_or(false) {
+                        items.iter().skip(idx + 1).position(|i| !i.played)
+                            .map(|offset| idx + 1 + offset)
                             .unwrap_or(items.len().saturating_sub(1))
                     } else {
-                        saved_cursor
+                        idx
                     }
                 } else {
-                    items.len().saturating_sub(1)
+                    0
                 };
                 self.last_played_item_id = last_played_item_id;
                 self.player_tab.items = items;
