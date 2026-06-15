@@ -37,6 +37,7 @@ enum ContextAction {
     MarkUnplayed(String),
     RemoveFromContinueWatching,
     RemoveFromPlaylist(usize),
+    GoToLibrary(String),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -2052,6 +2053,8 @@ impl App {
                 if self.tab_idx == 1 {
                     items.push("Remove from Playlist");
                     actions.push(ContextAction::RemoveFromPlaylist(self.player_tab.playlist_cursor));
+                    items.push("Go to Library");
+                    actions.push(ContextAction::GoToLibrary(item.id.clone()));
                 }
             }
         }
@@ -3366,6 +3369,13 @@ impl App {
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
             Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
             Some(ContextAction::RemoveFromPlaylist(pos)) => self.remove_from_playlist(pos),
+            Some(ContextAction::GoToLibrary(item_id)) => {
+                let lib_ids: Vec<(usize, String)> = self.libs.iter().enumerate()
+                    .map(|(i, lib)| (i, lib.library.id.clone()))
+                    .collect();
+                self.flash_status("Navigating to library\u{2026}".into());
+                self.spawn_navigate_to_item(item_id, lib_ids);
+            }
             None => {}
         }
     }
