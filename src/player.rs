@@ -72,32 +72,31 @@ pub enum PlayerCommand {
     ReplacePlaylist { items: Vec<MediaItem>, start_idx: usize },
 }
 
-pub fn lang_to_flag(s: &str) -> &'static str {
+pub fn lang_to_code(s: &str) -> &'static str {
     let l = s.to_lowercase();
-    // Matches both ISO lang codes (en, eng) and label prefixes (english ...)
-    if l.starts_with("en") { "🇬🇧" }
-    else if l.starts_with("fr") { "🇫🇷" }
-    else if l.starts_with("de") || l.starts_with("ger") || l.starts_with("deu") { "🇩🇪" }
-    else if l.starts_with("es") || l.starts_with("spa") || l.starts_with("spanish") { "🇪🇸" }
-    else if l.starts_with("it") || l.starts_with("ita") || l.starts_with("italian") { "🇮🇹" }
-    else if l.starts_with("pt") || l.starts_with("por") || l.starts_with("portuguese") { "🇵🇹" }
-    else if l.starts_with("ja") || l.starts_with("jpn") || l.starts_with("japanese") { "🇯🇵" }
-    else if l.starts_with("ko") || l.starts_with("kor") || l.starts_with("korean") { "🇰🇷" }
-    else if l.starts_with("zh") || l.starts_with("chi") || l.starts_with("zho") || l.starts_with("chinese") { "🇨🇳" }
-    else if l.starts_with("ru") || l.starts_with("rus") || l.starts_with("russian") { "🇷🇺" }
-    else if l.starts_with("ar") || l.starts_with("ara") || l.starts_with("arabic") { "🇸🇦" }
-    else if l.starts_with("nl") || l.starts_with("nld") || l.starts_with("dut") || l.starts_with("dutch") { "🇳🇱" }
-    else if l.starts_with("sv") || l.starts_with("swe") || l.starts_with("swedish") { "🇸🇪" }
-    else if l.starts_with("no") || l.starts_with("nor") || l.starts_with("norwegian") { "🇳🇴" }
-    else if l.starts_with("da") || l.starts_with("dan") || l.starts_with("danish") { "🇩🇰" }
-    else if l.starts_with("fi") || l.starts_with("fin") || l.starts_with("finnish") { "🇫🇮" }
-    else if l.starts_with("pl") || l.starts_with("pol") || l.starts_with("polish") { "🇵🇱" }
-    else if l.starts_with("cs") || l.starts_with("cze") || l.starts_with("ces") || l.starts_with("czech") { "🇨🇿" }
-    else if l.starts_with("tr") || l.starts_with("tur") || l.starts_with("turkish") { "🇹🇷" }
-    else if l.starts_with("uk") || l.starts_with("ukr") || l.starts_with("ukrainian") { "🇺🇦" }
-    else if l.starts_with("hi") || l.starts_with("hin") || l.starts_with("hindi") { "🇮🇳" }
-    else if l.starts_with("th") || l.starts_with("tha") || l.starts_with("thai") { "🇹🇭" }
-    else { "" }
+    if l.starts_with("en") { "EN" }
+    else if l.starts_with("fr") { "FR" }
+    else if l.starts_with("de") || l.starts_with("ger") || l.starts_with("deu") { "DE" }
+    else if l.starts_with("es") || l.starts_with("spa") { "ES" }
+    else if l.starts_with("it") || l.starts_with("ita") { "IT" }
+    else if l.starts_with("pt") || l.starts_with("por") { "PT" }
+    else if l.starts_with("ja") || l.starts_with("jpn") { "JA" }
+    else if l.starts_with("ko") || l.starts_with("kor") { "KO" }
+    else if l.starts_with("zh") || l.starts_with("chi") || l.starts_with("zho") { "ZH" }
+    else if l.starts_with("ru") || l.starts_with("rus") { "RU" }
+    else if l.starts_with("ar") || l.starts_with("ara") { "AR" }
+    else if l.starts_with("nl") || l.starts_with("nld") || l.starts_with("dut") { "NL" }
+    else if l.starts_with("sv") || l.starts_with("swe") { "SV" }
+    else if l.starts_with("no") || l.starts_with("nor") { "NO" }
+    else if l.starts_with("da") || l.starts_with("dan") { "DA" }
+    else if l.starts_with("fi") || l.starts_with("fin") { "FI" }
+    else if l.starts_with("pl") || l.starts_with("pol") { "PL" }
+    else if l.starts_with("cs") || l.starts_with("cze") || l.starts_with("ces") { "CS" }
+    else if l.starts_with("tr") || l.starts_with("tur") { "TR" }
+    else if l.starts_with("uk") || l.starts_with("ukr") { "UK" }
+    else if l.starts_with("hi") || l.starts_with("hin") { "HI" }
+    else if l.starts_with("th") || l.starts_with("tha") { "TH" }
+    else { "--" }
 }
 
 fn lang_code_to_name(code: &str) -> &'static str {

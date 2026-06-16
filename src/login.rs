@@ -109,6 +109,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     system_notifications: base_config.system_notifications,
                     image_cache_size: base_config.image_cache_size,
                     autosave_playlist: base_config.autosave_playlist,
+                    use_nerd_fonts: base_config.use_nerd_fonts,
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {

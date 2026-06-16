@@ -19,6 +19,10 @@ make install               # build release + install to ~/.local/bin/mbv
 
 There is no linter configured; `cargo build` catches everything relevant.
 
+## UI conventions
+
+- **No emoji, ever.** This is a terminal UI. Emoji render inconsistently across fonts and terminals. Use plain Unicode geometric/box-drawing characters or ASCII only.
+
 ## Architecture
 
 All code lives in `src/`. The app is single-binary with these modules:

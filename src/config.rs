@@ -25,6 +25,7 @@ pub struct Config {
     pub system_notifications: bool,
     pub image_cache_size: usize,
     pub autosave_playlist: bool,
+    pub use_nerd_fonts: bool,
 }
 
 impl Default for Config {
@@ -52,6 +53,7 @@ impl Default for Config {
             system_notifications: false,
             image_cache_size: 50,
             autosave_playlist: false,
+            use_nerd_fonts: false,
         }
     }
 }
@@ -364,6 +366,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .or_else(|| general.and_then(|m| m.get("autosave_playlist")).and_then(|v| v.as_bool()))
         .unwrap_or(false);
 
+    let use_nerd_fonts = general
+        .and_then(|m| m.get("use_nerd_fonts"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -387,6 +394,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         system_notifications,
         image_cache_size,
         autosave_playlist,
+        use_nerd_fonts,
     })
 }
 

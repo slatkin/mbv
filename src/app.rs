@@ -276,6 +276,7 @@ pub struct App {
     pending_queue_action: Option<PendingQueueAction>,
     show_save_playlist_modal: bool,
     autosave_playlist: bool,
+    use_nerd_fonts: bool,
     show_playback_panel: bool,
     layout_playback_indicator_area: Rect,
     ws_send_tx: Option<mpsc::Sender<String>>,
@@ -432,6 +433,7 @@ impl App {
         let system_notifications = client.config.system_notifications;
         let image_cache_size = client.config.image_cache_size;
         let autosave_playlist = client.config.autosave_playlist;
+        let use_nerd_fonts = client.config.use_nerd_fonts;
         crate::config::evict_old_image_cache();
         let start_on_queue = client.config.start_on_queue;
         let ws_url = client.ws_url();
@@ -570,6 +572,7 @@ impl App {
             pending_queue_action: None,
             show_save_playlist_modal: false,
             autosave_playlist,
+            use_nerd_fonts,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: Some(ws_send_tx_app),
@@ -613,6 +616,7 @@ impl App {
         let start_on_queue = client.config.start_on_queue;
         let image_cache_size = client.config.image_cache_size;
         let autosave_playlist = client.config.autosave_playlist;
+        let use_nerd_fonts = client.config.use_nerd_fonts;
         crate::config::evict_old_image_cache();
         let log = AppLog::new(0);
         let mut client = client;
@@ -741,6 +745,7 @@ impl App {
             pending_queue_action: None,
             show_save_playlist_modal: false,
             autosave_playlist,
+            use_nerd_fonts,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: None,
@@ -4785,92 +4790,106 @@ impl App {
 
         // Thin underline below tab row, with [字] sub and [♪:🏳] audio indicators embedded inline
         {
-            let (sub_active, player_active, audio_muted, audio_label) =
+            let (sub_active, has_subs, player_active, is_paused, audio_muted, audio_label) =
                 if let Some(ref remote) = self.connected_session_state {
                     let sub_on = remote.sub_index != -1;
                     let muted  = remote.volume == 0;
-                    (sub_on, true, muted, None::<String>)
+                    (sub_on, true, true, remote.is_paused, muted, None::<String>)
                 } else {
                     let s = self.player.status.lock().unwrap();
                     let sub_on = !self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
+                    let has_subs = !s.active || !s.sub_tracks.is_empty();
                     let muted = s.active && (s.audio_id == 0 || self.ui_volume == 0 || s.muted);
                     let aud_label = if s.active && s.audio_id != 0 {
                         s.audio_tracks.iter().find(|(id, _)| *id == s.audio_id)
                             .map(|(_, l)| l.clone())
                     } else { None };
-                    (sub_on, s.active, muted, aud_label)
+                    (sub_on, has_subs, s.active, s.paused, muted, aud_label)
                 };
             let is_audio_item = self.is_audio_item();
-            // audio_icon: single 2-cell glyph — muted, speaker (audio), flag, or ♪
-            let audio_icon: &str = if audio_muted {
-                "\u{1F507}"   // 🔇 muted
-            } else if is_audio_item {
-                "\u{1F50A}"   // 🔊 speaker (audio file, unmuted)
+            let nf = self.use_nerd_fonts;
+
+            // Icon widths: nf-md PUA icons are 1 terminal cell; ASCII/emoji fallbacks are 2.
+            let aud_w: u16 = if nf { 1 } else { 2 };
+            let sub_w: u16 = if nf { 1 } else { 2 };
+            const SESS_W: u16 = 3; // [icon] always 3 cells
+            const PLAY_W: u16 = 1;
+            const SEP:    u16 = 2; // ─<space>
+            let right_total: u16 = aud_w + SEP + sub_w + SEP + SESS_W + SEP + PLAY_W;
+
+            let audio_icon: &str = if nf {
+                if audio_muted        { "\u{F075F}" }   // nf-md-volume_off
+                else if is_audio_item { "\u{F057E}" }   // nf-md-volume_high
+                else {
+                    audio_label.as_deref()
+                        .map(crate::player::lang_to_code)
+                        .unwrap_or("--")
+                }
             } else {
-                audio_label.as_deref()
-                    .map(crate::player::lang_to_flag)
-                    .map(|f| if f.is_empty() { "\u{1F509}" } else { f })
-                    .unwrap_or("\u{1F509}")
+                if audio_muted        { "m:" }
+                else if is_audio_item { "\u{266A} " }   // ♪<space>
+                else {
+                    audio_label.as_deref()
+                        .map(crate::player::lang_to_code)
+                        .unwrap_or("--")
+                }
+            };
+            let sub_icon:  &str = if nf { "\u{F0A16}" } else { "CC" };   // nf-md-subtitles / CC
+            let sess_icon: &str = if nf { "\u{F0339}" } else { "\u{271A}" }; // nf-md-link_variant / ✚
+
+            let sub_color  = if !has_subs { palette::OVERLAY } else if sub_active { palette::RED } else { palette::MUTED };
+            let sess_color = if self.connected_session_id.is_some() { palette::IRIS } else { palette::MUTED };
+            let play_style = if player_active && !is_paused {
+                Style::default().fg(palette::IRIS)
+            } else if player_active && is_paused {
+                Style::default().fg(palette::YELLOW)
+            } else {
+                Style::default().fg(palette::MUTED)
+            };
+            let play_icon: &str = if nf {
+                if player_active && is_paused { "\u{F03E4}" } else { "\u{F040A}" }  // nf-md-pause / nf-md-play
+            } else {
+                if player_active && is_paused { "⏸" } else { "▶" }
             };
 
-            // right-to-left: ───[▶]─[✚]─[字]─[♫]──── leading dashes
-            const AUD_W:     u16 = 4;
-            const SUB_W:     u16 = 4;
-            const SESS_W:    u16 = 3; // [✚] — ✚ is 1 col wide
-            const PLAY_W:    u16 = 3; // [▶] — ▶ is 1 col wide
-            const SEP_W:     u16 = 1;
-            const RIGHT_PAD: u16 = 1;
-            let play_end   = (gap_area.width as usize).saturating_sub(RIGHT_PAD as usize);
-            let play_start = play_end.saturating_sub(PLAY_W as usize);
-            let sess_end   = play_start.saturating_sub(SEP_W as usize);
-            let sess_start = sess_end.saturating_sub(SESS_W as usize);
-            let sub_end    = sess_start.saturating_sub(SEP_W as usize);
-            let sub_start  = sub_end.saturating_sub(SUB_W as usize);
-            let aud_end    = sub_start.saturating_sub(SEP_W as usize);
-            let aud_start  = aud_end.saturating_sub(AUD_W as usize);
-
-            let dash      = Style::default().fg(palette::MUTED);
-            let bra       = Style::default().fg(palette::MUTED);
+            let dash = Style::default().fg(palette::MUTED);
+            let w = gap_area.width;
+            let aud_start = w.saturating_sub(right_total) as usize;
             let mut spans: Vec<Span> = Vec::new();
-            let sub_color  = if sub_active { palette::RED } else { palette::MUTED };
-            let sess_color = if self.connected_session_id.is_some() { palette::IRIS } else { palette::MUTED };
-            let play_color = if show_controls { palette::IRIS } else { palette::MUTED };
             spans.push(Span::styled("─".repeat(aud_start), dash));
             if player_active {
                 let icon_color = if audio_muted { palette::MUTED } else { palette::IRIS };
-                spans.push(Span::styled("[",        bra));
                 spans.push(Span::styled(audio_icon, Style::default().fg(icon_color)));
-                spans.push(Span::styled("]",        bra));
+                spans.push(Span::styled("─ ", dash));
             } else {
-                spans.push(Span::styled("─".repeat(AUD_W as usize), dash));
+                spans.push(Span::styled("─".repeat((aud_w + SEP) as usize), dash));
             }
-            spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
-            spans.push(Span::styled("[",  bra));
-            spans.push(Span::styled("字", Style::default().fg(sub_color)));
-            spans.push(Span::styled("]",  bra));
-            spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
-            spans.push(Span::styled("[",            bra));
-            spans.push(Span::styled("\u{271A}",     Style::default().fg(sess_color)));
-            spans.push(Span::styled("]",            bra));
-            spans.push(Span::styled("─".repeat(SEP_W as usize), dash));
-            spans.push(Span::styled("[",  bra));
-            spans.push(Span::styled("▶",  Style::default().fg(play_color)));
-            spans.push(Span::styled("]",  bra));
-            spans.push(Span::styled("─".repeat(RIGHT_PAD as usize), dash));
+            spans.push(Span::styled(sub_icon,   Style::default().fg(sub_color)));
+            spans.push(Span::styled("─ ",       dash));
+            spans.push(Span::styled("[",        Style::default().fg(palette::MUTED)));
+            spans.push(Span::styled(sess_icon,  Style::default().fg(sess_color)));
+            spans.push(Span::styled("]",        Style::default().fg(palette::MUTED)));
+            spans.push(Span::styled("─ ",       dash));
+            spans.push(Span::styled(play_icon,  play_style));
             f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
 
-            let aud_x  = gap_area.x + aud_start as u16;
-            self.layout_audio_indicator_area = if player_active {
-                Rect { x: aud_x, y: gap_area.y, width: AUD_W, height: 1 }
+            // Click targets from right edge
+            let play_x = gap_area.x + w.saturating_sub(PLAY_W);
+            self.layout_playback_indicator_area = Rect { x: play_x, y: gap_area.y, width: PLAY_W, height: 1 };
+            let sess_x = gap_area.x + w.saturating_sub(PLAY_W + SEP + SESS_W);
+            self.layout_sessions_btn_area = Rect { x: sess_x, y: gap_area.y, width: SESS_W, height: 1 };
+            let sub_x = gap_area.x + w.saturating_sub(PLAY_W + SEP + SESS_W + SEP + sub_w);
+            self.layout_sub_indicator_area = if has_subs {
+                Rect { x: sub_x, y: gap_area.y, width: sub_w, height: 1 }
             } else {
                 Rect::default()
             };
-            let sub_x  = gap_area.x + sub_start as u16;
-            self.layout_sub_indicator_area   = Rect { x: sub_x,  y: gap_area.y, width: SUB_W,  height: 1 };
-            let sess_x = gap_area.x + sess_start as u16;
-            self.layout_sessions_btn_area    = Rect { x: sess_x, y: gap_area.y, width: SESS_W, height: 1 };
-            let play_x = gap_area.x + play_start as u16;
-            self.layout_playback_indicator_area = Rect { x: play_x, y: gap_area.y, width: PLAY_W, height: 1 };
+            let aud_x = gap_area.x + w.saturating_sub(PLAY_W + SEP + SESS_W + SEP + sub_w + SEP + aud_w);
+            self.layout_audio_indicator_area = if player_active {
+                Rect { x: aud_x, y: gap_area.y, width: aud_w, height: 1 }
+            } else {
+                Rect::default()
+            };
         }
         let vol_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
@@ -5888,27 +5907,14 @@ impl App {
         let pos_str = fmt_duration(pos_s);
         let dur_str = fmt_duration(dur_s);
 
-        let btn_style = Style::default().fg(Color::Rgb(203, 212, 241));
-        let pp_icon   = if !paused { "\u{f04c}" } else { "\u{f04b}" };
-        let btn_icons = ["\u{f048}", "\u{f04a}", pp_icon, "\u{f04d}", "\u{f04e}", "\u{f051}"];
-        // Buttons: 6 buttons × 5 cells = 30 cells total
-        let mut btn_spans: Vec<Span> = Vec::new();
-        for icon in btn_icons.iter() {
-            let style = btn_style;
-            btn_spans.push(Span::styled(format!("  {icon}  "), style));
-        }
-
-        const BTNS_W: u16 = 30; // 6 buttons × 5
-        let btn_x = area.x + area.width.saturating_sub(BTNS_W) / 2;
-
+        const BTNS_W: u16 = 30; // 6 buttons × 5 cells each
         let btn_row_y = area.y + 1;
 
-        self.layout_seekbar_area      = Rect { x: area.x, y: area.y,    width: area.width, height: 1 };
-        self.layout_button_area       = Rect { x: btn_x,  y: btn_row_y, width: BTNS_W,     height: 1 };
-        self.layout_tracks_area       = Rect::default();
-        self.layout_vol_area          = Rect::default();
-        self.layout_sub_area          = Rect::default();
-        self.layout_audio_area        = Rect::default();
+        self.layout_seekbar_area = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+        self.layout_tracks_area  = Rect::default();
+        self.layout_vol_area     = Rect::default();
+        self.layout_sub_area     = Rect::default();
+        self.layout_audio_area   = Rect::default();
 
         // Row 0 — seekbar
         let ratio = if runtime_ticks > 0 {
@@ -5923,7 +5929,7 @@ impl App {
             Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)),
         ])), seek_rect);
 
-        // Row 1 — elapsed (left), buttons (center), total (right)
+        // Row 1 — elapsed (left), buttons (center, nf mode only), total (right)
         let time_style = Style::default().fg(palette::MUTED);
         let elapsed_w = pos_str.chars().count() as u16;
         let total_w   = dur_str.chars().count() as u16;
@@ -5931,15 +5937,29 @@ impl App {
             Paragraph::new(Span::styled(pos_str, time_style)),
             Rect { x: area.x, y: btn_row_y, width: elapsed_w.min(area.width), height: 1 },
         );
-        f.render_widget(
-            Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
-            Rect { x: area.x, y: btn_row_y, width: area.width, height: 1 },
-        );
         let total_x = area.x + area.width.saturating_sub(total_w);
         f.render_widget(
             Paragraph::new(Span::styled(dur_str, time_style)),
             Rect { x: total_x, y: btn_row_y, width: total_w.min(area.width), height: 1 },
         );
+
+        if self.use_nerd_fonts {
+            let btn_style = Style::default().fg(Color::Rgb(203, 212, 241));
+            let pp_icon = if !paused { "\u{F03E4}" } else { "\u{F040A}" }; // nf-md-pause / nf-md-play
+            let btn_icons = ["\u{F04AE}", "\u{F04A}", pp_icon, "\u{F04DB}", "\u{F04E}", "\u{F04AD}"];
+            let mut btn_spans: Vec<Span> = Vec::new();
+            for icon in btn_icons.iter() {
+                btn_spans.push(Span::styled(format!("  {icon}  "), btn_style));
+            }
+            let btn_x = area.x + area.width.saturating_sub(BTNS_W) / 2;
+            self.layout_button_area = Rect { x: btn_x, y: btn_row_y, width: BTNS_W, height: 1 };
+            f.render_widget(
+                Paragraph::new(Line::from(btn_spans)).alignment(Alignment::Center),
+                Rect { x: area.x, y: btn_row_y, width: area.width, height: 1 },
+            );
+        } else {
+            self.layout_button_area = Rect::default();
+        }
     }
 
     fn render_combined(&mut self, f: &mut ratatui::Frame, area: Rect) {
@@ -6637,12 +6657,12 @@ impl App {
             self.layout_seekbar_area = Rect::default();
         }
 
-        // Sticky playback buttons: always at the very bottom of the left panel when playing.
-        if show_controls && buttons_row < left_area.bottom() {
+        // Sticky playback buttons: shown only when use_nerd_fonts is enabled.
+        if show_controls && buttons_row < left_area.bottom() && self.use_nerd_fonts {
             let paused = live_paused;
             let btn_style = Style::default().fg(Color::Rgb(203, 212, 241));
-            let pp_icon   = if !paused { "\u{f04c}" } else { "\u{f04b}" };
-            let btn_icons = ["\u{f048}", "\u{f04a}", pp_icon, "\u{f04d}", "\u{f04e}", "\u{f051}"];
+            let pp_icon = if !paused { "\u{F03E4}" } else { "\u{F040A}" }; // nf-md-pause / nf-md-play
+            let btn_icons = ["\u{F04AE}", "\u{F04A}", pp_icon, "\u{F04DB}", "\u{F04E}", "\u{F04AD}"];
             let mut btn_spans: Vec<Span> = Vec::new();
             for icon in btn_icons.iter() {
                 btn_spans.push(Span::styled(format!("  {icon}  "), btn_style));
@@ -8165,7 +8185,7 @@ impl App {
             let episode_meta_line = |item: &crate::api::MediaItem| -> Line<'static> {
                 let mut spans: Vec<Span> = Vec::new();
                 if item.played {
-                    spans.push(Span::styled("\u{f00c} ", Style::default().fg(palette::PINE)));
+                    spans.push(Span::styled("\u{2713} ", Style::default().fg(palette::PINE)));
                 }
                 let mut parts: Vec<String> = Vec::new();
                 if !item.premiere_date.is_empty() { parts.push(item.premiere_date.clone()); }
@@ -8244,7 +8264,7 @@ impl App {
                     // Movie, Audio, and other non-folder types
                     let mut spans: Vec<Span> = Vec::new();
                     if !is_audio && item.played {
-                        spans.push(Span::styled("\u{f00c} ", Style::default().fg(palette::PINE)));
+                        spans.push(Span::styled("\u{2713} ", Style::default().fg(palette::PINE)));
                     }
                     let mut parts: Vec<String> = Vec::new();
                     if item.production_year > 0 { parts.push(format!("{}", item.production_year)); }
@@ -9001,6 +9021,7 @@ mod tests {
             pending_queue_action: None,
             show_save_playlist_modal: false,
             autosave_playlist: false,
+            use_nerd_fonts: false,
             show_playback_panel: true,
             layout_playback_indicator_area: Rect::default(),
             ws_send_tx: None,
