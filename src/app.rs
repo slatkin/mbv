@@ -2074,7 +2074,12 @@ impl App {
                             self.save_playlist_dialog = None;
                             self.force_clear = true;
                             match result {
-                                Ok(_) => self.flash_status(format!("Saved as playlist \"{name}\"")),
+                                Ok(id) => {
+                                    self.queue_playlist_id = Some(id);
+                                    self.queue_playlist_name = name.clone();
+                                    self.queue_dirty = false;
+                                    self.flash_status(format!("Saved as playlist \"{name}\""));
+                                }
                                 Err(e) => self.flash_status(format!("Error: {e}")),
                             }
                         }
@@ -2096,7 +2101,12 @@ impl App {
                         self.save_playlist_dialog = None;
                         self.force_clear = true;
                         match result {
-                            Ok(_) => self.flash_status(format!("Saved as playlist \"{name}\"")),
+                            Ok(id) => {
+                                self.queue_playlist_id = Some(id);
+                                self.queue_playlist_name = name.clone();
+                                self.queue_dirty = false;
+                                self.flash_status(format!("Saved as playlist \"{name}\""));
+                            }
                             Err(e) => self.flash_status(format!("Error: {e}")),
                         }
                     }
