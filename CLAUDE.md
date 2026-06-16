@@ -14,10 +14,13 @@ cargo build                # debug build (faster compile)
 cargo test                 # run all tests
 cargo test config          # run tests matching "config"
 cargo test -- --nocapture  # see println! output in tests
-make install               # build release + install to ~/.local/bin/mbv
 ```
 
 There is no linter configured; `cargo build` catches everything relevant.
+
+## Code quality
+
+Always fix compile warnings — delete unused code rather than suppressing with `#[allow]`.
 
 ## UI conventions
 

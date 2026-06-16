@@ -2194,25 +2194,35 @@ set_virt_mouse_area(0, 0, 0, 0, 'window-controls')
 
 --
 -- Next-Up banner
+-- Full-width bottom bar, same height as OSC, with DISMISS and SKIP buttons.
+-- While visible the OSC is hidden and inaccessible.
 --
 
 local next_up = {
-    visible    = false,
-    item_id    = '',
-    title      = '',
-    mouse_near = false,
-    osd        = mp.create_osd_overlay('ass-events'),
-    x1 = 0, y1 = 0, x2 = 0, y2 = 0,
+    visible         = false,
+    item_id         = '',
+    show_title      = '',
+    ep_title        = '',
+    artist          = '',
+    osd             = mp.create_osd_overlay('ass-events'),
+    osc_was_enabled = false,
+    -- button hitboxes in virtual ASS coords
+    dismiss_x1 = 0, dismiss_y1 = 0, dismiss_x2 = 0, dismiss_y2 = 0,
+    skip_x1    = 0, skip_y1    = 0, skip_x2    = 0, skip_y2    = 0,
 }
 
 local function next_up_hide()
     if not next_up.visible then return end
-    next_up.visible    = false
-    next_up.mouse_near = false
-    next_up.osd.data   = ''
+    next_up.visible      = false
+    next_up.osd.data     = ''
     next_up.osd:update()
-    set_virt_mouse_area(0, 0, 0, 0, 'next-up')
-    mp.disable_key_bindings('next-up')
+    set_virt_mouse_area(0, 0, 0, 0, 'next-up-dismiss')
+    set_virt_mouse_area(0, 0, 0, 0, 'next-up-skip')
+    mp.disable_key_bindings('next-up-dismiss')
+    mp.disable_key_bindings('next-up-skip')
+    if next_up.osc_was_enabled then
+        enable_osc(true)
+    end
 end
 
 local function next_up_render()
@@ -2227,85 +2237,134 @@ local function next_up_render()
         ph = dim.h
     end
 
-    local lbl_fs  = math.max(9,  math.floor(ph / 66))
-    local show_fs = math.max(10, math.floor(ph / 56))
-    local ep_fs   = math.max(10, math.floor(ph / 56))
-    local vpad    = 10
-    local bh      = lbl_fs + show_fs + ep_fs + vpad * 2
-    local r       = math.min(bh / 2, 14)
+    -- Overlay spans the full width, same height as the OSC (180 virtual units).
+    local bar_h = 180
+    local bar_y = ph - bar_h  -- top edge of overlay
 
-    local max_chars  = 36
-    local show_title = next_up.show_title or ''
-    local ep_title   = next_up.ep_title   or ''
-    if #show_title > max_chars then show_title = show_title:sub(1, max_chars - 1) .. '…' end
-    if #ep_title   > max_chars then ep_title   = ep_title:sub(1,   max_chars - 1) .. '…' end
-    local bw = math.max(r * 2 + 80, show_fs * 10)
-    bw = math.min(bw, math.floor(pw * 0.42))
-
-    local pad = 20
-    local bx  = pw - pad - bw
-    local by
-    if next_up.mouse_near then
-        by = ph - 145 - bh
+    -- Display label: series > artist > title
+    local show_t = next_up.show_title or ''
+    local ep_t   = next_up.ep_title   or ''
+    local art_t  = next_up.artist     or ''
+    local label
+    if show_t ~= '' then
+        label = show_t .. ' - ' .. ep_t
+    elseif art_t ~= '' then
+        label = art_t .. ' - ' .. ep_t
     else
-        by = ph - pad - bh
+        label = ep_t
     end
+    if #label > 56 then label = label:sub(1, 55) .. '...' end
 
-    next_up.x1 = bx
-    next_up.y1 = by
-    next_up.x2 = bx + bw
-    next_up.y2 = by + bh
+    local pad = math.floor(pw * 0.03)  -- left/right padding
 
-    set_virt_mouse_area(next_up.x1, next_up.y1, next_up.x2, next_up.y2, 'next-up')
-    mp.enable_key_bindings('next-up')
+    -- Buttons: right-aligned, stacked vertically (SKIP on top, DISMISS below)
+    local btn_w   = math.max(110, math.floor(pw * 0.13))
+    local btn_h   = math.max(30,  math.floor(ph / 24))
+    local btn_r   = math.floor(btn_h / 3)
+    local btn_gap = math.floor(bar_h * 0.08)
+    local btn_x   = pw - pad - btn_w
+
+    local total_btn_h = btn_h * 2 + btn_gap
+    local btn_block_y = bar_y + math.floor((bar_h - total_btn_h) / 2)
+
+    -- Font sizes: lbl+txt sum matches total button stack height so they align vertically
+    local lbl_fs = math.max(10, math.floor(total_btn_h * 0.38))
+    local txt_fs = total_btn_h - lbl_fs
+    local btn_fs = math.max(12, math.floor(btn_h * 0.60))
+
+    local skip_y1    = btn_block_y
+    local skip_y2    = skip_y1 + btn_h
+    local dismiss_y1 = skip_y2 + btn_gap
+    local dismiss_y2 = dismiss_y1 + btn_h
+
+    next_up.skip_x1    = btn_x;         next_up.skip_y1    = skip_y1
+    next_up.skip_x2    = btn_x + btn_w; next_up.skip_y2    = skip_y2
+    next_up.dismiss_x1 = btn_x;         next_up.dismiss_y1 = dismiss_y1
+    next_up.dismiss_x2 = btn_x + btn_w; next_up.dismiss_y2 = dismiss_y2
+
+    set_virt_mouse_area(next_up.skip_x1,    next_up.skip_y1,
+                        next_up.skip_x2,    next_up.skip_y2,    'next-up-skip')
+    set_virt_mouse_area(next_up.dismiss_x1, next_up.dismiss_y1,
+                        next_up.dismiss_x2, next_up.dismiss_y2, 'next-up-dismiss')
+    mp.enable_key_bindings('next-up-skip')
+    mp.enable_key_bindings('next-up-dismiss')
 
     local ass = assdraw.ass_new()
 
-    -- Solid rounded-rect background
+    -- Semi-transparent black background (65 % opaque: alpha &H67& ≈ 40 % transparent)
     ass:new_event()
-    ass:pos(bx, by)
+    ass:pos(0, bar_y)
     ass:an(7)
-    ass:append('{\\bord0\\blur0\\1c&H3F3F3F&\\1a&H00&}')
+    ass:append('{\\bord0\\blur0\\1c&H000000&\\1a&H67&}')
     ass:draw_start()
-    ass:round_rect_cw(0, 0, bw, bh, r, r)
+    ass:rect_cw(0, 0, pw, bar_h)
     ass:draw_stop()
 
-    local cx  = bx + bw / 2
-    local ty  = by + vpad   -- top of text block
+    -- Text block: left-aligned, vertically centred to match button stack
+    local tx = pad
+    local text_y = btn_block_y  -- top of text block aligns with top of button block
 
-    -- "Next Up" label
+    -- "NEXT UP" label (top-left anchor)
     ass:new_event()
-    ass:pos(cx, ty)
-    ass:an(8)
+    ass:pos(tx, text_y)
+    ass:an(7)
     ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HA09090&\\bold0}', lbl_fs))
-    ass:append('Next Up')
+    ass:append('NEXT UP')
 
-    -- Show title (dim)
+    -- Content line immediately below, no gap
     ass:new_event()
-    ass:pos(cx, ty + lbl_fs)
-    ass:an(8)
-    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HC8B8B8&\\bold0}', show_fs))
-    ass:append(show_title:gsub('{', '\\{'))
+    ass:pos(tx, text_y + lbl_fs)
+    ass:an(7)
+    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', txt_fs))
+    ass:append(label:gsub('{', '\\{'))
 
-    -- Episode title (bright)
+    -- SKIP button (green, top)
     ass:new_event()
-    ass:pos(cx, ty + lbl_fs + show_fs)
-    ass:an(8)
-    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', ep_fs))
-    ass:append(ep_title:gsub('{', '\\{'))
+    ass:pos(btn_x, skip_y1)
+    ass:an(7)
+    ass:append('{\\bord0\\blur0\\1c&H4BB552&\\1a&H00&}')
+    ass:draw_start()
+    ass:round_rect_cw(0, 0, btn_w, btn_h, btn_r, btn_r)
+    ass:draw_stop()
+
+    ass:new_event()
+    ass:pos(btn_x + btn_w / 2, skip_y1 + btn_h / 2)
+    ass:an(5)
+    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', btn_fs))
+    ass:append('SKIP')
+
+    -- DISMISS button (dark grey, bottom)
+    ass:new_event()
+    ass:pos(btn_x, dismiss_y1)
+    ass:an(7)
+    ass:append('{\\bord0\\blur0\\1c&H555555&\\1a&H00&}')
+    ass:draw_start()
+    ass:round_rect_cw(0, 0, btn_w, btn_h, btn_r, btn_r)
+    ass:draw_stop()
+
+    ass:new_event()
+    ass:pos(btn_x + btn_w / 2, dismiss_y1 + btn_h / 2)
+    ass:an(5)
+    ass:append(string.format('{\\fs%d\\bord0\\blur0\\1c&HFAFAFA&\\bold1}', btn_fs))
+    ass:append('DISMISS')
 
     next_up.osd.res_x = pw
     next_up.osd.res_y = ph
     next_up.osd.data  = ass.text
-    next_up.osd.z     = 999
+    next_up.osd.z     = 1001
     next_up.osd:update()
 end
 
-mp.register_script_message('mbv-next-up', function(item_id, show_title, ep_title)
-    msg.warn('next-up: received mbv-next-up id=' .. tostring(item_id) .. ' show=' .. tostring(show_title) .. ' ep=' .. tostring(ep_title))
-    next_up.item_id     = item_id    or ''
-    next_up.show_title  = show_title or ''
-    next_up.ep_title    = ep_title   or ''
+mp.register_script_message('mbv-next-up', function(item_id, show_title, ep_title, artist)
+    msg.warn('next-up: received id=' .. tostring(item_id) .. ' show=' .. tostring(show_title) .. ' ep=' .. tostring(ep_title))
+    next_up.item_id    = item_id    or ''
+    next_up.show_title = show_title or ''
+    next_up.ep_title   = ep_title   or ''
+    next_up.artist     = artist     or ''
+    if not next_up.visible then
+        next_up.osc_was_enabled = state.enabled
+        if state.enabled then enable_osc(false) end
+    end
     next_up.visible = true
     next_up_render()
 end)
@@ -2314,38 +2373,25 @@ mp.register_script_message('mbv-next-up-dismiss', function()
     next_up_hide()
 end)
 
--- Re-render on window resize.
 mp.observe_property('osd-dimensions', 'native', function()
     if next_up.visible then next_up_render() end
 end)
 
--- Float above OSC when mouse enters the bottom zone where the OSC appears.
-mp.observe_property('mouse-pos', 'native', function(_, pos)
-    if not next_up.visible then return end
-    if not pos or not pos.hover then
-        if next_up.mouse_near then
-            next_up.mouse_near = false
-            next_up_render()
-        end
-        return
-    end
-    local dim = mp.get_property_native('osd-dimensions')
-    if not dim or dim.h <= 0 then return end
-    local scale = osc_param.playresy / dim.h
-    local vy    = pos.y * scale
-    local near  = vy > osc_param.playresy * 0.78
-    if near ~= next_up.mouse_near then
-        next_up.mouse_near = near
-        next_up_render()
-    end
-end)
+mp.set_key_bindings({
+    {'mbtn_left', function() next_up_hide() end},
+}, 'next-up-dismiss', 'force')
 
 mp.set_key_bindings({
     {'mbtn_left', function()
         next_up_hide()
         mp.commandv('script-message', 'mbv-next-up-play')
     end},
-}, 'next-up', 'force')
+}, 'next-up-skip', 'force')
+
+-- Auto-dismiss when the next file actually starts playing.
+mp.register_event('start-file', function()
+    if next_up.visible then next_up_hide() end
+end)
 
 -- Skip Intro overlay
 local skip_intro = {

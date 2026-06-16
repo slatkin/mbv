@@ -207,6 +207,7 @@ pub fn run(client: EmbyClient) -> ! {
                         item_id:    item.id.clone(),
                         show_title: item.series_name.clone(),
                         ep_title:   item.name.clone(),
+                        artist:     item.artist.clone(),
                     });
                 }
                 broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::NextUpThreshold {
@@ -219,6 +220,7 @@ pub fn run(client: EmbyClient) -> ! {
                         item_id:    item.id.clone(),
                         show_title: item.series_name.clone(),
                         ep_title:   item.name.clone(),
+                        artist:     item.artist.clone(),
                     });
                 }
                 broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }));

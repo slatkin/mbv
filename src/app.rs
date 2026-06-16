@@ -852,6 +852,10 @@ impl App {
                     }
                     PlayerEvent::TrackChanged(idx) => {
                         self.skip_intro_end_ticks = None;
+                        self.next_up_item = None;
+                        if self.status.starts_with("Next up:") {
+                            self.status.clear();
+                        }
                         let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
                             if remove_idx < self.player_tab.items.len() {
                                 self.player_tab.items.remove(remove_idx);
@@ -872,6 +876,7 @@ impl App {
                             let item_id    = item.id.clone();
                             let show_title = item.series_name.clone();
                             let ep_title   = item.name.clone();
+                            let artist     = item.artist.clone();
                             let label = item.playback_label();
                             self.next_up_item = Some(item.clone());
                             let next_up_msg = format!("Next up: {} (Y/n)", label);
@@ -880,7 +885,7 @@ impl App {
                             self.status_expires = None;
                             // Daemon sends NextUpShow to mpv directly; only send from local player.
                             if !self.player.is_remote() {
-                                self.player.send_command(PlayerCommand::NextUpShow { item_id, show_title, ep_title });
+                                self.player.send_command(PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist });
                             }
                         }
                     }

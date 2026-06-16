@@ -66,38 +66,12 @@ pub enum PlayerCommand {
     SetAudio(i64),
     SetSub(i64), // 0 = off
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
-    NextUpShow { item_id: String, show_title: String, ep_title: String },
+    NextUpShow { item_id: String, show_title: String, ep_title: String, artist: String },
     NextUpDismiss,
     SkipIntroDismiss,
     ReplacePlaylist { items: Vec<MediaItem>, start_idx: usize },
 }
 
-pub fn lang_to_code(s: &str) -> &'static str {
-    let l = s.to_lowercase();
-    if l.starts_with("en") { "EN" }
-    else if l.starts_with("fr") { "FR" }
-    else if l.starts_with("de") || l.starts_with("ger") || l.starts_with("deu") { "DE" }
-    else if l.starts_with("es") || l.starts_with("spa") { "ES" }
-    else if l.starts_with("it") || l.starts_with("ita") { "IT" }
-    else if l.starts_with("pt") || l.starts_with("por") { "PT" }
-    else if l.starts_with("ja") || l.starts_with("jpn") { "JA" }
-    else if l.starts_with("ko") || l.starts_with("kor") { "KO" }
-    else if l.starts_with("zh") || l.starts_with("chi") || l.starts_with("zho") { "ZH" }
-    else if l.starts_with("ru") || l.starts_with("rus") { "RU" }
-    else if l.starts_with("ar") || l.starts_with("ara") { "AR" }
-    else if l.starts_with("nl") || l.starts_with("nld") || l.starts_with("dut") { "NL" }
-    else if l.starts_with("sv") || l.starts_with("swe") { "SV" }
-    else if l.starts_with("no") || l.starts_with("nor") { "NO" }
-    else if l.starts_with("da") || l.starts_with("dan") { "DA" }
-    else if l.starts_with("fi") || l.starts_with("fin") { "FI" }
-    else if l.starts_with("pl") || l.starts_with("pol") { "PL" }
-    else if l.starts_with("cs") || l.starts_with("cze") || l.starts_with("ces") { "CS" }
-    else if l.starts_with("tr") || l.starts_with("tur") { "TR" }
-    else if l.starts_with("uk") || l.starts_with("ukr") { "UK" }
-    else if l.starts_with("hi") || l.starts_with("hin") { "HI" }
-    else if l.starts_with("th") || l.starts_with("tha") { "TH" }
-    else { "--" }
-}
 
 fn lang_code_to_name(code: &str) -> &'static str {
     match code.to_lowercase().as_str() {
@@ -547,9 +521,9 @@ impl Player {
                 let mut cancel_stop = false;
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
-                        PlayerCommand::NextUpShow { item_id, show_title, ep_title } => {
+                        PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
                             log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}"));
-                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title]);
+                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title, &artist]);
                             log.push(Level::Warn, "player", format!("next-up: script-message result={r:?}"));
                         }
                         PlayerCommand::TogglePause => {
@@ -1158,9 +1132,9 @@ impl Player {
                 let mut cancel_stop = false;
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
-                        PlayerCommand::NextUpShow { item_id, show_title, ep_title } => {
+                        PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
                             log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}"));
-                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title]);
+                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title, &artist]);
                             log.push(Level::Warn, "player", format!("next-up: script-message result={r:?}"));
                         }
                         PlayerCommand::TogglePause => {
