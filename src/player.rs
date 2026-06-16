@@ -315,7 +315,7 @@ impl Player {
                 "{}/{}/{}/stream?static=true&api_key={}",
                 self.server_url, ep, item.id, self.token
             );
-            let start_pos = item.resume_seconds();
+            let start_pos = if item.should_resume() { item.resume_seconds() } else { 0.0 };
             {
                 let mut st = self.status.lock().unwrap();
                 st.position_ticks = item.playback_position_ticks;
@@ -342,7 +342,7 @@ impl Player {
             "{}/{}/{}/stream?static=true&api_key={}",
             self.server_url, ep, item.id, self.token
         );
-        let start_pos = if is_audio { 0.0 } else { item.resume_seconds() };
+        let start_pos = if is_audio || !item.should_resume() { 0.0 } else { item.resume_seconds() };
         let item_pos = if is_audio { 0 } else { item.playback_position_ticks };
         let title = item.display_name();
         let headless = !self.show_audio_window && is_audio;
@@ -1130,7 +1130,7 @@ impl Player {
             let mut current_osd_title = items[start_idx].display_name();
             let mut last_mouse_osd: Option<Instant> = None;
             let mut pending_resume_secs: Option<f64> =
-                if !items[start_idx].is_audio() && items[start_idx].playback_position_ticks > 0 {
+                if !items[start_idx].is_audio() && items[start_idx].should_resume() {
                     Some(items[start_idx].resume_seconds())
                 } else {
                     None
@@ -1250,7 +1250,7 @@ impl Player {
                             playlist_next_up_armed = false;
                             next_up_jump           = false;
                             current_osd_title      = items[start_idx].display_name();
-                            pending_resume_secs    = if !items[start_idx].is_audio() && items[start_idx].playback_position_ticks > 0 {
+                            pending_resume_secs    = if !items[start_idx].is_audio() && items[start_idx].should_resume() {
                                 Some(items[start_idx].resume_seconds())
                             } else {
                                 None
@@ -1615,7 +1615,7 @@ impl Player {
                         *session_id.lock().unwrap()      = new_sid;
                         current_osd_title = items[current_idx].display_name();
                         let next = &items[current_idx];
-                        if !next.is_audio() && next.playback_position_ticks > 0 {
+                        if !next.is_audio() && next.should_resume() {
                             pending_resume_secs = Some(next.resume_seconds());
                         }
                         let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: completed_idx, position_ticks: completed_pos, played: played_out, consume: consume_track });

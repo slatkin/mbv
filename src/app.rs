@@ -1928,7 +1928,7 @@ impl App {
         if let Some(t) = self.confirm_remove_idx {
             self.confirm_remove_idx = None;
             self.status.clear();
-            if matches!(key.code, KeyCode::Char('y') | KeyCode::Enter) {
+            if matches!(key.code, KeyCode::Char('y')) {
                 self.player.stop();
                 let item = self.player_tab.items.remove(t);
                 self.playlist_undo_stack.push((t, item));
@@ -3463,7 +3463,7 @@ impl App {
         };
         if active && current_idx == pos {
             self.confirm_remove_idx = Some(pos);
-            self.flash_status("Remove now-playing item and stop playback? [y/Enter]".into());
+            self.flash_status("Remove now-playing item and stop playback? (y/N)".into());
             return;
         }
         let item = self.player_tab.items.remove(pos);

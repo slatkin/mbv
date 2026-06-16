@@ -113,6 +113,13 @@ impl MediaItem {
         self.playback_position_ticks as f64 / TICKS_PER_SECOND as f64
     }
 
+    pub fn should_resume(&self) -> bool {
+        let pos = self.playback_position_ticks;
+        if pos <= 0 { return false; }
+        if self.runtime_ticks > 0 && pos * 100 < self.runtime_ticks { return false; } // displays as 0%
+        true
+    }
+
     pub fn runtime_seconds(&self) -> f64 {
         self.runtime_ticks as f64 / TICKS_PER_SECOND as f64
     }
