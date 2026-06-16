@@ -120,8 +120,10 @@ Most settings can also be toggled live in the settings panel (`F2`).
 - **Control other sessions** — connect to another active Emby session and drive it from mbv's controls and keyboard. `F3` opens the session list.
 - **Daemon mode** — run mbv as a background service with no terminal required. Register it with your server and drive it entirely from remote apps.
 - **System media keys** — mbv exposes an MPRIS2 interface so desktop widgets, `playerctl`, and system media keys all work automatically.
-- **Save queue as playlist** — `Ctrl+S` saves the current queue to Emby as a playlist.
+- **Save queue as playlist** — `Ctrl+S` saves the current queue to Emby as a playlist. The queue stays associated with the saved playlist; mbv prompts to save unsaved changes on quit or clear.
 - **Undo queue deletes** — `Ctrl+Z` restores the last item removed from the queue.
+- **Go to library** — press `i` on any queue item (or use the context menu) to jump straight to it in its library tab.
+- **Playlists panel** — `F4` opens a browsable side panel showing all Emby playlists; drill in to view and enqueue tracks.
 - **Desktop notifications** — with `system_notifications = true`, toasts and interactive prompts (Skip Intro, Next Up, Clear Playlist) are sent as desktop notifications with action buttons.
 
 ### Panels and navigation
@@ -131,6 +133,7 @@ Most settings can also be toggled live in the settings panel (`F2`).
 | `F1` | Help / keybindings |
 | `F2` | Settings |
 | `F3` | Remote sessions |
+| `F4` | Playlists |
 | `F5` | Refresh |
 | `h` | Hide / show the playback panel |
 | `Tab` / `Shift+Tab` | Cycle tabs |
