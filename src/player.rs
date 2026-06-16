@@ -32,9 +32,11 @@ pub struct PlayerStatus {
     pub title: String,
     pub audio_tracks: Vec<(i64, String)>, // (mpv id, label)
     pub sub_tracks: Vec<(i64, String)>,
-    pub audio_id: i64, // 0 = none/unknown
-    pub sub_id: i64,   // 0 = off
+    pub audio_id: i64,   // 0 = none/unknown
+    pub audio_lang: String, // raw lang code of selected audio track, e.g. "en", "ru"
+    pub sub_id: i64,    // 0 = off
     pub muted: bool,
+    pub video_width: i64,  // 0 = no video / audio-only
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -65,6 +67,7 @@ pub enum PlayerCommand {
     SeekAbsolute(f64),
     SetAudio(i64),
     SetSub(i64), // 0 = off
+    SetMute(bool),
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
     NextUpShow { item_id: String, show_title: String, ep_title: String, artist: String },
     NextUpDismiss,
@@ -155,8 +158,9 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
     };
     let mut audio: Vec<(i64, String)> = Vec::new();
     let mut subs:  Vec<(i64, String)> = Vec::new();
-    let mut audio_id: i64 = 0;
-    let mut sub_id:   i64 = 0;
+    let mut audio_id:   i64    = 0;
+    let mut audio_lang: String = String::new();
+    let mut sub_id:     i64    = 0;
 
     for i in 0..count {
         let ttype: String = mpv.get_property(&format!("track-list/{i}/type")).unwrap_or_default();
@@ -168,7 +172,7 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
 
         match ttype.as_str() {
             "audio" => {
-                if sel { audio_id = id; }
+                if sel { audio_id = id; audio_lang = lang.clone(); }
                 // Build label from lang+codec+channels to avoid scene-branded titles
                 let ch: i64 = mpv.get_property(&format!("track-list/{i}/demux-channel-count")).unwrap_or(0);
                 let name = lang_code_to_name(&lang);
@@ -197,6 +201,7 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
     s.audio_tracks = audio;
     s.sub_tracks   = subs;
     s.audio_id     = audio_id;
+    s.audio_lang   = audio_lang;
     s.sub_id       = sub_id;
 }
 
@@ -259,8 +264,10 @@ impl Player {
                 audio_tracks: Vec::new(),
                 sub_tracks: Vec::new(),
                 audio_id: 0,
+                audio_lang: String::new(),
                 sub_id: 0,
                 muted: false,
+                video_width: 0,
             })),
             thread_handle: Mutex::new(None),
             ws_tx,
@@ -442,6 +449,8 @@ impl Player {
             let _ = mpv.observe_property("volume", Format::Double, 2);
             let _ = mpv.observe_property("sid", Format::Int64, 3);
             let _ = mpv.observe_property("mute", Format::Flag, 4);
+            let _ = mpv.observe_property("aid", Format::String, 5);
+            let _ = mpv.observe_property("video-params/w", Format::Int64, 6);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -570,6 +579,10 @@ impl Player {
                             }
                             refresh_tracks(&mpv, &status);
                             status.lock().unwrap().sub_id = id;
+                        }
+                        PlayerCommand::SetMute(m) => {
+                            let _ = mpv.set_property("mute", m);
+                            status.lock().unwrap().muted = m;
                         }
                         PlayerCommand::LoadNew { url, start_pos, item } => {
                             // Cancel any pending quit so the new file loads in the same window.
@@ -734,8 +747,14 @@ impl Player {
                     Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
                         status.lock().unwrap().sub_id = id;
                     }
+                    Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
+                        refresh_tracks(&mpv, &status);
+                    }
                     Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
                         status.lock().unwrap().muted = m;
+                    }
+                    Some(Ok(Event::PropertyChange { name: "video-params/w", change: PropertyData::Int64(w), .. })) => {
+                        status.lock().unwrap().video_width = w;
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
                         let event_name: &str;
@@ -1041,6 +1060,8 @@ impl Player {
             let _ = mpv.observe_property("volume", Format::Double, 2);
             let _ = mpv.observe_property("sid", Format::Int64, 3);
             let _ = mpv.observe_property("mute", Format::Flag, 4);
+            let _ = mpv.observe_property("aid", Format::String, 5);
+            let _ = mpv.observe_property("video-params/w", Format::Int64, 6);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -1283,6 +1304,10 @@ impl Player {
                             refresh_tracks(&mpv, &status);
                             status.lock().unwrap().sub_id = id;
                         }
+                        PlayerCommand::SetMute(m) => {
+                            let _ = mpv.set_property("mute", m);
+                            status.lock().unwrap().muted = m;
+                        }
                         PlayerCommand::LoadNew { url, start_pos, item } => {
                             cancel_stop = true;
                             quit_at = None;
@@ -1431,8 +1456,14 @@ impl Player {
                     Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
                         status.lock().unwrap().sub_id = id;
                     }
+                    Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
+                        refresh_tracks(&mpv, &status);
+                    }
                     Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
                         status.lock().unwrap().muted = m;
+                    }
+                    Some(Ok(Event::PropertyChange { name: "video-params/w", change: PropertyData::Int64(w), .. })) => {
+                        status.lock().unwrap().video_width = w;
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
                         if pending_initial_jump {

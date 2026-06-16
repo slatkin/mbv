@@ -292,6 +292,7 @@ pub struct App {
     tab_scroll: usize,
     ui_volume: u8,
     pre_mute_volume: Option<u8>,
+    mute_on: bool,
     layout_tabbar_vol_area: Rect,
     last_scroll_at: Instant,
     last_nav_at: Instant,
@@ -511,6 +512,7 @@ impl App {
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
+            mute_on: false,
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             last_played_completed: false,
@@ -680,6 +682,7 @@ impl App {
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
+            mute_on: false,
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             last_played_completed: false,
@@ -1663,8 +1666,8 @@ impl App {
         if self.tab_idx != self.log_tab_idx() {
             if key.code == KeyCode::Char('c') && !key.modifiers.contains(KeyModifiers::ALT) && !in_lib_search {
                 if self.player_tab.items.is_empty() { return false; }
-                self.notify_with_actions("mbv", "Clear playlist?", &[("clear:yes", "Clear"), ("clear:no", "Cancel")]);
-                self.status = "Clear playlist? (Y/n)".into();
+                self.notify_with_actions("mbv", "Clear queue?", &[("clear:yes", "Clear"), ("clear:no", "Cancel")]);
+                self.status = "Clear queue? (Y/n)".into();
                 self.confirm_clear_playlist = true;
                 return false;
             }
@@ -1909,11 +1912,16 @@ impl App {
                 _ => {}
             }
         }
-        // Volume and subtitle preference work regardless of playback state
+        // Volume, mute, and subtitle preference work regardless of playback state
         match key.code {
             KeyCode::Char('-') => { self.adjust_volume(-5); return Some(false); }
             KeyCode::Char('+') | KeyCode::Char('=') => { self.adjust_volume(5); return Some(false); }
             KeyCode::Char('z') if !key.modifiers.contains(KeyModifiers::CONTROL) => { self.toggle_sub(); return Some(false); }
+            KeyCode::Char('m') => {
+                self.mute_on = !self.mute_on;
+                self.player.send_command(PlayerCommand::SetMute(self.mute_on));
+                return Some(false);
+            }
             _ => {}
         }
         if !active { return None; }
@@ -3558,6 +3566,7 @@ impl App {
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
         self.player.play_playlist(items, start_idx, c, self.log.clone(), self.ui_volume);
+        self.player.send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
     /// Play a single item. For series episodes with always_play_next, expands
@@ -3586,6 +3595,7 @@ impl App {
                 self.player_tab.playlist_cursor = 0;
                 self.flash_status(label);
                 self.player.play_playlist(episodes, 0, c, self.log.clone(), self.ui_volume);
+                self.player.send_command(PlayerCommand::SetMute(self.mute_on));
                 self.queue_source = crate::config::QueueSource::Series;
                 self.save_queue_state();
                 return;
@@ -3596,6 +3606,7 @@ impl App {
         self.player_tab.playlist_cursor = 0;
         self.flash_status(label);
         self.player.play(&item, c, self.log.clone(), self.ui_volume);
+        self.player.send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
     fn enqueue_selected(&mut self) {
@@ -4830,9 +4841,30 @@ impl App {
 
             let bracket = Style::default().fg(palette::WHITE);
 
-            // Subtitle indicator
             let pst = self.player.status.lock().unwrap();
+            let active = pst.active;
+
+            // Resolution indicator (only when playing)
+            let (res_text, res_color): (&str, ratatui::style::Color) = if pst.video_width >= 3840 {
+                ("4K", palette::PINE)
+            } else if pst.video_width >= 1280 {
+                ("HD", palette::PINE)
+            } else if pst.video_width > 0 {
+                ("SD", palette::MUTED)
+            } else {
+                ("--", palette::MUTED)
+            };
+
+            // Subtitle indicator (only when playing)
             let sub_color = if pst.sub_id != 0 { palette::RED } else { palette::MUTED };
+
+            // Audio language indicator (only when playing)
+            let raw_lang = pst.audio_lang.to_lowercase();
+            let (au_text, au_color): (String, ratatui::style::Color) = if raw_lang.is_empty() {
+                ("x".into(), palette::MUTED)
+            } else {
+                (raw_lang.chars().take(2).collect(), palette::YELLOW)
+            };
 
             // Playback indicator (rightmost)
             let (pb_text, pb_color): (&str, ratatui::style::Color) = if pst.active && !pst.paused {
@@ -4844,24 +4876,49 @@ impl App {
             };
             drop(pst);
 
+            // Mute indicator — client option, always visible
+            let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
+
             // Remote control indicator
             let (rc_text, rc_color): (&str, ratatui::style::Color) = if self.connected_session_id.is_some() {
                 ("↯", palette::PINE)
             } else {
-                ("↯", palette::SUBTLE)
+                ("↯", palette::MUTED)
             };
 
-            // Layout: ────[字]─[rc]─[pb]─
+            // Layout when playing:    ────[4K]─[en]─[字]─[↯]─[M]─[>]─
+            // Layout when not playing:              ────[↯]─[M]─[>]─
             let ind_w = |text: &str| -> u16 { 1 + text.width() as u16 + 1 + 1 }; // "[X]─"
-            let dash_count = gap_area.width.saturating_sub(ind_w("字") + ind_w(rc_text) + ind_w(pb_text)) as usize;
-            let line = Line::from(vec![
-                Span::styled("─".repeat(dash_count), dash_style),
+            let playback_ind_w = if active {
+                ind_w(res_text) + ind_w(&au_text) + ind_w("字")
+            } else { 0 };
+            let dash_count = gap_area.width.saturating_sub(
+                playback_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
+            ) as usize;
+            let mut spans: Vec<Span> = vec![Span::styled("─".repeat(dash_count), dash_style)];
+            if active {
+                spans.extend([
+                    Span::styled("[", bracket),
+                    Span::styled(res_text, Style::default().fg(res_color).add_modifier(Modifier::BOLD)),
+                    Span::styled("]", bracket),
+                    Span::styled("─", dash_style),
+                    Span::styled("[", bracket),
+                    Span::styled(au_text.clone(), Style::default().fg(au_color).add_modifier(Modifier::BOLD)),
+                    Span::styled("]", bracket),
+                    Span::styled("─", dash_style),
+                    Span::styled("[", bracket),
+                    Span::styled("字", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
+                    Span::styled("]", bracket),
+                    Span::styled("─", dash_style),
+                ]);
+            }
+            spans.extend([
                 Span::styled("[", bracket),
-                Span::styled("字", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
+                Span::styled(rc_text.to_string(), Style::default().fg(rc_color).add_modifier(Modifier::BOLD)),
                 Span::styled("]", bracket),
                 Span::styled("─", dash_style),
                 Span::styled("[", bracket),
-                Span::styled(rc_text.to_string(), Style::default().fg(rc_color).add_modifier(Modifier::BOLD)),
+                Span::styled("m", Style::default().fg(mu_color).add_modifier(Modifier::BOLD)),
                 Span::styled("]", bracket),
                 Span::styled("─", dash_style),
                 Span::styled("[", bracket),
@@ -4869,7 +4926,7 @@ impl App {
                 Span::styled("]", bracket),
                 Span::styled("─", dash_style),
             ]);
-            f.render_widget(Paragraph::new(line), gap_area);
+            f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
         }
         let vol_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
@@ -8865,7 +8922,7 @@ mod tests {
             position_ticks: 0, runtime_ticks: 0, paused: false,
             volume: 100, volume_max: 100, current_idx: 0, active: false,
             title: String::new(), audio_tracks: Vec::new(), sub_tracks: Vec::new(),
-            audio_id: 0, sub_id: 0, muted: false,
+            audio_id: 0, audio_lang: String::new(), sub_id: 0, muted: false, video_width: 0,
         }));
 
         let (_, player_rx) = std::sync::mpsc::channel();
@@ -8977,6 +9034,7 @@ mod tests {
             tab_scroll: 0,
             ui_volume: 100,
             pre_mute_volume: None,
+            mute_on: false,
             layout_tabbar_vol_area: Rect::default(),
             sessions: Vec::new(),
             sessions_cursor: 0,
