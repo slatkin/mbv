@@ -2043,7 +2043,7 @@ impl App {
         match &dialog.stage {
             SavePlaylistStage::EnterName => {
                 match key.code {
-                    KeyCode::Esc => { self.save_playlist_dialog = None; }
+                    KeyCode::Esc => { self.save_playlist_dialog = None; self.force_clear = true; }
                     KeyCode::Backspace => {
                         if let Some(d) = &mut self.save_playlist_dialog { d.input.pop(); }
                     }
@@ -2072,6 +2072,7 @@ impl App {
                                 c.create_playlist(&name, &ids)
                             };
                             self.save_playlist_dialog = None;
+                            self.force_clear = true;
                             match result {
                                 Ok(_) => self.flash_status(format!("Saved as playlist \"{name}\"")),
                                 Err(e) => self.flash_status(format!("Error: {e}")),
@@ -2093,6 +2094,7 @@ impl App {
                                 .and_then(|_| c.create_playlist(&name, &ids))
                         };
                         self.save_playlist_dialog = None;
+                        self.force_clear = true;
                         match result {
                             Ok(_) => self.flash_status(format!("Saved as playlist \"{name}\"")),
                             Err(e) => self.flash_status(format!("Error: {e}")),
