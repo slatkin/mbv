@@ -1223,6 +1223,27 @@ impl App {
             terminal.draw(|f| self.render(f))?;
         }
 
+        // Signal quit (terminal closed): save queue state and return immediately.
+        // Don't join the player thread — its report_stopped HTTP call would block
+        // while mpv's window stays visible. The process exit kills all threads.
+        if QUIT_REQUESTED.load(Ordering::Relaxed) {
+            let (was_playing, current_idx, position_ticks) = {
+                let st = self.player.status.lock().unwrap();
+                (st.active, st.current_idx, st.position_ticks)
+            };
+            if was_playing {
+                if let Some(item) = self.player_tab.items.get_mut(current_idx) {
+                    if position_ticks > 0 && !item.is_audio() {
+                        item.playback_position_ticks = position_ticks;
+                    }
+                    self.last_played_item_id = Some(item.id.clone());
+                }
+            }
+            self.save_queue_state();
+            let _ = restore_terminal(terminal);
+            return Ok(());
+        }
+
         // Leave the daemon's player running when the TUI disconnects; only
         // stop the player when we own it locally.
         let (was_playing, current_idx, position_ticks) = {
