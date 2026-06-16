@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::Read;
+use unicode_width::UnicodeWidthStr;
 use std::sync::{Arc, Mutex, mpsc};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -4766,11 +4767,52 @@ impl App {
         const VOL_W:  u16 = 14; // " Volume: XXX%"
         let right_w = VOL_W;
 
-        // Thin underline below tab row
+        // Thin underline below tab row with status indicators on the right
         {
-            let dash = Style::default().fg(palette::MUTED);
-            let line = "─".repeat(gap_area.width as usize);
-            f.render_widget(Paragraph::new(Span::styled(line, dash)), gap_area);
+            let dash_style = Style::default().fg(palette::MUTED);
+
+            let bracket = Style::default().fg(palette::WHITE);
+
+            // Subtitle indicator
+            let pst = self.player.status.lock().unwrap();
+            let sub_color = if pst.sub_id != 0 { palette::RED } else { palette::MUTED };
+
+            // Playback indicator (rightmost)
+            let (pb_text, pb_color): (&str, ratatui::style::Color) = if pst.active && !pst.paused {
+                if self.use_nerd_fonts { ("\u{f04b}", palette::PINE) } else { (">", palette::PINE) }
+            } else if pst.active && pst.paused {
+                if self.use_nerd_fonts { ("\u{f04c}", palette::YELLOW) } else { ("||", palette::YELLOW) }
+            } else {
+                if self.use_nerd_fonts { ("\u{f04d}", palette::MUTED) } else { (" ", palette::MUTED) }
+            };
+            drop(pst);
+
+            // Remote control indicator
+            let (rc_text, rc_color): (&str, ratatui::style::Color) = if self.connected_session_id.is_some() {
+                ("↯", palette::PINE)
+            } else {
+                ("↯", palette::SUBTLE)
+            };
+
+            // Layout: ────[字]─[rc]─[pb]─
+            let ind_w = |text: &str| -> u16 { 1 + text.width() as u16 + 1 + 1 }; // "[X]─"
+            let dash_count = gap_area.width.saturating_sub(ind_w("字") + ind_w(rc_text) + ind_w(pb_text)) as usize;
+            let line = Line::from(vec![
+                Span::styled("─".repeat(dash_count), dash_style),
+                Span::styled("[", bracket),
+                Span::styled("字", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
+                Span::styled("]", bracket),
+                Span::styled("─", dash_style),
+                Span::styled("[", bracket),
+                Span::styled(rc_text.to_string(), Style::default().fg(rc_color).add_modifier(Modifier::BOLD)),
+                Span::styled("]", bracket),
+                Span::styled("─", dash_style),
+                Span::styled("[", bracket),
+                Span::styled(pb_text.to_string(), Style::default().fg(pb_color).add_modifier(Modifier::BOLD)),
+                Span::styled("]", bracket),
+                Span::styled("─", dash_style),
+            ]);
+            f.render_widget(Paragraph::new(line), gap_area);
         }
         let vol_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
@@ -5941,7 +5983,8 @@ impl App {
             let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
             let media_type_str = if !item.item_type.is_empty() { item.item_type.clone() } else { "—".to_string() };
             let (pos_ticks, rt_ticks) = if i == current_idx && active {
-                (live_pos, live_runtime)
+                let pos = if live_pos > 0 { live_pos } else { item.playback_position_ticks };
+                (pos, live_runtime)
             } else {
                 (item.playback_position_ticks, item.runtime_ticks)
             };
@@ -6651,7 +6694,8 @@ impl App {
                 for j in i..run_end {
                     let it = &items[j];
                     let (pt, rt) = if j == active_idx && active {
-                        (live_pos, live_runtime)
+                        let pos = if live_pos > 0 { live_pos } else { it.playback_position_ticks };
+                        (pos, live_runtime)
                     } else {
                         (it.playback_position_ticks, it.runtime_ticks)
                     };

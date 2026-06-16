@@ -120,6 +120,10 @@ fn main() {
     }
 
     if daemon_mode {
+        if daemon_running() {
+            eprintln!("a daemon is already running, nacho");
+            std::process::exit(1);
+        }
         // Spawn a detached copy of ourselves and exit
         let exe = std::env::current_exe().expect("cannot locate binary");
         #[allow(clippy::zombie_processes)]

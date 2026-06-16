@@ -1444,6 +1444,7 @@ dependencies = [
  "tokio",
  "toml",
  "tungstenite",
+ "unicode-width",
  "ureq",
  "uuid",
  "zbus 4.4.0",
