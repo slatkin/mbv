@@ -1,7 +1,24 @@
 use std::collections::HashMap;
 use std::io::Read;
 use std::sync::{Arc, Mutex, mpsc};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+
+static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn handle_quit_signal(_: i32) {
+    QUIT_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+fn install_signal_handlers() {
+    extern "C" {
+        fn signal(signum: i32, handler: unsafe extern "C" fn(i32)) -> usize;
+    }
+    unsafe {
+        signal(1,  handle_quit_signal); // SIGHUP  — terminal closed
+        signal(15, handle_quit_signal); // SIGTERM — kill / systemd stop
+    }
+}
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use rand::seq::SliceRandom;
@@ -102,7 +119,7 @@ enum LibEvent {
     NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
     PlaylistsLoaded(Vec<MediaItem>),
     PlaylistItemsLoaded { playlist_id: String, items: Vec<MediaItem> },
-    QueueRestored { items: Vec<MediaItem>, playlist_id: Option<String>, playlist_name: String, saved_cursor: usize, last_played_item_id: Option<String>, last_played_completed: bool },
+    QueueRestored { items: Vec<MediaItem>, playlist_id: Option<String>, playlist_name: String, last_played_item_id: Option<String>, last_played_completed: bool },
     Error(String),
 }
 
@@ -787,7 +804,10 @@ impl App {
         self.spawn_restore_queue_state();
         terminal.draw(|f| self.render(f))?;
 
+        install_signal_handlers();
+
         'outer: loop {
+            if QUIT_REQUESTED.load(Ordering::Relaxed) { break; }
             if let Ok(ev) = self.player_rx.try_recv() {
                 match ev {
                     PlayerEvent::Stopped { idx, position_ticks, played } => {
@@ -820,6 +840,7 @@ impl App {
                             }
                         }
                         self.refresh_after_stop();
+                        self.save_queue_state();
                     }
                     PlayerEvent::TrackCompleted { idx, position_ticks, played, consume } => {
                         if let Some(item) = self.player_tab.items.get_mut(idx) {
@@ -852,6 +873,7 @@ impl App {
                         if let Some(item) = self.player_tab.items.get(adjusted) {
                             self.last_played_item_id = Some(item.id.clone());
                         }
+                        self.save_queue_state();
                     }
                     PlayerEvent::PlaylistNextUp { next_idx } => {
                         if let Some(item) = self.player_tab.items.get(next_idx) {
@@ -1223,7 +1245,7 @@ impl App {
         }
         self.save_playlist(was_playing);
         self.save_queue_state();
-        restore_terminal(terminal)?;
+        let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
         Ok(())
     }
 
@@ -1236,6 +1258,7 @@ impl App {
     fn handle_key(&mut self, key: KeyEvent) -> bool {
         if self.show_save_playlist_modal {
             let quit_after = matches!(self.pending_queue_action, Some(PendingQueueAction::Quit));
+            let play_after = matches!(self.pending_queue_action, Some(PendingQueueAction::PlayItems { .. }));
             match key.code {
                 KeyCode::Char('s') | KeyCode::Char('S') => {
                     self.save_playlist_to_emby();
@@ -1243,6 +1266,7 @@ impl App {
                     if let Some(action) = self.pending_queue_action.take() {
                         self.execute_pending_queue_action(action);
                     }
+                    if play_after { self.show_playlists = false; self.set_tab(1); }
                     if quit_after { return true; }
                 }
                 KeyCode::Char('d') | KeyCode::Char('D') => {
@@ -1250,6 +1274,7 @@ impl App {
                     if let Some(action) = self.pending_queue_action.take() {
                         self.execute_pending_queue_action(action);
                     }
+                    if play_after { self.show_playlists = false; self.set_tab(1); }
                     if quit_after { return true; }
                 }
                 KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
@@ -1482,7 +1507,10 @@ impl App {
                                 items, start_idx: start, playlist_id, playlist_name,
                             };
                             self.replace_queue_or_prompt(action);
-                            if !self.show_save_playlist_modal { self.show_playlists = false; }
+                            if !self.show_save_playlist_modal {
+                                self.show_playlists = false;
+                                self.set_tab(1);
+                            }
                         }
                     } else if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
                         self.load_and_play_playlist(pl.id);
@@ -2431,65 +2459,6 @@ impl App {
         }
     }
 
-    fn restore_playlist(&mut self) {
-        let path = crate::config::playlist_cache_path();
-        let Ok(text) = std::fs::read_to_string(&path) else { return };
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return };
-
-        let was_playing = v["was_playing"].as_bool().unwrap_or(false);
-        let last_played_item_id = v["last_played_item_id"].as_str().map(String::from);
-
-        // Extract IDs from whatever format is present, then re-fetch from server
-        // so positions and played flags are always authoritative from Emby.
-        let ids: Vec<String> = if let Some(arr) = v["items"].as_array() {
-            arr.iter().filter_map(|x| x["id"].as_str().map(String::from)).collect()
-        } else if v.is_array() {
-            serde_json::from_value(v.clone()).unwrap_or_default()
-        } else {
-            v["ids"].as_array()
-                .map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect())
-                .unwrap_or_default()
-        };
-        if ids.is_empty() { return }
-        let items: Vec<crate::api::MediaItem> = {
-            let client = self.client.lock().unwrap();
-            let Ok(fetched) = client.get_items_by_ids(&ids) else { return };
-            fetched
-        };
-
-        if items.is_empty() { return }
-        self.last_played_item_id = last_played_item_id;
-
-        // Determine cursor from saved cursor or last_played_item_id
-        let saved_cursor = v["cursor"].as_u64().map(|n| n as usize)
-            .or_else(|| {
-                if was_playing {
-                    self.last_played_item_id.as_deref()
-                        .and_then(|id| items.iter().position(|i| i.id == id))
-                } else {
-                    None
-                }
-            })
-            .unwrap_or(0)
-            .min(items.len().saturating_sub(1));
-
-        // Advance past completed items
-        self.player_tab.playlist_cursor = if items.get(saved_cursor).map(|i| i.played).unwrap_or(false) {
-            items.iter().skip(saved_cursor + 1).position(|i| !i.played)
-                .map(|offset| saved_cursor + 1 + offset)
-                .unwrap_or(items.len().saturating_sub(1))
-        } else {
-            saved_cursor
-        };
-
-        self.player_tab.items = items;
-
-        // Restore playlist association
-        self.queue_playlist_id = v["playlist_id"].as_str().map(String::from);
-        self.queue_playlist_name = v["playlist_name"].as_str().unwrap_or("").to_string();
-        self.queue_dirty = false;
-    }
-
     fn seek_to_col(&mut self, col: u16) {
         let bar = self.layout_seekbar_area;
         if bar.width == 0 { return; }
@@ -2715,7 +2684,10 @@ impl App {
                                             items, start_idx: start, playlist_id, playlist_name,
                                         };
                                         self.replace_queue_or_prompt(action);
-                                        if !self.show_save_playlist_modal { self.show_playlists = false; }
+                                        if !self.show_save_playlist_modal {
+                                            self.show_playlists = false;
+                                            self.set_tab(1);
+                                        }
                                     }
                                 } else {
                                     self.playlists_open_cursor = idx;
@@ -3459,7 +3431,6 @@ impl App {
             return;
         }
         let item = self.player_tab.items.remove(pos);
-        let name = item.display_name();
         self.queue_dirty = true;
         self.playlist_undo_stack.push((pos, item));
         if active {
@@ -3514,15 +3485,6 @@ impl App {
         self.notify_system(&msg);
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(3));
-    }
-
-    fn sync_config_mirrors(&mut self) {
-        let c = self.client.lock().unwrap();
-        self.show_log_tab = c.config.show_log_tab;
-        self.system_notifications = c.config.system_notifications;
-        self.hidden_libraries = c.config.hidden_libraries.clone();
-        self.hidden_latest = c.config.hidden_latest.clone();
-        self.music_levels = c.config.music_levels.clone();
     }
 
     /// Returns effective playback state for queue rendering, preferring a connected remote
@@ -4347,7 +4309,7 @@ impl App {
                     self.playlists_open_loading = false;
                 }
             }
-            LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor, last_played_item_id, last_played_completed } => {
+            LibEvent::QueueRestored { items, playlist_id, playlist_name, last_played_item_id, last_played_completed } => {
                 if items.is_empty() {
                     crate::config::clear_queue_state();
                     return;
@@ -4470,10 +4432,10 @@ impl App {
 
     fn spawn_restore_queue_state(&mut self) {
         // Try new state file first; fall back to legacy playlist cache for migration.
-        let (item_ids, playlist_id, playlist_name, saved_cursor, last_played_item_id, last_played_completed) =
+        let (item_ids, playlist_id, playlist_name, last_played_item_id, last_played_completed) =
             if let Some(state) = crate::config::load_queue_state() {
                 if state.item_ids.is_empty() { return; }
-                (state.item_ids, state.playlist_id, state.playlist_name, state.cursor, state.last_played_item_id, state.last_played_completed)
+                (state.item_ids, state.playlist_id, state.playlist_name, state.last_played_item_id, state.last_played_completed)
             } else {
                 // One-time migration from ~/.cache/mbv/playlist.json
                 let path = crate::config::playlist_cache_path();
@@ -4489,17 +4451,16 @@ impl App {
                     return;
                 };
                 if ids.is_empty() { return; }
-                let cursor = v["cursor"].as_u64().map(|n| n as usize).unwrap_or(0);
                 let pl_id = v["playlist_id"].as_str().map(String::from);
                 let pl_name = v["playlist_name"].as_str().unwrap_or("").to_string();
                 let last_played = v["last_played_item_id"].as_str().map(String::from);
-                (ids, pl_id, pl_name, cursor, last_played, false)
+                (ids, pl_id, pl_name, last_played, false)
             };
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let items = client.get_items_by_ids(&item_ids).unwrap_or_default();
-            let _ = tx.send(LibEvent::QueueRestored { items, playlist_id, playlist_name, saved_cursor, last_played_item_id, last_played_completed });
+            let _ = tx.send(LibEvent::QueueRestored { items, playlist_id, playlist_name, last_played_item_id, last_played_completed });
         });
     }
 
@@ -4560,6 +4521,7 @@ impl App {
         self.replace_queue_or_prompt(action);
         if !self.show_save_playlist_modal {
             self.show_playlists = false;
+            self.set_tab(1);
         }
     }
 

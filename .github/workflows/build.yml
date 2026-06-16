@@ -61,7 +61,7 @@ jobs:
 
       - name: Build .deb package
         run: |
-          cargo install cargo-deb --locked
+          command -v cargo-deb || cargo install cargo-deb --locked
           cargo deb --no-build --deb-version "${PKGVER}"
           DEB=$(ls target/debian/mbv_*.deb | head -1)
           echo "DEB=${DEB}" >> "$GITHUB_ENV"
