@@ -1926,14 +1926,17 @@ impl App {
     fn handle_playlist_key(&mut self, key: KeyEvent) -> bool {
         // Confirmation dialog for removing a playing item
         if let Some(t) = self.confirm_remove_idx {
+            self.confirm_remove_idx = None;
+            self.status.clear();
             if matches!(key.code, KeyCode::Char('y') | KeyCode::Enter) {
                 self.player.stop();
-                self.player_tab.items.remove(t);
+                let item = self.player_tab.items.remove(t);
+                self.playlist_undo_stack.push((t, item));
+                self.queue_dirty = true;
                 self.player_tab.playlist_cursor =
                     if self.player_tab.items.is_empty() { 0 }
                     else { t.min(self.player_tab.items.len() - 1) };
             }
-            self.confirm_remove_idx = None;
             return false;
         }
 
@@ -3460,6 +3463,7 @@ impl App {
         };
         if active && current_idx == pos {
             self.confirm_remove_idx = Some(pos);
+            self.flash_status("Remove now-playing item and stop playback? [y/Enter]".into());
             return;
         }
         let item = self.player_tab.items.remove(pos);
