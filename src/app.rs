@@ -15,8 +15,7 @@ fn install_signal_handlers() {
         fn signal(signum: i32, handler: unsafe extern "C" fn(i32)) -> usize;
     }
     unsafe {
-        signal(1,  handle_quit_signal); // SIGHUP  — terminal closed
-        signal(15, handle_quit_signal); // SIGTERM — kill / systemd stop
+        signal(1, handle_quit_signal); // SIGHUP — terminal closed
     }
 }
 
