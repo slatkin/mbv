@@ -208,10 +208,7 @@ pub struct App {
     layout_tracks_area: Rect,
     layout_vol_area: Rect,
     layout_sub_area: Rect,
-    layout_sub_indicator_area: Rect,
-    layout_audio_indicator_area: Rect,
     layout_audio_area: Rect,
-    layout_sessions_btn_area: Rect,
     confirm_remove_idx: Option<usize>,     // playlist index pending removal confirmation
     pending_queue_removal: Option<usize>,  // deferred removal after TrackChanged index-shifts
     confirm_clear_playlist: bool,
@@ -278,7 +275,6 @@ pub struct App {
     autosave_playlist: bool,
     use_nerd_fonts: bool,
     show_playback_panel: bool,
-    layout_playback_indicator_area: Rect,
     ws_send_tx: Option<mpsc::Sender<String>>,
     last_keepalive: Instant,
     last_capabilities: Instant,
@@ -503,10 +499,7 @@ impl App {
             layout_tracks_area: Rect::default(),
             layout_vol_area: Rect::default(),
             layout_sub_area: Rect::default(),
-            layout_sub_indicator_area: Rect::default(),
-            layout_audio_indicator_area: Rect::default(),
             layout_audio_area: Rect::default(),
-            layout_sessions_btn_area: Rect::default(),
             confirm_remove_idx: None,
             pending_queue_removal: None,
             confirm_clear_playlist: false,
@@ -574,7 +567,6 @@ impl App {
             autosave_playlist,
             use_nerd_fonts,
             show_playback_panel: true,
-            layout_playback_indicator_area: Rect::default(),
             ws_send_tx: Some(ws_send_tx_app),
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
@@ -676,10 +668,7 @@ impl App {
             layout_tracks_area: Rect::default(),
             layout_vol_area: Rect::default(),
             layout_sub_area: Rect::default(),
-            layout_sub_indicator_area: Rect::default(),
-            layout_audio_indicator_area: Rect::default(),
             layout_audio_area: Rect::default(),
-            layout_sessions_btn_area: Rect::default(),
             confirm_remove_idx: None,
             pending_queue_removal: None,
             confirm_clear_playlist: false,
@@ -747,7 +736,6 @@ impl App {
             autosave_playlist,
             use_nerd_fonts,
             show_playback_panel: true,
-            layout_playback_indicator_area: Rect::default(),
             ws_send_tx: None,
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
@@ -3024,28 +3012,12 @@ impl App {
                 }
 
                 // Click on info row: exact chip rects
-                if self.layout_sub_area.contains((col, row).into())
-                    || self.layout_sub_indicator_area.contains((col, row).into()) {
+                if self.layout_sub_area.contains((col, row).into()) {
                     self.toggle_sub();
                     return;
                 }
-                if self.layout_audio_indicator_area.contains((col, row).into())
-                    || self.layout_audio_area.contains((col, row).into()) {
+                if self.layout_audio_area.contains((col, row).into()) {
                     if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); }
-                    return;
-                }
-                if self.layout_sessions_btn_area.contains((col, row).into()) {
-                    self.show_sessions = true;
-                    self.spawn_sessions_load();
-                    return;
-                }
-                if self.layout_playback_indicator_area.contains((col, row).into()) {
-                    let active = self.player.status.lock().unwrap().active;
-                    let show_controls = active || self.connected_session_id.is_some();
-                    let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
-                    if show_controls && !in_presentation {
-                        self.show_playback_panel = !self.show_playback_panel;
-                    }
                     return;
                 }
                 if self.layout_vol_area.contains((col, row).into()) {
@@ -4788,108 +4760,11 @@ impl App {
         const VOL_W:  u16 = 14; // " Volume: XXX%"
         let right_w = VOL_W;
 
-        // Thin underline below tab row, with [字] sub and [♪:🏳] audio indicators embedded inline
+        // Thin underline below tab row
         {
-            let (sub_active, has_subs, player_active, is_paused, audio_muted, audio_label) =
-                if let Some(ref remote) = self.connected_session_state {
-                    let sub_on = remote.sub_index != -1;
-                    let muted  = remote.volume == 0;
-                    (sub_on, true, true, remote.is_paused, muted, None::<String>)
-                } else {
-                    let s = self.player.status.lock().unwrap();
-                    let sub_on = !self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
-                    let has_subs = !s.active || !s.sub_tracks.is_empty();
-                    let muted = s.active && (s.audio_id == 0 || self.ui_volume == 0 || s.muted);
-                    let aud_label = if s.active && s.audio_id != 0 {
-                        s.audio_tracks.iter().find(|(id, _)| *id == s.audio_id)
-                            .map(|(_, l)| l.clone())
-                    } else { None };
-                    (sub_on, has_subs, s.active, s.paused, muted, aud_label)
-                };
-            let is_audio_item = self.is_audio_item();
-            let nf = self.use_nerd_fonts;
-
-            // Icon widths: nf-md PUA icons are 1 terminal cell; ASCII/emoji fallbacks are 2.
-            let aud_w: u16 = if nf { 1 } else { 2 };
-            let sub_w: u16 = if nf { 1 } else { 2 };
-            const SESS_W: u16 = 3; // [icon] always 3 cells
-            const PLAY_W: u16 = 1;
-            const SEP:    u16 = 2; // ─<space>
-            let right_total: u16 = aud_w + SEP + sub_w + SEP + SESS_W + SEP + PLAY_W;
-
-            let audio_icon: &str = if nf {
-                if audio_muted        { "\u{F075F}" }   // nf-md-volume_off
-                else if is_audio_item { "\u{F057E}" }   // nf-md-volume_high
-                else {
-                    audio_label.as_deref()
-                        .map(crate::player::lang_to_code)
-                        .unwrap_or("--")
-                }
-            } else {
-                if audio_muted        { "m:" }
-                else if is_audio_item { "\u{266A} " }   // ♪<space>
-                else {
-                    audio_label.as_deref()
-                        .map(crate::player::lang_to_code)
-                        .unwrap_or("--")
-                }
-            };
-            let sub_icon:  &str = if nf { "\u{F0A16}" } else { "CC" };   // nf-md-subtitles / CC
-            let sess_icon: &str = if nf { "\u{F0339}" } else { "\u{271A}" }; // nf-md-link_variant / ✚
-
-            let sub_color  = if !has_subs { palette::OVERLAY } else if sub_active { palette::RED } else { palette::MUTED };
-            let sess_color = if self.connected_session_id.is_some() { palette::IRIS } else { palette::MUTED };
-            let play_style = if player_active && !is_paused {
-                Style::default().fg(palette::IRIS)
-            } else if player_active && is_paused {
-                Style::default().fg(palette::YELLOW)
-            } else {
-                Style::default().fg(palette::MUTED)
-            };
-            let play_icon: &str = if nf {
-                if player_active && is_paused { "\u{F03E4}" } else { "\u{F040A}" }  // nf-md-pause / nf-md-play
-            } else {
-                if player_active && is_paused { "⏸" } else { "▶" }
-            };
-
             let dash = Style::default().fg(palette::MUTED);
-            let w = gap_area.width;
-            let aud_start = w.saturating_sub(right_total) as usize;
-            let mut spans: Vec<Span> = Vec::new();
-            spans.push(Span::styled("─".repeat(aud_start), dash));
-            if player_active {
-                let icon_color = if audio_muted { palette::MUTED } else { palette::IRIS };
-                spans.push(Span::styled(audio_icon, Style::default().fg(icon_color)));
-                spans.push(Span::styled("─ ", dash));
-            } else {
-                spans.push(Span::styled("─".repeat((aud_w + SEP) as usize), dash));
-            }
-            spans.push(Span::styled(sub_icon,   Style::default().fg(sub_color)));
-            spans.push(Span::styled("─ ",       dash));
-            spans.push(Span::styled("[",        Style::default().fg(palette::MUTED)));
-            spans.push(Span::styled(sess_icon,  Style::default().fg(sess_color)));
-            spans.push(Span::styled("]",        Style::default().fg(palette::MUTED)));
-            spans.push(Span::styled("─ ",       dash));
-            spans.push(Span::styled(play_icon,  play_style));
-            f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
-
-            // Click targets from right edge
-            let play_x = gap_area.x + w.saturating_sub(PLAY_W);
-            self.layout_playback_indicator_area = Rect { x: play_x, y: gap_area.y, width: PLAY_W, height: 1 };
-            let sess_x = gap_area.x + w.saturating_sub(PLAY_W + SEP + SESS_W);
-            self.layout_sessions_btn_area = Rect { x: sess_x, y: gap_area.y, width: SESS_W, height: 1 };
-            let sub_x = gap_area.x + w.saturating_sub(PLAY_W + SEP + SESS_W + SEP + sub_w);
-            self.layout_sub_indicator_area = if has_subs {
-                Rect { x: sub_x, y: gap_area.y, width: sub_w, height: 1 }
-            } else {
-                Rect::default()
-            };
-            let aud_x = gap_area.x + w.saturating_sub(PLAY_W + SEP + SESS_W + SEP + sub_w + SEP + aud_w);
-            self.layout_audio_indicator_area = if player_active {
-                Rect { x: aud_x, y: gap_area.y, width: aud_w, height: 1 }
-            } else {
-                Rect::default()
-            };
+            let line = "─".repeat(gap_area.width as usize);
+            f.render_widget(Paragraph::new(Span::styled(line, dash)), gap_area);
         }
         let vol_area = Rect {
             x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
@@ -6795,16 +6670,13 @@ impl App {
 
         let rows: Vec<Row> = prows.iter().map(|prow| match prow {
             PRow::Header(series) => {
-                let name = trunc_str(series, title_col_w.saturating_sub(3));
-                // ─[name]─...  (1 + 1 + name + 1 + dash_w = 3 + name + dash_w)
-                let dash_w = title_col_w.saturating_sub(name.chars().count() + 3);
+                let name = trunc_str(series, title_col_w.saturating_sub(2));
+                // name<sp>─...
+                let dash_w = title_col_w.saturating_sub(name.chars().count() + 1);
                 let line_style = Style::default().fg(palette::IRIS);
-                let bra = Style::default().fg(palette::WHITE);
                 let title_cell = Cell::from(Line::from(vec![
-                    Span::styled("─", line_style),
-                    Span::styled("[", bra),
                     Span::styled(name, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
-                    Span::styled("]", bra),
+                    Span::styled(" ", Style::default()),
                     Span::styled("─".repeat(dash_w), line_style),
                 ]));
                 let len_cell = Cell::from(
@@ -8951,8 +8823,6 @@ mod tests {
             layout_tracks_area: ratatui::layout::Rect::default(),
             layout_vol_area: ratatui::layout::Rect::default(),
             layout_sub_area: ratatui::layout::Rect::default(),
-            layout_sub_indicator_area: ratatui::layout::Rect::default(),
-            layout_audio_indicator_area: ratatui::layout::Rect::default(),
             layout_audio_area: ratatui::layout::Rect::default(),
             confirm_remove_idx: None,
             pending_queue_removal: None,
@@ -9023,7 +8893,6 @@ mod tests {
             autosave_playlist: false,
             use_nerd_fonts: false,
             show_playback_panel: true,
-            layout_playback_indicator_area: Rect::default(),
             ws_send_tx: None,
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
@@ -9036,7 +8905,6 @@ mod tests {
             remote_pos_s: 0,
             remote_pos_at: std::time::Instant::now(),
             remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
-            layout_sessions_btn_area: Rect::default(),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
