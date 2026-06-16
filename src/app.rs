@@ -5009,7 +5009,7 @@ impl App {
             else { palette::PINE };
         let line = Line::from(vec![
             Span::styled(" Volume: ", Style::default().fg(Color::Rgb(230, 230, 230))),
-            Span::styled(format!("{}%", volume), Style::default().fg(color)),
+            Span::styled(format!("{:>3}%", volume), Style::default().fg(color)),
         ]);
         f.render_widget(Paragraph::new(line), area);
     }
