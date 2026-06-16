@@ -36,7 +36,7 @@ pub struct PlayerStatus {
     pub audio_lang: String, // raw lang code of selected audio track, e.g. "en", "ru"
     pub sub_id: i64,    // 0 = off
     pub muted: bool,
-    pub video_width: i64,  // 0 = no video / audio-only
+    pub video_height: i64,  // 0 = no video / audio-only
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -267,7 +267,7 @@ impl Player {
                 audio_lang: String::new(),
                 sub_id: 0,
                 muted: false,
-                video_width: 0,
+                video_height: 0,
             })),
             thread_handle: Mutex::new(None),
             ws_tx,
@@ -450,7 +450,7 @@ impl Player {
             let _ = mpv.observe_property("sid", Format::Int64, 3);
             let _ = mpv.observe_property("mute", Format::Flag, 4);
             let _ = mpv.observe_property("aid", Format::String, 5);
-            let _ = mpv.observe_property("video-params/w", Format::Int64, 6);
+            let _ = mpv.observe_property("video-params/h", Format::Int64, 6);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -753,8 +753,8 @@ impl Player {
                     Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
                         status.lock().unwrap().muted = m;
                     }
-                    Some(Ok(Event::PropertyChange { name: "video-params/w", change: PropertyData::Int64(w), .. })) => {
-                        status.lock().unwrap().video_width = w;
+                    Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
+                        status.lock().unwrap().video_height = h;
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
                         let event_name: &str;
@@ -853,7 +853,7 @@ impl Player {
                     Some(Ok(Event::Shutdown)) => {
                         if !stop_reported {
                             let _ = progress_stop_tx.send(());
-                            drop(progress_handle.take()); // detach; don't block on HTTP call
+                            if let Some(h) = progress_handle.take() { let _ = h.join(); }
                             let id   = current_item_id.lock().unwrap().clone();
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = current_sid.lock().unwrap().clone();
@@ -1061,7 +1061,7 @@ impl Player {
             let _ = mpv.observe_property("sid", Format::Int64, 3);
             let _ = mpv.observe_property("mute", Format::Flag, 4);
             let _ = mpv.observe_property("aid", Format::String, 5);
-            let _ = mpv.observe_property("video-params/w", Format::Int64, 6);
+            let _ = mpv.observe_property("video-params/h", Format::Int64, 6);
             if use_mpv_config {
                 let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
             }
@@ -1462,8 +1462,8 @@ impl Player {
                     Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
                         status.lock().unwrap().muted = m;
                     }
-                    Some(Ok(Event::PropertyChange { name: "video-params/w", change: PropertyData::Int64(w), .. })) => {
-                        status.lock().unwrap().video_width = w;
+                    Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
+                        status.lock().unwrap().video_height = h;
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
                         if pending_initial_jump {
@@ -1527,10 +1527,12 @@ impl Player {
                             let near_end = !natural_end && !completed_is_audio
                                 && runtime > 0
                                 && last_valid_pos * 20 / runtime >= 19;
-                            let _ = progress_stop_tx.send(());
-                            if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                            client.report_stopped(&id, &msid, if completed_is_audio { 0 } else { last_valid_pos }, &sid, &log);
-                            stop_reported = true;
+                            if !stop_reported {
+                                let _ = progress_stop_tx.send(());
+                                if let Some(h) = progress_handle.take() { let _ = h.join(); }
+                                client.report_stopped(&id, &msid, if completed_is_audio { 0 } else { last_valid_pos }, &sid, &log);
+                                stop_reported = true;
+                            }
                             if (natural_end || near_end) && !completed_is_audio {
                                 if let Err(e) = client.mark_played(&id) {
                                     log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}"));
@@ -1642,7 +1644,8 @@ impl Player {
                     }
                     Some(Ok(Event::Shutdown)) => {
                         if !stop_reported {
-                            drop(progress_handle.take()); // detach; don't block on HTTP call
+                            let _ = progress_stop_tx.send(());
+                            if let Some(h) = progress_handle.take() { let _ = h.join(); }
                             let id   = current_item_id.lock().unwrap().clone();
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = session_id.lock().unwrap().clone();

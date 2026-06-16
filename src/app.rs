@@ -4844,16 +4844,10 @@ impl App {
             let pst = self.player.status.lock().unwrap();
             let active = pst.active;
 
-            // Resolution indicator (only when playing)
-            let (res_text, res_color): (&str, ratatui::style::Color) = if pst.video_width >= 3840 {
-                ("4K", palette::PINE)
-            } else if pst.video_width >= 1280 {
-                ("HD", palette::PINE)
-            } else if pst.video_width > 0 {
-                ("SD", palette::MUTED)
-            } else {
-                ("--", palette::MUTED)
-            };
+            // Resolution indicator (only when playing) — shows pixel height e.g. "1080", "720"
+            let res_h = pst.video_height;
+            let res_str = if res_h > 0 { res_h.to_string() } else { "--".to_string() };
+            let res_color = if res_h >= 1080 { palette::PINE } else if res_h > 0 { palette::MUTED } else { palette::MUTED };
 
             // Subtitle indicator (only when playing)
             let sub_color = if pst.sub_id != 0 { palette::RED } else { palette::MUTED };
@@ -4890,7 +4884,7 @@ impl App {
             // Layout when not playing:              ────[↯]─[M]─[>]─
             let ind_w = |text: &str| -> u16 { 1 + text.width() as u16 + 1 + 1 }; // "[X]─"
             let playback_ind_w = if active {
-                ind_w(res_text) + ind_w(&au_text) + ind_w("字")
+                ind_w(&res_str) + ind_w(&au_text) + ind_w("字")
             } else { 0 };
             let dash_count = gap_area.width.saturating_sub(
                 playback_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
@@ -4899,7 +4893,7 @@ impl App {
             if active {
                 spans.extend([
                     Span::styled("[", bracket),
-                    Span::styled(res_text, Style::default().fg(res_color).add_modifier(Modifier::BOLD)),
+                    Span::styled(res_str.clone(), Style::default().fg(res_color).add_modifier(Modifier::BOLD)),
                     Span::styled("]", bracket),
                     Span::styled("─", dash_style),
                     Span::styled("[", bracket),
@@ -8922,7 +8916,7 @@ mod tests {
             position_ticks: 0, runtime_ticks: 0, paused: false,
             volume: 100, volume_max: 100, current_idx: 0, active: false,
             title: String::new(), audio_tracks: Vec::new(), sub_tracks: Vec::new(),
-            audio_id: 0, audio_lang: String::new(), sub_id: 0, muted: false, video_width: 0,
+            audio_id: 0, audio_lang: String::new(), sub_id: 0, muted: false, video_height: 0,
         }));
 
         let (_, player_rx) = std::sync::mpsc::channel();

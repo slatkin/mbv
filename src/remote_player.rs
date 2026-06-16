@@ -37,7 +37,7 @@ impl RemotePlayer {
             audio_lang: String::new(),
             sub_id: 0,
             muted: false,
-            video_width: 0,
+            video_height: 0,
         }));
         let subs_off = Arc::new(AtomicBool::new(true));
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
