@@ -1266,7 +1266,6 @@ impl App {
                 self.last_played_item_id = Some(item.id.clone());
             }
         }
-        self.save_playlist(was_playing);
         self.save_queue_state();
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
         Ok(())
@@ -2496,20 +2495,6 @@ impl App {
     fn save_playlist_view(&self) { self.save_prefs(); }
     fn save_home_card_view(&self) { self.save_prefs(); }
 
-    fn save_playlist(&self, was_playing: bool) {
-        let payload = serde_json::json!({
-            "items": self.player_tab.items,
-            "last_played_item_id": self.last_played_item_id,
-            "was_playing": was_playing,
-            "cursor": self.player_tab.playlist_cursor,
-            "playlist_id": self.queue_playlist_id(),
-            "playlist_name": self.queue_playlist_name(),
-        });
-        if let Ok(json) = serde_json::to_string(&payload) {
-            let path = crate::config::playlist_cache_path();
-            let _ = std::fs::write(path, json);
-        }
-    }
 
     fn seek_to_col(&mut self, col: u16) {
         let bar = self.layout_seekbar_area;
@@ -4517,32 +4502,10 @@ impl App {
     }
 
     fn spawn_restore_queue_state(&mut self) {
-        // Try new state file first; fall back to legacy playlist cache for migration.
+        let Some(state) = crate::config::load_queue_state() else { return };
+        if state.item_ids.is_empty() { return; }
         let (item_ids, source, last_played_item_id, last_played_completed) =
-            if let Some(state) = crate::config::load_queue_state() {
-                if state.item_ids.is_empty() { return; }
-                (state.item_ids, state.source, state.last_played_item_id, state.last_played_completed)
-            } else {
-                // One-time migration from ~/.cache/mbv/playlist.json
-                let path = crate::config::playlist_cache_path();
-                let Ok(text) = std::fs::read_to_string(&path) else { return };
-                let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return };
-                let ids: Vec<String> = if let Some(arr) = v["items"].as_array() {
-                    arr.iter().filter_map(|x| x["id"].as_str().map(String::from)).collect()
-                } else if let Some(arr) = v["ids"].as_array() {
-                    arr.iter().filter_map(|x| x.as_str().map(String::from)).collect()
-                } else if v.is_array() {
-                    serde_json::from_value::<Vec<String>>(v.clone()).unwrap_or_default()
-                } else {
-                    return;
-                };
-                if ids.is_empty() { return; }
-                let pl_id = v["playlist_id"].as_str().map(String::from);
-                let pl_name = v["playlist_name"].as_str().unwrap_or("").to_string();
-                let last_played = v["last_played_item_id"].as_str().map(String::from);
-                let src = crate::config::QueueSource::Playlist { id: pl_id, name: pl_name };
-                (ids, src, last_played, false)
-            };
+            (state.item_ids, state.source, state.last_played_item_id, state.last_played_completed);
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {

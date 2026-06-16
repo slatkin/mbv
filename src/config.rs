@@ -168,18 +168,20 @@ fn safe_cache_filename(key: &str) -> String {
     key.chars().map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' }).collect()
 }
 
-fn migrate_to_cache(filename: &str) -> PathBuf {
+fn migrate_to_state(filename: &str) -> PathBuf {
+    let dest = state_dir().join(filename);
+    if dest.exists() { return dest; }
+    if let Some(parent) = dest.parent() { let _ = std::fs::create_dir_all(parent); }
     let cache = cache_dir().join(filename);
-    if !cache.exists() {
-        let old = config_dir().join(filename);
-        if old.exists() {
-            if let Some(parent) = cache.parent() {
-                let _ = std::fs::create_dir_all(parent);
-            }
-            let _ = std::fs::rename(&old, &cache);
-        }
+    if cache.exists() {
+        let _ = std::fs::rename(&cache, &dest);
+        return dest;
     }
-    cache
+    let old = config_dir().join(filename);
+    if old.exists() {
+        let _ = std::fs::rename(&old, &dest);
+    }
+    dest
 }
 
 pub fn osc_script_path() -> PathBuf {
@@ -195,7 +197,7 @@ pub fn osc_script_path() -> PathBuf {
 }
 
 pub fn prefs_path() -> PathBuf {
-    migrate_to_cache("prefs.json")
+    migrate_to_state("prefs.json")
 }
 
 pub fn load_subs_off() -> bool {
@@ -237,12 +239,8 @@ pub fn control_socket_path() -> String {
     format!("{}/mbv-ctrl.sock", runtime)
 }
 
-pub fn playlist_cache_path() -> PathBuf {
-    migrate_to_cache("playlist.json")
-}
-
 pub fn token_cache_path() -> PathBuf {
-    migrate_to_cache("token.json")
+    migrate_to_state("token.json")
 }
 
 pub fn config_path() -> PathBuf {
@@ -573,10 +571,10 @@ hidden_latest = ["Movies", "TV SHOWS"]
 
     #[test]
     fn token_cache_path_uses_xdg() {
-        std::env::set_var("XDG_CACHE_HOME", "/tmp/xdg-test-cache");
+        std::env::set_var("XDG_STATE_HOME", "/tmp/xdg-test-state");
         let path = token_cache_path();
-        std::env::remove_var("XDG_CACHE_HOME");
-        assert_eq!(path.to_str().unwrap(), "/tmp/xdg-test-cache/mbv/token.json");
+        std::env::remove_var("XDG_STATE_HOME");
+        assert_eq!(path.to_str().unwrap(), "/tmp/xdg-test-state/mbv/token.json");
     }
 
     #[test]
