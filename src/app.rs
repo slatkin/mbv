@@ -2046,7 +2046,7 @@ impl App {
             KeyCode::Char('s') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
                 if !self.player_tab.items.is_empty() {
                     self.save_playlist_dialog = Some(SavePlaylistDialog {
-                        input: String::new(),
+                        input: self.queue_playlist_name.clone(),
                         stage: SavePlaylistStage::EnterName,
                     });
                 }
