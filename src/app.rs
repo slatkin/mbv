@@ -119,7 +119,7 @@ enum LibEvent {
     NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
     PlaylistsLoaded(Vec<MediaItem>),
     PlaylistItemsLoaded { playlist_id: String, items: Vec<MediaItem> },
-    QueueRestored { items: Vec<MediaItem>, playlist_id: Option<String>, playlist_name: String, last_played_item_id: Option<String>, last_played_completed: bool },
+    QueueRestored { items: Vec<MediaItem>, source: crate::config::QueueSource, last_played_item_id: Option<String>, last_played_completed: bool },
     Error(String),
 }
 
@@ -268,8 +268,8 @@ pub struct App {
     playlists_open_cursor: usize,
     playlists_open_scroll: usize,
     playlists_open_loading: bool,
-    queue_playlist_id: Option<String>,         // id of the playlist currently loaded into the queue
-    queue_playlist_name: String,
+    queue_source: crate::config::QueueSource,
+    queue_restored: bool,
     queue_dirty: bool,
     pending_queue_action: Option<PendingQueueAction>,
     show_save_playlist_modal: bool,
@@ -301,7 +301,7 @@ pub struct App {
 }
 
 enum PendingQueueAction {
-    PlayItems { items: Vec<MediaItem>, start_idx: usize, playlist_id: Option<String>, playlist_name: String },
+    PlayItems { items: Vec<MediaItem>, start_idx: usize, source: crate::config::QueueSource },
     ClearQueue,
     Quit,
 }
@@ -560,8 +560,8 @@ impl App {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
-            queue_playlist_id: None,
-            queue_playlist_name: String::new(),
+            queue_source: crate::config::QueueSource::Unknown,
+            queue_restored: false,
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
@@ -729,8 +729,8 @@ impl App {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
-            queue_playlist_id: None,
-            queue_playlist_name: String::new(),
+            queue_source: crate::config::QueueSource::Unknown,
+            queue_restored: false,
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
@@ -1516,15 +1516,17 @@ impl App {
                 KeyCode::Enter => {
                     if self.playlists_open.is_some() {
                         let selected_id = self.playlists_open_items.get(self.playlists_open_cursor).map(|i| i.id.clone());
-                        let playlist_id = self.playlists_open.as_ref().map(|p| p.id.clone());
-                        let playlist_name = self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default();
+                        let pl_source = crate::config::QueueSource::Playlist {
+                            id: self.playlists_open.as_ref().map(|p| p.id.clone()),
+                            name: self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
+                        };
                         let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
                         if !items.is_empty() {
                             let start = selected_id.as_deref()
                                 .and_then(|id| items.iter().position(|i| i.id == id))
                                 .unwrap_or(0);
                             let action = PendingQueueAction::PlayItems {
-                                items, start_idx: start, playlist_id, playlist_name,
+                                items, start_idx: start, source: pl_source,
                             };
                             self.replace_queue_or_prompt(action);
                             if !self.show_save_playlist_modal {
@@ -1726,7 +1728,12 @@ impl App {
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 let item = self.current_lib_item();
                 if let Some(item) = item {
-                    if item.is_folder { self.play_folder(&item.id.clone()); }
+                    if item.is_folder {
+                        let ct = self.libs[self.tab_idx - self.lib_tab_offset()].library.collection_type.clone();
+                        self.play_folder(&item.id.clone());
+                        self.queue_source = crate::config::QueueSource::Collection { collection_type: ct };
+                        self.save_queue_state();
+                    }
                     else { self.select(); }
                 }
             }
@@ -1936,6 +1943,7 @@ impl App {
                 self.player_tab.playlist_cursor =
                     if self.player_tab.items.is_empty() { 0 }
                     else { t.min(self.player_tab.items.len() - 1) };
+                self.save_queue_state();
             }
             return false;
         }
@@ -2015,6 +2023,7 @@ impl App {
                     self.player_tab.playlist_cursor = idx;
                     self.queue_dirty = true;
                     self.flash_status(format!("Restored: {name}"));
+                    self.save_queue_state();
                 }
             }
             KeyCode::Char(c @ '1'..='9') => {
@@ -2052,7 +2061,7 @@ impl App {
             KeyCode::Char('s') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
                 if !self.player_tab.items.is_empty() {
                     self.save_playlist_dialog = Some(SavePlaylistDialog {
-                        input: self.queue_playlist_name.clone(),
+                        input: self.queue_playlist_name().to_string(),
                         stage: SavePlaylistStage::EnterName,
                     });
                 }
@@ -2099,9 +2108,9 @@ impl App {
                             self.force_clear = true;
                             match result {
                                 Ok(id) => {
-                                    self.queue_playlist_id = Some(id);
-                                    self.queue_playlist_name = name.clone();
+                                    self.queue_source = crate::config::QueueSource::Playlist { id: Some(id), name: name.clone() };
                                     self.queue_dirty = false;
+                                    self.save_queue_state();
                                     self.flash_status(format!("Saved as playlist \"{name}\""));
                                 }
                                 Err(e) => self.flash_status(format!("Error: {e}")),
@@ -2126,8 +2135,7 @@ impl App {
                         self.force_clear = true;
                         match result {
                             Ok(id) => {
-                                self.queue_playlist_id = Some(id);
-                                self.queue_playlist_name = name.clone();
+                                self.queue_source = crate::config::QueueSource::Playlist { id: Some(id), name: name.clone() };
                                 self.queue_dirty = false;
                                 self.flash_status(format!("Saved as playlist \"{name}\""));
                             }
@@ -2486,8 +2494,8 @@ impl App {
             "last_played_item_id": self.last_played_item_id,
             "was_playing": was_playing,
             "cursor": self.player_tab.playlist_cursor,
-            "playlist_id": self.queue_playlist_id,
-            "playlist_name": self.queue_playlist_name,
+            "playlist_id": self.queue_playlist_id(),
+            "playlist_name": self.queue_playlist_name(),
         });
         if let Ok(json) = serde_json::to_string(&payload) {
             let path = crate::config::playlist_cache_path();
@@ -2709,15 +2717,17 @@ impl App {
                             if idx < self.playlists_open_items.len() {
                                 if self.playlists_open_cursor == idx {
                                     let selected_id = self.playlists_open_items.get(idx).map(|i| i.id.clone());
-                                    let playlist_id = self.playlists_open.as_ref().map(|p| p.id.clone());
-                                    let playlist_name = self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default();
+                                    let pl_source = crate::config::QueueSource::Playlist {
+                                        id: self.playlists_open.as_ref().map(|p| p.id.clone()),
+                                        name: self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
+                                    };
                                     let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
                                     if !items.is_empty() {
                                         let start = selected_id.as_deref()
                                             .and_then(|id| items.iter().position(|i| i.id == id))
                                             .unwrap_or(0);
                                         let action = PendingQueueAction::PlayItems {
-                                            items, start_idx: start, playlist_id, playlist_name,
+                                            items, start_idx: start, source: pl_source,
                                         };
                                         self.replace_queue_or_prompt(action);
                                         if !self.show_save_playlist_modal {
@@ -3454,6 +3464,7 @@ impl App {
         let item = self.player_tab.items.remove(pos);
         self.queue_dirty = true;
         self.playlist_undo_stack.push((pos, item));
+        self.save_queue_state();
         if active {
             self.player.send_command(PlayerCommand::PlaylistRemove(pos));
         }
@@ -3570,10 +3581,13 @@ impl App {
             drop(c);
             if episodes.len() > 1 {
                 let c = Arc::new(self.client.lock().unwrap().clone());
+                self.on_queue_replace_silent();
                 self.player_tab.items = episodes.clone();
                 self.player_tab.playlist_cursor = 0;
                 self.flash_status(label);
                 self.player.play_playlist(episodes, 0, c, self.log.clone(), self.ui_volume);
+                self.queue_source = crate::config::QueueSource::Series;
+                self.save_queue_state();
                 return;
             }
         }
@@ -3593,6 +3607,7 @@ impl App {
             self.player_tab.items.push(item);
             self.queue_dirty = true;
             self.flash_status(format!("Added: {name}"));
+            self.save_queue_state();
         } else if self.tab_idx >= 2 && self.tab_idx != self.log_tab_idx() {
             let Some(item) = self.current_lib_item() else { return };
             if item.is_folder { self.do_enqueue_folder(item); return; }
@@ -3601,6 +3616,7 @@ impl App {
             self.player_tab.items.push(item);
             self.queue_dirty = true;
             self.flash_status(format!("Added: {name}"));
+            self.save_queue_state();
         }
     }
 
@@ -3616,6 +3632,7 @@ impl App {
                 for i in items { self.player_tab.items.push(i); }
                 self.queue_dirty = true;
                 self.flash_status(format!("Enqueued {count} items from {}", item.display_name()));
+                self.save_queue_state();
             }
             Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
         }
@@ -3707,6 +3724,8 @@ impl App {
                     self.player_tab.items = tracks.clone();
                     self.player_tab.playlist_cursor = start_idx;
                     self.play_items_routed(tracks, start_idx);
+                    self.queue_source = crate::config::QueueSource::Album;
+                    self.save_queue_state();
                     return;
                 }
             }
@@ -3719,10 +3738,13 @@ impl App {
                             siblings.retain(|i| !i.is_folder);
                             siblings.sort_by_key(|a| natural_sort_key(a.sort_key()));
                             if let Some(start_idx) = siblings.iter().position(|i| i.id == fresh.id) {
+                                let ct = self.libs[lib_idx].library.collection_type.clone();
                                 drop(client);
                                 self.player_tab.items = siblings.clone();
                                 self.player_tab.playlist_cursor = start_idx;
                                 self.play_items_routed(siblings, start_idx);
+                                self.queue_source = crate::config::QueueSource::Collection { collection_type: ct };
+                                self.save_queue_state();
                                 return;
                             }
                             drop(client);
@@ -3775,8 +3797,16 @@ impl App {
                 }
                 else { self.select(); }
             }
-            Some(ContextAction::PlayFolder(id)) => self.play_folder(&id),
-            Some(ContextAction::ShuffleFolder(id)) => self.shuffle_folder(&id),
+            Some(ContextAction::PlayFolder(id)) => {
+                let ct = if self.tab_idx > 1 { self.libs[self.tab_idx - self.lib_tab_offset()].library.collection_type.clone() } else { String::new() };
+                self.play_folder(&id);
+                self.queue_source = crate::config::QueueSource::Collection { collection_type: ct };
+                self.save_queue_state();
+            }
+            Some(ContextAction::ShuffleFolder(id)) => {
+                self.shuffle_folder(&id);
+                // queue_source already set to Shuffle inside shuffle_folder
+            }
             Some(ContextAction::Enqueue) => self.enqueue_selected(),
             Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder(item),
             Some(ContextAction::MarkPlayed(id))   => self.context_set_played(&id, true),
@@ -3913,6 +3943,8 @@ impl App {
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
                 self.play_items_routed(items, 0);
+                self.queue_source = crate::config::QueueSource::Shuffle;
+                self.save_queue_state();
             }
             Err(e) => { let msg = format!("Error: {e}"); drop(client); self.flash_status(msg); }
         }
@@ -3951,6 +3983,8 @@ impl App {
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
                 self.play_items_routed(items, 0);
+                self.queue_source = crate::config::QueueSource::Shuffle;
+                self.save_queue_state();
             }
             Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
         }
@@ -4330,7 +4364,7 @@ impl App {
                     self.playlists_open_loading = false;
                 }
             }
-            LibEvent::QueueRestored { items, playlist_id, playlist_name, last_played_item_id, last_played_completed } => {
+            LibEvent::QueueRestored { items, source, last_played_item_id, last_played_completed } => {
                 if items.is_empty() {
                     crate::config::clear_queue_state();
                     return;
@@ -4352,8 +4386,8 @@ impl App {
                 self.last_played_completed = last_played_completed;
                 self.player_tab.items = items;
                 self.player_tab.playlist_cursor = cursor;
-                self.queue_playlist_id = playlist_id;
-                self.queue_playlist_name = playlist_name;
+                self.queue_source = source;
+                self.queue_restored = true;
                 self.queue_dirty = false;
                 if self.client.lock().unwrap().config.start_on_queue {
                     self.tab_idx = 1;
@@ -4370,7 +4404,7 @@ impl App {
     /// Returns true if the app should quit. Prompts to save if queue is dirty.
     fn try_quit(&mut self) -> bool {
         if !self.player.is_remote() { self.player.stop(); }
-        if self.queue_dirty && self.queue_playlist_id.is_some() {
+        if self.queue_dirty && self.queue_is_saved_playlist() {
             self.replace_queue_or_prompt(PendingQueueAction::Quit);
             false // modal is showing; actual quit happens after user responds
         } else {
@@ -4379,19 +4413,19 @@ impl App {
     }
 
     fn on_queue_replace_silent(&mut self) {
-        if self.queue_dirty && self.queue_playlist_id.is_some() {
+        if self.queue_dirty && self.queue_is_saved_playlist() {
             if self.autosave_playlist {
                 self.save_playlist_to_emby();
             }
         }
-        self.queue_playlist_id = None;
-        self.queue_playlist_name = String::new();
+        self.queue_source = crate::config::QueueSource::Unknown;
+        self.queue_restored = false;
         self.queue_dirty = false;
     }
 
     /// For interactive actions that can be cancelled (clear, quit): prompts if dirty.
     fn replace_queue_or_prompt(&mut self, action: PendingQueueAction) {
-        if self.queue_dirty && self.queue_playlist_id.is_some() {
+        if self.queue_dirty && self.queue_is_saved_playlist() {
             self.pending_queue_action = Some(action);
             self.show_save_playlist_modal = true;
         } else {
@@ -4402,17 +4436,18 @@ impl App {
     fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {
         self.queue_dirty = false;
         match action {
-            PendingQueueAction::PlayItems { items, start_idx, playlist_id, playlist_name } => {
-                self.queue_playlist_id = playlist_id;
-                self.queue_playlist_name = playlist_name;
+            PendingQueueAction::PlayItems { items, start_idx, source } => {
+                self.queue_source = source;
+                self.queue_restored = false;
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = start_idx;
                 let c = Arc::new(self.client.lock().unwrap().clone());
                 self.player.play_playlist(items, start_idx, c, self.log.clone(), self.ui_volume);
+                self.save_queue_state();
             }
             PendingQueueAction::ClearQueue => {
-                self.queue_playlist_id = None;
-                self.queue_playlist_name = String::new();
+                self.queue_source = crate::config::QueueSource::Unknown;
+                self.queue_restored = false;
                 self.player.stop();
                 self.player_tab.items.clear();
                 self.player_tab.playlist_cursor = 0;
@@ -4422,11 +4457,31 @@ impl App {
         }
     }
 
+    fn queue_is_saved_playlist(&self) -> bool {
+        matches!(&self.queue_source, crate::config::QueueSource::Playlist { id: Some(_), .. })
+    }
+
+    fn queue_playlist_id(&self) -> Option<&str> {
+        if let crate::config::QueueSource::Playlist { id: Some(ref id), .. } = self.queue_source {
+            Some(id.as_str())
+        } else {
+            None
+        }
+    }
+
+    fn queue_playlist_name(&self) -> &str {
+        if let crate::config::QueueSource::Playlist { ref name, .. } = self.queue_source {
+            name.as_str()
+        } else {
+            ""
+        }
+    }
+
     fn save_playlist_to_emby(&self) {
-        let Some(ref playlist_id) = self.queue_playlist_id else { return };
+        let Some(playlist_id) = self.queue_playlist_id() else { return };
         let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
         let client = self.client.lock().unwrap().clone();
-        let playlist_id = playlist_id.clone();
+        let playlist_id = playlist_id.to_string();
         let log = self.log.clone();
         std::thread::spawn(move || {
             if let Err(e) = client.update_playlist_items(&playlist_id, &item_ids) {
@@ -4437,8 +4492,7 @@ impl App {
 
     fn save_queue_state(&self) {
         let state = crate::config::QueueState {
-            playlist_id: self.queue_playlist_id.clone(),
-            playlist_name: self.queue_playlist_name.clone(),
+            source: self.queue_source.clone(),
             item_ids: self.player_tab.items.iter().map(|i| i.id.clone()).collect(),
             cursor: self.player_tab.playlist_cursor,
             last_played_item_id: self.last_played_item_id.clone(),
@@ -4453,10 +4507,10 @@ impl App {
 
     fn spawn_restore_queue_state(&mut self) {
         // Try new state file first; fall back to legacy playlist cache for migration.
-        let (item_ids, playlist_id, playlist_name, last_played_item_id, last_played_completed) =
+        let (item_ids, source, last_played_item_id, last_played_completed) =
             if let Some(state) = crate::config::load_queue_state() {
                 if state.item_ids.is_empty() { return; }
-                (state.item_ids, state.playlist_id, state.playlist_name, state.last_played_item_id, state.last_played_completed)
+                (state.item_ids, state.source, state.last_played_item_id, state.last_played_completed)
             } else {
                 // One-time migration from ~/.cache/mbv/playlist.json
                 let path = crate::config::playlist_cache_path();
@@ -4475,13 +4529,14 @@ impl App {
                 let pl_id = v["playlist_id"].as_str().map(String::from);
                 let pl_name = v["playlist_name"].as_str().unwrap_or("").to_string();
                 let last_played = v["last_played_item_id"].as_str().map(String::from);
-                (ids, pl_id, pl_name, last_played, false)
+                let src = crate::config::QueueSource::Playlist { id: pl_id, name: pl_name };
+                (ids, src, last_played, false)
             };
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let items = client.get_items_by_ids(&item_ids).unwrap_or_default();
-            let _ = tx.send(LibEvent::QueueRestored { items, playlist_id, playlist_name, last_played_item_id, last_played_completed });
+            let _ = tx.send(LibEvent::QueueRestored { items, source, last_played_item_id, last_played_completed });
         });
     }
 
@@ -4537,7 +4592,7 @@ impl App {
         if playable.is_empty() { self.flash_status("No playable items in playlist".into()); return; }
         let action = PendingQueueAction::PlayItems {
             items: playable, start_idx: 0,
-            playlist_id: Some(playlist_id), playlist_name,
+            source: crate::config::QueueSource::Playlist { id: Some(playlist_id), name: playlist_name },
         };
         self.replace_queue_or_prompt(action);
         if !self.show_save_playlist_modal {
@@ -4649,6 +4704,8 @@ impl App {
                         self.player.play_playlist(items_with_pos, start_idx, c, self.log.clone(), self.ui_volume);
                     }
                 }
+                self.queue_source = crate::config::QueueSource::Remote;
+                self.save_queue_state();
             }
             WsEvent::Stop => { self.player.stop(); }
             WsEvent::Pause => {
@@ -5600,7 +5657,7 @@ impl App {
     }
 
     fn render_dirty_playlist_modal(&self, f: &mut ratatui::Frame) {
-        let name = trunc_str(&self.queue_playlist_name, 36);
+        let name = trunc_str(self.queue_playlist_name(), 36);
         let is_quit = matches!(self.pending_queue_action, Some(PendingQueueAction::Quit));
         let full = f.area();
         let w: u16 = 56;
@@ -8935,8 +8992,8 @@ mod tests {
             playlists_open_cursor: 0,
             playlists_open_scroll: 0,
             playlists_open_loading: false,
-            queue_playlist_id: None,
-            queue_playlist_name: String::new(),
+            queue_source: crate::config::QueueSource::Unknown,
+            queue_restored: false,
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,

@@ -92,10 +92,23 @@ fn queue_state_path() -> PathBuf {
     state_dir().join("queue_state.json")
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum QueueSource {
+    Playlist { id: Option<String>, name: String },
+    Album,
+    Series,
+    Shuffle,
+    Remote,
+    Collection { collection_type: String },
+    #[default]
+    Unknown,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct QueueState {
-    pub playlist_id: Option<String>,
-    pub playlist_name: String,
+    #[serde(default)]
+    pub source: QueueSource,
     pub item_ids: Vec<String>,
     pub cursor: usize,
     pub last_played_item_id: Option<String>,
