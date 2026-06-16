@@ -43,6 +43,7 @@ All code lives in `src/`. The app is single-binary with these modules:
 | `mpris.rs` | MPRIS2 D-Bus interface (media keys, playerctl) |
 | `login.rs` | Full-screen TUI login flow |
 | `applog.rs` | In-process log ring buffer displayed on the Log tab |
+| `ctrl.rs` | Wire types (`CtrlCmd`, `CtrlEvent`, `CtrlState`) shared between daemon and remote_player |
 
 ### Event loop (`app.rs`)
 
@@ -60,9 +61,12 @@ Background work (library fetching, image fetching, album year lookups) is always
 
 - `libs: Vec<LibraryTab>` — one entry per Emby library visible in the tab bar. Each has a `nav_stack: Vec<BrowseLevel>` (browsing history) and optional `search: LibSearch`.
 - `player_tab: PlayerTab` — the queue (items + playlist cursor).
+- `queue_source: QueueSource` — enum tracking how the current queue was loaded (`Playlist`, `Album`, `Series`, `Shuffle`, `Remote`, `Collection { collection_type }`, `Unknown`). Persisted in `queue_state.json`. Set after every queue-replacing operation; cleared by `on_queue_replace_silent()`.
+- `queue_restored: bool` — true when the queue was loaded from `queue_state.json` on startup rather than built interactively.
 - `home: HomePane` — continue-watching + latest rows.
 - `card_image_states: HashMap<String, Option<StatefulProtocol>>` — decoded images keyed by `"{item_id}:{slot}"` (e.g. `"abc123:lib"`, `"abc123:A"`).
 - `music_levels: Vec<String>` — from config, describes the music folder layout (e.g. `["group", "album"]`). Drives `is_album_level()` / `is_viewing_album_folders()`.
+- `use_nerd_fonts: bool` — from config; when true, single-glyph Nerd Font code points are used in place of ASCII fallbacks (e.g. in the divider status indicators).
 
 ### MediaItem
 
@@ -98,4 +102,35 @@ Images are fetched by `fetch_card_image()` which spawns a thread, downloads byte
 
 ### Daemon mode
 
-`mbv -d` spawns `mbv --daemon-inner` as a detached process. The inner daemon runs `daemon::run()` which holds a `Player` and exposes a Unix socket at `$XDG_RUNTIME_DIR/mbv-ctl.sock`. A subsequent TUI invocation that detects the daemon connects via `remote_player::RemotePlayer` instead of creating its own `Player`.
+`mbv -d` spawns `mbv --daemon-inner` as a detached process. The inner daemon runs `daemon::run()` which holds a `Player` and exposes a Unix socket at `$XDG_RUNTIME_DIR/mbv-ctl.sock`. A subsequent TUI invocation that detects the daemon connects via `remote_player::RemotePlayer` instead of creating its own `Player`. Running `mbv -d` when a daemon is already running exits with an error.
+
+### Divider status indicators
+
+The tab-bar divider line (`gap_area` in `render()`) renders right-aligned bracketed indicators: `[字]` subtitle, `[↯]` remote-control, `[>]/[||]/[ ]` playback. The rendering block is in `render()` just below the `// Thin underline below tab row` comment.
+
+To add a new indicator:
+
+1. Compute `(text: &str, color: Color)` from whatever app state you need.
+2. Add it to the `ind_w` sum in `dash_count`:
+   ```rust
+   let dash_count = gap_area.width.saturating_sub(ind_w(new_text) + ind_w(rc_text) + ...) as usize;
+   ```
+3. Insert the bracket/glyph/bracket spans in order (left-to-right = left-of-existing to right):
+   ```rust
+   Span::styled("[", bracket),
+   Span::styled(new_text, Style::default().fg(new_color).add_modifier(Modifier::BOLD)),
+   Span::styled("]", bracket),
+   Span::styled("─", dash_style),
+   ```
+
+Rules:
+- `ind_w(text)` = `1 + text.width() + 1 + 1` (`[` + display-width + `]` + `─`). Use `text.width()` (from `UnicodeWidthStr`) not `.chars().count()` — CJK and some nerd font glyphs are double-width.
+- Brackets `[` `]` use the `bracket` style (white). The trailing `─` uses `dash_style` (muted). Never combine them into one span or the dash turns white.
+- Nerd font glyphs go behind `if self.use_nerd_fonts { ... } else { ascii_fallback }`.
+- The `dash_count` dashes fill the remaining width; the total of all `ind_w` values plus `dash_count` must equal `gap_area.width`.
+
+### Persistent state files
+
+- `~/.local/state/mbv/queue_state.json` — current queue item IDs, cursor, last-played item, and `QueueSource`. Updated immediately on every structural queue change (not just on quit).
+- `~/.config/mbv/config.toml` — user config (parsed in `config.rs`).
+- `~/.local/share/mbv/mbv.pid` — daemon PID file; checked by `daemon_running()` in `main.rs`.
