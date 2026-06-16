@@ -1239,6 +1239,7 @@ impl App {
                 }
             }
             self.save_queue_state();
+            if !self.player.is_remote() { self.player.stop(); }
             let _ = restore_terminal(terminal);
             return Ok(());
         }
