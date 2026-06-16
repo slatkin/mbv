@@ -4770,12 +4770,12 @@ impl App {
         let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
         let status_h:   u16 = if show_controls && !in_presentation && self.show_playback_panel { 1 } else { 0 };
         let controls_h: u16 = if show_controls && !in_presentation && self.show_playback_panel { 2 } else { 0 };
-        let [tabs_area, gap_area, toast_area, controls_area, status_area, main_area] = Layout::vertical([
+        let [tabs_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(1),            // tabs
-            Constraint::Length(1),            // spacer
-            Constraint::Length(1),            // toast notifications / now-playing title
+            Constraint::Length(1),            // spacer with indicators
+            Constraint::Length(1),            // now-playing title
             Constraint::Length(controls_h),   // playback controls (when active)
-            Constraint::Length(status_h),     // now-playing title bar (when active)
+            Constraint::Length(status_h),     // HR line below controls
             Constraint::Min(0),               // main content
         ]).areas(area);
 
@@ -4959,22 +4959,16 @@ impl App {
         } else {
             None
         };
-        // Toast area: flash message, then now-playing title
-        if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {
-            f.render_widget(
-                Paragraph::new(Self::toast_line(&self.status)).alignment(Alignment::Center),
-                toast_area,
-            );
-        } else if let Some((ref title, color)) = now_playing_title {
+        // Now-playing title row
+        if let Some((ref title, color)) = now_playing_title {
             f.render_widget(
                 Paragraph::new(title.as_str())
                     .alignment(Alignment::Center)
                     .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                toast_area,
+                title_area,
             );
         }
         if show_controls && !in_presentation && self.show_playback_panel {
-            // Status / now-playing HR (title now lives in the toast row)
             f.render_widget(
                 Paragraph::new(Span::styled(
                     "─".repeat(area.width as usize),
@@ -5001,6 +4995,22 @@ impl App {
             self.render_log(f, main_area);
         } else {
             self.render_library(f, main_area, self.tab_idx - self.lib_tab_offset());
+        }
+
+        // Toast overlay — floats centered over the full terminal, below modal overlays
+        if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {
+            let toast_w = area.width.min(60);
+            let toast_x = area.x + (area.width.saturating_sub(toast_w)) / 2;
+            let toast_y = area.y + area.height / 2 - 1;
+            let toast_rect = Rect { x: toast_x, y: toast_y, width: toast_w, height: 3 };
+            f.render_widget(Clear, toast_rect);
+            f.render_widget(
+                Paragraph::new(Self::toast_line(&self.status))
+                    .alignment(Alignment::Center)
+                    .style(Style::default().bg(palette::FOCUSED))
+                    .block(Block::default().style(Style::default().bg(palette::FOCUSED)).padding(ratatui::widgets::Padding::vertical(1))),
+                toast_rect,
+            );
         }
 
         self.render_context_menu(f);
@@ -6765,14 +6775,16 @@ impl App {
 
         let rows: Vec<Row> = prows.iter().map(|prow| match prow {
             PRow::Header(series) => {
-                let prefix = "  ";
-                let name = trunc_str(series, title_col_w.saturating_sub(2));
-                let dash_w = title_col_w.saturating_sub(prefix.len() + name.chars().count() + 1);
+                let name = trunc_str(series, title_col_w.saturating_sub(3));
+                // ─[name]─...  (1 + 1 + name + 1 + dash_w = 3 + name + dash_w)
+                let dash_w = title_col_w.saturating_sub(name.chars().count() + 3);
                 let line_style = Style::default().fg(palette::IRIS);
+                let bra = Style::default().fg(palette::WHITE);
                 let title_cell = Cell::from(Line::from(vec![
-                    Span::raw(prefix),
+                    Span::styled("─", line_style),
+                    Span::styled("[", bra),
                     Span::styled(name, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
-                    Span::raw(" "),
+                    Span::styled("]", bra),
                     Span::styled("─".repeat(dash_w), line_style),
                 ]));
                 let len_cell = Cell::from(
