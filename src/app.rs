@@ -1983,9 +1983,10 @@ impl App {
                         let current_idx = st.current_idx;
                         drop(st);
                         if active {
-                            if t == current_idx {
+                            let is_audio = self.player_tab.items.get(t).map(|i| i.is_audio()).unwrap_or(false);
+                            if t == current_idx && is_audio {
                                 self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
-                            } else {
+                            } else if t != current_idx {
                                 self.player.send_command(PlayerCommand::JumpTo(t));
                             }
                         } else if !self.player_tab.items.is_empty() {
