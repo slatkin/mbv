@@ -1,3 +1,4 @@
+use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION, PLAYLIST_VIEW_COUNT};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -338,7 +339,7 @@ impl App {
         if key.code == KeyCode::Char('h') {
             let active = self.player.status.lock().unwrap().active;
             let show_controls = active || self.connected_session_id.is_some();
-            let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
+            let in_presentation = self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION;
             if show_controls && !in_presentation {
                 self.show_playback_panel = !self.show_playback_panel;
             }
@@ -677,13 +678,13 @@ impl App {
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
             KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
             KeyCode::Up | KeyCode::Left
-                if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_view == 1) => {
+                if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_view == PLAYLIST_VIEW_CARDS) => {
                     self.last_nav_at = Instant::now();
                     self.player_tab.playlist_cursor -= 1;
                 }
             KeyCode::Down | KeyCode::Right
                 if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len()
-                && (key.code == KeyCode::Down || self.playlist_view == 1) => {
+                && (key.code == KeyCode::Down || self.playlist_view == PLAYLIST_VIEW_CARDS) => {
                     self.last_nav_at = Instant::now();
                     self.player_tab.playlist_cursor += 1;
                 }
@@ -766,7 +767,7 @@ impl App {
                 self.open_context_menu();
             }
             KeyCode::Char('v') => {
-                self.playlist_view = (self.playlist_view + 1) % 3;
+                self.playlist_view = (self.playlist_view + 1) % PLAYLIST_VIEW_COUNT;
                 self.save_playlist_view();
                 if !self.card_image_states.is_empty() { self.force_clear = true; }
             }
@@ -1127,11 +1128,11 @@ impl App {
     }
 
     fn context_menu_spawn_point(&self) -> (u16, u16) {
-        if (self.tab_idx == 0 && self.home_card_view) || (self.tab_idx == 1 && self.playlist_view == 1) {
+        if (self.tab_idx == 0 && self.home_card_view) || (self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_CARDS) {
             let center = self.layout_carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
-        if self.tab_idx == 1 && self.playlist_view == 2 {
+        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
             let inner = self.layout_playlist_inner;
             let row = self.layout_presentation_visual_cursor
                 .saturating_sub(self.layout_presentation_scroll) as u16;
@@ -1530,7 +1531,7 @@ impl App {
                         }
                     }
                 } else if self.tab_idx == 1 {
-                    if self.playlist_view == 2 {
+                    if self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
                         let sb = self.layout_presentation_sb;
                         if sb.width > 0 && sb.contains((col, row).into()) {
                             let n = self.player_tab.items.len();
@@ -1623,7 +1624,7 @@ impl App {
                     }
                 }
 
-                if self.tab_idx == 1 && self.playlist_view == 1 {
+                if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_CARDS {
                     let slots = self.layout_carousel_slots;
                     log::info!(target: "mouse",
                         "carousel click ({col},{row}): slots=[({:?},{:?}),({:?},{:?}),({:?},{:?})]",
@@ -1739,7 +1740,7 @@ impl App {
                     }
                 }
 
-                if self.tab_idx == 1 && self.playlist_view == 2 {
+                if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
                     let sb = self.layout_presentation_sb;
                     if sb.width > 0 && sb.contains((col, row).into()) {
                         self.presentation_scrollbar_seek(row);
@@ -1766,7 +1767,7 @@ impl App {
                     self.adjust_volume(5);
                     return;
                 }
-                if (self.tab_idx == 1 && self.playlist_view == 1) || (self.tab_idx == 0 && self.home_card_view) {
+                if (self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_CARDS) || (self.tab_idx == 0 && self.home_card_view) {
                     let slots = self.layout_carousel_slots;
                     for (maybe_item_idx, card_rect) in slots.iter() {
                         if card_rect.contains((col, row).into()) {
@@ -1798,7 +1799,7 @@ impl App {
                     self.home_scrollbar_seek(row);
                 }
             MouseEventKind::Drag(MouseButton::Left)
-                if self.tab_idx == 1 && self.playlist_view == 2 && {
+                if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION && {
                     let sb = self.layout_presentation_sb;
                     sb.width > 0 && sb.contains((col, row).into())
                 } => {

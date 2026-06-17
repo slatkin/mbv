@@ -12,6 +12,10 @@ use std::time::{Duration, Instant};
 
 static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 
+pub(super) const PLAYLIST_VIEW_CARDS: u8        = 1;
+pub(super) const PLAYLIST_VIEW_PRESENTATION: u8 = 2;
+pub(super) const PLAYLIST_VIEW_COUNT: u8        = 3;
+
 extern "C" fn handle_quit_signal(_: i32) {
     QUIT_REQUESTED.store(true, Ordering::Relaxed);
 }

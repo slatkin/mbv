@@ -1,3 +1,4 @@
+use crate::app::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION};
 use std::time::Duration;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Rect};
@@ -29,7 +30,7 @@ impl App {
 
         self.playlist_rect = area;
 
-        if self.playlist_view == 1 {
+        if self.playlist_view == PLAYLIST_VIEW_CARDS {
             let v_pad: u16 = if area.height >= 30 { 2 } else if area.height >= 20 { 1 } else { 0 };
             let inner = Rect {
                 x: area.x,
@@ -52,7 +53,7 @@ impl App {
             return;
         }
 
-        if self.playlist_view == 2 {
+        if self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
             self.layout_playlist_inner = area;
 
             if self.player_tab.items.is_empty() {

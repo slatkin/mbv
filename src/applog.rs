@@ -64,6 +64,9 @@ impl log::Log for GlobalLogger {
     fn enabled(&self, _: &log::Metadata) -> bool { true }
 
     fn log(&self, record: &log::Record) {
+        // mbv targets are bare words ("api", "ws", "img", etc.) with no "::".
+        // Third-party crates use module paths ("rustls::client", etc.) — suppress
+        // their Info/Debug to keep the log tab clean.
         if record.target().contains("::") && record.level() > log::Level::Warn {
             return;
         }
