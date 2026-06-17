@@ -375,6 +375,14 @@ impl App {
         });
     }
 
+    pub(super) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
+        let client = self.client.lock().unwrap().clone();
+        let library_id = self.libs[lib_idx].library.id.clone();
+        let name = self.libs[lib_idx].library.name.clone();
+        std::thread::spawn(move || { let _ = client.post_library_refresh(&library_id); });
+        self.flash_status(format!("Scanning '{name}'..."));
+    }
+
     pub(super) fn flash_status(&mut self, msg: String) {
         self.notify_system(&msg);
         self.status = msg;

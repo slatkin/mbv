@@ -287,6 +287,7 @@ pub struct App {
     album_year_loading: std::collections::HashSet<String>,
     save_playlist_dialog: Option<SavePlaylistDialog>,
     image_protocol_enabled: bool,
+    confirm_rescan: bool,
 }
 
 struct AppInit {
@@ -496,6 +497,7 @@ impl App {
             album_year_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
+            confirm_rescan: false,
         }
     }
 
@@ -1410,6 +1412,7 @@ mod tests {
             image_lru: std::collections::VecDeque::new(),
             image_cache_size: 50,
             image_protocol_enabled: false,
+            confirm_rescan: false,
         }
     }
 

@@ -357,6 +357,15 @@ impl App {
             }
             return false;
         }
+        if self.confirm_rescan {
+            self.confirm_rescan = false;
+            self.status.clear();
+            if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter) {
+                let lib_idx = self.tab_idx - self.lib_tab_offset();
+                self.trigger_lib_rescan(lib_idx);
+            }
+            return false;
+        }
         if self.skip_intro_end_ticks.is_some() {
             if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter) {
                 if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
@@ -465,6 +474,11 @@ impl App {
             KeyCode::Enter => self.select(),
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self.toggle_watched(),
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => self.shuffle_play(),
+            KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                let name = self.libs[lib_idx].library.name.clone();
+                self.status = format!("Rescan '{name}'? (Y/n)");
+                self.confirm_rescan = true;
+            }
             KeyCode::Char('o') if alt => self.open_context_menu(),
             KeyCode::Char('o') if !alt => self.open_context_menu(),
             KeyCode::Char(c @ '1'..='9') => {

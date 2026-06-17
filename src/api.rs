@@ -654,6 +654,17 @@ impl EmbyClient {
         Ok(())
     }
 
+    pub fn post_library_refresh(&self, library_id: &str) -> Result<(), String> {
+        self.post(&format!("/Items/{library_id}/Refresh"))
+            .query("Recursive", "true")
+            .query("ImageRefreshMode", "Default")
+            .query("MetadataRefreshMode", "Default")
+            .query("ReplaceAllImages", "false")
+            .query("ReplaceAllMetadata", "false")
+            .call().map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     pub fn ws_url(&self) -> String {
         let base = self.config.server_url
             .replacen("https://", "wss://", 1)
