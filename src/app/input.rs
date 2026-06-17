@@ -351,9 +351,6 @@ impl App {
             self.confirm_clear_playlist = false;
             if matches!(key.code, KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter) {
                 self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-                if !self.show_save_playlist_modal {
-                    self.flash_status("Playlist cleared".into());
-                }
             } else {
                 self.status.clear();
             }
@@ -744,12 +741,10 @@ impl App {
             }
             KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 if let Some((idx, item)) = self.playlist_undo_stack.pop() {
-                    let name = item.display_name();
                     let idx = idx.min(self.player_tab.items.len());
                     self.player_tab.items.insert(idx, item);
                     self.player_tab.playlist_cursor = idx;
                     self.queue_dirty = true;
-                    self.flash_status(format!("Restored: {name}"));
                     self.save_queue_state();
                 }
             }
@@ -764,7 +759,6 @@ impl App {
                     let lib_ids: Vec<(usize, String)> = self.libs.iter().enumerate()
                         .map(|(i, lib)| (i, lib.library.id.clone()))
                         .collect();
-                    self.flash_status("Navigating to library\u{2026}".into());
                     self.spawn_navigate_to_item(item_id, lib_ids);
                 }
             }

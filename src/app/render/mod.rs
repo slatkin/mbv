@@ -189,6 +189,7 @@ impl App {
         if self.status_expires.is_some_and(|t| t <= Instant::now()) {
             self.status.clear();
             self.status_expires = None;
+            self.force_clear = true;
         }
         let now_playing_title: Option<(String, Color)> = if show_controls && !in_presentation && self.show_playback_panel {
             if active {
@@ -238,10 +239,7 @@ impl App {
         }
 
         if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {
-            let toast_w = area.width.min(60);
-            let toast_x = area.x + (area.width.saturating_sub(toast_w)) / 2;
-            let toast_y = area.y + area.height / 2 - 1;
-            let toast_rect = Rect { x: toast_x, y: toast_y, width: toast_w, height: 3 };
+            let toast_rect = Rect { x: area.x, y: area.y + area.height - 3, width: area.width, height: 3 };
             f.render_widget(Clear, toast_rect);
             f.render_widget(
                 Paragraph::new(Self::toast_line(&self.status))

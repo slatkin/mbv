@@ -440,7 +440,6 @@ impl App {
                 self.on_queue_replace_silent();
                 self.player_tab.items = episodes.clone();
                 self.player_tab.playlist_cursor = 0;
-                self.flash_status(label);
                 self.player.play_playlist(episodes, 0, c, self.ui_volume);
                 self.player.send_command(PlayerCommand::SetMute(self.mute_on));
                 self.queue_source = crate::config::QueueSource::Series;
@@ -451,7 +450,6 @@ impl App {
         let c = Arc::new(self.client.lock().unwrap().clone());
         self.player_tab.items = vec![item.clone()];
         self.player_tab.playlist_cursor = 0;
-        self.flash_status(label);
         self.player.play(&item, c, self.ui_volume);
         self.player.send_command(PlayerCommand::SetMute(self.mute_on));
     }
@@ -671,7 +669,6 @@ impl App {
                 let lib_ids: Vec<(usize, String)> = self.libs.iter().enumerate()
                     .map(|(i, lib)| (i, lib.library.id.clone()))
                     .collect();
-                self.flash_status("Navigating to library\u{2026}".into());
                 self.spawn_navigate_to_item(item_id, lib_ids);
             }
             None => {}

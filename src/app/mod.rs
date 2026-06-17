@@ -805,9 +805,6 @@ impl App {
                         if self.confirm_clear_playlist {
                             self.confirm_clear_playlist = false;
                             self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-                            if !self.show_save_playlist_modal {
-                                self.flash_status("Playlist cleared".into());
-                            }
                         }
                     }
                     "__notif_failed__" => { self.notif_failed = true; }
