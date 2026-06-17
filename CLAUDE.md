@@ -33,7 +33,7 @@ All code lives in `src/`. The app is single-binary with these modules:
 | Module | Role |
 |--------|------|
 | `main.rs` | Entry point: auth, daemon/remote mode selection, launches `App::run()` |
-| `app.rs` | Everything UI — the `App` struct, event loop, all rendering, all input handling |
+| `app/` | Everything UI — see below |
 | `api.rs` | `EmbyClient` — all HTTP calls to Emby, `MediaItem` type, `parse_item()` |
 | `config.rs` | Config file parsing (`~/.config/mbv/config.toml`) and credential storage |
 | `player.rs` | `Player` — wraps `libmpv2`, runs in its own thread, sends `PlayerEvent` back via mpsc |
@@ -45,7 +45,27 @@ All code lives in `src/`. The app is single-binary with these modules:
 | `applog.rs` | In-process log ring buffer displayed on the Log tab |
 | `ctrl.rs` | Wire types (`CtrlCmd`, `CtrlEvent`, `CtrlState`) shared between daemon and remote_player |
 
-### Event loop (`app.rs`)
+### `src/app/` module tree
+
+The `App` struct and all UI code live here. All modules in this tree define `impl App` blocks — Rust allows splitting `impl` across files freely. Methods are `pub(super)` when called by sibling modules (e.g. render calling actions), `pub(crate)` only when needed outside `app/`.
+
+| File | Contents |
+|------|----------|
+| `mod.rs` | `App` struct definition, `AppInit`/`build()` constructors, `run()` event loop, type/enum definitions, tests |
+| `input.rs` | `handle_key`, `handle_mouse`, and all input dispatch methods |
+| `actions.rs` | State-changing methods: navigation, playback, queue management, `handle_lib_event`, `handle_ws_event` |
+| `images.rs` | `fetch_card_image`, `render_card_slot`, `fetch_album_year`, `images_enabled`, `magick_resize` |
+| `render/mod.rs` | `render()` main method, `render_playback_controls`, divider indicators, volume bar |
+| `render/library.rs` | `render_library`, `render_library_table`, `render_album_view`, `render_season_grid` |
+| `render/home.rs` | `render_combined`, `render_home_panel`, `render_home_cards_section` |
+| `render/playlist.rs` | `render_playlist_*` (list, filmstrip, cards, presentation views) |
+| `render/overlays.rs` | Settings panel, playlists panel, sessions overlay, context menu, all modals |
+| `render/log.rs` | Log tab rendering |
+| `ui_util.rs` | Pure functions: `fmt_duration`, `natural_sort_key`, `item_text_and_style`, `trunc_str`, etc. |
+| `settings.rs` | `setting_label`, `setting_value`, `settings_total_rows`, `settings_cursor_to_key` |
+| `palette.rs` | All color constants (`FOAM` = Emby blue, `IRIS` = Emby green, etc.) |
+
+### Event loop (`app/mod.rs`)
 
 `App::run()` is a standard ratatui loop. Each iteration:
 1. Drain `lib_rx` (background library loads via `LibEvent`)
@@ -57,6 +77,10 @@ All code lives in `src/`. The app is single-binary with these modules:
 
 Background work (library fetching, image fetching, album year lookups) is always done by spawning `std::thread::spawn` and sending results back via mpsc channels to the main loop. Nothing async except MPRIS (which uses tokio in its own thread).
 
+### Constructors
+
+`App::new()` and `App::new_remote()` both call the private `App::build(AppInit)` which holds all the common field defaults. When adding a new field to `App`: add it to `App` struct, set its default in `build()`, and add it to `AppInit` only if the two constructors need different values for it.
+
 ### Key App state
 
 - `libs: Vec<LibraryTab>` — one entry per Emby library visible in the tab bar. Each has a `nav_stack: Vec<BrowseLevel>` (browsing history) and optional `search: LibSearch`.
@@ -66,6 +90,7 @@ Background work (library fetching, image fetching, album year lookups) is always
 - `home: HomePane` — continue-watching + latest rows.
 - `card_image_states: HashMap<String, Option<StatefulProtocol>>` — decoded images keyed by `"{item_id}:{slot}"` (e.g. `"abc123:lib"`, `"abc123:A"`).
 - `music_levels: Vec<String>` — from config, describes the music folder layout (e.g. `["group", "album"]`). Drives `is_album_level()` / `is_viewing_album_folders()`.
+- `image_protocol_enabled: bool` — cached from `client.config.image_protocol.is_some()`; updated in the settings handler when the user cycles the image protocol. Use `images_enabled()` to read it.
 - `use_nerd_fonts: bool` — from config; when true, single-glyph Nerd Font code points are used in place of ASCII fallbacks (e.g. in the divider status indicators).
 
 ### MediaItem
@@ -87,7 +112,9 @@ In `render_library_table`, album folder rows (`is_album_folder = at_album_folder
 
 ### Image handling
 
-Images are fetched by `fetch_card_image()` which spawns a thread, downloads bytes, and sends them to `card_image_rx`. The special `"AudioChild"` image type fetches the first Audio child of an album folder then grabs its Primary image (workaround for Emby's image API for MusicAlbum items). Images are enabled only when `config.image_protocol` is `Some(_)`; the value controls the ratatui-image protocol (`kitty`, `sixel`, `halfblocks`, etc.).
+Images are fetched by `fetch_card_image()` which spawns a thread, downloads bytes, and sends them to `card_image_rx`. The special `"AudioChild"` image type fetches the first Audio child of an album folder then grabs its Primary image (workaround for Emby's image API for MusicAlbum items). Images are enabled only when `config.image_protocol` is `Some(_)`; check via `self.images_enabled()` (backed by the `image_protocol_enabled` field, not a mutex lock).
+
+`magick_resize` (in `images.rs`) tries `magick convert` then falls back to `convert` — each via a for-loop with `let Ok(...) else { continue }`, not `?`, so failure of the first command tries the second.
 
 ### Music library specifics
 
@@ -100,13 +127,15 @@ Images are fetched by `fetch_card_image()` which spawns a thread, downloads byte
 
 `Player` (player.rs) wraps libmpv2. It receives `PlayerCommand` via mpsc and sends `PlayerEvent` back. The App handles `PlayerEvent` to update played status, advance the queue, and report progress to Emby via `api.rs` (`report_start`, `report_progress_ws`, `report_stopped`). Ticks use Emby's `TICKS_PER_SECOND = 10_000_000`.
 
+`effective_playback_state()` returns `(active, active_idx, pos_ticks, runtime_ticks, is_paused)` — for remote sessions it extrapolates position forward from the last-polled value, but only when `!remote.is_paused`.
+
 ### Daemon mode
 
 `mbv -d` spawns `mbv --daemon-inner` as a detached process. The inner daemon runs `daemon::run()` which holds a `Player` and exposes a Unix socket at `$XDG_RUNTIME_DIR/mbv-ctl.sock`. A subsequent TUI invocation that detects the daemon connects via `remote_player::RemotePlayer` instead of creating its own `Player`. Running `mbv -d` when a daemon is already running exits with an error.
 
 ### Divider status indicators
 
-The tab-bar divider line (`gap_area` in `render()`) renders right-aligned bracketed indicators: `[字]` subtitle, `[↯]` remote-control, `[>]/[||]/[ ]` playback. The rendering block is in `render()` just below the `// Thin underline below tab row` comment.
+The tab-bar divider line (`gap_area` in `render()`) renders right-aligned bracketed indicators: `[字]` subtitle, `[↯]` remote-control, `[>]/[||]/[ ]` playback. The rendering block is in `render/mod.rs` just below the `// Thin underline below tab row` comment.
 
 To add a new indicator:
 
