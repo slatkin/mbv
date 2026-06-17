@@ -4957,7 +4957,7 @@ impl App {
             if active {
                 now_playing.map(|t| (t, palette::FOAM))
             } else if let Some(ref state) = self.connected_session_state {
-                state.now_playing.clone().map(|t| (t, palette::IRIS))
+                state.now_playing.clone().map(|t| (t, palette::FOAM))
             } else {
                 None
             }
