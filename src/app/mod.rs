@@ -1,0 +1,1685 @@
+pub(crate) mod palette;
+pub(crate) mod ui_util;
+pub(crate) mod images;
+mod settings;
+mod input;
+mod actions;
+pub mod render;
+
+use std::sync::{Arc, Mutex, mpsc};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant};
+
+static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn handle_quit_signal(_: i32) {
+    QUIT_REQUESTED.store(true, Ordering::Relaxed);
+}
+
+fn install_signal_handlers() {
+    extern "C" {
+        fn signal(signum: i32, handler: unsafe extern "C" fn(i32)) -> usize;
+    }
+    unsafe {
+        signal(1, handle_quit_signal); // SIGHUP — terminal closed
+    }
+}
+
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use ratatui::{
+    Terminal,
+    backend::CrosstermBackend,
+    layout::Rect,
+};
+
+use ratatui_image::picker::Picker;
+use ratatui_image::protocol::StatefulProtocol;
+
+use crate::api::{EmbyClient, MediaItem};
+use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
+use crate::ws::WsEvent;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum LogPane { Sources, Log }
+
+#[derive(Clone)]
+enum ContextAction {
+    Play,
+    PlayFolder(String),
+    ShuffleFolder(String),
+    Enqueue,
+    EnqueueFolder(MediaItem),
+    MarkPlayed(String),
+    MarkUnplayed(String),
+    RemoveFromContinueWatching,
+    RemoveFromPlaylist(usize),
+    GoToLibrary(String),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MultiSelectKind { HiddenLibraries, HiddenLatest }
+
+struct MultiSelectPopup {
+    kind: MultiSelectKind,
+    items: Vec<(String, String, bool)>, // (name_lower, display_name, is_hidden)
+    cursor: usize,
+}
+
+struct ContextMenu {
+    x: u16,
+    y: u16,
+    items: Vec<&'static str>,
+    actions: Vec<ContextAction>,
+    cursor: usize,
+}
+
+struct LibSearch {
+    query: String,
+    items: Vec<crate::api::MediaItem>,
+    results: Vec<usize>,               // indices into items, sorted by score desc
+    cursor: usize,                     // position within results
+    loading: bool,                     // true while full-library fetch is in flight
+}
+
+struct BrowseLevel {
+    parent_id: String,
+    title: String,
+    items: Vec<MediaItem>,
+    total_count: usize,
+    cursor: usize,
+    item_types: Option<String>,
+    unplayed_only: bool,
+    sort_by: String,
+    sort_order: String,
+    loading: bool,
+    all_items: Option<Vec<MediaItem>>, // prefetched full list for instant search
+}
+
+enum SavePlaylistStage {
+    EnterName,
+    ConfirmOverwrite { existing_id: String },
+}
+
+struct SavePlaylistDialog {
+    input: String,
+    stage: SavePlaylistStage,
+}
+
+const PAGE_SIZE: usize = 100;
+const PREFETCH_AHEAD: usize = 25;
+
+enum LibEvent {
+    Loaded { lib_idx: usize, parent_id: String, level: BrowseLevel },
+    PageAppended { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
+    Refreshed { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
+    SearchItemsLoaded { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
+    AllItemsPrefetched { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
+    AlbumYearFetched { album_id: String, year: u32 },
+    NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
+    PlaylistsLoaded(Vec<MediaItem>),
+    PlaylistItemsLoaded { playlist_id: String, items: Vec<MediaItem> },
+    QueueRestored { items: Vec<MediaItem>, source: crate::config::QueueSource, last_played_item_id: Option<String>, last_played_completed: bool },
+    Error(String),
+}
+
+enum SessionEvent {
+    Loaded(Vec<crate::api::SessionInfo>),
+    ItemRefreshed(String, crate::api::MediaItem), // (item_id, fresh)
+    Error(String),
+}
+
+struct PlayerTab {
+    items: Vec<MediaItem>,
+    playlist_cursor: usize,
+}
+
+struct HomePane {
+    continue_items: Vec<MediaItem>,
+    continue_cursor: usize,
+    latest: Vec<(String, String, Vec<MediaItem>, usize)>, // (title, lib_id, items, cursor)
+    section: usize, // 0=continue, 1..=latest
+}
+
+struct LibraryTab {
+    library: MediaItem,
+    nav_stack: Vec<BrowseLevel>,
+    search: Option<LibSearch>,
+}
+
+pub struct App {
+    client: Arc<Mutex<EmbyClient>>,
+    player: PlayerProxy,
+    player_rx: mpsc::Receiver<PlayerEvent>,
+    ws_rx: mpsc::Receiver<WsEvent>,
+    tab_idx: usize,
+    home: HomePane,
+    libs: Vec<LibraryTab>,
+    player_tab: PlayerTab,
+    status: String,
+    status_expires: Option<Instant>,
+    hidden_libraries: Vec<String>,
+    hidden_latest: Vec<String>,
+    music_levels: Vec<String>,
+    log_scroll: usize,
+    log_pane: LogPane,        // which pane has focus
+    log_source_cursor: usize, // selected row in sources pane
+    log_disabled_sources: std::collections::HashSet<String>,
+    // Layout rects from last render, used for mouse hit-testing
+    playlist_rect: Rect,
+    home_rect: Rect,
+    layout_playlist_inner: Rect,
+    layout_section_areas: Vec<Rect>,
+    layout_tabs_area: Rect,
+    terminal_width: u16,
+    terminal_height: u16,
+    layout_lib_scroll: usize,
+    layout_lib_row_heights: Vec<u16>, // height of each visible row, from scroll
+    layout_home_scrolls: Vec<usize>,
+    layout_home_scrollbar: Rect,
+    layout_presentation_sb: Rect,
+    home_panel_section_offset: usize,
+    home_cards_section_offset: usize,
+    layout_home_card_strips: Vec<(usize, Rect)>,
+    layout_lib_table_area: Rect,
+    layout_breadcrumbs: Vec<(u16, u16, u16, usize)>, // (x_start, x_end, row, target nav_stack len)
+    last_click_time: Instant,
+    last_click_pos: (u16, u16),
+    last_drag_seek: Instant,
+    layout_seekbar_area: Rect,
+    layout_button_area: Rect,
+    layout_tracks_area: Rect,
+    layout_vol_area: Rect,
+    layout_sub_area: Rect,
+    layout_audio_area: Rect,
+    confirm_remove_idx: Option<usize>,     // playlist index pending removal confirmation
+    pending_queue_removal: Option<usize>,  // deferred removal after TrackChanged index-shifts
+    confirm_clear_playlist: bool,
+    playlist_undo_stack: Vec<(usize, MediaItem)>,
+    skip_intro_end_ticks: Option<i64>,
+    next_up_item: Option<MediaItem>,
+    playlist_view: u8,
+    home_card_view: bool,
+    last_played_item_id: Option<String>,
+    last_played_completed: bool,
+    layout_carousel_slots: [(Option<usize>, Rect); 3],
+    layout_queue_strip_slots: Vec<(usize, Rect)>,
+    layout_carousel_left_arrow: Option<Rect>,
+    layout_carousel_right_arrow: Option<Rect>,
+    layout_carousel_up_arrow: Option<Rect>,
+    layout_carousel_down_arrow: Option<Rect>,
+    last_carousel_click_slot: Option<usize>,
+    last_carousel_click_time: Instant,
+    card_image_states: std::collections::HashMap<String, Option<StatefulProtocol>>,
+    image_lru: std::collections::VecDeque<String>,
+    image_cache_size: usize,
+    card_image_loading: std::collections::HashSet<String>,
+    card_image_tx: mpsc::Sender<(String, Option<Vec<u8>>)>,
+    card_image_rx: mpsc::Receiver<(String, Option<Vec<u8>>)>,
+    image_picker: Option<Picker>,
+    context_menu: Option<ContextMenu>,
+    context_menu_rect: Option<Rect>,
+    show_help: bool,
+    show_settings: bool,
+    settings_cursor: usize,
+    settings_scroll: usize,
+    settings_save_at: Option<Instant>,
+    confirm_logout: bool,
+    multiselect_popup: Option<MultiSelectPopup>,
+    layout_settings_area: Rect,
+    settings_line_of_cursor: Vec<usize>,
+    help_scroll: u16,
+    show_log_tab: bool,
+    system_notifications: bool,
+    notif_failed: bool,
+    notif_action_tx: mpsc::Sender<String>,
+    notif_action_rx: mpsc::Receiver<String>,
+    lib_tx: mpsc::Sender<LibEvent>,
+    lib_rx: mpsc::Receiver<LibEvent>,
+    sessions: Vec<crate::api::SessionInfo>,
+    sessions_cursor: usize,
+    sessions_loading: bool,
+    show_sessions: bool,
+    playlists: Vec<MediaItem>,
+    playlists_cursor: usize,
+    playlists_scroll: usize,
+    playlists_loading: bool,
+    show_playlists: bool,
+    playlists_open: Option<MediaItem>,         // playlist currently being browsed
+    playlists_open_items: Vec<MediaItem>,
+    playlists_open_cursor: usize,
+    playlists_open_scroll: usize,
+    playlists_open_loading: bool,
+    queue_source: crate::config::QueueSource,
+    queue_restored: bool,
+    queue_dirty: bool,
+    pending_queue_action: Option<PendingQueueAction>,
+    show_save_playlist_modal: bool,
+    autosave_playlist: bool,
+    use_nerd_fonts: bool,
+    show_playback_panel: bool,
+    ws_send_tx: Option<mpsc::Sender<String>>,
+    last_keepalive: Instant,
+    last_capabilities: Instant,
+    sessions_tx: mpsc::Sender<SessionEvent>,
+    sessions_rx: mpsc::Receiver<SessionEvent>,
+    connected_session_id: Option<String>,
+    connected_session_state: Option<crate::api::SessionInfo>,
+    last_session_poll: Instant,
+    session_miss_count: u8, // consecutive polls that didn't find the connected session
+    remote_pos_s: i64,               // monotonic position estimate for the connected remote
+    remote_pos_at: Instant,          // when remote_pos_s was last anchored
+    remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
+    force_clear: bool,
+    tab_scroll: usize,
+    ui_volume: u8,
+    pre_mute_volume: Option<u8>,
+    mute_on: bool,
+    layout_tabbar_vol_area: Rect,
+    last_scroll_at: Instant,
+    last_nav_at: Instant,
+    album_year_cache: std::collections::HashMap<String, u32>,
+    album_year_loading: std::collections::HashSet<String>,
+    save_playlist_dialog: Option<SavePlaylistDialog>,
+    image_protocol_enabled: bool,
+}
+
+struct AppInit {
+    client: std::sync::Arc<std::sync::Mutex<EmbyClient>>,
+    player: crate::player::PlayerProxy,
+    player_rx: std::sync::mpsc::Receiver<crate::player::PlayerEvent>,
+    ws_rx: std::sync::mpsc::Receiver<WsEvent>,
+    ws_send_tx: Option<std::sync::mpsc::Sender<String>>,
+    player_tab: PlayerTab,
+    show_log_tab: bool,
+    system_notifications: bool,
+    image_protocol_enabled: bool,
+    hidden_libraries: Vec<String>,
+    hidden_latest: Vec<String>,
+    music_levels: Vec<String>,
+    autosave_playlist: bool,
+    use_nerd_fonts: bool,
+    image_cache_size: usize,
+    start_on_queue: bool,
+    lib_tx: mpsc::Sender<LibEvent>,
+    lib_rx: mpsc::Receiver<LibEvent>,
+    sessions_tx: mpsc::Sender<SessionEvent>,
+    sessions_rx: mpsc::Receiver<SessionEvent>,
+    card_image_tx: mpsc::Sender<(String, Option<Vec<u8>>)>,
+    card_image_rx: mpsc::Receiver<(String, Option<Vec<u8>>)>,
+    notif_action_tx: mpsc::Sender<String>,
+    notif_action_rx: mpsc::Receiver<String>,
+}
+
+enum PendingQueueAction {
+    PlayItems { items: Vec<MediaItem>, start_idx: usize, source: crate::config::QueueSource },
+    ClearQueue,
+    Quit,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SettingKey {
+    DaemonModeOnExit,
+    StartOnQueue,
+    AlwaysPlayNext,
+    ConsumeVideos,
+    AutosavePlaylist,
+    AlwaysSkipIntro,
+    ShowLogTab,
+    ImageProtocol,
+    HiddenLibraries,
+    HiddenLatest,
+    ShowAudioWindow,
+    UseMpvConfig,
+    NoScripts,
+    Autoload,
+    ShowSysTrayIcon,
+    SystemNotifications,
+    LogOut,
+}
+
+// Sections rendered as IRIS blocks in a 2×2 grid.
+// LogOut is rendered separately as a plain line below the grid.
+static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
+    ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
+    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::AutosavePlaylist]),
+    ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
+    ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
+    ("[actions]",   &[SettingKey::LogOut]),
+];
+
+const SESSIONS_PANEL_W:  u16 = 42;
+const HELP_PANEL_W:      u16 = 58;
+const SETTINGS_PANEL_W:  u16 = 56;
+const PLAYLISTS_PANEL_W: u16 = 48;
+const HOME_MIN_SECTION_H: u16 = 6; // 2 border rows + 4 content rows
+impl App {
+    fn build(init: AppInit) -> Self {
+        App {
+            client: init.client,
+            player: init.player,
+            player_rx: init.player_rx,
+            ws_rx: init.ws_rx,
+            ws_send_tx: init.ws_send_tx,
+            player_tab: init.player_tab,
+            show_log_tab: init.show_log_tab,
+            system_notifications: init.system_notifications,
+            image_protocol_enabled: init.image_protocol_enabled,
+            hidden_libraries: init.hidden_libraries,
+            hidden_latest: init.hidden_latest,
+            music_levels: init.music_levels,
+            autosave_playlist: init.autosave_playlist,
+            use_nerd_fonts: init.use_nerd_fonts,
+            image_cache_size: init.image_cache_size,
+            tab_idx: if init.start_on_queue { 1 } else { 0 },
+            lib_tx: init.lib_tx,
+            lib_rx: init.lib_rx,
+            sessions_tx: init.sessions_tx,
+            sessions_rx: init.sessions_rx,
+            card_image_tx: init.card_image_tx,
+            card_image_rx: init.card_image_rx,
+            notif_action_tx: init.notif_action_tx,
+            notif_action_rx: init.notif_action_rx,
+            home: HomePane { continue_items: Vec::new(), continue_cursor: 0, latest: Vec::new(), section: 0 },
+            libs: Vec::new(),
+            status: String::new(),
+            status_expires: None,
+            log_scroll: 0,
+            log_pane: LogPane::Log,
+            log_source_cursor: 0,
+            log_disabled_sources: std::collections::HashSet::new(),
+            playlist_rect: Rect::default(),
+            home_rect: Rect::default(),
+            layout_playlist_inner: Rect::default(),
+            layout_section_areas: Vec::new(),
+            layout_tabs_area: Rect::default(),
+            terminal_width: 80,
+            terminal_height: 24,
+            layout_lib_scroll: 0,
+            layout_lib_row_heights: Vec::new(),
+            layout_home_scrolls: Vec::new(),
+            layout_home_scrollbar: Rect::default(),
+            layout_presentation_sb: Rect::default(),
+            home_panel_section_offset: 0,
+            home_cards_section_offset: 0,
+            layout_home_card_strips: Vec::new(),
+            layout_lib_table_area: Rect::default(),
+            layout_breadcrumbs: Vec::new(),
+            last_click_time: Instant::now(),
+            last_drag_seek: Instant::now() - Duration::from_secs(1),
+            last_click_pos: (u16::MAX, u16::MAX),
+            layout_seekbar_area: Rect::default(),
+            layout_button_area: Rect::default(),
+            layout_tracks_area: Rect::default(),
+            layout_vol_area: Rect::default(),
+            layout_sub_area: Rect::default(),
+            layout_audio_area: Rect::default(),
+            confirm_remove_idx: None,
+            pending_queue_removal: None,
+            confirm_clear_playlist: false,
+            playlist_undo_stack: Vec::new(),
+            skip_intro_end_ticks: None,
+            next_up_item: None,
+            playlist_view: Self::load_playlist_view(),
+            home_card_view: Self::load_home_card_view(),
+            ui_volume: Self::load_ui_volume(),
+            pre_mute_volume: None,
+            mute_on: false,
+            layout_tabbar_vol_area: Rect::default(),
+            last_played_item_id: None,
+            last_played_completed: false,
+            layout_carousel_slots: [(None, Rect::default()); 3],
+            layout_queue_strip_slots: Vec::new(),
+            layout_carousel_left_arrow: None,
+            layout_carousel_right_arrow: None,
+            layout_carousel_up_arrow: None,
+            layout_carousel_down_arrow: None,
+            last_carousel_click_slot: None,
+            last_carousel_click_time: Instant::now() - Duration::from_secs(1),
+            card_image_states: std::collections::HashMap::new(),
+            card_image_loading: std::collections::HashSet::new(),
+            image_picker: None,
+            show_help: false,
+            show_settings: false,
+            settings_cursor: 0,
+            settings_scroll: 0,
+            settings_save_at: None,
+            confirm_logout: false,
+            multiselect_popup: None,
+            layout_settings_area: Rect::default(),
+            settings_line_of_cursor: Vec::new(),
+            help_scroll: 0,
+            notif_failed: false,
+            context_menu: None,
+            context_menu_rect: None,
+            sessions: Vec::new(),
+            sessions_cursor: 0,
+            sessions_loading: false,
+            show_sessions: false,
+            playlists: Vec::new(),
+            playlists_cursor: 0,
+            playlists_scroll: 0,
+            playlists_loading: false,
+            show_playlists: false,
+            playlists_open: None,
+            playlists_open_items: Vec::new(),
+            playlists_open_cursor: 0,
+            playlists_open_scroll: 0,
+            playlists_open_loading: false,
+            queue_source: crate::config::QueueSource::Unknown,
+            queue_restored: false,
+            queue_dirty: false,
+            pending_queue_action: None,
+            show_save_playlist_modal: false,
+            show_playback_panel: true,
+            last_keepalive: Instant::now(),
+            last_capabilities: Instant::now(),
+            connected_session_id: None,
+            connected_session_state: None,
+            last_session_poll: Instant::now() - Duration::from_secs(60),
+            session_miss_count: 0,
+            remote_pos_s: 0,
+            remote_pos_at: Instant::now(),
+            remote_api_pos_advanced_at: Instant::now() - Duration::from_secs(60),
+            force_clear: false,
+            tab_scroll: 0,
+            last_scroll_at: Instant::now() - Duration::from_secs(1),
+            last_nav_at: Instant::now() - Duration::from_secs(1),
+            album_year_cache: std::collections::HashMap::new(),
+            album_year_loading: std::collections::HashSet::new(),
+            save_playlist_dialog: None,
+            image_lru: std::collections::VecDeque::new(),
+        }
+    }
+
+    pub fn new(client: EmbyClient) -> Self {
+        let (player_tx, player_rx) = mpsc::channel();
+        let (ws_tx, ws_rx) = mpsc::channel();
+        let (lib_tx, lib_rx) = mpsc::channel();
+        let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
+        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
+        let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
+        let server_url = client.config.server_url.clone();
+        let token = client.token.clone();
+        let hidden_libraries = client.config.hidden_libraries.clone();
+        let hidden_latest = client.config.hidden_latest.clone();
+        let music_levels = client.config.music_levels.clone();
+        let show_log_tab = client.config.show_log_tab;
+        let system_notifications = client.config.system_notifications;
+        let image_protocol_enabled = client.config.image_protocol.is_some();
+        let image_cache_size = client.config.image_cache_size;
+        let autosave_playlist = client.config.autosave_playlist;
+        let use_nerd_fonts = client.config.use_nerd_fonts;
+        let start_on_queue = client.config.start_on_queue;
+        let always_play_next = client.config.always_play_next;
+        let always_skip_intro = client.config.always_skip_intro;
+        crate::config::evict_old_image_cache();
+        let ws_url = client.ws_url();
+        let ws_send_tx = crate::ws::start(ws_url, ws_tx);
+        let ws_send_tx_app = ws_send_tx.clone();
+        let subs_off = Self::load_subs_off();
+        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, always_skip_intro, subs_off, player_tx, Some(ws_send_tx));
+        let player_status = raw_player.status.clone();
+        let player_cmd_tx = raw_player.cmd_tx.clone();
+        crate::mpris::start(player_status, move |cmd| {
+            if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
+                let _ = tx.send(cmd);
+            }
+        });
+        let player = PlayerProxy::local(raw_player, always_play_next);
+        let mut client = client;
+        client.probe_chapter_api();
+        Self::build(AppInit {
+            client: Arc::new(Mutex::new(client)),
+            player,
+            player_rx,
+            ws_rx,
+            ws_send_tx: Some(ws_send_tx_app),
+            player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
+            show_log_tab,
+            system_notifications,
+            image_protocol_enabled,
+            hidden_libraries,
+            hidden_latest,
+            music_levels,
+            autosave_playlist,
+            use_nerd_fonts,
+            image_cache_size,
+            start_on_queue,
+            lib_tx, lib_rx,
+            sessions_tx, sessions_rx,
+            card_image_tx, card_image_rx,
+            notif_action_tx, notif_action_rx,
+        })
+    }
+
+    pub fn new_remote(
+        client: EmbyClient,
+        remote: crate::remote_player::RemotePlayer,
+        player_rx: mpsc::Receiver<PlayerEvent>,
+    ) -> Self {
+        let (_, ws_rx) = mpsc::channel::<crate::ws::WsEvent>();
+        let (lib_tx, lib_rx) = mpsc::channel();
+        let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
+        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
+        let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
+        let hidden_libraries = client.config.hidden_libraries.clone();
+        let hidden_latest = client.config.hidden_latest.clone();
+        let music_levels = client.config.music_levels.clone();
+        let always_play_next = client.config.always_play_next;
+        let start_on_queue = client.config.start_on_queue;
+        let image_protocol_enabled = client.config.image_protocol.is_some();
+        let image_cache_size = client.config.image_cache_size;
+        let autosave_playlist = client.config.autosave_playlist;
+        let use_nerd_fonts = client.config.use_nerd_fonts;
+        crate::config::evict_old_image_cache();
+        let mut client = client;
+        client.probe_chapter_api();
+        let initial_items = remote.items.lock().unwrap().clone();
+        let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let player = PlayerProxy::remote(remote, always_play_next);
+        Self::build(AppInit {
+            client: Arc::new(Mutex::new(client)),
+            player,
+            player_rx,
+            ws_rx,
+            ws_send_tx: None,
+            player_tab: PlayerTab { items: initial_items, playlist_cursor: initial_cursor },
+            show_log_tab: false,
+            system_notifications: false,
+            image_protocol_enabled,
+            hidden_libraries,
+            hidden_latest,
+            music_levels,
+            autosave_playlist,
+            use_nerd_fonts,
+            image_cache_size,
+            start_on_queue,
+            lib_tx, lib_rx,
+            sessions_tx, sessions_rx,
+            card_image_tx, card_image_rx,
+            notif_action_tx, notif_action_rx,
+        })
+    }
+
+    pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut terminal = init_terminal()?;
+        terminal.clear()?;
+
+        // Initialise image picker after terminal is in raw mode.
+        use ratatui_image::picker::ProtocolType;
+        let protocol_override = self.client.lock().unwrap().config.image_protocol.clone();
+        let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
+        let proto = protocol_override.as_deref()
+            .and_then(|s| match s.to_lowercase().as_str() {
+                "sixel"      => Some(ProtocolType::Sixel),
+                "kitty"      => Some(ProtocolType::Kitty),
+                "iterm2"     => Some(ProtocolType::Iterm2),
+                "halfblocks" => Some(ProtocolType::Halfblocks),
+                _            => None, // "auto" or unknown: use picker's detected protocol
+            });
+        if let Some(proto) = proto {
+            picker.set_protocol_type(proto);
+        }
+        self.image_picker = Some(picker);
+
+        self.status = "Loading...".into();
+        terminal.draw(|f| self.render(f))?;
+
+        {
+            let c = self.client.lock().unwrap();
+            c.register_capabilities();
+        }
+
+        match self.fetch_home() {
+            Ok(()) => self.status.clear(),
+            Err(e) => self.flash_status(format!("Error: {e}")),
+        }
+        self.spawn_restore_queue_state();
+        terminal.draw(|f| self.render(f))?;
+
+        install_signal_handlers();
+
+        'outer: loop {
+            if QUIT_REQUESTED.load(Ordering::Relaxed) { break; }
+            if let Ok(ev) = self.player_rx.try_recv() {
+                match ev {
+                    PlayerEvent::Stopped { idx, position_ticks, played } => {
+                        if self.player.is_remote_disconnected() {
+                            self.next_up_item = None;
+                            self.skip_intro_end_ticks = None;
+                            self.flash_status("Daemon disconnected — playback stopped".into());
+                            self.refresh_after_stop();
+                            continue;
+                        }
+                        if let Some(item) = self.player_tab.items.get_mut(idx) {
+                            if played {
+                                item.playback_position_ticks = 0;
+                                item.played = true;
+                            } else if position_ticks > 0 && !item.is_audio() {
+                                item.playback_position_ticks = position_ticks;
+                            }
+                            self.last_played_item_id = Some(item.id.clone());
+                            self.last_played_completed = played;
+                        }
+                        self.next_up_item = None;
+                        self.skip_intro_end_ticks = None;
+                        self.status.clear();
+                        let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+                        if played && is_video && self.client.lock().unwrap().config.consume_videos {
+                            if idx < self.player_tab.items.len() {
+                                self.player_tab.items.remove(idx);
+                                self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
+                                    .min(self.player_tab.items.len().saturating_sub(1));
+                            }
+                        }
+                        self.refresh_after_stop();
+                        self.save_queue_state();
+                    }
+                    PlayerEvent::TrackCompleted { idx, position_ticks, played, consume } => {
+                        if let Some(item) = self.player_tab.items.get_mut(idx) {
+                            if played {
+                                item.playback_position_ticks = 0;
+                                item.played = true;
+                            } else if position_ticks >= 300_000_000 && !item.is_audio() {
+                                // Only update local position for meaningful progress (≥ 30 s).
+                                // Startup noise from mpv (< 30 s) keeps the previous value intact.
+                                item.playback_position_ticks = position_ticks;
+                            }
+                        }
+                        let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+                        if consume && is_video && self.client.lock().unwrap().config.consume_videos {
+                            self.pending_queue_removal = Some(idx);
+                        }
+                    }
+                    PlayerEvent::TrackChanged(idx) => {
+                        self.skip_intro_end_ticks = None;
+                        self.next_up_item = None;
+                        if self.status.starts_with("Next up:") {
+                            self.status.clear();
+                        }
+                        let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
+                            if remove_idx < self.player_tab.items.len() {
+                                self.player_tab.items.remove(remove_idx);
+                            }
+                            self.player.send_command(PlayerCommand::PlaylistRemove(remove_idx));
+                            if remove_idx < idx { idx - 1 } else { idx }
+                        } else {
+                            idx
+                        };
+                        self.player_tab.playlist_cursor = adjusted;
+                        if let Some(item) = self.player_tab.items.get(adjusted) {
+                            self.last_played_item_id = Some(item.id.clone());
+                        }
+                        self.save_queue_state();
+                    }
+                    PlayerEvent::PlaylistNextUp { next_idx } => {
+                        if let Some(item) = self.player_tab.items.get(next_idx) {
+                            let item_id    = item.id.clone();
+                            let show_title = item.series_name.clone();
+                            let ep_title   = item.name.clone();
+                            let artist     = item.artist.clone();
+                            let label = item.playback_label();
+                            self.next_up_item = Some(item.clone());
+                            let next_up_msg = format!("Next up: {} (Y/n)", label);
+                            self.notify_with_actions(&item.name, "Next up?", &[("next_up:play", "Play Now"), ("next_up:skip", "Skip")]);
+                            self.status = next_up_msg;
+                            self.status_expires = None;
+                            // Daemon sends NextUpShow to mpv directly; only send from local player.
+                            if !self.player.is_remote() {
+                                self.player.send_command(PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist });
+                            }
+                        }
+                    }
+                    PlayerEvent::NextUpThreshold { .. } => {
+                        // Series episodes now use play_playlist; this only fires for movies
+                        // (always_play_next=false or non-series content). No action needed.
+                    }
+                    PlayerEvent::NextUpPlay => {
+                        log::warn!(target: "app", "next-up: play triggered");
+                        if let Some(item) = self.next_up_item.take() {
+                            let label = item.playback_label();
+                            if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
+                                self.player.send_command(PlayerCommand::JumpTo(idx));
+                                self.player_tab.playlist_cursor = idx;
+                                self.flash_status(label);
+                            } else {
+                                log::warn!(target: "app", "next-up: item not in queue, cannot jump");
+                            }
+                        } else {
+                            log::warn!(target: "app", "next-up: NextUpPlay fired but next_up_item is None");
+                        }
+                    }
+                    PlayerEvent::QueueUpdated { items, cursor } => {
+                        self.player_tab.items = items;
+                        self.player_tab.playlist_cursor = cursor;
+                    }
+                    PlayerEvent::IntroStarted { intro_end_ticks } => {
+                        self.skip_intro_end_ticks = Some(intro_end_ticks);
+                        let playing_title = self.player_tab.items
+                            .get(self.player_tab.playlist_cursor)
+                            .map(|i| i.name.clone())
+                            .unwrap_or_else(|| "mbv".into());
+                        self.notify_with_actions(&playing_title, "Skip intro?", &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")]);
+                        self.status = "Skip intro? (Y/n)".into();
+                        self.status_expires = None;
+                    }
+                    PlayerEvent::IntroEnded => {
+                        if self.skip_intro_end_ticks.take().is_some() {
+                            self.status.clear();
+                        }
+                    }
+                    PlayerEvent::SkipIntroPlay => {
+                        self.skip_intro_end_ticks = None;
+                        self.status.clear();
+                    }
+                }
+            }
+
+            while let Ok(action) = self.notif_action_rx.try_recv() {
+                match action.as_str() {
+                    "skip_intro:skip" => {
+                        if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
+                            let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
+                            self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                            self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                            self.status.clear();
+                        }
+                    }
+                    "next_up:play" => {
+                        if let Some(item) = self.next_up_item.take() {
+                            if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
+                                let label = item.playback_label();
+                                self.player.send_command(PlayerCommand::JumpTo(idx));
+                                self.player_tab.playlist_cursor = idx;
+                                self.flash_status(label);
+                            }
+                        }
+                        self.status.clear();
+                    }
+                    "next_up:skip" => {
+                        self.next_up_item = None;
+                        self.player.send_command(PlayerCommand::NextUpDismiss);
+                        self.status.clear();
+                    }
+                    "clear:yes" => {
+                        if self.confirm_clear_playlist {
+                            self.confirm_clear_playlist = false;
+                            self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+                            if !self.show_save_playlist_modal {
+                                self.flash_status("Playlist cleared".into());
+                            }
+                        }
+                    }
+                    "__notif_failed__" => { self.notif_failed = true; }
+                    _ => {} // dismissed, "ignore", "cancel", or empty: leave TUI prompt untouched
+                }
+            }
+
+            while let Ok(ev) = self.lib_rx.try_recv() {
+                self.handle_lib_event(ev);
+            }
+
+            while let Ok(ev) = self.sessions_rx.try_recv() {
+                match ev {
+                    SessionEvent::Loaded(sessions) => {
+                        let old_id = self.sessions.get(self.sessions_cursor).map(|s| s.id.clone());
+                        self.sessions = sessions;
+                        self.sessions_loading = false;
+                        self.last_session_poll = Instant::now();
+                        if let Some(id) = old_id {
+                            if let Some(pos) = self.sessions.iter().position(|s| s.id == id) {
+                                self.sessions_cursor = pos;
+                            } else {
+                                self.sessions_cursor = self.sessions_cursor.min(self.sessions.len().saturating_sub(1));
+                                if !self.sessions.is_empty() {
+                                    log::warn!(target: "sessions", "selected session gone; cursor clamped");
+                                }
+                            }
+                        }
+                        // Update connected session state; auto-disconnect if gone
+                        if let Some(ref conn_id) = self.connected_session_id.clone() {
+                            if let Some(s) = self.sessions.iter().find(|s| &s.id == conn_id) {
+                                // Maintain a monotonic position estimate within a single video.
+                                // Reset the anchor only when the playing item ID changes.
+                                // Avoid keying on runtime or title — the API occasionally returns
+                                // missing RunTimeTicks (as_i64 returns None → 0) or a slightly
+                                // different name, which would spuriously reset the position anchor
+                                // every poll and prevent smooth interpolation.
+                                let now = Instant::now();
+                                let prev_item_id = self.connected_session_state
+                                    .as_ref().and_then(|p| p.now_playing_item_id.as_deref());
+                                let item_changed = s.now_playing_item_id.as_deref() != prev_item_id;
+                                if item_changed {
+                                    // Refresh the previous item so played/progress reflects
+                                    // what the remote client reported to the server.
+                                    if let Some(prev_id) = self.connected_session_state
+                                        .as_ref().and_then(|p| p.now_playing_item_id.clone())
+                                    {
+                                        let client = self.client.lock().unwrap().clone();
+                                        let tx = self.sessions_tx.clone();
+                                        std::thread::spawn(move || {
+                                            if let Ok(mut items) = client.get_items_by_ids(std::slice::from_ref(&prev_id)) {
+                                                if let Some(fresh) = items.pop() {
+                                                    let _ = tx.send(SessionEvent::ItemRefreshed(prev_id, fresh));
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
+                                // Detect playback via API position advancing, not IsPaused.
+                                // Some Emby clients always report IsPaused=true even while playing;
+                                // the only reliable signal is that PositionTicks keeps moving.
+                                let prev_api_pos = self.connected_session_state
+                                    .as_ref().map_or(0, |p| p.position_s);
+                                if s.position_s > prev_api_pos {
+                                    self.remote_api_pos_advanced_at = now;
+                                }
+                                // Extrapolate if API advanced recently (within 2× the ~11s report
+                                // interval). After that window lapses we treat it as paused/stopped.
+                                let api_active = self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
+                                if item_changed {
+                                    log::debug!(target: "sessions",
+                                        "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
+                                        s.position_s, self.remote_pos_s, s.position_s);
+                                    self.remote_pos_s = s.position_s;
+                                    self.remote_api_pos_advanced_at = now;
+                                } else if api_active {
+                                    let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
+                                    let extrapolated = self.remote_pos_s + elapsed.round() as i64;
+                                    let new_pos = s.position_s.max(extrapolated);
+                                    log::debug!(target: "sessions",
+                                        "pos extrap: api={}s paused={} elapsed={:.2}s → remote_pos_s {}s→{}s",
+                                        s.position_s, s.is_paused, elapsed, self.remote_pos_s, new_pos);
+                                    self.remote_pos_s = new_pos;
+                                } else {
+                                    log::debug!(target: "sessions",
+                                        "pos idle (no api advance in 22s): api_pos={}s → remote_pos_s {}s→{}s",
+                                        s.position_s, self.remote_pos_s, s.position_s);
+                                    self.remote_pos_s = s.position_s;
+                                }
+                                self.remote_pos_at = now;
+                                if item_changed {
+                                    if let Some(new_idx) = s.now_playing_item_id.as_ref()
+                                        .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id))
+                                    {
+                                        self.player_tab.playlist_cursor = new_idx;
+                                    }
+                                }
+                                self.connected_session_state = Some(s.clone());
+                                self.session_miss_count = 0;
+                                // Remote hasn't started playing yet — repoll sooner
+                                if s.runtime_s == 0 {
+                                    self.last_session_poll = Instant::now() - Duration::from_millis(500);
+                                }
+                            } else {
+                                self.session_miss_count += 1;
+                                if self.session_miss_count >= 3 {
+                                    log::warn!(target: "sessions", "connected session gone; disconnecting");
+                                    self.flash_status("Remote session ended; disconnected".to_string());
+                                    self.connected_session_id = None;
+                                    self.connected_session_state = None;
+                                    self.session_miss_count = 0;
+                                    self.remote_pos_s = 0;
+                                } else {
+                                    log::warn!(target: "sessions", "connected session not in poll ({}/3); holding", self.session_miss_count);
+                                }
+                            }
+                        }
+                    }
+                    SessionEvent::ItemRefreshed(item_id, fresh) => {
+                        if let Some(slot) = self.player_tab.items.iter_mut().find(|i| i.id == item_id) {
+                            *slot = fresh;
+                        }
+                    }
+                    SessionEvent::Error(e) => {
+                        self.sessions_loading = false;
+                        self.flash_status(format!("Sessions error: {e}"));
+                    }
+                }
+            }
+
+            while let Ok((item_id, bytes_opt)) = self.card_image_rx.try_recv() {
+                self.card_image_loading.remove(&item_id);
+                let state: Option<StatefulProtocol> = bytes_opt
+                    .and_then(|b| image::load_from_memory(&b).ok())
+                    .and_then(|dyn_img| {
+                        self.image_picker.as_ref().map(|p| p.new_resize_protocol(dyn_img))
+                    });
+                if state.is_some() {
+                    self.image_lru.retain(|k| k != &item_id);
+                    self.image_lru.push_back(item_id.clone());
+                    while self.image_lru.len() > self.image_cache_size {
+                        if let Some(evict) = self.image_lru.pop_front() {
+                            self.card_image_states.remove(&evict);
+                        }
+                    }
+                }
+                self.card_image_states.insert(item_id, state);
+            }
+
+            while let Ok(ev) = self.ws_rx.try_recv() {
+                self.handle_ws_event(ev);
+            }
+
+            if let Some(at) = self.settings_save_at {
+                if Instant::now() >= at {
+                    let cfg = self.client.lock().unwrap().config.clone();
+                    crate::config::save_config_settings(&cfg);
+                    self.settings_save_at = None;
+                }
+            }
+
+            // Periodic session poll when connected to a remote session
+            if self.connected_session_id.is_some()
+                && self.last_session_poll.elapsed() >= Duration::from_secs(1)
+                && !self.sessions_loading
+            {
+                self.spawn_sessions_load();
+            }
+
+            // Keep this session visible to other Emby clients
+            if let Some(ref tx) = self.ws_send_tx {
+                if self.last_keepalive.elapsed() >= Duration::from_secs(30) {
+                    let _ = tx.send("{\"MessageType\":\"KeepAlive\"}".to_string());
+                    self.last_keepalive = Instant::now();
+                }
+            }
+            if self.ws_send_tx.is_some()
+                && self.last_capabilities.elapsed() >= Duration::from_secs(600)
+            {
+                let client = self.client.lock().unwrap().clone();
+                std::thread::spawn(move || client.register_capabilities());
+                self.last_capabilities = Instant::now();
+            }
+
+            if event::poll(Duration::from_millis(50))? {
+                let ev = event::read()?;
+                let is_home_card_nav = self.home_card_view && self.tab_idx == 0;
+                match ev {
+                    Event::Key(key) => {
+                        if key.kind != KeyEventKind::Press { continue; }
+                        let nav_code = is_home_card_nav
+                            && matches!(key.code, KeyCode::Left | KeyCode::Right);
+                        if self.handle_key(key) { break; }
+                        // Drain queued duplicate nav keys to prevent scroll backlog.
+                        if nav_code {
+                            while event::poll(Duration::ZERO)? {
+                                match event::read()? {
+                                    Event::Key(k) if k.kind == KeyEventKind::Press
+                                        && k.code == key.code => {}
+                                    other => {
+                                        match other {
+                                            Event::Key(k) if k.kind == KeyEventKind::Press => {
+                                                if self.handle_key(k) { break 'outer; }
+                                            }
+                                            Event::Mouse(m) => self.handle_mouse(m),
+                                            _ => {}
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Event::Mouse(mouse) => {
+                        let nav_scroll = is_home_card_nav
+                            && matches!(mouse.kind,
+                                crossterm::event::MouseEventKind::ScrollUp |
+                                crossterm::event::MouseEventKind::ScrollDown)
+                            && self.home_rect.contains((mouse.column, mouse.row).into());
+                        self.handle_mouse(mouse);
+                        // Drain queued scroll events to prevent scroll backlog.
+                        if nav_scroll {
+                            while event::poll(Duration::ZERO)? {
+                                match event::read()? {
+                                    Event::Mouse(m) if matches!(m.kind,
+                                        crossterm::event::MouseEventKind::ScrollUp |
+                                        crossterm::event::MouseEventKind::ScrollDown) => {}
+                                    other => {
+                                        match other {
+                                            Event::Key(k) if k.kind == KeyEventKind::Press => {
+                                                if self.handle_key(k) { break 'outer; }
+                                            }
+                                            Event::Mouse(m) => self.handle_mouse(m),
+                                            _ => {}
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            if self.force_clear {
+                self.force_clear = false;
+                terminal.clear()?;
+            }
+            terminal.draw(|f| self.render(f))?;
+        }
+
+        // Signal quit (terminal closed): save queue state and return immediately.
+        // Don't join the player thread — its report_stopped HTTP call would block
+        // while mpv's window stays visible. The process exit kills all threads.
+        if QUIT_REQUESTED.load(Ordering::Relaxed) {
+            let (was_playing, current_idx, position_ticks) = {
+                let st = self.player.status.lock().unwrap();
+                (st.active, st.current_idx, st.position_ticks)
+            };
+            if was_playing {
+                if let Some(item) = self.player_tab.items.get_mut(current_idx) {
+                    if position_ticks > 0 && !item.is_audio() {
+                        item.playback_position_ticks = position_ticks;
+                    }
+                    self.last_played_item_id = Some(item.id.clone());
+                }
+            }
+            self.save_queue_state();
+            if !self.player.is_remote() { self.player.stop(); }
+            let _ = restore_terminal(terminal);
+            return Ok(());
+        }
+
+        // Leave the daemon's player running when the TUI disconnects; only
+        // stop the player when we own it locally.
+        let (was_playing, current_idx, position_ticks) = {
+            let st = self.player.status.lock().unwrap();
+            (st.active, st.current_idx, st.position_ticks)
+        };
+        if !self.player.is_remote() {
+            self.player.stop();
+        }
+        self.player.join();
+        // Update the playing item's position before saving — the PlayerEvent::Stopped
+        // that carries this update is never processed after we break out of the event loop.
+        if was_playing {
+            if let Some(item) = self.player_tab.items.get_mut(current_idx) {
+                if position_ticks > 0 && !item.is_audio() {
+                    item.playback_position_ticks = position_ticks;
+                }
+                self.last_played_item_id = Some(item.id.clone());
+            }
+        }
+        self.save_queue_state();
+        let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::TICKS_PER_SECOND;
+    use super::ui_util::{fmt_duration, item_text_and_style};
+
+    fn make_item(name: &str, item_type: &str) -> MediaItem {
+        MediaItem {
+            id: "id".into(), name: name.into(), item_type: item_type.into(),
+            is_folder: false, media_type: "Video".into(), collection_type: String::new(),
+            runtime_ticks: 0, played: false, playback_position_ticks: 0,
+            series_id: String::new(), series_name: String::new(), album_id: String::new(),
+            album: String::new(), index_number: 0, parent_index_number: 0,
+            unplayed_item_count: 0,
+            path: String::new(), artist: String::new(), sort_name: String::new(),
+            production_year: 0, end_year: 0, overview: String::new(),
+            premiere_date: String::new(), date_added: String::new(), total_count: 0, container: String::new(),
+            director: String::new(), video_info: String::new(), audio_info: String::new(),
+            genre: String::new(),
+            playlist_item_id: String::new(),
+        }
+    }
+
+    // ── fmt_duration ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn fmt_duration_zero() {
+        assert_eq!(fmt_duration(0), "0:00");
+    }
+
+    #[test]
+    fn fmt_duration_seconds_only() {
+        assert_eq!(fmt_duration(45), "0:45");
+    }
+
+    #[test]
+    fn fmt_duration_minutes_and_seconds() {
+        assert_eq!(fmt_duration(90), "1:30");
+        assert_eq!(fmt_duration(3599), "59:59");
+    }
+
+    #[test]
+    fn fmt_duration_hours() {
+        assert_eq!(fmt_duration(3600), "1:00:00");
+        assert_eq!(fmt_duration(3661), "1:01:01");
+        assert_eq!(fmt_duration(7384), "2:03:04");
+    }
+
+    // ── item_text_and_style ──────────────────────────────────────────────────
+
+    #[test]
+    fn item_text_plain_unwatched_movie() {
+        let item = make_item("Inception", "Movie");
+        let (text, style) = item_text_and_style(&item, false);
+        assert_eq!(text, "Inception");
+        assert_eq!(style.fg, Some(palette::WHITE));
+    }
+
+    #[test]
+    fn item_text_played_movie_uses_default_color() {
+        let mut item = make_item("Inception", "Movie");
+        item.played = true;
+        let (_, style) = item_text_and_style(&item, false);
+        assert_eq!(style.fg, Some(palette::WHITE));
+    }
+
+    #[test]
+    fn item_text_in_progress_shows_duration() {
+        let mut item = make_item("Inception", "Movie");
+        item.runtime_ticks = TICKS_PER_SECOND * 7200; // 2 hours
+        item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 1 hour in → 50%
+        let (text, style) = item_text_and_style(&item, false);
+        assert!(text.contains("2h00m"), "expected duration in: {text}");
+        assert!(!text.contains("50%"), "pct should be in span, not text: {text}");
+        assert_eq!(style.fg, Some(palette::WHITE));
+    }
+
+    #[test]
+    fn item_text_played_but_in_progress_shows_duration() {
+        let mut item = make_item("Inception", "Movie");
+        item.runtime_ticks = TICKS_PER_SECOND * 7200;
+        item.playback_position_ticks = TICKS_PER_SECOND * 3600;
+        item.played = true;
+        let (text, _) = item_text_and_style(&item, false);
+        assert!(text.contains("2h00m"), "expected duration in: {text}");
+        assert!(!text.contains("50%"), "pct should be in span, not text: {text}");
+    }
+
+    #[test]
+    fn item_text_includes_duration() {
+        let mut item = make_item("Movie", "Movie");
+        item.runtime_ticks = TICKS_PER_SECOND * 5400; // 90 min
+        let (text, _) = item_text_and_style(&item, false);
+        assert!(text.contains("1h30m"), "expected duration in: {text}");
+    }
+
+    #[test]
+    fn item_text_series_shows_unplayed_count_not_green() {
+        let mut item = make_item("Breaking Bad", "Series");
+        item.is_folder = true;
+        item.unplayed_item_count = 5;
+        let (text, style) = item_text_and_style(&item, false);
+        assert!(text.contains("[5]"), "expected count in: {text}");
+        assert_eq!(style.fg, Some(palette::WHITE));
+    }
+
+    #[test]
+    fn item_text_nav_folder_is_white() {
+        let mut item = make_item("Folder", "Folder");
+        item.is_folder = true;
+        let (_, style) = item_text_and_style(&item, false);
+        assert_eq!(style.fg, Some(palette::WHITE));
+    }
+
+    #[test]
+    fn item_text_selected_clears_color() {
+        let item = make_item("X", "Movie");
+        let (_, style) = item_text_and_style(&item, true);
+        assert_eq!(style.fg, None);
+    }
+
+    // ── test helpers ─────────────────────────────────────────────────────────
+
+    fn make_items(n: usize) -> Vec<MediaItem> {
+        (0..n).map(|i| {
+            let mut item = make_item(&format!("Item {i}"), "Movie");
+            item.id = format!("id{i}");
+            item
+        }).collect()
+    }
+
+    /// Minimal App stub for logic-only tests.
+    fn make_app_stub() -> App {
+        use std::sync::{Arc, Mutex};
+        use crate::player::{PlayerProxy, PlayerStatus};
+
+        let status = Arc::new(Mutex::new(PlayerStatus {
+            position_ticks: 0, runtime_ticks: 0, paused: false,
+            volume: 100, volume_max: 100, current_idx: 0, active: false,
+            title: String::new(), audio_tracks: Vec::new(), sub_tracks: Vec::new(),
+            audio_id: 0, audio_lang: String::new(), sub_id: 0, muted: false, video_height: 0,
+        }));
+
+        let (_, player_rx) = std::sync::mpsc::channel();
+        let (_, ws_rx)     = std::sync::mpsc::channel();
+        let (lib_tx, lib_rx) = std::sync::mpsc::channel();
+        let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
+        let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
+        let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
+
+        let player = PlayerProxy::stub(status.clone());
+
+        use crate::api::EmbyClient;
+        use crate::config::Config;
+        let client = EmbyClient::new(Config::default());
+
+        App {
+            client: Arc::new(Mutex::new(client)),
+            player,
+            player_rx,
+            ws_rx,
+            tab_idx: 0,
+            hidden_libraries: Vec::new(),
+            hidden_latest: Vec::new(),
+            music_levels: Vec::new(),
+            player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
+            home: HomePane {
+                continue_items: Vec::new(),
+                continue_cursor: 0,
+                latest: Vec::new(),
+                section: 0,
+            },
+            libs: Vec::new(),
+            status: String::new(),
+            status_expires: None,
+            log_scroll: 0,
+            log_pane: LogPane::Log,
+            log_source_cursor: 0,
+            log_disabled_sources: std::collections::HashSet::new(),
+            playlist_rect: ratatui::layout::Rect::default(),
+            home_rect: ratatui::layout::Rect::default(),
+            layout_playlist_inner: ratatui::layout::Rect::default(),
+            layout_section_areas: Vec::new(),
+            layout_tabs_area: ratatui::layout::Rect::default(),
+            terminal_width: 80,
+            terminal_height: 24,
+            layout_lib_scroll: 0,
+            layout_lib_row_heights: Vec::new(),
+            layout_home_scrolls: Vec::new(),
+            layout_home_scrollbar: Rect::default(),
+            layout_presentation_sb: Rect::default(),
+            home_panel_section_offset: 0,
+            home_cards_section_offset: 0,
+            layout_home_card_strips: Vec::new(),
+            layout_lib_table_area: ratatui::layout::Rect::default(),
+            layout_breadcrumbs: Vec::new(),
+            last_click_time: std::time::Instant::now(),
+            last_drag_seek: std::time::Instant::now(),
+            last_click_pos: (u16::MAX, u16::MAX),
+            layout_seekbar_area: ratatui::layout::Rect::default(),
+            layout_button_area: ratatui::layout::Rect::default(),
+            layout_tracks_area: ratatui::layout::Rect::default(),
+            layout_vol_area: ratatui::layout::Rect::default(),
+            layout_sub_area: ratatui::layout::Rect::default(),
+            layout_audio_area: ratatui::layout::Rect::default(),
+            confirm_remove_idx: None,
+            pending_queue_removal: None,
+            confirm_clear_playlist: false,
+            playlist_undo_stack: Vec::new(),
+            skip_intro_end_ticks: None,
+            next_up_item: None,
+            playlist_view: 0,
+            home_card_view: false,
+            last_played_item_id: None,
+            last_played_completed: false,
+            layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
+            layout_queue_strip_slots: Vec::new(),
+            layout_carousel_left_arrow: None,
+            layout_carousel_right_arrow: None,
+            layout_carousel_up_arrow: None,
+            layout_carousel_down_arrow: None,
+            last_carousel_click_slot: None,
+            last_carousel_click_time: std::time::Instant::now(),
+            card_image_states: std::collections::HashMap::new(),
+            card_image_loading: std::collections::HashSet::new(),
+            card_image_tx,
+            card_image_rx,
+            image_picker: None,
+            show_help: false,
+            show_settings: false,
+            settings_cursor: 0,
+            settings_scroll: 0,
+            settings_save_at: None,
+            confirm_logout: false,
+            multiselect_popup: None,
+            layout_settings_area: Rect::default(),
+            settings_line_of_cursor: Vec::new(),
+            help_scroll: 0,
+            show_log_tab: false,
+            system_notifications: false,
+            notif_failed: false,
+            notif_action_tx,
+            notif_action_rx,
+            context_menu: None,
+            context_menu_rect: None,
+            lib_tx,
+            lib_rx,
+            force_clear: false,
+            tab_scroll: 0,
+            ui_volume: 100,
+            pre_mute_volume: None,
+            mute_on: false,
+            layout_tabbar_vol_area: Rect::default(),
+            sessions: Vec::new(),
+            sessions_cursor: 0,
+            sessions_loading: false,
+            show_sessions: false,
+            playlists: Vec::new(),
+            playlists_cursor: 0,
+            playlists_scroll: 0,
+            playlists_loading: false,
+            show_playlists: false,
+            playlists_open: None,
+            playlists_open_items: Vec::new(),
+            playlists_open_cursor: 0,
+            playlists_open_scroll: 0,
+            playlists_open_loading: false,
+            queue_source: crate::config::QueueSource::Unknown,
+            queue_restored: false,
+            queue_dirty: false,
+            pending_queue_action: None,
+            show_save_playlist_modal: false,
+            autosave_playlist: false,
+            use_nerd_fonts: false,
+            show_playback_panel: true,
+            ws_send_tx: None,
+            last_keepalive: Instant::now(),
+            last_capabilities: Instant::now(),
+            sessions_tx,
+            sessions_rx,
+            connected_session_id: None,
+            connected_session_state: None,
+            last_session_poll: std::time::Instant::now(),
+            session_miss_count: 0,
+            remote_pos_s: 0,
+            remote_pos_at: std::time::Instant::now(),
+            remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
+            last_scroll_at: Instant::now() - Duration::from_secs(1),
+            last_nav_at: Instant::now() - Duration::from_secs(1),
+            album_year_cache: std::collections::HashMap::new(),
+            album_year_loading: std::collections::HashSet::new(),
+            save_playlist_dialog: None,
+            image_lru: std::collections::VecDeque::new(),
+            image_cache_size: 50,
+            image_protocol_enabled: false,
+        }
+    }
+
+    // ── home_section_len_cur ─────────────────────────────────────────────────
+
+    #[test]
+    fn home_section_len_cur_section_zero_uses_continue_items() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(5);
+        app.home.continue_cursor = 3;
+        assert_eq!(app.home_section_len_cur(0), (5, 3));
+    }
+
+    #[test]
+    fn home_section_len_cur_section_one_uses_latest() {
+        let mut app = make_app_stub();
+        app.home.latest = vec![
+            ("Latest Movies".into(), "lib1".into(), make_items(7), 2),
+        ];
+        assert_eq!(app.home_section_len_cur(1), (7, 2));
+    }
+
+    #[test]
+    fn home_section_len_cur_out_of_bounds_returns_zero() {
+        let app = make_app_stub();
+        assert_eq!(app.home_section_len_cur(99), (0, 0));
+    }
+
+    // ── set_home_cursor ──────────────────────────────────────────────────────
+
+    #[test]
+    fn set_home_cursor_section_zero_sets_continue_cursor() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(5);
+        app.set_home_cursor(0, 4);
+        assert_eq!(app.home.continue_cursor, 4);
+    }
+
+    #[test]
+    fn set_home_cursor_section_one_sets_latest_cursor() {
+        let mut app = make_app_stub();
+        app.home.latest = vec![("T".into(), "lib".into(), make_items(10), 0)];
+        app.set_home_cursor(1, 7);
+        assert_eq!(app.home.latest[0].3, 7);
+    }
+
+    #[test]
+    fn set_home_cursor_out_of_bounds_section_is_noop() {
+        let mut app = make_app_stub();
+        app.set_home_cursor(99, 3); // should not panic
+    }
+
+    // ── move_home_cursor ─────────────────────────────────────────────────────
+
+    #[test]
+    fn move_home_cursor_forward_within_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(5);
+        app.home.continue_cursor = 0;
+        app.move_home_cursor(1);
+        assert_eq!(app.home.continue_cursor, 1);
+        assert_eq!(app.home.section, 0);
+    }
+
+    #[test]
+    fn move_home_cursor_forward_stops_at_end_with_adjacent_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(3);
+        app.home.continue_cursor = 2; // at end of section 0
+        app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
+        app.move_home_cursor(1);
+        // stays at end, does not advance to section 1 or wrap
+        assert_eq!(app.home.section, 0);
+        assert_eq!(app.home.continue_cursor, 2);
+    }
+
+    #[test]
+    fn move_home_cursor_forward_stops_at_end_of_last_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(3);
+        app.home.continue_cursor = 2;
+        app.move_home_cursor(1);
+        assert_eq!(app.home.section, 0);
+        assert_eq!(app.home.continue_cursor, 2);
+    }
+
+    #[test]
+    fn move_home_cursor_backward_within_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(5);
+        app.home.continue_cursor = 3;
+        app.move_home_cursor(-1);
+        assert_eq!(app.home.continue_cursor, 2);
+        assert_eq!(app.home.section, 0);
+    }
+
+    #[test]
+    fn move_home_cursor_backward_stops_at_start_with_prior_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(3);
+        app.home.latest = vec![("T".into(), "lib".into(), make_items(4), 0)];
+        app.home.section = 1;
+        app.home.latest[0].3 = 0; // at start of section 1
+        app.move_home_cursor(-1);
+        // stays at start, does not go back to section 0 or wrap
+        assert_eq!(app.home.section, 1);
+        assert_eq!(app.home.latest[0].3, 0);
+    }
+
+    #[test]
+    fn move_home_cursor_backward_stops_at_start_of_first_section() {
+        let mut app = make_app_stub();
+        app.home.continue_items = make_items(3);
+        app.home.continue_cursor = 0;
+        app.move_home_cursor(-1);
+        assert_eq!(app.home.section, 0);
+        assert_eq!(app.home.continue_cursor, 0);
+    }
+
+    // ── ensure_home_section_visible ──────────────────────────────────────────
+
+    fn sections(n: usize) -> Vec<(String, String, Vec<MediaItem>, usize)> {
+        (0..n).map(|i| (format!("Sec {i}"), format!("lib{i}"), make_items(3), 0)).collect()
+    }
+
+    #[test]
+    fn ensure_visible_all_sections_fit_no_scrolling_needed() {
+        let mut app = make_app_stub();
+        // terminal_height=24, chrome=3, panel_h=21; HOME_MIN_SECTION_H=6; 3*6=18<=21 => all visible
+        app.terminal_height = 24;
+        app.home.latest = sections(2); // 3 total sections
+        app.home.section = 2;
+        app.home_panel_section_offset = 0;
+        app.ensure_home_section_visible();
+        assert_eq!(app.home_panel_section_offset, 0);
+    }
+
+    #[test]
+    fn ensure_visible_scrolls_offset_down_when_section_below_window() {
+        let mut app = make_app_stub();
+        // panel_h = 24-3 = 21; visible_rows = 21/6 = 3
+        // 8 Latest => n_rows = 1 + (8+1)/2 = 5; max_offset = 2
+        // section 8 (Latest[7]) => sec_row = 1 + 7/2 = 4
+        // 4 >= 0 + 3 => offset = 4 + 1 - 3 = 2
+        app.terminal_height = 24;
+        app.home.latest = sections(8);
+        app.home.section = 8; // last section, row 4
+        app.home_panel_section_offset = 0;
+        app.ensure_home_section_visible();
+        assert_eq!(app.home_panel_section_offset, 2);
+    }
+
+    #[test]
+    fn ensure_visible_scrolls_offset_up_when_section_above_window() {
+        let mut app = make_app_stub();
+        app.terminal_height = 24;
+        app.home.latest = sections(4); // 5 total sections
+        app.home.section = 0;
+        app.home_panel_section_offset = 3; // selected is above window
+        app.ensure_home_section_visible();
+        assert_eq!(app.home_panel_section_offset, 0);
+    }
+
+    #[test]
+    fn ensure_visible_clamps_offset_to_max() {
+        let mut app = make_app_stub();
+        // panel_h = 24 - 3 = 21; visible = 3; 3 total sections => max_offset = 0
+        app.terminal_height = 24;
+        app.home.latest = sections(2); // 3 total sections, all fit
+        app.home.section = 1;
+        app.home_panel_section_offset = 10; // way too high
+        app.ensure_home_section_visible();
+        assert_eq!(app.home_panel_section_offset, 0);
+    }
+
+    // ── home_card_view toggle ────────────────────────────────────────────────
+
+    #[test]
+    fn home_card_view_defaults_false() {
+        let app = make_app_stub();
+        assert!(!app.home_card_view);
+    }
+
+    #[test]
+    fn home_card_view_toggle_changes_state() {
+        let mut app = make_app_stub();
+        app.home_card_view = !app.home_card_view;
+        assert!(app.home_card_view);
+        app.home_card_view = !app.home_card_view;
+        assert!(!app.home_card_view);
+    }
+
+    // ── cursor preservation during home refresh ──────────────────────────────
+
+    #[test]
+    fn home_refresh_preserves_cursor_by_lib_id() {
+        // Simulate what init_home does: old_cursors keyed by lib_id.
+        let old_latest: Vec<(String, String, Vec<MediaItem>, usize)> = vec![
+            ("Latest Movies".into(), "lib-movies".into(), make_items(10), 7),
+            ("Latest TV".into(),     "lib-tv".into(),     make_items(5),  3),
+        ];
+        let old_cursors: std::collections::HashMap<String, usize> = old_latest.iter()
+            .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
+            .collect();
+
+        // New fetch returns same libs but with fresh items.
+        let new_items_movies = make_items(12);
+        let new_items_tv     = make_items(4);
+
+        let cursor_movies = old_cursors.get("lib-movies").copied().unwrap_or(0)
+            .min(new_items_movies.len().saturating_sub(1));
+        let cursor_tv = old_cursors.get("lib-tv").copied().unwrap_or(0)
+            .min(new_items_tv.len().saturating_sub(1));
+
+        assert_eq!(cursor_movies, 7, "cursor preserved when within bounds");
+        assert_eq!(cursor_tv, 3,     "cursor preserved when within bounds");
+    }
+
+    #[test]
+    fn home_refresh_clamps_cursor_when_new_list_is_shorter() {
+        let old_latest: Vec<(String, String, Vec<MediaItem>, usize)> = vec![
+            ("Latest Movies".into(), "lib-movies".into(), make_items(10), 9),
+        ];
+        let old_cursors: std::collections::HashMap<String, usize> = old_latest.iter()
+            .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
+            .collect();
+
+        let new_items = make_items(5); // shorter than before
+        let cursor = old_cursors.get("lib-movies").copied().unwrap_or(0)
+            .min(new_items.len().saturating_sub(1));
+
+        assert_eq!(cursor, 4, "cursor clamped to new last index");
+    }
+
+    #[test]
+    fn home_refresh_cursor_defaults_zero_for_new_library() {
+        let old_cursors: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let new_items = make_items(8);
+        let cursor = old_cursors.get("brand-new-lib").copied().unwrap_or(0)
+            .min(new_items.len().saturating_sub(1));
+        assert_eq!(cursor, 0);
+    }
+
+    #[test]
+    fn home_section_clamped_after_refresh_removes_sections() {
+        let mut app = make_app_stub();
+        app.home.latest = sections(4); // 5 total
+        app.home.section = 4;
+
+        // Simulate refresh that returns fewer sections.
+        app.home.latest = sections(1); // now only 2 total
+        let n = 1 + app.home.latest.len();
+        if app.home.section >= n {
+            app.home.section = n.saturating_sub(1);
+        }
+        assert_eq!(app.home.section, 1);
+    }
+
+}
+fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>> {
+    crossterm::terminal::enable_raw_mode()?;
+    let mut stdout = std::io::stdout();
+    crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
+    crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    let _ = crossterm::execute!(
+        stdout,
+        crossterm::event::PushKeyboardEnhancementFlags(
+            crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES
+        )
+    );
+    Ok(Terminal::new(CrosstermBackend::new(stdout))?)
+}
+fn restore_terminal(mut terminal: Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<(), Box<dyn std::error::Error>> {
+    crossterm::terminal::disable_raw_mode()?;
+    let _ = crossterm::execute!(terminal.backend_mut(), crossterm::event::PopKeyboardEnhancementFlags);
+    crossterm::execute!(terminal.backend_mut(), crossterm::event::DisableMouseCapture)?;
+    crossterm::execute!(terminal.backend_mut(), crossterm::terminal::LeaveAlternateScreen)?;
+    terminal.show_cursor()?;
+    Ok(())
+}
