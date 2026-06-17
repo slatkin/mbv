@@ -18,6 +18,13 @@ cargo test -- --nocapture  # see println! output in tests
 
 There is no linter configured; `cargo build` catches everything relevant.
 
+## Releasing
+
+1. Bump `version` in `Cargo.toml`
+2. `cargo build` to update `Cargo.lock`
+3. Commit: `Release X.Y.Z: <one-line summary>`
+4. Push — a GitHub Action automatically updates the PKGBUILD sha256
+
 ## Code quality
 
 Always fix compile warnings — delete unused code rather than suppressing with `#[allow]`.
