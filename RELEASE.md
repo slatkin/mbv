@@ -1,6 +1,6 @@
 ## Releasing
 
-1. If code changed since last release: `cargo test`
+1. Follow CHECKIN.md steps
 2. Bump `version` in `Cargo.toml`
 3. `cargo build` to update `Cargo.lock`
 4. Commit: `Release X.Y.Z: <one-line summary>`

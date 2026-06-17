@@ -16,11 +16,11 @@ cargo test config          # run tests matching "config"
 cargo test -- --nocapture  # see println! output in tests
 ```
 
-There is no linter configured; `cargo build` catches everything relevant.
+Use `cargo clippy` as the linter. See CHECKIN.md for pre-commit steps.
 
 ## Releasing
 
-1. If code changed since last release: `cargo test`
+1. Follow CHECKIN.md steps
 2. Bump `version` in `Cargo.toml`
 3. `cargo build` to update `Cargo.lock`
 4. Commit: `Release X.Y.Z: <one-line summary>`
