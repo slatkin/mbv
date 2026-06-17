@@ -4795,7 +4795,7 @@ impl App {
         ]).areas(area);
 
         // Right side: Vol (14) cols total
-        const VOL_W:  u16 = 14; // " Volume: XXX%"
+        const VOL_W:  u16 = 9; // " Vol XXX%"
         let right_w = VOL_W;
 
         // Thin underline below tab row with status indicators on the right
@@ -4810,7 +4810,7 @@ impl App {
             // Resolution indicator (only when playing) — shows pixel height e.g. "1080", "720"
             let res_h = pst.video_height;
             let res_str = if res_h > 0 { res_h.to_string() } else { "--".to_string() };
-            let res_color = if res_h >= 1080 { palette::PINE } else if res_h > 0 { palette::MUTED } else { palette::MUTED };
+            let res_color = if res_h > 0 { palette::FOAM } else { palette::MUTED };
 
             // Subtitle indicator (only when playing)
             let sub_color = if pst.sub_id != 0 { palette::RED } else { palette::MUTED };
@@ -5079,7 +5079,7 @@ impl App {
             else if volume > 60 { palette::YELLOW }
             else { palette::PINE };
         let line = Line::from(vec![
-            Span::styled(" Volume: ", Style::default().fg(Color::Rgb(230, 230, 230))),
+            Span::styled(" Vol ", Style::default().fg(Color::Rgb(230, 230, 230))),
             Span::styled(format!("{:>3}%", volume), Style::default().fg(color)),
         ]);
         f.render_widget(Paragraph::new(line), area);
