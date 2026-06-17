@@ -59,7 +59,7 @@ impl Default for Config {
 }
 
 pub fn is_system_instance() -> bool {
-    env::var("MBV_SYSTEM").is_ok()
+    env::var("MBV_SYSTEM").as_deref() == Ok("1")
 }
 
 fn config_dir() -> PathBuf {
@@ -211,7 +211,7 @@ fn migrate_to_state(filename: &str) -> PathBuf {
 }
 
 pub fn osc_script_path() -> PathBuf {
-    let user = data_dir().join("scripts").join("mbv.lua");
+    let user = data_dir_system_or_local().join("scripts").join("mbv.lua");
     if user.exists() {
         return user;
     }
@@ -235,12 +235,8 @@ pub fn load_subs_off() -> bool {
         .unwrap_or(true)
 }
 
-fn data_dir() -> PathBuf {
-    data_dir_system_or_local()
-}
-
 pub fn osc_fonts_dir() -> PathBuf {
-    let user = data_dir().join("fonts");
+    let user = data_dir_system_or_local().join("fonts");
     if user.exists() {
         return user;
     }
@@ -739,5 +735,112 @@ hidden_latest = ["Movies", "TV SHOWS"]
     fn parse_system_notifications_defaults_false() {
         let toml = "[server]\nurl = \"http://host\"";
         assert!(!parse_config(toml).unwrap().system_notifications);
+    }
+
+    // ── System-instance path routing ─────────────────────────────────────────
+    //
+    // MBV_SYSTEM is a process-global env var, so these tests must not run in
+    // parallel with each other or with the XDG tests above. Use a Mutex.
+
+    use std::sync::Mutex;
+    static SYS_ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn is_system_instance_false_without_env_var() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        assert!(!is_system_instance());
+    }
+
+    #[test]
+    fn is_system_instance_true_with_env_var() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "1");
+        let result = is_system_instance();
+        std::env::remove_var("MBV_SYSTEM");
+        assert!(result);
+    }
+
+    #[test]
+    fn is_system_instance_false_with_env_set_to_zero() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "0");
+        let result = is_system_instance();
+        std::env::remove_var("MBV_SYSTEM");
+        assert!(!result);
+    }
+
+    #[test]
+    fn is_system_instance_false_with_empty_env_var() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "");
+        let result = is_system_instance();
+        std::env::remove_var("MBV_SYSTEM");
+        assert!(!result);
+    }
+
+    #[test]
+    fn cache_dir_uses_system_path_when_mbv_system_set() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "1");
+        let path = cache_dir();
+        std::env::remove_var("MBV_SYSTEM");
+        assert_eq!(path, std::path::PathBuf::from("/var/cache/mbv"));
+    }
+
+    #[test]
+    fn cache_dir_uses_xdg_when_not_system() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        std::env::set_var("XDG_CACHE_HOME", "/tmp/xdg-test-cache");
+        let path = cache_dir();
+        std::env::remove_var("XDG_CACHE_HOME");
+        assert_eq!(path, std::path::PathBuf::from("/tmp/xdg-test-cache/mbv"));
+    }
+
+    #[test]
+    fn data_dir_system_or_local_uses_system_path_when_mbv_system_set() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "1");
+        let path = data_dir_system_or_local();
+        std::env::remove_var("MBV_SYSTEM");
+        assert_eq!(path, std::path::PathBuf::from("/var/lib/mbv"));
+    }
+
+    #[test]
+    fn config_path_uses_system_path_when_mbv_system_set() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "1");
+        let path = config_path();
+        std::env::remove_var("MBV_SYSTEM");
+        assert_eq!(path, std::path::PathBuf::from("/etc/mbv/config.toml"));
+    }
+
+    #[test]
+    fn mpv_ipc_path_uses_run_dir_when_mbv_system_set() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "1");
+        let path = mpv_ipc_path();
+        std::env::remove_var("MBV_SYSTEM");
+        assert_eq!(path, "/run/mbv/mbv-mpv.sock");
+    }
+
+    #[test]
+    fn control_socket_path_uses_run_dir_when_mbv_system_set() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "1");
+        let path = control_socket_path();
+        std::env::remove_var("MBV_SYSTEM");
+        assert_eq!(path, "/run/mbv/mbv-ctrl.sock");
+    }
+
+    #[test]
+    fn mpv_ipc_path_uses_xdg_runtime_dir_when_not_system() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        std::env::set_var("XDG_RUNTIME_DIR", "/run/user/1000");
+        let path = mpv_ipc_path();
+        std::env::remove_var("XDG_RUNTIME_DIR");
+        assert_eq!(path, "/run/user/1000/mbv-mpv.sock");
     }
 }

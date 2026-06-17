@@ -27,6 +27,7 @@ ksni = { version = "0.3", features = ["blocking"] }
 ratatui-image = { version = "11", default-features = false, features = ["crossterm"] }
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif"] }
 unicode-width = "0.2.2"
+log = "0.4"
 
 [build-dependencies]
 resvg = "0.47"

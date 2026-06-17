@@ -36,7 +36,7 @@ use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
 
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
-use crate::applog::{AppLog, Level};
+use crate::applog::Level;
 use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use crate::ws::WsEvent;
 
@@ -178,11 +178,10 @@ pub struct App {
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
     music_levels: Vec<String>,
-    log: AppLog,
     log_scroll: usize,
     log_pane: LogPane,        // which pane has focus
     log_source_cursor: usize, // selected row in sources pane
-    log_disabled_sources: std::collections::HashSet<&'static str>,
+    log_disabled_sources: std::collections::HashSet<String>,
     // Layout rects from last render, used for mouse hit-testing
     playlist_rect: Rect,
     home_rect: Rect,
@@ -435,8 +434,7 @@ impl App {
         crate::config::evict_old_image_cache();
         let start_on_queue = client.config.start_on_queue;
         let ws_url = client.ws_url();
-        let log = AppLog::new(if show_log_tab { 5000 } else { 0 });
-        let ws_send_tx = crate::ws::start(ws_url, ws_tx, log.clone());
+        let ws_send_tx = crate::ws::start(ws_url, ws_tx);
         let ws_send_tx_app = ws_send_tx.clone();
         let always_play_next = client.config.always_play_next;
         let always_skip_intro = client.config.always_skip_intro;
@@ -451,7 +449,7 @@ impl App {
         });
         let player = PlayerProxy::local(raw_player, always_play_next);
         let mut client = client;
-        client.probe_chapter_api(&log);
+        client.probe_chapter_api();
         App {
             client: Arc::new(Mutex::new(client)),
             player,
@@ -471,7 +469,6 @@ impl App {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            log,
             log_scroll: 0,
             log_pane: LogPane::Log,
             log_source_cursor: 0,
@@ -613,9 +610,8 @@ impl App {
         let autosave_playlist = client.config.autosave_playlist;
         let use_nerd_fonts = client.config.use_nerd_fonts;
         crate::config::evict_old_image_cache();
-        let log = AppLog::new(0);
         let mut client = client;
-        client.probe_chapter_api(&log);
+        client.probe_chapter_api();
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let player = PlayerProxy::remote(remote, always_play_next);
@@ -641,7 +637,6 @@ impl App {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            log,
             log_scroll: 0,
             log_pane: LogPane::Log,
             log_source_cursor: 0,
@@ -790,7 +785,7 @@ impl App {
 
         {
             let c = self.client.lock().unwrap();
-            c.register_capabilities(&self.log);
+            c.register_capabilities();
         }
 
         match self.fetch_home() {
@@ -898,7 +893,7 @@ impl App {
                         // (always_play_next=false or non-series content). No action needed.
                     }
                     PlayerEvent::NextUpPlay => {
-                        self.log.push(Level::Warn, "app", "next-up: play triggered");
+                        log::warn!(target: "app", "next-up: play triggered");
                         if let Some(item) = self.next_up_item.take() {
                             let label = item.playback_label();
                             if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
@@ -906,10 +901,10 @@ impl App {
                                 self.player_tab.playlist_cursor = idx;
                                 self.flash_status(label);
                             } else {
-                                self.log.push(Level::Warn, "app", "next-up: item not in queue, cannot jump");
+                                log::warn!(target: "app", "next-up: item not in queue, cannot jump");
                             }
                         } else {
-                            self.log.push(Level::Warn, "app", "next-up: NextUpPlay fired but next_up_item is None");
+                            log::warn!(target: "app", "next-up: NextUpPlay fired but next_up_item is None");
                         }
                     }
                     PlayerEvent::QueueUpdated { items, cursor } => {
@@ -995,7 +990,7 @@ impl App {
                             } else {
                                 self.sessions_cursor = self.sessions_cursor.min(self.sessions.len().saturating_sub(1));
                                 if !self.sessions.is_empty() {
-                                    self.log.push(Level::Warn, "sessions", "selected session gone; cursor clamped");
+                                    log::warn!(target: "sessions", "selected session gone; cursor clamped");
                                 }
                             }
                         }
@@ -1041,23 +1036,23 @@ impl App {
                                 // interval). After that window lapses we treat it as paused/stopped.
                                 let api_active = self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
                                 if item_changed {
-                                    self.log.push(Level::Debug, "sessions", format!(
+                                    log::debug!(target: "sessions",
                                         "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
-                                        s.position_s, self.remote_pos_s, s.position_s));
+                                        s.position_s, self.remote_pos_s, s.position_s);
                                     self.remote_pos_s = s.position_s;
                                     self.remote_api_pos_advanced_at = now;
                                 } else if api_active {
                                     let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
                                     let extrapolated = self.remote_pos_s + elapsed.round() as i64;
                                     let new_pos = s.position_s.max(extrapolated);
-                                    self.log.push(Level::Debug, "sessions", format!(
+                                    log::debug!(target: "sessions",
                                         "pos extrap: api={}s paused={} elapsed={:.2}s → remote_pos_s {}s→{}s",
-                                        s.position_s, s.is_paused, elapsed, self.remote_pos_s, new_pos));
+                                        s.position_s, s.is_paused, elapsed, self.remote_pos_s, new_pos);
                                     self.remote_pos_s = new_pos;
                                 } else {
-                                    self.log.push(Level::Debug, "sessions", format!(
+                                    log::debug!(target: "sessions",
                                         "pos idle (no api advance in 22s): api_pos={}s → remote_pos_s {}s→{}s",
-                                        s.position_s, self.remote_pos_s, s.position_s));
+                                        s.position_s, self.remote_pos_s, s.position_s);
                                     self.remote_pos_s = s.position_s;
                                 }
                                 self.remote_pos_at = now;
@@ -1077,14 +1072,14 @@ impl App {
                             } else {
                                 self.session_miss_count += 1;
                                 if self.session_miss_count >= 3 {
-                                    self.log.push(Level::Warn, "sessions", "connected session gone; disconnecting");
+                                    log::warn!(target: "sessions", "connected session gone; disconnecting");
                                     self.flash_status("Remote session ended; disconnected".to_string());
                                     self.connected_session_id = None;
                                     self.connected_session_state = None;
                                     self.session_miss_count = 0;
                                     self.remote_pos_s = 0;
                                 } else {
-                                    self.log.push(Level::Warn, "sessions", format!("connected session not in poll ({}/3); holding", self.session_miss_count));
+                                    log::warn!(target: "sessions", "connected session not in poll ({}/3); holding", self.session_miss_count);
                                 }
                             }
                         }
@@ -1151,8 +1146,7 @@ impl App {
                 && self.last_capabilities.elapsed() >= Duration::from_secs(600)
             {
                 let client = self.client.lock().unwrap().clone();
-                let log = self.log.clone();
-                std::thread::spawn(move || client.register_capabilities(&log));
+                std::thread::spawn(move || client.register_capabilities());
                 self.last_capabilities = Instant::now();
             }
 
@@ -2013,7 +2007,7 @@ impl App {
                         } else if !self.player_tab.items.is_empty() {
                             let items = self.player_tab.items.clone();
                             let c = Arc::new(self.client.lock().unwrap().clone());
-                            self.player.play_playlist(items, t, c, self.log.clone(), self.ui_volume);
+                            self.player.play_playlist(items, t, c, self.ui_volume);
                         }
                     }
                 }
@@ -2186,11 +2180,12 @@ impl App {
             KeyCode::Char(' ') => {
                 // Toggle selected source on/off
                 let sources = self.log_sources();
-                if let Some(src) = sources.get(self.log_source_cursor) {
+                let src_cursor = self.log_source_cursor.min(sources.len().saturating_sub(1));
+                if let Some(src) = sources.get(src_cursor) {
                     if self.log_disabled_sources.contains(src) {
                         self.log_disabled_sources.remove(src);
                     } else {
-                        self.log_disabled_sources.insert(src);
+                        self.log_disabled_sources.insert(src.clone());
                     }
                 }
             }
@@ -2224,19 +2219,19 @@ impl App {
         false
     }
 
-    fn log_sources(&self) -> Vec<&'static str> {
+    fn log_sources(&self) -> Vec<String> {
         let mut seen = std::collections::HashSet::new();
-        let mut sources: Vec<&'static str> = Vec::new();
-        for e in &self.log.snapshot() {
-            if seen.insert(e.source) { sources.push(e.source); }
+        let mut sources: Vec<String> = Vec::new();
+        for e in &crate::applog::global().map(|l| l.snapshot()).unwrap_or_default() {
+            if seen.insert(e.source.clone()) { sources.push(e.source.clone()); }
         }
         sources.sort_unstable();
         sources
     }
 
     fn visible_log_entries(&self) -> Vec<crate::applog::LogEntry> {
-        self.log.snapshot().into_iter()
-            .filter(|e| !self.log_disabled_sources.contains(e.source))
+        crate::applog::global().map(|l| l.snapshot()).unwrap_or_default().into_iter()
+            .filter(|e| !self.log_disabled_sources.contains(&e.source))
             .collect()
     }
 
@@ -2922,19 +2917,18 @@ impl App {
                 // Carousel card clicks — own double-click tracking independent of position-exact is_double
                 if self.tab_idx == 1 && self.playlist_view == 1 {
                     let slots = self.layout_carousel_slots;
-                    self.log.push(Level::Info, "mouse", format!(
+                    log::info!(target: "mouse",
                         "carousel click ({col},{row}): slots=[({:?},{:?}),({:?},{:?}),({:?},{:?})]",
                         slots[0].0, slots[0].1, slots[1].0, slots[1].1, slots[2].0, slots[2].1
-                    ));
+                    );
                     for (slot_idx, (maybe_item_idx, card_rect)) in slots.iter().enumerate() {
                         if card_rect.contains((col, row).into()) {
                             let elapsed_ms = now.duration_since(self.last_carousel_click_time).as_millis();
                             let is_double_slot = self.last_carousel_click_slot == Some(slot_idx)
                                 && now.duration_since(self.last_carousel_click_time) < Duration::from_millis(400);
-                            self.log.push(Level::Info, "mouse", format!(
+                            log::info!(target: "mouse",
                                 "carousel hit slot={slot_idx} item={maybe_item_idx:?} is_double={is_double_slot} elapsed={elapsed_ms}ms last_slot={:?}",
-                                self.last_carousel_click_slot
-                            ));
+                                self.last_carousel_click_slot);
                             self.last_carousel_click_slot = Some(slot_idx);
                             self.last_carousel_click_time = now;
                             if slot_idx == 1 {
@@ -2944,13 +2938,12 @@ impl App {
                                             let s = self.player.status.lock().unwrap();
                                             (s.active, s.current_idx)
                                         };
-                                        self.log.push(Level::Info, "mouse", format!(
-                                            "carousel dbl-center: active={active} active_idx={active_idx} item_idx={item_idx}"
-                                        ));
+                                        log::info!(target: "mouse",
+                                            "carousel dbl-center: active={active} active_idx={active_idx} item_idx={item_idx}");
                                         if active && active_idx == *item_idx {
                                             self.player.send_command(PlayerCommand::TogglePause);
                                         } else if active {
-                                            self.player.send_command(PlayerCommand::JumpTo(*item_idx));
+                                            self.player.send_command(PlayerCommand::JumpTo(*item_idx))
                                         } else if !self.player_tab.items.is_empty() {
                                             let items = self.player_tab.items.clone();
                                             let item_idx = *item_idx;
@@ -2974,7 +2967,7 @@ impl App {
                             return;
                         }
                     }
-                    self.log.push(Level::Info, "mouse", format!("carousel click ({col},{row}): no slot hit"));
+                    log::info!(target: "mouse", "carousel click ({col},{row}): no slot hit");
                     if self.layout_playlist_inner.contains((col, row).into()) {
                         return; // click between cards but inside carousel area — consume it
                     }
@@ -3550,7 +3543,7 @@ impl App {
             return;
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
-        self.player.play_playlist(items, start_idx, c, self.log.clone(), self.ui_volume);
+        self.player.play_playlist(items, start_idx, c, self.ui_volume);
         self.player.send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
@@ -3571,7 +3564,7 @@ impl App {
         }
         if !item.series_id.is_empty() && self.player.always_play_next {
             let c = self.client.lock().unwrap();
-            let episodes = c.get_episodes_from(&item.series_id, &item.id, &self.log);
+            let episodes = c.get_episodes_from(&item.series_id, &item.id);
             drop(c);
             if episodes.len() > 1 {
                 let c = Arc::new(self.client.lock().unwrap().clone());
@@ -3579,7 +3572,7 @@ impl App {
                 self.player_tab.items = episodes.clone();
                 self.player_tab.playlist_cursor = 0;
                 self.flash_status(label);
-                self.player.play_playlist(episodes, 0, c, self.log.clone(), self.ui_volume);
+                self.player.play_playlist(episodes, 0, c, self.ui_volume);
                 self.player.send_command(PlayerCommand::SetMute(self.mute_on));
                 self.queue_source = crate::config::QueueSource::Series;
                 self.save_queue_state();
@@ -3590,7 +3583,7 @@ impl App {
         self.player_tab.items = vec![item.clone()];
         self.player_tab.playlist_cursor = 0;
         self.flash_status(label);
-        self.player.play(&item, c, self.log.clone(), self.ui_volume);
+        self.player.play(&item, c, self.ui_volume);
         self.player.send_command(PlayerCommand::SetMute(self.mute_on));
     }
 
@@ -4259,7 +4252,7 @@ impl App {
                     let title = self.libs[lib_idx].nav_stack.last()
                         .map(|l| l.title.clone())
                         .unwrap_or_default();
-                    self.log.push(Level::Debug, "app", format!("album: entered «{title}»"));
+                    log::debug!(target: "app", "album: entered «{title}»");
                     if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
                         sort_audio_tracks(&mut last.items);
                     }
@@ -4438,7 +4431,7 @@ impl App {
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = start_idx;
                 let c = Arc::new(self.client.lock().unwrap().clone());
-                self.player.play_playlist(items, start_idx, c, self.log.clone(), self.ui_volume);
+                self.player.play_playlist(items, start_idx, c, self.ui_volume);
                 self.save_queue_state();
             }
             PendingQueueAction::ClearQueue => {
@@ -4478,10 +4471,9 @@ impl App {
         let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
         let client = self.client.lock().unwrap().clone();
         let playlist_id = playlist_id.to_string();
-        let log = self.log.clone();
         std::thread::spawn(move || {
             if let Err(e) = client.update_playlist_items(&playlist_id, &item_ids) {
-                log.push(Level::Error, "playlist", format!("Failed to save playlist: {e}"));
+                log::error!(target: "playlist", "Failed to save playlist: {e}");
             }
         });
     }
@@ -4634,7 +4626,7 @@ impl App {
     fn handle_ws_event(&mut self, ev: WsEvent) {
         match ev {
             WsEvent::Play { item_ids, play_now, start_position_ticks, start_index } => {
-                self.log.push(Level::Info, "ws", format!("Play: {} id(s), play_now={play_now}", item_ids.len()));
+                log::info!(target: "ws", "Play: {} id(s), play_now={play_now}", item_ids.len());
                 if !play_now { return; }
                 self.on_queue_replace_silent();
                 let items = {
@@ -4645,7 +4637,7 @@ impl App {
                     }
                 };
                 if items.is_empty() {
-                    self.log.push(Level::Warn, "ws", format!("Play: no items found for ids={}", item_ids.join(",")));
+                    log::warn!(target: "ws", "Play: no items found for ids={}", item_ids.join(","));
                     return;
                 }
                 let start_idx = start_index.min(items.len().saturating_sub(1));
@@ -4657,7 +4649,7 @@ impl App {
                     self.player_tab.playlist_cursor = 0;
                     self.flash_status(item.playback_label());
                     let c = Arc::new(self.client.lock().unwrap().clone());
-                    self.player.play(&item, c, self.log.clone(), self.ui_volume);
+                    self.player.play(&item, c, self.ui_volume);
                 } else {
                     let count = items.len();
                     self.player_tab.items = items.clone();
@@ -4665,17 +4657,17 @@ impl App {
                     self.flash_status(format!("Playing {count} items"));
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     let active = self.player.status.lock().unwrap().active;
-                    self.log.push(Level::Info, "ws", format!("Play multi: active={active}, count={count}, start_idx={start_idx}"));
+                    log::info!(target: "ws", "Play multi: active={active}, count={count}, start_idx={start_idx}");
                     if active {
                         let mut start_item = items[start_idx].clone();
                         if start_position_ticks > 0 { start_item.playback_position_ticks = start_position_ticks; }
-                        self.player.play(&start_item, c, self.log.clone(), self.ui_volume);
+                        self.player.play(&start_item, c, self.ui_volume);
                     } else {
                         let mut items_with_pos = items.clone();
                         if start_position_ticks > 0 {
                             items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
                         }
-                        self.player.play_playlist(items_with_pos, start_idx, c, self.log.clone(), self.ui_volume);
+                        self.player.play_playlist(items_with_pos, start_idx, c, self.ui_volume);
                     }
                 }
                 self.queue_source = crate::config::QueueSource::Remote;
@@ -6157,7 +6149,6 @@ impl App {
         };
         let types_owned: Vec<String> = types.iter().map(|s| s.to_string()).collect();
         let tx = self.card_image_tx.clone();
-        let log = self.log.clone();
         std::thread::spawn(move || {
             // Check disk cache first
             if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
@@ -6200,7 +6191,7 @@ impl App {
                 match magick_resize(&b) {
                     Some(resized) => resized,
                     None => {
-                        log.push(crate::applog::Level::Warn, "img", format!("magick_resize failed for {cache_key}, using raw bytes"));
+                        log::warn!(target: "img", "magick_resize failed for {cache_key}, using raw bytes");
                         b
                     }
                 }
@@ -8448,7 +8439,7 @@ impl App {
         f.render_widget(src_block, src_area);
 
         let src_cursor = self.log_source_cursor.min(sources.len().saturating_sub(1));
-        for (i, &src) in sources.iter().enumerate() {
+        for (i, src) in sources.iter().enumerate() {
             let y = src_inner.top() + i as u16;
             if y >= src_inner.bottom() { break; }
             let disabled = self.log_disabled_sources.contains(src);
@@ -8497,7 +8488,7 @@ impl App {
             x += 1;
             // source
             let src_len = entry.source.len().min(6);
-            f.buffer_mut().set_stringn(x, y, entry.source, src_len, Style::default().fg(palette::MUTED));
+            f.buffer_mut().set_stringn(x, y, &entry.source, src_len, Style::default().fg(palette::MUTED));
             x += 6 + 1;
             if x >= log_inner.right() { continue; }
             f.buffer_mut().set_stringn(x, y, "│", 1, Style::default().fg(palette::OVERLAY));
@@ -8914,7 +8905,6 @@ mod tests {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            log: crate::applog::AppLog::new(0),
             log_scroll: 0,
             log_pane: LogPane::Log,
             log_source_cursor: 0,

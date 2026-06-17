@@ -4,7 +4,6 @@ use std::sync::{Arc, Mutex, mpsc};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::applog::AppLog;
 use crate::ctrl::{CtrlCmd, CtrlEvent};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
@@ -118,7 +117,7 @@ impl RemotePlayer {
         let _ = self.cmd_tx.send(CtrlCmd::PlayerCmd(cmd));
     }
 
-    pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _log: AppLog, _initial_volume: u8) {
+    pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _initial_volume: u8) {
         let _ = self.cmd_tx.send(CtrlCmd::PlayItems {
             item_ids: vec![item.id.clone()],
             start_ticks: item.playback_position_ticks,
@@ -131,7 +130,6 @@ impl RemotePlayer {
         items: Vec<MediaItem>,
         start_idx: usize,
         _client: Arc<EmbyClient>,
-        _log: AppLog,
         _initial_volume: u8,
     ) {
         let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();

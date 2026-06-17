@@ -4,7 +4,6 @@ use std::time::{Duration, Instant};
 
 use libmpv2::{Format, Mpv, events::{Event, PropertyData}, mpv_end_file_reason};
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
-use crate::applog::{AppLog, Level};
 
 fn mpv_err_str(e: &libmpv2::Error) -> String {
     if let libmpv2::Error::Raw(code) = e {
@@ -287,7 +286,7 @@ impl Player {
         }
     }
 
-    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
+    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
         // If a video is already playing, load the new file into the existing mpv window
         if self.status.lock().unwrap().active {
             let ep = if item.is_audio() { "Audio" } else { "Videos" };
@@ -356,8 +355,8 @@ impl Player {
         let handle = thread::spawn(move || {
             is_playlist_mode.store(false, Ordering::Relaxed);
             let (session_id_str, msid_str) = {
-                let (sid, msid) = client.get_playback_info(&item.id, &log);
-                client.report_start(&item, &msid, &sid, &log);
+                let (sid, msid) = client.get_playback_info(&item.id);
+                client.report_start(&item, &msid, &sid);
                 (sid, msid)
             };
 
@@ -369,9 +368,9 @@ impl Player {
             let ipc_existed = std::path::Path::new(&ipc_path).exists();
             if ipc_existed {
                 let _ = std::fs::remove_file(&ipc_path);
-                log.push(Level::Info, "player", format!("init: removed stale ipc socket {}", ipc_path));
+                log::info!(target: "player", "init: removed stale ipc socket {}", ipc_path);
             }
-            log.push(Level::Info, "player", format!("init: ipc={} (existed={})", ipc_path, ipc_existed));
+            log::info!(target: "player", "init: ipc={} (existed={})", ipc_path, ipc_existed);
 
             let mut init_err: Option<String> = None;
             let mpv = match Mpv::with_initializer(|init| {
@@ -408,7 +407,7 @@ impl Player {
                 Ok(m) => m,
                 Err(e) => {
                     let msg = init_err.unwrap_or_else(|| format!("[player] mpv init error: {}", mpv_err_str(&e)));
-                    log.push(Level::Error, "player", msg);
+                    log::error!(target: "player", "{}", msg);
                     return;
                 }
             };
@@ -438,9 +437,9 @@ impl Player {
             }
 
             let title_opt = mpv_title_opt(&title);
-            log.push(Level::Info, "player", format!("loadfile url={url} opts={title_opt:?}"));
+            log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
             if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
-                log.push(Level::Warn, "player", format!("loadfile error: {} | url={url} opts={title_opt:?}", mpv_err_str(&e)));
+                log::warn!(target: "player", "loadfile error: {} | url={url} opts={title_opt:?}", mpv_err_str(&e));
                 return;
             }
 
@@ -461,7 +460,6 @@ impl Player {
             let csid_p  = current_sid.clone();
             let status_p = status.clone();
             let ws_tx_p = ws_tx.clone();
-            let log_p = log.clone();
             let (progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
             let mut progress_handle = Some(thread::spawn(move || {
                 let mut ticks: u32 = 0;
@@ -479,12 +477,12 @@ impl Player {
                                 let id   = cid_p.lock().unwrap().clone();
                                 let msid = cmsid_p.lock().unwrap().clone();
                                 if let Some(ref tx) = ws_tx_p {
-                                    client_progress.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log_p);
+                                    client_progress.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx);
                                 } else {
-                                    client_progress.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate", &log_p);
+                                    client_progress.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate");
                                 }
                             } else {
-                                client_progress.report_ping(&sid, &log_p);
+                                client_progress.report_ping(&sid);
                             }
                         }
                     }
@@ -512,7 +510,7 @@ impl Player {
             let mut intro_start_ticks: i64 = 0;
             let mut intro_end_ticks: i64   = 0;
             if client.chapter_api_available {
-                if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
+                if let Some((s, e)) = client.get_intro_times(&item.id) {
                     intro_start_ticks = s;
                     intro_end_ticks   = e;
                 }
@@ -531,9 +529,9 @@ impl Player {
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
                         PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
-                            log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}"));
+                            log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
                             let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title, &artist]);
-                            log.push(Level::Warn, "player", format!("next-up: script-message result={r:?}"));
+                            log::warn!(target: "player", "next-up: script-message result={r:?}");
                         }
                         PlayerCommand::TogglePause => {
                             let p = status.lock().unwrap().paused;
@@ -594,12 +592,12 @@ impl Player {
                             let old_id   = current_item_id.lock().unwrap().clone();
                             let old_msid = current_msid.lock().unwrap().clone();
                             let old_sid  = current_sid.lock().unwrap().clone();
-                            client.report_stopped(&old_id, &old_msid, last_valid_pos, &old_sid, &log);
+                            client.report_stopped(&old_id, &old_msid, last_valid_pos, &old_sid);
 
                             // Obtain session info for the new item and report start
                             let (new_sid, new_msid) = {
-                                let (sid, msid) = client.get_playback_info(&item.id, &log);
-                                client.report_start(&item, &msid, &sid, &log);
+                                let (sid, msid) = client.get_playback_info(&item.id);
+                                client.report_start(&item, &msid, &sid);
                                 (sid, msid)
                             };
                             *current_item_id.lock().unwrap() = item.id.clone();
@@ -633,9 +631,9 @@ impl Player {
                                 let _ = mpv.set_property("start", "0");
                             }
                             let title_opt = mpv_title_opt(&item.display_name());
-                            log.push(Level::Info, "player", format!("loadfile url={url} opts={title_opt:?}"));
+                            log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
                             if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
-                                log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
+                                log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
                             }
                             let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
@@ -644,7 +642,7 @@ impl Player {
                             intro_start_ticks = 0;
                             intro_end_ticks   = 0;
                             if client.chapter_api_available {
-                                if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
+                                if let Some((s, e)) = client.get_intro_times(&item.id) {
                                     intro_start_ticks = s;
                                     intro_end_ticks   = e;
                                 }
@@ -660,7 +658,7 @@ impl Player {
                         let id   = current_item_id.lock().unwrap().clone();
                         let msid = current_msid.lock().unwrap().clone();
                         let sid  = current_sid.lock().unwrap().clone();
-                        client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid, &log);
+                        client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid);
                         stop_reported = true;
                     }
                     let _ = mpv.command("quit", &[]);
@@ -689,13 +687,13 @@ impl Player {
                             if series_id_for_next_up.is_empty() {
                                 if !next_up_armed_logged && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
                                     next_up_armed_logged = true;
-                                    log.push(Level::Warn, "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
+                                    log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
                                 }
                             } else {
                                 let runtime = status.lock().unwrap().runtime_ticks;
                                 if runtime > NEXT_UP_TICKS && ticks > runtime - NEXT_UP_TICKS {
                                     next_up_fired = true;
-                                    log.push(Level::Warn, "player", format!("next-up: threshold reached series={}", series_id_for_next_up));
+                                    log::warn!(target: "player", "next-up: threshold reached series={}", series_id_for_next_up);
                                     let _ = event_tx.send(PlayerEvent::NextUpThreshold {
                                         series_id: series_id_for_next_up.clone(),
                                         season: season_for_next_up,
@@ -703,7 +701,7 @@ impl Player {
                                     });
                                 } else if !next_up_armed_logged && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
                                     next_up_armed_logged = true;
-                                    log.push(Level::Info, "player", format!("next-up: armed series={} runtime={}s", series_id_for_next_up, runtime / TICKS_PER_SECOND));
+                                    log::info!(target: "player", "next-up: armed series={} runtime={}s", series_id_for_next_up, runtime / TICKS_PER_SECOND);
                                 }
                             }
                         }
@@ -738,9 +736,9 @@ impl Player {
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = current_sid.lock().unwrap().clone();
                             if let Some(ref tx) = ws_tx {
-                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx, &log);
+                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx);
                             } else {
-                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name, &log);
+                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name);
                             }
                         }
                     }
@@ -791,9 +789,9 @@ impl Player {
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = current_sid.lock().unwrap().clone();
                             if let Some(ref tx) = ws_tx {
-                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx, &log);
+                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx);
                             } else {
-                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name, &log);
+                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name);
                             }
                         }
                     }
@@ -803,7 +801,7 @@ impl Player {
                         if pending_load { pending_load = false; continue; }
 
                         if reason == mpv_end_file_reason::Error {
-                            log.push(Level::Warn, "player", "EndFile: playback error (file may be unreadable or format unsupported)");
+                            log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
                         }
                         let id   = current_item_id.lock().unwrap().clone();
                         let msid = current_msid.lock().unwrap().clone();
@@ -812,16 +810,16 @@ impl Player {
                             && status.lock().unwrap().runtime_ticks > 0;
                         let _ = progress_stop_tx.send(());
                         if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                        client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid, &log);
+                        client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid);
                         stop_reported = true;
                         if natural_end {
                             if !is_audio {
                                 match client.mark_played(&id) {
                                     Ok(()) => {
-                                        log.push(Level::Info, "player", format!("mark_played ok id={id}"));
+                                        log::info!(target: "player", "mark_played ok id={id}");
                                     }
                                     Err(e) => {
-                                        log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}; will retry"));
+                                        log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
                                         mark_played_id = Some(id.clone());
                                     }
                                 }
@@ -833,11 +831,11 @@ impl Player {
                     Some(Ok(Event::LogMessage { prefix, level, text, .. })) => {
                         let t = text.trim_end();
                         if !t.is_empty() {
-                            log.push(Level::Warn, "mpv", format!("[{}/{}] {}", prefix, level, t));
+                            log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
                         }
                     }
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
-                        log.push(Level::Info, "player", "next-up: mbv-next-up-play received from Lua");
+                        log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
                         let _ = event_tx.send(PlayerEvent::NextUpPlay);
                     }
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-skip-intro-play") => {
@@ -857,17 +855,16 @@ impl Player {
                             let id   = current_item_id.lock().unwrap().clone();
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = current_sid.lock().unwrap().clone();
-                            client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid, &log);
+                            client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid);
                         }
                         // Retry mark_played in a detached thread so Shutdown never blocks.
                         if let Some(mid) = mark_played_id.take() {
                             let c2 = client.clone();
-                            let l2 = log.clone();
                             std::thread::spawn(move || {
                                 if let Err(e) = c2.mark_played(&mid) {
-                                    l2.push(Level::Warn, "player", format!("mark_played retry failed id={mid}: {e}"));
+                                    log::warn!(target: "player", "mark_played retry failed id={mid}: {e}");
                                 } else {
-                                    l2.push(Level::Info, "player", format!("mark_played retry ok id={mid}"));
+                                    log::info!(target: "player", "mark_played retry ok id={mid}");
                                 }
                             });
                         }
@@ -876,12 +873,11 @@ impl Player {
                         if near_end {
                             let id = current_item_id.lock().unwrap().clone();
                             let c2 = client.clone();
-                            let l2 = log.clone();
                             std::thread::spawn(move || {
                                 if let Err(e) = c2.mark_played(&id) {
-                                    l2.push(Level::Warn, "player", format!("mark_played near_end failed id={id}: {e}"));
+                                    log::warn!(target: "player", "mark_played near_end failed id={id}: {e}");
                                 } else {
-                                    l2.push(Level::Info, "player", format!("mark_played near_end ok id={id}"));
+                                    log::info!(target: "player", "mark_played near_end ok id={id}");
                                 }
                             });
                         }
@@ -892,7 +888,7 @@ impl Player {
                         return;
                     }
                     Some(Err(e)) => {
-                        log.push(Level::Warn, "player", format!("event error: {}", mpv_err_str(&e)));
+                        log::warn!(target: "player", "event error: {}", mpv_err_str(&e));
                     }
                     _ => {}
                 }
@@ -901,7 +897,7 @@ impl Player {
         *self.thread_handle.lock().unwrap() = Some(handle);
     }
 
-    pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
+    pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, initial_volume: u8) {
         if items.is_empty() { return; }
         let new_is_headless = !self.show_audio_window
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
@@ -964,8 +960,8 @@ impl Player {
             is_playlist_mode.store(true, Ordering::Relaxed);
             let mut items = items;
             let (session_id_str, first_msid) = {
-                let (sid, msid) = client.get_playback_info(&items[start_idx].id, &log);
-                client.report_start(&items[start_idx], &msid, &sid, &log);
+                let (sid, msid) = client.get_playback_info(&items[start_idx].id);
+                client.report_start(&items[start_idx], &msid, &sid);
                 (sid, msid)
             };
             let session_id = Arc::new(Mutex::new(session_id_str));
@@ -974,9 +970,9 @@ impl Player {
             let ipc_existed = std::path::Path::new(&ipc_path).exists();
             if ipc_existed {
                 let _ = std::fs::remove_file(&ipc_path);
-                log.push(Level::Info, "player", format!("init: removed stale ipc socket {}", ipc_path));
+                log::info!(target: "player", "init: removed stale ipc socket {}", ipc_path);
             }
-            log.push(Level::Info, "player", format!("init: ipc={} (existed={})", ipc_path, ipc_existed));
+            log::info!(target: "player", "init: ipc={} (existed={})", ipc_path, ipc_existed);
 
             let mut init_err: Option<String> = None;
             let mpv = match Mpv::with_initializer(|init| {
@@ -1013,7 +1009,7 @@ impl Player {
                 Ok(m) => m,
                 Err(e) => {
                     let msg = init_err.unwrap_or_else(|| format!("[player] mpv init error: {}", mpv_err_str(&e)));
-                    log.push(Level::Error, "player", msg);
+                    log::error!(target: "player", "{}", msg);
                     return;
                 }
             };
@@ -1045,7 +1041,7 @@ impl Player {
                 let mode = if i == 0 { "replace" } else { "append-play" };
                 let title_opt = mpv_title_opt(&item.display_name());
                 if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
-                    log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
+                    log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
                     if i == 0 {
                         // First file failed: nothing queued, exit cleanly.
                         status.lock().unwrap().active = false;
@@ -1076,7 +1072,6 @@ impl Player {
             let csid_p = session_id.clone();
             let status_p = status.clone();
             let ws_tx_p = ws_tx.clone();
-            let log_p = log.clone();
             let is_audio_p = current_is_audio.clone();
             let (progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
             let mut progress_handle = Some(thread::spawn(move || {
@@ -1095,12 +1090,12 @@ impl Player {
                                 let id = cid_p.lock().unwrap().clone();
                                 let msid = cmsid_p.lock().unwrap().clone();
                                 if let Some(ref tx) = ws_tx_p {
-                                    client_progress.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log_p);
+                                    client_progress.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx);
                                 } else {
-                                    client_progress.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate", &log_p);
+                                    client_progress.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate");
                                 }
                             } else {
-                                client_progress.report_ping(&sid, &log_p);
+                                client_progress.report_ping(&sid);
                             }
                         }
                     }
@@ -1136,7 +1131,7 @@ impl Player {
             let mut intro_start_ticks: i64 = 0;
             let mut intro_end_ticks: i64   = 0;
             if client.chapter_api_available {
-                if let Some((s, e)) = client.get_intro_times(&items[start_idx].id, &log) {
+                if let Some((s, e)) = client.get_intro_times(&items[start_idx].id) {
                     intro_start_ticks = s;
                     intro_end_ticks   = e;
                 }
@@ -1154,9 +1149,9 @@ impl Player {
                 while let Ok(cmd) = cmd_rx.try_recv() {
                     match cmd {
                         PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
-                            log.push(Level::Warn, "player", format!("next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}"));
+                            log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
                             let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title, &artist]);
-                            log.push(Level::Warn, "player", format!("next-up: script-message result={r:?}"));
+                            log::warn!(target: "player", "next-up: script-message result={r:?}");
                         }
                         PlayerCommand::TogglePause => {
                             let p = status.lock().unwrap().paused;
@@ -1204,7 +1199,7 @@ impl Player {
                             let old_id   = current_item_id.lock().unwrap().clone();
                             let old_msid = current_msid.lock().unwrap().clone();
                             let old_sid  = session_id.lock().unwrap().clone();
-                            client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid, &log);
+                            client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid);
 
                             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
                             // Remove all old playlist entries except the current one so that
@@ -1220,7 +1215,7 @@ impl Player {
                                 let mode = if i == 0 { "replace" } else { "append-play" };
                                 let title_opt = mpv_title_opt(&item.display_name());
                                 if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
-                                    log.push(Level::Warn, "player", format!("ReplacePlaylist loadfile error: {}", mpv_err_str(&e)));
+                                    log::warn!(target: "player", "ReplacePlaylist loadfile error: {}", mpv_err_str(&e));
                                 }
                             }
                             let _ = mpv.set_property("start", "0");
@@ -1253,7 +1248,7 @@ impl Player {
                             intro_start_ticks = 0;
                             intro_end_ticks   = 0;
                             if client.chapter_api_available {
-                                if let Some((s, e)) = client.get_intro_times(&items[start_idx].id, &log) {
+                                if let Some((s, e)) = client.get_intro_times(&items[start_idx].id) {
                                     intro_start_ticks = s;
                                     intro_end_ticks   = e;
                                 }
@@ -1263,8 +1258,8 @@ impl Player {
                             intro_hide_fired = pi;
 
                             let (new_sid, new_msid) = {
-                                let (sid, msid) = client.get_playback_info(&items[start_idx].id, &log);
-                                client.report_start(&items[start_idx], &msid, &sid, &log);
+                                let (sid, msid) = client.get_playback_info(&items[start_idx].id);
+                                client.report_start(&items[start_idx], &msid, &sid);
                                 (sid, msid)
                             };
                             current_is_audio.store(items[start_idx].is_audio(), Ordering::Relaxed);
@@ -1316,11 +1311,11 @@ impl Player {
                             let old_id   = current_item_id.lock().unwrap().clone();
                             let old_msid = current_msid.lock().unwrap().clone();
                             let old_sid  = session_id.lock().unwrap().clone();
-                            client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid, &log);
+                            client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid);
 
                             let (new_sid, new_msid) = {
-                                let (sid, msid) = client.get_playback_info(&item.id, &log);
-                                client.report_start(&item, &msid, &sid, &log);
+                                let (sid, msid) = client.get_playback_info(&item.id);
+                                client.report_start(&item, &msid, &sid);
                                 (sid, msid)
                             };
                             current_is_audio.store(item.is_audio(), Ordering::Relaxed);
@@ -1337,7 +1332,7 @@ impl Player {
                             intro_start_ticks = 0;
                             intro_end_ticks   = 0;
                             if client.chapter_api_available {
-                                if let Some((s, e)) = client.get_intro_times(&item.id, &log) {
+                                if let Some((s, e)) = client.get_intro_times(&item.id) {
                                     intro_start_ticks = s;
                                     intro_end_ticks   = e;
                                 }
@@ -1352,9 +1347,9 @@ impl Player {
                                 let _ = mpv.set_property("start", "0");
                             }
                             let title_opt = mpv_title_opt(&item.display_name());
-                            log.push(Level::Info, "player", format!("loadfile url={url} opts={title_opt:?}"));
+                            log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
                             if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
-                                log.push(Level::Warn, "player", format!("loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e)));
+                                log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
                             }
                         }
                     }
@@ -1367,7 +1362,7 @@ impl Player {
                         let id   = current_item_id.lock().unwrap().clone();
                         let msid = current_msid.lock().unwrap().clone();
                         let sid  = session_id.lock().unwrap().clone();
-                        client.report_stopped(&id, &msid, last_valid_pos, &sid, &log);
+                        client.report_stopped(&id, &msid, last_valid_pos, &sid);
                         stop_reported = true;
                     }
                     let _ = mpv.command("quit", &[]);
@@ -1411,7 +1406,7 @@ impl Player {
                                         let _ = event_tx.send(PlayerEvent::PlaylistNextUp { next_idx: current_idx + 1 });
                                     } else if !playlist_next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
                                         playlist_next_up_armed = true;
-                                        log.push(Level::Info, "player", format!("playlist next-up armed idx={}", current_idx + 1));
+                                        log::info!(target: "player", "playlist next-up armed idx={}", current_idx + 1);
                                     }
                                 }
                             }
@@ -1447,9 +1442,9 @@ impl Player {
                             let event_name = if paused { "Pause" } else { "Unpause" };
                             let sid = session_id.lock().unwrap().clone();
                             if let Some(ref tx) = ws_tx {
-                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx, &log);
+                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx);
                             } else {
-                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name, &log);
+                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name);
                             }
                         }
                     }
@@ -1497,9 +1492,9 @@ impl Player {
                                 let msid = current_msid.lock().unwrap().clone();
                                 let sid  = session_id.lock().unwrap().clone();
                                 if let Some(ref tx) = ws_tx {
-                                    client.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx, &log);
+                                    client.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx);
                                 } else {
-                                    client.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate", &log);
+                                    client.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate");
                                 }
                             }
                         }
@@ -1507,14 +1502,14 @@ impl Player {
                     Some(Ok(Event::LogMessage { prefix, level, text, .. })) => {
                         let t = text.trim_end();
                         if !t.is_empty() {
-                            log.push(Level::Warn, "mpv", format!("[{}/{}] {}", prefix, level, t));
+                            log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
                         }
                     }
                     Some(Ok(Event::EndFile(reason))) => {
                         if quit_at.is_some() { continue; }
                         if pending_load > 0 { pending_load -= 1; continue; }
                         if reason == mpv_end_file_reason::Error {
-                            log.push(Level::Warn, "player", "EndFile: playback error (file may be unreadable or format unsupported)");
+                            log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
                         }
                         let id   = current_item_id.lock().unwrap().clone();
                         let msid = current_msid.lock().unwrap().clone();
@@ -1530,12 +1525,12 @@ impl Player {
                             if !stop_reported {
                                 let _ = progress_stop_tx.send(());
                                 if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                                client.report_stopped(&id, &msid, if completed_is_audio { 0 } else { last_valid_pos }, &sid, &log);
+                                client.report_stopped(&id, &msid, if completed_is_audio { 0 } else { last_valid_pos }, &sid);
                                 stop_reported = true;
                             }
                             if (natural_end || near_end) && !completed_is_audio {
                                 if let Err(e) = client.mark_played(&id) {
-                                    log.push(Level::Warn, "player", format!("mark_played failed id={id}: {e}"));
+                                    log::warn!(target: "player", "mark_played failed id={id}: {e}");
                                 }
                             }
                             stopped_near_end = near_end;
@@ -1564,10 +1559,10 @@ impl Player {
                             let _ = progress_stop_tx.send(());
                             if let Some(h) = progress_handle.take() { let _ = h.join(); }
                             status.lock().unwrap().active = false;
-                            client.report_stopped(&id, &msid, completed_pos, &sid, &log);
+                            client.report_stopped(&id, &msid, completed_pos, &sid);
                             if played_out {
                                 if let Err(e) = client.mark_played(&items[completed_idx].id) {
-                                    log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
+                                    log::warn!(target: "player", "mark_played failed id={}: {e}", items[completed_idx].id);
                                 }
                             }
                             let _ = event_tx.send(PlayerEvent::Stopped { idx: completed_idx, position_ticks: completed_pos, played: played_out });
@@ -1586,10 +1581,10 @@ impl Player {
                             s.title          = items[current_idx].display_name();
                         }
 
-                        client.report_stopped(&id, &msid, completed_pos, &sid, &log);
+                        client.report_stopped(&id, &msid, completed_pos, &sid);
                         if played_out {
                             if let Err(e) = client.mark_played(&items[completed_idx].id) {
-                                log.push(Level::Warn, "player", format!("mark_played failed id={}: {e}", items[completed_idx].id));
+                                log::warn!(target: "player", "mark_played failed id={}: {e}", items[completed_idx].id);
                             }
                         }
 
@@ -1600,15 +1595,15 @@ impl Player {
                         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
                         let (new_sid, new_msid) = {
-                            let (sid, msid) = client.get_playback_info(&items[current_idx].id, &log);
-                            client.report_start(&items[current_idx], &msid, &sid, &log);
+                            let (sid, msid) = client.get_playback_info(&items[current_idx].id);
+                            client.report_start(&items[current_idx], &msid, &sid);
                             (sid, msid)
                         };
                         current_is_audio.store(items[current_idx].is_audio(), Ordering::Relaxed);
                         intro_start_ticks = 0;
                         intro_end_ticks   = 0;
                         if client.chapter_api_available {
-                            if let Some((s, e)) = client.get_intro_times(&items[current_idx].id, &log) {
+                            if let Some((s, e)) = client.get_intro_times(&items[current_idx].id) {
                                 intro_start_ticks = s;
                                 intro_end_ticks   = e;
                             }
@@ -1628,7 +1623,7 @@ impl Player {
                         let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));
                     }
                     Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
-                        log.push(Level::Info, "player", "next-up: mbv-next-up-play received from Lua");
+                        log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
                         next_up_jump = true;
                         let _ = event_tx.send(PlayerEvent::NextUpPlay);
                     }
@@ -1650,7 +1645,7 @@ impl Player {
                             let msid = current_msid.lock().unwrap().clone();
                             let sid  = session_id.lock().unwrap().clone();
                             let pos  = if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
-                            client.report_stopped(&id, &msid, pos, &sid, &log);
+                            client.report_stopped(&id, &msid, pos, &sid);
                         }
                         let pos = if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
                         status.lock().unwrap().active = false;
@@ -1658,7 +1653,7 @@ impl Player {
                         return;
                     }
                     Some(Err(e)) => {
-                        log.push(Level::Warn, "player", format!("event error: {}", mpv_err_str(&e)));
+                        log::warn!(target: "player", "event error: {}", mpv_err_str(&e));
                     }
                     _ => {}
                 }
@@ -1712,10 +1707,10 @@ impl PlayerProxy {
         PlayerProxy { always_play_next, status, subs_off, inner: PlayerProxyInner::Remote(remote) }
     }
 
-    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, log: AppLog, initial_volume: u8) {
+    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play(item, client, log, initial_volume),
-            PlayerProxyInner::Remote(r) => r.play(item, client, log, initial_volume),
+            PlayerProxyInner::Local(p) => p.play(item, client, initial_volume),
+            PlayerProxyInner::Remote(r) => r.play(item, client, initial_volume),
         }
     }
 
@@ -1724,12 +1719,11 @@ impl PlayerProxy {
         items: Vec<MediaItem>,
         start_idx: usize,
         client: Arc<EmbyClient>,
-        log: AppLog,
         initial_volume: u8,
     ) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play_playlist(items, start_idx, client, log, initial_volume),
-            PlayerProxyInner::Remote(r) => r.play_playlist(items, start_idx, client, log, initial_volume),
+            PlayerProxyInner::Local(p) => p.play_playlist(items, start_idx, client, initial_volume),
+            PlayerProxyInner::Remote(r) => r.play_playlist(items, start_idx, client, initial_volume),
         }
     }
 

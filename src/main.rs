@@ -93,6 +93,12 @@ fn main() {
         Err(e) => { eprintln!("{e}"); std::process::exit(1); }
     };
 
+    let log_capacity = if daemon_inner || config::is_system_instance() { 0 }
+                      else if config.show_log_tab { 5000 }
+                      else { 0 };
+    let log_stderr = config::is_system_instance();
+    applog::init(log_capacity, log_stderr);
+
     let mut client = EmbyClient::new(config);
 
     if client.authenticate().is_err() {
@@ -129,6 +135,7 @@ fn main() {
         #[allow(clippy::zombie_processes)]
         let _child = std::process::Command::new(exe)
             .arg("--daemon-inner")
+            .env_remove("MBV_SYSTEM")
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -170,6 +177,7 @@ fn main() {
             #[allow(clippy::zombie_processes)]
             let _ = std::process::Command::new(exe)
                 .arg("--daemon-inner")
+                .env_remove("MBV_SYSTEM")
                 .stdin(std::process::Stdio::null())
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())

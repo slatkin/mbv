@@ -6,8 +6,6 @@ use std::io::ErrorKind;
 use serde_json::Value;
 use tungstenite::Message;
 
-use crate::applog::{AppLog, Level};
-
 pub enum WsEvent {
     Play {
         item_ids: Vec<String>,
@@ -31,10 +29,10 @@ pub enum WsEvent {
     UserDataChanged,
 }
 
-fn parse(text: &str, log: &AppLog) -> Option<WsEvent> {
+fn parse(text: &str) -> Option<WsEvent> {
     let v: Value = serde_json::from_str(text).ok()?;
     let msg_type = v["MessageType"].as_str()?;
-    log.push(Level::Debug, "ws", format!("← {msg_type}"));
+    log::debug!(target: "ws", "← {msg_type}");
 
     match msg_type {
         "Play" => {
@@ -53,7 +51,7 @@ fn parse(text: &str, log: &AppLog) -> Option<WsEvent> {
                 }).collect())
                 .unwrap_or_default();
             if item_ids.is_empty() {
-                log.push(Level::Warn, "ws", format!("Play: no ItemIds — raw data: {data}"));
+                log::warn!(target: "ws", "Play: no ItemIds — raw data: {data}");
                 return None;
             }
             let play_now = data["PlayCommand"].as_str().unwrap_or("PlayNow") == "PlayNow";
@@ -63,7 +61,7 @@ fn parse(text: &str, log: &AppLog) -> Option<WsEvent> {
         }
         "Playstate" => {
             let cmd = v["Data"]["Command"].as_str().unwrap_or("");
-            log.push(Level::Debug, "ws", format!("Playstate cmd={cmd}"));
+            log::debug!(target: "ws", "Playstate cmd={cmd}");
             match cmd {
                 "Stop"          => Some(WsEvent::Stop),
                 "Pause"         => Some(WsEvent::Pause),
@@ -74,12 +72,12 @@ fn parse(text: &str, log: &AppLog) -> Option<WsEvent> {
                 "Seek"          => Some(WsEvent::Seek(v["Data"]["SeekPositionTicks"].as_i64().unwrap_or(0))),
                 "Rewind"        => Some(WsEvent::SeekRelative(-10.0)),
                 "FastForward"   => Some(WsEvent::SeekRelative(10.0)),
-                other           => { log.push(Level::Warn, "ws", format!("Playstate: unhandled cmd={other}")); None }
+                other           => { log::warn!(target: "ws", "Playstate: unhandled cmd={other}"); None }
             }
         }
         "GeneralCommand" => {
             let name = v["Data"]["Name"].as_str().unwrap_or("");
-            log.push(Level::Debug, "ws", format!("GeneralCommand name={name}"));
+            log::debug!(target: "ws", "GeneralCommand name={name}");
             match name {
                 "PlayPause" => Some(WsEvent::TogglePause),
                 "SetVolume" => {
@@ -92,7 +90,7 @@ fn parse(text: &str, log: &AppLog) -> Option<WsEvent> {
                 }
                 "VolumeUp"   => Some(WsEvent::VolumeUp),
                 "VolumeDown" => Some(WsEvent::VolumeDown),
-                other        => { log.push(Level::Warn, "ws", format!("GeneralCommand: unhandled name={other}")); None }
+                other        => { log::warn!(target: "ws", "GeneralCommand: unhandled name={other}"); None }
             }
         }
         "UserDataChanged" => Some(WsEvent::UserDataChanged),
@@ -100,11 +98,11 @@ fn parse(text: &str, log: &AppLog) -> Option<WsEvent> {
     }
 }
 
-pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>, log: AppLog) -> mpsc::Sender<String> {
+pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<String> {
     let (out_tx, out_rx) = mpsc::channel::<String>();
     thread::spawn(move || {
         loop {
-            log.push(Level::Info, "ws", "connecting…");
+            log::info!(target: "ws", "connecting…");
             match tungstenite::connect(&ws_url) {
                 Ok((mut socket, _)) => {
                     // Short read timeout so we can drain outbound messages between reads.
@@ -114,17 +112,17 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>, log: AppLog) -> mp
                         tungstenite::stream::MaybeTlsStream::NativeTls(tls) => { let _ = tls.get_ref().set_read_timeout(timeout); }
                         _ => {}
                     }
-                    log.push(Level::Info, "ws", "connected");
+                    log::info!(target: "ws", "connected");
                     'conn: loop {
                         while let Ok(msg) = out_rx.try_recv() {
                             if socket.send(Message::Text(msg)).is_err() {
-                                log.push(Level::Warn, "ws", "send error, reconnecting");
+                                log::warn!(target: "ws", "send error, reconnecting");
                                 break 'conn;
                             }
                         }
                         match socket.read() {
                             Ok(Message::Text(txt)) => {
-                                if let Some(ev) = parse(&txt, &log) {
+                                if let Some(ev) = parse(&txt) {
                                     if event_tx.send(ev).is_err() {
                                         return;
                                     }
@@ -134,14 +132,14 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>, log: AppLog) -> mp
                                 let _ = socket.send(Message::Pong(data));
                             }
                             Ok(Message::Close(_)) => {
-                                log.push(Level::Info, "ws", "closed by server, reconnecting");
+                                log::info!(target: "ws", "closed by server, reconnecting");
                                 break 'conn;
                             }
                             Err(tungstenite::Error::Io(e))
                                 if e.kind() == ErrorKind::WouldBlock
                                 || e.kind() == ErrorKind::TimedOut => {}
                             Err(e) => {
-                                log.push(Level::Warn, "ws", format!("error: {e}, reconnecting"));
+                                log::warn!(target: "ws", "error: {e}, reconnecting");
                                 break 'conn;
                             }
                             _ => {}
@@ -149,7 +147,7 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>, log: AppLog) -> mp
                     }
                 }
                 Err(e) => {
-                    log.push(Level::Warn, "ws", format!("connect failed: {e}"));
+                    log::warn!(target: "ws", "connect failed: {e}");
                 }
             }
             thread::sleep(Duration::from_secs(5));
@@ -163,7 +161,7 @@ mod tests {
     use super::*;
 
     fn parse_msg(text: &str) -> Option<WsEvent> {
-        parse(text, &crate::applog::AppLog::new(0))
+        parse(text)
     }
 
     // ── Play ─────────────────────────────────────────────────────────────────

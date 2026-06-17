@@ -2,7 +2,6 @@ use std::sync::mpsc;
 
 use serde_json::Value;
 
-use crate::applog::{AppLog, Level};
 use crate::config::Config;
 
 pub const TICKS_PER_SECOND: i64 = 10_000_000;
@@ -662,7 +661,7 @@ impl EmbyClient {
         format!("{}/embywebsocket?api_key={}&deviceId={}", base, self.token, self.device_id)
     }
 
-    pub fn report_start(&self, item: &MediaItem, media_source_id: &str, session_id: &str, log: &AppLog) {
+    pub fn report_start(&self, item: &MediaItem, media_source_id: &str, session_id: &str) {
         let body = ureq::json!({
             "UserId": self.user_id,
             "ItemId": item.id,
@@ -675,15 +674,15 @@ impl EmbyClient {
             "PositionTicks": item.playback_position_ticks,
             "RunTimeTicks": item.runtime_ticks,
         });
-        log.push(Level::Info, "api", format!("→ Playing item={} msid={media_source_id} pos={}", item.id, item.playback_position_ticks));
+        log::info!(target: "api", "→ Playing item={} msid={media_source_id} pos={}", item.id, item.playback_position_ticks);
         match self.post("/Sessions/Playing").send_json(body) {
-            Ok(r)  => log.push(Level::Info, "api", format!("← {} Playing", r.status())),
-            Err(e) => log.push(Level::Warn, "api", format!("← ERR Playing: {e}")),
+            Ok(r)  => log::info!(target: "api", "← {} Playing", r.status()),
+            Err(e) => log::warn!(target: "api", "← ERR Playing: {e}"),
         }
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn report_progress_ws(&self, item_id: &str, media_source_id: &str, position_ticks: i64, is_paused: bool, session_id: &str, event_name: &str, ws_tx: &mpsc::Sender<String>, log: &AppLog) {
+    pub fn report_progress_ws(&self, item_id: &str, media_source_id: &str, position_ticks: i64, is_paused: bool, session_id: &str, event_name: &str, ws_tx: &mpsc::Sender<String>) {
         let data = serde_json::json!({
             "UserId": self.user_id,
             "ItemId": item_id,
@@ -700,12 +699,12 @@ impl EmbyClient {
             "MessageType": "ReportPlaybackProgress",
             "Data": data,
         }).to_string();
-        log.push(Level::Debug, "api", format!("→ ws Progress pos={position_ticks} paused={is_paused} event={event_name}"));
+        log::debug!(target: "api", "→ ws Progress pos={position_ticks} paused={is_paused} event={event_name}");
         let _ = ws_tx.send(msg);
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn report_progress_http(&self, item_id: &str, media_source_id: &str, position_ticks: i64, is_paused: bool, session_id: &str, event_name: &str, log: &AppLog) {
+    pub fn report_progress_http(&self, item_id: &str, media_source_id: &str, position_ticks: i64, is_paused: bool, session_id: &str, event_name: &str) {
         let body = ureq::json!({
             "UserId": self.user_id,
             "ItemId": item_id,
@@ -718,25 +717,25 @@ impl EmbyClient {
             "PositionTicks": position_ticks,
             "EventName": event_name,
         });
-        log.push(Level::Debug, "api", format!("→ Progress pos={position_ticks} paused={is_paused} event={event_name}"));
+        log::debug!(target: "api", "→ Progress pos={position_ticks} paused={is_paused} event={event_name}");
         match self.post("/Sessions/Playing/Progress").send_json(body) {
-            Ok(r)  => log.push(Level::Debug, "api", format!("← {} Progress", r.status())),
-            Err(e) => log.push(Level::Warn,  "api", format!("← ERR Progress: {e}")),
+            Ok(r)  => log::debug!(target: "api", "← {} Progress", r.status()),
+            Err(e) => log::warn!(target: "api",  "← ERR Progress: {e}"),
         }
     }
 
-    pub fn report_ping(&self, session_id: &str, log: &AppLog) {
-        log.push(Level::Debug, "api", format!("→ Ping session={session_id}"));
+    pub fn report_ping(&self, session_id: &str) {
+        log::debug!(target: "api", "→ Ping session={session_id}");
         match self.post("/Sessions/Playing/Ping")
             .query("PlaySessionId", session_id)
             .send_string("")
         {
-            Ok(r)  => log.push(Level::Debug, "api", format!("← {} Ping", r.status())),
-            Err(e) => log.push(Level::Warn,  "api", format!("← ERR Ping: {e}")),
+            Ok(r)  => log::debug!(target: "api", "← {} Ping", r.status()),
+            Err(e) => log::warn!(target: "api",  "← ERR Ping: {e}"),
         }
     }
 
-    pub fn report_stopped(&self, item_id: &str, media_source_id: &str, position_ticks: i64, session_id: &str, log: &AppLog) {
+    pub fn report_stopped(&self, item_id: &str, media_source_id: &str, position_ticks: i64, session_id: &str) {
         let body = ureq::json!({
             "UserId": self.user_id,
             "ItemId": item_id,
@@ -745,28 +744,28 @@ impl EmbyClient {
             "PositionTicks": position_ticks,
             "PlayMethod": "DirectPlay",
         });
-        log.push(Level::Info, "api", format!("→ Stopped pos={position_ticks}"));
+        log::info!(target: "api", "→ Stopped pos={position_ticks}");
         match self.post("/Sessions/Playing/Stopped").send_json(body) {
-            Ok(r)  => log.push(Level::Info, "api", format!("← {} Stopped", r.status())),
-            Err(e) => log.push(Level::Warn, "api", format!("← ERR Stopped: {e}")),
+            Ok(r)  => log::info!(target: "api", "← {} Stopped", r.status()),
+            Err(e) => log::warn!(target: "api", "← ERR Stopped: {e}"),
         }
 
         if !self.user_id.is_empty() {
             let path = format!("/Users/{}/PlayingItems/{}", self.user_id, item_id);
-            log.push(Level::Info, "api", format!("→ DELETE PlayingItem pos={position_ticks}"));
+            log::info!(target: "api", "→ DELETE PlayingItem pos={position_ticks}");
             match self.delete(&path)
                 .query("MediaSourceId", media_source_id)
                 .query("PositionTicks", &position_ticks.to_string())
                 .query("PlaySessionId", session_id)
                 .call()
             {
-                Ok(r)  => log.push(Level::Info, "api", format!("← {} PlayingItem", r.status())),
-                Err(e) => log.push(Level::Warn, "api", format!("← ERR PlayingItem: {e}")),
+                Ok(r)  => log::info!(target: "api", "← {} PlayingItem", r.status()),
+                Err(e) => log::warn!(target: "api", "← ERR PlayingItem: {e}"),
             }
         }
     }
 
-    pub fn register_capabilities(&self, log: &AppLog) {
+    pub fn register_capabilities(&self) {
         let body = ureq::json!({
             "PlayableMediaTypes": ["Audio", "Video"],
             "SupportedCommands": [
@@ -777,15 +776,15 @@ impl EmbyClient {
             "SupportsMediaControl": true,
             "SupportsSync": false
         });
-        log.push(Level::Info, "api", "→ Capabilities");
+        log::info!(target: "api", "→ Capabilities");
         match self.post("/Sessions/Capabilities/Full").send_json(body) {
-            Ok(r)  => log.push(Level::Info, "api", format!("← {} Capabilities", r.status())),
-            Err(e) => log.push(Level::Warn, "api", format!("← ERR Capabilities: {e}")),
+            Ok(r)  => log::info!(target: "api", "← {} Capabilities", r.status()),
+            Err(e) => log::warn!(target: "api", "← ERR Capabilities: {e}"),
         }
     }
 
     // Returns (play_session_id, media_source_id). Falls back to generated id / item_id on failure.
-    pub fn get_playback_info(&self, item_id: &str, log: &AppLog) -> (String, String) {
+    pub fn get_playback_info(&self, item_id: &str) -> (String, String) {
         let body = ureq::json!({
             "UserId": self.user_id,
             "MaxStreamingBitrate": 140000000,
@@ -793,17 +792,17 @@ impl EmbyClient {
             "EnableDirectStream": false,
             "IsPlayback": true,
         });
-        log.push(Level::Info, "api", format!("→ PlaybackInfo item={item_id}"));
+        log::info!(target: "api", "→ PlaybackInfo item={item_id}");
         let resp: Value = match self.post(&format!("/Items/{item_id}/PlaybackInfo")).send_json(body) {
             Ok(r) => match r.into_json() {
                 Ok(v) => v,
-                Err(e) => { log.push(Level::Warn, "api", format!("← ERR PlaybackInfo parse: {e}")); return (gen_session_id(), item_id.to_string()); }
+                Err(e) => { log::warn!(target: "api", "← ERR PlaybackInfo parse: {e}"); return (gen_session_id(), item_id.to_string()); }
             },
-            Err(e) => { log.push(Level::Warn, "api", format!("← ERR PlaybackInfo: {e}")); return (gen_session_id(), item_id.to_string()); }
+            Err(e) => { log::warn!(target: "api", "← ERR PlaybackInfo: {e}"); return (gen_session_id(), item_id.to_string()); }
         };
         let sid = resp["PlaySessionId"].as_str().unwrap_or("").to_string();
         let msid = resp["MediaSources"][0]["Id"].as_str().unwrap_or(item_id).to_string();
-        log.push(Level::Info, "api", format!("← PlaybackInfo sid={sid} msid={msid}"));
+        log::info!(target: "api", "← PlaybackInfo sid={sid} msid={msid}");
         if sid.is_empty() {
             (gen_session_id(), item_id.to_string())
         } else {
@@ -909,23 +908,23 @@ impl EmbyClient {
     /// Probes for the Chapter API plugin. Sets `chapter_api_available` on self.
     /// Any HTTP response (even 500 for a bad id) means the plugin is installed;
     /// only a 404 or connection failure means it's absent.
-    pub fn probe_chapter_api(&mut self, log: &AppLog) {
-        log.push(Level::Info, "api", "→ ChapterAPI probe");
+    pub fn probe_chapter_api(&mut self) {
+        log::info!(target: "api", "→ ChapterAPI probe");
         match self.get("/chapter_api/get_chapters").query("id", "0").call() {
             Ok(_) | Err(ureq::Error::Status(_, _)) => {
                 self.chapter_api_available = true;
-                log.push(Level::Info, "api", "← ChapterAPI available");
+                log::info!(target: "api", "← ChapterAPI available");
             }
             Err(e) => {
-                log.push(Level::Info, "api", format!("← ChapterAPI not available: {e}"));
+                log::info!(target: "api", "← ChapterAPI not available: {e}");
             }
         }
     }
 
     /// Returns `(intro_start_ticks, intro_end_ticks)` for an item if the Chapter API
     /// exposes IntroStart and IntroEnd markers.
-    pub fn get_intro_times(&self, item_id: &str, log: &AppLog) -> Option<(i64, i64)> {
-        log.push(Level::Debug, "api", format!("→ ChapterAPI get_chapters item={item_id}"));
+    pub fn get_intro_times(&self, item_id: &str) -> Option<(i64, i64)> {
+        log::debug!(target: "api", "→ ChapterAPI get_chapters item={item_id}");
         let resp = self.get("/chapter_api/get_chapters")
             .query("id", item_id)
             .call().ok()?;
@@ -937,14 +936,14 @@ impl EmbyClient {
         let end = chapters.iter()
             .find(|c| c["MarkerType"].as_str() == Some("IntroEnd"))?
             ["StartPositionTicks"].as_i64()?;
-        log.push(Level::Info, "api", format!("← ChapterAPI intro start={start} end={end}"));
+        log::info!(target: "api", "← ChapterAPI intro start={start} end={end}");
         Some((start, end))
     }
 
     /// Returns all episodes of a series starting from `from_item_id` (inclusive), in air order.
     /// Mirrors Emby Web's `getEpisodes(seriesId)` + filter pattern.
-    pub fn get_episodes_from(&self, series_id: &str, from_item_id: &str, log: &AppLog) -> Vec<MediaItem> {
-        log.push(Level::Debug, "api", format!("→ EpisodesFrom series={series_id} from={from_item_id}"));
+    pub fn get_episodes_from(&self, series_id: &str, from_item_id: &str) -> Vec<MediaItem> {
+        log::debug!(target: "api", "→ EpisodesFrom series={series_id} from={from_item_id}");
         let resp: Value = match self.get(&format!("/Shows/{}/Episodes", series_id))
             .query("UserId", &self.user_id)
             .query("Fields", "UserData,RunTimeTicks,SeriesId,SeriesName,ParentIndexNumber,IndexNumber")
@@ -952,9 +951,9 @@ impl EmbyClient {
         {
             Ok(r) => match r.into_json() {
                 Ok(v) => v,
-                Err(e) => { log.push(Level::Warn, "api", format!("← ERR EpisodesFrom parse: {e}")); return vec![]; }
+                Err(e) => { log::warn!(target: "api", "← ERR EpisodesFrom parse: {e}"); return vec![]; }
             },
-            Err(e) => { log.push(Level::Warn, "api", format!("← ERR EpisodesFrom: {e}")); return vec![]; }
+            Err(e) => { log::warn!(target: "api", "← ERR EpisodesFrom: {e}"); return vec![]; }
         };
         let Some(all) = resp["Items"].as_array() else { return vec![]; };
         let mut found = false;
@@ -964,17 +963,17 @@ impl EmbyClient {
         }).collect();
         if items.is_empty() {
             // from_item_id not in series — return everything as a fallback
-            log.push(Level::Warn, "api", format!("← EpisodesFrom: from_item_id not found, returning all"));
+            log::warn!(target: "api", "← EpisodesFrom: from_item_id not found, returning all");
             return all.iter().map(parse_item).collect();
         }
-        log.push(Level::Info, "api", format!("← EpisodesFrom: {} episodes from '{}'", items.len(), items[0].display_name()));
+        log::info!(target: "api", "← EpisodesFrom: {} episodes from '{}'", items.len(), items[0].display_name());
         items
     }
 
 
     #[allow(dead_code)]
-    pub fn get_next_up(&self, series_id: &str, log: &AppLog) -> Option<MediaItem> {
-        log.push(Level::Debug, "api", format!("→ NextUp series={series_id}"));
+    pub fn get_next_up(&self, series_id: &str) -> Option<MediaItem> {
+        log::debug!(target: "api", "→ NextUp series={series_id}");
         let resp: Value = match self.get("/Shows/NextUp")
             .query("UserId", &self.user_id)
             .query("SeriesId", series_id)
@@ -984,17 +983,17 @@ impl EmbyClient {
         {
             Ok(r) => match r.into_json() {
                 Ok(v) => v,
-                Err(e) => { log.push(Level::Warn, "api", format!("← ERR NextUp parse: {e}")); return None; }
+                Err(e) => { log::warn!(target: "api", "← ERR NextUp parse: {e}"); return None; }
             },
-            Err(e) => { log.push(Level::Warn, "api", format!("← ERR NextUp: {e}")); return None; }
+            Err(e) => { log::warn!(target: "api", "← ERR NextUp: {e}"); return None; }
         };
         let items = resp["Items"].as_array()?;
         if items.is_empty() {
-            log.push(Level::Debug, "api", "← NextUp: none");
+            log::debug!(target: "api", "← NextUp: none");
             return None;
         }
         let item = parse_item(&items[0]);
-        log.push(Level::Info, "api", format!("← NextUp: {}", item.display_name()));
+        log::info!(target: "api", "← NextUp: {}", item.display_name());
         Some(item)
     }
 

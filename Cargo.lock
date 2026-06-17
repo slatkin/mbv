@@ -1434,6 +1434,7 @@ dependencies = [
  "ksni",
  "libmpv2",
  "libmpv2-sys",
+ "log",
  "rand 0.10.1",
  "ratatui",
  "ratatui-image",

@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex, mpsc};
 use ksni::blocking::TrayMethods;
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::applog::{AppLog, Level};
 use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlState};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
@@ -65,8 +64,7 @@ pub fn run(client: EmbyClient) -> ! {
 
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx)    = mpsc::channel();
-    let log = AppLog::new(50);
-    let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan, log.clone());
+    let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan);
     let subs_off = crate::config::load_subs_off();
     let player = Player::new(
         client.config.server_url.clone(),
@@ -91,7 +89,7 @@ pub fn run(client: EmbyClient) -> ! {
 
     let _tray = if client.config.show_systray_icon {
         MbyTray.spawn()
-            .map_err(|e| log.push(Level::Warn, "tray", format!("not available: {e}")))
+            .map_err(|e| { log::warn!(target: "tray", "not available: {e}"); })
             .ok()
     } else {
         None
@@ -232,12 +230,12 @@ pub fn run(client: EmbyClient) -> ! {
                     ws_ev, &client, &player,
                     &mut items, &mut cursor,
                     &shared_items, &shared_cursor,
-                    &ctrl_clients, &log,
+                    &ctrl_clients,
                 );
             }
             DaemonEvent::Ctrl(cmd) => {
                 handle_ctrl(cmd, &client, &player, &mut items, &mut cursor,
-                            &shared_items, &shared_cursor, &ctrl_clients, &log);
+                            &shared_items, &shared_cursor, &ctrl_clients);
             }
         }
     }
@@ -253,7 +251,6 @@ fn handle_ctrl(
     shared_items: &Arc<Mutex<Vec<MediaItem>>>,
     shared_cursor: &Arc<Mutex<usize>>,
     ctrl_clients: &ClientList,
-    log: &AppLog,
 ) {
     match cmd {
         CtrlCmd::PlayerCmd(pc) => {
@@ -265,7 +262,7 @@ fn handle_ctrl(
                 match c.get_items_by_ids(&item_ids) {
                     Ok(v) => v,
                     Err(e) => {
-                        log.push(Level::Warn, "daemon", format!("ctrl play error: {e}"));
+                        log::warn!(target: "daemon", "ctrl play error: {e}");
                         return;
                     }
                 }
@@ -274,7 +271,7 @@ fn handle_ctrl(
             if fetched.len() == 1 {
                 let item = fetched[0].clone();
                 if !item.series_id.is_empty() && player.always_play_next {
-                    let queue = client.lock().unwrap().get_episodes_from(&item.series_id, &item.id, log);
+                    let queue = client.lock().unwrap().get_episodes_from(&item.series_id, &item.id);
                     if queue.len() > 1 {
                         *items = queue.clone();
                         *cursor = 0;
@@ -286,7 +283,7 @@ fn handle_ctrl(
                             cursor: 0,
                         }));
                         let c = Arc::new(client.lock().unwrap().clone());
-                        player.play_playlist(queue, 0, c, log.clone(), 100);
+                        player.play_playlist(queue, 0, c, 100);
                         return;
                     }
                 }
@@ -304,7 +301,7 @@ fn handle_ctrl(
                     play_item.playback_position_ticks = start_ticks;
                 }
                 let c = Arc::new(client.lock().unwrap().clone());
-                player.play(&play_item, c, log.clone(), 100);
+                player.play(&play_item, c, 100);
             } else {
                 *items = fetched.clone();
                 *cursor = 0;
@@ -318,9 +315,9 @@ fn handle_ctrl(
                 let c = Arc::new(client.lock().unwrap().clone());
                 let active = player.status.lock().unwrap().active;
                 if active {
-                    player.play(&fetched[0], c, log.clone(), 100);
+                    player.play(&fetched[0], c, 100);
                 } else {
-                    player.play_playlist(fetched, 0, c, log.clone(), 100);
+                    player.play_playlist(fetched, 0, c, 100);
                 }
             }
         }
@@ -339,7 +336,6 @@ fn handle_ws(
     shared_items: &Arc<Mutex<Vec<MediaItem>>>,
     shared_cursor: &Arc<Mutex<usize>>,
     ctrl_clients: &ClientList,
-    log: &AppLog,
 ) {
     match ev {
         WsEvent::Play { item_ids, play_now, start_position_ticks, start_index } => {
@@ -348,7 +344,7 @@ fn handle_ws(
                 let c = client.lock().unwrap();
                 match c.get_items_by_ids(&item_ids) {
                     Ok(v) => v,
-                    Err(e) => { log.push(Level::Warn, "daemon", format!("play error: {e}")); return; }
+                    Err(e) => { log::warn!(target: "daemon", "play error: {e}"); return; }
                 }
             };
             if fetched.is_empty() { return; }
@@ -372,7 +368,7 @@ fn handle_ws(
                     play_item.playback_position_ticks = start_position_ticks;
                 }
                 let c = Arc::new(client.lock().unwrap().clone());
-                player.play(&play_item, c, log.clone(), 100);
+                player.play(&play_item, c, 100);
             } else {
                 // Apply StartPositionTicks to the starting item
                 let mut start_item = fetched[start_idx].clone();
@@ -382,7 +378,7 @@ fn handle_ws(
                 let mut items_with_pos = fetched.clone();
                 items_with_pos[start_idx] = start_item;
                 let c = Arc::new(client.lock().unwrap().clone());
-                player.play_playlist(items_with_pos, start_idx, c, log.clone(), 100);
+                player.play_playlist(items_with_pos, start_idx, c, 100);
             }
         }
         WsEvent::Stop   => { player.stop(); }
