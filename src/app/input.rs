@@ -1131,6 +1131,12 @@ impl App {
             let center = self.layout_carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
+        if self.tab_idx == 1 && self.playlist_view == 2 {
+            let inner = self.layout_playlist_inner;
+            let row = self.layout_presentation_visual_cursor
+                .saturating_sub(self.layout_presentation_scroll) as u16;
+            return (inner.x + 2, inner.y + row);
+        }
         if self.tab_idx == 0 {
             let sec = self.home.section;
             if let Some(area) = self.layout_section_areas.get(sec) {

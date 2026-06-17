@@ -752,6 +752,8 @@ impl App {
         .column_spacing(0)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, right_area, &mut state);
+        self.layout_presentation_scroll = state.offset();
+        self.layout_presentation_visual_cursor = visual_cursor;
 
         let total_rows = prows.len();
         let visible_rows = right_area.height as usize;

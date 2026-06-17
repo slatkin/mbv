@@ -380,6 +380,7 @@ pub(super) fn magick_resize(bytes: &[u8]) -> Option<Vec<u8>> {
             .spawn() else { continue };
         let Some(mut stdin) = child.stdin.take() else { continue };
         if stdin.write_all(bytes).is_err() { continue; }
+        drop(stdin); // close pipe so magick knows EOF
         let Ok(out) = child.wait_with_output() else { continue };
         if out.status.success() && !out.stdout.is_empty() {
             return Some(out.stdout);

@@ -64,6 +64,9 @@ impl log::Log for GlobalLogger {
     fn enabled(&self, _: &log::Metadata) -> bool { true }
 
     fn log(&self, record: &log::Record) {
+        if record.target().contains("::") && record.level() > log::Level::Warn {
+            return;
+        }
         if let Some(log) = GLOBAL.get() {
             log.push_entry(LogEntry {
                 level: record.level().into(),

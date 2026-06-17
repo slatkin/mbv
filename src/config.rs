@@ -59,7 +59,7 @@ impl Default for Config {
 }
 
 pub fn is_system_instance() -> bool {
-    env::var("MBV_SYSTEM").as_deref() == Ok("1")
+    env::var("MBV_SYSTEM").ok().as_deref() == Some("1")
 }
 
 fn config_dir() -> PathBuf {
