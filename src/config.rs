@@ -58,7 +58,14 @@ impl Default for Config {
     }
 }
 
+pub fn is_system_instance() -> bool {
+    env::var("MBV_SYSTEM").is_ok()
+}
+
 fn config_dir() -> PathBuf {
+    if is_system_instance() {
+        return PathBuf::from("/etc/mbv");
+    }
     let base = env::var("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
@@ -69,6 +76,9 @@ fn config_dir() -> PathBuf {
 }
 
 pub fn cache_dir() -> PathBuf {
+    if is_system_instance() {
+        return PathBuf::from("/var/cache/mbv");
+    }
     let base = env::var("XDG_CACHE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
@@ -79,11 +89,27 @@ pub fn cache_dir() -> PathBuf {
 }
 
 fn state_dir() -> PathBuf {
+    if is_system_instance() {
+        return PathBuf::from("/var/lib/mbv");
+    }
     let base = env::var("XDG_STATE_HOME")
         .map(PathBuf::from)
         .unwrap_or_else(|_| {
             let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
             PathBuf::from(home).join(".local").join("state")
+        });
+    base.join("mbv")
+}
+
+pub fn data_dir_system_or_local() -> PathBuf {
+    if is_system_instance() {
+        return PathBuf::from("/var/lib/mbv");
+    }
+    let base = env::var("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| {
+            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
+            PathBuf::from(home).join(".local").join("share")
         });
     base.join("mbv")
 }
@@ -210,13 +236,7 @@ pub fn load_subs_off() -> bool {
 }
 
 fn data_dir() -> PathBuf {
-    let base = env::var("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| {
-            let home = env::var("HOME").unwrap_or_else(|_| "/root".to_string());
-            PathBuf::from(home).join(".local").join("share")
-        });
-    base.join("mbv")
+    data_dir_system_or_local()
 }
 
 pub fn osc_fonts_dir() -> PathBuf {
@@ -227,16 +247,19 @@ pub fn osc_fonts_dir() -> PathBuf {
     PathBuf::from("/usr/share/mbv/fonts")
 }
 
+fn runtime_dir() -> String {
+    if is_system_instance() {
+        return "/run/mbv".to_string();
+    }
+    env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string())
+}
+
 pub fn mpv_ipc_path() -> String {
-    let runtime = env::var("XDG_RUNTIME_DIR")
-        .unwrap_or_else(|_| "/tmp".to_string());
-    format!("{}/mbv-mpv.sock", runtime)
+    format!("{}/mbv-mpv.sock", runtime_dir())
 }
 
 pub fn control_socket_path() -> String {
-    let runtime = env::var("XDG_RUNTIME_DIR")
-        .unwrap_or_else(|_| "/tmp".to_string());
-    format!("{}/mbv-ctrl.sock", runtime)
+    format!("{}/mbv-ctrl.sock", runtime_dir())
 }
 
 pub fn token_cache_path() -> PathBuf {

@@ -47,8 +47,7 @@ impl ksni::Tray for MbyTray {
 }
 
 pub fn pid_file() -> std::path::PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".into());
-    let dir = std::path::PathBuf::from(home).join(".local/share/mbv");
+    let dir = crate::config::data_dir_system_or_local();
     let _ = std::fs::create_dir_all(&dir);
     dir.join("mbv.pid")
 }

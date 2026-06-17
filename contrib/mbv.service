@@ -1,0 +1,32 @@
+[Unit]
+Description=mbv Emby media player daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mbv
+Group=mbv
+
+Environment=MBV_SYSTEM=1
+
+# config.toml lives in /etc/mbv/
+# state (queue, token, prefs) in /var/lib/mbv/
+# cache (images) in /var/cache/mbv/
+# sockets in /run/mbv/
+
+RuntimeDirectory=mbv
+RuntimeDirectoryMode=0750
+StateDirectory=mbv
+StateDirectoryMode=0750
+CacheDirectory=mbv
+CacheDirectoryMode=0750
+ConfigurationDirectory=mbv
+ConfigurationDirectoryMode=0750
+
+ExecStart=/usr/bin/mbv --daemon-inner
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
