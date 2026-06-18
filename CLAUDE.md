@@ -18,6 +18,8 @@ cargo test -- --nocapture  # see println! output in tests
 
 Use `cargo clippy` as the linter. See CHECKIN.md for pre-commit steps.
 
+**Before committing or pushing: always ask the user for permission first** (CHECKIN.md requirement).
+
 ## Releasing
 
 1. Follow CHECKIN.md steps
@@ -43,7 +45,7 @@ All code lives in `src/`. The app is single-binary with these modules:
 |--------|------|
 | `main.rs` | Entry point: auth, daemon/remote mode selection, launches `App::run()` |
 | `app/` | Everything UI — see below |
-| `api.rs` | `EmbyClient` — all HTTP calls to Emby, `MediaItem` type, `parse_item()` |
+| `api.rs` | `EmbyClient` — all HTTP calls to Emby, `MediaItem` type, `parse_item()`, `fetch_items()` |
 | `config.rs` | Config file parsing (`~/.config/mbv/config.toml`) and credential storage |
 | `player.rs` | `Player` — wraps `libmpv2`, runs in its own thread, sends `PlayerEvent` back via mpsc |
 | `ws.rs` | WebSocket thread: receives Emby remote-control messages, sends `WsEvent` to App |
@@ -102,6 +104,14 @@ Background work (library fetching, image fetching, album year lookups) is always
 - `image_protocol_enabled: bool` — cached from `client.config.image_protocol.is_some()`; updated in the settings handler when the user cycles the image protocol. Use `images_enabled()` to read it.
 - `use_nerd_fonts: bool` — from config; when true, single-glyph Nerd Font code points are used in place of ASCII fallbacks (e.g. in the divider status indicators).
 
+### `api.rs` structure
+
+`EmbyClient` methods are grouped by section comments (`// ── HTTP infrastructure ──`, `// ── Authentication ──`, `// ── Browse / fetch ──`, `// ── Library actions ──`, `// ── Playback reporting ──`, `// ── Playlists ──`, `// ── Series / episodes / chapters ──`, `// ── Remote session control ──`).
+
+Browse methods that return `Vec<MediaItem>` from a paginated `{"Items": [...]}` response use `fetch_items(path, &[("Key", "value"), ...])`. Methods that return a top-level JSON array (`get_latest`, `get_ancestors`) or need a `total_count` alongside results (`get_items_sorted`) don't use `fetch_items` — that's intentional.
+
+`parse_item()` delegates video/audio stream formatting to `parse_video_info(&[Value])` and `parse_audio_info(&[Value])`. The language table in `parse_audio_info` must be kept in sync with `lang_code_to_name()` in player.rs — they map the same ISO 639-1/2 codes to the same English names.
+
 ### MediaItem
 
 `MediaItem` (`api.rs`) is the universal item type used everywhere. Key fields for music:
@@ -135,6 +145,20 @@ Images are fetched by `fetch_card_image()` which spawns a thread, downloads byte
 ### Playback sync
 
 `Player` (player.rs) wraps libmpv2. It receives `PlayerCommand` via mpsc and sends `PlayerEvent` back. The App handles `PlayerEvent` to update played status, advance the queue, and report progress to Emby via `api.rs` (`report_start`, `report_progress_ws`, `report_stopped`). Ticks use Emby's `TICKS_PER_SECOND = 10_000_000`.
+
+#### player.rs internals
+
+`play()` and `play_playlist()` are thin setup functions (~50 lines each). The real logic lives in session structs that own all loop state:
+
+- **`SingleSession`** — handles a single-file playback session. Owns `quit_at`, `stop_reported`, `pending_load` (bool), intro state, next-up threshold, etc. Key methods: `handle_command`, `on_time_pos`, `on_playback_restart`, `on_end_file`, `on_shutdown`, `run`.
+- **`PlaylistSession`** — handles a multi-file mpv playlist. Same shape but with `items: Vec<MediaItem>`, `current_idx`, `forced_idx`, `pending_load: u8` (counts in-flight EndFile events from ReplacePlaylist / initial jump), `stop_reported`, etc.
+- **`SessionReporter`** — cloneable struct shared between the event-loop thread and the progress reporter thread. Holds `ids: Arc<Mutex<(item_id, msid, sid)>>` (a single lock for all three so transitions are never torn), `is_audio: Arc<AtomicBool>`, and `status: Arc<Mutex<PlayerStatus>>`. Key methods: `report_progress`, `report_stopped` (zeroes position for audio), `report_ping`, `start_item`, `transition_to`.
+- **`ProgressGuard`** — owns the background progress-reporter thread. `stop_and_join()` signals it and waits.
+- **`MpvSessionConfig`** — plain struct carrying headless/script/intro flags into the session.
+
+**Critical invariant — `pending_load` in `PlaylistSession`**: always assign with `=`, never `+=` in `ReplacePlaylist`. The count must exactly equal the EndFiles mpv will emit for that operation (1, or 2 if `start_idx > 0`). When `pending_load` drains to 0 in `on_end_file`, `stop_reported` is reset to `false` for the new item.
+
+**Critical invariant — `SessionReporter.ids`**: all three of `item_id`, `msid`, `sid` are updated atomically inside a single `Mutex::lock` in `start_item`. Never add separate per-field locks — the progress thread reads all three in one lock acquisition to avoid sending torn (new item_id, old sid) reports to Emby.
 
 `effective_playback_state()` returns `(active, active_idx, pos_ticks, runtime_ticks, is_paused)` — for remote sessions it extrapolates position forward from the last-polled value, but only when `!remote.is_paused`.
 
