@@ -105,7 +105,7 @@ impl App {
             }
             spans.extend([
                 Span::styled("[", bracket),
-                Span::styled(rc_text.to_string(), Style::default().fg(rc_color).add_modifier(Modifier::BOLD)),
+                Span::styled(rc_text.to_string(), if self.connected_session_id.is_some() { Style::default().fg(rc_color).add_modifier(Modifier::BOLD) } else { Style::default().fg(rc_color) }),
                 Span::styled("]", bracket),
                 Span::styled("─", dash_style),
                 Span::styled("[", bracket),
