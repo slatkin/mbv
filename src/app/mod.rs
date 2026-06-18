@@ -198,6 +198,7 @@ pub struct App {
     layout_sub_area: Rect,
     layout_audio_area: Rect,
     confirm_remove_idx: Option<usize>,     // playlist index pending removal confirmation
+    pending_delete_idx: Option<usize>,     // deferred removal of now-playing item after Stopped event
     pending_queue_removal: Option<usize>,  // deferred removal after TrackChanged index-shifts
     confirm_clear_playlist: bool,
     playlist_undo_stack: Vec<(usize, MediaItem)>,
@@ -423,6 +424,7 @@ impl App {
             layout_sub_area: Rect::default(),
             layout_audio_area: Rect::default(),
             confirm_remove_idx: None,
+            pending_delete_idx: None,
             pending_queue_removal: None,
             confirm_clear_playlist: false,
             playlist_undo_stack: Vec::new(),
@@ -661,12 +663,15 @@ impl App {
                             self.refresh_after_stop();
                             continue;
                         }
+                        let is_delete = self.pending_delete_idx.take().map_or(false, |d| d == idx);
                         if let Some(item) = self.player_tab.items.get_mut(idx) {
-                            if played {
-                                item.playback_position_ticks = 0;
-                                item.played = true;
-                            } else if position_ticks > 0 && !item.is_audio() {
-                                item.playback_position_ticks = position_ticks;
+                            if !is_delete {
+                                if played {
+                                    item.playback_position_ticks = 0;
+                                    item.played = true;
+                                } else if position_ticks > 0 && !item.is_audio() {
+                                    item.playback_position_ticks = position_ticks;
+                                }
                             }
                             self.last_played_item_id = Some(item.id.clone());
                             self.last_played_completed = played;
@@ -674,12 +679,20 @@ impl App {
                         self.next_up_item = None;
                         self.skip_intro_end_ticks = None;
                         self.status.clear();
-                        let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
-                        if played && is_video && self.client.lock().unwrap().config.consume_videos {
-                            if idx < self.player_tab.items.len() {
-                                self.player_tab.items.remove(idx);
-                                self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
-                                    .min(self.player_tab.items.len().saturating_sub(1));
+                        if is_delete {
+                            let item = self.player_tab.items.remove(idx);
+                            self.playlist_undo_stack.push((idx, item));
+                            self.player_tab.playlist_cursor =
+                                if self.player_tab.items.is_empty() { 0 }
+                                else { idx.min(self.player_tab.items.len() - 1) };
+                        } else {
+                            let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+                            if played && is_video && self.client.lock().unwrap().config.consume_videos {
+                                if idx < self.player_tab.items.len() {
+                                    self.player_tab.items.remove(idx);
+                                    self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
+                                        .min(self.player_tab.items.len().saturating_sub(1));
+                                }
                             }
                         }
                         self.refresh_after_stop();
@@ -1323,6 +1336,7 @@ mod tests {
             layout_sub_area: ratatui::layout::Rect::default(),
             layout_audio_area: ratatui::layout::Rect::default(),
             confirm_remove_idx: None,
+            pending_delete_idx: None,
             pending_queue_removal: None,
             confirm_clear_playlist: false,
             playlist_undo_stack: Vec::new(),

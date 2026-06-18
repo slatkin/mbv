@@ -675,14 +675,12 @@ impl App {
             self.confirm_remove_idx = None;
             self.status.clear();
             if matches!(key.code, KeyCode::Char('y')) {
+                // Defer the actual removal until PlayerEvent::Stopped arrives so the
+                // Stopped handler finds the correct item at index t, not the next item
+                // (which would have its playback_position_ticks corrupted otherwise).
+                self.pending_delete_idx = Some(t);
                 self.player.stop();
-                let item = self.player_tab.items.remove(t);
-                self.playlist_undo_stack.push((t, item));
                 self.queue_dirty = true;
-                self.player_tab.playlist_cursor =
-                    if self.player_tab.items.is_empty() { 0 }
-                    else { t.min(self.player_tab.items.len() - 1) };
-                self.save_queue_state();
             }
             return false;
         }
