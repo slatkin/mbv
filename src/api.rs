@@ -145,6 +145,24 @@ impl MediaItem {
         }
     }
 
+    fn folder(id: String, name: String, collection_type: String) -> Self {
+        MediaItem {
+            id, name,
+            item_type: "CollectionFolder".to_string(),
+            is_folder: true,
+            collection_type,
+            media_type: String::new(), runtime_ticks: 0, played: false,
+            playback_position_ticks: 0, series_id: String::new(), series_name: String::new(),
+            album_id: String::new(), album: String::new(), index_number: 0,
+            parent_index_number: 0, unplayed_item_count: 0, path: String::new(),
+            artist: String::new(), sort_name: String::new(), production_year: 0,
+            end_year: 0, overview: String::new(), premiere_date: String::new(),
+            date_added: String::new(), total_count: 0, container: String::new(),
+            director: String::new(), video_info: String::new(), audio_info: String::new(),
+            genre: String::new(), playlist_item_id: String::new(),
+        }
+    }
+
     pub fn display_name(&self) -> String {
         if self.item_type == "Episode" && !self.series_name.is_empty() {
             format!("{} - {}", self.series_name, self.name)
@@ -169,6 +187,73 @@ pub struct SessionInfo {
     pub volume:              i64,
     pub sub_index:           i64,   // -1 = disabled
     pub audio_index:         i64,   // 1-based; 0 = unknown
+}
+
+fn parse_video_info(streams: &[Value]) -> String {
+    let Some(s) = streams.iter().find(|s| s["Type"].as_str() == Some("Video")) else {
+        return String::new();
+    };
+    let width  = s["Width"].as_u64().unwrap_or(0);
+    let height = s["Height"].as_u64().unwrap_or(0);
+    let dim = width.max(height);
+    let res = match dim {
+        3840.. => "4K".to_string(),
+        1920.. => "1080p".to_string(),
+        1280.. => "720p".to_string(),
+        720..  => "480p".to_string(),
+        d if d > 0 => format!("{}p", height),
+        _ => String::new(),
+    };
+    let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
+    match (res.is_empty(), codec.is_empty()) {
+        (false, false) => format!("{} {}", res, codec),
+        (false, true)  => res,
+        (true, false)  => codec,
+        (true, true)   => String::new(),
+    }
+}
+
+fn parse_audio_info(streams: &[Value]) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    for s in streams.iter().filter(|s| s["Type"].as_str() == Some("Audio")) {
+        let lang = s["Language"].as_str().unwrap_or("");
+        let lang_name = match lang.to_lowercase().as_str() {
+            "en" | "eng" => "English",
+            "fr" | "fre" | "fra" => "French",
+            "de" | "ger" | "deu" => "German",
+            "es" | "spa" => "Spanish",
+            "it" | "ita" => "Italian",
+            "pt" | "por" => "Portuguese",
+            "ja" | "jpn" => "Japanese",
+            "ko" | "kor" => "Korean",
+            "zh" | "chi" | "zho" => "Chinese",
+            "ru" | "rus" => "Russian",
+            "ar" | "ara" => "Arabic",
+            "nl" | "nld" | "dut" => "Dutch",
+            "sv" | "swe" => "Swedish",
+            "no" | "nor" => "Norwegian",
+            "da" | "dan" => "Danish",
+            "fi" | "fin" => "Finnish",
+            "pl" | "pol" => "Polish",
+            "cs" | "cze" | "ces" => "Czech",
+            "tr" | "tur" => "Turkish",
+            _ => "",
+        };
+        let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
+        let layout = s["ChannelLayout"].as_str().unwrap_or("");
+        let layout_str = match layout {
+            "mono"   => "Mono",
+            "stereo" => "Stereo",
+            "5.1"    => "5.1",
+            "7.1"    => "7.1",
+            other if !other.is_empty() => other,
+            _ => "",
+        };
+        let track: Vec<&str> = [lang_name, &codec, layout_str]
+            .iter().filter(|s| !s.is_empty()).copied().collect();
+        if !track.is_empty() { parts.push(track.join(" ")); }
+    }
+    parts.join("  |  ")
 }
 
 fn parse_item(raw: &Value) -> MediaItem {
@@ -231,64 +316,11 @@ fn parse_item(raw: &Value) -> MediaItem {
                 .and_then(|p| p["Name"].as_str()))
             .unwrap_or("").to_string(),
         video_info: raw["MediaStreams"].as_array()
-            .and_then(|streams| streams.iter().find(|s| s["Type"].as_str() == Some("Video")))
-            .map(|s| {
-                let width  = s["Width"].as_u64().unwrap_or(0);
-                let height = s["Height"].as_u64().unwrap_or(0);
-                let dim = width.max(height);
-                let res = match dim {
-                    3840.. => "4K".to_string(),
-                    1920.. => "1080p".to_string(),
-                    1280.. => "720p".to_string(),
-                    720..  => "480p".to_string(),
-                    d if d > 0 => format!("{}p", height),
-                    _ => String::new(),
-                };
-                let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
-                match (res.is_empty(), codec.is_empty()) {
-                    (false, false) => format!("{} {}", res, codec),
-                    (false, true)  => res,
-                    (true, false)  => codec,
-                    (true, true)   => String::new(),
-                }
-            })
+            .map(|s| parse_video_info(s))
             .unwrap_or_default(),
         playlist_item_id: raw["PlaylistItemId"].as_str().unwrap_or("").to_string(),
         audio_info: raw["MediaStreams"].as_array()
-            .map(|streams| {
-                let mut parts: Vec<String> = Vec::new();
-                for s in streams.iter().filter(|s| s["Type"].as_str() == Some("Audio")) {
-                    let lang = s["Language"].as_str().unwrap_or("");
-                    let lang_name = match lang {
-                        "eng" => "English",
-                        "chi" | "zho" => "Chinese",
-                        "jpn" => "Japanese",
-                        "fre" | "fra" => "French",
-                        "ger" | "deu" => "German",
-                        "spa" => "Spanish",
-                        "ita" => "Italian",
-                        "kor" => "Korean",
-                        "por" => "Portuguese",
-                        "rus" => "Russian",
-                        other if !other.is_empty() => other,
-                        _ => "",
-                    };
-                    let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
-                    let layout = s["ChannelLayout"].as_str().unwrap_or("");
-                    let layout_str = match layout {
-                        "mono"   => "Mono",
-                        "stereo" => "Stereo",
-                        "5.1"    => "5.1",
-                        "7.1"    => "7.1",
-                        other if !other.is_empty() => other,
-                        _ => "",
-                    };
-                    let track: Vec<&str> = [lang_name, &codec, layout_str]
-                        .iter().filter(|s| !s.is_empty()).copied().collect();
-                    if !track.is_empty() { parts.push(track.join(" ")); }
-                }
-                parts.join("  |  ")
-            })
+            .map(|s| parse_audio_info(s))
             .unwrap_or_default(),
     }
 }
@@ -329,6 +361,8 @@ pub struct EmbyClient {
 }
 
 impl EmbyClient {
+    // ── HTTP infrastructure ──────────────────────────────────────────────────
+
     pub fn new(config: Config) -> Self {
         let agent = ureq::AgentBuilder::new()
             .timeout(std::time::Duration::from_secs(30))
@@ -372,6 +406,8 @@ impl EmbyClient {
             .set("Authorization", &self.auth_header())
             .set("X-Emby-Token", &self.token)
     }
+
+    // ── Authentication ───────────────────────────────────────────────────────
 
     pub fn authenticate(&mut self) -> Result<(), String> {
         let Some((cached_url, token, user_id)) = load_cached_token() else {
@@ -448,6 +484,18 @@ impl EmbyClient {
         Ok(())
     }
 
+    // ── Browse / fetch ───────────────────────────────────────────────────────
+
+    fn fetch_items(&self, path: &str, queries: &[(&str, &str)]) -> Result<Vec<MediaItem>, String> {
+        let mut req = self.get(path);
+        for (k, v) in queries { req = req.query(k, v); }
+        let resp: Value = req.call().map_err(|e| e.to_string())?
+                              .into_json().map_err(|e| e.to_string())?;
+        Ok(resp["Items"].as_array()
+            .map(|arr| arr.iter().map(parse_item).collect())
+            .unwrap_or_default())
+    }
+
     pub fn get_views(&self) -> Result<Vec<MediaItem>, String> {
         let vfolders: Value = self.get("/Library/VirtualFolders")
             .call().map_err(|e| e.to_string())?
@@ -462,42 +510,11 @@ impl EmbyClient {
 
         if let Some(arr) = vfolders.as_array() {
             for f in arr {
-                let id = f["ItemId"].as_str().unwrap_or("").to_string();
-                let item = MediaItem {
-                    id: id.clone(),
-                    name: f["Name"].as_str().unwrap_or("").to_string(),
-                    item_type: "CollectionFolder".to_string(),
-                    is_folder: true,
-                    collection_type: f["CollectionType"].as_str().unwrap_or("").to_string(),
-                    media_type: String::new(),
-                    runtime_ticks: 0,
-                    played: false,
-                    playback_position_ticks: 0,
-                    series_id: String::new(),
-                    series_name: String::new(),
-                    album_id: String::new(),
-                    album: String::new(),
-                    index_number: 0,
-                    parent_index_number: 0,
-                    unplayed_item_count: 0,
-                    path: String::new(),
-                    artist: String::new(),
-                    sort_name: String::new(),
-                    production_year: 0,
-                    end_year: 0,
-                    overview: String::new(),
-                    premiere_date: String::new(),
-                    date_added: String::new(),
-                    total_count: 0,
-                    container: String::new(),
-                    director: String::new(),
-                    video_info: String::new(),
-                    audio_info: String::new(),
-                    genre: String::new(),
-                    playlist_item_id: String::new(),
-                };
-                seen.insert(id);
-                items.push(item);
+                let id    = f["ItemId"].as_str().unwrap_or("").to_string();
+                let name  = f["Name"].as_str().unwrap_or("").to_string();
+                let ctype = f["CollectionType"].as_str().unwrap_or("").to_string();
+                seen.insert(id.clone());
+                items.push(MediaItem::folder(id, name, ctype));
             }
         }
 
@@ -514,12 +531,7 @@ impl EmbyClient {
     }
 
     pub fn get_user_views(&self) -> Result<Vec<MediaItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Views", self.user_id))
-            .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
-        Ok(resp["Items"].as_array()
-            .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default())
+        self.fetch_items(&format!("/Users/{}/Views", self.user_id), &[])
     }
 
     pub fn get_items_sorted(&self, parent_id: &str, item_types: Option<&str>, unplayed_only: bool, start_index: usize, limit: usize, sort_by: &str, sort_order: &str) -> Result<(Vec<MediaItem>, usize), String> {
@@ -547,16 +559,13 @@ impl EmbyClient {
     }
 
     pub fn get_continue_watching(&self, limit: usize) -> Result<Vec<MediaItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items/Resume", self.user_id))
-            .query("UserId", &self.user_id)
-            .query("Limit", &limit.to_string())
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
-            .query("MediaTypes", "Video")
-            .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
-        Ok(resp["Items"].as_array()
-            .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default())
+        let limit = limit.to_string();
+        self.fetch_items(&format!("/Users/{}/Items/Resume", self.user_id), &[
+            ("UserId",     &self.user_id),
+            ("Limit",      &limit),
+            ("Fields",     "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
+            ("MediaTypes", "Video"),
+        ])
     }
 
     pub fn get_latest(&self, parent_id: &str, limit: usize) -> Result<Vec<MediaItem>, String> {
@@ -572,68 +581,55 @@ impl EmbyClient {
     }
 
     pub fn get_latest_episodes(&self, parent_id: &str, limit: usize) -> Result<Vec<MediaItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
-            .query("ParentId", parent_id)
-            .query("Limit", &limit.to_string())
-            .query("IncludeItemTypes", "Episode")
-            .query("Recursive", "true")
-            .query("SortBy", "DateCreated")
-            .query("SortOrder", "Descending")
-            .query("IsPlayed", "false")
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path")
-            .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
-        Ok(resp["Items"].as_array()
-            .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default())
+        let limit = limit.to_string();
+        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+            ("ParentId",          parent_id),
+            ("Limit",             &limit),
+            ("IncludeItemTypes",  "Episode"),
+            ("Recursive",         "true"),
+            ("SortBy",            "DateCreated"),
+            ("SortOrder",         "Descending"),
+            ("IsPlayed",          "false"),
+            ("Fields",            "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path"),
+        ])
     }
 
     pub fn get_all_playable_recursive(&self, parent_id: &str) -> Result<Vec<MediaItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
-            .query("ParentId", parent_id)
-            .query("IncludeItemTypes", "Episode,Movie,Video,Audio")
-            .query("Recursive", "true")
-            .query("SortBy", "SortName")
-            .query("SortOrder", "Ascending")
-            .query("Limit", "2000")
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
-            .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
-        Ok(resp["Items"].as_array()
-            .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default())
+        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+            ("ParentId",         parent_id),
+            ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
+            ("Recursive",        "true"),
+            ("SortBy",           "SortName"),
+            ("SortOrder",        "Ascending"),
+            ("Limit",            "2000"),
+            ("Fields",           "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
+        ])
     }
 
     pub fn get_direct_playable(&self, parent_id: &str) -> Result<Vec<MediaItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
-            .query("ParentId", parent_id)
-            .query("IncludeItemTypes", "Episode,Movie,Video,Audio")
-            .query("SortBy", "SortName")
-            .query("SortOrder", "Ascending")
-            .query("Limit", "2000")
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
-            .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
-        Ok(resp["Items"].as_array()
-            .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default())
+        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+            ("ParentId",         parent_id),
+            ("IncludeItemTypes", "Episode,Movie,Video,Audio"),
+            ("SortBy",           "SortName"),
+            ("SortOrder",        "Ascending"),
+            ("Limit",            "2000"),
+            ("Fields",           "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
+        ])
     }
 
     pub fn get_all_videos_recursive(&self, parent_id: &str) -> Result<Vec<MediaItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
-            .query("ParentId", parent_id)
-            .query("IncludeItemTypes", "Episode,Movie,Video")
-            .query("Recursive", "true")
-            .query("SortBy", "SortName")
-            .query("SortOrder", "Ascending")
-            .query("Limit", "2000")
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
-            .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
-        Ok(resp["Items"].as_array()
-            .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default())
+        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+            ("ParentId",         parent_id),
+            ("IncludeItemTypes", "Episode,Movie,Video"),
+            ("Recursive",        "true"),
+            ("SortBy",           "SortName"),
+            ("SortOrder",        "Ascending"),
+            ("Limit",            "2000"),
+            ("Fields",           "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
+        ])
     }
+
+    // ── Library actions ──────────────────────────────────────────────────────
 
     pub fn mark_played(&self, item_id: &str) -> Result<(), String> {
         self.post(&format!("/Users/{}/PlayedItems/{}", self.user_id, item_id))
@@ -664,6 +660,8 @@ impl EmbyClient {
             .call().map_err(|e| e.to_string())?;
         Ok(())
     }
+
+    // ── Playback reporting ───────────────────────────────────────────────────
 
     pub fn ws_url(&self) -> String {
         let base = self.config.server_url
@@ -821,16 +819,14 @@ impl EmbyClient {
         }
     }
 
+    // ── Playlists ────────────────────────────────────────────────────────────
+
     pub fn get_playlists(&self) -> Result<Vec<MediaItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
-            .query("IncludeItemTypes", "Playlist")
-            .query("Recursive", "true")
-            .query("Fields", "")
-            .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
-        Ok(resp["Items"].as_array()
-            .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default())
+        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+            ("IncludeItemTypes", "Playlist"),
+            ("Recursive",        "true"),
+            ("Fields",           ""),
+        ])
     }
 
     pub fn create_playlist(&self, name: &str, item_ids: &[String]) -> Result<String, String> {
@@ -889,16 +885,15 @@ impl EmbyClient {
         Ok(())
     }
 
+    // ── Series / episodes / chapters ────────────────────────────────────────
+
     pub fn get_items_by_ids(&self, ids: &[String]) -> Result<Vec<MediaItem>, String> {
         if ids.is_empty() { return Ok(vec![]); }
-        let resp: Value = self.get(&format!("/Users/{}/Items", self.user_id))
-            .query("Ids", &ids.join(","))
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists")
-            .call().map_err(|e| e.to_string())?
-            .into_json().map_err(|e| e.to_string())?;
-        let mut items: Vec<MediaItem> = resp["Items"].as_array()
-            .map(|arr| arr.iter().map(parse_item).collect())
-            .unwrap_or_default();
+        let joined = ids.join(",");
+        let mut items = self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+            ("Ids",    &joined),
+            ("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists"),
+        ])?;
         // Emby returns items in server sort order, not input order. Restore input order.
         let order: std::collections::HashMap<&str, usize> =
             ids.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
@@ -1007,6 +1002,8 @@ impl EmbyClient {
         log::info!(target: "api", "← NextUp: {}", item.display_name());
         Some(item)
     }
+
+    // ── Remote session control ───────────────────────────────────────────────
 
     #[allow(dead_code)]
     pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {

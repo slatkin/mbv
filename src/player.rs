@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use libmpv2::{Format, Mpv, events::{Event, PropertyData}, mpv_end_file_reason};
+use libmpv2::{EndFileReason, Format, Mpv, events::{Event, PropertyData}, mpv_end_file_reason};
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 
 fn mpv_err_str(e: &libmpv2::Error) -> String {
@@ -204,6 +204,1256 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
     s.sub_id       = sub_id;
 }
 
+// ── Session infrastructure ────────────────────────────────────────────────────
+
+struct ProgressGuard {
+    stop_tx: mpsc::Sender<()>,
+    handle:  Option<thread::JoinHandle<()>>,
+}
+
+impl ProgressGuard {
+    fn stop_and_join(&mut self) {
+        let _ = self.stop_tx.send(());
+        if let Some(h) = self.handle.take() { let _ = h.join(); }
+    }
+}
+
+struct MpvSessionConfig {
+    headless:          bool,
+    use_mpv_config:    bool,
+    no_scripts:        bool,
+    always_skip_intro: bool,
+}
+
+// Shared between the event loop thread and the progress reporter thread.
+// All mutable fields are Arc-wrapped so transitions are visible to both.
+#[derive(Clone)]
+struct SessionReporter {
+    client:   Arc<EmbyClient>,
+    ws_tx:    Option<mpsc::Sender<String>>,
+    // (item_id, msid, sid) in a single lock so progress and event-loop threads never
+    // observe a torn triple during item transitions.
+    ids:      Arc<Mutex<(String, String, String)>>,
+    // Shared with progress thread so it knows whether to send progress or just ping.
+    is_audio: Arc<AtomicBool>,
+    status:   Arc<Mutex<PlayerStatus>>,
+}
+
+impl SessionReporter {
+    fn new(
+        client:   Arc<EmbyClient>,
+        ws_tx:    Option<mpsc::Sender<String>>,
+        item_id:  String,
+        msid:     String,
+        sid:      String,
+        is_audio: bool,
+        status:   Arc<Mutex<PlayerStatus>>,
+    ) -> Self {
+        SessionReporter {
+            client,
+            ws_tx,
+            ids:      Arc::new(Mutex::new((item_id, msid, sid))),
+            is_audio: Arc::new(AtomicBool::new(is_audio)),
+            status,
+        }
+    }
+
+    // Selects ws or http automatically; reads pos/paused from status.
+    fn report_progress(&self, event_name: &str) {
+        let (id, msid, sid) = self.ids.lock().unwrap().clone();
+        let (pos, paused) = {
+            let s = self.status.lock().unwrap();
+            (s.position_ticks, s.paused)
+        };
+        if let Some(ref tx) = self.ws_tx {
+            self.client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx);
+        } else {
+            self.client.report_progress_http(&id, &msid, pos, paused, &sid, event_name);
+        }
+    }
+
+    // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
+    fn report_stopped(&self, last_valid_pos: i64) {
+        let (id, msid, sid) = self.ids.lock().unwrap().clone();
+        let pos  = if self.is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
+        self.client.report_stopped(&id, &msid, pos, &sid);
+    }
+
+    fn report_ping(&self) {
+        let sid = self.ids.lock().unwrap().2.clone();
+        self.client.report_ping(&sid);
+    }
+
+    // get_playback_info + report_start for a new item, then update tracking ids atomically.
+    fn start_item(&self, item: &MediaItem) {
+        let (new_sid, new_msid) = self.client.get_playback_info(&item.id);
+        self.client.report_start(item, &new_msid, &new_sid);
+        let mut ids = self.ids.lock().unwrap();
+        ids.0 = item.id.clone();
+        ids.1 = new_msid;
+        ids.2 = new_sid;
+        drop(ids);
+        self.is_audio.store(item.is_audio(), Ordering::Relaxed);
+    }
+
+    // report_stopped for current item then start_item for the new one.
+    fn transition_to(&self, new_item: &MediaItem, last_valid_pos: i64) {
+        self.report_stopped(last_valid_pos);
+        self.start_item(new_item);
+    }
+}
+
+fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
+    let ipc_path = crate::config::mpv_ipc_path();
+    let ipc_existed = std::path::Path::new(&ipc_path).exists();
+    if ipc_existed {
+        let _ = std::fs::remove_file(&ipc_path);
+        log::info!(target: "player", "init: removed stale ipc socket {}", ipc_path);
+    }
+    log::info!(target: "player", "init: ipc={} (existed={})", ipc_path, ipc_existed);
+
+    let no_scripts     = config.no_scripts;
+    let use_mpv_config = config.use_mpv_config;
+    let mut init_err: Option<String> = None;
+    let mpv = match Mpv::with_initializer(|init| {
+        macro_rules! opt {
+            ($k:expr, $v:expr) => {{
+                let r = init.set_option($k, $v);
+                if let Err(ref e) = r { init_err = Some(format!("[player] set_option('{}') failed: {}", $k, mpv_err_str(e))); }
+                r?;
+            }};
+        }
+        opt!("config", "yes");
+        opt!("input-ipc-server", ipc_path.as_str());
+        opt!("input-default-bindings", "yes");
+        opt!("input-vo-keyboard", "yes");
+        opt!("wayland-app-id", "mbv");
+        opt!("demuxer-max-bytes", "50M");
+        opt!("demuxer-max-back-bytes", "10M");
+        opt!("gapless-audio", "weak");
+        if no_scripts || !use_mpv_config {
+            opt!("load-scripts", "no");
+            opt!("osc", "no");
+            opt!("osd-bar", "no");
+        }
+        if !no_scripts && !use_mpv_config {
+            let script = crate::config::osc_script_path();
+            if script.exists() {
+                opt!("scripts", script.to_str().unwrap_or(""));
+                let fonts = crate::config::osc_fonts_dir();
+                opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
+            }
+        }
+        Ok(())
+    }) {
+        Ok(m) => m,
+        Err(e) => {
+            let msg = init_err.unwrap_or_else(|| format!("[player] mpv init error: {}", mpv_err_str(&e)));
+            return Err(msg);
+        }
+    };
+
+    unsafe {
+        libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), b"warn\0".as_ptr() as _);
+    }
+
+    // Set after init so user's mpv.conf cannot override these.
+    if config.headless {
+        let _ = mpv.set_property("vo", "null");
+        let _ = mpv.set_property("force-window", "no");
+    }
+
+    Ok(mpv)
+}
+
+fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_volume: u8) {
+    let mut st    = status.lock().unwrap();
+    let raw_max   = mpv.get_property::<i64>("volume-max").unwrap_or(130);
+    st.volume_max = raw_max * raw_max / 100;
+    let v   = (initial_volume as i64).clamp(0, st.volume_max);
+    let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+    let _   = mpv.set_property("volume", raw as f64);
+    st.volume = v;
+}
+
+fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
+    let _ = mpv.observe_property("time-pos",      Format::Double, 0);
+    let _ = mpv.observe_property("pause",         Format::Flag,   1);
+    let _ = mpv.observe_property("volume",        Format::Double, 2);
+    let _ = mpv.observe_property("sid",           Format::Int64,  3);
+    let _ = mpv.observe_property("mute",          Format::Flag,   4);
+    let _ = mpv.observe_property("aid",           Format::String, 5);
+    let _ = mpv.observe_property("video-params/h",Format::Int64,  6);
+    if use_mpv_config {
+        let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
+    }
+}
+
+fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
+    let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let handle = thread::spawn(move || {
+        let mut ticks: u32 = 0;
+        loop {
+            match stop_rx.recv_timeout(Duration::from_secs(10)) {
+                Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    ticks += 1;
+                    if !reporter.is_audio.load(Ordering::Relaxed) && ticks.is_multiple_of(3) {
+                        reporter.report_progress("TimeUpdate");
+                    } else {
+                        reporter.report_ping();
+                    }
+                }
+            }
+        }
+    });
+    ProgressGuard { stop_tx, handle: Some(handle) }
+}
+
+fn load_intro_times(client: &EmbyClient, item_id: &str) -> (i64, i64) {
+    if client.chapter_api_available {
+        client.get_intro_times(item_id).unwrap_or((0, 0))
+    } else {
+        (0, 0)
+    }
+}
+
+fn handle_intro(
+    ticks:       i64,
+    start:       i64,
+    end:         i64,
+    show_fired:  &mut bool,
+    hide_fired:  &mut bool,
+    always_skip: bool,
+    mpv:         &Mpv,
+    event_tx:    &mpsc::Sender<PlayerEvent>,
+) {
+    if end <= start { return; }
+    if !*show_fired && ticks >= start {
+        *show_fired = true;
+        if ticks < end {
+            let end_secs = end as f64 / TICKS_PER_SECOND as f64;
+            if always_skip {
+                let _ = mpv.set_property("time-pos", end_secs);
+            } else {
+                let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks: end });
+                let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
+            }
+        } else {
+            *hide_fired = true;
+        }
+    }
+    if !*hide_fired && ticks >= end {
+        *hide_fired = true;
+        let _ = event_tx.send(PlayerEvent::IntroEnded);
+        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+    }
+}
+
+// ── SingleSession ─────────────────────────────────────────────────────────────
+
+struct SingleSession {
+    config:   MpvSessionConfig,
+    reporter: SessionReporter,
+    event_tx: mpsc::Sender<PlayerEvent>,
+    status:   Arc<Mutex<PlayerStatus>>,
+    subs_off: Arc<AtomicBool>,
+    // loop state
+    quit_at:             Option<Instant>,
+    stop_reported:       bool,
+    stopped_event_sent:  bool,
+    mark_played_id:      Option<String>,
+    pending_load:        bool,
+    pending_resume_secs: Option<f64>,
+    last_seek_at:        Option<Instant>,
+    tracks_initialized:  bool,
+    osd_title:           String,
+    last_mouse_osd:      Option<Instant>,
+    last_valid_pos:      i64,
+    // next-up
+    series_id:     String,
+    season:        i64,
+    episode:       i64,
+    next_up_fired: bool,
+    next_up_armed: bool,
+    // intro
+    intro_start: i64,
+    intro_end:   i64,
+    intro_show:  bool,
+    intro_hide:  bool,
+}
+
+impl SingleSession {
+    fn new(
+        item:     &MediaItem,
+        reporter: SessionReporter,
+        config:   MpvSessionConfig,
+        status:   Arc<Mutex<PlayerStatus>>,
+        event_tx: mpsc::Sender<PlayerEvent>,
+        subs_off: Arc<AtomicBool>,
+    ) -> Self {
+        let is_audio       = item.is_audio();
+        let last_valid_pos = if is_audio { 0 } else { item.playback_position_ticks };
+        let (intro_start, intro_end) = load_intro_times(&reporter.client, &item.id);
+        let past = intro_end > 0 && last_valid_pos >= intro_end;
+        SingleSession {
+            osd_title: item.display_name(),
+            series_id: if item.item_type == "Episode" { item.series_id.clone() } else { String::new() },
+            season:    item.parent_index_number,
+            episode:   item.index_number,
+            last_valid_pos,
+            intro_start,
+            intro_end,
+            intro_show: past,
+            intro_hide: past,
+            config,
+            reporter,
+            event_tx,
+            status,
+            subs_off,
+            quit_at:             None,
+            stop_reported:       false,
+            stopped_event_sent:  false,
+            mark_played_id:      None,
+            pending_load:        false,
+            pending_resume_secs: None,
+            last_seek_at:        None,
+            tracks_initialized:  false,
+            last_mouse_osd:      None,
+            next_up_fired:       false,
+            next_up_armed:       false,
+        }
+    }
+
+    fn set_intro(&mut self, start: i64, end: i64, pos: i64) {
+        self.intro_start = start;
+        self.intro_end   = end;
+        let past = end > 0 && pos >= end;
+        self.intro_show  = past;
+        self.intro_hide  = past;
+    }
+
+    // Returns true if a pending quit should be cancelled (LoadNew arrived).
+    fn handle_command(&mut self, cmd: PlayerCommand, mpv: &Mpv) -> bool {
+        let mut cancel_stop = false;
+        match cmd {
+            PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
+                log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
+                let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title, &artist]);
+                log::warn!(target: "player", "next-up: script-message result={r:?}");
+            }
+            PlayerCommand::TogglePause => {
+                let p = self.status.lock().unwrap().paused;
+                let _ = mpv.set_property("pause", !p);
+            }
+            PlayerCommand::SetVolume(v) => {
+                let vol_max = self.status.lock().unwrap().volume_max;
+                let v = v.clamp(0, vol_max);
+                let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+                let _ = mpv.set_property("volume", raw as f64);
+                self.status.lock().unwrap().volume = v;
+                let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
+            }
+            PlayerCommand::NextUpDismiss => {
+                let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
+            }
+            PlayerCommand::SkipIntroDismiss => {
+                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+            }
+            PlayerCommand::Seek(secs) => {
+                let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
+                self.last_seek_at = Some(Instant::now());
+            }
+            PlayerCommand::SeekAbsolute(secs) => {
+                let _ = mpv.command("seek", &[&secs.to_string(), "absolute"]);
+                self.last_seek_at = Some(Instant::now());
+            }
+            PlayerCommand::SetAudio(id) => {
+                if id > 0 { let _ = mpv.set_property("aid", id); }
+                else       { let _ = mpv.set_property("aid", "no".to_string()); }
+                self.status.lock().unwrap().audio_id = id;
+                refresh_tracks(mpv, &self.status);
+            }
+            PlayerCommand::SetSub(id) => {
+                if id == 0 { let _ = mpv.set_property("sid", "no".to_string()); }
+                else        { let _ = mpv.set_property("sid", id); }
+                refresh_tracks(mpv, &self.status);
+                self.status.lock().unwrap().sub_id = id;
+            }
+            PlayerCommand::SetMute(m) => {
+                let _ = mpv.set_property("mute", m);
+                self.status.lock().unwrap().muted = m;
+            }
+            PlayerCommand::LoadNew { url, start_pos, item } => {
+                // Cancel any pending quit so the new file loads in the same window.
+                cancel_stop = true;
+                self.quit_at = None;
+
+                self.reporter.transition_to(&item, self.last_valid_pos);
+
+                self.last_valid_pos = item.playback_position_ticks;
+                self.osd_title      = item.display_name();
+                {
+                    let mut st = self.status.lock().unwrap();
+                    st.runtime_ticks  = item.runtime_ticks;
+                    st.position_ticks = item.playback_position_ticks;
+                    st.title          = self.osd_title.clone();
+                }
+                self.tracks_initialized = false;
+                self.stop_reported  = false;
+                self.pending_load   = true;
+                self.next_up_fired  = false;
+                self.next_up_armed  = false;
+                if item.item_type == "Episode" {
+                    self.series_id = item.series_id.clone();
+                    self.season    = item.parent_index_number;
+                    self.episode   = item.index_number;
+                } else {
+                    self.series_id = String::new();
+                }
+                let (s, e) = load_intro_times(&self.reporter.client, &item.id);
+                self.set_intro(s, e, item.playback_position_ticks);
+
+                if start_pos > 0.0 {
+                    let _ = mpv.set_property("start", format!("{:.0}", start_pos));
+                } else {
+                    let _ = mpv.set_property("start", "0");
+                }
+                let title_opt = mpv_title_opt(&item.display_name());
+                log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
+                if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
+                    log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
+                }
+                let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
+                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+            }
+            // Not applicable in single-item mode
+            PlayerCommand::JumpTo(_) | PlayerCommand::PlaylistRemove(_) | PlayerCommand::ReplacePlaylist { .. } => {}
+        }
+        cancel_stop
+    }
+
+    fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
+        let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
+        self.status.lock().unwrap().position_ticks = ticks;
+        if pos_secs > 0.0 { self.last_valid_pos = ticks; }
+
+        const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
+        if !self.next_up_fired {
+            if self.series_id.is_empty() {
+                if !self.next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                    self.next_up_armed = true;
+                    log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
+                }
+            } else {
+                let runtime = self.status.lock().unwrap().runtime_ticks;
+                if runtime > NEXT_UP_TICKS && ticks > runtime - NEXT_UP_TICKS {
+                    self.next_up_fired = true;
+                    log::warn!(target: "player", "next-up: threshold reached series={}", self.series_id);
+                    let _ = self.event_tx.send(PlayerEvent::NextUpThreshold {
+                        series_id: self.series_id.clone(),
+                        season:    self.season,
+                        episode:   self.episode,
+                    });
+                } else if !self.next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                    self.next_up_armed = true;
+                    log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
+                }
+            }
+        }
+
+        handle_intro(
+            ticks,
+            self.intro_start, self.intro_end,
+            &mut self.intro_show, &mut self.intro_hide,
+            self.config.always_skip_intro,
+            mpv, &self.event_tx,
+        );
+    }
+
+    fn on_playback_restart(&mut self, mpv: &Mpv) {
+        let event_name: &str;
+        if !self.tracks_initialized {
+            auto_select_tracks(mpv, &self.status, self.subs_off.load(Ordering::Relaxed));
+            self.tracks_initialized = true;
+            let _ = mpv.set_property("start", "0");
+            if let Some(secs) = self.pending_resume_secs.take() {
+                if secs > 0.0 {
+                    let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
+                    self.last_seek_at = Some(Instant::now());
+                }
+            }
+            if self.config.use_mpv_config {
+                let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);
+            }
+            event_name = "TimeUpdate";
+        } else {
+            // Any restart after init means a seek happened (via TUI or mpv OSC).
+            // Re-arm so a seek into/out-of the threshold is handled correctly.
+            self.next_up_fired = false;
+            self.next_up_armed = false;
+            if self.last_seek_at.take().is_some() && self.config.use_mpv_config {
+                let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+            }
+            event_name = "Seek";
+        }
+        let seek_settled = self.last_seek_at.is_none_or(|t| t.elapsed() > Duration::from_millis(500));
+        if self.quit_at.is_none() && seek_settled {
+            self.last_seek_at = None;
+            self.reporter.report_progress(event_name);
+        }
+    }
+
+    // Returns true if the event loop should `continue` (skip the rest of this iteration).
+    fn on_end_file(&mut self, reason: EndFileReason, progress: &mut ProgressGuard) -> bool {
+        if self.quit_at.is_some() { return true; }
+        if self.pending_load { self.pending_load = false; return true; }
+
+        if reason == mpv_end_file_reason::Error {
+            log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
+        }
+
+        let id = self.reporter.ids.lock().unwrap().0.clone();
+        let natural_end = reason == mpv_end_file_reason::Eof
+            && self.status.lock().unwrap().runtime_ticks > 0;
+
+        progress.stop_and_join();
+        self.reporter.report_stopped(self.last_valid_pos);
+        self.stop_reported = true;
+
+        if natural_end {
+            if !self.reporter.is_audio.load(Ordering::Relaxed) {
+                match self.reporter.client.mark_played(&id) {
+                    Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
+                    Err(e) => {
+                        log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
+                        self.mark_played_id = Some(id.clone());
+                    }
+                }
+            }
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                idx: 0,
+                position_ticks: 0,
+                played: !self.reporter.is_audio.load(Ordering::Relaxed),
+            });
+            self.stopped_event_sent = true;
+        }
+        false
+    }
+
+    fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
+        if !self.stop_reported {
+            progress.stop_and_join();
+            self.reporter.report_stopped(self.last_valid_pos);
+        }
+        let client = self.reporter.client.clone();
+        // Retry mark_played in a detached thread so Shutdown never blocks.
+        if let Some(mid) = self.mark_played_id.take() {
+            let c2 = client.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = c2.mark_played(&mid) {
+                    log::warn!(target: "player", "mark_played retry failed id={mid}: {e}");
+                } else {
+                    log::info!(target: "player", "mark_played retry ok id={mid}");
+                }
+            });
+        }
+        let runtime  = self.status.lock().unwrap().runtime_ticks;
+        let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
+        let near_end = !is_audio && runtime > 0 && self.last_valid_pos * 20 / runtime >= 19;
+        if near_end {
+            let id = self.reporter.ids.lock().unwrap().0.clone();
+            let c2 = client.clone();
+            std::thread::spawn(move || {
+                if let Err(e) = c2.mark_played(&id) {
+                    log::warn!(target: "player", "mark_played near_end failed id={id}: {e}");
+                } else {
+                    log::info!(target: "player", "mark_played near_end ok id={id}");
+                }
+            });
+        }
+        self.status.lock().unwrap().active = false;
+        if !self.stopped_event_sent {
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                idx: 0,
+                position_ticks: self.last_valid_pos,
+                played: near_end,
+            });
+        }
+    }
+
+    fn run(mut self, mpv: Mpv, stop_rx: mpsc::Receiver<()>, cmd_rx: mpsc::Receiver<PlayerCommand>, mut progress: ProgressGuard) {
+        loop {
+            // Process commands before checking the stop signal so that a LoadNew
+            // arriving in the same iteration (e.g. WS Stop then Play) can cancel
+            // the quit instead of fighting with it.
+            let mut cancel_stop = false;
+            while let Ok(cmd) = cmd_rx.try_recv() {
+                cancel_stop |= self.handle_command(cmd, &mpv);
+            }
+
+            if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
+                progress.stop_and_join();
+                if !self.stop_reported {
+                    self.reporter.report_stopped(self.last_valid_pos);
+                    self.stop_reported = true;
+                }
+                let _ = mpv.command("quit", &[]);
+                self.quit_at = Some(Instant::now());
+            }
+
+            if self.quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
+                let runtime  = self.status.lock().unwrap().runtime_ticks;
+                let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
+                let near_end = !is_audio && runtime > 0 && self.last_valid_pos * 20 / runtime >= 19;
+                self.status.lock().unwrap().active = false;
+                let _ = self.event_tx.send(PlayerEvent::Stopped {
+                    idx: 0,
+                    position_ticks: self.last_valid_pos,
+                    played: near_end,
+                });
+                return;
+            }
+
+            match mpv.wait_event(0.5) {
+                Some(Ok(Event::PropertyChange { name: "volume", change: PropertyData::Double(vol), .. })) => {
+                    self.status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
+                }
+                Some(Ok(Event::PropertyChange { change: PropertyData::Double(pos_secs), .. })) => {
+                    self.on_time_pos(pos_secs, &mpv);
+                }
+                Some(Ok(Event::PropertyChange { name: "pause", change: PropertyData::Flag(paused), .. })) => {
+                    self.status.lock().unwrap().paused = paused;
+                    if self.quit_at.is_none() {
+                        let event_name = if paused { "Pause" } else { "Unpause" };
+                        self.reporter.report_progress(event_name);
+                    }
+                }
+                Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
+                    self.status.lock().unwrap().sub_id = id;
+                }
+                Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
+                    refresh_tracks(&mpv, &self.status);
+                }
+                Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
+                    self.status.lock().unwrap().muted = m;
+                }
+                Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
+                    self.status.lock().unwrap().video_height = h;
+                }
+                Some(Ok(Event::PlaybackRestart)) => {
+                    self.on_playback_restart(&mpv);
+                }
+                Some(Ok(Event::EndFile(reason))) => {
+                    if self.on_end_file(reason, &mut progress) { continue; }
+                }
+                Some(Ok(Event::LogMessage { prefix, level, text, .. })) => {
+                    let t = text.trim_end();
+                    if !t.is_empty() {
+                        log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
+                    }
+                }
+                Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
+                    log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
+                    let _ = self.event_tx.send(PlayerEvent::NextUpPlay);
+                }
+                Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-skip-intro-play") => {
+                    let _ = self.event_tx.send(PlayerEvent::SkipIntroPlay);
+                }
+                Some(Ok(Event::ClientMessage(args))) if self.config.use_mpv_config && args.first().copied() == Some("mouse-moved") => {
+                    let show = self.last_mouse_osd.is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
+                    if show {
+                        let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+                        self.last_mouse_osd = Some(Instant::now());
+                    }
+                }
+                Some(Ok(Event::Shutdown)) => {
+                    self.on_shutdown(&mut progress);
+                    return;
+                }
+                Some(Err(e)) => {
+                    log::warn!(target: "player", "event error: {}", mpv_err_str(&e));
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+// ── PlaylistSession ───────────────────────────────────────────────────────────
+
+struct PlaylistSession {
+    config:     MpvSessionConfig,
+    reporter:   SessionReporter,
+    event_tx:   mpsc::Sender<PlayerEvent>,
+    status:     Arc<Mutex<PlayerStatus>>,
+    subs_off:   Arc<AtomicBool>,
+    server_url: String,
+    token:      String,
+    items:      Vec<MediaItem>,
+    n:          usize,
+    // loop state
+    current_idx:            usize,
+    forced_idx:             Option<usize>,
+    quit_at:                Option<Instant>,
+    last_seek_at:           Option<Instant>,
+    last_valid_pos:         i64,
+    tracks_initialized:     bool,
+    playlist_cancelled:     bool,
+    pending_load:           u8,
+    pending_initial_jump:   bool,
+    stop_reported:          bool,
+    osd_title:              String,
+    last_mouse_osd:         Option<Instant>,
+    pending_resume_secs:    Option<f64>,
+    playlist_next_up_fired: bool,
+    playlist_next_up_armed: bool,
+    next_up_jump:           bool,
+    stopped_near_end:       bool,
+    // intro
+    intro_start: i64,
+    intro_end:   i64,
+    intro_show:  bool,
+    intro_hide:  bool,
+}
+
+impl PlaylistSession {
+    fn new(
+        items:      Vec<MediaItem>,
+        start_idx:  usize,
+        reporter:   SessionReporter,
+        config:     MpvSessionConfig,
+        status:     Arc<Mutex<PlayerStatus>>,
+        event_tx:   mpsc::Sender<PlayerEvent>,
+        subs_off:   Arc<AtomicBool>,
+        server_url: String,
+        token:      String,
+    ) -> Self {
+        let n          = items.len();
+        let initial_pos = items[start_idx].playback_position_ticks;
+        let (intro_start, intro_end) = load_intro_times(&reporter.client, &items[start_idx].id);
+        let past = intro_end > 0 && initial_pos >= intro_end;
+        let pending_resume_secs = if !items[start_idx].is_audio() && items[start_idx].should_resume() {
+            Some(items[start_idx].resume_seconds())
+        } else {
+            None
+        };
+        let osd_title = items[start_idx].display_name();
+        PlaylistSession {
+            config,
+            reporter,
+            event_tx,
+            status,
+            subs_off,
+            server_url,
+            token,
+            n,
+            current_idx:            start_idx,
+            forced_idx:             None,
+            quit_at:                None,
+            last_seek_at:           None,
+            last_valid_pos:         initial_pos,
+            tracks_initialized:     false,
+            playlist_cancelled:     false,
+            pending_load:           0,
+            pending_initial_jump:   start_idx > 0,
+            stop_reported:          false,
+            last_mouse_osd:         None,
+            playlist_next_up_fired: false,
+            playlist_next_up_armed: false,
+            next_up_jump:           false,
+            stopped_near_end:       false,
+            intro_start,
+            intro_end,
+            intro_show: past,
+            intro_hide: past,
+            osd_title,
+            pending_resume_secs,
+            items,
+        }
+    }
+
+    fn set_intro(&mut self, start: i64, end: i64, pos: i64) {
+        self.intro_start = start;
+        self.intro_end   = end;
+        let past = end > 0 && pos >= end;
+        self.intro_show  = past;
+        self.intro_hide  = past;
+    }
+
+    fn handle_command(&mut self, cmd: PlayerCommand, mpv: &Mpv) -> bool {
+        let mut cancel_stop = false;
+        match cmd {
+            PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
+                log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
+                let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title, &artist]);
+                log::warn!(target: "player", "next-up: script-message result={r:?}");
+            }
+            PlayerCommand::TogglePause => {
+                let p = self.status.lock().unwrap().paused;
+                let _ = mpv.set_property("pause", !p);
+            }
+            PlayerCommand::JumpTo(idx) => {
+                if idx < self.n {
+                    // mpv playlist indices match items indices directly.
+                    self.forced_idx = Some(idx);
+                    {
+                        let mut s = self.status.lock().unwrap();
+                        s.current_idx    = idx;
+                        s.position_ticks = 0;
+                        s.runtime_ticks  = self.items[idx].runtime_ticks;
+                        s.title          = self.items[idx].display_name();
+                    }
+                    let _ = mpv.set_property("playlist-pos", idx as i64);
+                }
+            }
+            PlayerCommand::PlaylistRemove(idx) => {
+                if idx < self.n {
+                    let _ = mpv.command("playlist-remove", &[&idx.to_string()]);
+                    self.items.remove(idx);
+                    self.n -= 1;
+                    if idx < self.current_idx {
+                        self.current_idx -= 1;
+                        self.status.lock().unwrap().current_idx = self.current_idx;
+                    }
+                    if let Some(fi) = self.forced_idx {
+                        self.forced_idx = if idx == fi { None }
+                                          else if idx < fi { Some(fi - 1) }
+                                          else { Some(fi) };
+                    }
+                }
+            }
+            PlayerCommand::NextUpDismiss => {
+                let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
+            }
+            PlayerCommand::SkipIntroDismiss => {
+                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+            }
+            PlayerCommand::ReplacePlaylist { items: new_items, start_idx } => {
+                cancel_stop = true;
+                if new_items.is_empty() { return cancel_stop; }
+                // report_stopped for current item; is_audio zeroing handled inside.
+                self.reporter.report_stopped(self.last_valid_pos);
+                self.stop_reported = true;
+
+                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+                // Remove all old playlist entries except the current one so that
+                // the subsequent loadfile "replace" starts from a clean slate.
+                // Without this, old entries remain and playlist-pos = start_idx
+                // lands on a stale file instead of new_items[start_idx].
+                let _ = mpv.command("playlist-clear", &[]);
+
+                let start_idx = start_idx.min(new_items.len() - 1);
+                for (i, item) in new_items.iter().enumerate() {
+                    let ep = if item.is_audio() { "Audio" } else { "Videos" };
+                    let url = format!("{}/{}/{}/stream?static=true&api_key={}", self.server_url, ep, item.id, self.token);
+                    let mode = if i == 0 { "replace" } else { "append-play" };
+                    let title_opt = mpv_title_opt(&item.display_name());
+                    if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
+                        log::warn!(target: "player", "ReplacePlaylist loadfile error: {}", mpv_err_str(&e));
+                    }
+                }
+                let _ = mpv.set_property("start", "0");
+                // loadfile "replace" displaces the current file (EndFile #1).
+                // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
+                // Use = not += so a stale pending_load from a prior operation never stacks.
+                // Clear pending_initial_jump too since any in-flight initial jump is superseded.
+                self.pending_initial_jump = false;
+                self.pending_load = if start_idx > 0 { 2 } else { 1 };
+                if start_idx > 0 {
+                    let _ = mpv.set_property("playlist-pos", start_idx as i64);
+                }
+
+                self.last_valid_pos         = new_items[start_idx].playback_position_ticks;
+                self.tracks_initialized     = false;
+                // stop_reported stays true until pending_load drains to 0 in on_end_file,
+                // preventing a duplicate report_stopped for the displaced file's EndFile(Quit).
+                self.playlist_cancelled     = false;
+                self.forced_idx             = None;
+                self.playlist_next_up_fired = false;
+                self.playlist_next_up_armed = false;
+                self.next_up_jump           = false;
+                self.osd_title              = new_items[start_idx].display_name();
+                self.pending_resume_secs    = if !new_items[start_idx].is_audio() && new_items[start_idx].should_resume() {
+                    Some(new_items[start_idx].resume_seconds())
+                } else {
+                    None
+                };
+                let (s, e) = load_intro_times(&self.reporter.client, &new_items[start_idx].id);
+                self.set_intro(s, e, new_items[start_idx].playback_position_ticks);
+
+                self.reporter.start_item(&new_items[start_idx]);
+                self.n          = new_items.len();
+                self.current_idx = start_idx;
+                self.items      = new_items;
+            }
+            PlayerCommand::SetVolume(v) => {
+                let vol_max = self.status.lock().unwrap().volume_max;
+                let v = v.clamp(0, vol_max);
+                let raw = (10.0 * (v as f64).sqrt()).round() as i64;
+                let _ = mpv.set_property("volume", raw as f64);
+                self.status.lock().unwrap().volume = v;
+                let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
+            }
+            PlayerCommand::Seek(secs) => {
+                let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
+                self.last_seek_at = Some(Instant::now());
+            }
+            PlayerCommand::SeekAbsolute(secs) => {
+                let _ = mpv.command("seek", &[&secs.to_string(), "absolute"]);
+                self.last_seek_at = Some(Instant::now());
+            }
+            PlayerCommand::SetAudio(id) => {
+                if id > 0 { let _ = mpv.set_property("aid", id); }
+                else       { let _ = mpv.set_property("aid", "no".to_string()); }
+                self.status.lock().unwrap().audio_id = id;
+                refresh_tracks(mpv, &self.status);
+            }
+            PlayerCommand::SetSub(id) => {
+                if id == 0 { let _ = mpv.set_property("sid", "no".to_string()); }
+                else        { let _ = mpv.set_property("sid", id); }
+                refresh_tracks(mpv, &self.status);
+                self.status.lock().unwrap().sub_id = id;
+            }
+            PlayerCommand::SetMute(m) => {
+                let _ = mpv.set_property("mute", m);
+                self.status.lock().unwrap().muted = m;
+            }
+            PlayerCommand::LoadNew { url, start_pos, item } => {
+                cancel_stop = true;
+                self.quit_at          = None;
+                self.playlist_cancelled = true;
+
+                self.reporter.transition_to(&item, self.last_valid_pos);
+
+                self.last_valid_pos    = item.playback_position_ticks;
+                self.tracks_initialized = false;
+                self.stop_reported     = false;
+                self.pending_load      = 1;
+
+                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+                let (s, e) = load_intro_times(&self.reporter.client, &item.id);
+                self.set_intro(s, e, item.playback_position_ticks);
+
+                if start_pos > 0.0 {
+                    let _ = mpv.set_property("start", format!("{:.0}", start_pos));
+                } else {
+                    let _ = mpv.set_property("start", "0");
+                }
+                let title_opt = mpv_title_opt(&item.display_name());
+                log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
+                if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
+                    log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
+                }
+            }
+        }
+        cancel_stop
+    }
+
+    fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
+        let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
+        self.status.lock().unwrap().position_ticks = ticks;
+        // Don't update last_valid_pos while a resume seek is pending: mpv fires
+        // time-pos=0 before the seek lands, which would overwrite the correct position.
+        if pos_secs > 0.0 && self.pending_resume_secs.is_none() {
+            self.last_valid_pos = ticks;
+        }
+
+        // Playlist next-up: match Emby Web's timing from videoosd.js.
+        // 90 s before end regardless of runtime length.
+        // Minimum episode: 10 min. Minimum remaining when shown: 20 s.
+        const MIN_RUNTIME_TICKS: i64 = 600 * TICKS_PER_SECOND;
+        const MIN_REMAIN_TICKS:  i64 = 20  * TICKS_PER_SECOND;
+        if self.current_idx + 1 < self.items.len() {
+            let runtime = self.status.lock().unwrap().runtime_ticks;
+            if runtime > 0 {
+                let show_at   = runtime - 60 * TICKS_PER_SECOND;
+                let remaining = runtime - ticks;
+                if self.playlist_next_up_fired && ticks < show_at {
+                    self.playlist_next_up_fired = false;
+                    self.playlist_next_up_armed = false;
+                }
+                if !self.playlist_next_up_fired && runtime >= MIN_RUNTIME_TICKS {
+                    if remaining >= MIN_REMAIN_TICKS && ticks >= show_at {
+                        self.playlist_next_up_fired = true;
+                        let _ = self.event_tx.send(PlayerEvent::PlaylistNextUp { next_idx: self.current_idx + 1 });
+                    } else if !self.playlist_next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                        self.playlist_next_up_armed = true;
+                        log::info!(target: "player", "playlist next-up armed idx={}", self.current_idx + 1);
+                    }
+                }
+            }
+        }
+
+        handle_intro(
+            ticks,
+            self.intro_start, self.intro_end,
+            &mut self.intro_show, &mut self.intro_hide,
+            self.config.always_skip_intro,
+            mpv, &self.event_tx,
+        );
+    }
+
+    fn on_playback_restart(&mut self, mpv: &Mpv) {
+        if self.pending_initial_jump {
+            // mpv ignored playlist-pos before the event loop started; now that
+            // playback is live (first PlaybackRestart), the jump is honored.
+            self.pending_initial_jump = false;
+            self.pending_load += 1;
+            let _ = mpv.set_property("playlist-pos", self.current_idx as i64);
+            // Skip normal handling; wait for the next PlaybackRestart (for start_idx item).
+            return;
+        }
+        if !self.tracks_initialized {
+            auto_select_tracks(mpv, &self.status, self.subs_off.load(Ordering::Relaxed));
+            self.tracks_initialized = true;
+            if let Some(secs) = self.pending_resume_secs.take() {
+                let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
+                self.last_seek_at = Some(Instant::now());
+            }
+            if self.config.use_mpv_config {
+                let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);
+            }
+        } else if self.last_seek_at.take().is_some() && self.config.use_mpv_config {
+            let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+        }
+        let seek_settled = self.last_seek_at.is_none_or(|t| t.elapsed() > Duration::from_millis(500));
+        if self.quit_at.is_none() && seek_settled {
+            self.last_seek_at = None;
+            if !self.reporter.is_audio.load(Ordering::Relaxed) {
+                self.reporter.report_progress("TimeUpdate");
+            }
+        }
+    }
+
+    // Returns true if the event loop should `continue`.
+    fn on_end_file(&mut self, reason: EndFileReason, mpv: &Mpv, progress: &mut ProgressGuard) -> bool {
+        if self.quit_at.is_some() { return true; }
+        if self.pending_load > 0 {
+            self.pending_load -= 1;
+            // Once all pending EndFiles from a ReplacePlaylist are drained, the new item's
+            // lifecycle begins — reset stop_reported so on_end_file/on_shutdown can report it.
+            if self.pending_load == 0 { self.stop_reported = false; }
+            return true;
+        }
+
+        if reason == mpv_end_file_reason::Error {
+            log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
+        }
+
+        let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
+        let runtime            = self.status.lock().unwrap().runtime_ticks;
+
+        if self.playlist_cancelled || reason == mpv_end_file_reason::Quit {
+            let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
+            let near_end    = !natural_end && !completed_is_audio
+                && runtime > 0
+                && self.last_valid_pos * 20 / runtime >= 19;
+            if !self.stop_reported {
+                progress.stop_and_join();
+                self.reporter.report_stopped(self.last_valid_pos);
+                self.stop_reported = true;
+            }
+            if (natural_end || near_end) && !completed_is_audio {
+                let id = self.reporter.ids.lock().unwrap().0.clone();
+                if let Err(e) = self.reporter.client.mark_played(&id) {
+                    log::warn!(target: "player", "mark_played failed id={id}: {e}");
+                }
+            }
+            self.stopped_near_end = near_end;
+            return true; // wait for Shutdown to fire PlayerEvent::Stopped
+        }
+
+        let completed_idx = self.current_idx;
+        let natural       = reason == mpv_end_file_reason::Eof
+            && self.items[completed_idx].runtime_ticks > 0;
+        // Also treat as played if user skipped within the last 5% of runtime.
+        let near_end = !natural && !completed_is_audio
+            && self.items[completed_idx].runtime_ticks > 0
+            && self.last_valid_pos * 20 / self.items[completed_idx].runtime_ticks >= 19;
+        let was_next_up   = std::mem::replace(&mut self.next_up_jump, false);
+        let played_out    = (natural || near_end || was_next_up) && !completed_is_audio;
+        let consume_track = (natural || near_end || was_next_up) && !completed_is_audio;
+        let completed_pos = if completed_is_audio || natural || near_end || was_next_up { 0 } else { self.last_valid_pos };
+
+        let next_idx = self.forced_idx.take().unwrap_or(self.current_idx + 1);
+
+        if next_idx >= self.n {
+            progress.stop_and_join();
+            self.status.lock().unwrap().active = false;
+            self.reporter.report_stopped(completed_pos);
+            if played_out {
+                if let Err(e) = self.reporter.client.mark_played(&self.items[completed_idx].id) {
+                    log::warn!(target: "player", "mark_played failed id={}: {e}", self.items[completed_idx].id);
+                }
+            }
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                idx: completed_idx,
+                position_ticks: completed_pos,
+                played: played_out,
+            });
+            return false; // signals run() to return
+        }
+
+        // Update UI to the next track immediately, before slow network calls.
+        self.current_idx       = next_idx;
+        self.last_valid_pos    = self.items[self.current_idx].playback_position_ticks;
+        self.tracks_initialized = false;
+        {
+            let mut s = self.status.lock().unwrap();
+            s.position_ticks = 0;
+            s.runtime_ticks  = self.items[self.current_idx].runtime_ticks;
+            s.current_idx    = self.current_idx;
+            s.title          = self.items[self.current_idx].display_name();
+        }
+
+        self.reporter.report_stopped(completed_pos);
+        if played_out {
+            if let Err(e) = self.reporter.client.mark_played(&self.items[completed_idx].id) {
+                log::warn!(target: "player", "mark_played failed id={}: {e}", self.items[completed_idx].id);
+            }
+        }
+
+        let _ = mpv.set_property("start", "0");
+        self.playlist_next_up_fired = false;
+        self.playlist_next_up_armed = false;
+        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+
+        self.reporter.start_item(&self.items[self.current_idx]);
+
+        let (s, e) = load_intro_times(&self.reporter.client, &self.items[self.current_idx].id);
+        self.set_intro(s, e, self.items[self.current_idx].playback_position_ticks);
+
+        self.osd_title = self.items[self.current_idx].display_name();
+        if !self.items[self.current_idx].is_audio() && self.items[self.current_idx].should_resume() {
+            self.pending_resume_secs = Some(self.items[self.current_idx].resume_seconds());
+        }
+
+        let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
+            idx: completed_idx,
+            position_ticks: completed_pos,
+            played: played_out,
+            consume: consume_track,
+        });
+        let _ = self.event_tx.send(PlayerEvent::TrackChanged(self.current_idx));
+        false
+    }
+
+    fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
+        if !self.stop_reported {
+            progress.stop_and_join();
+            self.reporter.report_stopped(self.last_valid_pos);
+        }
+        self.status.lock().unwrap().active = false;
+        let _ = self.event_tx.send(PlayerEvent::Stopped {
+            idx: self.current_idx,
+            position_ticks: self.last_valid_pos,
+            played: self.stopped_near_end,
+        });
+    }
+
+    fn run(mut self, mpv: Mpv, stop_rx: mpsc::Receiver<()>, cmd_rx: mpsc::Receiver<PlayerCommand>, mut progress: ProgressGuard) {
+        loop {
+            let mut cancel_stop = false;
+            while let Ok(cmd) = cmd_rx.try_recv() {
+                cancel_stop |= self.handle_command(cmd, &mpv);
+            }
+
+            if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
+                progress.stop_and_join();
+                if !self.stop_reported {
+                    self.reporter.report_stopped(self.last_valid_pos);
+                    self.stop_reported = true;
+                }
+                let _ = mpv.command("quit", &[]);
+                self.quit_at = Some(Instant::now());
+            }
+
+            if self.quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
+                self.status.lock().unwrap().active = false;
+                let _ = self.event_tx.send(PlayerEvent::Stopped {
+                    idx: self.current_idx,
+                    position_ticks: self.last_valid_pos,
+                    played: self.stopped_near_end,
+                });
+                return;
+            }
+
+            match mpv.wait_event(0.5) {
+                Some(Ok(Event::PropertyChange { name: "volume", change: PropertyData::Double(vol), .. })) => {
+                    self.status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
+                }
+                Some(Ok(Event::PropertyChange { change: PropertyData::Double(pos_secs), .. })) => {
+                    self.on_time_pos(pos_secs, &mpv);
+                }
+                Some(Ok(Event::PropertyChange { name: "pause", change: PropertyData::Flag(paused), .. })) => {
+                    self.status.lock().unwrap().paused = paused;
+                    if self.quit_at.is_none() {
+                        let event_name = if paused { "Pause" } else { "Unpause" };
+                        self.reporter.report_progress(event_name);
+                    }
+                }
+                Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
+                    self.status.lock().unwrap().sub_id = id;
+                }
+                Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
+                    refresh_tracks(&mpv, &self.status);
+                }
+                Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
+                    self.status.lock().unwrap().muted = m;
+                }
+                Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
+                    self.status.lock().unwrap().video_height = h;
+                }
+                Some(Ok(Event::PlaybackRestart)) => {
+                    self.on_playback_restart(&mpv);
+                }
+                Some(Ok(Event::EndFile(reason))) => {
+                    let should_continue = self.on_end_file(reason, &mpv, &mut progress);
+                    // on_end_file returns false both for "continue normally" and for
+                    // "end of playlist — return from thread". Detect end-of-playlist
+                    // by checking active flag which on_end_file sets to false.
+                    if !should_continue && !self.status.lock().unwrap().active {
+                        return;
+                    }
+                    if should_continue { continue; }
+                }
+                Some(Ok(Event::LogMessage { prefix, level, text, .. })) => {
+                    let t = text.trim_end();
+                    if !t.is_empty() {
+                        log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
+                    }
+                }
+                Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
+                    log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
+                    self.next_up_jump = true;
+                    let _ = self.event_tx.send(PlayerEvent::NextUpPlay);
+                }
+                Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-skip-intro-play") => {
+                    let _ = self.event_tx.send(PlayerEvent::SkipIntroPlay);
+                }
+                Some(Ok(Event::ClientMessage(args))) if self.config.use_mpv_config && args.first().copied() == Some("mouse-moved") => {
+                    let show = self.last_mouse_osd.is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
+                    if show {
+                        let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+                        self.last_mouse_osd = Some(Instant::now());
+                    }
+                }
+                Some(Ok(Event::Shutdown)) => {
+                    self.on_shutdown(&mut progress);
+                    return;
+                }
+                Some(Err(e)) => {
+                    log::warn!(target: "player", "event error: {}", mpv_err_str(&e));
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+// ── Player ────────────────────────────────────────────────────────────────────
+
 pub struct Player {
     server_url: String,
     token: String,
@@ -287,7 +1537,7 @@ impl Player {
     }
 
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
-        // If a video is already playing, load the new file into the existing mpv window
+        // If a video is already playing, load the new file into the existing mpv window.
         if self.status.lock().unwrap().active {
             let ep = if item.is_audio() { "Audio" } else { "Videos" };
             let url = format!(
@@ -298,10 +1548,10 @@ impl Player {
             {
                 let mut st = self.status.lock().unwrap();
                 st.position_ticks = item.playback_position_ticks;
-                st.runtime_ticks = item.runtime_ticks;
-                st.paused = false;
-                st.current_idx = 0;
-                st.title = item.display_name();
+                st.runtime_ticks  = item.runtime_ticks;
+                st.paused         = false;
+                st.current_idx    = 0;
+                st.title          = item.display_name();
             }
             self.send_command(PlayerCommand::LoadNew {
                 url,
@@ -314,599 +1564,87 @@ impl Player {
         self.stop();
         self.join();
 
-        let item = item.clone();
-        let is_audio = item.is_audio();
-        let ep = if is_audio { "Audio" } else { "Videos" };
-        let url = format!(
-            "{}/{}/{}/stream?static=true&api_key={}",
-            self.server_url, ep, item.id, self.token
-        );
+        let item      = item.clone();
+        let is_audio  = item.is_audio();
+        let headless  = !self.show_audio_window && is_audio;
+        let item_pos  = if is_audio { 0 } else { item.playback_position_ticks };
         let start_pos = if is_audio || !item.should_resume() { 0.0 } else { item.resume_seconds() };
-        let item_pos = if is_audio { 0 } else { item.playback_position_ticks };
-        let title = item.display_name();
-        let headless = !self.show_audio_window && is_audio;
-        let use_mpv_config = self.use_mpv_config;
-        let no_scripts = self.no_scripts;
-        let always_skip_intro = self.always_skip_intro;
-        let initial_volume = initial_volume;
-        let event_tx = self.event_tx.clone();
-        let status = self.status.clone();
-        let ws_tx = self.ws_tx.clone();
-        let subs_off = self.subs_off.clone();
+        let ep        = if is_audio { "Audio" } else { "Videos" };
+        let url       = format!("{}/{}/{}/stream?static=true&api_key={}", self.server_url, ep, item.id, self.token);
+        let title     = item.display_name();
+
+        let config = MpvSessionConfig {
+            headless,
+            use_mpv_config:    self.use_mpv_config,
+            no_scripts:        self.no_scripts,
+            always_skip_intro: self.always_skip_intro,
+        };
+        let status           = self.status.clone();
+        let event_tx         = self.event_tx.clone();
+        let ws_tx            = self.ws_tx.clone();
+        let subs_off         = self.subs_off.clone();
         let is_playlist_mode = self.is_playlist_mode.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
         {
             let mut st = status.lock().unwrap();
             st.position_ticks = item_pos;
-            st.runtime_ticks = item.runtime_ticks;
-            st.paused = false;
-            st.current_idx = 0;
-            st.active = true;
-            st.title = title.clone();
+            st.runtime_ticks  = item.runtime_ticks;
+            st.paused         = false;
+            st.current_idx    = 0;
+            st.active         = true;
+            st.title          = title.clone();
         }
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         *self.stop_tx.lock().unwrap() = Some(stop_tx);
-
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
         let handle = thread::spawn(move || {
             is_playlist_mode.store(false, Ordering::Relaxed);
-            let (session_id_str, msid_str) = {
-                let (sid, msid) = client.get_playback_info(&item.id);
-                client.report_start(&item, &msid, &sid);
-                (sid, msid)
+
+            let mpv = match init_mpv(&config) {
+                Ok(m)  => m,
+                Err(e) => { log::error!(target: "player", "{}", e); return; }
             };
-
-            let current_item_id = Arc::new(Mutex::new(item.id.clone()));
-            let current_msid    = Arc::new(Mutex::new(msid_str));
-            let current_sid     = Arc::new(Mutex::new(session_id_str));
-
-            let ipc_path = crate::config::mpv_ipc_path();
-            let ipc_existed = std::path::Path::new(&ipc_path).exists();
-            if ipc_existed {
-                let _ = std::fs::remove_file(&ipc_path);
-                log::info!(target: "player", "init: removed stale ipc socket {}", ipc_path);
-            }
-            log::info!(target: "player", "init: ipc={} (existed={})", ipc_path, ipc_existed);
-
-            let mut init_err: Option<String> = None;
-            let mpv = match Mpv::with_initializer(|init| {
-                macro_rules! opt {
-                    ($k:expr, $v:expr) => {{
-                        let r = init.set_option($k, $v);
-                        if let Err(ref e) = r { init_err = Some(format!("[player] set_option('{}') failed: {}", $k, mpv_err_str(e))); }
-                        r?;
-                    }};
-                }
-                opt!("config", "yes");
-                opt!("input-ipc-server", ipc_path.as_str());
-                opt!("input-default-bindings", "yes");
-                opt!("input-vo-keyboard", "yes");
-                opt!("wayland-app-id", "mbv");
-                opt!("demuxer-max-bytes", "50M");
-                opt!("demuxer-max-back-bytes", "10M");
-                opt!("gapless-audio", "weak");
-                if no_scripts || !use_mpv_config {
-                    opt!("load-scripts", "no");
-                    opt!("osc", "no");
-                    opt!("osd-bar", "no");
-                }
-                if !no_scripts && !use_mpv_config {
-                    let script = crate::config::osc_script_path();
-                    if script.exists() {
-                        opt!("scripts", script.to_str().unwrap_or(""));
-                        let fonts = crate::config::osc_fonts_dir();
-                        opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
-                    }
-                }
-                Ok(())
-            }) {
-                Ok(m) => m,
-                Err(e) => {
-                    let msg = init_err.unwrap_or_else(|| format!("[player] mpv init error: {}", mpv_err_str(&e)));
-                    log::error!(target: "player", "{}", msg);
-                    return;
-                }
-            };
-
-            unsafe {
-                libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), b"warn\0".as_ptr() as _);
-            }
-
-            // Set after init so user's mpv.conf cannot override these.
-            if headless {
-                let _ = mpv.set_property("vo", "null");
-                let _ = mpv.set_property("force-window", "no");
-            }
-
-            {
-                let mut st = status.lock().unwrap();
-                let raw_max   = mpv.get_property::<i64>("volume-max").unwrap_or(130);
-                st.volume_max = raw_max * raw_max / 100;
-                let v = (initial_volume as i64).clamp(0, st.volume_max);
-                let raw = (10.0 * (v as f64).sqrt()).round() as i64;
-                let _ = mpv.set_property("volume", raw as f64);
-                st.volume = v;
-            }
+            init_volume(&mpv, &status, initial_volume);
 
             if start_pos > 0.0 {
                 let _ = mpv.set_property("start", format!("{:.0}", start_pos));
             }
-
             let title_opt = mpv_title_opt(&title);
             log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
             if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
                 log::warn!(target: "player", "loadfile error: {} | url={url} opts={title_opt:?}", mpv_err_str(&e));
                 return;
             }
+            observe_properties(&mpv, config.use_mpv_config);
 
-            let _ = mpv.observe_property("time-pos", Format::Double, 0);
-            let _ = mpv.observe_property("pause", Format::Flag, 1);
-            let _ = mpv.observe_property("volume", Format::Double, 2);
-            let _ = mpv.observe_property("sid", Format::Int64, 3);
-            let _ = mpv.observe_property("mute", Format::Flag, 4);
-            let _ = mpv.observe_property("aid", Format::String, 5);
-            let _ = mpv.observe_property("video-params/h", Format::Int64, 6);
-            if use_mpv_config {
-                let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
-            }
-
-            let client_progress = client.clone();
-            let cid_p   = current_item_id.clone();
-            let cmsid_p = current_msid.clone();
-            let csid_p  = current_sid.clone();
-            let status_p = status.clone();
-            let ws_tx_p = ws_tx.clone();
-            let (progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
-            let mut progress_handle = Some(thread::spawn(move || {
-                let mut ticks: u32 = 0;
-                loop {
-                    match progress_stop_rx.recv_timeout(Duration::from_secs(10)) {
-                        Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                        Err(mpsc::RecvTimeoutError::Timeout) => {
-                            ticks += 1;
-                            let sid = csid_p.lock().unwrap().clone();
-                            if !is_audio && ticks.is_multiple_of(3) {
-                                let (pos, paused) = {
-                                    let s = status_p.lock().unwrap();
-                                    (s.position_ticks, s.paused)
-                                };
-                                let id   = cid_p.lock().unwrap().clone();
-                                let msid = cmsid_p.lock().unwrap().clone();
-                                if let Some(ref tx) = ws_tx_p {
-                                    client_progress.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx);
-                                } else {
-                                    client_progress.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate");
-                                }
-                            } else {
-                                client_progress.report_ping(&sid);
-                            }
-                        }
-                    }
-                }
-            }));
-
-            let mut quit_at: Option<Instant> = None;
-            let mut stop_reported = false;
-            let mut stopped_event_sent = false;
-            let mut mark_played_id: Option<String> = None; // set when natural end; retry in Shutdown if needed
-            let mut pending_load = false;
-            let mut pending_resume_secs: Option<f64> = None;
-            let mut last_seek_at: Option<Instant> = None;
-            let mut tracks_initialized = false;
-            let mut current_osd_title = item.display_name();
-            let mut last_mouse_osd: Option<Instant> = None;
-            // mpv fires time-pos=0 when closing a file, before EndFile; track the last
-            // non-zero position so report_stopped sends the real position, not 0.
-            let mut last_valid_pos: i64 = item_pos;
-            let mut series_id_for_next_up = if item.item_type == "Episode" { item.series_id.clone() } else { String::new() };
-            let mut season_for_next_up   = item.parent_index_number;
-            let mut episode_for_next_up  = item.index_number;
-            let mut next_up_fired = false;
-            let mut next_up_armed_logged = false;
-            let mut intro_start_ticks: i64 = 0;
-            let mut intro_end_ticks: i64   = 0;
-            if client.chapter_api_available {
-                if let Some((s, e)) = client.get_intro_times(&item.id) {
-                    intro_start_ticks = s;
-                    intro_end_ticks   = e;
-                }
-            }
-            // Pre-fire when resuming past the intro so mpv's brief time-pos=0 during seek
-            // doesn't incorrectly trigger the skip-intro handler.
-            let past_intro = intro_end_ticks > 0 && item_pos >= intro_end_ticks;
-            let mut intro_show_fired = past_intro;
-            let mut intro_hide_fired = past_intro;
-
-            loop {
-                // Process commands before checking the stop signal so that a LoadNew
-                // arriving in the same iteration (e.g. WS Stop then Play) can cancel
-                // the quit instead of fighting with it.
-                let mut cancel_stop = false;
-                while let Ok(cmd) = cmd_rx.try_recv() {
-                    match cmd {
-                        PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
-                            log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
-                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title, &artist]);
-                            log::warn!(target: "player", "next-up: script-message result={r:?}");
-                        }
-                        PlayerCommand::TogglePause => {
-                            let p = status.lock().unwrap().paused;
-                            let _ = mpv.set_property("pause", !p);
-                        }
-                        PlayerCommand::SetVolume(v) => {
-                            let vol_max = status.lock().unwrap().volume_max;
-                            let v = v.clamp(0, vol_max);
-                            // v is perceptual (processed); convert to raw for mpv: raw = 10*sqrt(v)
-                            let raw = (10.0 * (v as f64).sqrt()).round() as i64;
-                            let _ = mpv.set_property("volume", raw as f64);
-                            status.lock().unwrap().volume = v;
-                            let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
-                        }
-                        PlayerCommand::NextUpDismiss => {
-                            let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
-                        }
-                        PlayerCommand::SkipIntroDismiss => {
-                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                        }
-                        PlayerCommand::JumpTo(_) => {}
-                        PlayerCommand::PlaylistRemove(_) => {}
-                        PlayerCommand::ReplacePlaylist { .. } => {}
-                        PlayerCommand::Seek(secs) => {
-                            let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
-                            last_seek_at = Some(Instant::now());
-                        }
-                        PlayerCommand::SeekAbsolute(secs) => {
-                            let _ = mpv.command("seek", &[&secs.to_string(), "absolute"]);
-                            last_seek_at = Some(Instant::now());
-                        }
-                        PlayerCommand::SetAudio(id) => {
-                            if id > 0 { let _ = mpv.set_property("aid", id); }
-                            else { let _ = mpv.set_property("aid", "no".to_string()); }
-                            status.lock().unwrap().audio_id = id;
-                            refresh_tracks(&mpv, &status);
-                        }
-                        PlayerCommand::SetSub(id) => {
-                            if id == 0 {
-                                let _ = mpv.set_property("sid", "no".to_string());
-                            } else {
-                                let _ = mpv.set_property("sid", id);
-                            }
-                            refresh_tracks(&mpv, &status);
-                            status.lock().unwrap().sub_id = id;
-                        }
-                        PlayerCommand::SetMute(m) => {
-                            let _ = mpv.set_property("mute", m);
-                            status.lock().unwrap().muted = m;
-                        }
-                        PlayerCommand::LoadNew { url, start_pos, item } => {
-                            // Cancel any pending quit so the new file loads in the same window.
-                            // This handles WS Stop+Play arriving in the same iteration.
-                            cancel_stop = true;
-                            quit_at = None;
-
-                            // Report stopped for the current item before replacing
-                            let old_id   = current_item_id.lock().unwrap().clone();
-                            let old_msid = current_msid.lock().unwrap().clone();
-                            let old_sid  = current_sid.lock().unwrap().clone();
-                            client.report_stopped(&old_id, &old_msid, last_valid_pos, &old_sid);
-
-                            // Obtain session info for the new item and report start
-                            let (new_sid, new_msid) = {
-                                let (sid, msid) = client.get_playback_info(&item.id);
-                                client.report_start(&item, &msid, &sid);
-                                (sid, msid)
-                            };
-                            *current_item_id.lock().unwrap() = item.id.clone();
-                            *current_msid.lock().unwrap()    = new_msid;
-                            *current_sid.lock().unwrap()     = new_sid;
-
-                            last_valid_pos = item.playback_position_ticks;
-                            current_osd_title = item.display_name();
-                            {
-                                let mut st = status.lock().unwrap();
-                                st.runtime_ticks      = item.runtime_ticks;
-                                st.position_ticks     = item.playback_position_ticks;
-                                st.title              = current_osd_title.clone();
-                            }
-                            tracks_initialized = false;
-                            stop_reported = false;
-                            pending_load = true;
-                            next_up_fired = false;
-                            next_up_armed_logged = false;
-                            if item.item_type == "Episode" {
-                                series_id_for_next_up = item.series_id.clone();
-                                season_for_next_up    = item.parent_index_number;
-                                episode_for_next_up   = item.index_number;
-                            } else {
-                                series_id_for_next_up = String::new();
-                            }
-
-                            if start_pos > 0.0 {
-                                let _ = mpv.set_property("start", format!("{:.0}", start_pos));
-                            } else {
-                                let _ = mpv.set_property("start", "0");
-                            }
-                            let title_opt = mpv_title_opt(&item.display_name());
-                            log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
-                            if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
-                                log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-                            }
-                            let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
-                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                            intro_show_fired = false;
-                            intro_hide_fired = false;
-                            intro_start_ticks = 0;
-                            intro_end_ticks   = 0;
-                            if client.chapter_api_available {
-                                if let Some((s, e)) = client.get_intro_times(&item.id) {
-                                    intro_start_ticks = s;
-                                    intro_end_ticks   = e;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if !cancel_stop && quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                    let _ = progress_stop_tx.send(());
-                    if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                    if !stop_reported {
-                        let id   = current_item_id.lock().unwrap().clone();
-                        let msid = current_msid.lock().unwrap().clone();
-                        let sid  = current_sid.lock().unwrap().clone();
-                        client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid);
-                        stop_reported = true;
-                    }
-                    let _ = mpv.command("quit", &[]);
-                    quit_at = Some(Instant::now());
-                }
-
-                if quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
-                    let runtime = status.lock().unwrap().runtime_ticks;
-                    let near_end = !is_audio && runtime > 0 && last_valid_pos * 20 / runtime >= 19;
-                    status.lock().unwrap().active = false;
-                    let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos, played: near_end });
-                    return;
-                }
-
-                match mpv.wait_event(0.5) {
-                    Some(Ok(Event::PropertyChange { name: "volume", change: PropertyData::Double(vol), .. })) => {
-                        status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
-                    }
-                    Some(Ok(Event::PropertyChange { change: PropertyData::Double(pos_secs), .. })) => {
-                        let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
-                        status.lock().unwrap().position_ticks = ticks;
-                        if pos_secs > 0.0 { last_valid_pos = ticks; }
-                        // Fire next-up prompt 60 s before the episode ends (once per playback).
-                        const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
-                        if !next_up_fired {
-                            if series_id_for_next_up.is_empty() {
-                                if !next_up_armed_logged && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                                    next_up_armed_logged = true;
-                                    log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
-                                }
-                            } else {
-                                let runtime = status.lock().unwrap().runtime_ticks;
-                                if runtime > NEXT_UP_TICKS && ticks > runtime - NEXT_UP_TICKS {
-                                    next_up_fired = true;
-                                    log::warn!(target: "player", "next-up: threshold reached series={}", series_id_for_next_up);
-                                    let _ = event_tx.send(PlayerEvent::NextUpThreshold {
-                                        series_id: series_id_for_next_up.clone(),
-                                        season: season_for_next_up,
-                                        episode: episode_for_next_up,
-                                    });
-                                } else if !next_up_armed_logged && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                                    next_up_armed_logged = true;
-                                    log::info!(target: "player", "next-up: armed series={} runtime={}s", series_id_for_next_up, runtime / TICKS_PER_SECOND);
-                                }
-                            }
-                        }
-                        if intro_end_ticks > intro_start_ticks {
-                            if !intro_show_fired && ticks >= intro_start_ticks {
-                                intro_show_fired = true;
-                                if ticks < intro_end_ticks {
-                                    let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
-                                    if always_skip_intro {
-                                        let _ = mpv.set_property("time-pos", end_secs);
-                                    } else {
-                                        let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
-                                        let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
-                                    }
-                                } else {
-                                    intro_hide_fired = true;
-                                }
-                            }
-                            if !intro_hide_fired && ticks >= intro_end_ticks {
-                                intro_hide_fired = true;
-                                let _ = event_tx.send(PlayerEvent::IntroEnded);
-                                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                            }
-                        }
-                    }
-                    Some(Ok(Event::PropertyChange { name: "pause", change: PropertyData::Flag(paused), .. })) => {
-                        status.lock().unwrap().paused = paused;
-                        if quit_at.is_none() {
-                            let pos = status.lock().unwrap().position_ticks;
-                            let event_name = if paused { "Pause" } else { "Unpause" };
-                            let id   = current_item_id.lock().unwrap().clone();
-                            let msid = current_msid.lock().unwrap().clone();
-                            let sid  = current_sid.lock().unwrap().clone();
-                            if let Some(ref tx) = ws_tx {
-                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx);
-                            } else {
-                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name);
-                            }
-                        }
-                    }
-                    Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
-                        status.lock().unwrap().sub_id = id;
-                    }
-                    Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
-                        refresh_tracks(&mpv, &status);
-                    }
-                    Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
-                        status.lock().unwrap().muted = m;
-                    }
-                    Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
-                        status.lock().unwrap().video_height = h;
-                    }
-                    Some(Ok(Event::PlaybackRestart)) => {
-                        let event_name: &str;
-                        if !tracks_initialized {
-                            auto_select_tracks(&mpv, &status, subs_off.load(Ordering::Relaxed));
-                            tracks_initialized = true;
-                            let _ = mpv.set_property("start", "0");
-                            if let Some(secs) = pending_resume_secs.take() {
-                                if secs > 0.0 {
-                                    let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
-                                    last_seek_at = Some(Instant::now());
-                                }
-                            }
-                            if use_mpv_config { let _ = mpv.command("show-text", &[&current_osd_title, "3000"]); }
-                            event_name = "TimeUpdate";
-                        } else {
-                            // Any restart after init means a seek happened (via TUI or mpv OSC).
-                            // Re-arm so a seek into/out-of the threshold is handled correctly.
-                            next_up_fired = false;
-                            next_up_armed_logged = false;
-                            if last_seek_at.take().is_some() {
-                                if use_mpv_config { let _ = mpv.command("show-text", &[&current_osd_title, "2000"]); }
-                            }
-                            event_name = "Seek";
-                        }
-                        let seek_settled = last_seek_at.is_none_or(|t| t.elapsed() > Duration::from_millis(500));
-                        if quit_at.is_none() && seek_settled {
-                            last_seek_at = None;
-                            let (pos, paused) = {
-                                let s = status.lock().unwrap();
-                                (s.position_ticks, s.paused)
-                            };
-                            let id   = current_item_id.lock().unwrap().clone();
-                            let msid = current_msid.lock().unwrap().clone();
-                            let sid  = current_sid.lock().unwrap().clone();
-                            if let Some(ref tx) = ws_tx {
-                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx);
-                            } else {
-                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name);
-                            }
-                        }
-                    }
-                    Some(Ok(Event::EndFile(reason))) => {
-                        if quit_at.is_some() { continue; }
-                        // EndFile triggered by a loadfile replace — already reported stopped above
-                        if pending_load { pending_load = false; continue; }
-
-                        if reason == mpv_end_file_reason::Error {
-                            log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
-                        }
-                        let id   = current_item_id.lock().unwrap().clone();
-                        let msid = current_msid.lock().unwrap().clone();
-                        let sid  = current_sid.lock().unwrap().clone();
-                        let natural_end = reason == mpv_end_file_reason::Eof
-                            && status.lock().unwrap().runtime_ticks > 0;
-                        let _ = progress_stop_tx.send(());
-                        if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                        client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid);
-                        stop_reported = true;
-                        if natural_end {
-                            if !is_audio {
-                                match client.mark_played(&id) {
-                                    Ok(()) => {
-                                        log::info!(target: "player", "mark_played ok id={id}");
-                                    }
-                                    Err(e) => {
-                                        log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
-                                        mark_played_id = Some(id.clone());
-                                    }
-                                }
-                            }
-                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: 0, played: !is_audio });
-                            stopped_event_sent = true;
-                        }
-                    }
-                    Some(Ok(Event::LogMessage { prefix, level, text, .. })) => {
-                        let t = text.trim_end();
-                        if !t.is_empty() {
-                            log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
-                        }
-                    }
-                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
-                        log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
-                        let _ = event_tx.send(PlayerEvent::NextUpPlay);
-                    }
-                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-skip-intro-play") => {
-                        let _ = event_tx.send(PlayerEvent::SkipIntroPlay);
-                    }
-                    Some(Ok(Event::ClientMessage(args))) if use_mpv_config && args.first().copied() == Some("mouse-moved") => {
-                        let show = last_mouse_osd.is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
-                        if show {
-                            let _ = mpv.command("show-text", &[&current_osd_title, "2000"]);
-                            last_mouse_osd = Some(Instant::now());
-                        }
-                    }
-                    Some(Ok(Event::Shutdown)) => {
-                        if !stop_reported {
-                            let _ = progress_stop_tx.send(());
-                            if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                            let id   = current_item_id.lock().unwrap().clone();
-                            let msid = current_msid.lock().unwrap().clone();
-                            let sid  = current_sid.lock().unwrap().clone();
-                            client.report_stopped(&id, &msid, if is_audio { 0 } else { last_valid_pos }, &sid);
-                        }
-                        // Retry mark_played in a detached thread so Shutdown never blocks.
-                        if let Some(mid) = mark_played_id.take() {
-                            let c2 = client.clone();
-                            std::thread::spawn(move || {
-                                if let Err(e) = c2.mark_played(&mid) {
-                                    log::warn!(target: "player", "mark_played retry failed id={mid}: {e}");
-                                } else {
-                                    log::info!(target: "player", "mark_played retry ok id={mid}");
-                                }
-                            });
-                        }
-                        let runtime = status.lock().unwrap().runtime_ticks;
-                        let near_end = !is_audio && runtime > 0 && last_valid_pos * 20 / runtime >= 19;
-                        if near_end {
-                            let id = current_item_id.lock().unwrap().clone();
-                            let c2 = client.clone();
-                            std::thread::spawn(move || {
-                                if let Err(e) = c2.mark_played(&id) {
-                                    log::warn!(target: "player", "mark_played near_end failed id={id}: {e}");
-                                } else {
-                                    log::info!(target: "player", "mark_played near_end ok id={id}");
-                                }
-                            });
-                        }
-                        status.lock().unwrap().active = false;
-                        if !stopped_event_sent {
-                            let _ = event_tx.send(PlayerEvent::Stopped { idx: 0, position_ticks: last_valid_pos, played: near_end });
-                        }
-                        return;
-                    }
-                    Some(Err(e)) => {
-                        log::warn!(target: "player", "event error: {}", mpv_err_str(&e));
-                    }
-                    _ => {}
-                }
-            }
+            let (sid, msid) = client.get_playback_info(&item.id);
+            client.report_start(&item, &msid, &sid);
+            let reporter = SessionReporter::new(
+                client, ws_tx, item.id.clone(), msid, sid, is_audio, status.clone(),
+            );
+            let progress = spawn_progress_reporter(reporter.clone());
+            let session  = SingleSession::new(&item, reporter, config, status, event_tx, subs_off);
+            session.run(mpv, stop_rx, cmd_rx, progress);
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
     }
 
     pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, initial_volume: u8) {
         if items.is_empty() { return; }
+
         let new_is_headless = !self.show_audio_window
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
+
+        // If playlist loop already running, replace in place (no window close),
+        // unless mpv was spawned headless but new items need a window.
         if self.status.lock().unwrap().active
             && self.is_playlist_mode.load(Ordering::Relaxed)
             && !(self.current_is_headless.load(Ordering::Relaxed) && !new_is_headless)
         {
-            // Playlist loop running — replace its playlist in-place, no window close.
-            // Skip if mpv was spawned headless but new items need a window.
             let start_idx = start_idx.min(items.len() - 1);
             {
                 let mut st = self.status.lock().unwrap();
@@ -919,120 +1657,51 @@ impl Player {
             self.send_command(PlayerCommand::ReplacePlaylist { items, start_idx });
             return;
         }
+
         self.stop();
         self.join();
+
         let start_idx = start_idx.min(items.len() - 1);
+        let headless  = new_is_headless;
 
-        let (stop_tx, stop_rx) = mpsc::channel::<()>();
-        *self.stop_tx.lock().unwrap() = Some(stop_tx);
-
-        let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
-        *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
-
-        let event_tx = self.event_tx.clone();
-        let server_url = self.server_url.clone();
-        let token = self.token.clone();
-        let mut n = items.len();
-        let status = self.status.clone();
-        let ws_tx = self.ws_tx.clone();
-        let subs_off = self.subs_off.clone();
+        let config = MpvSessionConfig {
+            headless,
+            use_mpv_config:    self.use_mpv_config,
+            no_scripts:        self.no_scripts,
+            always_skip_intro: self.always_skip_intro,
+        };
+        let status           = self.status.clone();
+        let event_tx         = self.event_tx.clone();
+        let ws_tx            = self.ws_tx.clone();
+        let subs_off         = self.subs_off.clone();
         let is_playlist_mode = self.is_playlist_mode.clone();
-        let current_is_headless = self.current_is_headless.clone();
-        let headless = !self.show_audio_window
-            && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
-        current_is_headless.store(headless, Ordering::Relaxed);
-        let use_mpv_config = self.use_mpv_config;
-        let no_scripts = self.no_scripts;
-        let always_skip_intro = self.always_skip_intro;
-        let initial_volume = initial_volume;
+        let server_url       = self.server_url.clone();
+        let token            = self.token.clone();
+        self.current_is_headless.store(headless, Ordering::Relaxed);
 
         {
             let mut st = status.lock().unwrap();
             st.position_ticks = 0;
-            st.runtime_ticks = items[start_idx].runtime_ticks;
-            st.paused = false;
-            st.current_idx = start_idx;
-            st.active = true;
-            st.title = items[start_idx].display_name();
+            st.runtime_ticks  = items[start_idx].runtime_ticks;
+            st.paused         = false;
+            st.current_idx    = start_idx;
+            st.active         = true;
+            st.title          = items[start_idx].display_name();
         }
+
+        let (stop_tx, stop_rx) = mpsc::channel::<()>();
+        *self.stop_tx.lock().unwrap() = Some(stop_tx);
+        let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
+        *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
         let handle = thread::spawn(move || {
             is_playlist_mode.store(true, Ordering::Relaxed);
-            let mut items = items;
-            let (session_id_str, first_msid) = {
-                let (sid, msid) = client.get_playback_info(&items[start_idx].id);
-                client.report_start(&items[start_idx], &msid, &sid);
-                (sid, msid)
+
+            let mpv = match init_mpv(&config) {
+                Ok(m)  => m,
+                Err(e) => { log::error!(target: "player", "{}", e); return; }
             };
-            let session_id = Arc::new(Mutex::new(session_id_str));
-
-            let ipc_path = crate::config::mpv_ipc_path();
-            let ipc_existed = std::path::Path::new(&ipc_path).exists();
-            if ipc_existed {
-                let _ = std::fs::remove_file(&ipc_path);
-                log::info!(target: "player", "init: removed stale ipc socket {}", ipc_path);
-            }
-            log::info!(target: "player", "init: ipc={} (existed={})", ipc_path, ipc_existed);
-
-            let mut init_err: Option<String> = None;
-            let mpv = match Mpv::with_initializer(|init| {
-                macro_rules! opt {
-                    ($k:expr, $v:expr) => {{
-                        let r = init.set_option($k, $v);
-                        if let Err(ref e) = r { init_err = Some(format!("[player] set_option('{}') failed: {}", $k, mpv_err_str(e))); }
-                        r?;
-                    }};
-                }
-                opt!("config", "yes");
-                opt!("input-ipc-server", ipc_path.as_str());
-                opt!("input-default-bindings", "yes");
-                opt!("input-vo-keyboard", "yes");
-                opt!("wayland-app-id", "mbv");
-                opt!("demuxer-max-bytes", "50M");
-                opt!("demuxer-max-back-bytes", "10M");
-                opt!("gapless-audio", "weak");
-                if no_scripts || !use_mpv_config {
-                    opt!("load-scripts", "no");
-                    opt!("osc", "no");
-                    opt!("osd-bar", "no");
-                }
-                if !no_scripts && !use_mpv_config {
-                    let script = crate::config::osc_script_path();
-                    if script.exists() {
-                        opt!("scripts", script.to_str().unwrap_or(""));
-                        let fonts = crate::config::osc_fonts_dir();
-                        opt!("osd-fonts-dir", fonts.to_str().unwrap_or(""));
-                    }
-                }
-                Ok(())
-            }) {
-                Ok(m) => m,
-                Err(e) => {
-                    let msg = init_err.unwrap_or_else(|| format!("[player] mpv init error: {}", mpv_err_str(&e)));
-                    log::error!(target: "player", "{}", msg);
-                    return;
-                }
-            };
-
-            unsafe {
-                libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), b"warn\0".as_ptr() as _);
-            }
-
-            // Set after init so user's mpv.conf cannot override these.
-            if headless {
-                let _ = mpv.set_property("vo", "null");
-                let _ = mpv.set_property("force-window", "no");
-            }
-
-            {
-                let mut st = status.lock().unwrap();
-                let raw_max   = mpv.get_property::<i64>("volume-max").unwrap_or(130);
-                st.volume_max = raw_max * raw_max / 100;
-                let v = (initial_volume as i64).clamp(0, st.volume_max);
-                let raw = (10.0 * (v as f64).sqrt()).round() as i64;
-                let _ = mpv.set_property("volume", raw as f64);
-                st.volume = v;
-            }
+            init_volume(&mpv, &status, initial_volume);
 
             // Load the full playlist into mpv so every index matches items[i] directly.
             for (i, item) in items.iter().enumerate() {
@@ -1050,614 +1719,21 @@ impl Player {
                     // Subsequent file failed: skip it, keep playing what loaded.
                 }
             }
+            observe_properties(&mpv, config.use_mpv_config);
 
-            let _ = mpv.observe_property("time-pos", Format::Double, 0);
-            let _ = mpv.observe_property("pause", Format::Flag, 1);
-            let _ = mpv.observe_property("volume", Format::Double, 2);
-            let _ = mpv.observe_property("sid", Format::Int64, 3);
-            let _ = mpv.observe_property("mute", Format::Flag, 4);
-            let _ = mpv.observe_property("aid", Format::String, 5);
-            let _ = mpv.observe_property("video-params/h", Format::Int64, 6);
-            if use_mpv_config {
-                let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
-            }
-
-            let current_item_id = Arc::new(Mutex::new(items[start_idx].id.clone()));
-            let current_msid = Arc::new(Mutex::new(first_msid));
-
-            let current_is_audio = Arc::new(AtomicBool::new(items[start_idx].is_audio()));
-            let client_progress = client.clone();
-            let cid_p = current_item_id.clone();
-            let cmsid_p = current_msid.clone();
-            let csid_p = session_id.clone();
-            let status_p = status.clone();
-            let ws_tx_p = ws_tx.clone();
-            let is_audio_p = current_is_audio.clone();
-            let (progress_stop_tx, progress_stop_rx) = mpsc::channel::<()>();
-            let mut progress_handle = Some(thread::spawn(move || {
-                let mut ticks: u32 = 0;
-                loop {
-                    match progress_stop_rx.recv_timeout(Duration::from_secs(10)) {
-                        Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
-                        Err(mpsc::RecvTimeoutError::Timeout) => {
-                            ticks += 1;
-                            let sid = csid_p.lock().unwrap().clone();
-                            if !is_audio_p.load(Ordering::Relaxed) && ticks.is_multiple_of(3) {
-                                let (pos, paused) = {
-                                    let s = status_p.lock().unwrap();
-                                    (s.position_ticks, s.paused)
-                                };
-                                let id = cid_p.lock().unwrap().clone();
-                                let msid = cmsid_p.lock().unwrap().clone();
-                                if let Some(ref tx) = ws_tx_p {
-                                    client_progress.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx);
-                                } else {
-                                    client_progress.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate");
-                                }
-                            } else {
-                                client_progress.report_ping(&sid);
-                            }
-                        }
-                    }
-                }
-            }));
-
-            let mut current_idx = start_idx;
-            let mut forced_idx: Option<usize> = None;
-            let mut quit_at: Option<Instant> = None;
-            let mut last_seek_at: Option<Instant> = None;
-            let mut last_valid_pos: i64 = items[start_idx].playback_position_ticks;
-            let mut tracks_initialized = false;
-            let mut playlist_cancelled = false;
-            // If we need to start at start_idx > 0, we can't set playlist-pos before the event
-            // loop because mpv ignores it during initialization (loadfile "replace" always wins).
-            // Instead, we wait for the first PlaybackRestart (mpv is now in active playback
-            // state) and do the jump then, where it's honored.
-            let mut pending_load: u8 = 0;
-            let mut pending_initial_jump = start_idx > 0;
-            let mut stop_reported = false;
-            let mut current_osd_title = items[start_idx].display_name();
-            let mut last_mouse_osd: Option<Instant> = None;
-            let mut pending_resume_secs: Option<f64> =
-                if !items[start_idx].is_audio() && items[start_idx].should_resume() {
-                    Some(items[start_idx].resume_seconds())
-                } else {
-                    None
-                };
-            let mut playlist_next_up_fired = false;
-            let mut playlist_next_up_armed = false;
-            let mut next_up_jump = false;
-            let mut stopped_near_end = false;
-            let mut intro_start_ticks: i64 = 0;
-            let mut intro_end_ticks: i64   = 0;
-            if client.chapter_api_available {
-                if let Some((s, e)) = client.get_intro_times(&items[start_idx].id) {
-                    intro_start_ticks = s;
-                    intro_end_ticks   = e;
-                }
-            }
-            let past_intro = intro_end_ticks > 0 && items[start_idx].playback_position_ticks >= intro_end_ticks;
-            let mut intro_show_fired = past_intro;
-            let mut intro_hide_fired = past_intro;
-
-            // NOTE: Do NOT set playlist-pos here. mpv ignores property changes before the
-            // event loop starts (loadfile "replace" overwrites any pre-loop playlist-pos set).
-            // The jump happens in the PlaybackRestart handler below instead.
-
-            loop {
-                let mut cancel_stop = false;
-                while let Ok(cmd) = cmd_rx.try_recv() {
-                    match cmd {
-                        PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
-                            log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
-                            let r = mpv.command("script-message", &["mbv-next-up", &item_id, &show_title, &ep_title, &artist]);
-                            log::warn!(target: "player", "next-up: script-message result={r:?}");
-                        }
-                        PlayerCommand::TogglePause => {
-                            let p = status.lock().unwrap().paused;
-                            let _ = mpv.set_property("pause", !p);
-                        }
-                        PlayerCommand::JumpTo(idx) => {
-                            if idx < n {
-                                // mpv playlist indices match items indices directly, so any
-                                // jump is a simple playlist-pos set. EndFile handles the rest.
-                                forced_idx = Some(idx);
-                                {
-                                    let mut s = status.lock().unwrap();
-                                    s.current_idx    = idx;
-                                    s.position_ticks = 0;
-                                    s.runtime_ticks  = items[idx].runtime_ticks;
-                                    s.title          = items[idx].display_name();
-                                }
-                                let _ = mpv.set_property("playlist-pos", idx as i64);
-                            }
-                        }
-                        PlayerCommand::PlaylistRemove(idx) => {
-                            if idx < n {
-                                let _ = mpv.command("playlist-remove", &[&idx.to_string()]);
-                                items.remove(idx);
-                                n -= 1;
-                                if idx < current_idx {
-                                    current_idx -= 1;
-                                    status.lock().unwrap().current_idx = current_idx;
-                                }
-                                if let Some(fi) = forced_idx {
-                                    forced_idx = if idx == fi { None }
-                                                 else if idx < fi { Some(fi - 1) }
-                                                 else { Some(fi) };
-                                }
-                            }
-                        }
-                        PlayerCommand::NextUpDismiss => {
-                            let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
-                        }
-                        PlayerCommand::SkipIntroDismiss => {
-                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                        }
-                        PlayerCommand::ReplacePlaylist { items: new_items, start_idx } => {
-                            cancel_stop = true;
-                            let old_id   = current_item_id.lock().unwrap().clone();
-                            let old_msid = current_msid.lock().unwrap().clone();
-                            let old_sid  = session_id.lock().unwrap().clone();
-                            client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid);
-
-                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                            // Remove all old playlist entries except the current one so that
-                            // the subsequent loadfile "replace" starts from a clean slate.
-                            // Without this, old entries remain and playlist-pos = start_idx
-                            // lands on a stale file instead of new_items[start_idx].
-                            let _ = mpv.command("playlist-clear", &[]);
-
-                            let start_idx = start_idx.min(new_items.len() - 1);
-                            for (i, item) in new_items.iter().enumerate() {
-                                let ep = if item.is_audio() { "Audio" } else { "Videos" };
-                                let url = format!("{}/{}/{}/stream?static=true&api_key={}", server_url, ep, item.id, token);
-                                let mode = if i == 0 { "replace" } else { "append-play" };
-                                let title_opt = mpv_title_opt(&item.display_name());
-                                if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
-                                    log::warn!(target: "player", "ReplacePlaylist loadfile error: {}", mpv_err_str(&e));
-                                }
-                            }
-                            let _ = mpv.set_property("start", "0");
-                            // loadfile "replace" displaces the current file (EndFile #1).
-                            // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
-                            pending_load += 1;
-                            if start_idx > 0 {
-                                pending_load += 1;
-                                let _ = mpv.set_property("playlist-pos", start_idx as i64);
-                            }
-
-                            items                  = new_items;
-                            n                      = items.len();
-                            current_idx            = start_idx;
-                            last_valid_pos         = items[start_idx].playback_position_ticks;
-                            tracks_initialized     = false;
-                            stop_reported          = false;
-                            playlist_cancelled     = false;
-                            forced_idx             = None;
-                            playlist_next_up_fired = false;
-                            playlist_next_up_armed = false;
-                            next_up_jump           = false;
-                            current_osd_title      = items[start_idx].display_name();
-                            pending_resume_secs    = if !items[start_idx].is_audio() && items[start_idx].should_resume() {
-                                Some(items[start_idx].resume_seconds())
-                            } else {
-                                None
-                            };
-
-                            intro_start_ticks = 0;
-                            intro_end_ticks   = 0;
-                            if client.chapter_api_available {
-                                if let Some((s, e)) = client.get_intro_times(&items[start_idx].id) {
-                                    intro_start_ticks = s;
-                                    intro_end_ticks   = e;
-                                }
-                            }
-                            let pi = intro_end_ticks > 0 && items[start_idx].playback_position_ticks >= intro_end_ticks;
-                            intro_show_fired = pi;
-                            intro_hide_fired = pi;
-
-                            let (new_sid, new_msid) = {
-                                let (sid, msid) = client.get_playback_info(&items[start_idx].id);
-                                client.report_start(&items[start_idx], &msid, &sid);
-                                (sid, msid)
-                            };
-                            current_is_audio.store(items[start_idx].is_audio(), Ordering::Relaxed);
-                            *current_item_id.lock().unwrap() = items[start_idx].id.clone();
-                            *current_msid.lock().unwrap()    = new_msid;
-                            *session_id.lock().unwrap()      = new_sid;
-                        }
-                        PlayerCommand::SetVolume(v) => {
-                            let vol_max = status.lock().unwrap().volume_max;
-                            let v = v.clamp(0, vol_max);
-                            // v is perceptual (processed); convert to raw for mpv: raw = 10*sqrt(v)
-                            let raw = (10.0 * (v as f64).sqrt()).round() as i64;
-                            let _ = mpv.set_property("volume", raw as f64);
-                            status.lock().unwrap().volume = v;
-                            let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
-                        }
-                        PlayerCommand::Seek(secs) => {
-                            let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
-                            last_seek_at = Some(Instant::now());
-                        }
-                        PlayerCommand::SeekAbsolute(secs) => {
-                            let _ = mpv.command("seek", &[&secs.to_string(), "absolute"]);
-                            last_seek_at = Some(Instant::now());
-                        }
-                        PlayerCommand::SetAudio(id) => {
-                            if id > 0 { let _ = mpv.set_property("aid", id); }
-                            else { let _ = mpv.set_property("aid", "no".to_string()); }
-                            status.lock().unwrap().audio_id = id;
-                            refresh_tracks(&mpv, &status);
-                        }
-                        PlayerCommand::SetSub(id) => {
-                            if id == 0 {
-                                let _ = mpv.set_property("sid", "no".to_string());
-                            } else {
-                                let _ = mpv.set_property("sid", id);
-                            }
-                            refresh_tracks(&mpv, &status);
-                            status.lock().unwrap().sub_id = id;
-                        }
-                        PlayerCommand::SetMute(m) => {
-                            let _ = mpv.set_property("mute", m);
-                            status.lock().unwrap().muted = m;
-                        }
-                        PlayerCommand::LoadNew { url, start_pos, item } => {
-                            cancel_stop = true;
-                            quit_at = None;
-                            playlist_cancelled = true;
-
-                            let old_id   = current_item_id.lock().unwrap().clone();
-                            let old_msid = current_msid.lock().unwrap().clone();
-                            let old_sid  = session_id.lock().unwrap().clone();
-                            client.report_stopped(&old_id, &old_msid, if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos }, &old_sid);
-
-                            let (new_sid, new_msid) = {
-                                let (sid, msid) = client.get_playback_info(&item.id);
-                                client.report_start(&item, &msid, &sid);
-                                (sid, msid)
-                            };
-                            current_is_audio.store(item.is_audio(), Ordering::Relaxed);
-                            *current_item_id.lock().unwrap() = item.id.clone();
-                            *current_msid.lock().unwrap()    = new_msid;
-                            *session_id.lock().unwrap()      = new_sid;
-
-                            last_valid_pos = item.playback_position_ticks;
-                            tracks_initialized = false;
-                            stop_reported = false;
-                            pending_load = 1;
-
-                            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                            intro_start_ticks = 0;
-                            intro_end_ticks   = 0;
-                            if client.chapter_api_available {
-                                if let Some((s, e)) = client.get_intro_times(&item.id) {
-                                    intro_start_ticks = s;
-                                    intro_end_ticks   = e;
-                                }
-                            }
-                            let pi = intro_end_ticks > 0 && item.playback_position_ticks >= intro_end_ticks;
-                            intro_show_fired = pi;
-                            intro_hide_fired = pi;
-
-                            if start_pos > 0.0 {
-                                let _ = mpv.set_property("start", format!("{:.0}", start_pos));
-                            } else {
-                                let _ = mpv.set_property("start", "0");
-                            }
-                            let title_opt = mpv_title_opt(&item.display_name());
-                            log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
-                            if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
-                                log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-                            }
-                        }
-                    }
-                }
-
-                if !cancel_stop && quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                    let _ = progress_stop_tx.send(());
-                    if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                    if !stop_reported {
-                        let id   = current_item_id.lock().unwrap().clone();
-                        let msid = current_msid.lock().unwrap().clone();
-                        let sid  = session_id.lock().unwrap().clone();
-                        client.report_stopped(&id, &msid, last_valid_pos, &sid);
-                        stop_reported = true;
-                    }
-                    let _ = mpv.command("quit", &[]);
-                    quit_at = Some(Instant::now());
-                }
-
-                if quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
-                    status.lock().unwrap().active = false;
-                    let stopped_idx = current_idx;
-                    let stopped_pos = last_valid_pos;
-                    let _ = event_tx.send(PlayerEvent::Stopped { idx: stopped_idx, position_ticks: stopped_pos, played: stopped_near_end });
-                    return;
-                }
-
-                match mpv.wait_event(0.5) {
-                    Some(Ok(Event::PropertyChange { name: "volume", change: PropertyData::Double(vol), .. })) => {
-                        status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
-                    }
-                    Some(Ok(Event::PropertyChange { change: PropertyData::Double(pos_secs), .. })) => {
-                        let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
-                        status.lock().unwrap().position_ticks = ticks;
-                        if pos_secs > 0.0 && pending_resume_secs.is_none() { last_valid_pos = ticks; }
-                        // Playlist next-up: match Emby Web's timing from videoosd.js.
-                        // 90 s before end regardless of runtime length.
-                        // Minimum episode: 10 min. Minimum remaining when shown: 20 s.
-                        const MIN_RUNTIME_TICKS: i64 = 600 * TICKS_PER_SECOND;
-                        const MIN_REMAIN_TICKS:  i64 = 20 * TICKS_PER_SECOND;
-                        if current_idx + 1 < items.len() {
-                            let runtime = status.lock().unwrap().runtime_ticks;
-                            if runtime > 0 {
-                                let show_secs: i64 = 60;
-                                let show_at = runtime - show_secs * TICKS_PER_SECOND;
-                                let remaining = runtime - ticks;
-                                if playlist_next_up_fired && ticks < show_at {
-                                    playlist_next_up_fired = false;
-                                    playlist_next_up_armed = false;
-                                }
-                                if !playlist_next_up_fired && runtime >= MIN_RUNTIME_TICKS {
-                                    if remaining >= MIN_REMAIN_TICKS && ticks >= show_at {
-                                        playlist_next_up_fired = true;
-                                        let _ = event_tx.send(PlayerEvent::PlaylistNextUp { next_idx: current_idx + 1 });
-                                    } else if !playlist_next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                                        playlist_next_up_armed = true;
-                                        log::info!(target: "player", "playlist next-up armed idx={}", current_idx + 1);
-                                    }
-                                }
-                            }
-                        }
-                        if intro_end_ticks > intro_start_ticks {
-                            if !intro_show_fired && ticks >= intro_start_ticks {
-                                intro_show_fired = true;
-                                if ticks < intro_end_ticks {
-                                    let end_secs = intro_end_ticks as f64 / TICKS_PER_SECOND as f64;
-                                    if always_skip_intro {
-                                        let _ = mpv.set_property("time-pos", end_secs);
-                                    } else {
-                                        let _ = event_tx.send(PlayerEvent::IntroStarted { intro_end_ticks });
-                                        let _ = mpv.command("script-message", &["mbv-skip-intro", &end_secs.to_string()]);
-                                    }
-                                } else {
-                                    intro_hide_fired = true;
-                                }
-                            }
-                            if !intro_hide_fired && ticks >= intro_end_ticks {
-                                intro_hide_fired = true;
-                                let _ = event_tx.send(PlayerEvent::IntroEnded);
-                                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                            }
-                        }
-                    }
-                    Some(Ok(Event::PropertyChange { name: "pause", change: PropertyData::Flag(paused), .. })) => {
-                        let id   = current_item_id.lock().unwrap().clone();
-                        let msid = current_msid.lock().unwrap().clone();
-                        status.lock().unwrap().paused = paused;
-                        if quit_at.is_none() {
-                            let pos = status.lock().unwrap().position_ticks;
-                            let event_name = if paused { "Pause" } else { "Unpause" };
-                            let sid = session_id.lock().unwrap().clone();
-                            if let Some(ref tx) = ws_tx {
-                                client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx);
-                            } else {
-                                client.report_progress_http(&id, &msid, pos, paused, &sid, event_name);
-                            }
-                        }
-                    }
-                    Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
-                        status.lock().unwrap().sub_id = id;
-                    }
-                    Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
-                        refresh_tracks(&mpv, &status);
-                    }
-                    Some(Ok(Event::PropertyChange { name: "mute", change: PropertyData::Flag(m), .. })) => {
-                        status.lock().unwrap().muted = m;
-                    }
-                    Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
-                        status.lock().unwrap().video_height = h;
-                    }
-                    Some(Ok(Event::PlaybackRestart)) => {
-                        if pending_initial_jump {
-                            // mpv ignored playlist-pos before the event loop started; now that
-                            // playback is live (first PlaybackRestart), the jump is honored.
-                            pending_initial_jump = false;
-                            pending_load += 1;
-                            let _ = mpv.set_property("playlist-pos", start_idx as i64);
-                            // Skip normal PlaybackRestart handling; wait for the next one
-                            // (which fires for start_idx item after the jump).
-                        } else if !tracks_initialized {
-                            auto_select_tracks(&mpv, &status, subs_off.load(Ordering::Relaxed));
-                            tracks_initialized = true;
-                            if let Some(secs) = pending_resume_secs.take() {
-                                let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
-                                last_seek_at = Some(Instant::now());
-                            }
-                            if use_mpv_config { let _ = mpv.command("show-text", &[&current_osd_title, "3000"]); }
-                        } else if last_seek_at.take().is_some() {
-                            if use_mpv_config { let _ = mpv.command("show-text", &[&current_osd_title, "2000"]); }
-                        }
-                        let seek_settled = last_seek_at.is_none_or(|t| t.elapsed() > Duration::from_millis(500));
-                        if quit_at.is_none() && seek_settled {
-                            last_seek_at = None;
-                            if !current_is_audio.load(Ordering::Relaxed) {
-                                let (pos, paused) = {
-                                    let s = status.lock().unwrap();
-                                    (s.position_ticks, s.paused)
-                                };
-                                let id   = current_item_id.lock().unwrap().clone();
-                                let msid = current_msid.lock().unwrap().clone();
-                                let sid  = session_id.lock().unwrap().clone();
-                                if let Some(ref tx) = ws_tx {
-                                    client.report_progress_ws(&id, &msid, pos, paused, &sid, "TimeUpdate", tx);
-                                } else {
-                                    client.report_progress_http(&id, &msid, pos, paused, &sid, "TimeUpdate");
-                                }
-                            }
-                        }
-                    }
-                    Some(Ok(Event::LogMessage { prefix, level, text, .. })) => {
-                        let t = text.trim_end();
-                        if !t.is_empty() {
-                            log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
-                        }
-                    }
-                    Some(Ok(Event::EndFile(reason))) => {
-                        if quit_at.is_some() { continue; }
-                        if pending_load > 0 { pending_load -= 1; continue; }
-                        if reason == mpv_end_file_reason::Error {
-                            log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
-                        }
-                        let id   = current_item_id.lock().unwrap().clone();
-                        let msid = current_msid.lock().unwrap().clone();
-                        let sid  = session_id.lock().unwrap().clone();
-
-                        let completed_is_audio = current_is_audio.load(Ordering::Relaxed);
-                        if playlist_cancelled || reason == mpv_end_file_reason::Quit {
-                            let runtime = status.lock().unwrap().runtime_ticks;
-                            let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
-                            let near_end = !natural_end && !completed_is_audio
-                                && runtime > 0
-                                && last_valid_pos * 20 / runtime >= 19;
-                            if !stop_reported {
-                                let _ = progress_stop_tx.send(());
-                                if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                                client.report_stopped(&id, &msid, if completed_is_audio { 0 } else { last_valid_pos }, &sid);
-                                stop_reported = true;
-                            }
-                            if (natural_end || near_end) && !completed_is_audio {
-                                if let Err(e) = client.mark_played(&id) {
-                                    log::warn!(target: "player", "mark_played failed id={id}: {e}");
-                                }
-                            }
-                            stopped_near_end = near_end;
-                            continue; // wait for Shutdown to fire PlayerEvent::Stopped
-                        }
-
-                        let completed_idx = current_idx;
-                        let natural = reason == mpv_end_file_reason::Eof
-                            && items[completed_idx].runtime_ticks > 0;
-                        // Also treat as played/consumed if user skipped within the last 5% of runtime.
-                        let near_end = !natural && !completed_is_audio
-                            && items[completed_idx].runtime_ticks > 0
-                            && last_valid_pos * 20 / items[completed_idx].runtime_ticks >= 19;
-                        let was_next_up = std::mem::replace(&mut next_up_jump, false);
-                        let played_out = (natural || near_end || was_next_up) && !completed_is_audio;
-                        let consume_track = (natural || near_end || was_next_up) && !completed_is_audio;
-                        let completed_pos = if completed_is_audio || natural || near_end || was_next_up { 0 } else { last_valid_pos };
-
-                        let next_idx = if let Some(jump_idx) = forced_idx.take() {
-                            jump_idx
-                        } else {
-                            current_idx + 1
-                        };
-
-                        if next_idx >= n {
-                            let _ = progress_stop_tx.send(());
-                            if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                            status.lock().unwrap().active = false;
-                            client.report_stopped(&id, &msid, completed_pos, &sid);
-                            if played_out {
-                                if let Err(e) = client.mark_played(&items[completed_idx].id) {
-                                    log::warn!(target: "player", "mark_played failed id={}: {e}", items[completed_idx].id);
-                                }
-                            }
-                            let _ = event_tx.send(PlayerEvent::Stopped { idx: completed_idx, position_ticks: completed_pos, played: played_out });
-                            return;
-                        }
-
-                        // Update UI to the next track immediately, before slow network calls
-                        current_idx = next_idx;
-                        last_valid_pos = items[current_idx].playback_position_ticks;
-                        tracks_initialized = false;
-                        {
-                            let mut s = status.lock().unwrap();
-                            s.position_ticks = 0;
-                            s.runtime_ticks  = items[current_idx].runtime_ticks;
-                            s.current_idx    = current_idx;
-                            s.title          = items[current_idx].display_name();
-                        }
-
-                        client.report_stopped(&id, &msid, completed_pos, &sid);
-                        if played_out {
-                            if let Err(e) = client.mark_played(&items[completed_idx].id) {
-                                log::warn!(target: "player", "mark_played failed id={}: {e}", items[completed_idx].id);
-                            }
-                        }
-
-                        // Reset start position so the next playlist item isn't affected
-                        let _ = mpv.set_property("start", "0");
-                        playlist_next_up_fired = false;
-                        playlist_next_up_armed = false;
-                        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-
-                        let (new_sid, new_msid) = {
-                            let (sid, msid) = client.get_playback_info(&items[current_idx].id);
-                            client.report_start(&items[current_idx], &msid, &sid);
-                            (sid, msid)
-                        };
-                        current_is_audio.store(items[current_idx].is_audio(), Ordering::Relaxed);
-                        intro_start_ticks = 0;
-                        intro_end_ticks   = 0;
-                        if client.chapter_api_available {
-                            if let Some((s, e)) = client.get_intro_times(&items[current_idx].id) {
-                                intro_start_ticks = s;
-                                intro_end_ticks   = e;
-                            }
-                        }
-                        let pi = intro_end_ticks > 0 && items[current_idx].playback_position_ticks >= intro_end_ticks;
-                        intro_show_fired = pi;
-                        intro_hide_fired = pi;
-                        *current_item_id.lock().unwrap() = items[current_idx].id.clone();
-                        *current_msid.lock().unwrap()    = new_msid;
-                        *session_id.lock().unwrap()      = new_sid;
-                        current_osd_title = items[current_idx].display_name();
-                        let next = &items[current_idx];
-                        if !next.is_audio() && next.should_resume() {
-                            pending_resume_secs = Some(next.resume_seconds());
-                        }
-                        let _ = event_tx.send(PlayerEvent::TrackCompleted { idx: completed_idx, position_ticks: completed_pos, played: played_out, consume: consume_track });
-                        let _ = event_tx.send(PlayerEvent::TrackChanged(current_idx));
-                    }
-                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-next-up-play") => {
-                        log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
-                        next_up_jump = true;
-                        let _ = event_tx.send(PlayerEvent::NextUpPlay);
-                    }
-                    Some(Ok(Event::ClientMessage(args))) if args.first().copied() == Some("mbv-skip-intro-play") => {
-                        let _ = event_tx.send(PlayerEvent::SkipIntroPlay);
-                    }
-                    Some(Ok(Event::ClientMessage(args))) if use_mpv_config && args.first().copied() == Some("mouse-moved") => {
-                        let show = last_mouse_osd.is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
-                        if show {
-                            let _ = mpv.command("show-text", &[&current_osd_title, "2000"]);
-                            last_mouse_osd = Some(Instant::now());
-                        }
-                    }
-                    Some(Ok(Event::Shutdown)) => {
-                        if !stop_reported {
-                            let _ = progress_stop_tx.send(());
-                            if let Some(h) = progress_handle.take() { let _ = h.join(); }
-                            let id   = current_item_id.lock().unwrap().clone();
-                            let msid = current_msid.lock().unwrap().clone();
-                            let sid  = session_id.lock().unwrap().clone();
-                            let pos  = if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
-                            client.report_stopped(&id, &msid, pos, &sid);
-                        }
-                        let pos = if current_is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
-                        status.lock().unwrap().active = false;
-                        let _ = event_tx.send(PlayerEvent::Stopped { idx: current_idx, position_ticks: pos, played: stopped_near_end });
-                        return;
-                    }
-                    Some(Err(e)) => {
-                        log::warn!(target: "player", "event error: {}", mpv_err_str(&e));
-                    }
-                    _ => {}
-                }
-            }
+            let (sid, msid) = client.get_playback_info(&items[start_idx].id);
+            client.report_start(&items[start_idx], &msid, &sid);
+            let reporter = SessionReporter::new(
+                client, ws_tx,
+                items[start_idx].id.clone(), msid, sid,
+                items[start_idx].is_audio(),
+                status.clone(),
+            );
+            let progress = spawn_progress_reporter(reporter.clone());
+            let session  = PlaylistSession::new(
+                items, start_idx, reporter, config, status, event_tx, subs_off, server_url, token,
+            );
+            session.run(mpv, stop_rx, cmd_rx, progress);
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
     }
@@ -1696,20 +1772,20 @@ impl PlayerProxy {
     }
 
     pub fn local(player: Player, always_play_next: bool) -> Self {
-        let status = player.status.clone();
+        let status   = player.status.clone();
         let subs_off = player.subs_off.clone();
         PlayerProxy { always_play_next, status, subs_off, inner: PlayerProxyInner::Local(player) }
     }
 
     pub fn remote(remote: crate::remote_player::RemotePlayer, always_play_next: bool) -> Self {
-        let status = remote.status.clone();
+        let status   = remote.status.clone();
         let subs_off = remote.subs_off.clone();
         PlayerProxy { always_play_next, status, subs_off, inner: PlayerProxyInner::Remote(remote) }
     }
 
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play(item, client, initial_volume),
+            PlayerProxyInner::Local(p)  => p.play(item, client, initial_volume),
             PlayerProxyInner::Remote(r) => r.play(item, client, initial_volume),
         }
     }
@@ -1722,28 +1798,28 @@ impl PlayerProxy {
         initial_volume: u8,
     ) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play_playlist(items, start_idx, client, initial_volume),
+            PlayerProxyInner::Local(p)  => p.play_playlist(items, start_idx, client, initial_volume),
             PlayerProxyInner::Remote(r) => r.play_playlist(items, start_idx, client, initial_volume),
         }
     }
 
     pub fn stop(&self) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.stop(),
+            PlayerProxyInner::Local(p)  => p.stop(),
             PlayerProxyInner::Remote(r) => r.stop(),
         }
     }
 
     pub fn join(&self) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.join(),
+            PlayerProxyInner::Local(p)  => p.join(),
             PlayerProxyInner::Remote(r) => r.join(),
         }
     }
 
     pub fn send_command(&self, cmd: PlayerCommand) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.send_command(cmd),
+            PlayerProxyInner::Local(p)  => p.send_command(cmd),
             PlayerProxyInner::Remote(r) => r.send_command(cmd),
         }
     }
@@ -1754,7 +1830,7 @@ impl PlayerProxy {
 
     pub fn is_remote_disconnected(&self) -> bool {
         match &self.inner {
-            PlayerProxyInner::Local(_) => false,
+            PlayerProxyInner::Local(_)  => false,
             PlayerProxyInner::Remote(r) => r.is_disconnected(),
         }
     }
