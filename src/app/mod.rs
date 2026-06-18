@@ -25,7 +25,8 @@ fn install_signal_handlers() {
         fn signal(signum: i32, handler: unsafe extern "C" fn(i32)) -> usize;
     }
     unsafe {
-        signal(1, handle_quit_signal); // SIGHUP — terminal closed
+        signal(1,  handle_quit_signal); // SIGHUP — terminal closed
+        signal(15, handle_quit_signal); // SIGTERM — process termination
     }
 }
 
@@ -1080,9 +1081,12 @@ impl App {
             terminal.draw(|f| self.render(f))?;
         }
 
-        // Signal quit (terminal closed): save queue state and return immediately.
-        // Don't join the player thread — its report_stopped HTTP call would block
-        // while mpv's window stays visible. The process exit kills all threads.
+        // Signal quit (SIGHUP/SIGTERM — terminal closed or process termination).
+        // Stop player and join its thread so the mpv window closes and
+        // report_stopped completes before we exit. The player thread closes
+        // the window before making the HTTP call (see SingleSession/PlaylistSession
+        // run()), so the window disappears promptly even if the HTTP call takes a
+        // moment.
         if QUIT_REQUESTED.load(Ordering::Relaxed) {
             let (was_playing, current_idx, position_ticks) = {
                 let st = self.player.status.lock().unwrap();
@@ -1096,8 +1100,14 @@ impl App {
                     self.last_played_item_id = Some(item.id.clone());
                 }
             }
+            if self.queue_dirty && self.queue_is_saved_playlist() && self.autosave_playlist {
+                self.save_playlist_to_emby();
+            }
             self.save_queue_state();
-            if !self.player.is_remote() { self.player.stop(); }
+            if !self.player.is_remote() {
+                self.player.stop();
+                self.player.join_or_timeout(Duration::from_secs(5));
+            }
             let _ = restore_terminal(terminal);
             return Ok(());
         }

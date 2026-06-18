@@ -745,6 +745,7 @@ impl SingleSession {
         if !self.stop_reported {
             progress.stop_and_join();
             self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_reported = true;
         }
         let client = self.reporter.client.clone();
         // Retry mark_played in a detached thread so Shutdown never blocks.
@@ -793,16 +794,19 @@ impl SingleSession {
             }
 
             if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                progress.stop_and_join();
-                if !self.stop_reported {
-                    self.reporter.report_stopped(self.last_valid_pos);
-                    self.stop_reported = true;
-                }
+                // Issue quit immediately so the window closes without waiting for
+                // any in-flight HTTP calls. progress.stop_and_join() and
+                // report_stopped() run in on_shutdown() after the window is gone.
                 let _ = mpv.command("quit", &[]);
                 self.quit_at = Some(Instant::now());
             }
 
             if self.quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
+                // mpv never emitted Shutdown — report and bail out.
+                if !self.stop_reported {
+                    progress.stop_and_join();
+                    self.reporter.report_stopped(self.last_valid_pos);
+                }
                 let runtime  = self.status.lock().unwrap().runtime_ticks;
                 let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
                 let near_end = !is_audio && runtime > 0 && self.last_valid_pos * 20 / runtime >= 19;
@@ -1343,6 +1347,7 @@ impl PlaylistSession {
         if !self.stop_reported {
             progress.stop_and_join();
             self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_reported = true;
         }
         self.status.lock().unwrap().active = false;
         let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -1360,16 +1365,19 @@ impl PlaylistSession {
             }
 
             if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                progress.stop_and_join();
-                if !self.stop_reported {
-                    self.reporter.report_stopped(self.last_valid_pos);
-                    self.stop_reported = true;
-                }
+                // Issue quit immediately so the window closes without waiting for
+                // any in-flight HTTP calls. progress.stop_and_join() and
+                // report_stopped() run in on_shutdown() after the window is gone.
                 let _ = mpv.command("quit", &[]);
                 self.quit_at = Some(Instant::now());
             }
 
             if self.quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
+                // mpv never emitted Shutdown — report and bail out.
+                if !self.stop_reported {
+                    progress.stop_and_join();
+                    self.reporter.report_stopped(self.last_valid_pos);
+                }
                 self.status.lock().unwrap().active = false;
                 let _ = self.event_tx.send(PlayerEvent::Stopped {
                     idx: self.current_idx,
@@ -1527,6 +1535,20 @@ impl Player {
         let handle = self.thread_handle.lock().unwrap().take();
         if let Some(h) = handle {
             let _ = h.join();
+        }
+    }
+
+    // Join the player thread but give up after `timeout`. Used on SIGHUP/SIGTERM
+    // so the process always exits even if an HTTP call is hanging.
+    pub fn join_or_timeout(&self, timeout: std::time::Duration) {
+        let handle = self.thread_handle.lock().unwrap().take();
+        if let Some(h) = handle {
+            let (tx, rx) = std::sync::mpsc::channel::<()>();
+            std::thread::spawn(move || {
+                let _ = h.join();
+                let _ = tx.send(());
+            });
+            let _ = rx.recv_timeout(timeout);
         }
     }
 
@@ -1814,6 +1836,13 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p)  => p.join(),
             PlayerProxyInner::Remote(r) => r.join(),
+        }
+    }
+
+    pub fn join_or_timeout(&self, timeout: std::time::Duration) {
+        match &self.inner {
+            PlayerProxyInner::Local(p)  => p.join_or_timeout(timeout),
+            PlayerProxyInner::Remote(_) => {}
         }
     }
 

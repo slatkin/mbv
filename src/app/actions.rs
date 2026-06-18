@@ -1307,7 +1307,7 @@ impl App {
         }
     }
 
-    fn queue_is_saved_playlist(&self) -> bool {
+    pub(super) fn queue_is_saved_playlist(&self) -> bool {
         matches!(&self.queue_source, crate::config::QueueSource::Playlist { id: Some(_), .. })
     }
 
