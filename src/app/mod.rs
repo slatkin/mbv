@@ -652,9 +652,13 @@ impl App {
 
         install_signal_handlers();
 
+        let mut last_render = Instant::now() - Duration::from_secs(2);
+
         'outer: loop {
+            let mut had_events = false;
             if QUIT_REQUESTED.load(Ordering::Relaxed) { break; }
             if let Ok(ev) = self.player_rx.try_recv() {
+                had_events = true;
                 match ev {
                     PlayerEvent::Stopped { idx, position_ticks, played } => {
                         if self.player.is_remote_disconnected() {
@@ -800,6 +804,7 @@ impl App {
             }
 
             while let Ok(action) = self.notif_action_rx.try_recv() {
+                had_events = true;
                 match action.as_str() {
                     "skip_intro:skip" => {
                         if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
@@ -837,10 +842,12 @@ impl App {
             }
 
             while let Ok(ev) = self.lib_rx.try_recv() {
+                had_events = true;
                 self.handle_lib_event(ev);
             }
 
             while let Ok(ev) = self.sessions_rx.try_recv() {
+                had_events = true;
                 match ev {
                     SessionEvent::Loaded(sessions) => {
                         let old_id = self.sessions.get(self.sessions_cursor).map(|s| s.id.clone());
@@ -960,6 +967,7 @@ impl App {
             }
 
             while let Ok((item_id, bytes_opt)) = self.card_image_rx.try_recv() {
+                had_events = true;
                 self.card_image_loading.remove(&item_id);
                 let state: Option<StatefulProtocol> = bytes_opt
                     .and_then(|b| image::load_from_memory(&b).ok())
@@ -979,6 +987,7 @@ impl App {
             }
 
             while let Ok(ev) = self.ws_rx.try_recv() {
+                had_events = true;
                 self.handle_ws_event(ev);
             }
 
@@ -1014,6 +1023,7 @@ impl App {
             }
 
             if event::poll(Duration::from_millis(50))? {
+                had_events = true;
                 let ev = event::read()?;
                 let is_home_card_nav = self.home_card_view && self.tab_idx == 0;
                 match ev {
@@ -1074,11 +1084,14 @@ impl App {
                 }
             }
 
-            if self.force_clear {
-                self.force_clear = false;
-                terminal.clear()?;
+            if had_events || self.force_clear || last_render.elapsed() >= Duration::from_secs(1) {
+                if self.force_clear {
+                    self.force_clear = false;
+                    terminal.clear()?;
+                }
+                terminal.draw(|f| self.render(f))?;
+                last_render = Instant::now();
             }
-            terminal.draw(|f| self.render(f))?;
         }
 
         // Signal quit (SIGHUP/SIGTERM — terminal closed or process termination).
