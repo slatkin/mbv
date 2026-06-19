@@ -210,7 +210,13 @@ impl App {
                 title_area,
             );
         }
+        let is_library_tab = self.tab_idx >= self.lib_tab_offset()
+            && self.tab_idx != self.log_tab_idx();
+        let panel_and_library = show_controls && !in_presentation && self.show_playback_panel && is_library_tab;
+
         if show_controls && !in_presentation && self.show_playback_panel {
+            // Always draw the dashes; render_library overlays breadcrumb text
+            // on top when this is a library tab.
             f.render_widget(
                 Paragraph::new(Span::styled(
                     "─".repeat(area.width as usize),
@@ -235,7 +241,8 @@ impl App {
         } else if self.tab_idx == self.log_tab_idx() {
             self.render_log(f, main_area);
         } else {
-            self.render_library(f, main_area, self.tab_idx - self.lib_tab_offset());
+            let crumb_area = if panel_and_library { Some(status_area) } else { None };
+            self.render_library(f, main_area, self.tab_idx - self.lib_tab_offset(), crumb_area);
         }
 
         if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {

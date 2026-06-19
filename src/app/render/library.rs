@@ -11,22 +11,35 @@ use super::super::palette;
 use super::super::ui_util::{fmt_duration, trunc_overview, trunc_str};
 
 impl App {
-    pub(super) fn render_library(&mut self, f: &mut Frame, area: Rect, lib_idx: usize) {
+    // crumb_area: when Some, the playback panel's bottom line is available as a
+    // shared breadcrumb row — skip the top border and write crumb text there instead.
+    // When None, own the top border (showing it only when there's something to display).
+    pub(super) fn render_library(&mut self, f: &mut Frame, area: Rect, lib_idx: usize, crumb_area: Option<Rect>) {
+        let panel_visible = crumb_area.is_some();
         let is_loading = self.libs[lib_idx].nav_stack.last().map(|l| l.loading).unwrap_or(true);
         if is_loading && self.libs[lib_idx].search.is_none() {
-            let block = Block::default()
-                .borders(Borders::TOP).border_type(BorderType::Rounded)
-                .border_style(Style::default().fg(palette::IRIS));
-            let inner = block.inner(area);
-            f.render_widget(block, area);
-            let mid = inner.y + inner.height / 2;
-            let label_area = Rect { y: mid, height: 1, ..inner };
-            f.render_widget(
-                Paragraph::new("Loading...")
-                    .alignment(Alignment::Center)
-                    .style(Style::default().fg(palette::MUTED)),
-                label_area,
-            );
+            if panel_visible {
+                let mid = area.y + area.height / 2;
+                f.render_widget(
+                    Paragraph::new("Loading...")
+                        .alignment(Alignment::Center)
+                        .style(Style::default().fg(palette::MUTED)),
+                    Rect { y: mid, height: 1, ..area },
+                );
+            } else {
+                let block = Block::default()
+                    .borders(Borders::TOP).border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(palette::IRIS));
+                let inner = block.inner(area);
+                f.render_widget(block, area);
+                let mid = inner.y + inner.height / 2;
+                f.render_widget(
+                    Paragraph::new("Loading...")
+                        .alignment(Alignment::Center)
+                        .style(Style::default().fg(palette::MUTED)),
+                    Rect { y: mid, height: 1, ..inner },
+                );
+            }
             return;
         }
 
@@ -39,8 +52,10 @@ impl App {
 
         let sep = " \u{bb} ";
         let is_deep = crumb_names.len() > 1;
+        let has_search = self.libs[lib_idx].search.is_some();
+        let show_border = !panel_visible && (is_deep || has_search);
 
-        let crumb_row = area.y;
+        let crumb_row = crumb_area.map(|a| a.y).unwrap_or(area.y);
         let mut x = area.x + 2;
 
         let crumb_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
@@ -59,11 +74,9 @@ impl App {
         }
         self.layout_breadcrumbs = if is_deep { new_breadcrumbs } else { Vec::new() };
 
-        let mut block = Block::default()
-            .borders(Borders::TOP).border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(palette::IRIS));
-        let search_ref = self.libs[lib_idx].search.as_ref();
-        if let Some(s) = search_ref {
+        // Build the search/crumb label and render it — either onto crumb_area
+        // (panel visible) or as a block title on the top border (panel hidden).
+        let search_label: Option<Line<'static>> = if let Some(s) = self.libs[lib_idx].search.as_ref() {
             let label = if s.loading {
                 format!("Search {} (loading…): {}█", self.libs[lib_idx].library.name, s.query)
             } else {
@@ -71,20 +84,40 @@ impl App {
             };
             let border_style = Style::default().fg(palette::IRIS);
             let text_style   = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
-            let title_spans = Line::from(vec![
+            Some(Line::from(vec![
                 Span::styled("─", border_style),
                 Span::raw(" "),
                 Span::styled(label, text_style),
                 Span::raw(" "),
-            ]);
-            block = block.title(title_spans);
+            ]))
         } else if is_deep {
-            crumb_spans.insert(0, Span::raw(" "));
-            crumb_spans.push(Span::raw(" "));
-            block = block.title(Line::from(crumb_spans));
-        }
-        let inner = block.inner(area);
-        f.render_widget(block, area);
+            let mut spans = crumb_spans;
+            spans.insert(0, Span::raw(" "));
+            spans.push(Span::raw(" "));
+            Some(Line::from(spans))
+        } else {
+            None
+        };
+
+        let inner = if panel_visible {
+            if let (Some(label), Some(ca)) = (search_label, crumb_area) {
+                f.render_widget(Paragraph::new(label), ca);
+            }
+            area
+        } else if show_border {
+            let mut block = Block::default()
+                .borders(Borders::TOP).border_type(BorderType::Rounded)
+                .border_style(Style::default().fg(palette::IRIS));
+            if let Some(label) = search_label {
+                block = block.title(label);
+            }
+            let inner = block.inner(area);
+            f.render_widget(block, area);
+            inner
+        } else {
+            area
+        };
+
         if self.is_album_level(lib_idx) && self.libs[lib_idx].search.is_none() {
             self.render_album_view(f, inner, lib_idx);
         } else {
