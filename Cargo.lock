@@ -1432,6 +1432,7 @@ dependencies = [
  "fuzzy-matcher",
  "image",
  "ksni",
+ "libc",
  "libmpv2",
  "libmpv2-sys",
  "log",

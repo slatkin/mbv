@@ -794,15 +794,11 @@ impl SingleSession {
             }
 
             if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                // Issue quit immediately so the window closes without waiting for
-                // any in-flight HTTP calls. progress.stop_and_join() and
-                // report_stopped() run in on_shutdown() after the window is gone.
                 let _ = mpv.command("quit", &[]);
                 self.quit_at = Some(Instant::now());
             }
 
             if self.quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
-                // mpv never emitted Shutdown — report and bail out.
                 if !self.stop_reported {
                     progress.stop_and_join();
                     self.reporter.report_stopped(self.last_valid_pos);
@@ -1365,15 +1361,11 @@ impl PlaylistSession {
             }
 
             if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                // Issue quit immediately so the window closes without waiting for
-                // any in-flight HTTP calls. progress.stop_and_join() and
-                // report_stopped() run in on_shutdown() after the window is gone.
                 let _ = mpv.command("quit", &[]);
                 self.quit_at = Some(Instant::now());
             }
 
             if self.quit_at.is_some_and(|t| t.elapsed() > Duration::from_secs(2)) {
-                // mpv never emitted Shutdown — report and bail out.
                 if !self.stop_reported {
                     progress.stop_and_join();
                     self.reporter.report_stopped(self.last_valid_pos);
@@ -1456,6 +1448,24 @@ impl PlaylistSession {
                 }
                 _ => {}
             }
+        }
+    }
+}
+
+// ── QuitHandle ───────────────────────────────────────────────────────────────
+
+/// Clonable handle to stop the local player from any thread. Calling stop()
+/// sends mpv a quit command (closes the window immediately); the player thread
+/// then reports stopped to Emby before exiting.
+#[derive(Clone)]
+pub struct QuitHandle {
+    stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+}
+
+impl QuitHandle {
+    pub fn stop(&self) {
+        if let Some(tx) = self.stop_tx.lock().unwrap().take() {
+            let _ = tx.send(());
         }
     }
 }
@@ -1861,6 +1871,15 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(_)  => false,
             PlayerProxyInner::Remote(r) => r.is_disconnected(),
+        }
+    }
+
+    /// Returns a clonable stop handle for use from other threads (e.g. the
+    /// quit watchdog). None in remote mode — the daemon owns the player.
+    pub fn quit_handle(&self) -> Option<QuitHandle> {
+        match &self.inner {
+            PlayerProxyInner::Local(p)  => Some(QuitHandle { stop_tx: p.stop_tx.clone() }),
+            PlayerProxyInner::Remote(_) => None,
         }
     }
 }

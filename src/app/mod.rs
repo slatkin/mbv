@@ -9,6 +9,7 @@ pub mod render;
 use std::sync::{Arc, Mutex, mpsc};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use libc;
 
 static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 
@@ -28,6 +29,37 @@ fn install_signal_handlers() {
         signal(1,  handle_quit_signal); // SIGHUP — terminal closed
         signal(15, handle_quit_signal); // SIGTERM — process termination
     }
+}
+
+// Returns true if stdin (fd 0) has POLLHUP — the PTY master was closed.
+fn stdin_has_hup() -> bool {
+    let mut pfd = libc::pollfd { fd: 0, events: 0, revents: 0 };
+    unsafe { libc::poll(&mut pfd, 1, 0) > 0 && (pfd.revents & libc::POLLHUP as libc::c_short) != 0 }
+}
+
+// Watchdog thread: detects terminal close (SIGHUP or stdin POLLHUP) and
+// ensures the mpv window closes and the process exits even when the main event
+// loop is wedged in a blocking crossterm epoll call (which SA_RESTART prevents
+// SIGHUP from interrupting). Calls player stop directly — bypassing the event
+// loop — so the mpv window closes within one wait_event(0.5) tick. The player
+// thread then reports stopped to Emby on its own. Force-exits after 6s as a
+// backstop for hung Emby HTTP calls.
+fn start_quit_watchdog(quit_handle: Option<crate::player::QuitHandle>) {
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(50));
+            let sighup = QUIT_REQUESTED.load(Ordering::Relaxed);
+            let hup    = stdin_has_hup();
+            if sighup || hup {
+                QUIT_REQUESTED.store(true, Ordering::Relaxed);
+                if let Some(ref h) = quit_handle {
+                    h.stop();
+                }
+                std::thread::sleep(Duration::from_secs(6));
+                std::process::exit(0);
+            }
+        }
+    });
 }
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -651,6 +683,7 @@ impl App {
         terminal.draw(|f| self.render(f))?;
 
         install_signal_handlers();
+        start_quit_watchdog(self.player.quit_handle());
 
         let mut last_render = Instant::now() - Duration::from_secs(2);
 
@@ -1022,9 +1055,19 @@ impl App {
                 self.last_capabilities = Instant::now();
             }
 
-            if event::poll(Duration::from_millis(50))? {
+            // Break instead of propagating I/O errors: when the terminal closes
+            // (SIGHUP), poll/read fail because the fd is gone. Breaking lets the
+            // post-loop cleanup run (player.stop + join) so the mpv window closes.
+            let poll_ready = match event::poll(Duration::from_millis(50)) {
+                Ok(r) => r,
+                Err(_) => break,
+            };
+            if poll_ready {
                 had_events = true;
-                let ev = event::read()?;
+                let ev = match event::read() {
+                    Ok(ev) => ev,
+                    Err(_) => break,
+                };
                 let is_home_card_nav = self.home_card_view && self.tab_idx == 0;
                 match ev {
                     Event::Key(key) => {
@@ -1034,11 +1077,11 @@ impl App {
                         if self.handle_key(key) { break; }
                         // Drain queued duplicate nav keys to prevent scroll backlog.
                         if nav_code {
-                            while event::poll(Duration::ZERO)? {
-                                match event::read()? {
-                                    Event::Key(k) if k.kind == KeyEventKind::Press
+                            while event::poll(Duration::ZERO).unwrap_or(false) {
+                                match event::read() {
+                                    Ok(Event::Key(k)) if k.kind == KeyEventKind::Press
                                         && k.code == key.code => {}
-                                    other => {
+                                    Ok(other) => {
                                         match other {
                                             Event::Key(k) if k.kind == KeyEventKind::Press => {
                                                 if self.handle_key(k) { break 'outer; }
@@ -1048,6 +1091,7 @@ impl App {
                                         }
                                         break;
                                     }
+                                    Err(_) => break 'outer,
                                 }
                             }
                         }
@@ -1061,12 +1105,12 @@ impl App {
                         self.handle_mouse(mouse);
                         // Drain queued scroll events to prevent scroll backlog.
                         if nav_scroll {
-                            while event::poll(Duration::ZERO)? {
-                                match event::read()? {
-                                    Event::Mouse(m) if matches!(m.kind,
+                            while event::poll(Duration::ZERO).unwrap_or(false) {
+                                match event::read() {
+                                    Ok(Event::Mouse(m)) if matches!(m.kind,
                                         crossterm::event::MouseEventKind::ScrollUp |
                                         crossterm::event::MouseEventKind::ScrollDown) => {}
-                                    other => {
+                                    Ok(other) => {
                                         match other {
                                             Event::Key(k) if k.kind == KeyEventKind::Press => {
                                                 if self.handle_key(k) { break 'outer; }
@@ -1076,6 +1120,7 @@ impl App {
                                         }
                                         break;
                                     }
+                                    Err(_) => break 'outer,
                                 }
                             }
                         }

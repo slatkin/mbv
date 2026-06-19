@@ -28,6 +28,7 @@ ratatui-image = { version = "11", default-features = false, features = ["crosste
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif"] }
 unicode-width = "0.2.2"
 log = "0.4"
+libc = "0.2"
 
 [build-dependencies]
 resvg = "0.47"
