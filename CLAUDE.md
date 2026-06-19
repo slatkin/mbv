@@ -30,6 +30,10 @@ Use `cargo clippy` as the linter. See CHECKIN.md for pre-commit steps.
 6. Push tags
 7. Monitor CI for green
 
+## Working in This Repo
+
+**Explore**: Use the Explore subagent for any open-ended search — finding where something is defined, what calls a function, where a pattern is used. Only use Read/grep directly when the relevant file is already known.
+
 ## Code quality
 
 Always fix compile warnings — delete unused code rather than suppressing with `#[allow]`.
