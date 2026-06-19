@@ -23,6 +23,7 @@ impl RemotePlayer {
 
         let status = Arc::new(Mutex::new(PlayerStatus {
             position_ticks: 0,
+            last_valid_pos: 0,
             runtime_ticks: 0,
             paused: false,
             volume: 100,

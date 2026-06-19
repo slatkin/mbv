@@ -1172,9 +1172,9 @@ impl App {
 
         // Leave the daemon's player running when the TUI disconnects; only
         // stop the player when we own it locally.
-        let (was_playing, current_idx, position_ticks) = {
+        let (was_playing, current_idx, last_valid_pos) = {
             let st = self.player.status.lock().unwrap();
-            (st.active, st.current_idx, st.position_ticks)
+            (st.active, st.current_idx, st.last_valid_pos)
         };
         if !self.player.is_remote() {
             self.player.stop();
@@ -1182,10 +1182,12 @@ impl App {
         self.player.join();
         // Update the playing item's position before saving — the PlayerEvent::Stopped
         // that carries this update is never processed after we break out of the event loop.
+        // Use last_valid_pos (never zeroed during track transitions) rather than
+        // position_ticks (transiently 0 when PlaylistSession advances to the next track).
         if was_playing {
             if let Some(item) = self.player_tab.items.get_mut(current_idx) {
-                if position_ticks > 0 && !item.is_audio() {
-                    item.playback_position_ticks = position_ticks;
+                if last_valid_pos > 0 && !item.is_audio() {
+                    item.playback_position_ticks = last_valid_pos;
                 }
                 self.last_played_item_id = Some(item.id.clone());
             }
@@ -1333,7 +1335,7 @@ mod tests {
         use crate::player::{PlayerProxy, PlayerStatus};
 
         let status = Arc::new(Mutex::new(PlayerStatus {
-            position_ticks: 0, runtime_ticks: 0, paused: false,
+            position_ticks: 0, last_valid_pos: 0, runtime_ticks: 0, paused: false,
             volume: 100, volume_max: 100, current_idx: 0, active: false,
             title: String::new(), audio_tracks: Vec::new(), sub_tracks: Vec::new(),
             audio_id: 0, audio_lang: String::new(), sub_id: 0, muted: false, video_height: 0,

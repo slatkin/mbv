@@ -22,6 +22,8 @@ fn mpv_title_opt(title: &str) -> String {
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlayerStatus {
     pub position_ticks: i64,
+    #[serde(default)]
+    pub last_valid_pos: i64,
     pub runtime_ticks: i64,
     pub paused: bool,
     pub volume: i64,
@@ -635,8 +637,14 @@ impl SingleSession {
 
     fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
-        self.status.lock().unwrap().position_ticks = ticks;
-        if pos_secs > 0.0 { self.last_valid_pos = ticks; }
+        {
+            let mut st = self.status.lock().unwrap();
+            st.position_ticks = ticks;
+            if pos_secs > 0.0 {
+                self.last_valid_pos = ticks;
+                st.last_valid_pos = ticks;
+            }
+        }
 
         const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
         if !self.next_up_fired {
@@ -1152,16 +1160,19 @@ impl PlaylistSession {
 
     fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
         let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
-        self.status.lock().unwrap().position_ticks = ticks;
-        // Don't update last_valid_pos while a resume seek is pending: mpv fires
-        // time-pos=0 before the seek lands, which would overwrite the correct position.
-        if pos_secs > 0.0 && self.pending_resume_secs.is_none() {
-            self.last_valid_pos = ticks;
+        {
+            let mut st = self.status.lock().unwrap();
+            st.position_ticks = ticks;
+            // Don't update last_valid_pos while a resume seek is pending: mpv fires
+            // time-pos=0 before the seek lands, which would overwrite the correct position.
+            if pos_secs > 0.0 && self.pending_resume_secs.is_none() {
+                self.last_valid_pos = ticks;
+                st.last_valid_pos = ticks;
+            }
         }
 
         // Playlist next-up: match Emby Web's timing from videoosd.js.
-        // 90 s before end regardless of runtime length.
-        // Minimum episode: 10 min. Minimum remaining when shown: 20 s.
+        // 60 s before end. Minimum episode: 10 min. Minimum remaining when shown: 20 s.
         const MIN_RUNTIME_TICKS: i64 = 600 * TICKS_PER_SECOND;
         const MIN_REMAIN_TICKS:  i64 = 20  * TICKS_PER_SECOND;
         if self.current_idx + 1 < self.items.len() {
@@ -1267,14 +1278,11 @@ impl PlaylistSession {
         let completed_idx = self.current_idx;
         let natural       = reason == mpv_end_file_reason::Eof
             && self.items[completed_idx].runtime_ticks > 0;
-        // Also treat as played if user skipped within the last 5% of runtime.
-        let near_end = !natural && !completed_is_audio
-            && self.items[completed_idx].runtime_ticks > 0
-            && self.last_valid_pos * 20 / self.items[completed_idx].runtime_ticks >= 19;
+        let near_end = is_near_end(completed_is_audio, natural, self.last_valid_pos, self.items[completed_idx].runtime_ticks);
         let was_next_up   = std::mem::replace(&mut self.next_up_jump, false);
         let played_out    = (natural || near_end || was_next_up) && !completed_is_audio;
         let consume_track = (natural || near_end || was_next_up) && !completed_is_audio;
-        let completed_pos = if completed_is_audio || natural || near_end || was_next_up { 0 } else { self.last_valid_pos };
+        let completed_pos = playlist_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
 
         let next_idx = self.forced_idx.take().unwrap_or(self.current_idx + 1);
 
@@ -1521,6 +1529,7 @@ impl Player {
             cmd_tx: Arc::new(Mutex::new(None)),
             status: Arc::new(Mutex::new(PlayerStatus {
                 position_ticks: 0,
+                last_valid_pos: 0,
                 runtime_ticks: 0,
                 paused: false,
                 volume: 100,
@@ -1884,6 +1893,21 @@ impl PlayerProxy {
     }
 }
 
+// True when the track ended close enough to its natural end to count as played.
+// Threshold: position ≥ 95% of runtime (19/20 integer check avoids floating point).
+pub(crate) fn is_near_end(is_audio: bool, natural: bool, last_valid_pos: i64, runtime_ticks: i64) -> bool {
+    !natural && !is_audio && runtime_ticks > 0
+        && last_valid_pos * 20 / runtime_ticks >= 19
+}
+
+// Position to report to Emby when a playlist track ends.
+// Zero means "treat as fully played / reset resume point".
+// was_next_up alone does NOT zero the position — the user may have dismissed
+// or ignored the overlay, and we must preserve where they actually were.
+pub(crate) fn playlist_completed_pos(is_audio: bool, natural: bool, near_end: bool, last_valid_pos: i64) -> i64 {
+    if is_audio || natural || near_end { 0 } else { last_valid_pos }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1973,5 +1997,59 @@ mod tests {
         let json = serde_json::to_string(&cmd).unwrap();
         let decoded: PlayerCommand = serde_json::from_str(&json).unwrap();
         assert!(matches!(decoded, PlayerCommand::LoadNew { .. }));
+    }
+
+    // ── playlist_completed_pos / is_near_end ─────────────────────────────────
+
+    const RUNTIME: i64 = 600 * TICKS_PER_SECOND; // 10-minute episode
+
+    #[test]
+    fn mid_episode_quit_preserves_position() {
+        // User quits at ~88% (528 s into a 600 s episode). Not natural, not near-end,
+        // next-up overlay may have appeared but next_up_jump was never set because the
+        // user pressed q rather than clicking the overlay. Position must be preserved.
+        let pos = 528 * TICKS_PER_SECOND;
+        assert!(!is_near_end(false, false, pos, RUNTIME)); // 88% < 95%
+        assert_eq!(playlist_completed_pos(false, false, false, pos), pos);
+    }
+
+    #[test]
+    fn next_up_fired_preserves_position() {
+        // Bug fix: was_next_up alone used to force completed_pos = 0. After the fix,
+        // only natural EOF or >=95% position zeroes it. next_up_jump is now irrelevant
+        // to completed_pos — playlist_completed_pos doesn't receive it at all.
+        let pos = 540 * TICKS_PER_SECOND; // 90% — past 60s-before-end threshold
+        assert!(!is_near_end(false, false, pos, RUNTIME)); // still below 95%
+        assert_eq!(playlist_completed_pos(false, false, false, pos), pos);
+    }
+
+    #[test]
+    fn natural_end_resets_position() {
+        let pos = RUNTIME - TICKS_PER_SECOND; // 1 s before end
+        assert_eq!(playlist_completed_pos(false, true, false, pos), 0);
+    }
+
+    #[test]
+    fn near_end_boundary_resets_position() {
+        // Exactly 95% (19/20) is near-end; 94% is not.
+        let at_95   = RUNTIME * 19 / 20;
+        let below   = at_95 - 1;
+        assert!(is_near_end(false, false, at_95, RUNTIME));
+        assert!(!is_near_end(false, false, below, RUNTIME));
+        assert_eq!(playlist_completed_pos(false, false, true,  at_95), 0);
+        assert_eq!(playlist_completed_pos(false, false, false, below), below);
+    }
+
+    #[test]
+    fn audio_track_always_resets_position() {
+        let pos = 300 * TICKS_PER_SECOND; // 50%
+        assert!(!is_near_end(true, false, pos, RUNTIME));
+        assert_eq!(playlist_completed_pos(true, false, false, pos), 0);
+    }
+
+    #[test]
+    fn near_end_requires_runtime_known() {
+        // If runtime_ticks is 0 (unknown), near-end must never trigger.
+        assert!(!is_near_end(false, false, 1_000_000_000, 0));
     }
 }
