@@ -682,6 +682,7 @@ impl EmbyClient {
             "PlayMethod": "DirectPlay",
             "PositionTicks": item.playback_position_ticks,
             "RunTimeTicks": item.runtime_ticks,
+            "QueueableMediaTypes": ["Audio", "Video"],
         });
         log::info!(target: "api", "→ Playing item={} msid={media_source_id} pos={}", item.id, item.playback_position_ticks);
         match self.post("/Sessions/Playing").send_json(body) {
@@ -703,6 +704,7 @@ impl EmbyClient {
             "PlayMethod": "DirectPlay",
             "PositionTicks": position_ticks,
             "EventName": event_name,
+            "QueueableMediaTypes": ["Audio", "Video"],
         });
         let msg = serde_json::json!({
             "MessageType": "ReportPlaybackProgress",
@@ -725,6 +727,7 @@ impl EmbyClient {
             "PlayMethod": "DirectPlay",
             "PositionTicks": position_ticks,
             "EventName": event_name,
+            "QueueableMediaTypes": ["Audio", "Video"],
         });
         log::debug!(target: "api", "→ Progress pos={position_ticks} paused={is_paused} event={event_name}");
         match self.post("/Sessions/Playing/Progress").send_json(body) {
@@ -744,14 +747,19 @@ impl EmbyClient {
         }
     }
 
-    pub fn report_stopped(&self, item_id: &str, media_source_id: &str, position_ticks: i64, session_id: &str) {
+    pub fn report_stopped(&self, item_id: &str, media_source_id: &str, position_ticks: i64, session_id: &str, runtime_ticks: i64) {
         let body = ureq::json!({
             "UserId": self.user_id,
             "ItemId": item_id,
             "MediaSourceId": media_source_id,
             "PlaySessionId": session_id,
             "PositionTicks": position_ticks,
+            "RunTimeTicks": runtime_ticks,
+            "CanSeek": true,
+            "IsPaused": false,
+            "IsMuted": false,
             "PlayMethod": "DirectPlay",
+            "QueueableMediaTypes": ["Audio", "Video"],
         });
         log::info!(target: "api", "→ Stopped pos={position_ticks}");
         match self.post("/Sessions/Playing/Stopped").send_json(body) {
@@ -760,24 +768,6 @@ impl EmbyClient {
             }
             Err(e) => {
                 log::warn!(target: "api", "← ERR Stopped: {e}");
-            }
-        }
-
-        if !self.user_id.is_empty() {
-            let path = format!("/Users/{}/PlayingItems/{}", self.user_id, item_id);
-            log::info!(target: "api", "→ DELETE PlayingItem pos={position_ticks}");
-            match self.delete(&path)
-                .query("MediaSourceId", media_source_id)
-                .query("PositionTicks", &position_ticks.to_string())
-                .query("PlaySessionId", session_id)
-                .call()
-            {
-                Ok(r)  => {
-                    log::info!(target: "api", "← {} PlayingItem", r.status());
-                }
-                Err(e) => {
-                    log::warn!(target: "api", "← ERR PlayingItem: {e}");
-                }
             }
         }
     }

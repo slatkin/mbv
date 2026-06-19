@@ -11,14 +11,20 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use libc;
 
-static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
+static QUIT_REQUESTED:  AtomicBool = AtomicBool::new(false);
+// Set only by SIGHUP or stdin POLLHUP (terminal vanished). Never set by q/SIGTERM.
+// The watchdog's forced exit arms only on this flag so clean q-quits are never raced.
+static TERMINAL_GONE:   AtomicBool = AtomicBool::new(false);
 
 pub(super) const PLAYLIST_VIEW_CARDS: u8        = 1;
 pub(super) const PLAYLIST_VIEW_PRESENTATION: u8 = 2;
 pub(super) const PLAYLIST_VIEW_COUNT: u8        = 3;
 
-extern "C" fn handle_quit_signal(_: i32) {
+extern "C" fn handle_quit_signal(signum: i32) {
     QUIT_REQUESTED.store(true, Ordering::Relaxed);
+    if signum == 1 { // SIGHUP — terminal closed
+        TERMINAL_GONE.store(true, Ordering::Relaxed);
+    }
 }
 
 fn install_signal_handlers() {
@@ -42,21 +48,30 @@ fn stdin_has_hup() -> bool {
 // loop is wedged in a blocking crossterm epoll call (which SA_RESTART prevents
 // SIGHUP from interrupting). Calls player stop directly — bypassing the event
 // loop — so the mpv window closes within one wait_event(0.5) tick. The player
-// thread then reports stopped to Emby on its own. Force-exits after 6s as a
+// thread then reports stopped to Emby on its own. Force-exits after 15s as a
 // backstop for hung Emby HTTP calls.
+//
+// The forced exit is gated on TERMINAL_GONE (set only by SIGHUP/stdin POLLHUP),
+// never on QUIT_REQUESTED alone. A clean q-quit sets QUIT_REQUESTED but not
+// TERMINAL_GONE, so the watchdog stops mpv but never races report_stopped.
 fn start_quit_watchdog(quit_handle: Option<crate::player::QuitHandle>) {
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(50));
-            let sighup = QUIT_REQUESTED.load(Ordering::Relaxed);
-            let hup    = stdin_has_hup();
-            if sighup || hup {
+            let hup = stdin_has_hup();
+            if hup {
+                TERMINAL_GONE.store(true, Ordering::Relaxed);
+            }
+            if TERMINAL_GONE.load(Ordering::Relaxed) || QUIT_REQUESTED.load(Ordering::Relaxed) {
                 QUIT_REQUESTED.store(true, Ordering::Relaxed);
                 if let Some(ref h) = quit_handle {
                     h.stop();
                 }
-                std::thread::sleep(Duration::from_secs(6));
-                std::process::exit(0);
+                if TERMINAL_GONE.load(Ordering::Relaxed) {
+                    std::thread::sleep(Duration::from_secs(15));
+                    std::process::exit(0);
+                }
+                return; // clean quit — let the main thread finish report_stopped
             }
         }
     });

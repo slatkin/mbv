@@ -277,8 +277,10 @@ impl SessionReporter {
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
     fn report_stopped(&self, last_valid_pos: i64) {
         let (id, msid, sid) = self.ids.lock().unwrap().clone();
-        let pos  = if self.is_audio.load(Ordering::Relaxed) { 0 } else { last_valid_pos };
-        self.client.report_stopped(&id, &msid, pos, &sid);
+        let is_audio = self.is_audio.load(Ordering::Relaxed);
+        let pos = if is_audio { 0 } else { last_valid_pos };
+        let runtime_ticks = self.status.lock().unwrap().runtime_ticks;
+        self.client.report_stopped(&id, &msid, pos, &sid, runtime_ticks);
     }
 
     fn report_ping(&self) {
@@ -394,16 +396,14 @@ fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
 fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
     let handle = thread::spawn(move || {
-        let mut ticks: u32 = 0;
         loop {
             match stop_rx.recv_timeout(Duration::from_secs(10)) {
                 Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 Err(mpsc::RecvTimeoutError::Timeout) => {
-                    ticks += 1;
-                    if !reporter.is_audio.load(Ordering::Relaxed) && ticks.is_multiple_of(3) {
-                        reporter.report_progress("TimeUpdate");
-                    } else {
+                    if reporter.is_audio.load(Ordering::Relaxed) {
                         reporter.report_ping();
+                    } else {
+                        reporter.report_progress("TimeUpdate");
                     }
                 }
             }

@@ -91,24 +91,16 @@ impl log::Log for GlobalLogger {
     fn log(&self, record: &log::Record) {
         // mbv targets are bare words ("api", "ws", "img", etc.) with no "::".
         // Third-party crates use module paths ("rustls::client", etc.) — suppress
-        // their Info/Debug to keep the log tab clean, but still write to file.
-        let is_third_party = record.target().contains("::");
-        let entry = LogEntry {
-            level: record.level().into(),
-            source: record.target().to_string(),
-            msg: record.args().to_string(),
-        };
+        // them everywhere below Warn level.
+        if record.target().contains("::") && record.level() > log::Level::Warn {
+            return;
+        }
         if let Some(log) = GLOBAL.get() {
-            if is_third_party && record.level() > log::Level::Warn {
-                // write to file only, skip ring buffer
-                if let Ok(mut guard) = log.file.lock() {
-                    if let Some(f) = guard.as_mut() {
-                        let _ = writeln!(f, "[{} {}] {}", entry.level.label(), entry.source, entry.msg);
-                    }
-                }
-            } else {
-                log.push_entry(entry);
-            }
+            log.push_entry(LogEntry {
+                level: record.level().into(),
+                source: record.target().to_string(),
+                msg: record.args().to_string(),
+            });
         }
     }
 
