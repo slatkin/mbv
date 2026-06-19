@@ -52,25 +52,31 @@ impl App {
 
             let selected = i == self.sessions_cursor;
             let is_connected = self.connected_session_id.as_deref() == Some(s.id.as_str());
-            let bg = if selected { palette::FOCUSED } else { palette::BASE };
             let name_color = if selected { palette::IRIS } else { palette::TEXT };
-            let dim = Style::default().fg(palette::MUTED).bg(bg);
-            let card_style = Style::default().bg(bg);
+            let dim = Style::default().fg(palette::MUTED);
 
-            let prefix = if selected { "\u{25b6} " } else { "  " };
+            // Indicator spans all 3 rows of the card.
+            if selected {
+                let bar: Vec<Line> = (0..CARD_H)
+                    .map(|_| Line::from(Span::styled("\u{258c}", Style::default().fg(palette::IRIS))))
+                    .collect();
+                f.render_widget(Paragraph::new(bar), Rect { x: ix, y: entry_y, width: 1, height: CARD_H });
+            }
+            let text_x = ix + 2; // indicator + space
+            let text_w = inner_w.saturating_sub(2) as usize;
+
             let badge = if is_connected { " \u{271A}" } else { "" };
-            let name_max = iw.saturating_sub(prefix.len() + badge.len());
+            let name_max = text_w.saturating_sub(badge.len());
             let name_line = Line::from(vec![
-                Span::styled(prefix, Style::default().fg(palette::IRIS).bg(bg)),
-                Span::styled(trunc_str(&s.device_name, name_max), Style::default().fg(name_color).bg(bg).add_modifier(Modifier::BOLD)),
-                Span::styled(badge, Style::default().fg(palette::IRIS).bg(bg)),
+                Span::styled(trunc_str(&s.device_name, name_max), Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
+                Span::styled(badge, Style::default().fg(palette::IRIS)),
             ]);
-            f.render_widget(Paragraph::new(name_line).style(card_style), Rect { x: ix, y: entry_y, width: inner_w, height: 1 });
+            f.render_widget(Paragraph::new(name_line), Rect { x: text_x, y: entry_y, width: inner_w.saturating_sub(2), height: 1 });
 
-            let meta = format!("  {} \u{b7} {}@{}", s.client, s.user_name, s.host);
+            let meta = format!("{} \u{b7} {}@{}", s.client, s.user_name, s.host);
             f.render_widget(
-                Paragraph::new(Span::styled(trunc_str(&meta, iw), dim.fg(palette::SUBTLE))),
-                Rect { x: ix, y: entry_y + 1, width: inner_w, height: 1 },
+                Paragraph::new(Span::styled(trunc_str(&meta, text_w), dim.fg(palette::SUBTLE))),
+                Rect { x: text_x, y: entry_y + 1, width: inner_w.saturating_sub(2), height: 1 },
             );
 
             let state_icon = if s.now_playing.is_some() {
@@ -80,10 +86,10 @@ impl App {
                 format!(" {}/{}", fmt_duration(s.position_s), fmt_duration(s.runtime_s))
             } else { String::new() };
             let title = s.now_playing.as_deref().unwrap_or("idle");
-            let playing = format!("  {} {}{}", state_icon, trunc_str(title, iw.saturating_sub(12)), time);
+            let playing = format!("{} {}{}", state_icon, trunc_str(title, text_w.saturating_sub(11)), time);
             f.render_widget(
-                Paragraph::new(Span::styled(trunc_str(&playing, iw), dim)),
-                Rect { x: ix, y: entry_y + 2, width: inner_w, height: 1 },
+                Paragraph::new(Span::styled(trunc_str(&playing, text_w), dim)),
+                Rect { x: text_x, y: entry_y + 2, width: inner_w.saturating_sub(2), height: 1 },
             );
 
             if entry_y + entry_h <= list_y + list_h {
@@ -146,13 +152,11 @@ impl App {
                 if y >= list_h { break; }
                 let abs_idx = self.playlists_open_scroll + vi;
                 let selected = abs_idx == self.playlists_open_cursor;
-                let bg = if selected { palette::FOCUSED } else { palette::BASE };
                 let fg = if selected { palette::IRIS } else { palette::TEXT };
-                let prefix = if selected { "\u{25b6} " } else { "  " };
                 let num_str = format!("{:>2}. ", abs_idx + 1);
-                let indent = " ".repeat(prefix.len() + num_str.len());
+                let text_w = Self::panel_row_text_width(content.width).saturating_sub(num_str.len());
+                let indent = " ".repeat(2 + num_str.len()); // indicator + space + num
                 let label = item.display_name();
-                let text_w = iw.saturating_sub(prefix.len() + num_str.len());
                 let (line1, line2) = if label.len() <= text_w {
                     (label, String::new())
                 } else {
@@ -160,20 +164,17 @@ impl App {
                     (label[..wrap_at].to_string(), label[wrap_at..].trim_start().to_string())
                 };
                 let row_y = content.y + y as u16;
-                let row1 = Line::from(vec![
-                    Span::styled(prefix, Style::default().fg(palette::IRIS).bg(bg)),
-                    Span::styled(num_str, Style::default().fg(palette::MUTED).bg(bg)),
-                    Span::styled(line1, Style::default().fg(fg).bg(bg)),
+                Self::render_panel_row(f, ix, row_y, content.width, selected, vec![
+                    Span::styled(num_str, Style::default().fg(palette::MUTED)),
+                    Span::styled(line1, Style::default().fg(fg)),
                 ]);
-                f.render_widget(Paragraph::new(row1).style(Style::default().bg(bg)),
-                    Rect { x: ix, y: row_y, width: content.width, height: 1 });
                 y += 1;
                 if !line2.is_empty() && y < list_h {
-                    let row2 = Line::from(vec![
-                        Span::styled(indent, Style::default().bg(bg)),
-                        Span::styled(trunc_str(&line2, text_w), Style::default().fg(palette::SUBTLE).bg(bg)),
-                    ]);
-                    f.render_widget(Paragraph::new(row2).style(Style::default().bg(bg)),
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::raw(&indent),
+                            Span::styled(trunc_str(&line2, text_w), Style::default().fg(palette::SUBTLE)),
+                        ])),
                         Rect { x: ix, y: row_y + 1, width: content.width, height: 1 });
                     y += 1;
                 }
@@ -206,19 +207,14 @@ impl App {
             if vi >= list_h { break; }
             let abs_idx = self.playlists_scroll + vi;
             let selected = abs_idx == self.playlists_cursor;
-            let bg = if selected { palette::FOCUSED } else { palette::BASE };
             let fg = if selected { palette::IRIS } else { palette::TEXT };
-            let prefix = if selected { "\u{25b6} " } else { "  " };
             let count_str = if pl.total_count > 0 { format!(" ({})", pl.total_count) } else { String::new() };
-            let name_max = iw.saturating_sub(prefix.len() + count_str.len());
-            let line = Line::from(vec![
-                Span::styled(prefix, Style::default().fg(palette::IRIS).bg(bg)),
-                Span::styled(trunc_str(&pl.name, name_max), Style::default().fg(fg).bg(bg).add_modifier(Modifier::BOLD)),
-                Span::styled(count_str, Style::default().fg(palette::MUTED).bg(bg)),
-            ]);
+            let name_max = Self::panel_row_text_width(content.width).saturating_sub(count_str.len());
             let row_y = content.y + vi as u16;
-            f.render_widget(Paragraph::new(line).style(Style::default().bg(bg)),
-                Rect { x: ix, y: row_y, width: content.width, height: 1 });
+            Self::render_panel_row(f, ix, row_y, content.width, selected, vec![
+                Span::styled(trunc_str(&pl.name, name_max), Style::default().fg(fg).add_modifier(Modifier::BOLD)),
+                Span::styled(count_str, Style::default().fg(palette::MUTED)),
+            ]);
         }
     }
 
@@ -650,12 +646,13 @@ impl App {
                 line_of_cursor.push(lines.len());
                 if item_idx == cursor { cursor_line = lines.len(); }
                 let focused = item_idx == cursor;
-                let arrow = if focused { "\u{25b8} " } else { "  " };
+                let indicator = if focused { "\u{258c}" } else { " " };
                 let label = setting_label(key);
                 let val = setting_value(key, &cfg);
                 let label_style = if focused { Style::default().fg(palette::TEXT) } else { Style::default().fg(palette::MUTED) };
                 lines.push(Line::from(vec![
-                    Span::raw(arrow),
+                    Span::styled(indicator, Style::default().fg(palette::IRIS)),
+                    Span::raw(" "),
                     Span::styled(format!("{:<lw$}", label, lw = label_w), label_style),
                     Span::styled(val, Style::default().fg(palette::FOAM)),
                 ]));
@@ -668,14 +665,19 @@ impl App {
         line_of_cursor.push(lines.len());
         if cursor == logout_cursor_idx { cursor_line = lines.len(); }
         let focused = cursor == logout_cursor_idx;
+        let indicator_color = if focused { palette::RED } else { palette::IRIS };
         let (logout_text, logout_style) = if confirm_logout && focused {
-            ("\u{25b8} Log out? Press y to confirm", Style::default().fg(palette::RED))
+            ("Log out? Press y to confirm", Style::default().fg(palette::RED))
         } else if focused {
-            ("\u{25b8} Log out", Style::default().fg(palette::RED))
+            ("Log out", Style::default().fg(palette::RED))
         } else {
-            ("  Log out", Style::default().fg(palette::MUTED))
+            ("Log out", Style::default().fg(palette::MUTED))
         };
-        lines.push(Line::from(Span::styled(logout_text, logout_style)));
+        lines.push(Line::from(vec![
+            Span::styled(if focused { "\u{258c}" } else { " " }, Style::default().fg(indicator_color)),
+            Span::raw(" "),
+            Span::styled(logout_text, logout_style),
+        ]));
 
         let visible = content.height as usize;
         if cursor_line < self.settings_scroll {

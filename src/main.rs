@@ -97,7 +97,17 @@ fn main() {
                       else if config.show_log_tab { 5000 }
                       else { 0 };
     let log_stderr = config::is_system_instance();
-    applog::init(log_capacity, log_stderr);
+    let log_path = {
+        let state_dir = std::env::var("XDG_STATE_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+                    .join(".local").join("state")
+            })
+            .join("mbv");
+        Some(state_dir.join("mbv.log"))
+    };
+    applog::init(log_capacity, log_stderr, log_path);
 
     let mut client = EmbyClient::new(config);
 

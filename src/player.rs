@@ -1260,6 +1260,8 @@ impl PlaylistSession {
             let near_end    = !natural_end && !completed_is_audio
                 && runtime > 0
                 && self.last_valid_pos * 20 / runtime >= 19;
+            log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} pending_resume={} stop_reported={}",
+                self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_reported);
             if !self.stop_reported {
                 progress.stop_and_join();
                 self.reporter.report_stopped(self.last_valid_pos);
@@ -1276,6 +1278,8 @@ impl PlaylistSession {
         }
 
         let completed_idx = self.current_idx;
+        log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={} pending_resume={}",
+            self.last_valid_pos, self.status.lock().unwrap().runtime_ticks, self.pending_resume_secs.is_some());
         let natural       = reason == mpv_end_file_reason::Eof
             && self.items[completed_idx].runtime_ticks > 0;
         let near_end = is_near_end(completed_is_audio, natural, self.last_valid_pos, self.items[completed_idx].runtime_ticks);
@@ -1348,6 +1352,8 @@ impl PlaylistSession {
     }
 
     fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
+        log::warn!(target: "player", "shutdown: last_valid_pos={} stop_reported={} pending_resume={}",
+            self.last_valid_pos, self.stop_reported, self.pending_resume_secs.is_some());
         if !self.stop_reported {
             progress.stop_and_join();
             self.reporter.report_stopped(self.last_valid_pos);

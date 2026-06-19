@@ -755,8 +755,12 @@ impl EmbyClient {
         });
         log::info!(target: "api", "→ Stopped pos={position_ticks}");
         match self.post("/Sessions/Playing/Stopped").send_json(body) {
-            Ok(r)  => log::info!(target: "api", "← {} Stopped", r.status()),
-            Err(e) => log::warn!(target: "api", "← ERR Stopped: {e}"),
+            Ok(r)  => {
+                log::info!(target: "api", "← {} Stopped", r.status());
+            }
+            Err(e) => {
+                log::warn!(target: "api", "← ERR Stopped: {e}");
+            }
         }
 
         if !self.user_id.is_empty() {
@@ -768,8 +772,12 @@ impl EmbyClient {
                 .query("PlaySessionId", session_id)
                 .call()
             {
-                Ok(r)  => log::info!(target: "api", "← {} PlayingItem", r.status()),
-                Err(e) => log::warn!(target: "api", "← ERR PlayingItem: {e}"),
+                Ok(r)  => {
+                    log::info!(target: "api", "← {} PlayingItem", r.status());
+                }
+                Err(e) => {
+                    log::warn!(target: "api", "← ERR PlayingItem: {e}");
+                }
             }
         }
     }

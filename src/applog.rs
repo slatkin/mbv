@@ -1,5 +1,7 @@
-use std::sync::{Arc, Mutex, OnceLock};
 use std::collections::VecDeque;
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Level { Debug, Info, Warn, Error }
@@ -33,16 +35,39 @@ pub struct AppLog {
     buf: Arc<Mutex<VecDeque<LogEntry>>>,
     capacity: usize,
     stderr: bool,
+    file: Arc<Mutex<Option<std::fs::File>>>,
 }
 
 impl AppLog {
-    fn new(capacity: usize, stderr: bool) -> Self {
-        AppLog { buf: Arc::new(Mutex::new(VecDeque::new())), capacity, stderr }
+    fn new(capacity: usize, stderr: bool, log_path: Option<PathBuf>) -> Self {
+        let file = log_path.and_then(|path| {
+            if let Some(parent) = path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            // rotate if > 1 MB
+            if path.metadata().map(|m| m.len()).unwrap_or(0) > 1_000_000 {
+                let mut old = path.clone();
+                old.set_extension("log.old");
+                let _ = std::fs::rename(&path, &old);
+            }
+            std::fs::OpenOptions::new().create(true).append(true).open(&path).ok()
+        });
+        AppLog {
+            buf: Arc::new(Mutex::new(VecDeque::new())),
+            capacity,
+            stderr,
+            file: Arc::new(Mutex::new(file)),
+        }
     }
 
     fn push_entry(&self, entry: LogEntry) {
         if self.stderr {
             eprintln!("[{} {}] {}", entry.level.label(), entry.source, entry.msg);
+        }
+        if let Ok(mut guard) = self.file.lock() {
+            if let Some(f) = guard.as_mut() {
+                let _ = writeln!(f, "[{} {}] {}", entry.level.label(), entry.source, entry.msg);
+            }
         }
         if self.capacity == 0 { return; }
         let mut g = self.buf.lock().unwrap();
@@ -66,25 +91,33 @@ impl log::Log for GlobalLogger {
     fn log(&self, record: &log::Record) {
         // mbv targets are bare words ("api", "ws", "img", etc.) with no "::".
         // Third-party crates use module paths ("rustls::client", etc.) — suppress
-        // their Info/Debug to keep the log tab clean.
-        if record.target().contains("::") && record.level() > log::Level::Warn {
-            return;
-        }
+        // their Info/Debug to keep the log tab clean, but still write to file.
+        let is_third_party = record.target().contains("::");
+        let entry = LogEntry {
+            level: record.level().into(),
+            source: record.target().to_string(),
+            msg: record.args().to_string(),
+        };
         if let Some(log) = GLOBAL.get() {
-            log.push_entry(LogEntry {
-                level: record.level().into(),
-                source: record.target().to_string(),
-                msg: record.args().to_string(),
-            });
+            if is_third_party && record.level() > log::Level::Warn {
+                // write to file only, skip ring buffer
+                if let Ok(mut guard) = log.file.lock() {
+                    if let Some(f) = guard.as_mut() {
+                        let _ = writeln!(f, "[{} {}] {}", entry.level.label(), entry.source, entry.msg);
+                    }
+                }
+            } else {
+                log.push_entry(entry);
+            }
         }
     }
 
     fn flush(&self) {}
 }
 
-pub fn init(capacity: usize, stderr: bool) {
+pub fn init(capacity: usize, stderr: bool, log_path: Option<PathBuf>) {
     if GLOBAL.get().is_some() { return; }
-    let applog = AppLog::new(capacity, stderr);
+    let applog = AppLog::new(capacity, stderr, log_path);
     GLOBAL.get_or_init(|| applog);
     let _ = log::set_logger(&LOGGER);
     log::set_max_level(log::LevelFilter::Debug);
@@ -185,13 +218,13 @@ mod tests {
     #[test]
     fn global_returns_some_after_init() {
         // init() is idempotent via OnceLock; if already called, this is a no-op.
-        crate::applog::init(100, false);
+        crate::applog::init(100, false, None);
         assert!(crate::applog::global().is_some());
     }
 
     #[test]
     fn log_macro_routes_to_ring_buffer() {
-        crate::applog::init(100, false);
+        crate::applog::init(100, false, None);
         let before = crate::applog::global().unwrap().snapshot().len();
         log::info!(target: "test", "ring buffer routing test");
         let after = crate::applog::global().unwrap().snapshot().len();
