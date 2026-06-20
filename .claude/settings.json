@@ -5,7 +5,15 @@
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(x['path'], x.get\\('textMatches',''\\)\\) for x in d]\")",
       "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(x['path']\\) for x in d]\")",
       "Bash(python3 -c \"import json,sys; [print\\(x['path']\\) for x in json.load\\(sys.stdin\\)]\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Skill(loop)",
+      "Skill(loop:*)",
+      "Bash(coredumpctl list *)",
+      "Bash(coredumpctl debug *)",
+      "Bash(addr2line -e /home/slatkin/Dev/mbv/target/debug/mbv -f 0x0000556c1d54a5be)",
+      "Read(//proc/sys/kernel/**)",
+      "Bash(ulimit -c)",
+      "Bash(journalctl -t systemd-coredump --since \"10 minutes ago\")"
     ]
   }
 }
