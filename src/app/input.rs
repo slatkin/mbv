@@ -1353,7 +1353,7 @@ impl App {
                 }
                 if let Some((sec, sect_area)) = found_sec {
                     self.home.section = sec;
-                    let inner = Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).inner(sect_area);
+                    let inner = Block::default().borders(Borders::TOP | Borders::BOTTOM).border_type(BorderType::Rounded).inner(sect_area);
                     if inner.contains((col, row).into()) {
                         let row_idx = (row - inner.y) as usize;
                         let scroll_start = self.layout_home_scrolls.get(sec).copied().unwrap_or(0);

@@ -262,7 +262,7 @@ impl App {
         let constraints: Vec<Constraint> = (0..render_row_count)
             .map(|_| Constraint::Ratio(1, render_row_count as u32))
             .collect();
-        let row_areas = Layout::vertical(constraints).split(layout_area);
+        let row_areas = Layout::vertical(constraints).spacing(1).split(layout_area);
 
         let mut areas: Vec<Rect> = vec![Rect::default(); n_sections];
 
@@ -292,7 +292,7 @@ impl App {
                 let [left_area, right_area] = Layout::horizontal([
                     Constraint::Percentage(50),
                     Constraint::Percentage(50),
-                ]).areas(row_area);
+                ]).spacing(2).areas(row_area);
 
                 let is_last_odd = right_sec >= n_sections;
                 let render_left_area = if is_last_odd {
@@ -358,9 +358,9 @@ impl App {
             Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)
         };
         let block = Block::default()
-            .borders(Borders::ALL).border_type(BorderType::Rounded)
+            .borders(Borders::TOP | Borders::BOTTOM).border_type(BorderType::Rounded)
             .border_style(border_style)
-            .title(Span::styled(format!(" {} ", title), title_style))
+            .title(Span::styled(title.to_string(), title_style))
             .title_alignment(Alignment::Left);
         let inner = block.inner(area);
         f.render_widget(block, area);
