@@ -859,7 +859,10 @@ impl App {
                         self.status.clear();
                     }
                     PlayerEvent::MpvQuit => {
-                        break 'outer;
+                        self.next_up_item = None;
+                        self.skip_intro_end_ticks = None;
+                        self.status.clear();
+                        self.refresh_after_stop();
                     }
                 }
             }
