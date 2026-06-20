@@ -1263,11 +1263,6 @@ impl App {
     }
 
     pub(super) fn on_queue_replace_silent(&mut self) {
-        if self.queue_dirty && self.queue_is_saved_playlist() {
-            if self.autosave_playlist {
-                self.save_playlist_to_emby();
-            }
-        }
         self.queue_source = crate::config::QueueSource::Unknown;
         self.queue_restored = false;
         self.queue_dirty = false;
@@ -1337,6 +1332,43 @@ impl App {
                 log::error!(target: "playlist", "Failed to save playlist: {e}");
             }
         });
+    }
+
+    fn delete_playlist_on_emby(&mut self) {
+        let Some(playlist_id) = self.queue_playlist_id() else { return };
+        let name = self.queue_playlist_name().to_string();
+        let client = self.client.lock().unwrap().clone();
+        let playlist_id = playlist_id.to_string();
+        log::info!(target: "playlist", "consume: deleting fully-consumed playlist id={playlist_id} name={name:?}");
+        self.queue_source = crate::config::QueueSource::Unknown;
+        std::thread::spawn(move || {
+            if let Err(e) = client.delete_playlist(&playlist_id) {
+                log::error!(target: "playlist", "Failed to delete playlist id={playlist_id}: {e}");
+            } else {
+                log::info!(target: "playlist", "Deleted playlist id={playlist_id} name={name:?}");
+            }
+        });
+    }
+
+    pub(super) fn consume_item(&mut self, idx: usize) {
+        let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+        if idx < self.player_tab.items.len() {
+            self.player_tab.items.remove(idx);
+        }
+        self.player.send_command(crate::player::PlayerCommand::PlaylistRemove(idx));
+        self.queue_dirty = true;
+
+        if is_video
+            && self.client.lock().unwrap().config.save_playlist_on_consume
+            && self.queue_is_saved_playlist()
+        {
+            if self.player_tab.items.is_empty() {
+                self.delete_playlist_on_emby();
+            } else {
+                log::info!(target: "playlist", "consume: saving playlist after removing idx={idx}");
+                self.save_playlist_to_emby();
+            }
+        }
     }
 
     pub(super) fn save_queue_state(&self) {

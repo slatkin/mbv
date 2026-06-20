@@ -309,7 +309,6 @@ pub struct App {
     queue_dirty: bool,
     pending_queue_action: Option<PendingQueueAction>,
     show_save_playlist_modal: bool,
-    autosave_playlist: bool,
     use_nerd_fonts: bool,
     show_playback_panel: bool,
     ws_send_tx: Option<mpsc::Sender<String>>,
@@ -352,7 +351,6 @@ struct AppInit {
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
     music_levels: Vec<String>,
-    autosave_playlist: bool,
     use_nerd_fonts: bool,
     image_cache_size: usize,
     start_on_queue: bool,
@@ -378,7 +376,7 @@ enum SettingKey {
     StartOnQueue,
     AlwaysPlayNext,
     ConsumeVideos,
-    AutosavePlaylist,
+    SavePlaylistOnConsume,
     AlwaysSkipIntro,
     ShowLogTab,
     ImageProtocol,
@@ -397,7 +395,7 @@ enum SettingKey {
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
-    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::AutosavePlaylist]),
+    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::SavePlaylistOnConsume]),
     ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
     ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",   &[SettingKey::LogOut]),
@@ -423,7 +421,6 @@ impl App {
             hidden_libraries: init.hidden_libraries,
             hidden_latest: init.hidden_latest,
             music_levels: init.music_levels,
-            autosave_playlist: init.autosave_playlist,
             use_nerd_fonts: init.use_nerd_fonts,
             image_cache_size: init.image_cache_size,
             tab_idx: if init.start_on_queue { 1 } else { 0 },
@@ -567,7 +564,6 @@ impl App {
         let system_notifications = client.config.system_notifications;
         let image_protocol_enabled = client.config.image_protocol.is_some();
         let image_cache_size = client.config.image_cache_size;
-        let autosave_playlist = client.config.autosave_playlist;
         let use_nerd_fonts = client.config.use_nerd_fonts;
         let start_on_queue = client.config.start_on_queue;
         let always_play_next = client.config.always_play_next;
@@ -601,7 +597,6 @@ impl App {
             hidden_libraries,
             hidden_latest,
             music_levels,
-            autosave_playlist,
             use_nerd_fonts,
             image_cache_size,
             start_on_queue,
@@ -629,7 +624,6 @@ impl App {
         let start_on_queue = client.config.start_on_queue;
         let image_protocol_enabled = client.config.image_protocol.is_some();
         let image_cache_size = client.config.image_cache_size;
-        let autosave_playlist = client.config.autosave_playlist;
         let use_nerd_fonts = client.config.use_nerd_fonts;
         crate::config::evict_old_image_cache();
         let mut client = client;
@@ -650,7 +644,6 @@ impl App {
             hidden_libraries,
             hidden_latest,
             music_levels,
-            autosave_playlist,
             use_nerd_fonts,
             image_cache_size,
             start_on_queue,
@@ -747,11 +740,9 @@ impl App {
                         } else {
                             let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
                             if played && is_video && self.client.lock().unwrap().config.consume_videos {
-                                if idx < self.player_tab.items.len() {
-                                    self.player_tab.items.remove(idx);
-                                    self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
-                                        .min(self.player_tab.items.len().saturating_sub(1));
-                                }
+                                self.consume_item(idx);
+                                self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
+                                    .min(self.player_tab.items.len().saturating_sub(1));
                             }
                         }
                         self.refresh_after_stop();
@@ -780,10 +771,7 @@ impl App {
                             self.status.clear();
                         }
                         let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
-                            if remove_idx < self.player_tab.items.len() {
-                                self.player_tab.items.remove(remove_idx);
-                            }
-                            self.player.send_command(PlayerCommand::PlaylistRemove(remove_idx));
+                            self.consume_item(remove_idx);
                             if remove_idx < idx { idx - 1 } else { idx }
                         } else {
                             idx
@@ -1180,9 +1168,6 @@ impl App {
                     self.last_played_item_id = Some(item.id.clone());
                 }
             }
-            if self.queue_dirty && self.queue_is_saved_playlist() && self.autosave_playlist {
-                self.save_playlist_to_emby();
-            }
             self.save_queue_state();
             if !self.player.is_remote() {
                 self.player.stop();
@@ -1495,7 +1480,6 @@ mod tests {
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
-            autosave_playlist: false,
             use_nerd_fonts: false,
             show_playback_panel: true,
             ws_send_tx: None,

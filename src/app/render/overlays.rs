@@ -410,10 +410,7 @@ impl App {
                     SettingKey::StartOnQueue     => c.config.start_on_queue = !c.config.start_on_queue,
                     SettingKey::AlwaysPlayNext   => c.config.always_play_next = !c.config.always_play_next,
                     SettingKey::ConsumeVideos    => c.config.consume_videos = !c.config.consume_videos,
-                    SettingKey::AutosavePlaylist => {
-                        c.config.autosave_playlist = !c.config.autosave_playlist;
-                        self.autosave_playlist = c.config.autosave_playlist;
-                    }
+                    SettingKey::SavePlaylistOnConsume => c.config.save_playlist_on_consume = !c.config.save_playlist_on_consume,
                     SettingKey::AlwaysSkipIntro  => c.config.always_skip_intro = !c.config.always_skip_intro,
                     SettingKey::ShowAudioWindow  => c.config.show_audio_window = !c.config.show_audio_window,
                     SettingKey::UseMpvConfig     => c.config.use_mpv_config = !c.config.use_mpv_config,
@@ -625,7 +622,7 @@ impl App {
         let cfg = self.client.lock().unwrap().config.clone();
         let cursor = self.settings_cursor;
         let confirm_logout = self.confirm_logout;
-        let label_w = 22usize;
+        let label_w = 30usize;
         let w = content.width as usize;
 
         let data_sections = &SETTING_SECTIONS[..SETTING_SECTIONS.len() - 1];

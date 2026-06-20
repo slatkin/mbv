@@ -108,7 +108,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     music_levels: base_config.music_levels.clone(),
                     system_notifications: base_config.system_notifications,
                     image_cache_size: base_config.image_cache_size,
-                    autosave_playlist: base_config.autosave_playlist,
+                    save_playlist_on_consume: base_config.save_playlist_on_consume,
                     use_nerd_fonts: base_config.use_nerd_fonts,
                 };
                 let mut client = EmbyClient::new(config);

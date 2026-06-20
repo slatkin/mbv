@@ -11,6 +11,20 @@ use super::super::{App, palette};
 use super::super::ui_util::{fmt_duration, trunc_str};
 
 impl App {
+    fn render_playlist_bar(&self, f: &mut Frame, area: Rect) {
+        let name = self.queue_playlist_name().to_string();
+        let max_name = (area.width as usize).saturating_sub(12);
+        let name_trunc = trunc_str(&name, max_name);
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::raw(" "),
+                Span::styled("Playlist: ", Style::default().fg(palette::SUBTLE)),
+                Span::styled(name_trunc, Style::default().fg(palette::WHITE)),
+            ])).style(Style::default().bg(palette::OVERLAY)),
+            area,
+        );
+    }
+
     pub(super) fn render_combined(&mut self, f: &mut Frame, area: Rect) {
         self.home_rect = area;
         self.layout_carousel_left_arrow = None;
@@ -32,13 +46,24 @@ impl App {
 
         if self.playlist_view == PLAYLIST_VIEW_CARDS {
             let v_pad: u16 = if area.height >= 30 { 2 } else if area.height >= 20 { 1 } else { 0 };
+            let is_playlist = self.queue_is_saved_playlist();
+            let bar_h = if is_playlist { 1u16 } else { 0 };
             let inner = Rect {
                 x: area.x,
                 y: area.y + v_pad,
                 width: area.width,
-                height: area.height.saturating_sub(v_pad * 2),
+                height: area.height.saturating_sub(v_pad * 2 + bar_h),
             };
             self.layout_playlist_inner = inner;
+
+            if is_playlist {
+                self.render_playlist_bar(f, Rect {
+                    y: area.y + area.height.saturating_sub(1),
+                    height: 1,
+                    x: area.x,
+                    width: area.width,
+                });
+            }
 
             if self.player_tab.items.is_empty() {
                 f.render_widget(
@@ -82,7 +107,16 @@ impl App {
         }
 
         let cursor = self.player_tab.playlist_cursor;
-        let table_area = inner;
+        let is_playlist = self.queue_is_saved_playlist();
+        let bar_h = if is_playlist { 1u16 } else { 0 };
+        let table_area = Rect { height: inner.height.saturating_sub(bar_h), ..inner };
+        if is_playlist {
+            self.render_playlist_bar(f, Rect {
+                y: inner.y + table_area.height,
+                height: 1,
+                ..inner
+            });
+        }
         let show_ep_cols = self.player_tab.items.iter().any(|it| it.item_type == "Episode");
 
         // Fixed column widths + 5 inter-column gaps of 2 = 10 overhead
@@ -461,8 +495,15 @@ impl App {
         let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
         let right_x = area.x + left_w + 1;
         let right_w = area.width.saturating_sub(left_w + 1);
+        let is_playlist = self.queue_is_saved_playlist();
+        let bar_h = if is_playlist { 1u16 } else { 0 };
         let left_area  = Rect { x: area.x,  y: area.y, width: left_w,  height: area.height };
-        let right_area = Rect { x: right_x, y: area.y, width: right_w, height: area.height };
+        let right_area = Rect { x: right_x, y: area.y, width: right_w, height: area.height.saturating_sub(bar_h) };
+        if is_playlist {
+            self.render_playlist_bar(f, Rect {
+                x: right_x, y: area.y + right_area.height, width: right_w, height: 1,
+            });
+        }
 
         let show_controls = active || self.connected_session_id.is_some();
 
