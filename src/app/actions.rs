@@ -340,6 +340,11 @@ impl App {
         self.save_queue_state();
         if active {
             self.player.send_command(PlayerCommand::PlaylistRemove(pos));
+            // Eagerly adjust current_idx so the now-playing indicator renders
+            // at the correct row before mpv fires TrackChanged.
+            if pos < current_idx {
+                self.player.status.lock().unwrap().current_idx = current_idx - 1;
+            }
         }
         if !self.player_tab.items.is_empty() {
             self.player_tab.playlist_cursor =
