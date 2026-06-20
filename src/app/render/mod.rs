@@ -3,6 +3,7 @@ mod library;
 mod log;
 mod overlays;
 mod playlist;
+mod power;
 
 use std::time::Instant;
 use ratatui::Frame;
@@ -28,8 +29,9 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
         let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
-        let status_h:   u16 = if show_controls && !in_presentation && self.show_playback_panel { 1 } else { 0 };
-        let controls_h: u16 = if show_controls && !in_presentation && self.show_playback_panel { 2 } else { 0 };
+        let in_power       = self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER;
+        let status_h:   u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
+        let controls_h: u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 2 } else { 0 };
         let [tabs_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(1),
             Constraint::Length(1),
@@ -203,11 +205,18 @@ impl App {
             None
         };
         if let Some((ref title, color)) = now_playing_title {
+            let render_title_area = if in_power {
+                let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
+                let divider_x = area.x + left_w;
+                Rect { x: divider_x + 1, width: area.width.saturating_sub(left_w + 1), ..title_area }
+            } else {
+                title_area
+            };
             f.render_widget(
                 Paragraph::new(title.as_str())
                     .alignment(Alignment::Center)
                     .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                title_area,
+                render_title_area,
             );
         }
         let is_library_tab = self.tab_idx >= self.lib_tab_offset()
@@ -236,6 +245,8 @@ impl App {
 
         if self.tab_idx == 0 {
             self.render_combined(f, main_area);
+        } else if self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER {
+            self.render_power_view(f, main_area);
         } else if self.tab_idx == 1 {
             self.render_playlist_panel(f, main_area);
         } else if self.tab_idx == self.log_tab_idx() {

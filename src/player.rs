@@ -56,6 +56,8 @@ pub enum PlayerEvent {
     IntroEnded,
     /// Chapter API: user clicked the "Skip Intro" button in MPV.
     SkipIntroPlay,
+    /// mpv exited on its own (user pressed q inside mpv, or mpv crashed).
+    MpvQuit,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -795,6 +797,10 @@ impl SingleSession {
                 played: near_end,
             });
         }
+        // mpv exited on its own (not via our stop command) — tell the app to quit.
+        if self.quit_at.is_none() {
+            let _ = self.event_tx.send(PlayerEvent::MpvQuit);
+        }
     }
 
     fn run(mut self, mpv: Mpv, stop_rx: mpsc::Receiver<()>, cmd_rx: mpsc::Receiver<PlayerCommand>, mut progress: ProgressGuard) {
@@ -1390,6 +1396,10 @@ impl PlaylistSession {
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
         });
+        // mpv exited on its own (not via our stop command) — tell the app to quit.
+        if self.quit_at.is_none() {
+            let _ = self.event_tx.send(PlayerEvent::MpvQuit);
+        }
     }
 
     fn run(mut self, mpv: Mpv, stop_rx: mpsc::Receiver<()>, cmd_rx: mpsc::Receiver<PlayerCommand>, mut progress: ProgressGuard) {

@@ -7,7 +7,7 @@ use crate::player::PlayerCommand;
 use crate::ws::WsEvent;
 use super::{
     App, PAGE_SIZE, PREFETCH_AHEAD,
-    PendingQueueAction, ContextAction, LibEvent, SessionEvent, BrowseLevel,
+    PendingQueueAction, ContextAction, LibEvent, SessionEvent, BrowseLevel, PowerFocus,
 };
 use super::ui_util::{natural_sort_key, is_playable, sort_episodes, sort_audio_tracks};
 
@@ -554,7 +554,7 @@ impl App {
                 sort_by: "SortName".into(), sort_order: "Ascending".into(),
                 loading: true, all_items: None,
             });
-            self.layout_lib_scroll = 0;
+            if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) { *v = 0; }
             self.spawn_browse(lib_idx, item.id, item.name, None, false, "SortName".into(), "Ascending".into());
         } else if is_playable(&item) {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
@@ -565,7 +565,7 @@ impl App {
                         lvl.cursor = pos;
                     }
                 }
-                self.layout_lib_scroll = 0;
+                if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) { *v = 0; }
             }
             let fresh = {
                 let c = self.client.lock().unwrap();
@@ -622,7 +622,8 @@ impl App {
     pub(super) fn go_back(&mut self) {
         if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
             let lib_off = self.lib_tab_offset();
-            let lib = &mut self.libs[self.tab_idx - lib_off];
+            let lib_idx = self.tab_idx - lib_off;
+            let lib = &mut self.libs[lib_idx];
             if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
                 let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
                 lib.nav_stack.pop();
@@ -631,7 +632,7 @@ impl App {
                         parent.cursor = idx;
                     }
                 }
-                self.layout_lib_scroll = 0;
+                if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) { *v = 0; }
             }
         }
     }
@@ -866,6 +867,11 @@ impl App {
     pub(super) fn ensure_library_loaded(&mut self) {
         if self.tab_idx <= 1 || self.tab_idx == self.log_tab_idx() { return; }
         let idx = self.tab_idx - self.lib_tab_offset();
+        self.ensure_lib_loaded_for(idx);
+    }
+
+    pub(super) fn ensure_lib_loaded_for(&mut self, idx: usize) {
+        if idx >= self.libs.len() { return; }
         if self.libs[idx].nav_stack.is_empty() {
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();
@@ -1253,11 +1259,11 @@ impl App {
     }
 
     pub(super) fn try_quit(&mut self) -> bool {
-        if !self.player.is_remote() { self.player.stop(); }
         if self.queue_dirty && self.queue_is_saved_playlist() {
             self.replace_queue_or_prompt(PendingQueueAction::Quit);
             false
         } else {
+            if !self.player.is_remote() { self.player.stop(); }
             true
         }
     }
@@ -1298,7 +1304,9 @@ impl App {
                 self.playlist_undo_stack.clear();
                 self.save_queue_state();
             }
-            PendingQueueAction::Quit => {}
+            PendingQueueAction::Quit => {
+                if !self.player.is_remote() { self.player.stop(); }
+            }
         }
     }
 
@@ -1368,6 +1376,45 @@ impl App {
                 log::info!(target: "playlist", "consume: saving playlist after removing idx={idx}");
                 self.save_playlist_to_emby();
             }
+            self.queue_dirty = false;
+        }
+    }
+
+    pub(super) fn power_focused_lib_idx(&self) -> Option<usize> {
+        match self.power_focus {
+            PowerFocus::Library(idx) => Some(idx),
+            PowerFocus::Queue => None,
+        }
+    }
+
+    pub(super) fn power_focus_next(&mut self) {
+        let n = self.libs.len();
+        self.power_focus = match self.power_focus {
+            PowerFocus::Queue => if n > 0 { PowerFocus::Library(0) } else { PowerFocus::Queue },
+            PowerFocus::Library(idx) => {
+                if idx + 1 < n { PowerFocus::Library(idx + 1) } else { PowerFocus::Queue }
+            }
+        };
+        self.power_ensure_focused_visible();
+    }
+
+    pub(super) fn power_focus_prev(&mut self) {
+        let n = self.libs.len();
+        self.power_focus = match self.power_focus {
+            PowerFocus::Queue => if n > 0 { PowerFocus::Library(n - 1) } else { PowerFocus::Queue },
+            PowerFocus::Library(0) => PowerFocus::Queue,
+            PowerFocus::Library(idx) => PowerFocus::Library(idx - 1),
+        };
+        self.power_ensure_focused_visible();
+    }
+
+    fn power_ensure_focused_visible(&mut self) {
+        let PowerFocus::Library(lib_idx) = self.power_focus else { return };
+        let n_cols = self.power_lib_col_areas.len().max(2);
+        if lib_idx < self.power_lib_col_scroll {
+            self.power_lib_col_scroll = lib_idx;
+        } else if lib_idx >= self.power_lib_col_scroll + n_cols {
+            self.power_lib_col_scroll = lib_idx + 1 - n_cols;
         }
     }
 
@@ -1482,6 +1529,10 @@ impl App {
                 .unwrap_or_default();
             self.libs.push(super::LibraryTab { library: view.clone(), nav_stack: stack, search: None });
         }
+        let n = self.libs.len();
+        self.layout_lib_scroll.resize(n, 0);
+        self.layout_lib_row_heights.resize_with(n, Vec::new);
+        self.layout_lib_table_area.resize(n, ratatui::layout::Rect::default());
 
         let old_cursors: HashMap<String, usize> = self.home.latest.iter()
             .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))

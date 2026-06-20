@@ -18,7 +18,8 @@ static TERMINAL_GONE:   AtomicBool = AtomicBool::new(false);
 
 pub(super) const PLAYLIST_VIEW_CARDS: u8        = 1;
 pub(super) const PLAYLIST_VIEW_PRESENTATION: u8 = 2;
-pub(super) const PLAYLIST_VIEW_COUNT: u8        = 3;
+pub(super) const PLAYLIST_VIEW_POWER: u8        = 3;
+pub(super) const PLAYLIST_VIEW_COUNT: u8        = 4;
 
 extern "C" fn handle_quit_signal(signum: i32) {
     QUIT_REQUESTED.store(true, Ordering::Relaxed);
@@ -224,8 +225,8 @@ pub struct App {
     layout_tabs_area: Rect,
     terminal_width: u16,
     terminal_height: u16,
-    layout_lib_scroll: usize,
-    layout_lib_row_heights: Vec<u16>, // height of each visible row, from scroll
+    layout_lib_scroll: Vec<usize>,
+    layout_lib_row_heights: Vec<Vec<u16>>, // per lib_idx: height of each visible row, from scroll
     layout_home_scrolls: Vec<usize>,
     layout_home_scrollbar: Rect,
     layout_presentation_sb: Rect,
@@ -234,7 +235,7 @@ pub struct App {
     home_panel_section_offset: usize,
     home_cards_section_offset: usize,
     layout_home_card_strips: Vec<(usize, Rect)>,
-    layout_lib_table_area: Rect,
+    layout_lib_table_area: Vec<Rect>,
     layout_breadcrumbs: Vec<(u16, u16, u16, usize)>, // (x_start, x_end, row, target nav_stack len)
     last_click_time: Instant,
     last_click_pos: (u16, u16),
@@ -253,6 +254,10 @@ pub struct App {
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
+    power_focus: PowerFocus,
+    power_lib_col_scroll: usize,       // index of leftmost visible library column
+    power_lib_col_areas: Vec<(usize, Rect)>, // (lib_idx, area) for each rendered column
+    power_queue_area: Rect,
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
@@ -370,6 +375,13 @@ enum PendingQueueAction {
     Quit,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub(super) enum PowerFocus {
+    #[default]
+    Queue,
+    Library(usize), // focused library column index (into libs, not col position)
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingKey {
     DaemonModeOnExit,
@@ -447,7 +459,7 @@ impl App {
             layout_tabs_area: Rect::default(),
             terminal_width: 80,
             terminal_height: 24,
-            layout_lib_scroll: 0,
+            layout_lib_scroll: Vec::new(),
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
             layout_home_scrollbar: Rect::default(),
@@ -457,7 +469,7 @@ impl App {
             home_panel_section_offset: 0,
             home_cards_section_offset: 0,
             layout_home_card_strips: Vec::new(),
-            layout_lib_table_area: Rect::default(),
+            layout_lib_table_area: Vec::new(),
             layout_breadcrumbs: Vec::new(),
             last_click_time: Instant::now(),
             last_drag_seek: Instant::now() - Duration::from_secs(1),
@@ -476,6 +488,10 @@ impl App {
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: Self::load_playlist_view(),
+            power_focus: PowerFocus::default(),
+            power_lib_col_scroll: 0,
+            power_lib_col_areas: Vec::new(),
+            power_queue_area: Rect::default(),
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
@@ -841,6 +857,9 @@ impl App {
                     PlayerEvent::SkipIntroPlay => {
                         self.skip_intro_end_ticks = None;
                         self.status.clear();
+                    }
+                    PlayerEvent::MpvQuit => {
+                        break 'outer;
                     }
                 }
             }
@@ -1391,7 +1410,7 @@ mod tests {
             layout_tabs_area: ratatui::layout::Rect::default(),
             terminal_width: 80,
             terminal_height: 24,
-            layout_lib_scroll: 0,
+            layout_lib_scroll: Vec::new(),
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
             layout_home_scrollbar: Rect::default(),
@@ -1401,7 +1420,7 @@ mod tests {
             home_panel_section_offset: 0,
             home_cards_section_offset: 0,
             layout_home_card_strips: Vec::new(),
-            layout_lib_table_area: ratatui::layout::Rect::default(),
+            layout_lib_table_area: Vec::new(),
             layout_breadcrumbs: Vec::new(),
             last_click_time: std::time::Instant::now(),
             last_drag_seek: std::time::Instant::now(),
@@ -1420,6 +1439,10 @@ mod tests {
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: 0,
+            power_focus: PowerFocus::default(),
+            power_lib_col_scroll: 0,
+            power_lib_col_areas: Vec::new(),
+            power_queue_area: Rect::default(),
             home_card_view: false,
             last_played_item_id: None,
             last_played_completed: false,

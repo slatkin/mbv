@@ -1,4 +1,4 @@
-use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION, PLAYLIST_VIEW_COUNT};
+use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION, PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -442,6 +442,10 @@ impl App {
         if self.tab_idx == 0 { return self.handle_combined_key(key); }
         if self.tab_idx == 1 { return self.handle_playlist_key(key); }
         if self.tab_idx == self.log_tab_idx() { return self.handle_log_key(key); }
+        self.handle_lib_key(key)
+    }
+
+    fn handle_lib_key(&mut self, key: KeyEvent) -> bool {
         let lib_idx = self.tab_idx - self.lib_tab_offset();
         let alt = key.modifiers.contains(KeyModifiers::ALT);
 
@@ -506,7 +510,7 @@ impl App {
                 }
                 self.update_lib_search(lib_idx);
             }
-            _ => {}
+            _ => { return false; }
         }
         false
     }
@@ -685,6 +689,32 @@ impl App {
             return false;
         }
 
+        // In power view, route nav keys to the focused library column.
+        if self.playlist_view == PLAYLIST_VIEW_POWER {
+            if let Some(lib_idx) = self.power_focused_lib_idx() {
+                let is_lib_key = match key.code {
+                    KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
+                    | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End
+                    | KeyCode::Enter | KeyCode::Esc | KeyCode::Backspace
+                    | KeyCode::Tab | KeyCode::BackTab => true,
+                    KeyCode::Char('/') => true,
+                    KeyCode::Char('q') => true,
+                    KeyCode::Char(_) if key.modifiers.contains(KeyModifiers::CONTROL)
+                                     || key.modifiers.contains(KeyModifiers::ALT) => true,
+                    _ => false,
+                };
+                if is_lib_key {
+                    let is_quit_key = matches!(key.code, KeyCode::Char('q') if !key.modifiers.contains(KeyModifiers::CONTROL));
+                    let saved = self.tab_idx;
+                    self.tab_idx = self.lib_tab_offset() + lib_idx;
+                    let result = self.handle_lib_key(key);
+                    self.tab_idx = saved;
+                    if is_quit_key { return result; }
+                    return false;
+                }
+            }
+        }
+
         match key.code {
             KeyCode::Char('q') => { return self.try_quit(); }
             KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
@@ -799,6 +829,18 @@ impl App {
                         stage: SavePlaylistStage::EnterName,
                     });
                 }
+            }
+            KeyCode::Left | KeyCode::Up
+                if self.playlist_view == PLAYLIST_VIEW_POWER
+                && key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                self.power_focus_prev();
+            }
+            KeyCode::Right | KeyCode::Down
+                if self.playlist_view == PLAYLIST_VIEW_POWER
+                && key.modifiers.contains(KeyModifiers::CONTROL) =>
+            {
+                self.power_focus_next();
             }
             _ => {}
         }
@@ -1169,9 +1211,9 @@ impl App {
                     .and_then(|s| s.results.get(s.cursor).copied())
                     .unwrap_or(lvl.cursor)
             }).unwrap_or(0);
-            let scroll = self.layout_lib_scroll;
+            let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
             let row = cursor.saturating_sub(scroll) as u16;
-            let tbl = self.layout_lib_table_area;
+            let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
             return (self.terminal_width / 2, tbl.y + row * 3);
         }
         (4, 4)
@@ -1188,7 +1230,7 @@ impl App {
     pub(super) fn load_playlist_view() -> u8 {
         let prefs = Self::load_prefs();
         if let Some(v) = prefs["playlist_view"].as_u64() {
-            return v.min(2) as u8;
+            return v.min((super::PLAYLIST_VIEW_COUNT - 1) as u64) as u8;
         }
         prefs["playlist_card_view"].as_bool().unwrap_or(false) as u8
     }
@@ -1309,21 +1351,58 @@ impl App {
                     }
                 }
             }
+        } else if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+            // Click in queue area: move queue cursor.
+            let qa = self.power_queue_area;
+            if qa.contains((col, row).into()) {
+                let click_y = (row - qa.y) as usize;
+                let n = self.player_tab.items.len();
+                if click_y < n { self.player_tab.playlist_cursor = click_y; return true; }
+            }
+            // Click in a library column: focus it and set its cursor.
+            let col_areas = self.power_lib_col_areas.clone();
+            for (lib_idx, col_area) in col_areas {
+                let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
+                if col_area.contains((col, row).into()) {
+                    self.power_focus = PowerFocus::Library(lib_idx);
+                    if tbl.contains((col, row).into()) {
+                        let click_y = row - tbl.y;
+                        let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
+                        let display_pos = {
+                            let mut y = 0u16;
+                            let mut found = scroll;
+                            for (vi, &h) in self.layout_lib_row_heights.get(lib_idx).map(|v| v.as_slice()).unwrap_or(&[]).iter().enumerate() {
+                                if click_y < y + h { found = scroll + vi; break; }
+                                y += h;
+                            }
+                            found
+                        };
+                        let lib = &mut self.libs[lib_idx];
+                        if let Some(s) = &mut lib.search {
+                            if display_pos < s.results.len() { s.cursor = display_pos; }
+                        } else if let Some(lvl) = lib.nav_stack.last_mut() {
+                            if display_pos < lvl.items.len() { lvl.cursor = display_pos; }
+                        }
+                    }
+                    return true;
+                }
+            }
         } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
-            let tbl = self.layout_lib_table_area;
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
             if tbl.contains((col, row).into()) {
                 let click_y = row - tbl.y;
+                let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
                 let display_pos = {
                     let mut y = 0u16;
-                    let mut found = self.layout_lib_scroll;
-                    for (vi, &h) in self.layout_lib_row_heights.iter().enumerate() {
-                        if click_y < y + h { found = self.layout_lib_scroll + vi; break; }
+                    let mut found = scroll;
+                    for (vi, &h) in self.layout_lib_row_heights.get(lib_idx).map(|v| v.as_slice()).unwrap_or(&[]).iter().enumerate() {
+                        if click_y < y + h { found = scroll + vi; break; }
                         y += h;
                     }
                     found
                 };
-                let lib_off = self.lib_tab_offset();
-                let lib = &mut self.libs[self.tab_idx - lib_off];
+                let lib = &mut self.libs[lib_idx];
                 let hit = if let Some(s) = &mut lib.search {
                     if display_pos < s.results.len() { s.cursor = display_pos; true } else { false }
                 } else if let Some(lvl) = lib.nav_stack.last_mut() {
@@ -1541,6 +1620,22 @@ impl App {
                         } else {
                             self.move_home_cursor(delta);
                         }
+                    }
+                } else if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+                    // Scroll in whichever power-view panel the mouse is over.
+                    let col_areas = self.power_lib_col_areas.clone();
+                    let queue_area = self.power_queue_area;
+                    if queue_area.contains((col, row).into()) {
+                        let n = self.player_tab.items.len();
+                        if n > 0 {
+                            self.player_tab.playlist_cursor =
+                                (self.player_tab.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                        }
+                    } else if let Some(&(lib_idx, _)) = col_areas.iter().find(|(_, r)| r.contains((col, row).into())) {
+                        let saved = self.tab_idx;
+                        self.tab_idx = self.lib_tab_offset() + lib_idx;
+                        self.move_lib_cursor(delta);
+                        self.tab_idx = saved;
                     }
                 } else if self.tab_idx == 1 {
                     if self.playlist_view == PLAYLIST_VIEW_PRESENTATION {

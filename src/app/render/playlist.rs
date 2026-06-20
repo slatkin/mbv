@@ -11,16 +11,22 @@ use super::super::{App, palette};
 use super::super::ui_util::{fmt_duration, trunc_str};
 
 impl App {
-    fn render_playlist_bar(&self, f: &mut Frame, area: Rect) {
+    pub(super) fn render_playlist_bar(&self, f: &mut Frame, area: Rect) {
+        self.render_playlist_bar_bg(f, area, palette::OVERLAY);
+    }
+
+    pub(super) fn render_playlist_bar_bg(&self, f: &mut Frame, area: Rect, bg: ratatui::style::Color) {
         let name = self.queue_playlist_name().to_string();
         let max_name = (area.width as usize).saturating_sub(12);
         let name_trunc = trunc_str(&name, max_name);
+        let focused = bg != palette::OVERLAY;
+        let label_fg = if focused { palette::OVERLAY } else { palette::SUBTLE };
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(" "),
-                Span::styled("Playlist: ", Style::default().fg(palette::SUBTLE)),
+                Span::styled("Playlist: ", Style::default().fg(label_fg)),
                 Span::styled(name_trunc, Style::default().fg(palette::WHITE)),
-            ])).style(Style::default().bg(palette::OVERLAY)),
+            ])).style(Style::default().bg(bg)),
             area,
         );
     }

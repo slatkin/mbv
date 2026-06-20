@@ -272,9 +272,9 @@ impl App {
 
         let cursor_row = cursor / COLS;
         let scroll_row = {
-            let prev = self.layout_lib_scroll;
+            let prev = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
             let s = prev.min(cursor_row).max(cursor_row.saturating_sub(n_visible_rows - 1));
-            self.layout_lib_scroll = s;
+            if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) { *v = s; }
             s
         };
 
@@ -375,7 +375,7 @@ impl App {
             self.render_season_grid(f, area, lib_idx);
             return;
         }
-        self.layout_lib_table_area = area;
+        if let Some(v) = self.layout_lib_table_area.get_mut(lib_idx) { *v = area; }
         const LIB_SELECTED_IMG_W: u16 = 32;
         const LIB_AUDIO_IMG_W: u16 = 12;
         let lib_audio_img_h: u16 = self.image_picker.as_ref()
@@ -497,7 +497,7 @@ impl App {
         }).collect();
 
         let scroll = if self.libs[lib_idx].search.is_some() {
-            let mut s = self.layout_lib_scroll.min(cursor);
+            let mut s = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0).min(cursor);
             loop {
                 let visible_h: u16 = all_heights[s..=cursor].iter().sum();
                 if visible_h <= area.height { break; }
@@ -507,7 +507,7 @@ impl App {
         } else {
             cursor
         };
-        self.layout_lib_scroll = scroll;
+        if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) { *v = scroll; }
 
         if self.last_nav_at.elapsed() >= Duration::from_millis(150) {
             let prefetch_start = cursor.saturating_sub(3);
@@ -870,7 +870,7 @@ impl App {
             rendered_heights.push(row_h);
             row_y += row_h;
         }
-        self.layout_lib_row_heights = rendered_heights;
+        if let Some(v) = self.layout_lib_row_heights.get_mut(lib_idx) { *v = rendered_heights; }
 
         if needs_scrollbar {
             let mut sb_state = ScrollbarState::new(items_len).position(scroll);

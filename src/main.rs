@@ -53,37 +53,71 @@ fn daemon_running() -> bool {
     std::path::Path::new(&format!("/proc/{pid}")).exists()
 }
 
+fn crash_log_path() -> std::path::PathBuf {
+    std::env::var("XDG_STATE_HOME")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| {
+            std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+                .join(".local").join("state")
+        })
+        .join("mbv")
+        .join("mbv.log")
+}
+
+fn write_crash_log(msg: &str) {
+    let _ = crossterm::terminal::disable_raw_mode();
+    let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
+    // Write directly to stderr (async-signal-safe, no mutex)
+    use std::io::Write;
+    let _ = std::io::stderr().write_all(msg.as_bytes());
+    let _ = std::io::stderr().write_all(b"\n");
+    log::error!(target: "crash", "{msg}");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(crash_log_path()) {
+        let _ = writeln!(f, "{msg}");
+    }
+}
+
 fn install_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
-        // Restore terminal unconditionally — no-op if not in raw mode.
-        let _ = crossterm::terminal::disable_raw_mode();
-        let _ = crossterm::execute!(
-            std::io::stdout(),
-            crossterm::terminal::LeaveAlternateScreen
-        );
-
-        // Write panic info directly to the log file, bypassing applog (which
-        // may not be initialized yet if the panic is very early).
-        let log_path = std::env::var("XDG_STATE_HOME")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| {
-                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                    .join(".local").join("state")
-            })
-            .join("mbv")
-            .join("mbv.log");
-        let msg = format!("[E player] PANIC: {info}\n");
-        // Also try the applog channel in case it is up.
-        log::error!(target: "player", "PANIC: {info}");
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
-            use std::io::Write;
-            let _ = f.write_all(msg.as_bytes());
-        }
+        let msg = format!("PANIC: {info}");
+        write_crash_log(&msg);
+        eprintln!("{msg}");
     }));
+}
+
+fn install_signal_handlers() {
+    // Write a crash log entry for fatal signals before the process dies.
+    unsafe {
+        for &sig in &[libc::SIGSEGV, libc::SIGILL, libc::SIGBUS, libc::SIGFPE] {
+            libc::signal(sig, signal_handler as extern "C" fn(libc::c_int) as libc::sighandler_t);
+        }
+    }
+}
+
+extern "C" fn signal_handler(sig: libc::c_int) {
+    let name = match sig {
+        libc::SIGSEGV => "SIGSEGV",
+        libc::SIGILL  => "SIGILL",
+        libc::SIGBUS  => "SIGBUS",
+        libc::SIGFPE  => "SIGFPE",
+        _             => "UNKNOWN",
+    };
+    // Only async-signal-safe ops here: write directly to the log file.
+    let msg = format!("CRASH: signal {name} ({sig})");
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(crash_log_path()) {
+        use std::io::Write;
+        let _ = writeln!(f, "{msg}");
+    }
+    // Re-raise with default handler so the process actually terminates and core dumps work.
+    unsafe {
+        libc::signal(sig, libc::SIG_DFL);
+        libc::raise(sig);
+    }
 }
 
 fn main() {
     install_panic_hook();
+    install_signal_handlers();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
 
