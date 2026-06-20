@@ -404,6 +404,7 @@ fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
                         reporter.report_ping();
                     } else {
                         reporter.report_progress("TimeUpdate");
+                        reporter.report_ping();
                     }
                 }
             }

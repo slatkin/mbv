@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:ossgit.org)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(x['path'], x.get\\('textMatches',''\\)\\) for x in d]\")",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(x['path']\\) for x in d]\")",
+      "Bash(python3 -c \"import json,sys; [print\\(x['path']\\) for x in json.load\\(sys.stdin\\)]\")",
+      "Bash(python3 -c ' *)"
+    ]
+  }
+}
