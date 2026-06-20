@@ -1161,10 +1161,11 @@ impl App {
         // run()), so the window disappears promptly even if the HTTP call takes a
         // moment.
         if QUIT_REQUESTED.load(Ordering::Relaxed) {
-            let (was_playing, current_idx, position_ticks) = {
+            let (was_playing, current_idx, position_ticks, last_valid_pos) = {
                 let st = self.player.status.lock().unwrap();
-                (st.active, st.current_idx, st.position_ticks)
+                (st.active, st.current_idx, st.position_ticks, st.last_valid_pos)
             };
+            log::info!(target: "player", "quit: was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos}");
             if was_playing {
                 if let Some(item) = self.player_tab.items.get_mut(current_idx) {
                     if position_ticks > 0 && !item.is_audio() {

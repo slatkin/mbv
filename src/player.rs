@@ -263,12 +263,12 @@ impl SessionReporter {
     // Selects ws or http automatically; reads pos/paused from status.
     fn report_progress(&self, event_name: &str) {
         let (id, msid, sid) = self.ids.lock().unwrap().clone();
-        let (pos, paused) = {
+        let (pos, runtime, paused) = {
             let s = self.status.lock().unwrap();
-            (s.position_ticks, s.paused)
+            (s.position_ticks, s.runtime_ticks, s.paused)
         };
         if let Some(ref tx) = self.ws_tx {
-            self.client.report_progress_ws(&id, &msid, pos, paused, &sid, event_name, tx);
+            self.client.report_progress_ws(&id, &msid, pos, runtime, paused, &sid, event_name, tx);
         } else {
             self.client.report_progress_http(&id, &msid, pos, paused, &sid, event_name);
         }
@@ -642,6 +642,9 @@ impl SingleSession {
             let mut st = self.status.lock().unwrap();
             st.position_ticks = ticks;
             if pos_secs > 0.0 {
+                if self.last_valid_pos == 0 {
+                    log::info!(target: "player", "last_valid_pos first non-zero: {}s", ticks / TICKS_PER_SECOND);
+                }
                 self.last_valid_pos = ticks;
                 st.last_valid_pos = ticks;
             }
@@ -947,6 +950,7 @@ impl PlaylistSession {
         } else {
             None
         };
+        log::info!(target: "player", "playlist init idx={start_idx} pending_resume={pending_resume_secs:?}s");
         let osd_title = items[start_idx].display_name();
         PlaylistSession {
             config,
@@ -1088,6 +1092,7 @@ impl PlaylistSession {
                 } else {
                     None
                 };
+                log::info!(target: "player", "playlist queue-replace idx={start_idx} pending_resume={:?}s", self.pending_resume_secs);
                 let (s, e) = load_intro_times(&self.reporter.client, &new_items[start_idx].id);
                 self.set_intro(s, e, new_items[start_idx].playback_position_ticks);
 
@@ -1167,6 +1172,9 @@ impl PlaylistSession {
             // Don't update last_valid_pos while a resume seek is pending: mpv fires
             // time-pos=0 before the seek lands, which would overwrite the correct position.
             if pos_secs > 0.0 && self.pending_resume_secs.is_none() {
+                if self.last_valid_pos == 0 {
+                    log::info!(target: "player", "playlist last_valid_pos first non-zero: {}s idx={}", ticks / TICKS_PER_SECOND, self.current_idx);
+                }
                 self.last_valid_pos = ticks;
                 st.last_valid_pos = ticks;
             }
@@ -1220,8 +1228,11 @@ impl PlaylistSession {
             auto_select_tracks(mpv, &self.status, self.subs_off.load(Ordering::Relaxed));
             self.tracks_initialized = true;
             if let Some(secs) = self.pending_resume_secs.take() {
+                log::info!(target: "player", "playlist pending_resume cleared: seeking to {secs:.0}s idx={}", self.current_idx);
                 let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
                 self.last_seek_at = Some(Instant::now());
+            } else {
+                log::info!(target: "player", "playlist pending_resume cleared: no resume (starting from 0) idx={}", self.current_idx);
             }
             if self.config.use_mpv_config {
                 let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);
@@ -1341,6 +1352,7 @@ impl PlaylistSession {
         if !self.items[self.current_idx].is_audio() && self.items[self.current_idx].should_resume() {
             self.pending_resume_secs = Some(self.items[self.current_idx].resume_seconds());
         }
+        log::info!(target: "player", "playlist track-transition idx={} pending_resume={:?}s", self.current_idx, self.pending_resume_secs);
 
         let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
             idx: completed_idx,

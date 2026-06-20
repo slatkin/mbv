@@ -692,7 +692,7 @@ impl EmbyClient {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub fn report_progress_ws(&self, item_id: &str, media_source_id: &str, position_ticks: i64, is_paused: bool, session_id: &str, event_name: &str, ws_tx: &mpsc::Sender<String>) {
+    pub fn report_progress_ws(&self, item_id: &str, media_source_id: &str, position_ticks: i64, runtime_ticks: i64, is_paused: bool, session_id: &str, event_name: &str, ws_tx: &mpsc::Sender<String>) {
         let data = serde_json::json!({
             "UserId": self.user_id,
             "ItemId": item_id,
@@ -710,7 +710,9 @@ impl EmbyClient {
             "MessageType": "ReportPlaybackProgress",
             "Data": data,
         }).to_string();
-        log::debug!(target: "api", "→ ws Progress pos={position_ticks} paused={is_paused} event={event_name}");
+        let pos_s = position_ticks / TICKS_PER_SECOND;
+        let run_s = runtime_ticks / TICKS_PER_SECOND;
+        log::info!(target: "api", "→ ws Progress pos={pos_s}s/{run_s}s paused={is_paused} event={event_name}");
         let _ = ws_tx.send(msg);
     }
 
