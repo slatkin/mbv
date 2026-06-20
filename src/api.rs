@@ -857,6 +857,18 @@ impl EmbyClient {
 
     /// Replace a playlist's contents with the given item ids (in order).
     /// Fetches current entry ids, deletes them all, then adds the new set.
+    pub fn get_playlist_items(&self, playlist_id: &str) -> Result<Vec<MediaItem>, String> {
+        let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", playlist_id))
+            .query("UserId", &self.user_id)
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear,EndDate,Overview,PremiereDate,DateCreated,ChildCount,RecursiveItemCount,Container,People,MediaStreams,Genres")
+            .query("EnableUserData", "true")
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        Ok(resp["Items"].as_array()
+            .map(|arr| arr.iter().map(parse_item).collect())
+            .unwrap_or_default())
+    }
+
     pub fn update_playlist_items(&self, playlist_id: &str, item_ids: &[String]) -> Result<(), String> {
         // Get current playlist entry ids
         let resp: serde_json::Value = self.get(&format!("/Playlists/{}/Items", playlist_id))

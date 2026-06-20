@@ -1481,9 +1481,7 @@ impl App {
         let tx = self.lib_tx.clone();
         let playlist_id = playlist.id.clone();
         std::thread::spawn(move || {
-            let items = client.get_items_sorted(&playlist_id, None, false, 0, 5000, "IndexNumber", "Ascending")
-                .map(|(v, _)| v)
-                .unwrap_or_default();
+            let items = client.get_playlist_items(&playlist_id).unwrap_or_default();
             let _ = tx.send(LibEvent::PlaylistItemsLoaded { playlist_id, items });
         });
     }
@@ -1502,7 +1500,7 @@ impl App {
         let playlist_name = self.playlists.iter().find(|p| p.id == playlist_id)
             .map(|p| p.name.clone()).unwrap_or_default();
         let client = self.client.lock().unwrap().clone();
-        let (items, _) = match client.get_items_sorted(&playlist_id, None, false, 0, 5000, "IndexNumber", "Ascending") {
+        let items = match client.get_playlist_items(&playlist_id) {
             Ok(r) => r,
             Err(e) => { self.flash_status(format!("Playlist load failed: {e}")); return; }
         };

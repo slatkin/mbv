@@ -42,7 +42,7 @@ impl App {
         ]).areas(area);
 
         const VOL_W: u16 = 9; // " Vol XXX%"
-        let right_w = VOL_W;
+        let right_w = VOL_W + 1; // +1 so the trailing % aligns with the last ] on the divider row
 
         {
             let dash_style = Style::default().fg(palette::MUTED);
@@ -52,7 +52,7 @@ impl App {
             let active = pst.active;
 
             let res_h = pst.video_height;
-            let res_str = if res_h > 0 { res_h.to_string() } else { "--".to_string() };
+            let res_str = if res_h > 0 { format!("{}p", res_h) } else { "--".to_string() };
             let res_color = if res_h > 0 { palette::FOAM } else { palette::MUTED };
 
             let sub_color = if pst.sub_id != 0 { palette::RED } else { palette::MUTED };
