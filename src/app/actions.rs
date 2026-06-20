@@ -13,7 +13,15 @@ use super::ui_util::{natural_sort_key, is_playable, sort_episodes, sort_audio_tr
 
 impl App {
     pub(super) fn lib_page_size(&self) -> usize {
-        self.layout_lib_row_heights.len().saturating_sub(1).max(1)
+        let lib_idx = if self.tab_idx >= self.lib_tab_offset() {
+            self.tab_idx - self.lib_tab_offset()
+        } else {
+            0
+        };
+        self.layout_lib_row_heights
+            .get(lib_idx)
+            .map(|v| v.len().saturating_sub(1).max(1))
+            .unwrap_or(1)
     }
 
     pub(super) fn playlist_page_size(&self) -> usize {
