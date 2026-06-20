@@ -280,6 +280,8 @@ impl SessionReporter {
         let is_audio = self.is_audio.load(Ordering::Relaxed);
         let pos = if is_audio { 0 } else { last_valid_pos };
         let runtime_ticks = self.status.lock().unwrap().runtime_ticks;
+        log::info!(target: "player", "report_stopped: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s",
+            last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
         self.client.report_stopped(&id, &msid, pos, &sid, runtime_ticks);
     }
 
@@ -796,6 +798,8 @@ impl SingleSession {
     }
 
     fn run(mut self, mpv: Mpv, stop_rx: mpsc::Receiver<()>, cmd_rx: mpsc::Receiver<PlayerCommand>, mut progress: ProgressGuard) {
+        let event_tx_panic = self.event_tx.clone();
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         loop {
             // Process commands before checking the stop signal so that a LoadNew
             // arriving in the same iteration (e.g. WS Stop then Play) can cancel
@@ -888,6 +892,14 @@ impl SingleSession {
                 }
                 _ => {}
             }
+        }
+        })); // end catch_unwind
+        if result.is_err() {
+            let _ = event_tx_panic.send(PlayerEvent::Stopped {
+                idx: 0,
+                position_ticks: 0,
+                played: false,
+            });
         }
     }
 }
@@ -1381,6 +1393,9 @@ impl PlaylistSession {
     }
 
     fn run(mut self, mpv: Mpv, stop_rx: mpsc::Receiver<()>, cmd_rx: mpsc::Receiver<PlayerCommand>, mut progress: ProgressGuard) {
+        let event_tx_panic = self.event_tx.clone();
+        let current_idx_panic = self.current_idx;
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         loop {
             let mut cancel_stop = false;
             while let Ok(cmd) = cmd_rx.try_recv() {
@@ -1475,6 +1490,14 @@ impl PlaylistSession {
                 }
                 _ => {}
             }
+        }
+        })); // end catch_unwind
+        if result.is_err() {
+            let _ = event_tx_panic.send(PlayerEvent::Stopped {
+                idx: current_idx_panic,
+                position_ticks: 0,
+                played: false,
+            });
         }
     }
 }

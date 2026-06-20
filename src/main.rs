@@ -53,7 +53,38 @@ fn daemon_running() -> bool {
     std::path::Path::new(&format!("/proc/{pid}")).exists()
 }
 
+fn install_panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        // Restore terminal unconditionally — no-op if not in raw mode.
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = crossterm::execute!(
+            std::io::stdout(),
+            crossterm::terminal::LeaveAlternateScreen
+        );
+
+        // Write panic info directly to the log file, bypassing applog (which
+        // may not be initialized yet if the panic is very early).
+        let log_path = std::env::var("XDG_STATE_HOME")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
+                    .join(".local").join("state")
+            })
+            .join("mbv")
+            .join("mbv.log");
+        let msg = format!("[E player] PANIC: {info}\n");
+        // Also try the applog channel in case it is up.
+        log::error!(target: "player", "PANIC: {info}");
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&log_path) {
+            use std::io::Write;
+            let _ = f.write_all(msg.as_bytes());
+        }
+    }));
+}
+
 fn main() {
+    install_panic_hook();
+
     let args: Vec<String> = std::env::args().skip(1).collect();
 
     if args.contains(&"--version".to_string()) || args.contains(&"-V".to_string()) {
