@@ -709,6 +709,8 @@ impl App {
                 had_events = true;
                 match ev {
                     PlayerEvent::Stopped { idx, position_ticks, played } => {
+                        log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played}",
+                            position_ticks / crate::api::TICKS_PER_SECOND);
                         if self.player.is_remote_disconnected() {
                             self.next_up_item = None;
                             self.skip_intro_end_ticks = None;
@@ -722,8 +724,12 @@ impl App {
                                 if played {
                                     item.playback_position_ticks = 0;
                                     item.played = true;
+                                    log::info!(target: "player", "Stopped: marked played, position reset to 0");
                                 } else if position_ticks > 0 && !item.is_audio() {
                                     item.playback_position_ticks = position_ticks;
+                                    log::info!(target: "player", "Stopped: saved position={}s", position_ticks / crate::api::TICKS_PER_SECOND);
+                                } else {
+                                    log::info!(target: "player", "Stopped: position not saved (position_ticks={} is_audio={})", position_ticks, item.is_audio());
                                 }
                             }
                             self.last_played_item_id = Some(item.id.clone());

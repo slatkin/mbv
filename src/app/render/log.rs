@@ -86,6 +86,11 @@ impl App {
             x += 1;
             f.buffer_mut().set_stringn(x, y, "│", 1, Style::default().fg(palette::OVERLAY));
             x += 1;
+            f.buffer_mut().set_stringn(x, y, &entry.ts, 8, Style::default().fg(palette::MUTED));
+            x += 9;
+            if x >= log_inner.right() { continue; }
+            f.buffer_mut().set_stringn(x, y, "│", 1, Style::default().fg(palette::OVERLAY));
+            x += 1;
             let src_len = entry.source.len().min(6);
             f.buffer_mut().set_stringn(x, y, &entry.source, src_len, Style::default().fg(palette::MUTED));
             x += 6 + 1;

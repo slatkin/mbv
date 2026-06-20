@@ -32,7 +32,7 @@ pub enum WsEvent {
 fn parse(text: &str) -> Option<WsEvent> {
     let v: Value = serde_json::from_str(text).ok()?;
     let msg_type = v["MessageType"].as_str()?;
-    log::debug!(target: "ws", "← {msg_type}");
+    log::debug!(target: "ws", "inbound: {msg_type}");
 
     match msg_type {
         "Play" => {

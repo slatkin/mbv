@@ -20,6 +20,7 @@ impl RemotePlayer {
         let path = crate::config::control_socket_path();
         let stream = UnixStream::connect(&path)
             .map_err(|e| format!("cannot connect to daemon socket {path}: {e}"))?;
+        log::info!(target: "remote", "connected to daemon socket {path}");
 
         let status = Arc::new(Mutex::new(PlayerStatus {
             position_ticks: 0,
@@ -60,7 +61,10 @@ impl RemotePlayer {
                     Err(_) => break,
                     Ok(l) if l.is_empty() => continue,
                     Ok(l) => {
-                        let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else { continue };
+                        let Ok(ev) = serde_json::from_str::<CtrlEvent>(&l) else {
+                            log::warn!(target: "remote", "unrecognized event from daemon: {l}");
+                            continue;
+                        };
                         match ev {
                             CtrlEvent::StatusOnly(s) => {
                                 subs_off_r.store(s.sub_id == 0, Ordering::Relaxed);
@@ -92,7 +96,7 @@ impl RemotePlayer {
                 }
             }
             disconnected_r.store(true, Ordering::SeqCst);
-            // Notify TUI that connection is gone
+            log::info!(target: "remote", "daemon disconnected");
             let _ = event_tx_r.send(PlayerEvent::Stopped { idx: 0, position_ticks: 0, played: false });
         });
 

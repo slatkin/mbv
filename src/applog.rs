@@ -10,6 +10,9 @@ impl Level {
     pub fn label(self) -> &'static str {
         match self { Level::Error => "E", Level::Warn => "W", Level::Info => "I", Level::Debug => "D" }
     }
+    pub fn logfmt(self) -> &'static str {
+        match self { Level::Error => "error", Level::Warn => "warn", Level::Info => "info", Level::Debug => "debug" }
+    }
 }
 
 impl From<log::Level> for Level {
@@ -26,8 +29,16 @@ impl From<log::Level> for Level {
 #[derive(Clone)]
 pub struct LogEntry {
     pub level: Level,
+    pub ts: String,
     pub source: String,
     pub msg: String,
+}
+
+fn now_ts() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let s = secs % 86400;
+    format!("{:02}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60)
 }
 
 #[derive(Clone)]
@@ -60,13 +71,17 @@ impl AppLog {
         }
     }
 
-    fn push_entry(&self, entry: LogEntry) {
+    fn push_entry(&self, mut entry: LogEntry) {
+        entry.ts = now_ts();
+        let line = format!("ts={} level={} source={} msg=\"{}\"",
+            entry.ts, entry.level.logfmt(), entry.source,
+            entry.msg.replace('\\', "\\\\").replace('"', "\\\""));
         if self.stderr {
-            eprintln!("[{} {}] {}", entry.level.label(), entry.source, entry.msg);
+            eprintln!("{line}");
         }
         if let Ok(mut guard) = self.file.lock() {
             if let Some(f) = guard.as_mut() {
-                let _ = writeln!(f, "[{} {}] {}", entry.level.label(), entry.source, entry.msg);
+                let _ = writeln!(f, "{line}");
             }
         }
         if self.capacity == 0 { return; }
@@ -98,6 +113,7 @@ impl log::Log for GlobalLogger {
         if let Some(log) = GLOBAL.get() {
             log.push_entry(LogEntry {
                 level: record.level().into(),
+                ts: String::new(),
                 source: record.target().to_string(),
                 msg: record.args().to_string(),
             });
@@ -125,7 +141,11 @@ mod tests {
     use super::*;
 
     fn make(capacity: usize) -> AppLog {
-        AppLog::new(capacity, false)
+        AppLog::new(capacity, false, None)
+    }
+
+    fn entry(level: Level, source: &str, msg: &str) -> LogEntry {
+        LogEntry { level, ts: String::new(), source: source.into(), msg: msg.into() }
     }
 
     #[test]
@@ -139,14 +159,14 @@ mod tests {
     #[test]
     fn capacity_zero_drops_all_pushes() {
         let log = make(0);
-        log.push_entry(LogEntry { level: Level::Info, source: "src".into(), msg: "msg".into() });
+        log.push_entry(entry(Level::Info, "src", "msg"));
         assert!(log.snapshot().is_empty());
     }
 
     #[test]
     fn push_adds_entry_visible_in_snapshot() {
         let log = make(10);
-        log.push_entry(LogEntry { level: Level::Warn, source: "ws".into(), msg: "hello".into() });
+        log.push_entry(entry(Level::Warn, "ws", "hello"));
         let snap = log.snapshot();
         assert_eq!(snap.len(), 1);
         assert_eq!(snap[0].level, Level::Warn);
@@ -158,10 +178,10 @@ mod tests {
     fn capacity_respected_drains_ten_percent() {
         let log = make(10);
         for i in 0..10 {
-            log.push_entry(LogEntry { level: Level::Info, source: "s".into(), msg: i.to_string() });
+            log.push_entry(entry(Level::Info, "s", &i.to_string()));
         }
         assert_eq!(log.snapshot().len(), 10);
-        log.push_entry(LogEntry { level: Level::Info, source: "s".into(), msg: "10".into() });
+        log.push_entry(entry(Level::Info, "s", "10"));
         assert_eq!(log.snapshot().len(), 10);
         assert_eq!(log.snapshot()[0].msg, "1");
     }
@@ -170,7 +190,7 @@ mod tests {
     fn clone_shares_underlying_storage() {
         let log = make(10);
         let clone = log.clone();
-        log.push_entry(LogEntry { level: Level::Debug, source: "s".into(), msg: "shared".into() });
+        log.push_entry(entry(Level::Debug, "s", "shared"));
         assert_eq!(clone.snapshot().len(), 1);
         assert_eq!(clone.snapshot()[0].msg, "shared");
     }
