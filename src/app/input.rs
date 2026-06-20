@@ -692,11 +692,12 @@ impl App {
         // In power view, route nav keys to the focused library column.
         if self.playlist_view == PLAYLIST_VIEW_POWER {
             if let Some(lib_idx) = self.power_focused_lib_idx() {
-                let is_lib_key = match key.code {
+                let is_power_nav = matches!(key.code, KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down)
+                    && key.modifiers.contains(KeyModifiers::CONTROL);
+                let is_lib_key = !is_power_nav && match key.code {
                     KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
                     | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End
-                    | KeyCode::Enter | KeyCode::Esc | KeyCode::Backspace
-                    | KeyCode::Tab | KeyCode::BackTab => true,
+                    | KeyCode::Enter | KeyCode::Esc | KeyCode::Backspace => true,
                     KeyCode::Char('/') => true,
                     KeyCode::Char('q') => true,
                     KeyCode::Char(_) if key.modifiers.contains(KeyModifiers::CONTROL)
@@ -1283,7 +1284,45 @@ impl App {
     }
 
     fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
-        if self.tab_idx == 1 {
+        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+            // Click in queue area: focus queue and move cursor.
+            let qa = self.power_queue_area;
+            if qa.contains((col, row).into()) {
+                self.power_focus = PowerFocus::Queue;
+                let click_y = (row - qa.y) as usize;
+                let n = self.player_tab.items.len();
+                if click_y < n { self.player_tab.playlist_cursor = click_y; }
+                return true;
+            }
+            // Click in a library column: focus it and set its cursor.
+            let col_areas = self.power_lib_col_areas.clone();
+            for (lib_idx, col_area) in col_areas {
+                let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
+                if col_area.contains((col, row).into()) {
+                    self.power_focus = PowerFocus::Library(lib_idx);
+                    if tbl.contains((col, row).into()) {
+                        let click_y = row - tbl.y;
+                        let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
+                        let display_pos = {
+                            let mut y = 0u16;
+                            let mut found = scroll;
+                            for (vi, &h) in self.layout_lib_row_heights.get(lib_idx).map(|v| v.as_slice()).unwrap_or(&[]).iter().enumerate() {
+                                if click_y < y + h { found = scroll + vi; break; }
+                                y += h;
+                            }
+                            found
+                        };
+                        let lib = &mut self.libs[lib_idx];
+                        if let Some(s) = &mut lib.search {
+                            if display_pos < s.results.len() { s.cursor = display_pos; }
+                        } else if let Some(lvl) = lib.nav_stack.last_mut() {
+                            if display_pos < lvl.items.len() { lvl.cursor = display_pos; }
+                        }
+                    }
+                    return true;
+                }
+            }
+        } else if self.tab_idx == 1 {
             let inner = self.layout_playlist_inner;
             if inner.contains((col, row).into()) {
                 let row_idx = (row - inner.y) as usize;
@@ -1349,42 +1388,6 @@ impl App {
                             }
                         }
                     }
-                }
-            }
-        } else if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
-            // Click in queue area: move queue cursor.
-            let qa = self.power_queue_area;
-            if qa.contains((col, row).into()) {
-                let click_y = (row - qa.y) as usize;
-                let n = self.player_tab.items.len();
-                if click_y < n { self.player_tab.playlist_cursor = click_y; return true; }
-            }
-            // Click in a library column: focus it and set its cursor.
-            let col_areas = self.power_lib_col_areas.clone();
-            for (lib_idx, col_area) in col_areas {
-                let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
-                if col_area.contains((col, row).into()) {
-                    self.power_focus = PowerFocus::Library(lib_idx);
-                    if tbl.contains((col, row).into()) {
-                        let click_y = row - tbl.y;
-                        let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
-                        let display_pos = {
-                            let mut y = 0u16;
-                            let mut found = scroll;
-                            for (vi, &h) in self.layout_lib_row_heights.get(lib_idx).map(|v| v.as_slice()).unwrap_or(&[]).iter().enumerate() {
-                                if click_y < y + h { found = scroll + vi; break; }
-                                y += h;
-                            }
-                            found
-                        };
-                        let lib = &mut self.libs[lib_idx];
-                        if let Some(s) = &mut lib.search {
-                            if display_pos < s.results.len() { s.cursor = display_pos; }
-                        } else if let Some(lvl) = lib.nav_stack.last_mut() {
-                            if display_pos < lvl.items.len() { lvl.cursor = display_pos; }
-                        }
-                    }
-                    return true;
                 }
             }
         } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {

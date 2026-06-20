@@ -255,18 +255,21 @@ impl App {
             let focused = matches!(self.power_focus, PowerFocus::Library(idx) if idx == lib_idx);
             let lib_name = self.libs[lib_idx].library.name.clone();
             let header_fg = if focused { palette::IRIS } else { palette::SUBTLE };
-            let header_style = if focused {
-                Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD | Modifier::REVERSED)
+            if focused {
+                let label = format!("  {}  ", trunc_str(&lib_name, (w as usize).saturating_sub(4)));
+                f.render_widget(
+                    Paragraph::new(Span::styled(label, Style::default().fg(palette::WHITE).bg(palette::IRIS).add_modifier(Modifier::BOLD))),
+                    Rect { x, y: area.y, width: w, height: 1 },
+                );
             } else {
-                Style::default().fg(palette::WHITE)
-            };
-            f.render_widget(
-                Paragraph::new(Line::from(vec![
-                    Span::raw(" "),
-                    Span::styled(trunc_str(&lib_name, (w as usize).saturating_sub(2)), header_style),
-                ])),
-                Rect { x, y: area.y, width: w, height: 1 },
-            );
+                f.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(trunc_str(&lib_name, (w as usize).saturating_sub(2)), Style::default().fg(palette::WHITE)),
+                    ])),
+                    Rect { x, y: area.y, width: w, height: 1 },
+                );
+            }
             // underline beneath header
             if area.height > 1 {
                 let uline = "\u{2500}".repeat(w as usize);

@@ -1,5 +1,5 @@
 use textwrap::wrap;
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use crate::api::MediaItem;
 use super::palette;
@@ -110,7 +110,9 @@ pub fn trunc_str(s: &str, max: usize) -> String {
 
 pub fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
     if item.is_folder {
-        let text = if item.unplayed_item_count > 0 {
+        let text = if item.item_type == "Folder" && item.total_count > 0 {
+            format!("{} \u{00b7} {} albums", item.display_name(), item.total_count)
+        } else if item.unplayed_item_count > 0 {
             format!("{} [{}]", item.display_name(), item.unplayed_item_count)
         } else {
             item.display_name()
@@ -140,6 +142,7 @@ pub fn split_suffix(s: &str) -> (&str, &str) {
     if s.ends_with(']') {
         if let Some(pos) = s.rfind(" [") { return (&s[..pos], &s[pos..]); }
     }
+    if let Some(pos) = s.find(" \u{00b7} ") { return (&s[..pos], &s[pos..]); }
     (s, "")
 }
 
@@ -148,7 +151,23 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
     let in_progress = !item.is_folder && item.playback_position_ticks > 0;
     let yellow = Style::default().fg(palette::YELLOW);
     let subtle = Style::default().fg(palette::SUBTLE);
+    let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
+    let label_style = Style::default().fg(palette::YELLOW);
     let w = width.max(1);
+    // Returns extra spans for a suffix: dot-count suffixes get green+bold number + white label.
+    let suf_spans = |suf: &str| -> Vec<Span<'static>> {
+        if let Some(rest) = suf.strip_prefix(" \u{00b7} ") {
+            // rest is e.g. "49 albums" — split at first space
+            if let Some(sp) = rest.find(' ') {
+                return vec![
+                    Span::styled(format!(" \u{00b7} {}", &rest[..sp]), count_style),
+                    Span::styled(rest[sp..].to_string(), label_style),
+                ];
+            }
+            return vec![Span::styled(suf.to_string(), count_style)];
+        }
+        vec![Span::styled(suf.to_string(), subtle)]
+    };
     let lines: Vec<Line<'static>> = wrap(&full_text, w).into_iter().enumerate()
         .map(|(i, s)| {
             let s = s.into_owned();
@@ -159,7 +178,7 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
                 } else { String::new() };
                 let (name, suf) = split_suffix(&s);
                 let mut spans = vec![Span::styled(name.to_string(), style)];
-                if !suf.is_empty() { spans.push(Span::styled(suf.to_string(), subtle)); }
+                if !suf.is_empty() { spans.extend(suf_spans(suf)); }
                 if !pct_str.is_empty() { spans.push(Span::styled(pct_str, yellow)); }
                 Line::from(spans)
             } else {
@@ -167,7 +186,9 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
                 if suf.is_empty() {
                     Line::from(Span::styled(s, style))
                 } else {
-                    Line::from(vec![Span::styled(name.to_string(), style), Span::styled(suf.to_string(), subtle)])
+                    let mut spans = vec![Span::styled(name.to_string(), style)];
+                    spans.extend(suf_spans(suf));
+                    Line::from(spans)
                 }
             }
         })

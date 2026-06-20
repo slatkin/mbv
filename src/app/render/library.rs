@@ -635,16 +635,12 @@ impl App {
                         item.name.clone()
                     }
                 }
-                _ if item.is_folder && item.item_type != "Series" && item.item_type != "Season" => {
-                    if is_album_folder {
-                        item.name.clone()
-                    } else if item.total_count > 0 {
-                        format!("{} ({})", item.name, item.total_count)
-                    } else {
-                        item.name.clone()
-                    }
-                }
                 _ => item.name.clone(),
+            };
+            let folder_count: Option<u32> = if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
+                Some(item.total_count)
+            } else {
+                None
             };
             let title_display = wrap(&title_line, content_w.max(1))
                 .into_iter().next().map(|c| c.into_owned()).unwrap_or_default();
@@ -808,13 +804,24 @@ impl App {
             let constraints: Vec<Constraint> = (0..line_count).map(|_| Constraint::Length(1)).collect();
             let line_rects = Layout::vertical(constraints).split(centered_text_rect);
 
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(title_display, {
+            {
+                let title_style = {
                     let s = Style::default().fg(text_color);
                     if selected && (matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") || is_episode_like) { s.add_modifier(Modifier::BOLD) } else { s }
-                }))),
-                line_rects[0],
-            );
+                };
+                let title_line_widget = if let Some(count) = folder_count {
+                    let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
+                    let label_style = Style::default().fg(palette::YELLOW);
+                    Line::from(vec![
+                        Span::styled(title_display, title_style),
+                        Span::styled(format!(" \u{00b7} {count}"), count_style),
+                        Span::styled(" albums", label_style),
+                    ])
+                } else {
+                    Line::from(Span::styled(title_display, title_style))
+                };
+                f.render_widget(Paragraph::new(title_line_widget), line_rects[0]);
+            }
             if let Some(ref a) = artist_line {
                 if line_count >= 2 {
                     f.render_widget(
