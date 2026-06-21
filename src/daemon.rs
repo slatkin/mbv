@@ -13,13 +13,16 @@ enum DaemonEvent {
     Player(PlayerEvent),
     Ws(WsEvent),
     Ctrl(CtrlCmd),
+    Shutdown,
 }
 
 type ClientList = Arc<Mutex<Vec<mpsc::Sender<String>>>>;
 
 const TRAY_ICON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tray_icon.bin"));
 
-struct MbyTray;
+struct MbyTray {
+    shutdown_tx: mpsc::SyncSender<()>,
+}
 
 impl ksni::Tray for MbyTray {
     fn id(&self) -> String {
@@ -37,7 +40,7 @@ impl ksni::Tray for MbyTray {
             StandardItem {
                 label: "Quit".into(),
                 icon_name: "application-exit".into(),
-                activate: Box::new(|_| std::process::exit(0)),
+                activate: Box::new(|tray: &mut Self| { let _ = tray.shutdown_tx.try_send(()); }),
                 ..Default::default()
             }
             .into(),
@@ -61,6 +64,32 @@ fn broadcast(clients: &ClientList, event: &CtrlEvent) {
 pub fn run(client: EmbyClient) -> ! {
     std::fs::write(pid_file(), std::process::id().to_string())
         .expect("mbv daemon: failed to write PID file");
+
+    // Shared shutdown channel — written by SIGTERM thread and tray Quit item.
+    let (shutdown_signal_tx, shutdown_signal_rx) = mpsc::sync_channel::<()>(1);
+
+    // Block SIGTERM in all threads so sigwait() owns it exclusively.
+    unsafe {
+        let mut mask = std::mem::zeroed::<libc::sigset_t>();
+        libc::sigemptyset(&mut mask);
+        libc::sigaddset(&mut mask, libc::SIGTERM);
+        libc::pthread_sigmask(libc::SIG_BLOCK, &mask, std::ptr::null_mut());
+    }
+
+    // Thread that blocks on SIGTERM and forwards it as a graceful shutdown.
+    {
+        let tx = shutdown_signal_tx.clone();
+        std::thread::spawn(move || {
+            let mut sig: libc::c_int = 0;
+            let mut mask = unsafe { std::mem::zeroed::<libc::sigset_t>() };
+            unsafe {
+                libc::sigemptyset(&mut mask);
+                libc::sigaddset(&mut mask, libc::SIGTERM);
+                libc::sigwait(&mask, &mut sig);
+            }
+            let _ = tx.try_send(());
+        });
+    }
 
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx)    = mpsc::channel();
@@ -88,7 +117,7 @@ pub fn run(client: EmbyClient) -> ! {
     });
 
     let _tray = if client.config.show_systray_icon {
-        MbyTray.spawn()
+        MbyTray { shutdown_tx: shutdown_signal_tx }.spawn()
             .map_err(|e| { log::warn!(target: "tray", "not available: {e}"); })
             .ok()
     } else {
@@ -104,6 +133,12 @@ pub fn run(client: EmbyClient) -> ! {
     let tx = merged_tx.clone();
     std::thread::spawn(move || {
         for ev in ws_rx { let _ = tx.send(DaemonEvent::Ws(ev)); }
+    });
+    let tx = merged_tx.clone();
+    std::thread::spawn(move || {
+        if shutdown_signal_rx.recv().is_ok() {
+            let _ = tx.send(DaemonEvent::Shutdown);
+        }
     });
 
     // Shared state for ctrl socket initial-state snapshots
@@ -236,6 +271,13 @@ pub fn run(client: EmbyClient) -> ! {
             DaemonEvent::Ctrl(cmd) => {
                 handle_ctrl(cmd, &client, &player, &mut items, &mut cursor,
                             &shared_items, &shared_cursor, &ctrl_clients);
+            }
+            DaemonEvent::Shutdown => {
+                log::info!(target: "daemon", "graceful shutdown: stopping player");
+                player.stop();
+                player.join_or_timeout(std::time::Duration::from_secs(5));
+                let _ = std::fs::remove_file(pid_file());
+                std::process::exit(0);
             }
         }
     }
