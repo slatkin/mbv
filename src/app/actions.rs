@@ -709,7 +709,7 @@ impl App {
         }
     }
 
-    fn remove_from_continue_watching(&mut self) {
+    pub(super) fn remove_from_continue_watching(&mut self) {
         let Some(item) = self.home.continue_items.get(self.home.continue_cursor).cloned() else { return };
         let client = self.client.lock().unwrap();
         let result = client.hide_from_resume(&item.id);
@@ -1432,12 +1432,17 @@ impl App {
     }
 
     pub(super) fn save_queue_state(&self) {
+        let positions: std::collections::HashMap<String, i64> = self.player_tab.items.iter()
+            .filter(|i| i.playback_position_ticks > 0 && !i.is_audio())
+            .map(|i| (i.id.clone(), i.playback_position_ticks))
+            .collect();
         let state = crate::config::QueueState {
             source: self.queue_source.clone(),
             item_ids: self.player_tab.items.iter().map(|i| i.id.clone()).collect(),
             cursor: self.player_tab.playlist_cursor,
             last_played_item_id: self.last_played_item_id.clone(),
             last_played_completed: self.last_played_completed,
+            positions,
         };
         if state.item_ids.is_empty() {
             crate::config::clear_queue_state();
@@ -1449,12 +1454,25 @@ impl App {
     pub(super) fn spawn_restore_queue_state(&mut self) {
         let Some(state) = crate::config::load_queue_state() else { return };
         if state.item_ids.is_empty() { return; }
-        let (item_ids, source, last_played_item_id, last_played_completed) =
-            (state.item_ids, state.source, state.last_played_item_id, state.last_played_completed);
+        let (item_ids, source, last_played_item_id, last_played_completed, positions) =
+            (state.item_ids, state.source, state.last_played_item_id, state.last_played_completed, state.positions);
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            let items = client.get_items_by_ids(&item_ids).unwrap_or_default();
+            let mut items = client.get_items_by_ids(&item_ids).unwrap_or_default();
+            // Apply locally-saved positions where they are fresher than what Emby returned.
+            // Emby's UserData may lag by up to a few seconds after a Stopped report.
+            for item in &mut items {
+                if let Some(&saved_pos) = positions.get(&item.id) {
+                    if saved_pos > item.playback_position_ticks {
+                        log::info!(target: "player", "restore: applying saved pos={}s (Emby had {}s) for item={}",
+                            saved_pos / crate::api::TICKS_PER_SECOND,
+                            item.playback_position_ticks / crate::api::TICKS_PER_SECOND,
+                            item.id);
+                        item.playback_position_ticks = saved_pos;
+                    }
+                }
+            }
             let _ = tx.send(LibEvent::QueueRestored { items, source, last_played_item_id, last_played_completed });
         });
     }

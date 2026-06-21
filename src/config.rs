@@ -139,6 +139,10 @@ pub struct QueueState {
     pub cursor: usize,
     pub last_played_item_id: Option<String>,
     pub last_played_completed: bool,
+    // Per-item resume positions saved at quit time. Used on restore to override stale Emby
+    // UserData when a fresh launch races with Emby's async position write.
+    #[serde(default)]
+    pub positions: std::collections::HashMap<String, i64>,
 }
 
 pub fn save_queue_state(state: &QueueState) {
