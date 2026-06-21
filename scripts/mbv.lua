@@ -105,6 +105,9 @@ local osc_styles = {
     elementDown = '{\\1c&H999999&}',
 }
 
+-- episode subtitle tag (e.g. "S02E05") set via mbv-ep-info script-message
+local ep_subtitle = ''
+
 -- internal states, do not touch
 local state = {
     showtime,                               -- time of last invocation (last mouse move)
@@ -1128,6 +1131,11 @@ layouts = function ()
                                 geo.x, geo.y - geo.h, geo.x + geo.w , geo.y)
     lo.alpha[3] = 0
     lo.button.maxchars = geo.w / 23
+
+    lo = add_layout('ep_subtitle')
+    lo.geometry = { x = 25, y = refY - 130, an = 7, w = osc_geo.w - 50, h = 22 }
+    lo.style = '{\\blur0\\bord0.5\\1c&HFFFFFF&\\3c&H000000&\\fs18\\fn' .. user_opts.font .. '}'
+    lo.alpha[3] = 0
 end
 
 -- Validate string type user options
@@ -1365,6 +1373,11 @@ function osc_init()
         return not (title == '') and title or ' '
     end
     ne.visible = osc_param.playresy >= 320 and user_opts.showtitle
+
+    -- episode tag line (e.g. "S02E05") shown below the title for series episodes
+    ne = new_element('ep_subtitle', 'button')
+    ne.content = function () return ep_subtitle end
+    ne.visible = osc_param.playresy >= 320 and user_opts.showtitle and ep_subtitle ~= ''
     
     --seekbar
     ne = new_element('seekbar', 'slider')
@@ -2391,6 +2404,19 @@ mp.set_key_bindings({
 -- Auto-dismiss when the next file actually starts playing.
 mp.register_event('start-file', function()
     if next_up.visible then next_up_hide() end
+end)
+
+mp.register_script_message('mbv-ep-info', function(season, episode)
+    msg.warn('mbv-ep-info: season=' .. tostring(season) .. ' episode=' .. tostring(episode))
+    local s = tonumber(season) or 0
+    local e = tonumber(episode) or 0
+    if s > 0 and e > 0 then
+        ep_subtitle = string.format('S%dE%02d', s, e)
+    else
+        ep_subtitle = ''
+    end
+    msg.warn('mbv-ep-info: ep_subtitle=' .. ep_subtitle)
+    request_init()
 end)
 
 -- Skip Intro overlay

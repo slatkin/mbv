@@ -417,7 +417,7 @@ const SESSIONS_PANEL_W:  u16 = 42;
 const HELP_PANEL_W:      u16 = 58;
 const SETTINGS_PANEL_W:  u16 = 56;
 const PLAYLISTS_PANEL_W: u16 = 48;
-const HOME_MIN_SECTION_H: u16 = 6; // 2 border rows + 4 content rows
+const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
     fn build(init: AppInit) -> Self {
         App {

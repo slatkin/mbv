@@ -1,5 +1,5 @@
-use textwrap::wrap;
 use ratatui::style::{Modifier, Style};
+use unicode_width::UnicodeWidthStr;
 use ratatui::text::{Line, Span, Text};
 use crate::api::MediaItem;
 use super::palette;
@@ -104,8 +104,19 @@ pub fn regex_strip_urls(s: &str) -> String {
 }
 
 pub fn trunc_str(s: &str, max: usize) -> String {
-    if s.chars().count() <= max { s.to_string() }
-    else { format!("{}\u{2026}", s.chars().take(max.saturating_sub(1)).collect::<String>()) }
+    if s.width() <= max { s.to_string() }
+    else {
+        let mut out = String::new();
+        let mut w = 0;
+        for c in s.chars() {
+            let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+            if w + cw + 1 > max { break; }
+            out.push(c);
+            w += cw;
+        }
+        out.push('\u{2026}');
+        out
+    }
 }
 
 pub fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
@@ -135,65 +146,88 @@ pub fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) 
     (text, style)
 }
 
-pub fn split_suffix(s: &str) -> (&str, &str) {
-    if s.ends_with(')') {
-        if let Some(pos) = s.rfind(" (") { return (&s[..pos], &s[pos..]); }
-    }
-    if s.ends_with(']') {
-        if let Some(pos) = s.rfind(" [") { return (&s[..pos], &s[pos..]); }
-    }
-    if let Some(pos) = s.find(" \u{00b7} ") { return (&s[..pos], &s[pos..]); }
-    (s, "")
-}
 
 pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
-    let (full_text, style) = item_text_and_style(item, selected);
-    let in_progress = !item.is_folder && item.playback_position_ticks > 0;
+    let name_style = if selected {
+        Style::default().add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)
+    };
     let yellow = Style::default().fg(palette::YELLOW);
     let subtle = Style::default().fg(palette::SUBTLE);
+    let muted = Style::default().fg(palette::MUTED);
     let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
-    let label_style = Style::default().fg(palette::YELLOW);
-    let w = width.max(1);
-    // Returns extra spans for a suffix: dot-count suffixes get green+bold number + white label.
-    let suf_spans = |suf: &str| -> Vec<Span<'static>> {
-        if let Some(rest) = suf.strip_prefix(" \u{00b7} ") {
-            // rest is e.g. "49 albums" — split at first space
-            if let Some(sp) = rest.find(' ') {
-                return vec![
-                    Span::styled(format!(" \u{00b7} {}", &rest[..sp]), count_style),
-                    Span::styled(rest[sp..].to_string(), label_style),
-                ];
-            }
-            return vec![Span::styled(suf.to_string(), count_style)];
-        }
-        vec![Span::styled(suf.to_string(), subtle)]
+
+    let in_progress = !item.is_folder && item.playback_position_ticks > 0;
+
+    let dur_str: String = if item.runtime_ticks > 0 {
+        let s = item.runtime_seconds();
+        let h = (s / 3600.0) as u64;
+        let m = ((s % 3600.0) / 60.0) as u64;
+        if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") }
+    } else { String::new() };
+
+    // Subtitle line: context metadata
+    let subtitle: String = if item.is_folder {
+        String::new()
+    } else if item.item_type == "Episode" && item.parent_index_number > 0 {
+        let tag = format!("S{:02}E{:02}", item.parent_index_number, item.index_number);
+        if !item.series_name.is_empty() {
+            format!("{tag}  {}", item.series_name)
+        } else { tag }
+    } else if item.item_type == "Audio" {
+        if !item.album.is_empty() && !item.artist.is_empty() {
+            format!("{}  {}", item.artist, item.album)
+        } else if !item.artist.is_empty() {
+            item.artist.clone()
+        } else { String::new() }
+    } else if item.item_type == "MusicAlbum" && !item.artist.is_empty() {
+        item.artist.clone()
+    } else {
+        String::new()
     };
-    let lines: Vec<Line<'static>> = wrap(&full_text, w).into_iter().enumerate()
-        .map(|(i, s)| {
-            let s = s.into_owned();
-            if i == 0 && in_progress {
-                let pct_str = if item.runtime_ticks > 0 {
-                    let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                    format!(" {pct}%")
-                } else { String::new() };
-                let (name, suf) = split_suffix(&s);
-                let mut spans = vec![Span::styled(name.to_string(), style)];
-                if !suf.is_empty() { spans.extend(suf_spans(suf)); }
-                if !pct_str.is_empty() { spans.push(Span::styled(pct_str, yellow)); }
-                Line::from(spans)
-            } else {
-                let (name, suf) = split_suffix(&s);
-                if suf.is_empty() {
-                    Line::from(Span::styled(s, style))
-                } else {
-                    let mut spans = vec![Span::styled(name.to_string(), style)];
-                    spans.extend(suf_spans(suf));
-                    Line::from(spans)
-                }
-            }
-        })
-        .collect();
-    if lines.is_empty() { Text::from("") } else { Text::from(lines) }
+
+    // Duration goes on line 1 as right-aligned suffix when there's subtitle content,
+    // otherwise drops to line 2 so the second row isn't wasted blank.
+    let has_subtitle = !subtitle.is_empty();
+
+    let suffix: String = if item.is_folder {
+        if item.unplayed_item_count > 0 {
+            format!("[{}]", item.unplayed_item_count)
+        } else if item.total_count > 0 {
+            format!("{}", item.total_count)
+        } else {
+            String::new()
+        }
+    } else if in_progress {
+        if item.runtime_ticks > 0 {
+            let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+            format!("{pct}%")
+        } else { String::new() }
+    } else if has_subtitle {
+        dur_str.clone()
+    } else {
+        String::new()
+    };
+
+    let name = trunc_str(&item.name, width.saturating_sub(suffix.width() + 2).max(1));
+    let gap = width.saturating_sub(name.width() + suffix.width());
+    let suffix_style = if in_progress { yellow } else if item.is_folder { count_style } else { subtle };
+    let mut line1_spans = vec![Span::styled(name, name_style)];
+    if !suffix.is_empty() {
+        line1_spans.push(Span::styled(" ".repeat(gap.max(1)), Style::default()));
+        line1_spans.push(Span::styled(suffix, suffix_style));
+    }
+
+    let sub_style = if selected { subtle } else { muted };
+    let line2_content = if has_subtitle {
+        trunc_str(&subtitle, width.max(1))
+    } else {
+        dur_str
+    };
+    let line2 = Line::from(Span::styled(line2_content, sub_style));
+
+    Text::from(vec![Line::from(line1_spans), line2])
 }
 
 pub fn highlight_style(item: &MediaItem) -> Style {
@@ -207,36 +241,70 @@ pub fn highlight_style(item: &MediaItem) -> Style {
 }
 
 pub fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
-    let (full_text, _) = item_text_and_style(item, selected);
-    let in_progress = item.playback_position_ticks > 0;
-    let span_style = if selected { Style::default() } else { Style::default().fg(palette::WHITE) };
+    let name_style = if selected {
+        Style::default().add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)
+    };
     let yellow = Style::default().fg(palette::YELLOW);
     let subtle = Style::default().fg(palette::SUBTLE);
-    let w = width.max(1);
-    let lines: Vec<Line<'static>> = wrap(&full_text, w).into_iter().enumerate()
-        .map(|(i, s)| {
-            let s = s.into_owned();
-            if i == 0 && in_progress {
-                let pct_str = if item.runtime_ticks > 0 {
-                    let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                    format!(" {pct}%")
-                } else { String::new() };
-                let (name, suf) = split_suffix(&s);
-                let mut spans = vec![Span::styled(name.to_string(), span_style)];
-                if !suf.is_empty() { spans.push(Span::styled(suf.to_string(), subtle)); }
-                if !pct_str.is_empty() { spans.push(Span::styled(pct_str, yellow)); }
-                Line::from(spans)
-            } else {
-                let (name, suf) = split_suffix(&s);
-                if suf.is_empty() {
-                    Line::from(Span::styled(s, span_style))
-                } else {
-                    Line::from(vec![Span::styled(name.to_string(), span_style), Span::styled(suf.to_string(), subtle)])
-                }
-            }
-        })
-        .collect();
-    if lines.is_empty() { Text::from("") } else { Text::from(lines) }
+    let muted  = Style::default().fg(palette::MUTED);
+
+    // Fixed right-side columns (widths include 1 leading space each)
+    let dur_str = if item.runtime_ticks > 0 {
+        let s = item.runtime_seconds();
+        let h = (s / 3600.0) as u64;
+        let m = ((s % 3600.0) / 60.0) as u64;
+        if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") }
+    } else { String::new() };
+
+    let pct_str = if item.runtime_ticks > 0 {
+        let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+        format!("{pct}%")
+    } else { String::new() };
+
+    let ep_tag = if item.item_type == "Episode" && item.parent_index_number > 0 {
+        format!("S{}E{:02}", item.parent_index_number, item.index_number)
+    } else { String::new() };
+
+    let context = if item.item_type == "Episode" {
+        item.series_name.clone()
+    } else if item.item_type == "Audio" {
+        item.artist.clone()
+    } else if item.production_year > 0 {
+        item.production_year.to_string()
+    } else { String::new() };
+
+    // Column layout (left to right):
+    //   episode title | context (series/year/artist) | ep tag | pct | dur
+    const CTX_W: usize = 20; // series name / year / artist
+    const TAG_W: usize =  9; // "S2025E31 "
+    const PCT_W: usize =  5; // " 100%"
+    const DUR_W: usize =  6; // " 1h23m"
+
+    let ctx_used = if context.is_empty() { 0 } else { CTX_W };
+    let tag_used = if ep_tag.is_empty() { 0 } else { TAG_W };
+    let fixed_w = ctx_used + tag_used + PCT_W + DUR_W;
+    let name_w = width.saturating_sub(fixed_w).max(4);
+
+    let ctx_col = if context.is_empty() { String::new() } else { format!("{:<width$}", trunc_str(&context, CTX_W - 1), width = CTX_W) };
+    let tag_col = if ep_tag.is_empty() { String::new() } else { format!("{:<width$}", ep_tag, width = TAG_W) };
+    let pct_col = if pct_str.is_empty() { " ".repeat(PCT_W) } else { format!("{:>width$}", pct_str, width = PCT_W) };
+    let dur_col = if dur_str.is_empty() { " ".repeat(DUR_W) } else { format!("{:>width$}", dur_str, width = DUR_W) };
+
+    let col_style = if selected { subtle } else { muted };
+
+    let name_trunc = trunc_str(&item.name, name_w);
+    let name_pad = name_w.saturating_sub(name_trunc.width());
+    let line = Line::from(vec![
+        Span::styled(name_trunc, name_style),
+        Span::raw(" ".repeat(name_pad)),
+        Span::styled(ctx_col, col_style),
+        Span::styled(tag_col, col_style),
+        Span::styled(pct_col, yellow),
+        Span::styled(dur_col, col_style),
+    ]);
+    Text::from(vec![line])
 }
 
 pub fn highlight_style_continue(_item: &MediaItem) -> Style {

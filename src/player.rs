@@ -19,6 +19,16 @@ fn mpv_title_opt(title: &str) -> String {
     format!("force-media-title=%{}%{}", title.len(), title)
 }
 
+fn send_ep_info(mpv: &Mpv, item: &crate::api::MediaItem) {
+    if item.item_type == "Episode" && item.parent_index_number > 0 && item.index_number > 0 {
+        let s = item.parent_index_number.to_string();
+        let e = item.index_number.to_string();
+        let _ = mpv.command("script-message", &["mbv-ep-info", &s, &e]);
+    } else {
+        let _ = mpv.command("script-message", &["mbv-ep-info", "0", "0"]);
+    }
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlayerStatus {
     pub position_ticks: i64,
@@ -631,6 +641,7 @@ impl SingleSession {
                 if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
                     log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
                 }
+                send_ep_info(mpv, &item);
                 let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
                 let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             }
@@ -692,6 +703,13 @@ impl SingleSession {
         if !self.tracks_initialized {
             auto_select_tracks(mpv, &self.status, self.subs_off.load(Ordering::Relaxed));
             self.tracks_initialized = true;
+            if self.season > 0 && self.episode > 0 {
+                let s = self.season.to_string();
+                let e = self.episode.to_string();
+                let _ = mpv.command("script-message", &["mbv-ep-info", &s, &e]);
+            } else {
+                let _ = mpv.command("script-message", &["mbv-ep-info", "0", "0"]);
+            }
             let _ = mpv.set_property("start", "0");
             if let Some(secs) = self.pending_resume_secs.take() {
                 if secs > 0.0 {
@@ -968,7 +986,8 @@ impl PlaylistSession {
         } else {
             None
         };
-        log::info!(target: "player", "playlist init idx={start_idx} pending_resume={pending_resume_secs:?}s");
+        log::info!(target: "player", "playlist init idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
+            initial_pos / crate::api::TICKS_PER_SECOND);
         let osd_title = items[start_idx].display_name();
         PlaylistSession {
             config,
@@ -1085,6 +1104,7 @@ impl PlaylistSession {
                     }
                 }
                 let _ = mpv.set_property("start", "0");
+                send_ep_info(mpv, &new_items[start_idx]);
                 // loadfile "replace" displaces the current file (EndFile #1).
                 // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
                 // Use = not += so a stale pending_load from a prior operation never stacks.
@@ -1177,6 +1197,7 @@ impl PlaylistSession {
                 if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
                     log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
                 }
+                send_ep_info(mpv, &item);
             }
         }
         cancel_stop
@@ -1245,6 +1266,7 @@ impl PlaylistSession {
         if !self.tracks_initialized {
             auto_select_tracks(mpv, &self.status, self.subs_off.load(Ordering::Relaxed));
             self.tracks_initialized = true;
+            send_ep_info(mpv, &self.items[self.current_idx]);
             if let Some(secs) = self.pending_resume_secs.take() {
                 log::info!(target: "player", "playlist pending_resume cleared: seeking to {secs:.0}s idx={}", self.current_idx);
                 let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
@@ -1359,6 +1381,7 @@ impl PlaylistSession {
         let _ = mpv.set_property("start", "0");
         self.playlist_next_up_fired = false;
         self.playlist_next_up_armed = false;
+        send_ep_info(mpv, &self.items[self.current_idx]);
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
         self.reporter.start_item(&self.items[self.current_idx]);
@@ -1712,6 +1735,7 @@ impl Player {
                 log::warn!(target: "player", "loadfile error: {} | url={url} opts={title_opt:?}", mpv_err_str(&e));
                 return;
             }
+            send_ep_info(&mpv, &item);
             observe_properties(&mpv, config.use_mpv_config);
 
             let (sid, msid) = client.get_playback_info(&item.id);
@@ -1812,6 +1836,7 @@ impl Player {
                     // Subsequent file failed: skip it, keep playing what loaded.
                 }
             }
+            send_ep_info(&mpv, &items[start_idx]);
             observe_properties(&mpv, config.use_mpv_config);
 
             let (sid, msid) = client.get_playback_info(&items[start_idx].id);

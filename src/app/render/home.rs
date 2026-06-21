@@ -1,8 +1,8 @@
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
-use ratatui::text::Span;
-use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use crate::api::MediaItem;
 use super::super::App;
 use super::super::palette;
@@ -259,9 +259,17 @@ impl App {
             area
         };
 
-        let constraints: Vec<Constraint> = (0..render_row_count)
-            .map(|_| Constraint::Ratio(1, render_row_count as u32))
-            .collect();
+        let continue_items = self.home.continue_items.len();
+        let constraints: Vec<Constraint> = (0..render_row_count).map(|row_pos| {
+            let logical_row = row_offset + row_pos;
+            if logical_row == 0 {
+                // Size Continue Watching to its content: header + 2 rows per item, capped at half height
+                let content_h = (1 + continue_items as u16).min(area.height / 2).max(HOME_MIN_SECTION_H);
+                Constraint::Length(content_h)
+            } else {
+                Constraint::Min(HOME_MIN_SECTION_H)
+            }
+        }).collect();
         let row_areas = Layout::vertical(constraints).spacing(1).split(layout_area);
 
         let mut areas: Vec<Rect> = vec![Rect::default(); n_sections];
@@ -351,42 +359,55 @@ impl App {
         title: &str, items: &[MediaItem], cursor: usize, focused: bool,
         continue_style: bool,
     ) -> usize {
-        let border_style = if focused { Style::default().fg(palette::IRIS) } else { Style::default().fg(palette::PINE) };
+        if area.height < 2 { return 0; }
+
         let title_style = if focused {
             Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)
+            Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)
         };
-        let block = Block::default()
-            .borders(Borders::TOP | Borders::BOTTOM).border_type(BorderType::Rounded)
-            .border_style(border_style)
-            .title(Span::styled(title.to_string(), title_style))
-            .title_alignment(Alignment::Left);
-        let inner = block.inner(area);
-        f.render_widget(block, area);
+        let rule_style = Style::default().fg(palette::OVERLAY);
+
+        // Header: bold title + right-padded rule on the same row
+        let title_chars = title.chars().count() as u16;
+        let rule_len = area.width.saturating_sub(title_chars + 1);
+        let rule = "\u{2500}".repeat(rule_len as usize);
+        let header = Line::from(vec![
+            Span::styled(title.to_string(), title_style),
+            Span::styled(format!(" {rule}"), rule_style),
+        ]);
+        let header_rect = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+        f.render_widget(Paragraph::new(header), header_rect);
+
+        let list_rect = Rect {
+            x: area.x,
+            y: area.y + 1,
+            width: area.width,
+            height: area.height.saturating_sub(1),
+        };
 
         if items.is_empty() {
-            f.render_widget(Paragraph::new("(empty)").style(Style::default().fg(palette::MUTED)), inner);
+            f.render_widget(Paragraph::new("(empty)").style(Style::default().fg(palette::MUTED)), list_rect);
             return 0;
         }
 
         let list_items: Vec<ListItem> = items.iter().enumerate().map(|(i, item)| {
             let sel = focused && i == cursor;
             let li = if continue_style {
-                ListItem::new(fmt_item_continue(item, inner.width as usize, sel))
+                ListItem::new(fmt_item_continue(item, list_rect.width as usize, sel))
             } else {
-                ListItem::new(fmt_item_wrapped(item, inner.width as usize, sel))
+                ListItem::new(fmt_item_wrapped(item, list_rect.width as usize, sel))
             };
             if sel {
                 li.style(if continue_style { highlight_style_continue(item) } else { highlight_style(item) })
             } else {
-                li.style(Style::default().fg(palette::MUTED))
+                li
             }
         }).collect();
 
         let mut state = ListState::default();
         if focused { state.select(Some(cursor)); }
-        f.render_stateful_widget(List::new(list_items), inner, &mut state);
+        f.render_stateful_widget(List::new(list_items), list_rect, &mut state);
         state.offset()
     }
 }

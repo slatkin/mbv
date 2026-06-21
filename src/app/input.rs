@@ -582,6 +582,7 @@ impl App {
             KeyCode::Enter => self.select_home(),
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => self.toggle_watched_home(),
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => self.enqueue_selected(),
+            KeyCode::Delete if self.home.section == 0 => self.remove_from_continue_watching(),
             _ => {}
         }
         false
