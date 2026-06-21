@@ -20,13 +20,12 @@ fn mpv_title_opt(title: &str) -> String {
 }
 
 fn send_ep_info(mpv: &Mpv, item: &crate::api::MediaItem) {
-    if item.item_type == "Episode" && item.parent_index_number > 0 && item.index_number > 0 {
-        let s = item.parent_index_number.to_string();
-        let e = item.index_number.to_string();
-        let _ = mpv.command("script-message", &["mbv-ep-info", &s, &e]);
+    let val = if item.item_type == "Episode" && item.parent_index_number > 0 && item.index_number > 0 {
+        format!("Season {}  Episode {}", item.parent_index_number, item.index_number)
     } else {
-        let _ = mpv.command("script-message", &["mbv-ep-info", "0", "0"]);
-    }
+        String::new()
+    };
+    let _ = mpv.set_property("user-data/mbv/ep-tag", val.as_str());
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
@@ -703,13 +702,12 @@ impl SingleSession {
         if !self.tracks_initialized {
             auto_select_tracks(mpv, &self.status, self.subs_off.load(Ordering::Relaxed));
             self.tracks_initialized = true;
-            if self.season > 0 && self.episode > 0 {
-                let s = self.season.to_string();
-                let e = self.episode.to_string();
-                let _ = mpv.command("script-message", &["mbv-ep-info", &s, &e]);
+            let val = if self.season > 0 && self.episode > 0 {
+                format!("Season {}  Episode {}", self.season, self.episode)
             } else {
-                let _ = mpv.command("script-message", &["mbv-ep-info", "0", "0"]);
-            }
+                String::new()
+            };
+            let _ = mpv.set_property("user-data/mbv/ep-tag", val.as_str());
             let _ = mpv.set_property("start", "0");
             if let Some(secs) = self.pending_resume_secs.take() {
                 if secs > 0.0 {

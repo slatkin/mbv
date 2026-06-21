@@ -158,3 +158,11 @@ The tab-bar divider line renders right-aligned bracketed indicators in `render/m
 - `~/.local/state/mbv/mbv.log.old` — previous session's log (rotated on startup).
 
 **When debugging issues**: read the log files directly (`tail`, `grep`) rather than asking the user to report what they see. Lua script messages logged with `msg.warn(...)` appear in `mbv.log` as `source=mpv` lines.
+
+### Lua script deployment for `cargo run`
+
+`osc_script_path()` checks `~/.local/share/mbv/scripts/mbv.lua` first — this installed copy shadows the source file. When debugging Lua changes with `cargo run`, always copy after editing:
+
+```sh
+cp scripts/mbv.lua ~/.local/share/mbv/scripts/mbv.lua
+```

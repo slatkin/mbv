@@ -1133,8 +1133,8 @@ layouts = function ()
     lo.button.maxchars = geo.w / 23
 
     lo = add_layout('ep_subtitle')
-    lo.geometry = { x = 25, y = refY - 130, an = 7, w = osc_geo.w - 50, h = 22 }
-    lo.style = '{\\blur0\\bord0.5\\1c&HFFFFFF&\\3c&H000000&\\fs18\\fn' .. user_opts.font .. '}'
+    lo.geometry = { x = 25, y = refY - 140, an = 7, w = osc_geo.w - 50, h = 22 }
+    lo.style = '{\\blur0\\bord0.5\\1c&HFFFFFF&\\3c&H000000&\\fs30\\fn' .. user_opts.font .. '}'
     lo.alpha[3] = 0
 end
 
@@ -2406,16 +2406,9 @@ mp.register_event('start-file', function()
     if next_up.visible then next_up_hide() end
 end)
 
-mp.register_script_message('mbv-ep-info', function(season, episode)
-    msg.warn('mbv-ep-info: season=' .. tostring(season) .. ' episode=' .. tostring(episode))
-    local s = tonumber(season) or 0
-    local e = tonumber(episode) or 0
-    if s > 0 and e > 0 then
-        ep_subtitle = string.format('S%dE%02d', s, e)
-    else
-        ep_subtitle = ''
-    end
-    msg.warn('mbv-ep-info: ep_subtitle=' .. ep_subtitle)
+mp.observe_property('user-data/mbv/ep-tag', 'string', function(_, val)
+    local v = val or ''
+    ep_subtitle = v:gsub('^"(.*)"$', '%1')
     request_init()
 end)
 
