@@ -125,9 +125,9 @@ impl App {
         }
         let show_ep_cols = self.player_tab.items.iter().any(|it| it.item_type == "Episode");
 
-        // Fixed column widths + 5 inter-column gaps of 2 = 10 overhead
+        // Fixed column widths + 5 inter-column gaps of 1 = 5 overhead
         let title_col_width = (table_area.width as i32
-            - if show_ep_cols { 37 } else { 29 }).max(0) as usize;
+            - if show_ep_cols { 32 } else { 24 }).max(0) as usize;
 
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let row_style = if i == current_idx && active {
@@ -137,7 +137,7 @@ impl App {
             };
 
             let indicator = if i == cursor {
-                Cell::from("▌").style(Style::default().fg(palette::IRIS))
+                Cell::from("▐").style(Style::default().fg(palette::IRIS))
             } else {
                 Cell::from(" ")
             };
@@ -209,7 +209,7 @@ impl App {
             Constraint::Length(1),
         ])
         .header(header)
-        .column_spacing(2)
+        .column_spacing(1)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
     }
