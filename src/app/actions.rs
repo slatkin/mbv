@@ -1304,8 +1304,19 @@ impl App {
                 self.queue_restored = false;
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = start_idx;
-                let c = Arc::new(self.client.lock().unwrap().clone());
-                self.player.play_playlist(items, start_idx, c, self.ui_volume);
+                if let Some(ref conn_id) = self.connected_session_id.clone() {
+                    self.clear_playback_overlays();
+                    let id = conn_id.clone();
+                    let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
+                    let start_ticks = items.get(start_idx).map_or(0, |i| i.playback_position_ticks);
+                    let label = items.get(start_idx).map(|i| i.playback_label()).unwrap_or_default();
+                    self.flash_status(format!("Playing on remote: {label}"));
+                    self.do_session_command(move |c| c.session_play_items(&id, &item_ids, start_idx, start_ticks));
+                } else {
+                    let c = Arc::new(self.client.lock().unwrap().clone());
+                    self.player.play_playlist(items, start_idx, c, self.ui_volume);
+                    self.player.send_command(PlayerCommand::SetMute(self.mute_on));
+                }
                 self.save_queue_state();
             }
             PendingQueueAction::ClearQueue => {
