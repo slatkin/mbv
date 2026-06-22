@@ -13,7 +13,15 @@ impl App {
     pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
         if area.height < 6 { return; }
 
-        let top_h = (area.height as u32 * 3 / 5) as u16;
+        let min_queue_h: u16 = 8;
+        let min_lib_h: u16 = 4;
+        let top_max = area.height.saturating_sub(min_lib_h);
+        let top_h = if top_max >= min_queue_h {
+            let preferred = (area.height as u32 * 3 / 5) as u16;
+            preferred.clamp(min_queue_h, top_max)
+        } else {
+            top_max
+        };
         let bot_h = area.height.saturating_sub(top_h);
         let top_area = Rect { x: area.x, y: area.y, width: area.width, height: top_h };
         let bot_area = Rect { x: area.x, y: area.y + top_h, width: area.width, height: bot_h };
@@ -90,7 +98,8 @@ impl App {
 
         let div_fg = if focused { palette::IRIS } else { palette::OVERLAY };
 
-        let active = self.player.status.lock().unwrap().active;
+        let active = self.player.status.lock().unwrap().active
+            || self.connected_session_state.is_some();
         let list_area = if active {
             // top 2 rows: playback controls (80% width, centered), then a divider
             let ctrl_w = (area.width as u32 * 4 / 5) as u16;
