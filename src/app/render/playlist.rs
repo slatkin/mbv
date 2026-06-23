@@ -38,7 +38,9 @@ impl App {
         self.layout_carousel_up_arrow = None;
         self.layout_carousel_down_arrow = None;
         self.layout_home_card_strips.clear();
-        if self.home_card_view {
+        if self.home_search.is_some() {
+            self.render_home_search(f, area);
+        } else if self.home_card_view {
             self.render_home_cards(f, area);
         } else {
             self.render_home_panel(f, area);
@@ -46,6 +48,10 @@ impl App {
     }
 
     pub(super) fn render_playlist_panel(&mut self, f: &mut Frame, area: Rect) {
+        if self.home_search.is_some() {
+            self.render_home_search(f, area);
+            return;
+        }
         let (active, current_idx, live_pos, live_runtime, _live_paused) = self.effective_playback_state();
 
         self.playlist_rect = area;

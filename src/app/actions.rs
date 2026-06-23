@@ -170,6 +170,9 @@ impl App {
     }
 
     pub(super) fn current_home_item(&self) -> Option<MediaItem> {
+        if let Some(ref hs) = self.home_search {
+            return hs.filtered_results().get(hs.cursor).copied().cloned();
+        }
         let sec = self.home.section;
         if sec == 0 {
             self.home.continue_items.get(self.home.continue_cursor).cloned()
@@ -177,6 +180,14 @@ impl App {
             let col = self.home.latest.get(sec - 1)?;
             col.2.get(col.3).cloned()
         }
+    }
+
+    pub(super) fn spawn_global_search(&mut self, query: String) {
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.search_tx.clone();
+        std::thread::spawn(move || {
+            let _ = tx.send(client.search_items(&query, 100));
+        });
     }
 
     pub(super) fn current_lib_item(&self) -> Option<MediaItem> {
@@ -687,11 +698,11 @@ impl App {
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
             Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
             Some(ContextAction::RemoveFromPlaylist(pos)) => self.remove_from_playlist(pos),
-            Some(ContextAction::GoToLibrary(item_id)) => {
-                let lib_ids: Vec<(usize, String)> = self.libs.iter().enumerate()
-                    .map(|(i, lib)| (i, lib.library.id.clone()))
+            Some(ContextAction::GoToLibrary(item_id, item_type)) => {
+                let libs: Vec<(usize, String, String)> = self.libs.iter().enumerate()
+                    .map(|(i, lib)| (i, lib.library.id.clone(), lib.library.collection_type.clone()))
                     .collect();
-                self.spawn_navigate_to_item(item_id, lib_ids);
+                self.spawn_navigate_to_item(item_id, item_type, libs);
             }
             None => {}
         }
@@ -941,28 +952,47 @@ impl App {
         });
     }
 
-    pub(super) fn spawn_navigate_to_item(&self, item_id: String, lib_ids: Vec<(usize, String)>) {
+    pub(super) fn spawn_navigate_to_item(&self, item_id: String, item_type: String, libs: Vec<(usize, String, String)>) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
+            // Match library by collection_type since CollectionFolder IDs never appear in ancestors
+            let target_ctype = match item_type.as_str() {
+                "Series" | "Episode" | "Season" => "tvshows",
+                "Movie"                          => "movies",
+                "Audio" | "MusicAlbum" | "MusicArtist" => "music",
+                _                                => "",
+            };
+            let (lib_idx, lib_id) = match libs.iter().find(|(_, _, ctype)| ctype == target_ctype) {
+                Some((idx, id, _)) => (*idx, id.clone()),
+                None => { let _ = tx.send(LibEvent::Error("No matching library for this item type".into())); return; }
+            };
+
+            // Ancestors are ordered nearest→root: [Season, Series, physical_folder, AggregateFolder]
             let ancestors = match client.get_ancestors(&item_id) {
                 Ok(a) => a,
-                Err(e) => { let _ = tx.send(LibEvent::Error(e)); return; }
+                Err(e) => { log::error!(target:"navigate", "get_ancestors failed: {e}"); let _ = tx.send(LibEvent::Error(e)); return; }
             };
-            let lib_root_id = match ancestors.last() {
-                Some(a) => a.id.clone(),
-                None => { let _ = tx.send(LibEvent::Error("Item has no ancestors".into())); return; }
-            };
-            let lib_idx = match lib_ids.iter().find(|(_, id)| *id == lib_root_id) {
-                Some(&(idx, _)) => idx,
-                None => { let _ = tx.send(LibEvent::Error("Item not found in any library".into())); return; }
-            };
-            let chain: Vec<&crate::api::MediaItem> = ancestors.iter().rev().collect();
+            log::debug!(target:"navigate", "ancestors: {:?}", ancestors.iter().map(|a| format!("{}({})", a.name, a.id)).collect::<Vec<_>>());
+
+            // Drop the last two ancestors (physical library folder + AggregateFolder root);
+            // everything before those is navigable content inside the library.
+            let inside = if ancestors.len() >= 2 { &ancestors[..ancestors.len() - 2] } else { &ancestors[..0] };
+
+            // Build nav levels: lib_id first, then inside ancestors from root→item, then item itself.
+            // inside is nearest→root order; we need root→item, so iterate reversed.
+            let mut parents: Vec<String> = vec![lib_id];
+            for a in inside.iter().rev() { parents.push(a.id.clone()); }
+
+            // targets[i] is the item we want the cursor on inside parents[i]
+            let mut targets: Vec<String> = inside.iter().rev().skip(1)
+                .map(|a| a.id.clone())
+                .collect();
+            if let Some(a) = inside.first() { targets.push(a.id.clone()); } // last inside level → first inside ancestor
+            targets.push(item_id.clone()); // deepest level → the item itself
+
             let mut nav_stack: Vec<BrowseLevel> = Vec::new();
-            for i in 0..chain.len() {
-                let parent_id = chain[i].id.clone();
-                let title = chain[i].name.clone();
-                let target_id = if i + 1 < chain.len() { chain[i + 1].id.clone() } else { item_id.clone() };
+            for (parent_id, target_id) in parents.into_iter().zip(targets.into_iter()) {
                 let (mut items, total_count) = match client.get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending") {
                     Ok(x) => x,
                     Err(e) => { let _ = tx.send(LibEvent::Error(e)); return; }
@@ -971,8 +1001,11 @@ impl App {
                     sort_episodes(&mut items);
                 }
                 let cursor = items.iter().position(|it| it.id == target_id).unwrap_or(0);
+                log::debug!(target:"navigate", "level parent={parent_id} target={target_id} cursor={cursor}/{}", items.len());
                 nav_stack.push(BrowseLevel {
-                    parent_id, title, items, total_count, cursor,
+                    parent_id: parent_id.clone(),
+                    title: String::new(),
+                    items, total_count, cursor,
                     item_types: None, unplayed_only: false,
                     sort_by: "SortName".into(), sort_order: "Ascending".into(),
                     loading: false, all_items: None,
@@ -1225,6 +1258,7 @@ impl App {
                     lib.nav_stack = nav_stack;
                     lib.search = None;
                 }
+                self.home_search = None;
                 let target_tab = lib_idx + self.lib_tab_offset();
                 self.set_tab(target_tab);
             }

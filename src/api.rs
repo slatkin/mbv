@@ -558,6 +558,16 @@ impl EmbyClient {
         Ok((items, total))
     }
 
+    pub fn search_items(&self, term: &str, limit: usize) -> Result<Vec<MediaItem>, String> {
+        let limit = limit.to_string();
+        self.fetch_items(&format!("/Users/{}/Items", self.user_id), &[
+            ("SearchTerm",  term),
+            ("Recursive",   "true"),
+            ("Limit",       &limit),
+            ("Fields",      "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,ProductionYear"),
+        ])
+    }
+
     pub fn get_continue_watching(&self, limit: usize) -> Result<Vec<MediaItem>, String> {
         let limit = limit.to_string();
         self.fetch_items(&format!("/Users/{}/Items/Resume", self.user_id), &[
@@ -914,7 +924,7 @@ impl EmbyClient {
     }
 
     pub fn get_ancestors(&self, item_id: &str) -> Result<Vec<MediaItem>, String> {
-        let resp: Value = self.get(&format!("/Users/{}/Items/{}/Ancestors", self.user_id, item_id))
+        let resp: Value = self.get(&format!("/Items/{}/Ancestors", item_id))
             .query("Fields", "SortName")
             .call().map_err(|e| e.to_string())?
             .into_json().map_err(|e| e.to_string())?;

@@ -410,4 +410,145 @@ impl App {
         f.render_stateful_widget(List::new(list_items), list_rect, &mut state);
         state.offset()
     }
+
+    pub(super) fn render_home_search(&mut self, f: &mut Frame, area: Rect) {
+        use ratatui::widgets::{Block, Borders, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+        use ratatui::text::{Line, Span};
+        use ratatui::style::{Modifier, Style};
+        use ratatui::layout::{Constraint, Layout};
+        use super::super::palette;
+
+        if self.home_search.is_none() { return; }
+
+        // Compute layout parameters from an immutable borrow, then drop it
+        let (show_filter, filter_height, filtered_total) = {
+            let hs = self.home_search.as_ref().unwrap();
+            let types = hs.available_types();
+            let show = !hs.results.is_empty() && types.len() > 1;
+            let total = hs.filtered_count();
+            (show, if show { 1 } else { 0 }, total)
+        };
+
+        let chunks = Layout::vertical([
+            Constraint::Length(3),
+            Constraint::Length(filter_height),
+            Constraint::Min(0),
+        ]).split(area);
+        let input_area = chunks[0];
+        let filter_area = chunks[1];
+        let results_area = chunks[2];
+        let visible = results_area.height as usize;
+
+        // Mutable scroll sync
+        if let Some(ref mut hs) = self.home_search {
+            if hs.cursor < hs.scroll {
+                hs.scroll = hs.cursor;
+            } else if visible > 0 && hs.cursor >= hs.scroll + visible {
+                hs.scroll = hs.cursor + 1 - visible;
+            }
+        }
+
+        let hs = self.home_search.as_ref().unwrap();
+
+        // Search input bar
+        let loading_suffix = if hs.loading { " [searching...]" } else { "" };
+        let input_text = format!("{}{}", hs.query, loading_suffix);
+        f.render_widget(
+            Paragraph::new(input_text)
+                .style(Style::default().fg(palette::FOAM))
+                .block(Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(palette::IRIS))
+                    .title(" Search ")
+                    .title_style(Style::default().fg(palette::YELLOW))),
+            input_area,
+        );
+
+        // Type filter bar
+        if show_filter {
+            let types = hs.available_types();
+            let mut spans: Vec<Span> = Vec::new();
+            let active = hs.type_filter;
+            let all_style = if active == 0 {
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default().fg(palette::MUTED)
+            };
+            spans.push(Span::styled(" All ", all_style));
+            for (i, t) in types.iter().enumerate() {
+                let label = match *t {
+                    "Movie"       => " Movie ",
+                    "Series"      => " Series ",
+                    "Episode"     => " Ep ",
+                    "Audio"       => " Audio ",
+                    "MusicAlbum"  => " Album ",
+                    "MusicArtist" => " Artist ",
+                    _             => " Item ",
+                };
+                let style = if active == i + 1 {
+                    Style::default().fg(palette::FOAM).add_modifier(Modifier::REVERSED)
+                } else {
+                    Style::default().fg(palette::MUTED)
+                };
+                spans.push(Span::styled(label, style));
+            }
+            f.render_widget(Paragraph::new(Line::from(spans)), filter_area);
+        }
+
+        if hs.results.is_empty() && !hs.loading {
+            let hint = if hs.last_query.is_empty() {
+                "Type a search term and press Enter"
+            } else {
+                "No results"
+            };
+            f.render_widget(
+                Paragraph::new(hint).style(Style::default().fg(palette::MUTED)),
+                Rect { x: results_area.x + 1, y: results_area.y + 1, width: results_area.width.saturating_sub(2), height: 1 },
+            );
+            return;
+        }
+
+        let cursor = hs.cursor;
+        let scroll = hs.scroll;
+        let filtered = hs.filtered_results();
+
+        let items: Vec<ListItem> = filtered.iter().enumerate().skip(scroll).take(visible).map(|(i, item)| {
+            let type_label = match item.item_type.as_str() {
+                "Movie"       => "[Movie]  ",
+                "Series"      => "[Series] ",
+                "Episode"     => "[Ep]     ",
+                "Audio"       => "[Audio]  ",
+                "MusicAlbum"  => "[Album]  ",
+                "MusicArtist" => "[Artist] ",
+                _             => "[Item]   ",
+            };
+            let year = if item.production_year > 0 {
+                format!("  ({})", item.production_year)
+            } else {
+                String::new()
+            };
+            let name = format!("{}{}{}", type_label, item.display_name(), year);
+            let style = if i == cursor {
+                Style::default().add_modifier(Modifier::REVERSED)
+            } else {
+                Style::default()
+            };
+            ListItem::new(Line::from(vec![Span::styled(name, style)]))
+        }).collect();
+
+        use ratatui::widgets::{List, ListState};
+        let mut state = ListState::default();
+        state.select(Some(cursor.saturating_sub(scroll)));
+        f.render_stateful_widget(List::new(items), results_area, &mut state);
+
+        if filtered_total > visible {
+            let mut sb_state = ScrollbarState::new(filtered_total).position(scroll);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight),
+                results_area,
+                &mut sb_state,
+            );
+        }
+    }
 }

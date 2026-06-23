@@ -10,7 +10,7 @@ use crate::player::PlayerCommand;
 use super::{
     App, HOME_MIN_SECTION_H,
     LogPane, PendingQueueAction, ContextAction, ContextMenu,
-    LibSearch, SavePlaylistDialog, SavePlaylistStage,
+    HomeSearch, LibSearch, SavePlaylistDialog, SavePlaylistStage,
     SESSIONS_PANEL_W, PLAYLISTS_PANEL_W, HELP_PANEL_W, SETTINGS_PANEL_W,
 };
 use super::settings::settings_total_rows;
@@ -298,12 +298,95 @@ impl App {
             }
             return false;
         }
+        if key.code == KeyCode::F(1) { self.show_help = true; return false; }
+        if key.code == KeyCode::F(2) { self.show_settings = !self.show_settings; return false; }
+        if key.code == KeyCode::F(3) { self.show_sessions = true; self.spawn_sessions_load(); return false; }
+        if key.code == KeyCode::F(4) { self.open_playlists_panel(); return false; }
+        // Alt+Left/Right cycle type filter when home search is active
+        if (self.tab_idx == 0 || self.tab_idx == 1)
+            && key.modifiers.contains(KeyModifiers::ALT)
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
+            && self.home_search.is_some()
+            && self.context_menu.is_none()
+        {
+            match key.code {
+                KeyCode::Left | KeyCode::Right => {
+                    if let Some(ref mut hs) = self.home_search {
+                        let n = hs.available_types().len() + 1; // +1 for "All"
+                        if n > 1 {
+                            hs.type_filter = if key.code == KeyCode::Right {
+                                (hs.type_filter + 1) % n
+                            } else {
+                                (hs.type_filter + n - 1) % n
+                            };
+                            hs.cursor = 0;
+                            hs.scroll = 0;
+                        }
+                    }
+                    return false;
+                }
+                _ => {}
+            }
+        }
+        // When home search is active, unmodified keys feed the search input
+        if (self.tab_idx == 0 || self.tab_idx == 1)
+            && !key.modifiers.contains(KeyModifiers::ALT)
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
+            && self.home_search.is_some()
+            && self.context_menu.is_none()
+        {
+            match key.code {
+                KeyCode::Esc => { self.home_search = None; }
+                KeyCode::Backspace => {
+                    let empty = self.home_search.as_ref().is_none_or(|s| s.query.is_empty());
+                    if empty { self.home_search = None; }
+                    else { self.home_search.as_mut().unwrap().query.pop(); }
+                }
+                KeyCode::Up => {
+                    if let Some(ref mut hs) = self.home_search {
+                        hs.cursor = hs.cursor.saturating_sub(1);
+                        if hs.cursor < hs.scroll { hs.scroll = hs.cursor; }
+                    }
+                }
+                KeyCode::Down => {
+                    if let Some(ref mut hs) = self.home_search {
+                        let max = hs.filtered_count().saturating_sub(1);
+                        hs.cursor = (hs.cursor + 1).min(max);
+                    }
+                }
+                KeyCode::Enter => {
+                    let (query, last_query, loading, has_results) = self.home_search.as_ref()
+                        .map(|hs| (hs.query.clone(), hs.last_query.clone(), hs.loading, !hs.results.is_empty()))
+                        .unwrap_or_default();
+                    if loading { return false; }
+                    if query.is_empty() { return false; }
+                    if query != last_query {
+                        if let Some(ref mut hs) = self.home_search {
+                            hs.last_query = query.clone();
+                            hs.loading = true;
+                            hs.results.clear();
+                            hs.cursor = 0;
+                            hs.scroll = 0;
+                        }
+                        self.spawn_global_search(query);
+                    } else if has_results {
+                        self.select_home();
+                    }
+                }
+                KeyCode::Char(c) => {
+                    self.home_search.as_mut().unwrap().query.push(c);
+                }
+                _ => {}
+            }
+            return false;
+        }
         // When library search is active, unmodified keys feed the search
         if self.tab_idx > 1
             && self.tab_idx != self.log_tab_idx()
             && !key.modifiers.contains(KeyModifiers::ALT)
             && !key.modifiers.contains(KeyModifiers::CONTROL)
             && self.libs.get(self.tab_idx - self.lib_tab_offset()).is_some_and(|l| l.search.is_some())
+            && self.context_menu.is_none()
         {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
             let alt = key.modifiers.contains(KeyModifiers::ALT);
@@ -332,10 +415,6 @@ impl App {
             }
             return false;
         }
-        if key.code == KeyCode::F(1) { self.show_help = true; return false; }
-        if key.code == KeyCode::F(2) { self.show_settings = !self.show_settings; return false; }
-        if key.code == KeyCode::F(3) { self.show_sessions = true; self.spawn_sessions_load(); return false; }
-        if key.code == KeyCode::F(4) { self.open_playlists_panel(); return false; }
         if key.code == KeyCode::Char('h') {
             let active = self.player.status.lock().unwrap().active;
             let show_controls = active || self.connected_session_id.is_some();
@@ -548,6 +627,18 @@ impl App {
             }
             KeyCode::Char('o') => {
                 self.open_context_menu(); return false;
+            }
+            KeyCode::Char('/') => {
+                self.home_search = Some(HomeSearch {
+                    query: String::new(),
+                    last_query: String::new(),
+                    results: Vec::new(),
+                    cursor: 0,
+                    loading: false,
+                    scroll: 0,
+                    type_filter: 0,
+                });
+                return false;
             }
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);
@@ -801,14 +892,27 @@ impl App {
                 let cursor = self.player_tab.playlist_cursor;
                 if let Some(item) = self.player_tab.items.get(cursor) {
                     let item_id = item.id.clone();
-                    let lib_ids: Vec<(usize, String)> = self.libs.iter().enumerate()
-                        .map(|(i, lib)| (i, lib.library.id.clone()))
+                    let item_type = item.item_type.clone();
+                    let libs: Vec<(usize, String, String)> = self.libs.iter().enumerate()
+                        .map(|(i, lib)| (i, lib.library.id.clone(), lib.library.collection_type.clone()))
                         .collect();
-                    self.spawn_navigate_to_item(item_id, lib_ids);
+                    self.spawn_navigate_to_item(item_id, item_type, libs);
                 }
             }
             KeyCode::Char('o') => {
                 self.open_context_menu();
+            }
+            KeyCode::Char('/') => {
+                self.home_search = Some(HomeSearch {
+                    query: String::new(),
+                    last_query: String::new(),
+                    results: Vec::new(),
+                    cursor: 0,
+                    loading: false,
+                    scroll: 0,
+                    type_filter: 0,
+                });
+                return false;
             }
             KeyCode::Char('v') => {
                 self.playlist_view = (self.playlist_view + 1) % PLAYLIST_VIEW_COUNT;
@@ -1117,7 +1221,9 @@ impl App {
         let mut items: Vec<&'static str> = vec![];
         let mut actions: Vec<ContextAction> = vec![];
 
-        let current_item = if self.tab_idx == 0 {
+        let current_item = if self.home_search.is_some() {
+            self.current_home_item()
+        } else if self.tab_idx == 0 {
             self.current_home_item()
         } else if self.tab_idx == 1 {
             self.player_tab.items.get(self.player_tab.playlist_cursor).cloned()
@@ -1139,10 +1245,14 @@ impl App {
                 actions.push(ContextAction::MarkPlayed(item.id.clone()));
                 items.push("Mark Unwatched");
                 actions.push(ContextAction::MarkUnplayed(item.id.clone()));
+                if self.home_search.is_some() {
+                    items.push("Go to Library");
+                    actions.push(ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()));
+                }
             } else {
                 items.push("Play");
                 actions.push(ContextAction::Play);
-                if self.tab_idx != 1 {
+                if self.home_search.is_some() || self.tab_idx != 1 {
                     items.push("Add to Queue");
                     actions.push(ContextAction::Enqueue);
                 }
@@ -1156,15 +1266,17 @@ impl App {
                         actions.push(ContextAction::MarkPlayed(item.id.clone()));
                     }
                 }
-                if self.tab_idx == 0 && self.home.section == 0 {
+                if self.home_search.is_none() && self.tab_idx == 0 && self.home.section == 0 {
                     items.push("Remove from Continue Watching");
                     actions.push(ContextAction::RemoveFromContinueWatching);
                 }
-                if self.tab_idx == 1 {
+                if self.home_search.is_none() && self.tab_idx == 1 {
                     items.push("Remove from Playlist");
                     actions.push(ContextAction::RemoveFromPlaylist(self.player_tab.playlist_cursor));
+                }
+                if self.home_search.is_some() || self.tab_idx == 1 {
                     items.push("Go to Library");
-                    actions.push(ContextAction::GoToLibrary(item.id.clone()));
+                    actions.push(ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()));
                 }
             }
         }

@@ -106,7 +106,7 @@ enum ContextAction {
     MarkUnplayed(String),
     RemoveFromContinueWatching,
     RemoveFromPlaylist(usize),
-    GoToLibrary(String),
+    GoToLibrary(String, String), // (item_id, item_type)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -132,6 +132,52 @@ struct LibSearch {
     results: Vec<usize>,               // indices into items, sorted by score desc
     cursor: usize,                     // position within results
     loading: bool,                     // true while full-library fetch is in flight
+}
+
+struct HomeSearch {
+    query: String,
+    last_query: String,                // query string that produced current results
+    results: Vec<crate::api::MediaItem>,
+    cursor: usize,
+    loading: bool,
+    scroll: usize,
+    type_filter: usize,                // 0 = All; 1..N index into sorted type list
+}
+
+impl HomeSearch {
+    fn type_sort_key(t: &str) -> u8 {
+        match t {
+            "Movie"       => 0,
+            "Series"      => 1,
+            "Episode"     => 2,
+            "Audio"       => 3,
+            "MusicAlbum"  => 4,
+            "MusicArtist" => 5,
+            _             => 6,
+        }
+    }
+
+    pub(super) fn available_types(&self) -> Vec<&str> {
+        let mut seen = std::collections::HashSet::new();
+        let mut types: Vec<&str> = self.results.iter()
+            .filter_map(|r| {
+                let t = r.item_type.as_str();
+                if seen.insert(t) { Some(t) } else { None }
+            })
+            .collect();
+        types.sort_by_key(|t| Self::type_sort_key(t));
+        types
+    }
+
+    pub(super) fn filtered_results(&self) -> Vec<&crate::api::MediaItem> {
+        let types = self.available_types();
+        let filter = if self.type_filter == 0 { None } else { types.get(self.type_filter - 1).copied() };
+        self.results.iter().filter(|r| filter.map_or(true, |t| r.item_type == t)).collect()
+    }
+
+    pub(super) fn filtered_count(&self) -> usize {
+        self.filtered_results().len()
+    }
 }
 
 struct BrowseLevel {
@@ -284,7 +330,6 @@ pub struct App {
     settings_scroll: usize,
     settings_save_at: Option<Instant>,
     confirm_logout: bool,
-    image_protocol_changed: bool,
     multiselect_popup: Option<MultiSelectPopup>,
     layout_settings_area: Rect,
     settings_line_of_cursor: Vec<usize>,
@@ -296,6 +341,9 @@ pub struct App {
     notif_action_rx: mpsc::Receiver<String>,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
+    home_search: Option<HomeSearch>,
+    search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
+    search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
     sessions: Vec<crate::api::SessionInfo>,
     sessions_cursor: usize,
     sessions_loading: bool,
@@ -368,6 +416,8 @@ struct AppInit {
     card_image_rx: mpsc::Receiver<(String, Option<Vec<u8>>)>,
     notif_action_tx: mpsc::Sender<String>,
     notif_action_rx: mpsc::Receiver<String>,
+    search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
+    search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
 }
 
 enum PendingQueueAction {
@@ -439,6 +489,9 @@ impl App {
             tab_idx: if init.start_on_queue { 1 } else { 0 },
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
+            home_search: None,
+            search_tx: init.search_tx,
+            search_rx: init.search_rx,
             sessions_tx: init.sessions_tx,
             sessions_rx: init.sessions_rx,
             card_image_tx: init.card_image_tx,
@@ -517,7 +570,6 @@ impl App {
             settings_scroll: 0,
             settings_save_at: None,
             confirm_logout: false,
-            image_protocol_changed: false,
             multiselect_popup: None,
             layout_settings_area: Rect::default(),
             settings_line_of_cursor: Vec::new(),
@@ -573,6 +625,7 @@ impl App {
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
+        let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
         let hidden_libraries = client.config.hidden_libraries.clone();
@@ -622,6 +675,7 @@ impl App {
             sessions_tx, sessions_rx,
             card_image_tx, card_image_rx,
             notif_action_tx, notif_action_rx,
+            search_tx, search_rx,
         })
     }
 
@@ -635,6 +689,7 @@ impl App {
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
+        let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
@@ -669,6 +724,7 @@ impl App {
             sessions_tx, sessions_rx,
             card_image_tx, card_image_rx,
             notif_action_tx, notif_action_rx,
+            search_tx, search_rx,
         })
     }
 
@@ -910,6 +966,23 @@ impl App {
             while let Ok(ev) = self.lib_rx.try_recv() {
                 had_events = true;
                 self.handle_lib_event(ev);
+            }
+
+            while let Ok(result) = self.search_rx.try_recv() {
+                had_events = true;
+                if let Some(ref mut hs) = self.home_search {
+                    hs.loading = false;
+                    hs.cursor = 0;
+                    hs.scroll = 0;
+                    hs.type_filter = 0;
+                    match result {
+                        Ok(items) => { hs.results = items; }
+                        Err(e) => {
+                            hs.results = Vec::new();
+                            self.status = format!("Search error: {e}");
+                        }
+                    }
+                }
             }
 
             while let Ok(ev) = self.sessions_rx.try_recv() {
@@ -1378,6 +1451,7 @@ mod tests {
         let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
         let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
         let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
+        let (search_tx, search_rx) = std::sync::mpsc::channel::<Result<Vec<MediaItem>, String>>();
 
         let player = PlayerProxy::stub(status.clone());
 
@@ -1470,7 +1544,6 @@ mod tests {
             settings_scroll: 0,
             settings_save_at: None,
             confirm_logout: false,
-            image_protocol_changed: false,
             multiselect_popup: None,
             layout_settings_area: Rect::default(),
             settings_line_of_cursor: Vec::new(),
@@ -1484,6 +1557,9 @@ mod tests {
             context_menu_rect: None,
             lib_tx,
             lib_rx,
+            home_search: None,
+            search_tx,
+            search_rx,
             force_clear: false,
             tab_scroll: 0,
             ui_volume: 100,

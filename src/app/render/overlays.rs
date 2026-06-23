@@ -358,10 +358,6 @@ impl App {
             let cfg = self.client.lock().unwrap().config.clone();
             crate::config::save_config_settings(&cfg);
         }
-        if self.image_protocol_changed {
-            self.image_protocol_changed = false;
-            self.flash_status("Image protocol changed — restart required".into());
-        }
         self.show_settings = false;
     }
 
@@ -385,7 +381,6 @@ impl App {
                     c.config.image_protocol.is_none()
                 };
                 self.image_protocol_enabled = !now_none;
-                self.image_protocol_changed = true;
                 if now_none {
                     self.home_card_view = false;
                     self.playlist_view = 0;
