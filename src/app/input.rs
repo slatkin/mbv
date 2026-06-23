@@ -602,14 +602,14 @@ impl App {
             KeyCode::BackTab => {
                 let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); return false;
             }
-            KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Left | KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + n - 1) % n;
                 self.ensure_home_section_visible();
                 if self.home_card_view && !self.card_image_states.is_empty() { self.force_clear = true; }
                 return false;
             }
-            KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
+            KeyCode::Right | KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + 1) % n;
                 self.ensure_home_section_visible();
@@ -784,7 +784,7 @@ impl App {
         if self.playlist_view == PLAYLIST_VIEW_POWER {
             if let Some(lib_idx) = self.power_focused_lib_idx() {
                 let is_power_nav = matches!(key.code, KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down)
-                    && key.modifiers.contains(KeyModifiers::CONTROL);
+                    && key.modifiers.contains(KeyModifiers::ALT);
                 let is_lib_key = !is_power_nav && match key.code {
                     KeyCode::Up | KeyCode::Down | KeyCode::Left | KeyCode::Right
                     | KeyCode::PageUp | KeyCode::PageDown | KeyCode::Home | KeyCode::End
@@ -937,13 +937,13 @@ impl App {
             }
             KeyCode::Left | KeyCode::Up
                 if self.playlist_view == PLAYLIST_VIEW_POWER
-                && key.modifiers.contains(KeyModifiers::CONTROL) =>
+                && key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.power_focus_prev();
             }
             KeyCode::Right | KeyCode::Down
                 if self.playlist_view == PLAYLIST_VIEW_POWER
-                && key.modifiers.contains(KeyModifiers::CONTROL) =>
+                && key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.power_focus_next();
             }

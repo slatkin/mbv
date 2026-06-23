@@ -12,7 +12,7 @@ use super::super::ui_util::{fmt_duration, trunc_str};
 
 impl App {
     pub(super) fn render_playlist_bar(&self, f: &mut Frame, area: Rect) {
-        self.render_playlist_bar_bg(f, area, palette::OVERLAY);
+        self.render_playlist_bar_bg(f, area, palette::YELLOW);
     }
 
     pub(super) fn render_playlist_bar_bg(&self, f: &mut Frame, area: Rect, bg: ratatui::style::Color) {
@@ -21,11 +21,12 @@ impl App {
         let name_trunc = trunc_str(&name, max_name);
         let focused = bg != palette::OVERLAY;
         let label_fg = if focused { palette::OVERLAY } else { palette::SUBTLE };
+        let name_fg = if focused { palette::OVERLAY } else { palette::WHITE };
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(" "),
                 Span::styled("Playlist: ", Style::default().fg(label_fg)),
-                Span::styled(name_trunc, Style::default().fg(palette::WHITE)),
+                Span::styled(name_trunc, Style::default().fg(name_fg)),
             ])).style(Style::default().bg(bg)),
             area,
         );

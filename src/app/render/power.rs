@@ -136,7 +136,7 @@ impl App {
         let bar_h = if is_playlist { 1u16 } else { 0 };
         let table_area = Rect { height: list_area.height.saturating_sub(bar_h), ..list_area };
         if is_playlist {
-            let bar_bg = if focused { palette::IRIS } else { palette::OVERLAY };
+            let bar_bg = palette::YELLOW;
             self.render_playlist_bar_bg(f, Rect {
                 y: list_area.y + table_area.height,
                 height: 1,
