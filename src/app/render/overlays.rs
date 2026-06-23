@@ -562,7 +562,7 @@ impl App {
             MultiSelectKind::HiddenLatest    => " Hidden Latest ",
         };
         let max_name = popup.items.iter().map(|(_, n, _)| n.len()).max().unwrap_or(0);
-        let inner_w = ((max_name + 6) as u16).max(36).min(60);
+        let inner_w = ((max_name + 6) as u16).clamp(36, 60);
         let width = inner_w + 2;
         let content_h = popup.items.len() as u16 + 1;
         let area = f.area();

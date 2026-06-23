@@ -371,7 +371,7 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
     };
 
     unsafe {
-        libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), b"warn\0".as_ptr() as _);
+        libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), c"warn".as_ptr() as _);
     }
 
     // Set after init so user's mpv.conf cannot override these.
@@ -1758,7 +1758,7 @@ impl Player {
         // unless mpv was spawned headless but new items need a window.
         if self.status.lock().unwrap().active
             && self.is_playlist_mode.load(Ordering::Relaxed)
-            && !(self.current_is_headless.load(Ordering::Relaxed) && !new_is_headless)
+            && (!self.current_is_headless.load(Ordering::Relaxed) || new_is_headless)
         {
             let start_idx = start_idx.min(items.len() - 1);
             {

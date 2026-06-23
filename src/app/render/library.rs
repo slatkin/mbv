@@ -253,7 +253,7 @@ impl App {
             return;
         }
 
-        let total_rows = (n + COLS - 1) / COLS;
+        let total_rows = n.div_ceil(COLS);
         let scrollbar_w: u16 = 1;
 
         let cell_w = area.width.saturating_sub(scrollbar_w + H_GAP * (COLS as u16 - 1)) / COLS as u16;

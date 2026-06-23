@@ -718,8 +718,7 @@ impl App {
                     };
                     prows.push(PRow::Header(header));
                 }
-                for j in i..run_end {
-                    let it = &items[j];
+                for (j, it) in items.iter().enumerate().take(run_end).skip(i) {
                     let (pt, rt) = if j == active_idx && active {
                         let pos = if live_pos > 0 { live_pos } else { it.playback_position_ticks };
                         (pos, live_runtime)

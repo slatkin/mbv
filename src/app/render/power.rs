@@ -230,8 +230,6 @@ impl App {
         // How many columns fit? Always show at least 2, then add more at MIN_COL_W.
         let n_cols = if area.width >= MIN_COL_W * 3 {
             (area.width / MIN_COL_W) as usize
-        } else if area.width >= MIN_COL_W * 2 {
-            2usize
         } else {
             2usize // squeeze: 2 share the space even below min
         }.min(n_libs);

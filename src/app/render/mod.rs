@@ -284,9 +284,9 @@ impl App {
     fn toast_line(s: &str) -> Line<'static> {
         let text_style   = Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD);
         let yellow_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
-        let open = s.find(|c| c == '[' || c == '(');
+        let open = s.find(['[', '(']);
         if let Some(i) = open {
-            let close = s[i..].find(|c| c == ']' || c == ')').map(|j| i + j);
+            let close = s[i..].find([']', ')']).map(|j| i + j);
             if let Some(j) = close {
                 let mut spans = vec![
                     Span::styled(s[..i].to_string(),     text_style),

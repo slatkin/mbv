@@ -9,7 +9,6 @@ pub mod render;
 use std::sync::{Arc, Mutex, mpsc};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
-use libc;
 
 static QUIT_REQUESTED:  AtomicBool = AtomicBool::new(false);
 // Set only by SIGHUP or stdin POLLHUP (terminal vanished). Never set by q/SIGTERM.
@@ -101,7 +100,7 @@ enum ContextAction {
     PlayFolder(String),
     ShuffleFolder(String),
     Enqueue,
-    EnqueueFolder(MediaItem),
+    EnqueueFolder(Box<MediaItem>),
     MarkPlayed(String),
     MarkUnplayed(String),
     RemoveFromContinueWatching,
@@ -172,7 +171,7 @@ impl HomeSearch {
     pub(super) fn filtered_results(&self) -> Vec<&crate::api::MediaItem> {
         let types = self.available_types();
         let filter = if self.type_filter == 0 { None } else { types.get(self.type_filter - 1).copied() };
-        self.results.iter().filter(|r| filter.map_or(true, |t| r.item_type == t)).collect()
+        self.results.iter().filter(|r| filter.is_none_or(|t| r.item_type == t)).collect()
     }
 
     pub(super) fn filtered_count(&self) -> usize {
@@ -223,7 +222,7 @@ enum LibEvent {
 
 enum SessionEvent {
     Loaded(Vec<crate::api::SessionInfo>),
-    ItemRefreshed(String, crate::api::MediaItem), // (item_id, fresh)
+    ItemRefreshed(String, Box<crate::api::MediaItem>), // (item_id, fresh)
     Error(String),
 }
 
@@ -785,7 +784,7 @@ impl App {
                             self.refresh_after_stop();
                             continue;
                         }
-                        let is_delete = self.pending_delete_idx.take().map_or(false, |d| d == idx);
+                        let is_delete = self.pending_delete_idx.take() == Some(idx);
                         if let Some(item) = self.player_tab.items.get_mut(idx) {
                             if !is_delete {
                                 if played {
@@ -812,7 +811,7 @@ impl App {
                                 if self.player_tab.items.is_empty() { 0 }
                                 else { idx.min(self.player_tab.items.len() - 1) };
                         } else {
-                            let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+                            let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
                             if played && is_video && self.client.lock().unwrap().config.consume_videos {
                                 self.consume_item(idx);
                                 self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
@@ -833,7 +832,7 @@ impl App {
                                 item.playback_position_ticks = position_ticks;
                             }
                         }
-                        let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+                        let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
                         if consume && is_video && self.client.lock().unwrap().config.consume_videos {
                             self.pending_queue_removal = Some(idx);
                         }
@@ -1027,7 +1026,7 @@ impl App {
                                         std::thread::spawn(move || {
                                             if let Ok(mut items) = client.get_items_by_ids(std::slice::from_ref(&prev_id)) {
                                                 if let Some(fresh) = items.pop() {
-                                                    let _ = tx.send(SessionEvent::ItemRefreshed(prev_id, fresh));
+                                                    let _ = tx.send(SessionEvent::ItemRefreshed(prev_id, Box::new(fresh)));
                                                 }
                                             }
                                         });
@@ -1095,7 +1094,7 @@ impl App {
                     }
                     SessionEvent::ItemRefreshed(item_id, fresh) => {
                         if let Some(slot) = self.player_tab.items.iter_mut().find(|i| i.id == item_id) {
-                            *slot = fresh;
+                            *slot = *fresh;
                         }
                     }
                     SessionEvent::Error(e) => {

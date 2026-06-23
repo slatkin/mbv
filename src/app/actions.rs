@@ -11,6 +11,8 @@ use super::{
 };
 use super::ui_util::{natural_sort_key, is_playable, sort_episodes, sort_audio_tracks};
 
+type BrowseRefresh = (usize, String, Option<String>, bool, String, String, usize);
+
 impl App {
     pub(super) fn lib_page_size(&self) -> usize {
         let lib_idx = if self.tab_idx >= self.lib_tab_offset() {
@@ -105,7 +107,7 @@ impl App {
             return;
         }
 
-        let n_rows = 1 + (n_latest + 1) / 2;
+        let n_rows = 1 + n_latest.div_ceil(2);
         let visible_rows = if (n_rows as u16) * super::HOME_MIN_SECTION_H <= panel_h {
             n_rows
         } else {
@@ -142,7 +144,7 @@ impl App {
         let chrome: u16 = if active { 6 } else { 3 };
         let panel_h = self.terminal_height.saturating_sub(chrome);
         let n_latest = self.home.latest.len();
-        let n_rows = 1 + (n_latest + 1) / 2;
+        let n_rows = 1 + n_latest.div_ceil(2);
         let visible_rows = ((panel_h / super::HOME_MIN_SECTION_H) as usize).max(1).min(n_rows);
         let max_offset = n_rows.saturating_sub(visible_rows);
         if max_offset == 0 { return; }
@@ -372,7 +374,7 @@ impl App {
             cmd.arg("--app-name=mbv").arg("mbv").arg(msg)
                 .stderr(std::process::Stdio::null());
             std::thread::spawn(move || {
-                if cmd.output().map(|o| o.status.success()).unwrap_or(false) == false {
+                if !cmd.output().map(|o| o.status.success()).unwrap_or(false) {
                     let _ = tx.send("__notif_failed__".into());
                 }
             });
@@ -603,7 +605,7 @@ impl App {
                     .map(|l| l.items.clone())
                     .unwrap_or_default();
                 let mut tracks: Vec<MediaItem> = level_items.into_iter()
-                    .filter(|i| is_playable(i))
+                    .filter(is_playable)
                     .collect();
                 sort_audio_tracks(&mut tracks);
                 if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
@@ -693,7 +695,7 @@ impl App {
                 self.shuffle_folder(&id);
             }
             Some(ContextAction::Enqueue) => self.enqueue_selected(),
-            Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder(item),
+            Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),
             Some(ContextAction::MarkPlayed(id))   => self.context_set_played(&id, true),
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
             Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
@@ -917,7 +919,7 @@ impl App {
 
     pub(super) fn refresh_after_stop(&mut self) {
         let _ = self.fetch_home();
-        let fetches: Vec<(usize, String, Option<String>, bool, String, String, usize)> = self.libs.iter().enumerate()
+        let fetches: Vec<BrowseRefresh> = self.libs.iter().enumerate()
             .filter_map(|(i, lib)| lib.nav_stack.last().map(|lvl| {
                 (i, lvl.parent_id.clone(), lvl.item_types.clone(), lvl.unplayed_only,
                  lvl.sort_by.clone(), lvl.sort_order.clone(), lvl.items.len())
@@ -992,7 +994,7 @@ impl App {
             targets.push(item_id.clone()); // deepest level → the item itself
 
             let mut nav_stack: Vec<BrowseLevel> = Vec::new();
-            for (parent_id, target_id) in parents.into_iter().zip(targets.into_iter()) {
+            for (parent_id, target_id) in parents.into_iter().zip(targets) {
                 let (mut items, total_count) = match client.get_items_sorted(&parent_id, None, false, 0, 500, "SortName", "Ascending") {
                     Ok(x) => x,
                     Err(e) => { let _ = tx.send(LibEvent::Error(e)); return; }
@@ -1061,11 +1063,8 @@ impl App {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            match client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, 0, total_count, &sort_by, &sort_order) {
-                Ok((items, _)) => {
-                    let _ = tx.send(LibEvent::SearchItemsLoaded { lib_idx, parent_id, items });
-                }
-                Err(_) => {}
+            if let Ok((items, _)) = client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, 0, total_count, &sort_by, &sort_order) {
+                let _ = tx.send(LibEvent::SearchItemsLoaded { lib_idx, parent_id, items });
             }
         });
     }
@@ -1417,7 +1416,7 @@ impl App {
     }
 
     pub(super) fn consume_item(&mut self, idx: usize) {
-        let is_video = self.player_tab.items.get(idx).map_or(false, |i| i.is_video());
+        let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
         if idx < self.player_tab.items.len() {
             self.player_tab.items.remove(idx);
         }

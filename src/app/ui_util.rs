@@ -25,11 +25,11 @@ pub fn is_playable(item: &MediaItem) -> bool {
     matches!(item.media_type.as_str(), "Video" | "Audio")
 }
 
-pub fn sort_episodes(items: &mut Vec<MediaItem>) {
+pub fn sort_episodes(items: &mut [MediaItem]) {
     items.sort_by_key(|i| i.index_number);
 }
 
-pub fn sort_audio_tracks(items: &mut Vec<MediaItem>) {
+pub fn sort_audio_tracks(items: &mut [MediaItem]) {
     let has_track_nums = items.iter().any(|i| i.index_number > 0);
     if has_track_nums {
         items.sort_by_key(|i| {

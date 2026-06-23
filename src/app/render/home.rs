@@ -150,8 +150,7 @@ impl App {
         if self.images_enabled() {
             let prefetch_start = cursor.saturating_sub(3);
             let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
-            for pi in prefetch_start..=prefetch_end {
-                let item = &items[pi];
+            for (pi, item) in items.iter().enumerate().take(prefetch_end + 1).skip(prefetch_start) {
                 let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
                 let types_a: &[&str] = match item.item_type.as_str() {
                     "MusicAlbum" => &["AudioChild"],
@@ -237,7 +236,7 @@ impl App {
         let home_focused = true;
         let n_latest = self.home.latest.len();
         let n_sections = 1 + n_latest;
-        let n_rows = 1 + (n_latest + 1) / 2;
+        let n_rows = 1 + n_latest.div_ceil(2);
 
         let visible_rows = if (n_rows as u16) * HOME_MIN_SECTION_H <= area.height {
             n_rows

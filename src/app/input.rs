@@ -477,14 +477,13 @@ impl App {
             }
             return false;
         }
-        if self.tab_idx != self.log_tab_idx() {
-            if key.code == KeyCode::Char('c') && !key.modifiers.contains(KeyModifiers::ALT) && !in_lib_search {
-                if self.player_tab.items.is_empty() { return false; }
-                self.notify_with_actions("mbv", "Clear queue?", &[("clear:yes", "Clear"), ("clear:no", "Cancel")]);
-                self.status = "Clear queue? (Y/n)".into();
-                self.confirm_clear_playlist = true;
-                return false;
-            }
+        if self.tab_idx != self.log_tab_idx()
+            && key.code == KeyCode::Char('c') && !key.modifiers.contains(KeyModifiers::ALT) && !in_lib_search {
+            if self.player_tab.items.is_empty() { return false; }
+            self.notify_with_actions("mbv", "Clear queue?", &[("clear:yes", "Clear"), ("clear:no", "Cancel")]);
+            self.status = "Clear queue? (Y/n)".into();
+            self.confirm_clear_playlist = true;
+            return false;
         }
         if self.tab_idx != self.log_tab_idx() {
             if let Some(quit) = self.handle_playback_key(key) { return quit; }
@@ -690,7 +689,7 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         if active {
             let st = self.player.status.lock().unwrap();
-            let v = (st.volume as i64 + delta).clamp(0, st.volume_max as i64) as u8;
+            let v = (st.volume + delta).clamp(0, st.volume_max) as u8;
             drop(st);
             self.player.send_command(PlayerCommand::SetVolume(v as i64));
             self.ui_volume = v;
@@ -1178,8 +1177,7 @@ impl App {
         let widths = self.tab_title_widths();
         let pad = 1u16;
         let mut x = 0u16;
-        for i in vis_start..vis_end {
-            let w = widths[i];
+        for (i, &w) in widths.iter().enumerate().skip(vis_start).take(vis_end - vis_start) {
             let end = x + pad + w + pad;
             if rel < end { return Some(i); }
             x = end;
@@ -1221,9 +1219,7 @@ impl App {
         let mut items: Vec<&'static str> = vec![];
         let mut actions: Vec<ContextAction> = vec![];
 
-        let current_item = if self.home_search.is_some() {
-            self.current_home_item()
-        } else if self.tab_idx == 0 {
+        let current_item = if self.home_search.is_some() || self.tab_idx == 0 {
             self.current_home_item()
         } else if self.tab_idx == 1 {
             self.player_tab.items.get(self.player_tab.playlist_cursor).cloned()
@@ -1240,7 +1236,7 @@ impl App {
                 items.push("Shuffle");
                 actions.push(ContextAction::ShuffleFolder(item.id.clone()));
                 items.push("Add to Queue");
-                actions.push(ContextAction::EnqueueFolder(item.clone()));
+                actions.push(ContextAction::EnqueueFolder(Box::new(item.clone())));
                 items.push("Mark Watched");
                 actions.push(ContextAction::MarkPlayed(item.id.clone()));
                 items.push("Mark Unwatched");
