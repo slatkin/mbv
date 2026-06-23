@@ -169,7 +169,7 @@ impl App {
                 if i == selected_tab {
                     Span::styled(format!("  {n}  "), Style::default().fg(palette::WHITE).bg(palette::IRIS).add_modifier(Modifier::BOLD))
                 } else {
-                    Span::styled(format!("  {n}  "), Style::default().fg(palette::SUBTLE))
+                    Span::styled(format!("  {n}  "), Style::default().fg(palette::YELLOW))
                 }
             }).collect();
         f.render_widget(
@@ -262,8 +262,8 @@ impl App {
             f.render_widget(
                 Paragraph::new(Self::toast_line(&self.status))
                     .alignment(Alignment::Center)
-                    .style(Style::default().bg(palette::FOCUSED))
-                    .block(Block::default().style(Style::default().bg(palette::FOCUSED)).padding(ratatui::widgets::Padding::vertical(1))),
+                    .style(Style::default().fg(palette::TEXT).bg(palette::IRIS))
+                    .block(Block::default().style(Style::default().fg(palette::TEXT).bg(palette::IRIS)).padding(ratatui::widgets::Padding::vertical(1))),
                 toast_rect,
             );
         }

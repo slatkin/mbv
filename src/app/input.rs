@@ -22,282 +22,14 @@ impl App {
     pub(super) fn lib_tab_offset(&self) -> usize { 2 }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> bool {
-        if self.show_save_playlist_modal {
-            let quit_after = matches!(self.pending_queue_action, Some(PendingQueueAction::Quit));
-            let play_after = matches!(self.pending_queue_action, Some(PendingQueueAction::PlayItems { .. }));
-            match key.code {
-                KeyCode::Char('s') | KeyCode::Char('S') => {
-                    self.save_playlist_to_emby();
-                    self.show_save_playlist_modal = false;
-                    if let Some(action) = self.pending_queue_action.take() {
-                        self.execute_pending_queue_action(action);
-                    }
-                    if play_after { self.show_playlists = false; self.set_tab(1); }
-                    if quit_after { return true; }
-                }
-                KeyCode::Char('d') | KeyCode::Char('D') => {
-                    self.show_save_playlist_modal = false;
-                    if let Some(action) = self.pending_queue_action.take() {
-                        self.execute_pending_queue_action(action);
-                    }
-                    if play_after { self.show_playlists = false; self.set_tab(1); }
-                    if quit_after { return true; }
-                }
-                KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
-                    self.show_save_playlist_modal = false;
-                    self.pending_queue_action = None;
-                }
-                _ => {}
-            }
-            return false;
-        }
+        if let Some(r) = self.handle_key_save_modal(key) { return r; }
         if self.save_playlist_dialog.is_some() {
             return self.handle_save_playlist_key(key);
         }
-        if self.show_settings {
-            if self.multiselect_popup.is_some() {
-                match key.code {
-                    KeyCode::Esc | KeyCode::Enter => { self.close_multiselect_popup(); }
-                    KeyCode::Up => {
-                        if let Some(p) = &mut self.multiselect_popup {
-                            if p.cursor > 0 { p.cursor -= 1; }
-                        }
-                    }
-                    KeyCode::Down => {
-                        if let Some(p) = &mut self.multiselect_popup {
-                            if p.cursor + 1 < p.items.len() { p.cursor += 1; }
-                        }
-                    }
-                    KeyCode::Char(' ') => {
-                        if let Some(p) = &mut self.multiselect_popup {
-                            let i = p.cursor;
-                            p.items[i].2 = !p.items[i].2;
-                        }
-                    }
-                    _ => {}
-                }
-                return false;
-            }
-            if self.confirm_logout {
-                if matches!(key.code, KeyCode::Char('y')) {
-                    crate::api::clear_cached_token();
-                    self.confirm_logout = false;
-                    self.show_settings = false;
-                    self.flash_status("Logged out — restart mbv to sign in again".into());
-                } else {
-                    self.confirm_logout = false;
-                }
-                return false;
-            }
-            match key.code {
-                KeyCode::Char('q') => { return self.try_quit(); }
-                KeyCode::Esc => { self.close_settings(); }
-                KeyCode::F(1) => { self.close_settings(); self.show_help = true; }
-                KeyCode::F(3) => { self.close_settings(); self.show_sessions = true; }
-                KeyCode::F(4) => { self.close_settings(); self.open_playlists_panel(); }
-                KeyCode::Up => {
-                    if self.settings_cursor > 0 {
-                        self.settings_cursor -= 1;
-                        self.settings_scroll_follow();
-                    }
-                }
-                KeyCode::Down => {
-                    if self.settings_cursor + 1 < settings_total_rows() {
-                        self.settings_cursor += 1;
-                        self.settings_scroll_follow();
-                    }
-                }
-                KeyCode::PageUp => {
-                    self.settings_scroll = self.settings_scroll.saturating_sub(10);
-                }
-                KeyCode::PageDown => {
-                    self.settings_scroll += 10;
-                }
-                KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') | KeyCode::Enter => {
-                    self.handle_settings_activate();
-                }
-                _ => {}
-            }
-            return false;
-        }
-        if self.show_help {
-            match key.code {
-                KeyCode::Char('q') => { return self.try_quit(); }
-                KeyCode::Esc | KeyCode::F(1) => { self.show_help = false; }
-                KeyCode::F(2) => { self.show_help = false; self.show_settings = true; }
-                KeyCode::F(3) => { self.show_help = false; self.show_sessions = true; }
-                KeyCode::F(4) => { self.show_help = false; self.open_playlists_panel(); }
-                KeyCode::Up       => { self.help_scroll = self.help_scroll.saturating_sub(1); }
-                KeyCode::Down     => { self.help_scroll += 1; }
-                KeyCode::PageUp   => { self.help_scroll = self.help_scroll.saturating_sub(10); }
-                KeyCode::PageDown => { self.help_scroll += 10; }
-                KeyCode::Home     => { self.help_scroll = 0; }
-                _ => {}
-            }
-            return false;
-        }
-        if self.show_sessions {
-            match key.code {
-                KeyCode::Char('q') => { return self.try_quit(); }
-                KeyCode::Esc | KeyCode::F(3) => { self.show_sessions = false; }
-                KeyCode::F(1) => { self.show_sessions = false; self.show_help = true; }
-                KeyCode::F(2) => { self.show_sessions = false; self.show_settings = true; }
-                KeyCode::F(4) => { self.show_sessions = false; self.open_playlists_panel(); }
-                KeyCode::Up => {
-                    self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
-                }
-                KeyCode::Down => {
-                    if !self.sessions.is_empty() {
-                        self.sessions_cursor = (self.sessions_cursor + 1).min(self.sessions.len() - 1);
-                    }
-                }
-                KeyCode::Char('r') => { self.spawn_sessions_load(); }
-                KeyCode::Enter => {
-                    if let Some(sess) = self.sessions.get(self.sessions_cursor) {
-                        let id = sess.id.clone();
-                        let name = sess.device_name.clone();
-                        self.connected_session_id = Some(id);
-                        self.connected_session_state = Some(sess.clone());
-                        self.session_miss_count = 0;
-                        self.remote_pos_s = sess.position_s;
-                        self.remote_pos_at = Instant::now();
-                        self.remote_api_pos_advanced_at = Instant::now();
-                        self.show_sessions = false;
-                        self.flash_status(format!("Connected to {name}"));
-                        self.spawn_sessions_load();
-                    }
-                }
-                KeyCode::Char('d') => {
-                    self.connected_session_id = None;
-                    self.connected_session_state = None;
-                    self.session_miss_count = 0;
-                    self.remote_pos_s = 0;
-                    self.show_sessions = false;
-                    self.flash_status("Disconnected from remote session".to_string());
-                }
-                _ => {}
-            }
-            return false;
-        }
-        if self.show_playlists {
-            match key.code {
-                KeyCode::Char('q') => { return self.try_quit(); }
-                KeyCode::Esc | KeyCode::F(4) => {
-                    if self.playlists_open.is_some() {
-                        self.playlists_open = None;
-                        self.playlists_open_items = Vec::new();
-                    } else {
-                        self.show_playlists = false;
-                    }
-                }
-                KeyCode::Backspace => {
-                    if self.playlists_open.is_some() {
-                        self.playlists_open = None;
-                        self.playlists_open_items = Vec::new();
-                    }
-                }
-                KeyCode::F(1) => { self.show_playlists = false; self.show_help = true; }
-                KeyCode::F(2) => { self.show_playlists = false; self.show_settings = true; }
-                KeyCode::F(3) => { self.show_playlists = false; self.show_sessions = true; }
-                KeyCode::Up => {
-                    if self.playlists_open.is_some() {
-                        if self.playlists_open_cursor > 0 {
-                            self.playlists_open_cursor -= 1;
-                        }
-                    } else if self.playlists_cursor > 0 {
-                        self.playlists_cursor -= 1;
-                    }
-                }
-                KeyCode::Down => {
-                    if self.playlists_open.is_some() {
-                        if !self.playlists_open_items.is_empty() {
-                            self.playlists_open_cursor = (self.playlists_open_cursor + 1).min(self.playlists_open_items.len() - 1);
-                        }
-                    } else if !self.playlists.is_empty() {
-                        self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
-                    }
-                }
-                KeyCode::PageUp => {
-                    let page = (self.terminal_height as usize).saturating_sub(4);
-                    if self.playlists_open.is_some() {
-                        self.playlists_open_cursor = self.playlists_open_cursor.saturating_sub(page);
-                    } else {
-                        self.playlists_cursor = self.playlists_cursor.saturating_sub(page);
-                    }
-                }
-                KeyCode::PageDown => {
-                    let page = (self.terminal_height as usize).saturating_sub(4);
-                    if self.playlists_open.is_some() {
-                        if !self.playlists_open_items.is_empty() {
-                            self.playlists_open_cursor = (self.playlists_open_cursor + page).min(self.playlists_open_items.len() - 1);
-                        }
-                    } else if !self.playlists.is_empty() {
-                        self.playlists_cursor = (self.playlists_cursor + page).min(self.playlists.len() - 1);
-                    }
-                }
-                KeyCode::Home => {
-                    if self.playlists_open.is_some() { self.playlists_open_cursor = 0; }
-                    else { self.playlists_cursor = 0; }
-                }
-                KeyCode::End => {
-                    if self.playlists_open.is_some() {
-                        self.playlists_open_cursor = self.playlists_open_items.len().saturating_sub(1);
-                    } else {
-                        self.playlists_cursor = self.playlists.len().saturating_sub(1);
-                    }
-                }
-                KeyCode::Right => {
-                    if self.playlists_open.is_none() {
-                        if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
-                            self.spawn_open_playlist(pl);
-                        }
-                    }
-                }
-                KeyCode::Left => {
-                    if self.playlists_open.is_some() {
-                        self.playlists_open = None;
-                        self.playlists_open_items = Vec::new();
-                    }
-                }
-                KeyCode::Enter => {
-                    if self.playlists_open.is_some() {
-                        let selected_id = self.playlists_open_items.get(self.playlists_open_cursor).map(|i| i.id.clone());
-                        let pl_source = crate::config::QueueSource::Playlist {
-                            id: self.playlists_open.as_ref().map(|p| p.id.clone()),
-                            name: self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
-                        };
-                        let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
-                        if !items.is_empty() {
-                            let start = selected_id.as_deref()
-                                .and_then(|id| items.iter().position(|i| i.id == id))
-                                .unwrap_or(0);
-                            let action = PendingQueueAction::PlayItems {
-                                items, start_idx: start, source: pl_source,
-                            };
-                            self.replace_queue_or_prompt(action);
-                            if !self.show_save_playlist_modal {
-                                self.show_playlists = false;
-                                self.set_tab(1);
-                            }
-                        }
-                    } else if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
-                        self.load_and_play_playlist(pl.id);
-                    }
-                }
-                KeyCode::Char('r') => {
-                    if self.playlists_open.is_some() {
-                        if let Some(pl) = self.playlists_open.clone() {
-                            self.playlists_open = None;
-                            self.spawn_open_playlist(pl);
-                        }
-                    } else {
-                        self.spawn_load_playlists();
-                    }
-                }
-                _ => {}
-            }
-            return false;
-        }
+        if let Some(r) = self.handle_key_settings(key) { return r; }
+        if let Some(r) = self.handle_key_help(key) { return r; }
+        if let Some(r) = self.handle_key_sessions(key) { return r; }
+        if let Some(r) = self.handle_key_playlists(key) { return r; }
         if key.code == KeyCode::F(1) { self.show_help = true; return false; }
         if key.code == KeyCode::F(2) { self.show_settings = !self.show_settings; return false; }
         if key.code == KeyCode::F(3) { self.show_sessions = true; self.spawn_sessions_load(); return false; }
@@ -488,30 +220,7 @@ impl App {
         if self.tab_idx != self.log_tab_idx() {
             if let Some(quit) = self.handle_playback_key(key) { return quit; }
         }
-        if self.context_menu.is_some() {
-            match key.code {
-                KeyCode::Esc => { self.context_menu = None; self.force_clear = true; }
-                KeyCode::Up   => {
-                    if let Some(m) = &mut self.context_menu {
-                        if m.cursor > 0 { m.cursor -= 1; }
-                    }
-                }
-                KeyCode::Down => {
-                    if let Some(m) = &mut self.context_menu {
-                        if m.cursor + 1 < m.items.len() { m.cursor += 1; }
-                    }
-                }
-                KeyCode::Enter => {
-                    if let Some(m) = self.context_menu.take() {
-                        self.force_clear = true;
-                        let action = m.actions.get(m.cursor).cloned();
-                        self.execute_context_action(action);
-                    }
-                }
-                _ => {}
-            }
-            return false;
-        }
+        if let Some(r) = self.handle_key_context_menu(key) { return r; }
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;
             return false;
@@ -521,6 +230,315 @@ impl App {
         if self.tab_idx == 1 { return self.handle_playlist_key(key); }
         if self.tab_idx == self.log_tab_idx() { return self.handle_log_key(key); }
         self.handle_lib_key(key)
+    }
+
+    fn handle_key_save_modal(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.show_save_playlist_modal { return None; }
+        let quit_after = matches!(self.pending_queue_action, Some(PendingQueueAction::Quit));
+        let play_after = matches!(self.pending_queue_action, Some(PendingQueueAction::PlayItems { .. }));
+        match key.code {
+            KeyCode::Char('s') | KeyCode::Char('S') => {
+                self.save_playlist_to_emby();
+                self.show_save_playlist_modal = false;
+                if let Some(action) = self.pending_queue_action.take() {
+                    self.execute_pending_queue_action(action);
+                }
+                if play_after { self.show_playlists = false; self.set_tab(1); }
+                if quit_after { return Some(true); }
+            }
+            KeyCode::Char('d') | KeyCode::Char('D') => {
+                self.show_save_playlist_modal = false;
+                if let Some(action) = self.pending_queue_action.take() {
+                    self.execute_pending_queue_action(action);
+                }
+                if play_after { self.show_playlists = false; self.set_tab(1); }
+                if quit_after { return Some(true); }
+            }
+            KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
+                self.show_save_playlist_modal = false;
+                self.pending_queue_action = None;
+            }
+            _ => {}
+        }
+        Some(false)
+    }
+
+    fn handle_key_settings(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.show_settings { return None; }
+        if self.multiselect_popup.is_some() {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter => { self.close_multiselect_popup(); }
+                KeyCode::Up => {
+                    if let Some(p) = &mut self.multiselect_popup {
+                        if p.cursor > 0 { p.cursor -= 1; }
+                    }
+                }
+                KeyCode::Down => {
+                    if let Some(p) = &mut self.multiselect_popup {
+                        if p.cursor + 1 < p.items.len() { p.cursor += 1; }
+                    }
+                }
+                KeyCode::Char(' ') => {
+                    if let Some(p) = &mut self.multiselect_popup {
+                        let i = p.cursor;
+                        p.items[i].2 = !p.items[i].2;
+                    }
+                }
+                _ => {}
+            }
+            return Some(false);
+        }
+        if self.confirm_logout {
+            if matches!(key.code, KeyCode::Char('y')) {
+                crate::api::clear_cached_token();
+                self.confirm_logout = false;
+                self.show_settings = false;
+                self.flash_status("Logged out — restart mbv to sign in again".into());
+            } else {
+                self.confirm_logout = false;
+            }
+            return Some(false);
+        }
+        match key.code {
+            KeyCode::Char('q') => { return Some(self.try_quit()); }
+            KeyCode::Esc => { self.close_settings(); }
+            KeyCode::F(1) => { self.close_settings(); self.show_help = true; }
+            KeyCode::F(3) => { self.close_settings(); self.show_sessions = true; }
+            KeyCode::F(4) => { self.close_settings(); self.open_playlists_panel(); }
+            KeyCode::Up => {
+                if self.settings_cursor > 0 {
+                    self.settings_cursor -= 1;
+                    self.settings_scroll_follow();
+                }
+            }
+            KeyCode::Down => {
+                if self.settings_cursor + 1 < settings_total_rows() {
+                    self.settings_cursor += 1;
+                    self.settings_scroll_follow();
+                }
+            }
+            KeyCode::PageUp => {
+                self.settings_scroll = self.settings_scroll.saturating_sub(10);
+            }
+            KeyCode::PageDown => {
+                self.settings_scroll += 10;
+            }
+            KeyCode::Left | KeyCode::Right | KeyCode::Char(' ') | KeyCode::Enter => {
+                self.handle_settings_activate();
+            }
+            _ => {}
+        }
+        Some(false)
+    }
+
+    fn handle_key_help(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.show_help { return None; }
+        match key.code {
+            KeyCode::Char('q') => { return Some(self.try_quit()); }
+            KeyCode::Esc | KeyCode::F(1) => { self.show_help = false; }
+            KeyCode::F(2) => { self.show_help = false; self.show_settings = true; }
+            KeyCode::F(3) => { self.show_help = false; self.show_sessions = true; }
+            KeyCode::F(4) => { self.show_help = false; self.open_playlists_panel(); }
+            KeyCode::Up       => { self.help_scroll = self.help_scroll.saturating_sub(1); }
+            KeyCode::Down     => { self.help_scroll += 1; }
+            KeyCode::PageUp   => { self.help_scroll = self.help_scroll.saturating_sub(10); }
+            KeyCode::PageDown => { self.help_scroll += 10; }
+            KeyCode::Home     => { self.help_scroll = 0; }
+            _ => {}
+        }
+        Some(false)
+    }
+
+    fn handle_key_sessions(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.show_sessions { return None; }
+        match key.code {
+            KeyCode::Char('q') => { return Some(self.try_quit()); }
+            KeyCode::Esc | KeyCode::F(3) => { self.show_sessions = false; }
+            KeyCode::F(1) => { self.show_sessions = false; self.show_help = true; }
+            KeyCode::F(2) => { self.show_sessions = false; self.show_settings = true; }
+            KeyCode::F(4) => { self.show_sessions = false; self.open_playlists_panel(); }
+            KeyCode::Up => {
+                self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
+            }
+            KeyCode::Down => {
+                if !self.sessions.is_empty() {
+                    self.sessions_cursor = (self.sessions_cursor + 1).min(self.sessions.len() - 1);
+                }
+            }
+            KeyCode::Char('r') => { self.spawn_sessions_load(); }
+            KeyCode::Enter => {
+                if let Some(sess) = self.sessions.get(self.sessions_cursor) {
+                    let id = sess.id.clone();
+                    let name = sess.device_name.clone();
+                    self.connected_session_id = Some(id);
+                    self.connected_session_state = Some(sess.clone());
+                    self.session_miss_count = 0;
+                    self.remote_pos_s = sess.position_s;
+                    self.remote_pos_at = Instant::now();
+                    self.remote_api_pos_advanced_at = Instant::now();
+                    self.show_sessions = false;
+                    self.flash_status(format!("Connected to {name}"));
+                    self.spawn_sessions_load();
+                }
+            }
+            KeyCode::Char('d') => {
+                self.connected_session_id = None;
+                self.connected_session_state = None;
+                self.session_miss_count = 0;
+                self.remote_pos_s = 0;
+                self.show_sessions = false;
+                self.flash_status("Disconnected from remote session".to_string());
+            }
+            _ => {}
+        }
+        Some(false)
+    }
+
+    fn handle_key_playlists(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.show_playlists { return None; }
+        match key.code {
+            KeyCode::Char('q') => { return Some(self.try_quit()); }
+            KeyCode::Esc | KeyCode::F(4) => {
+                if self.playlists_open.is_some() {
+                    self.playlists_open = None;
+                    self.playlists_open_items = Vec::new();
+                } else {
+                    self.show_playlists = false;
+                }
+            }
+            KeyCode::Backspace => {
+                if self.playlists_open.is_some() {
+                    self.playlists_open = None;
+                    self.playlists_open_items = Vec::new();
+                }
+            }
+            KeyCode::F(1) => { self.show_playlists = false; self.show_help = true; }
+            KeyCode::F(2) => { self.show_playlists = false; self.show_settings = true; }
+            KeyCode::F(3) => { self.show_playlists = false; self.show_sessions = true; }
+            KeyCode::Up => {
+                if self.playlists_open.is_some() {
+                    if self.playlists_open_cursor > 0 {
+                        self.playlists_open_cursor -= 1;
+                    }
+                } else if self.playlists_cursor > 0 {
+                    self.playlists_cursor -= 1;
+                }
+            }
+            KeyCode::Down => {
+                if self.playlists_open.is_some() {
+                    if !self.playlists_open_items.is_empty() {
+                        self.playlists_open_cursor = (self.playlists_open_cursor + 1).min(self.playlists_open_items.len() - 1);
+                    }
+                } else if !self.playlists.is_empty() {
+                    self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
+                }
+            }
+            KeyCode::PageUp => {
+                let page = (self.terminal_height as usize).saturating_sub(4);
+                if self.playlists_open.is_some() {
+                    self.playlists_open_cursor = self.playlists_open_cursor.saturating_sub(page);
+                } else {
+                    self.playlists_cursor = self.playlists_cursor.saturating_sub(page);
+                }
+            }
+            KeyCode::PageDown => {
+                let page = (self.terminal_height as usize).saturating_sub(4);
+                if self.playlists_open.is_some() {
+                    if !self.playlists_open_items.is_empty() {
+                        self.playlists_open_cursor = (self.playlists_open_cursor + page).min(self.playlists_open_items.len() - 1);
+                    }
+                } else if !self.playlists.is_empty() {
+                    self.playlists_cursor = (self.playlists_cursor + page).min(self.playlists.len() - 1);
+                }
+            }
+            KeyCode::Home => {
+                if self.playlists_open.is_some() { self.playlists_open_cursor = 0; }
+                else { self.playlists_cursor = 0; }
+            }
+            KeyCode::End => {
+                if self.playlists_open.is_some() {
+                    self.playlists_open_cursor = self.playlists_open_items.len().saturating_sub(1);
+                } else {
+                    self.playlists_cursor = self.playlists.len().saturating_sub(1);
+                }
+            }
+            KeyCode::Right => {
+                if self.playlists_open.is_none() {
+                    if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
+                        self.spawn_open_playlist(pl);
+                    }
+                }
+            }
+            KeyCode::Left => {
+                if self.playlists_open.is_some() {
+                    self.playlists_open = None;
+                    self.playlists_open_items = Vec::new();
+                }
+            }
+            KeyCode::Enter => {
+                if self.playlists_open.is_some() {
+                    let selected_id = self.playlists_open_items.get(self.playlists_open_cursor).map(|i| i.id.clone());
+                    let pl_source = crate::config::QueueSource::Playlist {
+                        id: self.playlists_open.as_ref().map(|p| p.id.clone()),
+                        name: self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
+                    };
+                    let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
+                    if !items.is_empty() {
+                        let start = selected_id.as_deref()
+                            .and_then(|id| items.iter().position(|i| i.id == id))
+                            .unwrap_or(0);
+                        let action = PendingQueueAction::PlayItems {
+                            items, start_idx: start, source: pl_source,
+                        };
+                        self.replace_queue_or_prompt(action);
+                        if !self.show_save_playlist_modal {
+                            self.show_playlists = false;
+                            self.set_tab(1);
+                        }
+                    }
+                } else if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
+                    self.load_and_play_playlist(pl.id);
+                }
+            }
+            KeyCode::Char('r') => {
+                if self.playlists_open.is_some() {
+                    if let Some(pl) = self.playlists_open.clone() {
+                        self.playlists_open = None;
+                        self.spawn_open_playlist(pl);
+                    }
+                } else {
+                    self.spawn_load_playlists();
+                }
+            }
+            _ => {}
+        }
+        Some(false)
+    }
+
+    fn handle_key_context_menu(&mut self, key: KeyEvent) -> Option<bool> {
+        if self.context_menu.is_none() { return None; }
+        match key.code {
+            KeyCode::Esc => { self.context_menu = None; self.force_clear = true; }
+            KeyCode::Up => {
+                if let Some(m) = &mut self.context_menu {
+                    if m.cursor > 0 { m.cursor -= 1; }
+                }
+            }
+            KeyCode::Down => {
+                if let Some(m) = &mut self.context_menu {
+                    if m.cursor + 1 < m.items.len() { m.cursor += 1; }
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(m) = self.context_menu.take() {
+                    self.force_clear = true;
+                    let action = m.actions.get(m.cursor).cloned();
+                    self.execute_context_action(action);
+                }
+            }
+            _ => {}
+        }
+        Some(false)
     }
 
     fn handle_lib_key(&mut self, key: KeyEvent) -> bool {
@@ -1526,6 +1544,156 @@ impl App {
         false
     }
 
+    /// Handle a mouse event when a panel overlay (help/settings/sessions/playlists) is open.
+    /// Returns true if the event was consumed.
+    fn handle_mouse_panels(&mut self, mouse: crossterm::event::MouseEvent) -> bool {
+        use crossterm::event::{MouseEventKind, MouseButton};
+        let col = mouse.column;
+        let row = mouse.row;
+        let panel_w: u16 = if self.show_help      { HELP_PANEL_W }
+                           else if self.show_settings  { SETTINGS_PANEL_W }
+                           else if self.show_sessions  { SESSIONS_PANEL_W }
+                           else if self.show_playlists { PLAYLISTS_PANEL_W }
+                           else { return false; };
+        let pw = panel_w.min(self.terminal_width);
+        let inside_panel = col < pw;
+        if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && !inside_panel {
+            if self.show_settings { self.close_settings(); }
+            else { self.show_help = false; self.show_sessions = false; self.show_playlists = false; }
+            return true;
+        }
+        if self.show_help {
+            match mouse.kind {
+                MouseEventKind::ScrollDown => { self.help_scroll += 3; }
+                MouseEventKind::ScrollUp   => { self.help_scroll = self.help_scroll.saturating_sub(3); }
+                _ => {}
+            }
+            return true;
+        }
+        if self.show_settings && self.multiselect_popup.is_none() {
+            let content_top: u16 = 1;
+            let content_bottom = self.terminal_height.saturating_sub(2);
+            match mouse.kind {
+                MouseEventKind::ScrollDown => { self.settings_scroll += 3; }
+                MouseEventKind::ScrollUp   => { self.settings_scroll = self.settings_scroll.saturating_sub(3); }
+                MouseEventKind::Down(MouseButton::Left) if row >= content_top && row < content_bottom => {
+                    let lines_idx = (row - content_top) as usize + self.settings_scroll;
+                    if let Some(cur) = self.settings_line_of_cursor.iter().position(|&l| l == lines_idx) {
+                        self.settings_cursor = cur;
+                        self.settings_scroll_follow();
+                        self.handle_settings_activate();
+                    }
+                }
+                _ => {}
+            }
+            return true;
+        }
+        if self.show_sessions {
+            const ENTRY_H: u16 = 4;
+            let content_top: u16 = 1;
+            match mouse.kind {
+                MouseEventKind::ScrollDown => {
+                    if !self.sessions.is_empty() {
+                        self.sessions_cursor = (self.sessions_cursor + 1).min(self.sessions.len() - 1);
+                    }
+                }
+                MouseEventKind::ScrollUp => {
+                    self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
+                }
+                MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
+                    let idx = ((row - content_top) / ENTRY_H) as usize;
+                    if idx < self.sessions.len() {
+                        self.sessions_cursor = idx;
+                    }
+                }
+                _ => {}
+            }
+            return true;
+        }
+        if self.show_playlists {
+            let content_top: u16 = 1;
+            if self.playlists_open.is_some() {
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => {
+                        if !self.playlists_open_items.is_empty() {
+                            self.playlists_open_cursor = (self.playlists_open_cursor + 1).min(self.playlists_open_items.len() - 1);
+                        }
+                    }
+                    MouseEventKind::ScrollUp => {
+                        self.playlists_open_cursor = self.playlists_open_cursor.saturating_sub(1);
+                    }
+                    MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
+                        let click_line = (row - content_top) as usize;
+                        let mut y = 0usize;
+                        let mut idx = self.playlists_open_scroll;
+                        for i in self.playlists_open_items[self.playlists_open_scroll..].iter() {
+                            let pw2 = PLAYLISTS_PANEL_W.min(self.terminal_width) as usize;
+                            let h = if i.display_name().len() <= pw2.saturating_sub(6) { 1 } else { 2 };
+                            if click_line < y + h { break; }
+                            y += h;
+                            idx += 1;
+                        }
+                        if idx < self.playlists_open_items.len() {
+                            if self.playlists_open_cursor == idx {
+                                let selected_id = self.playlists_open_items.get(idx).map(|i| i.id.clone());
+                                let pl_source = crate::config::QueueSource::Playlist {
+                                    id: self.playlists_open.as_ref().map(|p| p.id.clone()),
+                                    name: self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
+                                };
+                                let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
+                                if !items.is_empty() {
+                                    let start = selected_id.as_deref()
+                                        .and_then(|id| items.iter().position(|i| i.id == id))
+                                        .unwrap_or(0);
+                                    let action = PendingQueueAction::PlayItems {
+                                        items, start_idx: start, source: pl_source,
+                                    };
+                                    self.replace_queue_or_prompt(action);
+                                    if !self.show_save_playlist_modal {
+                                        self.show_playlists = false;
+                                        self.set_tab(1);
+                                    }
+                                }
+                            } else {
+                                self.playlists_open_cursor = idx;
+                            }
+                        }
+                    }
+                    MouseEventKind::Down(MouseButton::Right) if row >= content_top => {
+                        self.playlists_open = None;
+                        self.playlists_open_items = Vec::new();
+                    }
+                    _ => {}
+                }
+            } else {
+                match mouse.kind {
+                    MouseEventKind::ScrollDown => {
+                        if !self.playlists.is_empty() {
+                            self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
+                        }
+                    }
+                    MouseEventKind::ScrollUp => {
+                        self.playlists_cursor = self.playlists_cursor.saturating_sub(1);
+                    }
+                    MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
+                        let idx = (row - content_top) as usize + self.playlists_scroll;
+                        if idx < self.playlists.len() {
+                            if self.playlists_cursor == idx {
+                                let id = self.playlists[idx].id.clone();
+                                self.load_and_play_playlist(id);
+                            } else {
+                                self.playlists_cursor = idx;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            return true;
+        }
+        false
+    }
+
     pub(super) fn handle_mouse(&mut self, mouse: crossterm::event::MouseEvent) {
         use crossterm::event::{MouseEventKind, MouseButton};
         let col = mouse.column;
@@ -1538,149 +1706,7 @@ impl App {
             self.last_scroll_at = now;
         }
 
-        let panel_w: u16 = if self.show_help      { HELP_PANEL_W }
-                           else if self.show_settings  { SETTINGS_PANEL_W }
-                           else if self.show_sessions  { SESSIONS_PANEL_W }
-                           else if self.show_playlists { PLAYLISTS_PANEL_W }
-                           else { 0 };
-        if panel_w > 0 {
-            let pw = panel_w.min(self.terminal_width);
-            let inside_panel = col < pw;
-            if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && !inside_panel {
-                if self.show_settings { self.close_settings(); } else { self.show_help = false; self.show_sessions = false; self.show_playlists = false; }
-                return;
-            }
-            if self.show_help {
-                match mouse.kind {
-                    MouseEventKind::ScrollDown => { self.help_scroll += 3; }
-                    MouseEventKind::ScrollUp   => { self.help_scroll = self.help_scroll.saturating_sub(3); }
-                    _ => {}
-                }
-                return;
-            }
-            if self.show_settings && self.multiselect_popup.is_none() {
-                let content_top: u16 = 1;
-                let content_bottom = self.terminal_height.saturating_sub(2);
-                match mouse.kind {
-                    MouseEventKind::ScrollDown => { self.settings_scroll += 3; }
-                    MouseEventKind::ScrollUp   => { self.settings_scroll = self.settings_scroll.saturating_sub(3); }
-                    MouseEventKind::Down(MouseButton::Left) if row >= content_top && row < content_bottom => {
-                        let lines_idx = (row - content_top) as usize + self.settings_scroll;
-                        if let Some(cur) = self.settings_line_of_cursor.iter().position(|&l| l == lines_idx) {
-                            self.settings_cursor = cur;
-                            self.settings_scroll_follow();
-                            self.handle_settings_activate();
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            if self.show_sessions {
-                const ENTRY_H: u16 = 4;
-                let content_top: u16 = 1;
-                match mouse.kind {
-                    MouseEventKind::ScrollDown => {
-                        if !self.sessions.is_empty() {
-                            self.sessions_cursor = (self.sessions_cursor + 1).min(self.sessions.len() - 1);
-                        }
-                    }
-                    MouseEventKind::ScrollUp => {
-                        self.sessions_cursor = self.sessions_cursor.saturating_sub(1);
-                    }
-                    MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
-                        let idx = ((row - content_top) / ENTRY_H) as usize;
-                        if idx < self.sessions.len() {
-                            self.sessions_cursor = idx;
-                        }
-                    }
-                    _ => {}
-                }
-                return;
-            }
-            if self.show_playlists {
-                let content_top: u16 = 1;
-                if self.playlists_open.is_some() {
-                    match mouse.kind {
-                        MouseEventKind::ScrollDown => {
-                            if !self.playlists_open_items.is_empty() {
-                                self.playlists_open_cursor = (self.playlists_open_cursor + 1).min(self.playlists_open_items.len() - 1);
-                            }
-                        }
-                        MouseEventKind::ScrollUp => {
-                            self.playlists_open_cursor = self.playlists_open_cursor.saturating_sub(1);
-                        }
-                        MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
-                            let click_line = (row - content_top) as usize;
-                            let mut y = 0usize;
-                            let mut idx = self.playlists_open_scroll;
-                            for i in self.playlists_open_items[self.playlists_open_scroll..].iter() {
-                                let pw = PLAYLISTS_PANEL_W.min(self.terminal_width) as usize;
-                                let h = if i.display_name().len() <= pw.saturating_sub(6) { 1 } else { 2 };
-                                if click_line < y + h { break; }
-                                y += h;
-                                idx += 1;
-                            }
-                            if idx < self.playlists_open_items.len() {
-                                if self.playlists_open_cursor == idx {
-                                    let selected_id = self.playlists_open_items.get(idx).map(|i| i.id.clone());
-                                    let pl_source = crate::config::QueueSource::Playlist {
-                                        id: self.playlists_open.as_ref().map(|p| p.id.clone()),
-                                        name: self.playlists_open.as_ref().map(|p| p.name.clone()).unwrap_or_default(),
-                                    };
-                                    let items: Vec<MediaItem> = self.playlists_open_items.iter().filter(|i| !i.is_folder).cloned().collect();
-                                    if !items.is_empty() {
-                                        let start = selected_id.as_deref()
-                                            .and_then(|id| items.iter().position(|i| i.id == id))
-                                            .unwrap_or(0);
-                                        let action = PendingQueueAction::PlayItems {
-                                            items, start_idx: start, source: pl_source,
-                                        };
-                                        self.replace_queue_or_prompt(action);
-                                        if !self.show_save_playlist_modal {
-                                            self.show_playlists = false;
-                                            self.set_tab(1);
-                                        }
-                                    }
-                                } else {
-                                    self.playlists_open_cursor = idx;
-                                }
-                            }
-                        }
-                        MouseEventKind::Down(MouseButton::Right) if row >= content_top => {
-                            self.playlists_open = None;
-                            self.playlists_open_items = Vec::new();
-                        }
-                        _ => {}
-                    }
-                } else {
-                    match mouse.kind {
-                        MouseEventKind::ScrollDown => {
-                            if !self.playlists.is_empty() {
-                                self.playlists_cursor = (self.playlists_cursor + 1).min(self.playlists.len() - 1);
-                            }
-                        }
-                        MouseEventKind::ScrollUp => {
-                            self.playlists_cursor = self.playlists_cursor.saturating_sub(1);
-                        }
-                        MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
-                            let idx = (row - content_top) as usize + self.playlists_scroll;
-                            if idx < self.playlists.len() {
-                                if self.playlists_cursor == idx {
-                                    let id = self.playlists[idx].id.clone();
-                                    self.load_and_play_playlist(id);
-                                } else {
-                                    self.playlists_cursor = idx;
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                return;
-            }
-            return;
-        }
+        if self.handle_mouse_panels(mouse) { return; }
 
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout_tabs_area.contains((col, row).into()) {

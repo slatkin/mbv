@@ -12,22 +12,30 @@ use super::super::ui_util::{fmt_duration, trunc_str};
 
 impl App {
     pub(super) fn render_playlist_bar(&self, f: &mut Frame, area: Rect) {
-        self.render_playlist_bar_bg(f, area, palette::YELLOW);
+        self.render_playlist_bar_bg(f, area, palette::IRIS, false);
     }
 
-    pub(super) fn render_playlist_bar_bg(&self, f: &mut Frame, area: Rect, bg: ratatui::style::Color) {
+    pub(super) fn render_playlist_bar_bg(&self, f: &mut Frame, area: Rect, bg: ratatui::style::Color, centered: bool) {
         let name = self.queue_playlist_name().to_string();
         let max_name = (area.width as usize).saturating_sub(12);
         let name_trunc = trunc_str(&name, max_name);
         let focused = bg != palette::OVERLAY;
-        let label_fg = if focused { palette::OVERLAY } else { palette::SUBTLE };
-        let name_fg = if focused { palette::OVERLAY } else { palette::WHITE };
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
+        let label_fg = if focused { palette::YELLOW } else { palette::SUBTLE };
+        let name_fg = if focused { palette::YELLOW } else { palette::WHITE };
+        let line = if centered {
+            Line::from(vec![
+                Span::styled("Playlist: ", Style::default().fg(label_fg)),
+                Span::styled(name_trunc, Style::default().fg(name_fg)),
+            ]).alignment(Alignment::Center)
+        } else {
+            Line::from(vec![
                 Span::raw(" "),
                 Span::styled("Playlist: ", Style::default().fg(label_fg)),
                 Span::styled(name_trunc, Style::default().fg(name_fg)),
-            ])).style(Style::default().bg(bg)),
+            ])
+        };
+        f.render_widget(
+            Paragraph::new(line).style(Style::default().bg(bg)),
             area,
         );
     }
@@ -70,12 +78,26 @@ impl App {
             self.layout_playlist_inner = inner;
 
             if is_playlist {
-                self.render_playlist_bar(f, Rect {
+                const SIDE_HIDE_W: u16 = 60;
+                let show_sides = inner.width >= SIDE_HIDE_W;
+                const GAP: u16 = 1;
+                let (bar_w, bar_x) = if show_sides {
+                    let avail_w = inner.width.saturating_sub(GAP * 4 + 4);
+                    let cw = (avail_w as u32 * 2 / 5) as u16;
+                    let sw = avail_w.saturating_sub(cw) / 2;
+                    let xl = inner.x + GAP + 2;
+                    let xc = xl + sw + GAP;
+                    (cw, xc)
+                } else {
+                    let avail_w = inner.width.saturating_sub(GAP * 2);
+                    (avail_w, inner.x + GAP)
+                };
+                self.render_playlist_bar_bg(f, Rect {
+                    x: bar_x,
                     y: area.y + area.height.saturating_sub(1),
+                    width: bar_w,
                     height: 1,
-                    x: area.x,
-                    width: area.width,
-                });
+                }, palette::FOAM, true);
             }
 
             if self.player_tab.items.is_empty() {

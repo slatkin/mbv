@@ -773,155 +773,7 @@ impl App {
             if QUIT_REQUESTED.load(Ordering::Relaxed) { break; }
             if let Ok(ev) = self.player_rx.try_recv() {
                 had_events = true;
-                match ev {
-                    PlayerEvent::Stopped { idx, position_ticks, played } => {
-                        log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played}",
-                            position_ticks / crate::api::TICKS_PER_SECOND);
-                        if self.player.is_remote_disconnected() {
-                            self.next_up_item = None;
-                            self.skip_intro_end_ticks = None;
-                            self.flash_status("Daemon disconnected — playback stopped".into());
-                            self.refresh_after_stop();
-                            continue;
-                        }
-                        let is_delete = self.pending_delete_idx.take() == Some(idx);
-                        if let Some(item) = self.player_tab.items.get_mut(idx) {
-                            if !is_delete {
-                                if played {
-                                    item.playback_position_ticks = 0;
-                                    item.played = true;
-                                    log::info!(target: "player", "Stopped: marked played, position reset to 0");
-                                } else if position_ticks > 0 && !item.is_audio() {
-                                    item.playback_position_ticks = position_ticks;
-                                    log::info!(target: "player", "Stopped: saved position={}s", position_ticks / crate::api::TICKS_PER_SECOND);
-                                } else {
-                                    log::info!(target: "player", "Stopped: position not saved (position_ticks={} is_audio={})", position_ticks, item.is_audio());
-                                }
-                            }
-                            self.last_played_item_id = Some(item.id.clone());
-                            self.last_played_completed = played;
-                        }
-                        self.next_up_item = None;
-                        self.skip_intro_end_ticks = None;
-                        self.status.clear();
-                        if is_delete {
-                            let item = self.player_tab.items.remove(idx);
-                            self.playlist_undo_stack.push((idx, item));
-                            self.player_tab.playlist_cursor =
-                                if self.player_tab.items.is_empty() { 0 }
-                                else { idx.min(self.player_tab.items.len() - 1) };
-                        } else {
-                            let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
-                            if played && is_video && self.client.lock().unwrap().config.consume_videos {
-                                self.consume_item(idx);
-                                self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
-                                    .min(self.player_tab.items.len().saturating_sub(1));
-                            }
-                        }
-                        self.refresh_after_stop();
-                        self.save_queue_state();
-                    }
-                    PlayerEvent::TrackCompleted { idx, position_ticks, played, consume } => {
-                        if let Some(item) = self.player_tab.items.get_mut(idx) {
-                            if played {
-                                item.playback_position_ticks = 0;
-                                item.played = true;
-                            } else if position_ticks >= 300_000_000 && !item.is_audio() {
-                                // Only update local position for meaningful progress (≥ 30 s).
-                                // Startup noise from mpv (< 30 s) keeps the previous value intact.
-                                item.playback_position_ticks = position_ticks;
-                            }
-                        }
-                        let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
-                        if consume && is_video && self.client.lock().unwrap().config.consume_videos {
-                            self.pending_queue_removal = Some(idx);
-                        }
-                    }
-                    PlayerEvent::TrackChanged(idx) => {
-                        self.skip_intro_end_ticks = None;
-                        self.next_up_item = None;
-                        if self.status.starts_with("Next up:") {
-                            self.status.clear();
-                        }
-                        let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
-                            self.consume_item(remove_idx);
-                            if remove_idx < idx { idx - 1 } else { idx }
-                        } else {
-                            idx
-                        };
-                        self.player_tab.playlist_cursor = adjusted;
-                        if let Some(item) = self.player_tab.items.get(adjusted) {
-                            self.last_played_item_id = Some(item.id.clone());
-                        }
-                        self.save_queue_state();
-                    }
-                    PlayerEvent::PlaylistNextUp { next_idx } => {
-                        if let Some(item) = self.player_tab.items.get(next_idx) {
-                            let item_id    = item.id.clone();
-                            let show_title = item.series_name.clone();
-                            let ep_title   = item.name.clone();
-                            let artist     = item.artist.clone();
-                            let label = item.playback_label();
-                            self.next_up_item = Some(item.clone());
-                            let next_up_msg = format!("Next up: {} (Y/n)", label);
-                            self.notify_with_actions(&item.name, "Next up?", &[("next_up:play", "Play Now"), ("next_up:skip", "Skip")]);
-                            self.status = next_up_msg;
-                            self.status_expires = None;
-                            // Daemon sends NextUpShow to mpv directly; only send from local player.
-                            if !self.player.is_remote() {
-                                self.player.send_command(PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist });
-                            }
-                        }
-                    }
-                    PlayerEvent::NextUpThreshold { .. } => {
-                        // Series episodes now use play_playlist; this only fires for movies
-                        // (always_play_next=false or non-series content). No action needed.
-                    }
-                    PlayerEvent::NextUpPlay => {
-                        log::warn!(target: "app", "next-up: play triggered");
-                        if let Some(item) = self.next_up_item.take() {
-                            let label = item.playback_label();
-                            if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
-                                self.player.send_command(PlayerCommand::JumpTo(idx));
-                                self.player_tab.playlist_cursor = idx;
-                                self.flash_status(label);
-                            } else {
-                                log::warn!(target: "app", "next-up: item not in queue, cannot jump");
-                            }
-                        } else {
-                            log::warn!(target: "app", "next-up: NextUpPlay fired but next_up_item is None");
-                        }
-                    }
-                    PlayerEvent::QueueUpdated { items, cursor } => {
-                        self.player_tab.items = items;
-                        self.player_tab.playlist_cursor = cursor;
-                    }
-                    PlayerEvent::IntroStarted { intro_end_ticks } => {
-                        self.skip_intro_end_ticks = Some(intro_end_ticks);
-                        let playing_title = self.player_tab.items
-                            .get(self.player_tab.playlist_cursor)
-                            .map(|i| i.name.clone())
-                            .unwrap_or_else(|| "mbv".into());
-                        self.notify_with_actions(&playing_title, "Skip intro?", &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")]);
-                        self.status = "Skip intro? (Y/n)".into();
-                        self.status_expires = None;
-                    }
-                    PlayerEvent::IntroEnded => {
-                        if self.skip_intro_end_ticks.take().is_some() {
-                            self.status.clear();
-                        }
-                    }
-                    PlayerEvent::SkipIntroPlay => {
-                        self.skip_intro_end_ticks = None;
-                        self.status.clear();
-                    }
-                    PlayerEvent::MpvQuit => {
-                        self.next_up_item = None;
-                        self.skip_intro_end_ticks = None;
-                        self.status.clear();
-                        self.refresh_after_stop();
-                    }
-                }
+                if self.handle_player_event(ev) { continue 'outer; }
             }
 
             while let Ok(action) = self.notif_action_rx.try_recv() {
@@ -1298,6 +1150,161 @@ impl App {
         self.save_queue_state();
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
         Ok(())
+    }
+
+    /// Handle a PlayerEvent received from the player thread.
+    /// Returns true if the caller's event loop should `continue` (skip render for this tick).
+    fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
+        match ev {
+            PlayerEvent::Stopped { idx, position_ticks, played } => {
+                log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played}",
+                    position_ticks / crate::api::TICKS_PER_SECOND);
+                if self.player.is_remote_disconnected() {
+                    self.next_up_item = None;
+                    self.skip_intro_end_ticks = None;
+                    self.flash_status("Daemon disconnected — playback stopped".into());
+                    self.refresh_after_stop();
+                    return true;
+                }
+                let is_delete = self.pending_delete_idx.take() == Some(idx);
+                if let Some(item) = self.player_tab.items.get_mut(idx) {
+                    if !is_delete {
+                        if played {
+                            item.playback_position_ticks = 0;
+                            item.played = true;
+                            log::info!(target: "player", "Stopped: marked played, position reset to 0");
+                        } else if position_ticks > 0 && !item.is_audio() {
+                            item.playback_position_ticks = position_ticks;
+                            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / crate::api::TICKS_PER_SECOND);
+                        } else {
+                            log::info!(target: "player", "Stopped: position not saved (position_ticks={} is_audio={})", position_ticks, item.is_audio());
+                        }
+                    }
+                    self.last_played_item_id = Some(item.id.clone());
+                    self.last_played_completed = played;
+                }
+                self.next_up_item = None;
+                self.skip_intro_end_ticks = None;
+                self.status.clear();
+                if is_delete {
+                    let item = self.player_tab.items.remove(idx);
+                    self.playlist_undo_stack.push((idx, item));
+                    self.player_tab.playlist_cursor =
+                        if self.player_tab.items.is_empty() { 0 }
+                        else { idx.min(self.player_tab.items.len() - 1) };
+                } else {
+                    let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
+                    if played && is_video && self.client.lock().unwrap().config.consume_videos {
+                        self.consume_item(idx);
+                        self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
+                            .min(self.player_tab.items.len().saturating_sub(1));
+                    }
+                }
+                self.refresh_after_stop();
+                self.save_queue_state();
+            }
+            PlayerEvent::TrackCompleted { idx, position_ticks, played, consume } => {
+                if let Some(item) = self.player_tab.items.get_mut(idx) {
+                    if played {
+                        item.playback_position_ticks = 0;
+                        item.played = true;
+                    } else if position_ticks >= 300_000_000 && !item.is_audio() {
+                        // Only update local position for meaningful progress (≥ 30 s).
+                        // Startup noise from mpv (< 30 s) keeps the previous value intact.
+                        item.playback_position_ticks = position_ticks;
+                    }
+                }
+                let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
+                if consume && is_video && self.client.lock().unwrap().config.consume_videos {
+                    self.pending_queue_removal = Some(idx);
+                }
+            }
+            PlayerEvent::TrackChanged(idx) => {
+                self.skip_intro_end_ticks = None;
+                self.next_up_item = None;
+                if self.status.starts_with("Next up:") {
+                    self.status.clear();
+                }
+                let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
+                    self.consume_item(remove_idx);
+                    if remove_idx < idx { idx - 1 } else { idx }
+                } else {
+                    idx
+                };
+                self.player_tab.playlist_cursor = adjusted;
+                if let Some(item) = self.player_tab.items.get(adjusted) {
+                    self.last_played_item_id = Some(item.id.clone());
+                }
+                self.save_queue_state();
+            }
+            PlayerEvent::PlaylistNextUp { next_idx } => {
+                if let Some(item) = self.player_tab.items.get(next_idx) {
+                    let item_id    = item.id.clone();
+                    let show_title = item.series_name.clone();
+                    let ep_title   = item.name.clone();
+                    let artist     = item.artist.clone();
+                    let label = item.playback_label();
+                    self.next_up_item = Some(item.clone());
+                    let next_up_msg = format!("Next up: {} (Y/n)", label);
+                    self.notify_with_actions(&item.name, "Next up?", &[("next_up:play", "Play Now"), ("next_up:skip", "Skip")]);
+                    self.status = next_up_msg;
+                    self.status_expires = None;
+                    // Daemon sends NextUpShow to mpv directly; only send from local player.
+                    if !self.player.is_remote() {
+                        self.player.send_command(PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist });
+                    }
+                }
+            }
+            PlayerEvent::NextUpThreshold { .. } => {
+                // Series episodes now use play_playlist; this only fires for movies
+                // (always_play_next=false or non-series content). No action needed.
+            }
+            PlayerEvent::NextUpPlay => {
+                log::warn!(target: "app", "next-up: play triggered");
+                if let Some(item) = self.next_up_item.take() {
+                    let label = item.playback_label();
+                    if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
+                        self.player.send_command(PlayerCommand::JumpTo(idx));
+                        self.player_tab.playlist_cursor = idx;
+                        self.flash_status(label);
+                    } else {
+                        log::warn!(target: "app", "next-up: item not in queue, cannot jump");
+                    }
+                } else {
+                    log::warn!(target: "app", "next-up: NextUpPlay fired but next_up_item is None");
+                }
+            }
+            PlayerEvent::QueueUpdated { items, cursor } => {
+                self.player_tab.items = items;
+                self.player_tab.playlist_cursor = cursor;
+            }
+            PlayerEvent::IntroStarted { intro_end_ticks } => {
+                self.skip_intro_end_ticks = Some(intro_end_ticks);
+                let playing_title = self.player_tab.items
+                    .get(self.player_tab.playlist_cursor)
+                    .map(|i| i.name.clone())
+                    .unwrap_or_else(|| "mbv".into());
+                self.notify_with_actions(&playing_title, "Skip intro?", &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")]);
+                self.status = "Skip intro? (Y/n)".into();
+                self.status_expires = None;
+            }
+            PlayerEvent::IntroEnded => {
+                if self.skip_intro_end_ticks.take().is_some() {
+                    self.status.clear();
+                }
+            }
+            PlayerEvent::SkipIntroPlay => {
+                self.skip_intro_end_ticks = None;
+                self.status.clear();
+            }
+            PlayerEvent::MpvQuit => {
+                self.next_up_item = None;
+                self.skip_intro_end_ticks = None;
+                self.status.clear();
+                self.refresh_after_stop();
+            }
+        }
+        false
     }
 }
 

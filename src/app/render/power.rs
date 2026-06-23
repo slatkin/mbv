@@ -136,12 +136,12 @@ impl App {
         let bar_h = if is_playlist { 1u16 } else { 0 };
         let table_area = Rect { height: list_area.height.saturating_sub(bar_h), ..list_area };
         if is_playlist {
-            let bar_bg = palette::YELLOW;
+            let bar_bg = palette::IRIS;
             self.render_playlist_bar_bg(f, Rect {
                 y: list_area.y + table_area.height,
                 height: 1,
                 ..list_area
-            }, bar_bg);
+            }, bar_bg, false);
         }
 
         self.power_queue_area = table_area;
