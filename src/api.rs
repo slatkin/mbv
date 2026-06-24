@@ -836,7 +836,7 @@ impl EmbyClient {
         let sub_urls: Vec<String> = resp["MediaSources"][0]["MediaStreams"]
             .as_array().map(|a| a.as_slice()).unwrap_or(&[])
             .iter()
-            .filter(|s| s["Type"].as_str() == Some("Subtitle") && s["IsExternal"].as_bool() == Some(true))
+            .filter(|s| s["Type"].as_str() == Some("Subtitle") && s["DeliveryMethod"].as_str() == Some("External"))
             .filter_map(|s| s["DeliveryUrl"].as_str())
             .map(|u| format!("{}{}", self.config.server_url, u))
             .collect();

@@ -781,15 +781,12 @@ impl SingleSession {
         let event_name: &str;
         if !self.tracks_initialized {
             let prefs = self.subtitle_prefs.lock().unwrap().clone();
-            auto_select_tracks(mpv, &self.status, &prefs);
             for url in &self.ext_sub_urls {
                 if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
                     log::warn!(target: "player", "sub-add failed: {url}: {e:?}");
                 }
             }
-            if !self.ext_sub_urls.is_empty() {
-                refresh_tracks(mpv, &self.status);
-            }
+            auto_select_tracks(mpv, &self.status, &prefs);
             self.tracks_initialized = true;
             let val = if self.season > 0 && self.episode > 0 {
                 format!("Season {}  Episode {}", self.season, self.episode)
@@ -1365,15 +1362,12 @@ impl PlaylistSession {
         }
         if !self.tracks_initialized {
             let prefs = self.subtitle_prefs.lock().unwrap().clone();
-            auto_select_tracks(mpv, &self.status, &prefs);
             for url in &self.ext_sub_urls {
                 if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
                     log::warn!(target: "player", "sub-add failed: {url}: {e:?}");
                 }
             }
-            if !self.ext_sub_urls.is_empty() {
-                refresh_tracks(mpv, &self.status);
-            }
+            auto_select_tracks(mpv, &self.status, &prefs);
             self.tracks_initialized = true;
             send_ep_info(mpv, &self.items[self.current_idx]);
             if let Some(secs) = self.pending_resume_secs.take() {
