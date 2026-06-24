@@ -285,6 +285,25 @@ impl App {
         self.player.send_command(PlayerCommand::SetAudio(next_id));
     }
 
+    pub(super) fn cycle_subtitle_mode(&mut self) {
+        let new_mode = {
+            let mut c = self.client.lock().unwrap();
+            c.config.subtitle_mode = match c.config.subtitle_mode.as_str() {
+                "Default" | "" => "Always".into(),
+                "Always"       => "Smart".into(),
+                "Smart"        => "OnlyForced".into(),
+                "OnlyForced"   => "None".into(),
+                "None"         => "HearingImpaired".into(),
+                _              => "Default".into(),
+            };
+            c.config.subtitle_mode.clone()
+        };
+        self.player.subtitle_prefs.lock().unwrap().mode = new_mode.clone();
+        let cfg = self.client.lock().unwrap().config.clone();
+        crate::config::save_config_settings(&cfg);
+        self.flash_status(format!("Subtitle mode: {new_mode}"));
+    }
+
     pub(super) fn toggle_sub(&mut self) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             let idx = self.connected_session_state.as_ref().map(|s| s.sub_index).unwrap_or(-1);
@@ -294,6 +313,12 @@ impl App {
                 state.sub_index = next;
             }
             self.do_session_command(move |c| c.session_set_subtitle_index(&id, next));
+            return;
+        }
+        // When idle: cycle the default subtitle mode instead of toggling a track
+        let active = self.player.status.lock().unwrap().active;
+        if !active {
+            self.cycle_subtitle_mode();
             return;
         }
         let (tracks, current_id) = {

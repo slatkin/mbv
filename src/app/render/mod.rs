@@ -50,12 +50,11 @@ impl App {
 
             let pst = self.player.status.lock().unwrap();
             let active = pst.active;
+            let sub_id = pst.sub_id;
 
             let res_h = pst.video_height;
             let res_str = if res_h > 0 { format!("{}p", res_h) } else { "--".to_string() };
             let res_color = if res_h > 0 { palette::FOAM } else { palette::MUTED };
-
-            let sub_color = if pst.sub_id != 0 { palette::RED } else { palette::MUTED };
 
             let raw_lang = pst.audio_lang.to_lowercase();
             let (au_text, au_color): (String, Color) = if raw_lang.is_empty() {
@@ -73,6 +72,18 @@ impl App {
             };
             drop(pst);
 
+            // When playing: RED if a subtitle track is active, MUTED if off.
+            // When idle: RED if the configured default mode would enable subs, MUTED otherwise.
+            let sub_color = if active {
+                if sub_id != 0 { palette::RED } else { palette::MUTED }
+            } else {
+                let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
+                match mode.as_str() {
+                    "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::RED,
+                    _ => palette::MUTED,
+                }
+            };
+
             let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
 
             let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
@@ -82,11 +93,10 @@ impl App {
             };
 
             let ind_w = |text: &str| -> u16 { 1 + text.width() as u16 + 1 + 1 }; // "[X]─"
-            let playback_ind_w = if active {
-                ind_w(&res_str) + ind_w(&au_text) + ind_w("字")
-            } else { 0 };
+            // [字] is always shown; [res] and [au] only when a file is playing
+            let playback_ind_w = if active { ind_w(&res_str) + ind_w(&au_text) } else { 0 };
             let dash_count = gap_area.width.saturating_sub(
-                playback_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
+                playback_ind_w + ind_w("字") + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
             ) as usize;
 
             // Store indicator Rects for mouse hit-testing
@@ -98,12 +108,11 @@ impl App {
                 let mut ix = gap_area.x + dash_count as u16;
                 if active {
                     ix += ind_adv(&res_str); // [res] — no click action
-                    self.layout_ind_au  = ind_rect(ix, &au_text); ix += ind_adv(&au_text);
-                    self.layout_ind_sub = ind_rect(ix, "字");      ix += ind_adv("字");
+                    self.layout_ind_au = ind_rect(ix, &au_text); ix += ind_adv(&au_text);
                 } else {
-                    self.layout_ind_au  = Rect::default();
-                    self.layout_ind_sub = Rect::default();
+                    self.layout_ind_au = Rect::default();
                 }
+                self.layout_ind_sub = ind_rect(ix, "字"); ix += ind_adv("字");
                 self.layout_ind_rc = ind_rect(ix, rc_text);  ix += ind_adv(rc_text);
                 self.layout_ind_mu = ind_rect(ix, "m");       ix += ind_adv("m");
                 self.layout_ind_pb = ind_rect(ix, pb_text);
@@ -120,12 +129,14 @@ impl App {
                     Span::styled(au_text.clone(), Style::default().fg(au_color).add_modifier(Modifier::BOLD)),
                     Span::styled("]", bracket),
                     Span::styled("─", dash_style),
-                    Span::styled("[", bracket),
-                    Span::styled("字", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
-                    Span::styled("]", bracket),
-                    Span::styled("─", dash_style),
                 ]);
             }
+            spans.extend([
+                Span::styled("[", bracket),
+                Span::styled("字", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
+                Span::styled("]", bracket),
+                Span::styled("─", dash_style),
+            ]);
             spans.extend([
                 Span::styled("[", bracket),
                 Span::styled(rc_text.to_string(), if self.connected_session_id.is_some() { Style::default().fg(rc_color).add_modifier(Modifier::BOLD) } else { Style::default().fg(rc_color) }),
