@@ -174,7 +174,6 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
     };
     let yellow = Style::default().fg(palette::YELLOW);
     let subtle = Style::default().fg(palette::SUBTLE);
-    let muted = Style::default().fg(palette::MUTED);
     let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
 
     let in_progress = !item.is_folder && item.playback_position_ticks > 0;
@@ -238,7 +237,7 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
         line1_spans.push(Span::styled(suffix, suffix_style));
     }
 
-    let sub_style = if selected { subtle } else { muted };
+    let sub_style = subtle;
     let line2_content = if has_subtitle {
         trunc_str(&subtitle, width.max(1))
     } else {
@@ -267,7 +266,6 @@ pub fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text
     };
     let yellow = Style::default().fg(palette::YELLOW);
     let subtle = Style::default().fg(palette::SUBTLE);
-    let muted  = Style::default().fg(palette::MUTED);
 
     // Fixed right-side columns (widths include 1 leading space each)
     let dur_str = if item.runtime_ticks > 0 {
@@ -311,7 +309,7 @@ pub fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text
     let pct_col = if pct_str.is_empty() { " ".repeat(PCT_W) } else { format!("{:>width$}", pct_str, width = PCT_W) };
     let dur_col = if dur_str.is_empty() { " ".repeat(DUR_W) } else { format!("{:>width$}", dur_str, width = DUR_W) };
 
-    let col_style = if selected { subtle } else { muted };
+    let col_style = subtle;
 
     let name_trunc = trunc_str(&item.name, name_w);
     let name_pad = name_w.saturating_sub(name_trunc.width());
