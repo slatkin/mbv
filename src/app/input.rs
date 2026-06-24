@@ -1617,7 +1617,7 @@ impl App {
                 }
                 MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
                     let idx = ((row - content_top) / ENTRY_H) as usize;
-                    if idx < self.sessions.len() {
+if idx < self.sessions.len() {
                         if self.sessions_cursor == idx {
                             if let Some(sess) = self.sessions.get(idx) {
                                 let id = sess.id.clone();
