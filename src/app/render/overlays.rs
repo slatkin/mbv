@@ -543,7 +543,9 @@ impl App {
         match popup.kind {
             MultiSelectKind::HiddenLibraries  => self.hidden_libraries = hidden,
             MultiSelectKind::HiddenLatest     => self.hidden_latest    = hidden,
-            MultiSelectKind::FeedViewLibraries => {}  // no cached copy on App; config is the source of truth
+            MultiSelectKind::FeedViewLibraries => {
+                for lib in &mut self.libs { lib.nav_stack.clear(); }
+            }
             MultiSelectKind::MyLanguages      => unreachable!(),
         }
         let cfg = self.client.lock().unwrap().config.clone();
