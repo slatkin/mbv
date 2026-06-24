@@ -141,7 +141,7 @@ pub fn trunc_str(s: &str, max: usize) -> String {
 pub fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
     if item.is_folder {
         let text = if item.item_type == "Folder" && item.total_count > 0 {
-            format!("{} \u{00b7} {} albums", item.display_name(), item.total_count)
+            format!("{} \u{00b7} {} items", item.display_name(), item.total_count)
         } else if item.unplayed_item_count > 0 {
             format!("{} [{}]", item.display_name(), item.unplayed_item_count)
         } else {

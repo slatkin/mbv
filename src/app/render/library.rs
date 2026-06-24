@@ -812,10 +812,11 @@ impl App {
                 let title_line_widget = if let Some(count) = folder_count {
                     let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
                     let label_style = Style::default().fg(palette::YELLOW);
+                    let count_label = if at_album_folders { " albums" } else { " items" };
                     Line::from(vec![
                         Span::styled(title_display, title_style),
                         Span::styled(format!(" \u{00b7} {count}"), count_style),
-                        Span::styled(" albums", label_style),
+                        Span::styled(count_label, label_style),
                     ])
                 } else {
                     Line::from(Span::styled(title_display, title_style))
