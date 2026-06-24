@@ -440,6 +440,13 @@ impl App {
         #[allow(non_snake_case)]
         let LIB_EPISODE_IMG_H = lib_episode_img_h;
         let at_album_folders = self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none();
+        let at_music_groups = {
+            let lib = &self.libs[lib_idx];
+            lib.library.collection_type == "music"
+                && !self.music_levels.is_empty()
+                && lib.nav_stack.len() >= 1
+                && self.music_levels.get(lib.nav_stack.len() - 1).map(|s| s == "group").unwrap_or(false)
+        };
         let is_feed_lib = { let c = self.client.lock().unwrap(); c.config.feed_view_libraries.contains(&self.libs[lib_idx].library.name.to_lowercase()) };
 
         let actual_sel_img_h: u16 = if images_enabled {
@@ -812,7 +819,7 @@ impl App {
                 let title_line_widget = if let Some(count) = folder_count {
                     let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
                     let label_style = Style::default().fg(palette::YELLOW);
-                    let count_label = if at_album_folders { " albums" } else { " items" };
+                    let count_label = if at_music_groups { " albums" } else { " items" };
                     Line::from(vec![
                         Span::styled(title_display, title_style),
                         Span::styled(format!(" \u{00b7} {count}"), count_style),
