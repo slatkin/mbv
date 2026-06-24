@@ -814,8 +814,8 @@ impl EmbyClient {
         }
     }
 
-    // Returns (play_session_id, media_source_id). Falls back to generated id / item_id on failure.
-    pub fn get_playback_info(&self, item_id: &str) -> (String, String) {
+    // Returns (play_session_id, media_source_id, ext_sub_urls). Falls back to generated id / item_id on failure.
+    pub fn get_playback_info(&self, item_id: &str) -> (String, String, Vec<String>) {
         let body = ureq::json!({
             "UserId": self.user_id,
             "MaxStreamingBitrate": 140000000,
@@ -827,17 +827,24 @@ impl EmbyClient {
         let resp: Value = match self.post(&format!("/Items/{item_id}/PlaybackInfo")).send_json(body) {
             Ok(r) => match r.into_json() {
                 Ok(v) => v,
-                Err(e) => { log::warn!(target: "api", "err: PlaybackInfo parse: {e}"); return (gen_session_id(), item_id.to_string()); }
+                Err(e) => { log::warn!(target: "api", "err: PlaybackInfo parse: {e}"); return (gen_session_id(), item_id.to_string(), vec![]); }
             },
-            Err(e) => { log::warn!(target: "api", "err: PlaybackInfo: {e}"); return (gen_session_id(), item_id.to_string()); }
+            Err(e) => { log::warn!(target: "api", "err: PlaybackInfo: {e}"); return (gen_session_id(), item_id.to_string(), vec![]); }
         };
         let sid = resp["PlaySessionId"].as_str().unwrap_or("").to_string();
         let msid = resp["MediaSources"][0]["Id"].as_str().unwrap_or(item_id).to_string();
-        log::info!(target: "api", "inbound: PlaybackInfo sid={sid} msid={msid}");
+        let sub_urls: Vec<String> = resp["MediaSources"][0]["MediaStreams"]
+            .as_array().map(|a| a.as_slice()).unwrap_or(&[])
+            .iter()
+            .filter(|s| s["Type"].as_str() == Some("Subtitle") && s["IsExternal"].as_bool() == Some(true))
+            .filter_map(|s| s["DeliveryUrl"].as_str())
+            .map(|u| format!("{}{}", self.config.server_url, u))
+            .collect();
+        log::info!(target: "api", "inbound: PlaybackInfo sid={sid} msid={msid} ext_subs={}", sub_urls.len());
         if sid.is_empty() {
-            (gen_session_id(), item_id.to_string())
+            (gen_session_id(), msid, sub_urls)
         } else {
-            (sid, msid)
+            (sid, msid, sub_urls)
         }
     }
 

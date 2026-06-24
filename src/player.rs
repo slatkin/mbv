@@ -367,8 +367,9 @@ impl SessionReporter {
     }
 
     // get_playback_info + report_start for a new item, then update tracking ids atomically.
-    fn start_item(&self, item: &MediaItem) {
-        let (new_sid, new_msid) = self.client.get_playback_info(&item.id);
+    // Returns ext_sub_urls from the playback info response.
+    fn start_item(&self, item: &MediaItem) -> Vec<String> {
+        let (new_sid, new_msid, ext_sub_urls) = self.client.get_playback_info(&item.id);
         self.client.report_start(item, &new_msid, &new_sid);
         let mut ids = self.ids.lock().unwrap();
         ids.0 = item.id.clone();
@@ -376,12 +377,14 @@ impl SessionReporter {
         ids.2 = new_sid;
         drop(ids);
         self.is_audio.store(item.is_audio(), Ordering::Relaxed);
+        ext_sub_urls
     }
 
     // report_stopped for current item then start_item for the new one.
-    fn transition_to(&self, new_item: &MediaItem, last_valid_pos: i64) {
+    // Returns ext_sub_urls for the new item.
+    fn transition_to(&self, new_item: &MediaItem, last_valid_pos: i64) -> Vec<String> {
         self.report_stopped(last_valid_pos);
-        self.start_item(new_item);
+        self.start_item(new_item)
     }
 }
 
@@ -539,6 +542,7 @@ struct SingleSession {
     event_tx: mpsc::Sender<PlayerEvent>,
     status:   Arc<Mutex<PlayerStatus>>,
     subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
+    ext_sub_urls: Vec<String>,
     // loop state
     quit_at:             Option<Instant>,
     stop_reported:       bool,
@@ -572,6 +576,7 @@ impl SingleSession {
         status:   Arc<Mutex<PlayerStatus>>,
         event_tx: mpsc::Sender<PlayerEvent>,
         subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
+        ext_sub_urls: Vec<String>,
     ) -> Self {
         let is_audio       = item.is_audio();
         let last_valid_pos = if is_audio { 0 } else { item.playback_position_ticks };
@@ -592,6 +597,7 @@ impl SingleSession {
             event_tx,
             status,
             subtitle_prefs,
+            ext_sub_urls,
             quit_at:             None,
             stop_reported:       false,
             stopped_event_sent:  false,
@@ -679,8 +685,7 @@ impl SingleSession {
                 // Cancel any pending quit so the new file loads in the same window.
                 cancel_stop = true;
                 self.quit_at = None;
-
-                self.reporter.transition_to(&item, self.last_valid_pos);
+                self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
 
                 self.last_valid_pos = item.playback_position_ticks;
                 self.osd_title      = item.display_name();
@@ -777,6 +782,14 @@ impl SingleSession {
         if !self.tracks_initialized {
             let prefs = self.subtitle_prefs.lock().unwrap().clone();
             auto_select_tracks(mpv, &self.status, &prefs);
+            for url in &self.ext_sub_urls {
+                if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
+                    log::warn!(target: "player", "sub-add failed: {url}: {e:?}");
+                }
+            }
+            if !self.ext_sub_urls.is_empty() {
+                refresh_tracks(mpv, &self.status);
+            }
             self.tracks_initialized = true;
             let val = if self.season > 0 && self.episode > 0 {
                 format!("Season {}  Episode {}", self.season, self.episode)
@@ -1014,6 +1027,7 @@ struct PlaylistSession {
     token:      String,
     items:      Vec<MediaItem>,
     n:          usize,
+    ext_sub_urls: Vec<String>,
     // loop state
     current_idx:            usize,
     forced_idx:             Option<usize>,
@@ -1041,15 +1055,16 @@ struct PlaylistSession {
 
 impl PlaylistSession {
     fn new(
-        items:      Vec<MediaItem>,
-        start_idx:  usize,
-        reporter:   SessionReporter,
-        config:     MpvSessionConfig,
-        status:     Arc<Mutex<PlayerStatus>>,
-        event_tx:   mpsc::Sender<PlayerEvent>,
+        items:        Vec<MediaItem>,
+        start_idx:    usize,
+        reporter:     SessionReporter,
+        config:       MpvSessionConfig,
+        status:       Arc<Mutex<PlayerStatus>>,
+        event_tx:     mpsc::Sender<PlayerEvent>,
         subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-        server_url: String,
-        token:      String,
+        server_url:   String,
+        token:        String,
+        ext_sub_urls: Vec<String>,
     ) -> Self {
         let n          = items.len();
         let initial_pos = items[start_idx].playback_position_ticks;
@@ -1072,6 +1087,7 @@ impl PlaylistSession {
             server_url,
             token,
             n,
+            ext_sub_urls,
             current_idx:            start_idx,
             forced_idx:             None,
             quit_at:                None,
@@ -1260,7 +1276,7 @@ impl PlaylistSession {
                 self.quit_at          = None;
                 self.playlist_cancelled = true;
 
-                self.reporter.transition_to(&item, self.last_valid_pos);
+                self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
 
                 self.last_valid_pos    = item.playback_position_ticks;
                 self.tracks_initialized = false;
@@ -1350,6 +1366,14 @@ impl PlaylistSession {
         if !self.tracks_initialized {
             let prefs = self.subtitle_prefs.lock().unwrap().clone();
             auto_select_tracks(mpv, &self.status, &prefs);
+            for url in &self.ext_sub_urls {
+                if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
+                    log::warn!(target: "player", "sub-add failed: {url}: {e:?}");
+                }
+            }
+            if !self.ext_sub_urls.is_empty() {
+                refresh_tracks(mpv, &self.status);
+            }
             self.tracks_initialized = true;
             send_ep_info(mpv, &self.items[self.current_idx]);
             if let Some(secs) = self.pending_resume_secs.take() {
@@ -1823,13 +1847,13 @@ impl Player {
             send_ep_info(&mpv, &item);
             observe_properties(&mpv, config.use_mpv_config);
 
-            let (sid, msid) = client.get_playback_info(&item.id);
+            let (sid, msid, ext_sub_urls) = client.get_playback_info(&item.id);
             client.report_start(&item, &msid, &sid);
             let reporter = SessionReporter::new(
                 client, ws_tx, item.id.clone(), msid, sid, is_audio, status.clone(),
             );
             let progress = spawn_progress_reporter(reporter.clone());
-            let session  = SingleSession::new(&item, reporter, config, status, event_tx, subtitle_prefs);
+            let session  = SingleSession::new(&item, reporter, config, status, event_tx, subtitle_prefs, ext_sub_urls);
             session.run(mpv, stop_rx, cmd_rx, progress);
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
@@ -1924,7 +1948,7 @@ impl Player {
             send_ep_info(&mpv, &items[start_idx]);
             observe_properties(&mpv, config.use_mpv_config);
 
-            let (sid, msid) = client.get_playback_info(&items[start_idx].id);
+            let (sid, msid, ext_sub_urls) = client.get_playback_info(&items[start_idx].id);
             client.report_start(&items[start_idx], &msid, &sid);
             let reporter = SessionReporter::new(
                 client, ws_tx,
@@ -1934,7 +1958,7 @@ impl Player {
             );
             let progress = spawn_progress_reporter(reporter.clone());
             let session  = PlaylistSession::new(
-                items, start_idx, reporter, config, status, event_tx, subtitle_prefs, server_url, token,
+                items, start_idx, reporter, config, status, event_tx, subtitle_prefs, server_url, token, ext_sub_urls,
             );
             session.run(mpv, stop_rx, cmd_rx, progress);
         });

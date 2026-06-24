@@ -21,6 +21,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::SystemNotifications => "System notifications",
         SettingKey::MyLanguages         => "My languages",
         SettingKey::SubtitleMode        => "Subtitle mode",
+
         SettingKey::SubtitleLanguage    => "Subtitle language",
         SettingKey::AudioLanguage       => "Audio language",
         SettingKey::FeedViewLibraries   => "Feed view",
@@ -48,6 +49,7 @@ pub fn setting_value(key: SettingKey, cfg: &Config) -> String {
         SettingKey::SystemNotifications => bool_val(cfg.system_notifications),
         SettingKey::MyLanguages      => fmt_lang_list(&cfg.my_languages),
         SettingKey::SubtitleMode     => if cfg.subtitle_mode.is_empty() { "Default".into() } else { cfg.subtitle_mode.clone() },
+
         SettingKey::SubtitleLanguage => if cfg.subtitle_lang.is_empty() { "any".into() } else { cfg.subtitle_lang.clone() },
         SettingKey::AudioLanguage    => if cfg.audio_lang.is_empty() { "any".into() } else { cfg.audio_lang.clone() },
         SettingKey::FeedViewLibraries   => fmt_feed_view_list(&cfg.feed_view_libraries),

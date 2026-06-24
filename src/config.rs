@@ -549,7 +549,6 @@ pub fn save_config_settings(cfg: &Config) {
             cfg.my_languages.iter().map(|s| toml::Value::String(s.clone())).collect()
         ));
     }
-
     if let Ok(s) = toml::to_string(&doc) {
         let _ = std::fs::write(path, s);
     }
