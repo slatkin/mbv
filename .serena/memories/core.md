@@ -1,50 +1,63 @@
-# mbv — Emby TUI client
+# mbv — Core
 
-Single Rust binary. Embeds mpv for playback, syncs position with Emby, supports remote control via WebSocket.
+Terminal UI Emby client. Rust + ratatui + libmpv2. Single binary.
 
 ## Source map
 
-```
-src/
-  main.rs           — auth, daemon/remote mode selection, launches App::run()
-  api.rs            — EmbyClient (all HTTP), MediaItem, parse_item(), fetch_items()
-  config.rs         — ~/.config/mbv/config.toml parsing + credential storage
-  player.rs         — Player wrapping libmpv2, own thread, sends PlayerEvent via mpsc
-  ws.rs             — WebSocket thread → WsEvent to App
-  daemon.rs         — headless player, Unix socket at $XDG_RUNTIME_DIR/mbv-ctl.sock
-  remote_player.rs  — client side of daemon socket
-  mpris.rs          — MPRIS2 D-Bus (tokio thread)
-  login.rs          — full-screen TUI login flow
-  applog.rs         — in-process log ring buffer (Log tab)
-  ctrl.rs           — wire types (CtrlCmd, CtrlEvent, CtrlState)
-  app/
-    mod.rs          — App struct, AppInit/build(), run() event loop, enums, tests
-    input.rs        — handle_key, handle_mouse, all input dispatch
-    actions.rs      — state-changing methods, handle_lib_event, handle_ws_event
-    images.rs       — card image fetch/render
-    palette.rs      — all color constants
-    settings.rs     — settings panel logic
-    ui_util.rs      — pure helpers: fmt_duration, natural_sort_key, trunc_str, …
-    render/
-      mod.rs        — render() entry, playback controls, divider indicators, volume bar
-      home.rs       — render_combined, render_home_panel, render_home_search
-      library.rs    — render_library, render_album_view, render_season_grid
-      playlist.rs   — render_playlist_* (list, filmstrip, cards, presentation, power)
-      overlays.rs   — settings, playlists, sessions, context menu, modals
-      log.rs        — log tab
-```
+| Path | Role |
+|------|------|
+| `src/main.rs` | Entry: auth, daemon/remote mode selection, launches `App::run()` |
+| `src/app/mod.rs` | `App` struct, constructors (`build(AppInit)`), `run()` event loop |
+| `src/app/input.rs` | `handle_key`, `handle_mouse`, input dispatch |
+| `src/app/actions.rs` | State mutations: nav, playback, queue, `handle_lib_event`, `handle_ws_event` |
+| `src/app/render/mod.rs` | `render()`, playback controls, divider indicators, volume bar |
+| `src/app/render/library.rs` | Library table, album view, season grid |
+| `src/app/render/home.rs` | Home/combined panel, home cards |
+| `src/app/render/playlist.rs` | Playlist views (list, filmstrip, cards, presentation) |
+| `src/app/render/overlays.rs` | Settings panel, playlists panel, sessions overlay, context menu, modals |
+| `src/app/render/log.rs` | Log tab |
+| `src/app/images.rs` | Image fetch, card rendering, album year fetch |
+| `src/app/ui_util.rs` | Pure helpers: `fmt_duration`, `natural_sort_key`, `trunc_str`, etc. |
+| `src/app/settings.rs` | Settings key/label/value helpers |
+| `src/app/palette.rs` | Color constants (`FOAM`=Emby blue, `IRIS`=Emby green) |
+| `src/api.rs` | `EmbyClient`, `MediaItem`, `parse_item()`, `fetch_items()` |
+| `src/config.rs` | Config parsing (`~/.config/mbv/config.toml`) + credential storage |
+| `src/player.rs` | `Player` wraps libmpv2; own thread; sends `PlayerEvent` via mpsc |
+| `src/ws.rs` | WebSocket thread: Emby remote-control → `WsEvent` |
+| `src/daemon.rs` | Headless background player, Unix socket at `$XDG_RUNTIME_DIR/mbv-ctl.sock` |
+| `src/remote_player.rs` | Client side of daemon socket |
+| `src/mpris.rs` | MPRIS2 D-Bus (media keys, playerctl) |
+| `src/login.rs` | Full-screen TUI login flow |
+| `src/applog.rs` | In-process log ring buffer (Log tab) |
+| `src/ctrl.rs` | Wire types (`CtrlCmd`, `CtrlEvent`, `CtrlState`) for daemon↔remote_player |
+| `scripts/mbv.lua` | mpv OSC Lua script; deploy to `~/.local/share/mbv/scripts/` for `cargo run` |
 
 ## Key invariants
 
-- All `impl App` blocks spread across files; methods are `pub(super)` for siblings, `pub(crate)` only if needed outside `app/`.
-- Background work via `std::thread::spawn` + mpsc channels (`lib_rx`, `player_rx`, `ws_rx`, `card_image_rx`, `search_rx`).
-- MPRIS runs on tokio; everything else is sync.
-- `App::build(AppInit)` holds all field defaults. New fields: add to struct → default in `build()` → `AppInit` only if constructors differ.
-- `parse_item()` in api.rs: `is_folder` forced true for Series/Season/MusicAlbum/MusicArtist/etc. regardless of Emby's IsFolder. `production_year` falls back to `Year` for audio items.
-- Emby uses numeric item IDs (not GUIDs).
-- CollectionFolder IDs (library roots) are VIRTUAL — they never appear in `/Items/{id}/Ancestors` responses. Ancestors traverse the physical folder tree (AggregateFolder root id=2 at top). Match items to libraries by `collection_type`, not by ancestor ID.
-- Ancestors endpoint: `GET /Items/{itemId}/Ancestors` (no `/Users/{userId}/` prefix).
-- Language table in `parse_audio_info` (api.rs) must stay in sync with `lang_code_to_name()` (player.rs).
+- All `impl App` blocks split across files in `src/app/`; methods `pub(super)` by default.
+- Background work via `std::thread::spawn`; results over mpsc channels (`lib_rx`, `player_rx`, `ws_rx`, `card_image_rx`).
+- `App::new()` / `App::new_remote()` both call `App::build(AppInit)` for shared defaults.
+- `card_image_states` keyed `"{item_id}:{slot}"`.
+- `music_levels: Vec<String>` from config maps nav depth to folder semantics.
+- Language table in `parse_audio_info` (`api.rs`) **must stay in sync** with `lang_code_to_name()` in `player.rs`.
+- Playback ticks: `TICKS_PER_SECOND = 10_000_000`.
 
-See `mem:conventions`, `mem:tech_stack`, `mem:suggested_commands`, `mem:task_completion`.
-Docs in `docs/`: `mem:docs/library-rendering`, `mem:docs/player-internals`, `mem:docs/divider-indicators`.
+## Docs
+
+- `docs/library-rendering.md` — touch before editing `render/library.rs`, `images.rs`, album year logic.
+- `docs/player-internals.md` — touch before editing `player.rs` session structs.
+- `docs/divider-indicators.md` — recipe for adding a new divider indicator.
+
+## Persistent state
+
+- `~/.local/state/mbv/queue_state.json` — queue item IDs, cursor, `QueueSource`
+- `~/.config/mbv/config.toml` — user config
+- `~/.local/share/mbv/mbv.pid` — daemon PID
+
+## Logs
+
+- `~/.local/state/mbv/mbv.log` — main log (check first when debugging)
+- `~/.local/state/mbv/player-diag.log` — mpv/player diagnostics
+- Lua `msg.warn(...)` appears as `source=mpv` lines in mbv.log
+
+Related: `mem:tech_stack`, `mem:conventions`, `mem:task_completion`, `mem:suggested_commands`
