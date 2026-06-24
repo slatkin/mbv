@@ -4,6 +4,25 @@ use ratatui::text::{Line, Span, Text};
 use crate::api::MediaItem;
 use super::palette;
 
+/// Advance subtitle mode through the standard cycle.
+pub(super) fn next_subtitle_mode(current: &str) -> &'static str {
+    match current {
+        "Default" | "" => "Always",
+        "Always"       => "Smart",
+        "Smart"        => "OnlyForced",
+        "OnlyForced"   => "None",
+        "None"         => "HearingImpaired",
+        _              => "Default",
+    }
+}
+
+/// Advance a language preference through `["" (any)] + my_languages`.
+pub(super) fn cycle_lang(my_languages: &[String], current: &str) -> String {
+    let cycle: Vec<&str> = std::iter::once("").chain(my_languages.iter().map(String::as_str)).collect();
+    let idx = cycle.iter().position(|&l| l == current).unwrap_or(0);
+    cycle[(idx + 1) % cycle.len()].to_string()
+}
+
 pub fn natural_sort_key(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 16);
     let mut chars = s.chars().peekable();

@@ -496,8 +496,6 @@ impl EmbyClient {
         Ok(crate::player::SubtitlePrefs { mode, subtitle_lang, audio_lang })
     }
 
-
-
     // ── Browse / fetch ───────────────────────────────────────────────────────
 
     fn fetch_items(&self, path: &str, queries: &[(&str, &str)]) -> Result<Vec<MediaItem>, String> {

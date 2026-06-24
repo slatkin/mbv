@@ -409,51 +409,31 @@ impl App {
                 // Never pushed to the Emby server.
                 let new_mode = {
                     let mut c = self.client.lock().unwrap();
-                    c.config.subtitle_mode = match c.config.subtitle_mode.as_str() {
-                        "Default" | "" => "Always".into(),
-                        "Always"       => "Smart".into(),
-                        "Smart"        => "OnlyForced".into(),
-                        "OnlyForced"   => "None".into(),
-                        "None"         => "HearingImpaired".into(),
-                        _              => "Default".into(),
-                    };
+                    c.config.subtitle_mode = super::super::ui_util::next_subtitle_mode(&c.config.subtitle_mode).to_string();
                     c.config.subtitle_mode.clone()
                 };
-                self.player.subtitle_prefs.lock().unwrap().mode = new_mode.clone();
-                let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
-                self.player.send_command(crate::player::PlayerCommand::SetSubtitlePrefs {
-                    mode: prefs.mode, subtitle_lang: prefs.subtitle_lang, audio_lang: prefs.audio_lang,
-                });
+                self.player.subtitle_prefs.lock().unwrap().mode = new_mode;
+                self.push_subtitle_prefs();
             }
             SettingKey::SubtitleLanguage => {
                 let new_lang = {
                     let mut c = self.client.lock().unwrap();
-                    let my = c.config.my_languages.clone();
-                    let cycle: Vec<&str> = std::iter::once("").chain(my.iter().map(String::as_str)).collect();
-                    let idx = cycle.iter().position(|&l| l == c.config.subtitle_lang.as_str()).unwrap_or(0);
-                    c.config.subtitle_lang = cycle[(idx + 1) % cycle.len()].to_string();
-                    c.config.subtitle_lang.clone()
+                    let new = super::super::ui_util::cycle_lang(&c.config.my_languages, &c.config.subtitle_lang);
+                    c.config.subtitle_lang = new.clone();
+                    new
                 };
                 self.player.subtitle_prefs.lock().unwrap().subtitle_lang = new_lang;
-                let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
-                self.player.send_command(crate::player::PlayerCommand::SetSubtitlePrefs {
-                    mode: prefs.mode, subtitle_lang: prefs.subtitle_lang, audio_lang: prefs.audio_lang,
-                });
+                self.push_subtitle_prefs();
             }
             SettingKey::AudioLanguage => {
                 let new_lang = {
                     let mut c = self.client.lock().unwrap();
-                    let my = c.config.my_languages.clone();
-                    let cycle: Vec<&str> = std::iter::once("").chain(my.iter().map(String::as_str)).collect();
-                    let idx = cycle.iter().position(|&l| l == c.config.audio_lang.as_str()).unwrap_or(0);
-                    c.config.audio_lang = cycle[(idx + 1) % cycle.len()].to_string();
-                    c.config.audio_lang.clone()
+                    let new = super::super::ui_util::cycle_lang(&c.config.my_languages, &c.config.audio_lang);
+                    c.config.audio_lang = new.clone();
+                    new
                 };
                 self.player.subtitle_prefs.lock().unwrap().audio_lang = new_lang;
-                let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
-                self.player.send_command(crate::player::PlayerCommand::SetSubtitlePrefs {
-                    mode: prefs.mode, subtitle_lang: prefs.subtitle_lang, audio_lang: prefs.audio_lang,
-                });
+                self.push_subtitle_prefs();
             }
             _ => {
                 let mut c = self.client.lock().unwrap();
@@ -485,7 +465,7 @@ impl App {
             ];
             let my_langs = self.client.lock().unwrap().config.my_languages.clone();
             let items = ALL_LANGS.iter().map(|&name| {
-                let selected = my_langs.contains(&name.to_string());
+                let selected = my_langs.iter().any(|l| l == name);
                 (name.to_lowercase(), name.to_string(), selected)
             }).collect();
             self.multiselect_popup = Some(MultiSelectPopup { kind, items, cursor: 0 });

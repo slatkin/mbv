@@ -285,21 +285,22 @@ impl App {
         self.player.send_command(PlayerCommand::SetAudio(next_id));
     }
 
+    /// Clone the current subtitle prefs from the shared Arc and notify the player thread.
+    pub(super) fn push_subtitle_prefs(&self) {
+        let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
+        self.player.send_command(crate::player::PlayerCommand::SetSubtitlePrefs {
+            mode: prefs.mode, subtitle_lang: prefs.subtitle_lang, audio_lang: prefs.audio_lang,
+        });
+    }
+
     pub(super) fn cycle_subtitle_mode(&mut self) {
-        let new_mode = {
+        let (new_mode, cfg) = {
             let mut c = self.client.lock().unwrap();
-            c.config.subtitle_mode = match c.config.subtitle_mode.as_str() {
-                "Default" | "" => "Always".into(),
-                "Always"       => "Smart".into(),
-                "Smart"        => "OnlyForced".into(),
-                "OnlyForced"   => "None".into(),
-                "None"         => "HearingImpaired".into(),
-                _              => "Default".into(),
-            };
-            c.config.subtitle_mode.clone()
+            c.config.subtitle_mode = super::ui_util::next_subtitle_mode(&c.config.subtitle_mode).to_string();
+            (c.config.subtitle_mode.clone(), c.config.clone())
         };
         self.player.subtitle_prefs.lock().unwrap().mode = new_mode.clone();
-        let cfg = self.client.lock().unwrap().config.clone();
+        self.push_subtitle_prefs();
         crate::config::save_config_settings(&cfg);
         self.flash_status(format!("Subtitle mode: {new_mode}"));
     }
