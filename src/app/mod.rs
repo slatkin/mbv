@@ -109,7 +109,7 @@ enum ContextAction {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MultiSelectKind { HiddenLibraries, HiddenLatest, MyLanguages }
+pub(crate) enum MultiSelectKind { HiddenLibraries, HiddenLatest, MyLanguages, FeedViewLibraries }
 
 struct MultiSelectPopup {
     kind: MultiSelectKind,
@@ -459,6 +459,7 @@ enum SettingKey {
     SystemNotifications,
     MyLanguages,
     SubtitleMode,
+    FeedViewLibraries,
     SubtitleLanguage,
     AudioLanguage,
     LogOut,
@@ -467,7 +468,7 @@ enum SettingKey {
 // Sections rendered as IRIS blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
-    ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
+    ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest, SettingKey::FeedViewLibraries]),
     ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::SavePlaylistOnConsume]),
     ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
     ("[playback]",  &[SettingKey::MyLanguages, SettingKey::SubtitleMode, SettingKey::SubtitleLanguage, SettingKey::AudioLanguage]),

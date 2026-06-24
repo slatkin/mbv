@@ -31,6 +31,7 @@ pub struct Config {
     pub subtitle_lang: String,      // full language name, e.g. "English"; "" = any
     pub audio_lang: String,         // full language name, e.g. "English"; "" = any
     pub my_languages: Vec<String>,  // user's relevant languages; filters subtitle/audio lang cycling
+    pub feed_view_libraries: Vec<String>, // libraries treated as feed view (unplayed, date-sorted)
 }
 
 impl Default for Config {
@@ -63,6 +64,7 @@ impl Default for Config {
             subtitle_lang: String::new(),
             audio_lang: String::new(),
             my_languages: vec![],
+            feed_view_libraries: vec![],
         }
     }
 }
@@ -425,6 +427,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(String::from).collect())
         .unwrap_or_default();
+    let feed_view_libraries: Vec<String> = general
+        .and_then(|m| m.get("feed_view_libraries"))
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(|s| s.to_lowercase()).collect())
+        .unwrap_or_default();
 
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
@@ -454,6 +461,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         subtitle_lang,
         audio_lang,
         my_languages,
+        feed_view_libraries,
     })
 }
 
@@ -494,6 +502,9 @@ pub fn save_config_settings(cfg: &Config) {
     ));
     general.insert("hidden_latest".to_string(), toml::Value::Array(
         cfg.hidden_latest.iter().map(|s| toml::Value::String(s.clone())).collect()
+    ));
+    general.insert("feed_view_libraries".to_string(), toml::Value::Array(
+        cfg.feed_view_libraries.iter().map(|s| toml::Value::String(s.clone())).collect()
     ));
     match &cfg.image_protocol {
         Some(p) => { general.insert("image_protocol".to_string(), toml::Value::String(p.clone())); }

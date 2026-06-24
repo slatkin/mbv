@@ -920,10 +920,14 @@ impl App {
         if self.libs[idx].nav_stack.is_empty() {
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();
+            let is_feed_view = {
+                let c = self.client.lock().unwrap();
+                c.config.feed_view_libraries.contains(&lib_name.to_lowercase())
+            };
             let (item_types, unplayed_only, sort_by, sort_order) = match self.libs[idx].library.collection_type.as_str() {
-                "movies"               => (Some("Movie".to_string()), false, "SortName", "Ascending"),
-                "channels"|"homevideos" if lib_name == "Youtube" => (Some("Video".to_string()), true, "DateCreated", "Ascending"),
-                _                      => (None, false, "SortName", "Ascending"),
+                "movies"    => (Some("Movie".to_string()), false, "SortName", "Ascending"),
+                _ if is_feed_view => (Some("Video".to_string()), true, "DateCreated", "Ascending"),
+                _           => (None, false, "SortName", "Ascending"),
             };
             self.libs[idx].nav_stack.push(BrowseLevel {
                 parent_id: lib_id.clone(), title: lib_name.clone(),

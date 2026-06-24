@@ -366,7 +366,8 @@ impl App {
         match key {
             SettingKey::HiddenLibraries => { self.open_multiselect_popup(MultiSelectKind::HiddenLibraries); return; }
             SettingKey::HiddenLatest    => { self.open_multiselect_popup(MultiSelectKind::HiddenLatest);    return; }
-            SettingKey::MyLanguages     => { self.open_multiselect_popup(MultiSelectKind::MyLanguages);     return; }
+            SettingKey::MyLanguages       => { self.open_multiselect_popup(MultiSelectKind::MyLanguages);       return; }
+            SettingKey::FeedViewLibraries => { self.open_multiselect_popup(MultiSelectKind::FeedViewLibraries); return; }
             SettingKey::LogOut => { self.confirm_logout = true; }
             SettingKey::ImageProtocol => {
                 let now_none = {
@@ -473,20 +474,22 @@ impl App {
         }
         let client = self.client.lock().unwrap();
         let all = match kind {
-            MultiSelectKind::HiddenLibraries => client.get_views().unwrap_or_default(),
-            MultiSelectKind::HiddenLatest    => client.get_user_views().unwrap_or_default(),
-            MultiSelectKind::MyLanguages     => unreachable!(),
+            MultiSelectKind::HiddenLibraries  => client.get_views().unwrap_or_default(),
+            MultiSelectKind::HiddenLatest     => client.get_user_views().unwrap_or_default(),
+            MultiSelectKind::FeedViewLibraries => client.get_views().unwrap_or_default(),
+            MultiSelectKind::MyLanguages      => unreachable!(),
         };
-        let hidden_list = match kind {
-            MultiSelectKind::HiddenLibraries => &client.config.hidden_libraries,
-            MultiSelectKind::HiddenLatest    => &client.config.hidden_latest,
-            MultiSelectKind::MyLanguages     => unreachable!(),
+        let selected_list = match kind {
+            MultiSelectKind::HiddenLibraries  => &client.config.hidden_libraries,
+            MultiSelectKind::HiddenLatest     => &client.config.hidden_latest,
+            MultiSelectKind::FeedViewLibraries => &client.config.feed_view_libraries,
+            MultiSelectKind::MyLanguages      => unreachable!(),
         };
         let items: Vec<(String, String, bool)> = all.iter()
             .filter(|v| v.collection_type != "playlists")
             .map(|v| {
                 let lower = v.name.to_lowercase();
-                let is_hidden = hidden_list.contains(&lower);
+                let is_hidden = selected_list.contains(&lower);
                 (lower, v.name.clone(), is_hidden)
             }).collect();
         drop(client);
@@ -531,15 +534,17 @@ impl App {
         {
             let mut c = self.client.lock().unwrap();
             match popup.kind {
-                MultiSelectKind::HiddenLibraries => c.config.hidden_libraries = hidden.clone(),
-                MultiSelectKind::HiddenLatest    => c.config.hidden_latest    = hidden.clone(),
-                MultiSelectKind::MyLanguages     => unreachable!(),
+                MultiSelectKind::HiddenLibraries  => c.config.hidden_libraries    = hidden.clone(),
+                MultiSelectKind::HiddenLatest     => c.config.hidden_latest       = hidden.clone(),
+                MultiSelectKind::FeedViewLibraries => c.config.feed_view_libraries = hidden.clone(),
+                MultiSelectKind::MyLanguages      => unreachable!(),
             }
         }
         match popup.kind {
-            MultiSelectKind::HiddenLibraries => self.hidden_libraries = hidden,
-            MultiSelectKind::HiddenLatest    => self.hidden_latest    = hidden,
-            MultiSelectKind::MyLanguages     => unreachable!(),
+            MultiSelectKind::HiddenLibraries  => self.hidden_libraries = hidden,
+            MultiSelectKind::HiddenLatest     => self.hidden_latest    = hidden,
+            MultiSelectKind::FeedViewLibraries => {}  // no cached copy on App; config is the source of truth
+            MultiSelectKind::MyLanguages      => unreachable!(),
         }
         let cfg = self.client.lock().unwrap().config.clone();
         crate::config::save_config_settings(&cfg);
@@ -637,9 +642,10 @@ impl App {
     pub(super) fn render_multiselect_popup(&mut self, f: &mut Frame) {
         let Some(ref popup) = self.multiselect_popup else { return; };
         let title = match popup.kind {
-            MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
-            MultiSelectKind::HiddenLatest    => " Hidden Latest ",
-            MultiSelectKind::MyLanguages     => " My Languages ",
+            MultiSelectKind::HiddenLibraries  => " Hidden Libraries ",
+            MultiSelectKind::HiddenLatest     => " Hidden Latest ",
+            MultiSelectKind::FeedViewLibraries => " Feed View ",
+            MultiSelectKind::MyLanguages      => " My Languages ",
         };
         let max_name = popup.items.iter().map(|(_, n, _)| n.len()).max().unwrap_or(0);
         let inner_w = ((max_name + 6) as u16).clamp(36, 60);
