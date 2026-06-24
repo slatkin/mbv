@@ -7,4 +7,3 @@
 5. Commit: `Release X.Y.Z: <one-line summary>`
 6. Push — a GitHub Action automatically updates the PKGBUILD sha256
 7. `git tag vX.Y.Z && git push origin vX.Y.Z`
-8. Monitor CI for green
