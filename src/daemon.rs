@@ -94,7 +94,18 @@ pub fn run(client: EmbyClient) -> ! {
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx)    = mpsc::channel();
     let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan);
-    let subtitle_prefs = client.get_user_subtitle_prefs().unwrap_or_default();
+    let subtitle_prefs = if client.config.subtitle_mode.is_empty()
+        && client.config.subtitle_lang.is_empty()
+        && client.config.audio_lang.is_empty()
+    {
+        client.get_user_subtitle_prefs().unwrap_or_default()
+    } else {
+        crate::player::SubtitlePrefs {
+            mode: client.config.subtitle_mode.clone(),
+            subtitle_lang: client.config.subtitle_lang.clone(),
+            audio_lang: client.config.audio_lang.clone(),
+        }
+    };
     let player = Player::new(
         client.config.server_url.clone(),
         client.token.clone(),

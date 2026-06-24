@@ -26,6 +26,10 @@ pub struct Config {
     pub image_cache_size: usize,
     pub save_playlist_on_consume: bool,
     pub use_nerd_fonts: bool,
+    // [playback] — client-only subtitle/audio preferences (never pushed to Emby server)
+    pub subtitle_mode: String, // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"; "" = inherit from Emby
+    pub subtitle_lang: String, // full language name, e.g. "English"; "" = any
+    pub audio_lang: String,    // full language name, e.g. "English"; "" = any
 }
 
 impl Default for Config {
@@ -54,6 +58,9 @@ impl Default for Config {
             image_cache_size: 50,
             save_playlist_on_consume: false,
             use_nerd_fonts: false,
+            subtitle_mode: String::new(),
+            subtitle_lang: String::new(),
+            audio_lang: String::new(),
         }
     }
 }
@@ -395,6 +402,23 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let playback = doc.get("playback");
+    let subtitle_mode = playback
+        .and_then(|p| p.get("subtitle_mode"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let subtitle_lang = playback
+        .and_then(|p| p.get("subtitle_lang"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let audio_lang = playback
+        .and_then(|p| p.get("audio_lang"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -419,6 +443,9 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         image_cache_size,
         save_playlist_on_consume,
         use_nerd_fonts,
+        subtitle_mode,
+        subtitle_lang,
+        audio_lang,
     })
 }
 
@@ -479,6 +506,23 @@ pub fn save_config_settings(cfg: &Config) {
 
     let daemon = section!("daemon");
     daemon.insert("show_systray_icon".to_string(), toml::Value::Boolean(cfg.show_systray_icon));
+
+    let playback = section!("playback");
+    if cfg.subtitle_mode.is_empty() {
+        playback.remove("subtitle_mode");
+    } else {
+        playback.insert("subtitle_mode".to_string(), toml::Value::String(cfg.subtitle_mode.clone()));
+    }
+    if cfg.subtitle_lang.is_empty() {
+        playback.remove("subtitle_lang");
+    } else {
+        playback.insert("subtitle_lang".to_string(), toml::Value::String(cfg.subtitle_lang.clone()));
+    }
+    if cfg.audio_lang.is_empty() {
+        playback.remove("audio_lang");
+    } else {
+        playback.insert("audio_lang".to_string(), toml::Value::String(cfg.audio_lang.clone()));
+    }
 
     if let Ok(s) = toml::to_string(&doc) {
         let _ = std::fs::write(path, s);

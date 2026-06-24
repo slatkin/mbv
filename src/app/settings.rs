@@ -26,7 +26,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
     }
 }
 
-pub fn setting_value(key: SettingKey, cfg: &Config, prefs: &crate::player::SubtitlePrefs) -> String {
+pub fn setting_value(key: SettingKey, cfg: &Config) -> String {
     match key {
         SettingKey::DaemonModeOnExit    => bool_val(cfg.daemon_mode_on_exit),
         SettingKey::StartOnQueue        => bool_val(cfg.start_on_queue),
@@ -44,9 +44,9 @@ pub fn setting_value(key: SettingKey, cfg: &Config, prefs: &crate::player::Subti
         SettingKey::Autoload            => bool_val(cfg.autoload),
         SettingKey::ShowSysTrayIcon     => bool_val(cfg.show_systray_icon),
         SettingKey::SystemNotifications => bool_val(cfg.system_notifications),
-        SettingKey::SubtitleMode        => if prefs.mode.is_empty() { "Default".into() } else { prefs.mode.clone() },
-        SettingKey::SubtitleLanguage    => if prefs.subtitle_lang.is_empty() { "any".into() } else { prefs.subtitle_lang.clone() },
-        SettingKey::AudioLanguage       => if prefs.audio_lang.is_empty() { "any".into() } else { prefs.audio_lang.clone() },
+        SettingKey::SubtitleMode     => if cfg.subtitle_mode.is_empty() { "Default".into() } else { cfg.subtitle_mode.clone() },
+        SettingKey::SubtitleLanguage => if cfg.subtitle_lang.is_empty() { "any".into() } else { cfg.subtitle_lang.clone() },
+        SettingKey::AudioLanguage    => if cfg.audio_lang.is_empty() { "any".into() } else { cfg.audio_lang.clone() },
         SettingKey::LogOut              => String::new(),
     }
 }

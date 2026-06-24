@@ -659,7 +659,19 @@ impl App {
         let ws_url = client.ws_url();
         let ws_send_tx = crate::ws::start(ws_url, ws_tx);
         let ws_send_tx_app = ws_send_tx.clone();
-        let subtitle_prefs = client.get_user_subtitle_prefs().unwrap_or_default();
+        // Prefer local config; fall back to Emby server prefs only on first run (all empty).
+        let subtitle_prefs = if client.config.subtitle_mode.is_empty()
+            && client.config.subtitle_lang.is_empty()
+            && client.config.audio_lang.is_empty()
+        {
+            client.get_user_subtitle_prefs().unwrap_or_default()
+        } else {
+            crate::player::SubtitlePrefs {
+                mode: client.config.subtitle_mode.clone(),
+                subtitle_lang: client.config.subtitle_lang.clone(),
+                audio_lang: client.config.audio_lang.clone(),
+            }
+        };
         let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, always_skip_intro, subtitle_prefs, player_tx, Some(ws_send_tx));
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();

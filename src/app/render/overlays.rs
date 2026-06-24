@@ -404,9 +404,11 @@ impl App {
                 self.system_notifications = new_val;
             }
             SettingKey::SubtitleMode => {
-                let new_prefs = {
-                    let mut p = self.player.subtitle_prefs.lock().unwrap();
-                    p.mode = match p.mode.as_str() {
+                // Client-only: update local config (saved to config.toml) + player Arc only.
+                // Never pushed to the Emby server.
+                let new_mode = {
+                    let mut c = self.client.lock().unwrap();
+                    c.config.subtitle_mode = match c.config.subtitle_mode.as_str() {
                         "Default" | "" => "Always".into(),
                         "Always"       => "Smart".into(),
                         "Smart"        => "OnlyForced".into(),
@@ -414,66 +416,45 @@ impl App {
                         "None"         => "HearingImpaired".into(),
                         _              => "Default".into(),
                     };
-                    p.clone()
+                    c.config.subtitle_mode.clone()
                 };
+                self.player.subtitle_prefs.lock().unwrap().mode = new_mode.clone();
+                let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
                 self.player.send_command(crate::player::PlayerCommand::SetSubtitlePrefs {
-                    mode: new_prefs.mode.clone(),
-                    subtitle_lang: new_prefs.subtitle_lang.clone(),
-                    audio_lang: new_prefs.audio_lang.clone(),
+                    mode: prefs.mode, subtitle_lang: prefs.subtitle_lang, audio_lang: prefs.audio_lang,
                 });
-                let client = self.client.clone();
-                std::thread::spawn(move || {
-                    if let Err(e) = client.lock().unwrap().update_user_subtitle_prefs(&new_prefs) {
-                        log::warn!(target: "settings", "subtitle prefs update failed: {e}");
-                    }
-                });
-                return;
             }
             SettingKey::SubtitleLanguage => {
                 const LANGS: &[&str] = &["", "English", "French", "German", "Spanish", "Italian",
                     "Portuguese", "Japanese", "Korean", "Chinese", "Russian", "Arabic", "Dutch",
                     "Swedish", "Norwegian", "Danish", "Finnish", "Polish", "Czech", "Turkish"];
-                let new_prefs = {
-                    let mut p = self.player.subtitle_prefs.lock().unwrap();
-                    let idx = LANGS.iter().position(|&l| l == p.subtitle_lang.as_str()).unwrap_or(0);
-                    p.subtitle_lang = LANGS[(idx + 1) % LANGS.len()].into();
-                    p.clone()
+                let new_lang = {
+                    let mut c = self.client.lock().unwrap();
+                    let idx = LANGS.iter().position(|&l| l == c.config.subtitle_lang.as_str()).unwrap_or(0);
+                    c.config.subtitle_lang = LANGS[(idx + 1) % LANGS.len()].into();
+                    c.config.subtitle_lang.clone()
                 };
+                self.player.subtitle_prefs.lock().unwrap().subtitle_lang = new_lang;
+                let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
                 self.player.send_command(crate::player::PlayerCommand::SetSubtitlePrefs {
-                    mode: new_prefs.mode.clone(),
-                    subtitle_lang: new_prefs.subtitle_lang.clone(),
-                    audio_lang: new_prefs.audio_lang.clone(),
+                    mode: prefs.mode, subtitle_lang: prefs.subtitle_lang, audio_lang: prefs.audio_lang,
                 });
-                let client = self.client.clone();
-                std::thread::spawn(move || {
-                    if let Err(e) = client.lock().unwrap().update_user_subtitle_prefs(&new_prefs) {
-                        log::warn!(target: "settings", "subtitle lang update failed: {e}");
-                    }
-                });
-                return;
             }
             SettingKey::AudioLanguage => {
                 const LANGS: &[&str] = &["", "English", "French", "German", "Spanish", "Italian",
                     "Portuguese", "Japanese", "Korean", "Chinese", "Russian", "Arabic", "Dutch",
                     "Swedish", "Norwegian", "Danish", "Finnish", "Polish", "Czech", "Turkish"];
-                let new_prefs = {
-                    let mut p = self.player.subtitle_prefs.lock().unwrap();
-                    let idx = LANGS.iter().position(|&l| l == p.audio_lang.as_str()).unwrap_or(0);
-                    p.audio_lang = LANGS[(idx + 1) % LANGS.len()].into();
-                    p.clone()
+                let new_lang = {
+                    let mut c = self.client.lock().unwrap();
+                    let idx = LANGS.iter().position(|&l| l == c.config.audio_lang.as_str()).unwrap_or(0);
+                    c.config.audio_lang = LANGS[(idx + 1) % LANGS.len()].into();
+                    c.config.audio_lang.clone()
                 };
+                self.player.subtitle_prefs.lock().unwrap().audio_lang = new_lang;
+                let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
                 self.player.send_command(crate::player::PlayerCommand::SetSubtitlePrefs {
-                    mode: new_prefs.mode.clone(),
-                    subtitle_lang: new_prefs.subtitle_lang.clone(),
-                    audio_lang: new_prefs.audio_lang.clone(),
+                    mode: prefs.mode, subtitle_lang: prefs.subtitle_lang, audio_lang: prefs.audio_lang,
                 });
-                let client = self.client.clone();
-                std::thread::spawn(move || {
-                    if let Err(e) = client.lock().unwrap().update_user_subtitle_prefs(&new_prefs) {
-                        log::warn!(target: "settings", "audio lang update failed: {e}");
-                    }
-                });
-                return;
             }
             _ => {
                 let mut c = self.client.lock().unwrap();
@@ -692,7 +673,7 @@ impl App {
             "[↑↓]navigate [Space/\u{21b5}]toggle [Esc]close",
         );
         let cfg = self.client.lock().unwrap().config.clone();
-        let sub_prefs = self.player.subtitle_prefs.lock().unwrap().clone();
+
         let cursor = self.settings_cursor;
         let confirm_logout = self.confirm_logout;
         let label_w = 30usize;
@@ -718,7 +699,7 @@ impl App {
                 let focused = item_idx == cursor;
                 let indicator = if focused { "\u{258c}" } else { " " };
                 let label = setting_label(key);
-                let val = setting_value(key, &cfg, &sub_prefs);
+                let val = setting_value(key, &cfg);
                 let label_style = if focused { Style::default().fg(palette::TEXT) } else { Style::default().fg(palette::MUTED) };
                 lines.push(Line::from(vec![
                     Span::styled(indicator, Style::default().fg(palette::IRIS)),
