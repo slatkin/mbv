@@ -623,7 +623,7 @@ impl App {
             let total_str   = fmt_duration(live_runtime / crate::api::TICKS_PER_SECOND);
             let elapsed_w   = elapsed_str.chars().count() as u16;
             let total_w     = total_str.chars().count() as u16;
-            let time_style  = Style::default().fg(palette::MUTED);
+            let time_style  = Style::default().fg(palette::SUBTLE);
             let elapsed_x   = bar_x.saturating_sub(elapsed_w + 1).max(left_area.x);
             f.render_widget(Paragraph::new(Span::styled(elapsed_str, time_style)),
                 Rect { x: elapsed_x, y: seekbar_row, width: elapsed_w, height: 1 });

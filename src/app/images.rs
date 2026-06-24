@@ -165,7 +165,7 @@ impl App {
             }
             if let Some(label) = count_label {
                 block = block.title_bottom(
-                    Line::from(Span::styled(format!(" {} ", label), Style::default().fg(palette::MUTED)))
+                    Line::from(Span::styled(format!(" {} ", label), Style::default().fg(palette::SUBTLE)))
                         .centered()
                 );
             }
@@ -251,7 +251,7 @@ impl App {
             if name_len + suffix_len <= w {
                 let mut spans = vec![Span::styled(name.to_string(), Style::default().fg(title_fg).add_modifier(title_mod))];
                 if !dur_suffix.is_empty() {
-                    spans.push(Span::styled(dur_suffix, Style::default().fg(palette::MUTED)));
+                    spans.push(Span::styled(dur_suffix, Style::default().fg(palette::SUBTLE)));
                 }
                 put(f, text_y, Paragraph::new(Line::from(spans)).alignment(Alignment::Center));
                 text_y += 1;
@@ -267,7 +267,7 @@ impl App {
                 text_y += 1;
                 let mut spans = vec![Span::styled(line2, Style::default().fg(title_fg).add_modifier(title_mod))];
                 if !dur_suffix.is_empty() {
-                    spans.push(Span::styled(dur_suffix, Style::default().fg(palette::MUTED)));
+                    spans.push(Span::styled(dur_suffix, Style::default().fg(palette::SUBTLE)));
                 }
                 put(f, text_y, Paragraph::new(Line::from(spans)).alignment(Alignment::Center));
                 text_y += 1;
@@ -281,7 +281,7 @@ impl App {
             text_y += 1;
             if !ep_tag.is_empty() {
                 put(f, text_y, Paragraph::new(Line::from(
-                    Span::styled(ep_tag.to_string(), Style::default().fg(palette::MUTED))
+                    Span::styled(ep_tag.to_string(), Style::default().fg(palette::SUBTLE))
                 )).alignment(Alignment::Center));
                 text_y += 1;
             }
@@ -290,12 +290,12 @@ impl App {
                 Line::from(vec![
                     Span::styled(trunc(series), Style::default().fg(palette::SUBTLE)),
                     Span::styled(" • ",         Style::default().fg(palette::IRIS)),
-                    Span::styled(ep_tag.to_string(), Style::default().fg(palette::MUTED)),
+                    Span::styled(ep_tag.to_string(), Style::default().fg(palette::SUBTLE)),
                 ])
             } else if !series.is_empty() {
                 Line::from(Span::styled(trunc(series), Style::default().fg(palette::SUBTLE)))
             } else {
-                Line::from(Span::styled(ep_tag.to_string(), Style::default().fg(palette::MUTED)))
+                Line::from(Span::styled(ep_tag.to_string(), Style::default().fg(palette::SUBTLE)))
             };
             put(f, text_y, Paragraph::new(line).alignment(Alignment::Center));
             text_y += 1;
@@ -313,7 +313,7 @@ impl App {
                 Span::styled("━".repeat(filled),         Style::default().fg(if now_playing { palette::IRIS } else { palette::FOAM })),
                 Span::styled("─".repeat(bar_w - filled), Style::default().fg(if now_playing { palette::IRIS_DIM } else { Color::Rgb(0, 80, 128) })),
             ])));
-            let time_style = Style::default().fg(palette::MUTED);
+            let time_style = Style::default().fg(palette::SUBTLE);
             let elapsed_str = fmt_duration(pos_ticks / TICKS_PER_SECOND);
             let total_str   = fmt_duration(rt_ticks / TICKS_PER_SECOND);
             let elapsed_w   = elapsed_str.chars().count() as u16;
@@ -351,7 +351,7 @@ impl App {
                     );
                 } else {
                     put(f, text_y, Paragraph::new(format!("{} / {}", fmt_m(pos_ticks), fmt_m(rt_ticks)))
-                        .style(Style::default().fg(palette::MUTED))
+                        .style(Style::default().fg(palette::SUBTLE))
                         .alignment(Alignment::Center));
                 }
             }
@@ -359,9 +359,9 @@ impl App {
             let status_str = if played { "Played" } else { "Unplayed" };
             let length_str = fmt_m(rt_ticks);
             put(f, text_y, Paragraph::new(Line::from(vec![
-                Span::styled(status_str, Style::default().fg(palette::MUTED)),
+                Span::styled(status_str, Style::default().fg(palette::SUBTLE)),
                 Span::styled(" • ", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
-                Span::styled(length_str, Style::default().fg(palette::MUTED)),
+                Span::styled(length_str, Style::default().fg(palette::SUBTLE)),
             ])).alignment(Alignment::Center));
             text_y += 1;
         }
