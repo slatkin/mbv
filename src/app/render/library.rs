@@ -444,7 +444,7 @@ impl App {
             let lib = &self.libs[lib_idx];
             lib.library.collection_type == "music"
                 && !self.music_levels.is_empty()
-                && lib.nav_stack.len() >= 1
+                && !lib.nav_stack.is_empty()
                 && self.music_levels.get(lib.nav_stack.len() - 1).map(|s| s == "group").unwrap_or(false)
         };
         let is_feed_lib = { let c = self.client.lock().unwrap(); c.config.feed_view_libraries.contains(&self.libs[lib_idx].library.name.to_lowercase()) };

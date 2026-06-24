@@ -67,7 +67,7 @@ impl App {
             && self.home_search.is_some()
             && self.context_menu.is_none()
         {
-            let input_focused = self.home_search.as_ref().map_or(true, |s| s.input_focused);
+            let input_focused = self.home_search.as_ref().is_none_or(|s| s.input_focused);
             match key.code {
                 KeyCode::Esc => { self.home_search = None; }
                 KeyCode::Tab => {
@@ -532,7 +532,7 @@ impl App {
     }
 
     fn handle_key_context_menu(&mut self, key: KeyEvent) -> Option<bool> {
-        if self.context_menu.is_none() { return None; }
+        self.context_menu.as_ref()?;
         match key.code {
             KeyCode::Esc => { self.context_menu = None; self.force_clear = true; }
             KeyCode::Up => {
@@ -1983,10 +1983,9 @@ if idx < self.sessions.len() {
                                 self.player.send_command(PlayerCommand::JumpTo(t));
                             }
                         }
-                    } else if self.tab_idx != self.log_tab_idx() {
-                        if self.current_lib_item().map(|i| !i.is_folder).unwrap_or(false) {
-                            self.select();
-                        }
+                    } else if self.tab_idx != self.log_tab_idx()
+                        && self.current_lib_item().map(|i| !i.is_folder).unwrap_or(false) {
+                        self.select();
                     }
                     return;
                 }
@@ -2060,10 +2059,9 @@ if idx < self.sessions.len() {
                     }
                 }
                 let hit = self.click_set_cursor(col, row);
-                if hit && self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
-                    if self.current_lib_item().map(|i| i.is_folder).unwrap_or(false) {
-                        self.select();
-                    }
+                if hit && self.tab_idx > 1 && self.tab_idx != self.log_tab_idx()
+                    && self.current_lib_item().map(|i| i.is_folder).unwrap_or(false) {
+                    self.select();
                 }
             }
             MouseEventKind::Down(MouseButton::Right) => {
