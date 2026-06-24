@@ -88,6 +88,27 @@ impl App {
             let dash_count = gap_area.width.saturating_sub(
                 playback_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
             ) as usize;
+
+            // Store indicator Rects for mouse hit-testing
+            {
+                let ind_rect = |x: u16, text: &str| -> Rect {
+                    Rect { x, y: gap_area.y, width: text.width() as u16 + 2, height: 1 }
+                };
+                let ind_adv = |text: &str| -> u16 { text.width() as u16 + 3 };
+                let mut ix = gap_area.x + dash_count as u16;
+                if active {
+                    ix += ind_adv(&res_str); // [res] — no click action
+                    self.layout_ind_au  = ind_rect(ix, &au_text); ix += ind_adv(&au_text);
+                    self.layout_ind_sub = ind_rect(ix, "字");      ix += ind_adv("字");
+                } else {
+                    self.layout_ind_au  = Rect::default();
+                    self.layout_ind_sub = Rect::default();
+                }
+                self.layout_ind_rc = ind_rect(ix, rc_text);  ix += ind_adv(rc_text);
+                self.layout_ind_mu = ind_rect(ix, "m");       ix += ind_adv("m");
+                self.layout_ind_pb = ind_rect(ix, pb_text);
+            }
+
             let mut spans: Vec<Span> = vec![Span::styled("─".repeat(dash_count), dash_style)];
             if active {
                 spans.extend([

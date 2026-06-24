@@ -21,17 +21,17 @@ impl App {
         let name_trunc = trunc_str(&name, max_name);
         let focused = bg != palette::OVERLAY;
         let label_fg = if focused { palette::YELLOW } else { palette::SUBTLE };
-        let name_fg = if focused { palette::YELLOW } else { palette::WHITE };
+        let name_fg = palette::WHITE;
         let line = if centered {
             Line::from(vec![
-                Span::styled("Playlist: ", Style::default().fg(label_fg)),
-                Span::styled(name_trunc, Style::default().fg(name_fg)),
+                Span::styled("Playlist: ", Style::default().fg(label_fg).bold()),
+                Span::styled(name_trunc, Style::default().fg(name_fg).bold()),
             ]).alignment(Alignment::Center)
         } else {
             Line::from(vec![
                 Span::raw(" "),
-                Span::styled("Playlist: ", Style::default().fg(label_fg)),
-                Span::styled(name_trunc, Style::default().fg(name_fg)),
+                Span::styled("Playlist: ", Style::default().fg(label_fg).bold()),
+                Span::styled(name_trunc, Style::default().fg(name_fg).bold()),
             ])
         };
         f.render_widget(

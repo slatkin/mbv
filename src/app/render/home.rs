@@ -3,6 +3,7 @@ use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use unicode_width::UnicodeWidthStr;
 use crate::api::MediaItem;
 use super::super::App;
 use super::super::palette;
@@ -449,20 +450,35 @@ impl App {
 
         let hs = self.home_search.as_ref().unwrap();
 
+        // Cursor position (computed before the borrow ends)
+        let input_focused = hs.input_focused;
+        let cursor_x = (input_area.x + 1 + hs.query.width() as u16)
+            .min(input_area.x + input_area.width.saturating_sub(2));
+        let cursor_y = input_area.y + 1;
+
         // Search input bar
         let loading_suffix = if hs.loading { " [searching...]" } else { "" };
         let input_text = format!("{}{}", hs.query, loading_suffix);
+        let border_color = if input_focused { palette::IRIS } else { palette::MUTED };
+        let hint_style = Style::default().fg(palette::MUTED);
         f.render_widget(
             Paragraph::new(input_text)
                 .style(Style::default().fg(palette::FOAM))
                 .block(Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(palette::IRIS))
+                    .border_style(Style::default().fg(border_color))
                     .title(" Search ")
-                    .title_style(Style::default().fg(palette::YELLOW))),
+                    .title_style(Style::default().fg(palette::YELLOW))
+                    .title_bottom(Line::from(vec![
+                        Span::styled(" ESC: back", hint_style),
+                        Span::styled("  Tab: toggle input ", hint_style),
+                    ]))),
             input_area,
         );
+        if input_focused {
+            f.set_cursor_position((cursor_x, cursor_y));
+        }
 
         // Type filter bar
         if show_filter {

@@ -141,6 +141,7 @@ struct HomeSearch {
     loading: bool,
     scroll: usize,
     type_filter: usize,                // 0 = All; 1..N index into sorted type list
+    input_focused: bool,               // true = typing into box; false = browsing results
 }
 
 impl HomeSearch {
@@ -291,6 +292,11 @@ pub struct App {
     layout_vol_area: Rect,
     layout_sub_area: Rect,
     layout_audio_area: Rect,
+    layout_ind_au:  Rect,
+    layout_ind_sub: Rect,
+    layout_ind_rc:  Rect,
+    layout_ind_mu:  Rect,
+    layout_ind_pb:  Rect,
     confirm_remove_idx: Option<usize>,     // playlist index pending removal confirmation
     pending_delete_idx: Option<usize>,     // deferred removal of now-playing item after Stopped event
     pending_queue_removal: Option<usize>,  // deferred removal after TrackChanged index-shifts
@@ -376,6 +382,7 @@ pub struct App {
     remote_pos_s: i64,               // monotonic position estimate for the connected remote
     remote_pos_at: Instant,          // when remote_pos_s was last anchored
     remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
+    remote_seek_pending_until: Instant,  // suppress poll pos-reconcile after a seek
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -533,6 +540,11 @@ impl App {
             layout_vol_area: Rect::default(),
             layout_sub_area: Rect::default(),
             layout_audio_area: Rect::default(),
+            layout_ind_au:  Rect::default(),
+            layout_ind_sub: Rect::default(),
+            layout_ind_rc:  Rect::default(),
+            layout_ind_mu:  Rect::default(),
+            layout_ind_pb:  Rect::default(),
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
@@ -605,6 +617,7 @@ impl App {
             remote_pos_s: 0,
             remote_pos_at: Instant::now(),
             remote_api_pos_advanced_at: Instant::now() - Duration::from_secs(60),
+            remote_seek_pending_until: Instant::now() - Duration::from_secs(1),
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -895,12 +908,21 @@ impl App {
                                 // Extrapolate if API advanced recently (within 2× the ~11s report
                                 // interval). After that window lapses we treat it as paused/stopped.
                                 let api_active = self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
-                                if item_changed {
+                                let seek_pending = now < self.remote_seek_pending_until;
+                                if seek_pending && !item_changed {
+                                    // A seek was just dispatched; hold the optimistic position until
+                                    // the API catches up. Once the API reports the new position (or
+                                    // the window expires) we fall through to normal reconciliation.
+                                    log::debug!(target: "sessions",
+                                        "pos hold (seek pending): api={}s remote_pos_s={}s",
+                                        s.position_s, self.remote_pos_s);
+                                } else if item_changed {
                                     log::debug!(target: "sessions",
                                         "pos reset (item change): api_pos={}s → remote_pos_s {}s→{}s",
                                         s.position_s, self.remote_pos_s, s.position_s);
                                     self.remote_pos_s = s.position_s;
                                     self.remote_api_pos_advanced_at = now;
+                                    self.remote_seek_pending_until = now - Duration::from_secs(1);
                                 } else if api_active {
                                     let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
                                     let extrapolated = self.remote_pos_s + elapsed.round() as i64;
@@ -915,7 +937,9 @@ impl App {
                                         s.position_s, self.remote_pos_s, s.position_s);
                                     self.remote_pos_s = s.position_s;
                                 }
-                                self.remote_pos_at = now;
+                                if !seek_pending || item_changed {
+                                    self.remote_pos_at = now;
+                                }
                                 if item_changed {
                                     if let Some(new_idx) = s.now_playing_item_id.as_ref()
                                         .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id))
@@ -1516,6 +1540,11 @@ mod tests {
             layout_vol_area: ratatui::layout::Rect::default(),
             layout_sub_area: ratatui::layout::Rect::default(),
             layout_audio_area: ratatui::layout::Rect::default(),
+            layout_ind_au:  Rect::default(),
+            layout_ind_sub: Rect::default(),
+            layout_ind_rc:  Rect::default(),
+            layout_ind_mu:  Rect::default(),
+            layout_ind_pb:  Rect::default(),
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
@@ -1605,6 +1634,7 @@ mod tests {
             remote_pos_s: 0,
             remote_pos_at: std::time::Instant::now(),
             remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
+            remote_seek_pending_until: std::time::Instant::now() - Duration::from_secs(1),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),

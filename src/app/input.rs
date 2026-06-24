@@ -67,9 +67,15 @@ impl App {
             && self.home_search.is_some()
             && self.context_menu.is_none()
         {
+            let input_focused = self.home_search.as_ref().map_or(true, |s| s.input_focused);
             match key.code {
                 KeyCode::Esc => { self.home_search = None; }
-                KeyCode::Backspace => {
+                KeyCode::Tab => {
+                    if let Some(ref mut hs) = self.home_search {
+                        hs.input_focused = !hs.input_focused;
+                    }
+                }
+                KeyCode::Backspace if input_focused => {
                     let empty = self.home_search.as_ref().is_none_or(|s| s.query.is_empty());
                     if empty { self.home_search = None; }
                     else { self.home_search.as_mut().unwrap().query.pop(); }
@@ -91,6 +97,10 @@ impl App {
                         .map(|hs| (hs.query.clone(), hs.last_query.clone(), hs.loading, !hs.results.is_empty()))
                         .unwrap_or_default();
                     if loading { return false; }
+                    if !input_focused {
+                        if has_results { self.select_home(); }
+                        return false;
+                    }
                     if query.is_empty() { return false; }
                     if query != last_query {
                         if let Some(ref mut hs) = self.home_search {
@@ -105,8 +115,14 @@ impl App {
                         self.select_home();
                     }
                 }
+                KeyCode::Char('q') if !input_focused => {
+                    return self.try_quit();
+                }
                 KeyCode::Char(c) => {
-                    self.home_search.as_mut().unwrap().query.push(c);
+                    if let Some(ref mut hs) = self.home_search {
+                        hs.input_focused = true;
+                        hs.query.push(c);
+                    }
                 }
                 _ => {}
             }
@@ -654,6 +670,7 @@ impl App {
                     loading: false,
                     scroll: 0,
                     type_filter: 0,
+                    input_focused: true,
                 });
                 return false;
             }
@@ -928,6 +945,7 @@ impl App {
                     loading: false,
                     scroll: 0,
                     type_filter: 0,
+                    input_focused: true,
                 });
                 return false;
             }
@@ -1401,6 +1419,9 @@ impl App {
             if runtime_s == 0 { return; }
             let ticks = (fraction * (runtime_s * crate::api::TICKS_PER_SECOND) as f64) as i64;
             let id = conn_id.clone();
+            self.remote_pos_s = (fraction * runtime_s as f64) as i64;
+            self.remote_pos_at = Instant::now();
+            self.remote_seek_pending_until = Instant::now() + Duration::from_secs(4);
             self.do_session_command(move |c| c.session_seek(&id, ticks));
             return;
         }
@@ -1964,6 +1985,27 @@ impl App {
                     return;
                 }
 
+                if self.layout_ind_au.width > 0 && self.layout_ind_au.contains((col, row).into()) {
+                    self.cycle_audio();
+                    return;
+                }
+                if self.layout_ind_sub.width > 0 && self.layout_ind_sub.contains((col, row).into()) {
+                    self.toggle_sub();
+                    return;
+                }
+                if self.layout_ind_rc.contains((col, row).into()) {
+                    self.show_sessions = !self.show_sessions;
+                    if self.show_sessions { self.spawn_sessions_load(); }
+                    return;
+                }
+                if self.layout_ind_mu.contains((col, row).into()) {
+                    self.toggle_mute();
+                    return;
+                }
+                if self.layout_ind_pb.contains((col, row).into()) {
+                    self.handle_button_click(2); // play/pause
+                    return;
+                }
                 if self.layout_sub_area.contains((col, row).into()) {
                     self.toggle_sub();
                     return;
