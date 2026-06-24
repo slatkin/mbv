@@ -1618,7 +1618,23 @@ impl App {
                 MouseEventKind::Down(MouseButton::Left) if row >= content_top => {
                     let idx = ((row - content_top) / ENTRY_H) as usize;
                     if idx < self.sessions.len() {
-                        self.sessions_cursor = idx;
+                        if self.sessions_cursor == idx {
+                            if let Some(sess) = self.sessions.get(idx) {
+                                let id = sess.id.clone();
+                                let name = sess.device_name.clone();
+                                self.connected_session_id = Some(id);
+                                self.connected_session_state = Some(sess.clone());
+                                self.session_miss_count = 0;
+                                self.remote_pos_s = sess.position_s;
+                                self.remote_pos_at = Instant::now();
+                                self.remote_api_pos_advanced_at = Instant::now();
+                                self.show_sessions = false;
+                                self.flash_status(format!("Connected to {name}"));
+                                self.spawn_sessions_load();
+                            }
+                        } else {
+                            self.sessions_cursor = idx;
+                        }
                     }
                 }
                 _ => {}
@@ -1968,7 +1984,9 @@ impl App {
                             }
                         }
                     } else if self.tab_idx != self.log_tab_idx() {
-                        self.select();
+                        if self.current_lib_item().map(|i| !i.is_folder).unwrap_or(false) {
+                            self.select();
+                        }
                     }
                     return;
                 }
@@ -2041,7 +2059,12 @@ impl App {
                         }
                     }
                 }
-                self.click_set_cursor(col, row);
+                let hit = self.click_set_cursor(col, row);
+                if hit && self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
+                    if self.current_lib_item().map(|i| i.is_folder).unwrap_or(false) {
+                        self.select();
+                    }
+                }
             }
             MouseEventKind::Down(MouseButton::Right) => {
                 if self.layout_vol_area.contains((col, row).into()) {
