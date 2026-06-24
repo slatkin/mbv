@@ -366,6 +366,7 @@ impl App {
         match key {
             SettingKey::HiddenLibraries => { self.open_multiselect_popup(MultiSelectKind::HiddenLibraries); return; }
             SettingKey::HiddenLatest    => { self.open_multiselect_popup(MultiSelectKind::HiddenLatest);    return; }
+            SettingKey::MyLanguages     => { self.open_multiselect_popup(MultiSelectKind::MyLanguages);     return; }
             SettingKey::LogOut => { self.confirm_logout = true; }
             SettingKey::ImageProtocol => {
                 let now_none = {
@@ -425,13 +426,12 @@ impl App {
                 });
             }
             SettingKey::SubtitleLanguage => {
-                const LANGS: &[&str] = &["", "English", "French", "German", "Spanish", "Italian",
-                    "Portuguese", "Japanese", "Korean", "Chinese", "Russian", "Arabic", "Dutch",
-                    "Swedish", "Norwegian", "Danish", "Finnish", "Polish", "Czech", "Turkish"];
                 let new_lang = {
                     let mut c = self.client.lock().unwrap();
-                    let idx = LANGS.iter().position(|&l| l == c.config.subtitle_lang.as_str()).unwrap_or(0);
-                    c.config.subtitle_lang = LANGS[(idx + 1) % LANGS.len()].into();
+                    let my = c.config.my_languages.clone();
+                    let cycle: Vec<&str> = std::iter::once("").chain(my.iter().map(String::as_str)).collect();
+                    let idx = cycle.iter().position(|&l| l == c.config.subtitle_lang.as_str()).unwrap_or(0);
+                    c.config.subtitle_lang = cycle[(idx + 1) % cycle.len()].to_string();
                     c.config.subtitle_lang.clone()
                 };
                 self.player.subtitle_prefs.lock().unwrap().subtitle_lang = new_lang;
@@ -441,13 +441,12 @@ impl App {
                 });
             }
             SettingKey::AudioLanguage => {
-                const LANGS: &[&str] = &["", "English", "French", "German", "Spanish", "Italian",
-                    "Portuguese", "Japanese", "Korean", "Chinese", "Russian", "Arabic", "Dutch",
-                    "Swedish", "Norwegian", "Danish", "Finnish", "Polish", "Czech", "Turkish"];
                 let new_lang = {
                     let mut c = self.client.lock().unwrap();
-                    let idx = LANGS.iter().position(|&l| l == c.config.audio_lang.as_str()).unwrap_or(0);
-                    c.config.audio_lang = LANGS[(idx + 1) % LANGS.len()].into();
+                    let my = c.config.my_languages.clone();
+                    let cycle: Vec<&str> = std::iter::once("").chain(my.iter().map(String::as_str)).collect();
+                    let idx = cycle.iter().position(|&l| l == c.config.audio_lang.as_str()).unwrap_or(0);
+                    c.config.audio_lang = cycle[(idx + 1) % cycle.len()].to_string();
                     c.config.audio_lang.clone()
                 };
                 self.player.subtitle_prefs.lock().unwrap().audio_lang = new_lang;
@@ -478,14 +477,30 @@ impl App {
     }
 
     pub(crate) fn open_multiselect_popup(&mut self, kind: MultiSelectKind) {
+        if matches!(kind, MultiSelectKind::MyLanguages) {
+            const ALL_LANGS: &[&str] = &[
+                "English", "French", "German", "Spanish", "Italian", "Portuguese",
+                "Japanese", "Korean", "Chinese", "Russian", "Arabic", "Dutch",
+                "Swedish", "Norwegian", "Danish", "Finnish", "Polish", "Czech", "Turkish",
+            ];
+            let my_langs = self.client.lock().unwrap().config.my_languages.clone();
+            let items = ALL_LANGS.iter().map(|&name| {
+                let selected = my_langs.contains(&name.to_string());
+                (name.to_lowercase(), name.to_string(), selected)
+            }).collect();
+            self.multiselect_popup = Some(MultiSelectPopup { kind, items, cursor: 0 });
+            return;
+        }
         let client = self.client.lock().unwrap();
         let all = match kind {
             MultiSelectKind::HiddenLibraries => client.get_views().unwrap_or_default(),
             MultiSelectKind::HiddenLatest    => client.get_user_views().unwrap_or_default(),
+            MultiSelectKind::MyLanguages     => unreachable!(),
         };
         let hidden_list = match kind {
             MultiSelectKind::HiddenLibraries => &client.config.hidden_libraries,
             MultiSelectKind::HiddenLatest    => &client.config.hidden_latest,
+            MultiSelectKind::MyLanguages     => unreachable!(),
         };
         let items: Vec<(String, String, bool)> = all.iter()
             .filter(|v| v.collection_type != "playlists")
@@ -500,6 +515,35 @@ impl App {
 
     pub(crate) fn close_multiselect_popup(&mut self) {
         let Some(popup) = self.multiselect_popup.take() else { return; };
+
+        if matches!(popup.kind, MultiSelectKind::MyLanguages) {
+            let selected: Vec<String> = popup.items.iter()
+                .filter(|(_, _, is_sel)| *is_sel)
+                .map(|(_, name, _)| name.clone())
+                .collect();
+            {
+                let mut c = self.client.lock().unwrap();
+                // If user removed a language that was chosen for subtitle/audio, clear it to "any"
+                if !selected.is_empty() {
+                    if !c.config.subtitle_lang.is_empty() && !selected.contains(&c.config.subtitle_lang) {
+                        c.config.subtitle_lang = String::new();
+                    }
+                    if !c.config.audio_lang.is_empty() && !selected.contains(&c.config.audio_lang) {
+                        c.config.audio_lang = String::new();
+                    }
+                }
+                c.config.my_languages = selected;
+            }
+            let cfg = self.client.lock().unwrap().config.clone();
+            {
+                let mut p = self.player.subtitle_prefs.lock().unwrap();
+                p.subtitle_lang = cfg.subtitle_lang.clone();
+                p.audio_lang    = cfg.audio_lang.clone();
+            }
+            crate::config::save_config_settings(&cfg);
+            return;
+        }
+
         let hidden: Vec<String> = popup.items.iter()
             .filter(|(_, _, is_hidden)| *is_hidden)
             .map(|(lower, _, _)| lower.clone())
@@ -509,11 +553,13 @@ impl App {
             match popup.kind {
                 MultiSelectKind::HiddenLibraries => c.config.hidden_libraries = hidden.clone(),
                 MultiSelectKind::HiddenLatest    => c.config.hidden_latest    = hidden.clone(),
+                MultiSelectKind::MyLanguages     => unreachable!(),
             }
         }
         match popup.kind {
             MultiSelectKind::HiddenLibraries => self.hidden_libraries = hidden,
             MultiSelectKind::HiddenLatest    => self.hidden_latest    = hidden,
+            MultiSelectKind::MyLanguages     => unreachable!(),
         }
         let cfg = self.client.lock().unwrap().config.clone();
         crate::config::save_config_settings(&cfg);
@@ -613,6 +659,7 @@ impl App {
         let title = match popup.kind {
             MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
             MultiSelectKind::HiddenLatest    => " Hidden Latest ",
+            MultiSelectKind::MyLanguages     => " My Languages ",
         };
         let max_name = popup.items.iter().map(|(_, n, _)| n.len()).max().unwrap_or(0);
         let inner_w = ((max_name + 6) as u16).clamp(36, 60);

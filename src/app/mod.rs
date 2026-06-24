@@ -109,7 +109,7 @@ enum ContextAction {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MultiSelectKind { HiddenLibraries, HiddenLatest }
+pub(crate) enum MultiSelectKind { HiddenLibraries, HiddenLatest, MyLanguages }
 
 struct MultiSelectPopup {
     kind: MultiSelectKind,
@@ -457,6 +457,7 @@ enum SettingKey {
     Autoload,
     ShowSysTrayIcon,
     SystemNotifications,
+    MyLanguages,
     SubtitleMode,
     SubtitleLanguage,
     AudioLanguage,
@@ -469,7 +470,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
     ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::SavePlaylistOnConsume]),
     ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
-    ("[playback]",  &[SettingKey::SubtitleMode, SettingKey::SubtitleLanguage, SettingKey::AudioLanguage]),
+    ("[playback]",  &[SettingKey::MyLanguages, SettingKey::SubtitleMode, SettingKey::SubtitleLanguage, SettingKey::AudioLanguage]),
     ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",   &[SettingKey::LogOut]),
 ];

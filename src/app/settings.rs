@@ -19,6 +19,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::Autoload            => "autoload",
         SettingKey::ShowSysTrayIcon     => "Show systray icon",
         SettingKey::SystemNotifications => "System notifications",
+        SettingKey::MyLanguages         => "My languages",
         SettingKey::SubtitleMode        => "Subtitle mode",
         SettingKey::SubtitleLanguage    => "Subtitle language",
         SettingKey::AudioLanguage       => "Audio language",
@@ -44,6 +45,7 @@ pub fn setting_value(key: SettingKey, cfg: &Config) -> String {
         SettingKey::Autoload            => bool_val(cfg.autoload),
         SettingKey::ShowSysTrayIcon     => bool_val(cfg.show_systray_icon),
         SettingKey::SystemNotifications => bool_val(cfg.system_notifications),
+        SettingKey::MyLanguages      => fmt_lang_list(&cfg.my_languages),
         SettingKey::SubtitleMode     => if cfg.subtitle_mode.is_empty() { "Default".into() } else { cfg.subtitle_mode.clone() },
         SettingKey::SubtitleLanguage => if cfg.subtitle_lang.is_empty() { "any".into() } else { cfg.subtitle_lang.clone() },
         SettingKey::AudioLanguage    => if cfg.audio_lang.is_empty() { "any".into() } else { cfg.audio_lang.clone() },
@@ -56,6 +58,14 @@ pub fn fmt_hidden_list(list: &[String]) -> String {
         0 => "none".into(),
         1 => list[0].clone(),
         n => format!("{n} hidden"),
+    }
+}
+
+pub fn fmt_lang_list(list: &[String]) -> String {
+    match list.len() {
+        0 => "none".into(),
+        1 => list[0].clone(),
+        n => format!("{n} languages"),
     }
 }
 

@@ -27,9 +27,10 @@ pub struct Config {
     pub save_playlist_on_consume: bool,
     pub use_nerd_fonts: bool,
     // [playback] — client-only subtitle/audio preferences (never pushed to Emby server)
-    pub subtitle_mode: String, // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"; "" = inherit from Emby
-    pub subtitle_lang: String, // full language name, e.g. "English"; "" = any
-    pub audio_lang: String,    // full language name, e.g. "English"; "" = any
+    pub subtitle_mode: String,      // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"; "" = inherit from Emby
+    pub subtitle_lang: String,      // full language name, e.g. "English"; "" = any
+    pub audio_lang: String,         // full language name, e.g. "English"; "" = any
+    pub my_languages: Vec<String>,  // user's relevant languages; filters subtitle/audio lang cycling
 }
 
 impl Default for Config {
@@ -61,6 +62,7 @@ impl Default for Config {
             subtitle_mode: String::new(),
             subtitle_lang: String::new(),
             audio_lang: String::new(),
+            my_languages: vec![],
         }
     }
 }
@@ -418,6 +420,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let my_languages: Vec<String> = playback
+        .and_then(|p| p.get("my_languages"))
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(String::from).collect())
+        .unwrap_or_default();
 
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
@@ -446,6 +453,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         subtitle_mode,
         subtitle_lang,
         audio_lang,
+        my_languages,
     })
 }
 
@@ -522,6 +530,13 @@ pub fn save_config_settings(cfg: &Config) {
         playback.remove("audio_lang");
     } else {
         playback.insert("audio_lang".to_string(), toml::Value::String(cfg.audio_lang.clone()));
+    }
+    if cfg.my_languages.is_empty() {
+        playback.remove("my_languages");
+    } else {
+        playback.insert("my_languages".to_string(), toml::Value::Array(
+            cfg.my_languages.iter().map(|s| toml::Value::String(s.clone())).collect()
+        ));
     }
 
     if let Ok(s) = toml::to_string(&doc) {
