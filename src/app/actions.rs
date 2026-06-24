@@ -417,15 +417,15 @@ impl App {
 
     pub(super) fn effective_playback_state(&self) -> (bool, usize, i64, i64, bool) {
         if let Some(ref remote) = self.connected_session_state {
-            let active_idx = remote.now_playing_item_id.as_ref()
-                .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id))
-                .unwrap_or(0);
+            let maybe_active_idx = remote.now_playing_item_id.as_ref()
+                .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id));
+            let active_idx = maybe_active_idx.unwrap_or(0);
             let pos_ticks = {
                 let elapsed_s = if remote.is_paused { 0.0 } else { self.remote_pos_at.elapsed().as_secs_f64() };
                 let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
                 (pos_s * crate::api::TICKS_PER_SECOND as f64) as i64
             };
-            (remote.now_playing.is_some(),
+            (remote.now_playing.is_some() && maybe_active_idx.is_some(),
              active_idx,
              pos_ticks,
              remote.runtime_s * crate::api::TICKS_PER_SECOND,
