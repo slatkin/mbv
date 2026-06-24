@@ -440,14 +440,21 @@ impl App {
         #[allow(non_snake_case)]
         let LIB_EPISODE_IMG_H = lib_episode_img_h;
         let at_album_folders = self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none();
-        let is_homevideo_lib = matches!(self.libs[lib_idx].library.collection_type.as_str(), "homevideos" | "channels");
+        let at_music_groups = {
+            let lib = &self.libs[lib_idx];
+            lib.library.collection_type == "music"
+                && !self.music_levels.is_empty()
+                && lib.nav_stack.len() >= 1
+                && self.music_levels.get(lib.nav_stack.len() - 1).map(|s| s == "group").unwrap_or(false)
+        };
+        let is_feed_lib = { let c = self.client.lock().unwrap(); c.config.feed_view_libraries.contains(&self.libs[lib_idx].library.name.to_lowercase()) };
 
         let actual_sel_img_h: u16 = if images_enabled {
             if let Some((_, item)) = display_items.get(cursor) {
                 let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
                 let is_album_folder = at_album_folders && item.is_folder;
                 if !is_audio && !is_album_folder {
-                    let is_episode_like = item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video");
+                    let is_episode_like = item.item_type == "Episode" || (is_feed_lib && item.item_type == "Video");
                     let (img_w, img_h) = if is_episode_like {
                         (LIB_EPISODE_IMG_W, LIB_EPISODE_IMG_H)
                     } else {
@@ -475,7 +482,7 @@ impl App {
             } else if is_audio {
                 if i == cursor { LIB_AUDIO_IMG_H.max(3) } else { 3 }
             } else if images_enabled && i == cursor {
-                let is_episode_like = item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video");
+                let is_episode_like = item.item_type == "Episode" || (is_feed_lib && item.item_type == "Video");
                 let (sel_img_w, sel_img_h) = if is_episode_like {
                     (LIB_EPISODE_IMG_W, LIB_EPISODE_IMG_H)
                 } else {
@@ -553,7 +560,7 @@ impl App {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
                     let (img_w, img_h) = if is_audio || is_album_folder {
                         (LIB_AUDIO_IMG_W, LIB_AUDIO_IMG_H)
-                    } else if item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video") {
+                    } else if item.item_type == "Episode" || (is_feed_lib && item.item_type == "Video") {
                         (LIB_EPISODE_IMG_W, LIB_EPISODE_IMG_H)
                     } else {
                         (LIB_SELECTED_IMG_W, LIB_SELECTED_IMG_H)
@@ -600,7 +607,7 @@ impl App {
             };
             let content_w = text_rect.width as usize;
 
-            let is_episode_like = item.item_type == "Episode" || (is_homevideo_lib && item.item_type == "Video");
+            let is_episode_like = item.item_type == "Episode" || (is_feed_lib && item.item_type == "Video");
             if selected && !is_album_folder && !matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") && !is_episode_like {
                 let bar: Vec<Line> = (0..ind_rect.height)
                     .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::IRIS))))
@@ -656,7 +663,7 @@ impl App {
                 }
                 let mut parts: Vec<String> = Vec::new();
                 if !item.premiere_date.is_empty() { parts.push(item.premiere_date.clone()); }
-                if is_homevideo_lib && !item.date_added.is_empty() {
+                if is_feed_lib && !item.date_added.is_empty() {
                     const MONTHS: [&str; 12] = ["January","February","March","April","May","June","July","August","September","October","November","December"];
                     let formatted = item.date_added.splitn(3, '-')
                         .collect::<Vec<_>>()
@@ -812,10 +819,11 @@ impl App {
                 let title_line_widget = if let Some(count) = folder_count {
                     let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
                     let label_style = Style::default().fg(palette::YELLOW);
+                    let count_label = if at_music_groups { " albums" } else { " items" };
                     Line::from(vec![
                         Span::styled(title_display, title_style),
                         Span::styled(format!(" \u{00b7} {count}"), count_style),
-                        Span::styled(" albums", label_style),
+                        Span::styled(count_label, label_style),
                     ])
                 } else {
                     Line::from(Span::styled(title_display, title_style))

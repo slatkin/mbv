@@ -23,6 +23,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::SubtitleMode        => "Subtitle mode",
         SettingKey::SubtitleLanguage    => "Subtitle language",
         SettingKey::AudioLanguage       => "Audio language",
+        SettingKey::FeedViewLibraries   => "Feed view",
         SettingKey::LogOut              => "Log out",
     }
 }
@@ -49,6 +50,7 @@ pub fn setting_value(key: SettingKey, cfg: &Config) -> String {
         SettingKey::SubtitleMode     => if cfg.subtitle_mode.is_empty() { "Default".into() } else { cfg.subtitle_mode.clone() },
         SettingKey::SubtitleLanguage => if cfg.subtitle_lang.is_empty() { "any".into() } else { cfg.subtitle_lang.clone() },
         SettingKey::AudioLanguage    => if cfg.audio_lang.is_empty() { "any".into() } else { cfg.audio_lang.clone() },
+        SettingKey::FeedViewLibraries   => fmt_feed_view_list(&cfg.feed_view_libraries),
         SettingKey::LogOut              => String::new(),
     }
 }
@@ -66,6 +68,14 @@ pub fn fmt_lang_list(list: &[String]) -> String {
         0 => "none".into(),
         1 => list[0].clone(),
         n => format!("{n} languages"),
+    }
+}
+
+pub fn fmt_feed_view_list(list: &[String]) -> String {
+    match list.len() {
+        0 => "none".into(),
+        1 => list[0].clone(),
+        n => format!("{n} libraries"),
     }
 }
 
