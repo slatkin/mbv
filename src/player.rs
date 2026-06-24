@@ -465,7 +465,7 @@ fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
     let _ = mpv.observe_property("time-pos",      Format::Double, 0);
     let _ = mpv.observe_property("pause",         Format::Flag,   1);
     let _ = mpv.observe_property("volume",        Format::Double, 2);
-    let _ = mpv.observe_property("sid",           Format::Int64,  3);
+    let _ = mpv.observe_property("sid",           Format::String, 3);
     let _ = mpv.observe_property("mute",          Format::Flag,   4);
     let _ = mpv.observe_property("aid",           Format::String, 5);
     let _ = mpv.observe_property("video-params/h",Format::Int64,  6);
@@ -953,8 +953,8 @@ impl SingleSession {
                         self.reporter.report_progress(event_name);
                     }
                 }
-                Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
-                    self.status.lock().unwrap().sub_id = id;
+                Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Str(s), .. })) => {
+                    self.status.lock().unwrap().sub_id = s.parse::<i64>().unwrap_or(0);
                 }
                 Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
                     refresh_tracks(&mpv, &self.status);
@@ -1571,8 +1571,8 @@ impl PlaylistSession {
                         self.reporter.report_progress(event_name);
                     }
                 }
-                Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Int64(id), .. })) => {
-                    self.status.lock().unwrap().sub_id = id;
+                Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Str(s), .. })) => {
+                    self.status.lock().unwrap().sub_id = s.parse::<i64>().unwrap_or(0);
                 }
                 Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
                     refresh_tracks(&mpv, &self.status);
