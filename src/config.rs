@@ -230,15 +230,6 @@ pub fn prefs_path() -> PathBuf {
     migrate_to_state("prefs.json")
 }
 
-pub fn load_subs_off() -> bool {
-    let path = prefs_path();
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-        .and_then(|v| v["subs_off"].as_bool())
-        .unwrap_or(true)
-}
-
 pub fn osc_fonts_dir() -> PathBuf {
     let user = data_dir_system_or_local().join("fonts");
     if user.exists() {

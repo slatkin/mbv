@@ -300,19 +300,13 @@ impl App {
             let s = self.player.status.lock().unwrap();
             (s.sub_tracks.clone(), s.sub_id)
         };
-        let currently_off = self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
+        let currently_off = current_id == 0;
         if currently_off {
-            self.player.subs_off.store(false, std::sync::atomic::Ordering::Relaxed);
-            if let Some(&(first_id, _)) = tracks.first() {
-                if current_id == 0 {
-                    self.player.send_command(PlayerCommand::SetSub(first_id));
-                }
+            if let Some(&(first_id, _, _)) = tracks.first() {
+                self.player.send_command(PlayerCommand::SetSub(first_id));
             }
         } else {
-            self.player.subs_off.store(true, std::sync::atomic::Ordering::Relaxed);
-            if current_id != 0 {
-                self.player.send_command(PlayerCommand::SetSub(0));
-            }
+            self.player.send_command(PlayerCommand::SetSub(0));
         }
         self.save_prefs();
     }
@@ -328,11 +322,10 @@ impl App {
         };
         if tracks.is_empty() { return; }
         let mut entries: Vec<i64> = vec![0];
-        entries.extend(tracks.iter().map(|(id, _)| *id));
+        entries.extend(tracks.iter().map(|(id, _, _)| *id));
         let cur = entries.iter().position(|&id| id == current_id).unwrap_or(0);
         let next = (cur + 1) % entries.len();
         let next_id = entries[next];
-        self.player.subs_off.store(next_id == 0, std::sync::atomic::Ordering::Relaxed);
         self.player.send_command(PlayerCommand::SetSub(next_id));
         self.save_prefs();
     }

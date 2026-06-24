@@ -457,6 +457,9 @@ enum SettingKey {
     Autoload,
     ShowSysTrayIcon,
     SystemNotifications,
+    SubtitleMode,
+    SubtitleLanguage,
+    AudioLanguage,
     LogOut,
 }
 
@@ -466,6 +469,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest]),
     ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::SavePlaylistOnConsume]),
     ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
+    ("[playback]",  &[SettingKey::SubtitleMode, SettingKey::SubtitleLanguage, SettingKey::AudioLanguage]),
     ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",   &[SettingKey::LogOut]),
 ];
@@ -655,8 +659,8 @@ impl App {
         let ws_url = client.ws_url();
         let ws_send_tx = crate::ws::start(ws_url, ws_tx);
         let ws_send_tx_app = ws_send_tx.clone();
-        let subs_off = Self::load_subs_off();
-        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, always_skip_intro, subs_off, player_tx, Some(ws_send_tx));
+        let subtitle_prefs = client.get_user_subtitle_prefs().unwrap_or_default();
+        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, always_skip_intro, subtitle_prefs, player_tx, Some(ws_send_tx));
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();
         crate::mpris::start(player_status, move |cmd| {

@@ -1389,18 +1389,12 @@ impl App {
         Self::load_prefs()["ui_volume"].as_u64().unwrap_or(100).min(200) as u8
     }
 
-    pub(super) fn load_subs_off() -> bool {
-        Self::load_prefs()["subs_off"].as_bool().unwrap_or(true)
-    }
-
     pub(super) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
-        let subs_off = self.player.subs_off.load(std::sync::atomic::Ordering::Relaxed);
         let v = serde_json::json!({
             "playlist_view": self.playlist_view,
             "home_card_view": self.home_card_view,
             "ui_volume": self.ui_volume,
-            "subs_off": subs_off,
         });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);

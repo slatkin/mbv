@@ -28,6 +28,13 @@ fn send_ep_info(mpv: &Mpv, item: &crate::api::MediaItem) {
     let _ = mpv.set_property("user-data/mbv/ep-tag", val.as_str());
 }
 
+#[derive(Clone, Default)]
+pub struct SubtitlePrefs {
+    pub mode: String,           // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"
+    pub subtitle_lang: String,  // full language name, e.g. "English"
+    pub audio_lang: String,     // full language name, e.g. "English"
+}
+
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct PlayerStatus {
     pub position_ticks: i64,
@@ -41,7 +48,7 @@ pub struct PlayerStatus {
     pub active: bool,
     pub title: String,
     pub audio_tracks: Vec<(i64, String)>, // (mpv id, label)
-    pub sub_tracks: Vec<(i64, String)>,
+    pub sub_tracks: Vec<(i64, String, bool)>,  // (mpv id, label, forced)
     pub audio_id: i64,   // 0 = none/unknown
     pub audio_lang: String, // raw lang code of selected audio track, e.g. "en", "ru"
     pub sub_id: i64,    // 0 = off
@@ -79,6 +86,7 @@ pub enum PlayerCommand {
     SeekAbsolute(f64),
     SetAudio(i64),
     SetSub(i64), // 0 = off
+    SetSubtitlePrefs { mode: String, subtitle_lang: String, audio_lang: String },
     SetMute(bool),
     LoadNew { url: String, start_pos: f64, item: Box<MediaItem> },
     NextUpShow { item_id: String, show_title: String, ep_title: String, artist: String },
@@ -127,37 +135,90 @@ fn is_image_sub(codec: &str) -> bool {
     matches!(codec, "hdmv_pgs_subtitle" | "pgssub" | "dvd_subtitle" | "dvdsub" | "dvb_subtitle" | "xsub")
 }
 
-pub fn is_english(label: &str) -> bool {
+/// Returns true if `label` begins with or contains the full language name `lang_pref`
+/// (case-insensitive). Used to match audio/subtitle track labels against a preferred language.
+fn label_matches_lang(label: &str, lang_pref: &str) -> bool {
+    if lang_pref.is_empty() { return false; }
     let l = label.to_lowercase();
-    l == "en" || l == "eng" || l.starts_with("en-") || l.starts_with("english")
+    let p = lang_pref.to_lowercase();
+    l.starts_with(&p)
 }
 
-fn auto_select_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, subs_off: bool) {
+fn auto_select_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, prefs: &SubtitlePrefs) {
     refresh_tracks(mpv, status);
 
-    let (audio_tracks, audio_id) = {
-        let s = status.lock().unwrap();
-        (s.audio_tracks.clone(), s.audio_id)
-    };
-
-    // Switch to English audio if the current track isn't English
-    let current_is_english = audio_tracks.iter()
-        .find(|(id, _)| *id == audio_id)
-        .is_some_and(|(_, l)| is_english(l));
-    if !current_is_english {
-        if let Some((id, _)) = audio_tracks.iter().find(|(_, l)| is_english(l)) {
-            let _ = mpv.set_property("aid", *id);
-            status.lock().unwrap().audio_id = *id;
+    // Audio: select track matching AudioLanguagePreference
+    if !prefs.audio_lang.is_empty() {
+        let (audio_tracks, audio_id) = {
+            let s = status.lock().unwrap();
+            (s.audio_tracks.clone(), s.audio_id)
+        };
+        let current_matches = audio_tracks.iter()
+            .find(|(id, _)| *id == audio_id)
+            .is_some_and(|(_, l)| label_matches_lang(l, &prefs.audio_lang));
+        if !current_matches {
+            if let Some((id, _)) = audio_tracks.iter().find(|(_, l)| label_matches_lang(l, &prefs.audio_lang)) {
+                let _ = mpv.set_property("aid", *id);
+                status.lock().unwrap().audio_id = *id;
+            }
         }
     }
 
-    let sub_tracks: Vec<(i64, String)> = status.lock().unwrap().sub_tracks.clone();
-    if subs_off {
-        let _ = mpv.set_property("sid", "no".to_string());
-        status.lock().unwrap().sub_id = 0;
-    } else if let Some(&(first_id, _)) = sub_tracks.first() {
-        let _ = mpv.set_property("sid", first_id);
-        status.lock().unwrap().sub_id = first_id;
+    // Subtitle: apply SubtitleMode
+    // For "Default" mode, let mpv honour the stream's default/forced flags without interference.
+    if prefs.mode == "Default" || prefs.mode.is_empty() {
+        refresh_tracks(mpv, status);
+        return;
+    }
+
+    let sub_tracks: Vec<(i64, String, bool)> = status.lock().unwrap().sub_tracks.clone();
+    let audio_lang_name = {
+        let raw = status.lock().unwrap().audio_lang.clone();
+        lang_code_to_name(&raw).to_lowercase()
+    };
+    let sub_pref = prefs.subtitle_lang.to_lowercase();
+
+    let sid: Option<i64> = match prefs.mode.as_str() {
+        "None" => None,
+        "OnlyForced" => {
+            sub_tracks.iter()
+                .find(|(_, l, forced)| *forced && label_matches_lang(l, &prefs.subtitle_lang))
+                .or_else(|| sub_tracks.iter().find(|(_, _, forced)| *forced))
+                .map(|(id, _, _)| *id)
+        }
+        "Always" => {
+            sub_tracks.iter()
+                .find(|(_, l, _)| label_matches_lang(l, &prefs.subtitle_lang))
+                .or_else(|| sub_tracks.first())
+                .map(|(id, _, _)| *id)
+        }
+        "Smart" => {
+            if !sub_pref.is_empty() && audio_lang_name == sub_pref {
+                None
+            } else {
+                sub_tracks.iter()
+                    .find(|(_, l, _)| label_matches_lang(l, &prefs.subtitle_lang))
+                    .or_else(|| sub_tracks.first())
+                    .map(|(id, _, _)| *id)
+            }
+        }
+        "HearingImpaired" => {
+            sub_tracks.iter()
+                .find(|(_, l, _)| { let ll = l.to_lowercase(); ll.contains("sdh") || ll.contains(" cc") || ll.contains("(cc)") })
+                .or_else(|| sub_tracks.iter().find(|(_, l, _)| label_matches_lang(l, &prefs.subtitle_lang)))
+                .or_else(|| sub_tracks.first())
+                .map(|(id, _, _)| *id)
+        }
+        _ => {
+            // Unknown mode: treat like Default, don't interfere
+            refresh_tracks(mpv, status);
+            return;
+        }
+    };
+
+    match sid {
+        None    => { let _ = mpv.set_property("sid", "no".to_string()); status.lock().unwrap().sub_id = 0; }
+        Some(id) => { let _ = mpv.set_property("sid", id); status.lock().unwrap().sub_id = id; }
     }
 
     refresh_tracks(mpv, status);
@@ -169,7 +230,7 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
         Err(_) => return,
     };
     let mut audio: Vec<(i64, String)> = Vec::new();
-    let mut subs:  Vec<(i64, String)> = Vec::new();
+    let mut subs:  Vec<(i64, String, bool)> = Vec::new();
     let mut audio_id:   i64    = 0;
     let mut audio_lang: String = String::new();
     let mut sub_id:     i64    = 0;
@@ -200,10 +261,14 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
             }
             "sub" if !is_image_sub(&codec) => {
                 if sel { sub_id = id; }
-                let label = if !title.is_empty() { title }
+                let forced: bool = mpv.get_property(&format!("track-list/{i}/forced")).unwrap_or(false);
+                let name = lang_code_to_name(&lang);
+                let base_label = if !title.is_empty() { title.clone() }
+                    else if !name.is_empty() { name.to_string() }
                     else if !lang.is_empty() { lang.to_uppercase() }
                     else { format!("#{}", i + 1) };
-                subs.push((id, label));
+                let label = if forced { format!("{base_label} (Forced)") } else { base_label };
+                subs.push((id, label, forced));
             }
             _ => {}
         }
@@ -473,7 +538,7 @@ struct SingleSession {
     reporter: SessionReporter,
     event_tx: mpsc::Sender<PlayerEvent>,
     status:   Arc<Mutex<PlayerStatus>>,
-    subs_off: Arc<AtomicBool>,
+    subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     // loop state
     quit_at:             Option<Instant>,
     stop_reported:       bool,
@@ -506,7 +571,7 @@ impl SingleSession {
         config:   MpvSessionConfig,
         status:   Arc<Mutex<PlayerStatus>>,
         event_tx: mpsc::Sender<PlayerEvent>,
-        subs_off: Arc<AtomicBool>,
+        subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     ) -> Self {
         let is_audio       = item.is_audio();
         let last_valid_pos = if is_audio { 0 } else { item.playback_position_ticks };
@@ -526,7 +591,7 @@ impl SingleSession {
             reporter,
             event_tx,
             status,
-            subs_off,
+            subtitle_prefs,
             quit_at:             None,
             stop_reported:       false,
             stopped_event_sent:  false,
@@ -595,6 +660,16 @@ impl SingleSession {
                 else        { let _ = mpv.set_property("sid", id); }
                 refresh_tracks(mpv, &self.status);
                 self.status.lock().unwrap().sub_id = id;
+            }
+            PlayerCommand::SetSubtitlePrefs { mode, subtitle_lang, audio_lang } => {
+                {
+                    let mut p = self.subtitle_prefs.lock().unwrap();
+                    p.mode = mode;
+                    p.subtitle_lang = subtitle_lang;
+                    p.audio_lang = audio_lang;
+                }
+                let prefs = self.subtitle_prefs.lock().unwrap().clone();
+                auto_select_tracks(mpv, &self.status, &prefs);
             }
             PlayerCommand::SetMute(m) => {
                 let _ = mpv.set_property("mute", m);
@@ -700,7 +775,8 @@ impl SingleSession {
     fn on_playback_restart(&mut self, mpv: &Mpv) {
         let event_name: &str;
         if !self.tracks_initialized {
-            auto_select_tracks(mpv, &self.status, self.subs_off.load(Ordering::Relaxed));
+            let prefs = self.subtitle_prefs.lock().unwrap().clone();
+            auto_select_tracks(mpv, &self.status, &prefs);
             self.tracks_initialized = true;
             let val = if self.season > 0 && self.episode > 0 {
                 format!("Season {}  Episode {}", self.season, self.episode)
@@ -933,7 +1009,7 @@ struct PlaylistSession {
     reporter:   SessionReporter,
     event_tx:   mpsc::Sender<PlayerEvent>,
     status:     Arc<Mutex<PlayerStatus>>,
-    subs_off:   Arc<AtomicBool>,
+    subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     server_url: String,
     token:      String,
     items:      Vec<MediaItem>,
@@ -971,7 +1047,7 @@ impl PlaylistSession {
         config:     MpvSessionConfig,
         status:     Arc<Mutex<PlayerStatus>>,
         event_tx:   mpsc::Sender<PlayerEvent>,
-        subs_off:   Arc<AtomicBool>,
+        subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
         server_url: String,
         token:      String,
     ) -> Self {
@@ -992,7 +1068,7 @@ impl PlaylistSession {
             reporter,
             event_tx,
             status,
-            subs_off,
+            subtitle_prefs,
             server_url,
             token,
             n,
@@ -1165,6 +1241,16 @@ impl PlaylistSession {
                 refresh_tracks(mpv, &self.status);
                 self.status.lock().unwrap().sub_id = id;
             }
+            PlayerCommand::SetSubtitlePrefs { mode, subtitle_lang, audio_lang } => {
+                {
+                    let mut p = self.subtitle_prefs.lock().unwrap();
+                    p.mode = mode;
+                    p.subtitle_lang = subtitle_lang;
+                    p.audio_lang = audio_lang;
+                }
+                let prefs = self.subtitle_prefs.lock().unwrap().clone();
+                auto_select_tracks(mpv, &self.status, &prefs);
+            }
             PlayerCommand::SetMute(m) => {
                 let _ = mpv.set_property("mute", m);
                 self.status.lock().unwrap().muted = m;
@@ -1262,7 +1348,8 @@ impl PlaylistSession {
             return;
         }
         if !self.tracks_initialized {
-            auto_select_tracks(mpv, &self.status, self.subs_off.load(Ordering::Relaxed));
+            let prefs = self.subtitle_prefs.lock().unwrap().clone();
+            auto_select_tracks(mpv, &self.status, &prefs);
             self.tracks_initialized = true;
             send_ep_info(mpv, &self.items[self.current_idx]);
             if let Some(secs) = self.pending_resume_secs.take() {
@@ -1562,7 +1649,7 @@ pub struct Player {
     #[allow(dead_code)]
     pub always_play_next: bool,
     pub always_skip_intro: bool,
-    pub subs_off: Arc<AtomicBool>,
+    pub subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     is_playlist_mode: Arc<AtomicBool>,
     current_is_headless: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
@@ -1582,7 +1669,7 @@ impl Player {
         no_scripts: bool,
         always_play_next: bool,
         always_skip_intro: bool,
-        subs_off: bool,
+        subtitle_prefs: SubtitlePrefs,
         event_tx: mpsc::Sender<PlayerEvent>,
         ws_tx: Option<mpsc::Sender<String>>,
     ) -> Self {
@@ -1594,7 +1681,7 @@ impl Player {
             no_scripts,
             always_play_next,
             always_skip_intro,
-            subs_off: Arc::new(AtomicBool::new(subs_off)),
+            subtitle_prefs: Arc::new(Mutex::new(subtitle_prefs)),
             is_playlist_mode: Arc::new(AtomicBool::new(false)),
             current_is_headless: Arc::new(AtomicBool::new(false)),
             event_tx,
@@ -1696,7 +1783,7 @@ impl Player {
         let status           = self.status.clone();
         let event_tx         = self.event_tx.clone();
         let ws_tx            = self.ws_tx.clone();
-        let subs_off         = self.subs_off.clone();
+        let subtitle_prefs   = self.subtitle_prefs.clone();
         let is_playlist_mode = self.is_playlist_mode.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
@@ -1742,7 +1829,7 @@ impl Player {
                 client, ws_tx, item.id.clone(), msid, sid, is_audio, status.clone(),
             );
             let progress = spawn_progress_reporter(reporter.clone());
-            let session  = SingleSession::new(&item, reporter, config, status, event_tx, subs_off);
+            let session  = SingleSession::new(&item, reporter, config, status, event_tx, subtitle_prefs);
             session.run(mpv, stop_rx, cmd_rx, progress);
         });
         *self.thread_handle.lock().unwrap() = Some(handle);
@@ -1788,7 +1875,7 @@ impl Player {
         let status           = self.status.clone();
         let event_tx         = self.event_tx.clone();
         let ws_tx            = self.ws_tx.clone();
-        let subs_off         = self.subs_off.clone();
+        let subtitle_prefs   = self.subtitle_prefs.clone();
         let is_playlist_mode = self.is_playlist_mode.clone();
         let server_url       = self.server_url.clone();
         let token            = self.token.clone();
@@ -1847,7 +1934,7 @@ impl Player {
             );
             let progress = spawn_progress_reporter(reporter.clone());
             let session  = PlaylistSession::new(
-                items, start_idx, reporter, config, status, event_tx, subs_off, server_url, token,
+                items, start_idx, reporter, config, status, event_tx, subtitle_prefs, server_url, token,
             );
             session.run(mpv, stop_rx, cmd_rx, progress);
         });
@@ -1874,7 +1961,7 @@ enum PlayerProxyInner {
 pub struct PlayerProxy {
     pub always_play_next: bool,
     pub status: Arc<Mutex<PlayerStatus>>,
-    pub subs_off: Arc<AtomicBool>,
+    pub subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
     inner: PlayerProxyInner,
 }
 
@@ -1882,21 +1969,21 @@ impl PlayerProxy {
     #[cfg(test)]
     pub fn stub(status: Arc<Mutex<PlayerStatus>>) -> Self {
         let (tx, _rx) = std::sync::mpsc::channel();
-        let player = Player::new(String::new(), String::new(), false, false, false, false, false, true, tx, None);
-        let subs_off = player.subs_off.clone();
-        PlayerProxy { always_play_next: false, status, subs_off, inner: PlayerProxyInner::Local(player) }
+        let player = Player::new(String::new(), String::new(), false, false, false, false, false, SubtitlePrefs::default(), tx, None);
+        let subtitle_prefs = player.subtitle_prefs.clone();
+        PlayerProxy { always_play_next: false, status, subtitle_prefs, inner: PlayerProxyInner::Local(player) }
     }
 
     pub fn local(player: Player, always_play_next: bool) -> Self {
         let status   = player.status.clone();
-        let subs_off = player.subs_off.clone();
-        PlayerProxy { always_play_next, status, subs_off, inner: PlayerProxyInner::Local(player) }
+        let subtitle_prefs = player.subtitle_prefs.clone();
+        PlayerProxy { always_play_next, status, subtitle_prefs, inner: PlayerProxyInner::Local(player) }
     }
 
     pub fn remote(remote: crate::remote_player::RemotePlayer, always_play_next: bool) -> Self {
         let status   = remote.status.clone();
-        let subs_off = remote.subs_off.clone();
-        PlayerProxy { always_play_next, status, subs_off, inner: PlayerProxyInner::Remote(remote) }
+        let subtitle_prefs = remote.subtitle_prefs.clone();
+        PlayerProxy { always_play_next, status, subtitle_prefs, inner: PlayerProxyInner::Remote(remote) }
     }
 
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
@@ -2007,39 +2094,6 @@ mod tests {
     #[test]
     fn title_opt_empty() {
         assert_eq!(mpv_title_opt(""), "force-media-title=%0%");
-    }
-
-    // ── is_english ───────────────────────────────────────────────────────────
-
-    #[test]
-    fn english_language_codes() {
-        assert!(is_english("en"));
-        assert!(is_english("eng"));
-        assert!(is_english("en-US"));
-        assert!(is_english("en-GB"));
-    }
-
-    #[test]
-    fn english_case_insensitive() {
-        assert!(is_english("EN"));
-        assert!(is_english("ENG"));
-        assert!(is_english("English"));
-        assert!(is_english("ENGLISH"));
-        assert!(is_english("English (Stereo)"));
-        assert!(is_english("English 5.1"));
-    }
-
-    #[test]
-    fn non_english_rejected() {
-        assert!(!is_english("fr"));
-        assert!(!is_english("fra"));
-        assert!(!is_english("French"));
-        assert!(!is_english("deu"));
-        assert!(!is_english("German"));
-        assert!(!is_english("jpn"));
-        assert!(!is_english("Japanese"));
-        assert!(!is_english("#1"));
-        assert!(!is_english(""));
     }
 
     // ── PlayerCommand serde (IPC protocol integrity) ─────────────────────────

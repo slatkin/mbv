@@ -19,11 +19,14 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::Autoload            => "autoload",
         SettingKey::ShowSysTrayIcon     => "Show systray icon",
         SettingKey::SystemNotifications => "System notifications",
+        SettingKey::SubtitleMode        => "Subtitle mode",
+        SettingKey::SubtitleLanguage    => "Subtitle language",
+        SettingKey::AudioLanguage       => "Audio language",
         SettingKey::LogOut              => "Log out",
     }
 }
 
-pub fn setting_value(key: SettingKey, cfg: &Config) -> String {
+pub fn setting_value(key: SettingKey, cfg: &Config, prefs: &crate::player::SubtitlePrefs) -> String {
     match key {
         SettingKey::DaemonModeOnExit    => bool_val(cfg.daemon_mode_on_exit),
         SettingKey::StartOnQueue        => bool_val(cfg.start_on_queue),
@@ -41,6 +44,9 @@ pub fn setting_value(key: SettingKey, cfg: &Config) -> String {
         SettingKey::Autoload            => bool_val(cfg.autoload),
         SettingKey::ShowSysTrayIcon     => bool_val(cfg.show_systray_icon),
         SettingKey::SystemNotifications => bool_val(cfg.system_notifications),
+        SettingKey::SubtitleMode        => if prefs.mode.is_empty() { "Default".into() } else { prefs.mode.clone() },
+        SettingKey::SubtitleLanguage    => if prefs.subtitle_lang.is_empty() { "any".into() } else { prefs.subtitle_lang.clone() },
+        SettingKey::AudioLanguage       => if prefs.audio_lang.is_empty() { "any".into() } else { prefs.audio_lang.clone() },
         SettingKey::LogOut              => String::new(),
     }
 }

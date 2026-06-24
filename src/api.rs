@@ -484,6 +484,35 @@ impl EmbyClient {
         Ok(())
     }
 
+    /// Fetch the current user's subtitle and audio language preferences from Emby.
+    pub fn get_user_subtitle_prefs(&self) -> Result<crate::player::SubtitlePrefs, String> {
+        let resp: serde_json::Value = self.get("/Users/Me")
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        let cfg = &resp["Configuration"];
+        let mode = cfg["SubtitleMode"].as_str().unwrap_or("Default").to_string();
+        let subtitle_lang = cfg["SubtitleLanguagePreference"].as_str().unwrap_or("").to_string();
+        let audio_lang = cfg["AudioLanguagePreference"].as_str().unwrap_or("").to_string();
+        Ok(crate::player::SubtitlePrefs { mode, subtitle_lang, audio_lang })
+    }
+
+    /// Update the current user's subtitle and audio language preferences on the Emby server.
+    pub fn update_user_subtitle_prefs(&self, prefs: &crate::player::SubtitlePrefs) -> Result<(), String> {
+        // Read the full Configuration object first (Emby requires the complete object on POST).
+        let user: serde_json::Value = self.get("/Users/Me")
+            .call().map_err(|e| e.to_string())?
+            .into_json().map_err(|e| e.to_string())?;
+        let user_id = user["Id"].as_str().unwrap_or("").to_string();
+        let mut cfg = user["Configuration"].clone();
+        if cfg.is_null() { cfg = serde_json::json!({}); }
+        cfg["SubtitleMode"] = serde_json::json!(prefs.mode);
+        cfg["SubtitleLanguagePreference"] = serde_json::json!(prefs.subtitle_lang);
+        cfg["AudioLanguagePreference"] = serde_json::json!(prefs.audio_lang);
+        let path = format!("/Users/{user_id}/Configuration");
+        self.post(&path).send_json(cfg).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     // ── Browse / fetch ───────────────────────────────────────────────────────
 
     fn fetch_items(&self, path: &str, queries: &[(&str, &str)]) -> Result<Vec<MediaItem>, String> {
