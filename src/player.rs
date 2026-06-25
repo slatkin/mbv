@@ -802,6 +802,7 @@ impl SingleSession {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        { let mut st = self.status.lock().unwrap(); st.video_height = 0; st.audio_codec.clear(); st.video_is_image = false; }
         let event_name: &str;
         if !self.tracks_initialized {
             let prefs = self.subtitle_prefs.lock().unwrap().clone();
@@ -985,7 +986,6 @@ impl SingleSession {
                     self.status.lock().unwrap().video_is_image = is_img;
                 }
                 Some(Ok(Event::PlaybackRestart)) => {
-                    { let mut st = self.status.lock().unwrap(); st.video_height = 0; st.audio_codec.clear(); st.video_is_image = false; }
                     self.on_playback_restart(&mpv);
                 }
                 Some(Ok(Event::EndFile(reason))) => {
@@ -1392,6 +1392,7 @@ impl PlaylistSession {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        { let mut st = self.status.lock().unwrap(); st.video_height = 0; st.audio_codec.clear(); st.video_is_image = false; }
         if self.pending_initial_jump {
             // mpv ignored playlist-pos before the event loop started; now that
             // playback is live (first PlaybackRestart), the jump is honored.
@@ -1661,7 +1662,6 @@ impl PlaylistSession {
                     self.status.lock().unwrap().video_is_image = is_img;
                 }
                 Some(Ok(Event::PlaybackRestart)) => {
-                    { let mut st = self.status.lock().unwrap(); st.video_height = 0; st.audio_codec.clear(); st.video_is_image = false; }
                     self.on_playback_restart(&mpv);
                 }
                 Some(Ok(Event::EndFile(reason))) => {

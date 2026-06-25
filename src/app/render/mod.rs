@@ -55,17 +55,13 @@ impl App {
             let sub_id = pst.sub_id;
 
             let res_h = pst.video_height;
-            let audio_codec = pst.audio_codec.clone();
-            let video_is_image = pst.video_is_image;
-            let is_audio_only = res_h == 0 || video_is_image;
+            let is_audio_only = active && (res_h == 0 || pst.video_is_image);
             let res_str = if is_audio_only {
-                if audio_codec.is_empty() { "--".to_string() } else { audio_codec.to_uppercase() }
+                if pst.audio_codec.is_empty() { "--".to_string() } else { pst.audio_codec.to_uppercase() }
             } else {
                 format!("{}p", res_h)
             };
-            let res_color = if is_audio_only && !audio_codec.is_empty() { palette::FOAM }
-                            else if !is_audio_only { palette::FOAM }
-                            else { palette::MUTED };
+            let res_color = if res_str == "--" { palette::MUTED } else { palette::FOAM };
 
             let raw_lang = pst.audio_lang.to_lowercase();
             let (au_text, au_color): (String, Color) = if raw_lang.is_empty() {
