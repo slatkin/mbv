@@ -39,6 +39,8 @@ impl RemotePlayer {
             sub_id: 0,
             muted: false,
             video_height: 0,
+            audio_codec: String::new(),
+            video_is_image: false,
         }));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));

@@ -54,6 +54,10 @@ pub struct PlayerStatus {
     pub sub_id: i64,    // 0 = off
     pub muted: bool,
     pub video_height: i64,  // 0 = no video / audio-only
+    #[serde(default)]
+    pub audio_codec: String, // e.g. "flac", "mp3", "aac"
+    #[serde(default)]
+    pub video_is_image: bool, // true when the video track is cover art (not real video)
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -482,7 +486,9 @@ fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
     let _ = mpv.observe_property("sid",           Format::String, 3);
     let _ = mpv.observe_property("mute",          Format::Flag,   4);
     let _ = mpv.observe_property("aid",           Format::String, 5);
-    let _ = mpv.observe_property("video-params/h",Format::Int64,  6);
+    let _ = mpv.observe_property("video-params/h",  Format::Int64,  6);
+    let _ = mpv.observe_property("audio-codec-name",        Format::String, 7);
+    let _ = mpv.observe_property("current-tracks/video/image", Format::Flag, 8);
     if use_mpv_config {
         let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
     }
@@ -972,7 +978,14 @@ impl SingleSession {
                 Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
                     self.status.lock().unwrap().video_height = h;
                 }
+                Some(Ok(Event::PropertyChange { name: "audio-codec-name", change: PropertyData::Str(s), .. })) => {
+                    self.status.lock().unwrap().audio_codec = s.to_lowercase();
+                }
+                Some(Ok(Event::PropertyChange { name: "current-tracks/video/image", change: PropertyData::Flag(is_img), .. })) => {
+                    self.status.lock().unwrap().video_is_image = is_img;
+                }
                 Some(Ok(Event::PlaybackRestart)) => {
+                    { let mut st = self.status.lock().unwrap(); st.video_height = 0; st.audio_codec.clear(); st.video_is_image = false; }
                     self.on_playback_restart(&mpv);
                 }
                 Some(Ok(Event::EndFile(reason))) => {
@@ -1641,7 +1654,14 @@ impl PlaylistSession {
                 Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
                     self.status.lock().unwrap().video_height = h;
                 }
+                Some(Ok(Event::PropertyChange { name: "audio-codec-name", change: PropertyData::Str(s), .. })) => {
+                    self.status.lock().unwrap().audio_codec = s.to_lowercase();
+                }
+                Some(Ok(Event::PropertyChange { name: "current-tracks/video/image", change: PropertyData::Flag(is_img), .. })) => {
+                    self.status.lock().unwrap().video_is_image = is_img;
+                }
                 Some(Ok(Event::PlaybackRestart)) => {
+                    { let mut st = self.status.lock().unwrap(); st.video_height = 0; st.audio_codec.clear(); st.video_is_image = false; }
                     self.on_playback_restart(&mpv);
                 }
                 Some(Ok(Event::EndFile(reason))) => {
@@ -1785,6 +1805,8 @@ impl Player {
                 sub_id: 0,
                 muted: false,
                 video_height: 0,
+                audio_codec: String::new(),
+                video_is_image: false,
             })),
             thread_handle: Mutex::new(None),
             ws_tx,

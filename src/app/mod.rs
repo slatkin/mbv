@@ -1491,6 +1491,7 @@ mod tests {
             volume: 100, volume_max: 100, current_idx: 0, active: false,
             title: String::new(), audio_tracks: Vec::new(), sub_tracks: Vec::new(),
             audio_id: 0, audio_lang: String::new(), sub_id: 0, muted: false, video_height: 0,
+            audio_codec: String::new(), video_is_image: false,
         }));
 
         let (_, player_rx) = std::sync::mpsc::channel();
