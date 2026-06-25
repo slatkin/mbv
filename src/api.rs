@@ -698,7 +698,7 @@ impl EmbyClient {
         format!("{}/embywebsocket?api_key={}&deviceId={}", base, self.token, self.device_id)
     }
 
-    pub fn report_start(&self, item: &MediaItem, media_source_id: &str, session_id: &str) {
+    pub fn report_start(&self, item: &MediaItem, media_source_id: &str, session_id: &str) -> bool {
         let body = ureq::json!({
             "UserId": self.user_id,
             "ItemId": item.id,
@@ -714,13 +714,13 @@ impl EmbyClient {
         });
         log::info!(target: "api", "outbound: Playing item={} msid={media_source_id} pos={}", item.id, item.playback_position_ticks);
         match self.post("/Sessions/Playing").send_json(body.clone()) {
-            Ok(r)  => log::info!(target: "api", "inbound: {} Playing", r.status()),
+            Ok(r)  => { log::info!(target: "api", "inbound: {} Playing", r.status()); true }
             Err(e) => {
                 log::warn!(target: "api", "err: Playing: {e}, retrying...");
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 match self.post("/Sessions/Playing").send_json(body) {
-                    Ok(r)  => log::info!(target: "api", "inbound: {} Playing (retry)", r.status()),
-                    Err(e) => log::warn!(target: "api", "err: Playing retry failed: {e}"),
+                    Ok(r)  => { log::info!(target: "api", "inbound: {} Playing (retry)", r.status()); true }
+                    Err(e) => { log::warn!(target: "api", "err: Playing retry failed: {e}"); false }
                 }
             }
         }
@@ -787,7 +787,7 @@ impl EmbyClient {
         }
     }
 
-    pub fn report_stopped(&self, item_id: &str, media_source_id: &str, position_ticks: i64, session_id: &str, runtime_ticks: i64) {
+    pub fn report_stopped(&self, item_id: &str, media_source_id: &str, position_ticks: i64, session_id: &str, runtime_ticks: i64) -> bool {
         let body = ureq::json!({
             "UserId": self.user_id,
             "ItemId": item_id,
@@ -805,13 +805,14 @@ impl EmbyClient {
         match self.post("/Sessions/Playing/Stopped").send_json(body.clone()) {
             Ok(r)  => {
                 log::info!(target: "api", "inbound: {} Stopped", r.status());
+                true
             }
             Err(e) => {
                 log::warn!(target: "api", "err: Stopped: {e}, retrying...");
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 match self.post("/Sessions/Playing/Stopped").send_json(body) {
-                    Ok(r)  => log::info!(target: "api", "inbound: {} Stopped (retry)", r.status()),
-                    Err(e) => log::warn!(target: "api", "err: Stopped retry failed: {e}"),
+                    Ok(r)  => { log::info!(target: "api", "inbound: {} Stopped (retry)", r.status()); true }
+                    Err(e) => { log::warn!(target: "api", "err: Stopped retry failed: {e}"); false }
                 }
             }
         }

@@ -351,14 +351,14 @@ impl SessionReporter {
     }
 
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
-    fn report_stopped(&self, last_valid_pos: i64) {
+    fn report_stopped(&self, last_valid_pos: i64) -> bool {
         let (id, msid, sid) = self.ids.lock().unwrap().clone();
         let is_audio = self.is_audio.load(Ordering::Relaxed);
         let pos = if is_audio { 0 } else { last_valid_pos };
         let runtime_ticks = self.status.lock().unwrap().runtime_ticks;
         log::info!(target: "player", "report_stopped: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s",
             last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
-        self.client.report_stopped(&id, &msid, pos, &sid, runtime_ticks);
+        self.client.report_stopped(&id, &msid, pos, &sid, runtime_ticks)
     }
 
     fn report_ping(&self) {
@@ -369,8 +369,8 @@ impl SessionReporter {
     // get_playback_info + report_start for a new item, updating tracking ids
     // *before* the network call so the progress reporter thread never sends
     // stale IDs to Emby.
-    // Returns ext_sub_urls from the playback info response.
-    fn start_item(&self, item: &MediaItem) -> Vec<String> {
+    // Returns (ext_sub_urls, success).
+    fn start_item(&self, item: &MediaItem) -> (Vec<String>, bool) {
         let (new_sid, new_msid, ext_sub_urls) = self.client.get_playback_info(&item.id);
         // Update ids before report_start so the progress reporter (which reads
         // ids on a 10-second timer) always sees the new item.
@@ -381,15 +381,22 @@ impl SessionReporter {
             ids.2 = new_sid.clone();
         }
         self.is_audio.store(item.is_audio(), Ordering::Relaxed);
-        self.client.report_start(item, &new_msid, &new_sid);
-        ext_sub_urls
+        let ok = self.client.report_start(item, &new_msid, &new_sid);
+        (ext_sub_urls, ok)
     }
 
     // report_stopped for current item then start_item for the new one.
-    // Returns ext_sub_urls for the new item.
+    // Returns ext_sub_urls for the new item. Logs warnings on API failures.
     fn transition_to(&self, new_item: &MediaItem, last_valid_pos: i64) -> Vec<String> {
-        self.report_stopped(last_valid_pos);
-        self.start_item(new_item)
+        let stop_ok = self.report_stopped(last_valid_pos);
+        if !stop_ok {
+            log::warn!(target: "player", "transition_to: report_stopped failed for prev item");
+        }
+        let (ext_sub_urls, start_ok) = self.start_item(new_item);
+        if !start_ok {
+            log::warn!(target: "player", "transition_to: report_start failed for item={}", new_item.id);
+        }
+        ext_sub_urls
     }
 }
 
@@ -1246,7 +1253,10 @@ impl PlaylistSession {
                 // Stop progress reporter during transition to prevent stale reports,
                 // then restart for the new item.
                 progress.stop_and_join();
-                self.reporter.start_item(&new_items[start_idx]);
+                let (_urls, ok) = self.reporter.start_item(&new_items[start_idx]);
+                if !ok {
+                    log::warn!(target: "player", "start_item failed for playlist replace item={}", new_items[start_idx].id);
+                }
                 *progress = spawn_progress_reporter(self.reporter.clone());
                 self.n          = new_items.len();
                 self.current_idx = start_idx;
@@ -1519,7 +1529,10 @@ impl PlaylistSession {
 
         // Stop progress reporter during transition to prevent stale reports.
         progress.stop_and_join();
-        self.reporter.start_item(&self.items[self.current_idx]);
+        let (_urls, ok) = self.reporter.start_item(&self.items[self.current_idx]);
+        if !ok {
+            log::warn!(target: "player", "start_item failed for playlist track-transition item={}", self.items[self.current_idx].id);
+        }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
         let (s, e) = load_intro_times(&self.reporter.client, &self.items[self.current_idx].id);

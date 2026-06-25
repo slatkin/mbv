@@ -1,7 +1,9 @@
 use std::sync::mpsc;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::io::ErrorKind;
+
+use rand::RngExt;
 
 use serde_json::Value;
 use tungstenite::Message;
@@ -101,10 +103,14 @@ fn parse(text: &str) -> Option<WsEvent> {
 pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<String> {
     let (out_tx, out_rx) = mpsc::channel::<String>();
     thread::spawn(move || {
+        let mut backoff_secs: u64 = 1;
         loop {
             log::info!(target: "ws", "connecting…");
             match tungstenite::connect(&ws_url) {
                 Ok((mut socket, _)) => {
+                    // Successful connection — reset backoff.
+                    backoff_secs = 1;
+
                     // Short read timeout so we can drain outbound messages between reads.
                     let timeout = Some(Duration::from_millis(100));
                     match socket.get_ref() {
@@ -113,15 +119,40 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
                         _ => {}
                     }
                     log::info!(target: "ws", "connected");
+
+                    let mut last_activity = Instant::now();
+                    let mut last_ping = Instant::now();
+                    const PING_INTERVAL: Duration = Duration::from_secs(20);
+                    const PONG_TIMEOUT: Duration = Duration::from_secs(45);
+
                     'conn: loop {
+                        // Send outbound messages.
                         while let Ok(msg) = out_rx.try_recv() {
                             if socket.send(Message::Text(msg)).is_err() {
                                 log::warn!(target: "ws", "send error, reconnecting");
                                 break 'conn;
                             }
                         }
+
+                        // M4: Send periodic heartbeat pings.
+                        if last_ping.elapsed() >= PING_INTERVAL {
+                            if socket.send(Message::Ping(vec![])).is_err() {
+                                log::warn!(target: "ws", "ping send failed, reconnecting");
+                                break 'conn;
+                            }
+                            last_ping = Instant::now();
+                        }
+
+                        // M4: Detect stale connection (no data for PONG_TIMEOUT).
+                        if last_activity.elapsed() >= PONG_TIMEOUT {
+                            log::warn!(target: "ws", "no response for {:.0}s, reconnecting",
+                                last_activity.elapsed().as_secs_f64());
+                            break 'conn;
+                        }
+
                         match socket.read() {
                             Ok(Message::Text(txt)) => {
+                                last_activity = Instant::now();
                                 if let Some(ev) = parse(&txt) {
                                     if event_tx.send(ev).is_err() {
                                         return;
@@ -129,7 +160,11 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
                                 }
                             }
                             Ok(Message::Ping(data)) => {
+                                last_activity = Instant::now();
                                 let _ = socket.send(Message::Pong(data));
+                            }
+                            Ok(Message::Pong(_)) => {
+                                last_activity = Instant::now();
                             }
                             Ok(Message::Close(_)) => {
                                 log::info!(target: "ws", "closed by server, reconnecting");
@@ -150,7 +185,12 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
                     log::warn!(target: "ws", "connect failed: {e}");
                 }
             }
-            thread::sleep(Duration::from_secs(5));
+            // M3: Exponential backoff with jitter, max 60s.
+            let jitter: f64 = rand::rng().random_range(0.0..1.0);
+            let delay = Duration::from_secs_f64(backoff_secs as f64 + jitter);
+            log::info!(target: "ws", "reconnecting in {:.1}s (backoff={backoff_secs}s)", delay.as_secs_f64());
+            thread::sleep(delay);
+            backoff_secs = (backoff_secs * 2).min(60);
         }
     });
     out_tx
