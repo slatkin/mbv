@@ -161,6 +161,8 @@ impl App {
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let row_style = if i == current_idx && active {
                 Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+            } else if i == cursor {
+                Style::default().fg(palette::YELLOW)
             } else {
                 Style::default().fg(palette::WHITE)
             };

@@ -181,6 +181,8 @@ impl App {
             let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
             let row_style = if is_playing {
                 Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+            } else if is_cursor {
+                Style::default().fg(palette::YELLOW)
             } else {
                 Style::default().fg(palette::WHITE)
             };
@@ -638,8 +640,7 @@ impl App {
 
             let is_now_playing = lib_now_playing_id.as_deref() == Some(item.id.as_str());
             let text_color = if is_now_playing { palette::FOAM }
-                else if selected && (matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") || is_episode_like) { palette::IRIS }
-                else if selected { palette::WHITE }
+                else if selected { palette::YELLOW }
                 else { palette::TEXT };
 
             let title_line = match item.item_type.as_str() {

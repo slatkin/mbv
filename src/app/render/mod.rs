@@ -35,7 +35,7 @@ impl App {
         let status_h:   u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
         let controls_h: u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 2 } else { 0 };
         let tabs_h:  u16 = if in_power { 0 } else { 1 };
-        let gap_h:   u16 = if in_power { 0 } else { 1 };
+        let gap_h:   u16 = 1;
         let title_h: u16 = if in_power { 0 } else { 1 };
         let [tabs_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(tabs_h),
@@ -49,9 +49,7 @@ impl App {
         const VOL_W: u16 = 9; // " Vol XXX%"
         let right_w = VOL_W + 1; // +1 so the trailing % aligns with the last ] on the divider row
 
-        if !in_power {
-            self.render_indicator_bar(f, gap_area, false);
-        }
+        self.render_indicator_bar(f, gap_area, in_power);
 
         if !in_power {
             let vol_area = Rect {

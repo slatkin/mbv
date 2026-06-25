@@ -17,7 +17,7 @@ impl App {
         let min_lib_h: u16 = 4;
         let top_max = area.height.saturating_sub(min_lib_h);
         let top_h = if top_max >= min_queue_h {
-            let preferred = (area.height as u32 / 2) as u16;
+            let preferred = (area.height as u32 * 45 / 100) as u16;
             preferred.clamp(min_queue_h, top_max)
         } else {
             top_max
@@ -39,8 +39,7 @@ impl App {
         self.render_power_queue(f, right_area, queue_focused);
 
         // ── horizontal divider ───────────────────────────────────────────────
-        let lib_focused = matches!(self.power_focus, PowerFocus::Library(_));
-        let hdiv_fg = if lib_focused { palette::IRIS } else { palette::SUBTLE };
+        let hdiv_fg = palette::IRIS;
         let hdiv_str = "\u{2500}".repeat(area.width as usize);
         f.render_widget(
             Paragraph::new(Span::styled(hdiv_str, Style::default().fg(hdiv_fg))),
@@ -126,15 +125,11 @@ impl App {
         };
 
         let list_area = if active && self.show_playback_panel {
-            // 2 rows: seekbar then time+buttons; then indicator bar divider
+            // 2 rows: seekbar then time+buttons
             let ctrl_w = area.width;
             let controls_area = Rect { x: area.x, y: area.y, width: ctrl_w, height: 2 };
-            let divider_y = area.y + 2;
             self.render_playback_controls(f, controls_area);
-            if area.height > 2 {
-                self.render_indicator_bar(f, Rect { x: area.x, y: divider_y, width: area.width, height: 1 }, focused);
-            }
-            Rect { y: area.y + 3, height: area.height.saturating_sub(3), ..area }
+            Rect { y: area.y + 2, height: area.height.saturating_sub(2), ..area }
         } else {
             area
         };
@@ -174,8 +169,9 @@ impl App {
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let is_active = i == active_idx && active;
             let row_style = if is_active {
-                let fg = if focused { palette::FOAM } else { palette::MUTED };
-                Style::default().fg(fg).add_modifier(Modifier::BOLD)
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+            } else if i == cursor && focused {
+                Style::default().fg(palette::YELLOW)
             } else {
                 Style::default().fg(if focused { palette::WHITE } else { palette::SUBTLE })
             };
@@ -189,7 +185,7 @@ impl App {
                 let pct = (pt * 100 / rt.max(1)) as u64;
                 format!(" {pct}%")
             } else { String::new() };
-            let marker = if i == cursor {
+            let marker = if i == cursor && focused {
                 Span::styled("\u{258c}", Style::default().fg(palette::IRIS))
             } else {
                 Span::raw(" ")
@@ -281,7 +277,7 @@ impl App {
             // Column header: library name, highlighted green if focused
             let focused = matches!(self.power_focus, PowerFocus::Library(idx) if idx == lib_idx);
             let lib_name = self.libs[lib_idx].library.name.clone();
-            let header_fg = if focused { palette::IRIS } else { palette::SUBTLE };
+            let header_fg = palette::IRIS;
             if focused {
                 let label = format!("  {}  ", trunc_str(&lib_name, (w as usize).saturating_sub(4)));
                 f.render_widget(
@@ -292,7 +288,7 @@ impl App {
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
                         Span::raw(" "),
-                        Span::styled(trunc_str(&lib_name, (w as usize).saturating_sub(2)), Style::default().fg(palette::WHITE)),
+                        Span::styled(trunc_str(&lib_name, (w as usize).saturating_sub(2)), Style::default().fg(palette::YELLOW)),
                     ])),
                     Rect { x, y: area.y, width: w, height: 1 },
                 );
@@ -373,17 +369,26 @@ impl App {
             let abs = offset + i;
             let selected = abs == cursor;
             let (text, _) = item_text_and_style(item, selected);
-            let display = format!(" {}", trunc_str(&text, (area.width as usize).saturating_sub(2)));
-            let row_style = if selected && focused {
-                Style::default().fg(palette::WHITE).add_modifier(Modifier::REVERSED)
-            } else if selected {
-                Style::default().fg(palette::IRIS)
+            let title = trunc_str(&text, (area.width as usize).saturating_sub(2));
+            let fg = if !focused {
+                palette::SUBTLE
             } else if item.is_folder {
-                Style::default().fg(palette::WHITE)
+                palette::WHITE
             } else {
-                Style::default().fg(palette::TEXT)
+                palette::TEXT
             };
-            ListItem::new(Span::styled(display, row_style))
+            let line = if selected && focused {
+                Line::from(vec![
+                    Span::styled("\u{258c}", Style::default().fg(palette::IRIS)),
+                    Span::styled(title, Style::default().fg(palette::YELLOW)),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::raw(" "),
+                    Span::styled(title, Style::default().fg(fg)),
+                ])
+            };
+            ListItem::new(line)
         }).collect();
 
         let mut state = ListState::default();
