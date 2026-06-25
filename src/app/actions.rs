@@ -363,7 +363,8 @@ impl App {
         };
         if active && current_idx == pos {
             self.confirm_remove_idx = Some(pos);
-            self.flash_status("Remove now-playing item and stop playback? (y/N)".into());
+            self.status = "Remove now-playing item and stop playback? (y/N)".into();
+            self.status_expires = None;
             return;
         }
         let item = self.player_tab.items.remove(pos);
@@ -431,7 +432,13 @@ impl App {
     pub(super) fn flash_status(&mut self, msg: String) {
         self.notify_system(&msg);
         self.status = msg;
-        self.status_expires = Some(Instant::now() + Duration::from_secs(3));
+        self.status_expires = Some(Instant::now() + Duration::from_secs(2));
+    }
+
+    pub(super) fn flash_status_high(&mut self, msg: String) {
+        self.notify_system(&msg);
+        self.status = msg;
+        self.status_expires = Some(Instant::now() + Duration::from_secs(5));
     }
 
     pub(super) fn effective_playback_state(&self) -> (bool, usize, i64, i64, bool) {
@@ -537,13 +544,13 @@ impl App {
                 items.sort_by_key(|a| natural_sort_key(a.sort_key()));
                 let count = items.len();
                 drop(client);
-                if count == 0 { self.flash_status("Nothing to enqueue".into()); return; }
+                if count == 0 { self.flash_status_high("Nothing to enqueue".into()); return; }
                 for i in items { self.player_tab.items.push(i); }
                 self.queue_dirty = true;
                 self.flash_status(format!("Enqueued {count} items from {}", item.display_name()));
                 self.save_queue_state();
             }
-            Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
+            Err(e) => { drop(client); self.flash_status_high(format!("Error: {e}")); }
         }
     }
 
@@ -737,7 +744,7 @@ impl App {
             Ok(()) => {
                 if self.tab_idx == 0 { let _ = self.fetch_home(); } else { self.refresh_lib(); }
             }
-            Err(e) => self.flash_status(format!("Error: {e}")),
+            Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
     }
 
@@ -748,7 +755,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => { let _ = self.fetch_home(); }
-            Err(e) => self.flash_status(format!("Error: {e}")),
+            Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
     }
 
@@ -760,7 +767,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => { let _ = self.fetch_home(); }
-            Err(e) => self.flash_status(format!("Error: {e}")),
+            Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
     }
 
@@ -772,7 +779,7 @@ impl App {
         drop(client);
         match result {
             Ok(()) => self.refresh_lib(),
-            Err(e) => self.flash_status(format!("Error: {e}")),
+            Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
     }
 
@@ -810,7 +817,7 @@ impl App {
         self.force_clear = true;
         if self.tab_idx == 0 {
             if let Err(e) = self.fetch_home() {
-                self.flash_status(format!("Refresh error: {e}"));
+                self.flash_status_high(format!("Refresh error: {e}"));
             }
         } else if self.tab_idx == 1 {
             self.refresh_queue();
@@ -839,7 +846,7 @@ impl App {
         match client.get_all_videos_recursive(&parent_id) {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
-                if items.is_empty() { drop(client); self.flash_status("Nothing to shuffle".into()); return; }
+                if items.is_empty() { drop(client); self.flash_status_high("Nothing to shuffle".into()); return; }
                 items.shuffle(&mut rand::rng());
                 let count = items.len();
                 drop(client);
@@ -851,7 +858,7 @@ impl App {
                 self.queue_source = crate::config::QueueSource::Shuffle;
                 self.save_queue_state();
             }
-            Err(e) => { let msg = format!("Error: {e}"); drop(client); self.flash_status(msg); }
+            Err(e) => { let msg = format!("Error: {e}"); drop(client); self.flash_status_high(msg); }
         }
     }
 
@@ -861,7 +868,7 @@ impl App {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
                 items.sort_by_key(|a| natural_sort_key(a.sort_key()));
-                if items.is_empty() { drop(client); self.flash_status("Nothing to play".into()); return; }
+                if items.is_empty() { drop(client); self.flash_status_high("Nothing to play".into()); return; }
                 let count = items.len();
                 drop(client);
                 self.player_tab.items = items.clone();
@@ -870,7 +877,7 @@ impl App {
                 self.flash_status(format!("Playing {count} items"));
                 self.play_items_routed(items, 0);
             }
-            Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
+            Err(e) => { drop(client); self.flash_status_high(format!("Error: {e}")); }
         }
     }
 
@@ -879,7 +886,7 @@ impl App {
         match client.get_all_playable_recursive(folder_id) {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
-                if items.is_empty() { drop(client); self.flash_status("Nothing to shuffle".into()); return; }
+                if items.is_empty() { drop(client); self.flash_status_high("Nothing to shuffle".into()); return; }
                 items.shuffle(&mut rand::rng());
                 let count = items.len();
                 drop(client);
@@ -891,7 +898,7 @@ impl App {
                 self.queue_source = crate::config::QueueSource::Shuffle;
                 self.save_queue_state();
             }
-            Err(e) => { drop(client); self.flash_status(format!("Error: {e}")); }
+            Err(e) => { drop(client); self.flash_status_high(format!("Error: {e}")); }
         }
     }
 
@@ -1322,7 +1329,7 @@ impl App {
                 }
             }
             LibEvent::Error(e) => {
-                self.flash_status(format!("Error: {e}"));
+                self.flash_status_high(format!("Error: {e}"));
             }
         }
     }
@@ -1587,11 +1594,11 @@ impl App {
         let client = self.client.lock().unwrap().clone();
         let items = match client.get_playlist_items(&playlist_id) {
             Ok(r) => r,
-            Err(e) => { self.flash_status(format!("Playlist load failed: {e}")); return; }
+            Err(e) => { self.flash_status_high(format!("Playlist load failed: {e}")); return; }
         };
-        if items.is_empty() { self.flash_status("Playlist is empty".into()); return; }
+        if items.is_empty() { self.flash_status_high("Playlist is empty".into()); return; }
         let playable: Vec<MediaItem> = items.into_iter().filter(|i| !i.is_folder).collect();
-        if playable.is_empty() { self.flash_status("No playable items in playlist".into()); return; }
+        if playable.is_empty() { self.flash_status_high("No playable items in playlist".into()); return; }
         let action = PendingQueueAction::PlayItems {
             items: playable, start_idx: 0,
             source: crate::config::QueueSource::Playlist { id: Some(playlist_id), name: playlist_name },
@@ -1673,7 +1680,7 @@ impl App {
                     let c = self.client.lock().unwrap();
                     match c.get_items_by_ids(&item_ids) {
                         Ok(v) => v,
-                        Err(e) => { let msg = format!("WS play error: {e}"); drop(c); self.flash_status(msg); return; }
+                        Err(e) => { let msg = format!("WS play error: {e}"); drop(c); self.flash_status_high(msg); return; }
                     }
                 };
                 if items.is_empty() {

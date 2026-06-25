@@ -309,7 +309,7 @@ impl App {
                 crate::api::clear_cached_token();
                 self.confirm_logout = false;
                 self.show_settings = false;
-                self.flash_status("Logged out — restart mbv to sign in again".into());
+                self.flash_status_high("Logged out — restart mbv to sign in again".into());
             } else {
                 self.confirm_logout = false;
             }
@@ -960,7 +960,7 @@ impl App {
                     self.player_tab.playlist_cursor = s.current_idx;
                 } else {
                     drop(s);
-                    self.flash_status("Nothing is playing".into());
+                    self.flash_status_high("Nothing is playing".into());
                 }
             }
             KeyCode::Char('s') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
@@ -1030,7 +1030,7 @@ impl App {
                                     self.save_queue_state();
                                     self.flash_status(format!("Saved as playlist \"{name}\""));
                                 }
-                                Err(e) => self.flash_status(format!("Error: {e}")),
+                                Err(e) => self.flash_status_high(format!("Error: {e}")),
                             }
                         }
                     }
@@ -1056,7 +1056,7 @@ impl App {
                                 self.queue_dirty = false;
                                 self.flash_status(format!("Saved as playlist \"{name}\""));
                             }
-                            Err(e) => self.flash_status(format!("Error: {e}")),
+                            Err(e) => self.flash_status_high(format!("Error: {e}")),
                         }
                     }
                     KeyCode::Esc => {
@@ -1123,7 +1123,7 @@ impl App {
                         })
                         .map(|s| s.success()).unwrap_or(false);
                 if copied { self.flash_status(format!("Copied {n} log lines to clipboard")); }
-                else      { self.flash_status("Copy failed — wl-copy/xclip not found".into()); }
+                else      { self.flash_status_high("Copy failed — wl-copy/xclip not found".into()); }
             }
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);

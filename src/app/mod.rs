@@ -789,7 +789,7 @@ impl App {
 
         match self.fetch_home() {
             Ok(()) => self.status.clear(),
-            Err(e) => self.flash_status(format!("Error: {e}")),
+            Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
         self.spawn_restore_queue_state();
         terminal.draw(|f| self.render(f))?;
@@ -861,7 +861,7 @@ impl App {
                         Ok(items) => { hs.results = items; }
                         Err(e) => {
                             hs.results = Vec::new();
-                            self.status = format!("Search error: {e}");
+                            self.flash_status_high(format!("Search error: {e}"));
                         }
                     }
                 }
@@ -975,7 +975,7 @@ impl App {
                                 self.session_miss_count += 1;
                                 if self.session_miss_count >= 3 {
                                     log::warn!(target: "sessions", "connected session gone; disconnecting");
-                                    self.flash_status("Remote session ended; disconnected".to_string());
+                                    self.flash_status_high("Remote session ended; disconnected".to_string());
                                     self.connected_session_id = None;
                                     self.connected_session_state = None;
                                     self.session_miss_count = 0;
@@ -993,7 +993,7 @@ impl App {
                     }
                     SessionEvent::Error(e) => {
                         self.sessions_loading = false;
-                        self.flash_status(format!("Sessions error: {e}"));
+                        self.flash_status_high(format!("Sessions error: {e}"));
                     }
                 }
             }
@@ -1204,7 +1204,7 @@ impl App {
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;
                     self.skip_intro_end_ticks = None;
-                    self.flash_status("Daemon disconnected — playback stopped".into());
+                    self.flash_status_high("Daemon disconnected — playback stopped".into());
                     self.refresh_after_stop();
                     return true;
                 }
