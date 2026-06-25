@@ -31,6 +31,9 @@ impl MediaPlayer2 {
 
 struct MediaPlayer2Player {
     status: Arc<Mutex<PlayerStatus>>,
+    /// Snapshot updated every 500ms by the polling loop so all property reads
+    /// within one D-Bus call batch see consistent state.
+    snapshot: Arc<Mutex<PlayerStatus>>,
     cmd_tx: Arc<dyn Fn(PlayerCommand) + Send + Sync>,
 }
 
@@ -87,10 +90,18 @@ impl MediaPlayer2Player {
     }
 
     fn seek(&self, offset_us: i64) {
-        (self.cmd_tx)(PlayerCommand::Seek(offset_us as f64 / 1_000_000.0));
+        let secs = offset_us as f64 / 1_000_000.0;
+        // Clamp seek to reasonable bounds (avoid seeking hours into the future).
+        if secs.abs() > 86400.0 { return; }
+        (self.cmd_tx)(PlayerCommand::Seek(secs));
     }
 
-    fn set_position(&self, _track_id: zvariant::ObjectPath<'_>, position_us: i64) {
+    fn set_position(&self, track_id: zvariant::ObjectPath<'_>, position_us: i64) {
+        // Per MPRIS spec: ignore if track_id doesn't match current track or position is negative.
+        if track_id.as_str() != "/org/mpris/MediaPlayer2/TrackList/Track1" { return; }
+        if position_us < 0 { return; }
+        let runtime_us = self.status.lock().unwrap().runtime_ticks * 1_000_000 / TICKS_PER_SECOND;
+        if runtime_us > 0 && position_us > runtime_us { return; }
         (self.cmd_tx)(PlayerCommand::SeekAbsolute(position_us as f64 / 1_000_000.0));
     }
 
@@ -98,7 +109,7 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     fn playback_status(&self) -> String {
-        let s = self.status.lock().unwrap();
+        let s = self.snapshot.lock().unwrap();
         if !s.active        { "Stopped".into() }
         else if s.paused    { "Paused".into()  }
         else                { "Playing".into() }
@@ -115,12 +126,12 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     fn metadata(&self) -> HashMap<String, zvariant::Value<'static>> {
-        make_metadata(&self.status.lock().unwrap())
+        make_metadata(&self.snapshot.lock().unwrap())
     }
 
     #[zbus(property)]
     fn volume(&self) -> f64 {
-        self.status.lock().unwrap().volume as f64 / 100.0
+        self.snapshot.lock().unwrap().volume as f64 / 100.0
     }
 
     #[zbus(property)]
@@ -130,7 +141,7 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     fn position(&self) -> i64 {
-        self.status.lock().unwrap().position_ticks * 1_000_000 / TICKS_PER_SECOND
+        self.snapshot.lock().unwrap().position_ticks * 1_000_000 / TICKS_PER_SECOND
     }
 
     #[zbus(property)]
@@ -154,6 +165,8 @@ impl MediaPlayer2Player {
 pub fn start(status: Arc<Mutex<PlayerStatus>>, send: impl Fn(PlayerCommand) + Send + Sync + 'static) {
     let send = Arc::new(send);
     let status_poll = status.clone();
+    let snapshot = Arc::new(Mutex::new(status.lock().unwrap().clone()));
+    let snapshot_poll = snapshot.clone();
 
     thread::spawn(move || {
         let rt = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
@@ -161,7 +174,7 @@ pub fn start(status: Arc<Mutex<PlayerStatus>>, send: impl Fn(PlayerCommand) + Se
             Err(e) => { eprintln!("MPRIS tokio error: {e}"); return; }
         };
         rt.block_on(async move {
-            let player_iface = MediaPlayer2Player { status, cmd_tx: send };
+            let player_iface = MediaPlayer2Player { status, snapshot: snapshot_poll.clone(), cmd_tx: send };
             let conn = match connection::Builder::session()
                 .unwrap()
                 .name("org.mpris.MediaPlayer2.mbv")
@@ -185,8 +198,11 @@ pub fn start(status: Arc<Mutex<PlayerStatus>>, send: impl Fn(PlayerCommand) + Se
             loop {
                 tokio::time::sleep(Duration::from_millis(500)).await;
 
+                // Snapshot PlayerStatus once per poll cycle so all property
+                // reads see consistent state.
                 let (cur_status, cur_title, cur_pos_us, cur_vol) = {
                     let s = status_poll.lock().unwrap();
+                    *snapshot_poll.lock().unwrap() = s.clone();
                     let st = if !s.active       { "Stopped".to_string() }
                              else if s.paused   { "Paused".to_string()  }
                              else               { "Playing".to_string() };

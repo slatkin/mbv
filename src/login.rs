@@ -115,6 +115,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     audio_lang: base_config.audio_lang.clone(),
                     my_languages: base_config.my_languages.clone(),
                     feed_view_libraries: base_config.feed_view_libraries.clone(),
+                    config_version: base_config.config_version,
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {

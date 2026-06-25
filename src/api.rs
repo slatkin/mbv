@@ -18,7 +18,9 @@ fn decode_html_entities(s: &str) -> String {
 pub fn gen_session_id() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let t = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
-    format!("{:x}{:x}", t.as_secs(), t.subsec_nanos())
+    let pid = std::process::id();
+    let r: u32 = rand::random();
+    format!("{:x}{:x}{:x}{:x}", t.as_secs(), t.subsec_nanos(), pid, r)
 }
 
 fn device_name() -> String {

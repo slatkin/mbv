@@ -19,6 +19,8 @@ use super::ui_util::{fmt_duration, trunc_str};
 impl App {
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
+        // Guard against zero-dimension terminal (e.g. minimized or piped).
+        if area.width == 0 || area.height == 0 { return; }
         if area.width != self.terminal_width || area.height != self.terminal_height {
             self.card_image_states.clear();
             self.card_image_loading.clear();

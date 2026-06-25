@@ -886,28 +886,14 @@ impl SingleSession {
         let client = self.reporter.client.clone();
         // Retry mark_played in a detached thread so Shutdown never blocks.
         if let Some(mid) = self.mark_played_id.take() {
-            let c2 = client.clone();
-            std::thread::spawn(move || {
-                if let Err(e) = c2.mark_played(&mid) {
-                    log::warn!(target: "player", "mark_played retry failed id={mid}: {e}");
-                } else {
-                    log::info!(target: "player", "mark_played retry ok id={mid}");
-                }
-            });
+            retry_mark_played(client.clone(), mid);
         }
         let runtime  = self.status.lock().unwrap().runtime_ticks;
         let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
         let near_end = !is_audio && runtime > 0 && self.last_valid_pos * 20 / runtime >= 19;
         if near_end {
             let id = self.reporter.ids.lock().unwrap().0.clone();
-            let c2 = client.clone();
-            std::thread::spawn(move || {
-                if let Err(e) = c2.mark_played(&id) {
-                    log::warn!(target: "player", "mark_played near_end failed id={id}: {e}");
-                } else {
-                    log::info!(target: "player", "mark_played near_end ok id={id}");
-                }
-            });
+            retry_mark_played(client.clone(), id);
         }
         self.status.lock().unwrap().active = false;
         if !self.stopped_event_sent {
@@ -1466,7 +1452,8 @@ impl PlaylistSession {
             if (natural_end || near_end) && !completed_is_audio {
                 let id = self.reporter.ids.lock().unwrap().0.clone();
                 if let Err(e) = self.reporter.client.mark_played(&id) {
-                    log::warn!(target: "player", "mark_played failed id={id}: {e}");
+                    log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
+                    retry_mark_played(self.reporter.client.clone(), id);
                 }
             }
             self.stopped_near_end = near_end;
@@ -1507,8 +1494,10 @@ impl PlaylistSession {
             self.status.lock().unwrap().active = false;
             self.reporter.report_stopped(completed_pos);
             if played_out {
-                if let Err(e) = self.reporter.client.mark_played(&self.items[completed_idx].id) {
-                    log::warn!(target: "player", "mark_played failed id={}: {e}", self.items[completed_idx].id);
+                let id = self.items[completed_idx].id.clone();
+                if let Err(e) = self.reporter.client.mark_played(&id) {
+                    log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
+                    retry_mark_played(self.reporter.client.clone(), id);
                 }
             }
             let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -1534,8 +1523,10 @@ impl PlaylistSession {
 
         self.reporter.report_stopped(completed_pos);
         if played_out {
-            if let Err(e) = self.reporter.client.mark_played(&self.items[completed_idx].id) {
-                log::warn!(target: "player", "mark_played failed id={}: {e}", self.items[completed_idx].id);
+            let id = self.items[completed_idx].id.clone();
+            if let Err(e) = self.reporter.client.mark_played(&id) {
+                log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
+                retry_mark_played(self.reporter.client.clone(), id);
             }
         }
 
@@ -2145,6 +2136,26 @@ impl PlayerProxy {
             PlayerProxyInner::Remote(_) => None,
         }
     }
+}
+
+/// Retry mark_played in a detached thread with exponential backoff.
+/// Max 3 attempts (initial + 2 retries), delays: 500ms, 2s.
+fn retry_mark_played(client: Arc<EmbyClient>, item_id: String) {
+    std::thread::spawn(move || {
+        let delays = [500, 2000]; // ms
+        for (i, delay_ms) in delays.iter().enumerate() {
+            std::thread::sleep(Duration::from_millis(*delay_ms));
+            match client.mark_played(&item_id) {
+                Ok(()) => {
+                    log::info!(target: "player", "mark_played retry {} ok id={item_id}", i + 1);
+                    return;
+                }
+                Err(e) => {
+                    log::warn!(target: "player", "mark_played retry {} failed id={item_id}: {e}", i + 1);
+                }
+            }
+        }
+    });
 }
 
 // True when the track ended close enough to its natural end to count as played.

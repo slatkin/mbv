@@ -32,6 +32,7 @@ pub struct Config {
     pub audio_lang: String,         // full language name, e.g. "English"; "" = any
     pub my_languages: Vec<String>,  // user's relevant languages; filters subtitle/audio lang cycling
     pub feed_view_libraries: Vec<String>, // libraries treated as feed view (unplayed, date-sorted)
+    pub config_version: u32,              // schema version for future migrations (0 = unversioned)
 }
 
 impl Default for Config {
@@ -65,6 +66,7 @@ impl Default for Config {
             audio_lang: String::new(),
             my_languages: vec![],
             feed_view_libraries: vec![],
+            config_version: 0,
         }
     }
 }
@@ -430,6 +432,10 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_array())
         .map(|arr| arr.iter().filter_map(|v| v.as_str()).map(String::from).collect())
         .unwrap_or_default();
+    let config_version = doc.get("version")
+        .and_then(|v| v.as_integer())
+        .unwrap_or(0) as u32;
+
     let feed_view_libraries: Vec<String> = general
         .and_then(|m| m.get("feed_view_libraries"))
         .and_then(|v| v.as_array())
@@ -465,6 +471,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         audio_lang,
         my_languages,
         feed_view_libraries,
+        config_version,
     })
 }
 
