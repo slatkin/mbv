@@ -40,7 +40,7 @@ local user_opts = {
     visibility = 'auto',        -- only used at init to set visibility_mode(...)
     windowcontrols = 'auto',    -- whether to show window controls
     volumecontrol = true,       -- whether to show mute button and volumne slider
-    processvolume = true,		-- volue slider show processd volume
+    processvolume = false,		-- disabled: mbv Rust side handles volume sqrt scaling
     language = 'eng',            -- eng=English, chs=Chinese
 }
 

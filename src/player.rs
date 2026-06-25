@@ -337,10 +337,12 @@ impl SessionReporter {
     }
 
     // Selects ws or http automatically; reads pos/paused from status.
+    // Recovers from poisoned mutexes so the progress thread never panics
+    // while holding a lock.
     fn report_progress(&self, event_name: &str) {
-        let (id, msid, sid) = self.ids.lock().unwrap().clone();
+        let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let (pos, runtime, paused) = {
-            let s = self.status.lock().unwrap();
+            let s = self.status.lock().unwrap_or_else(|e| e.into_inner());
             (s.position_ticks, s.runtime_ticks, s.paused)
         };
         if let Some(ref tx) = self.ws_tx {
@@ -352,17 +354,17 @@ impl SessionReporter {
 
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
     fn report_stopped(&self, last_valid_pos: i64) -> bool {
-        let (id, msid, sid) = self.ids.lock().unwrap().clone();
+        let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let is_audio = self.is_audio.load(Ordering::Relaxed);
         let pos = if is_audio { 0 } else { last_valid_pos };
-        let runtime_ticks = self.status.lock().unwrap().runtime_ticks;
+        let runtime_ticks = self.status.lock().unwrap_or_else(|e| e.into_inner()).runtime_ticks;
         log::info!(target: "player", "report_stopped: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s",
             last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
         self.client.report_stopped(&id, &msid, pos, &sid, runtime_ticks)
     }
 
     fn report_ping(&self) {
-        let sid = self.ids.lock().unwrap().2.clone();
+        let sid = self.ids.lock().unwrap_or_else(|e| e.into_inner()).2.clone();
         self.client.report_ping(&sid);
     }
 
@@ -375,7 +377,7 @@ impl SessionReporter {
         // Update ids before report_start so the progress reporter (which reads
         // ids on a 10-second timer) always sees the new item.
         {
-            let mut ids = self.ids.lock().unwrap();
+            let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
             ids.0 = item.id.clone();
             ids.1 = new_msid.clone();
             ids.2 = new_sid.clone();
@@ -1474,6 +1476,22 @@ impl PlaylistSession {
         let completed_idx = self.current_idx;
         log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={} pending_resume={}",
             self.last_valid_pos, self.status.lock().unwrap().runtime_ticks, self.pending_resume_secs.is_some());
+        // H11: bounds-check completed_idx — PlaylistRemove can shrink the list
+        // while the current track is finishing.
+        if completed_idx >= self.items.len() {
+            log::warn!(target: "player", "on_end_file: completed_idx={completed_idx} out of bounds (len={}), stopping",
+                self.items.len());
+            progress.stop_and_join();
+            self.status.lock().unwrap().active = false;
+            self.reporter.report_stopped(self.last_valid_pos);
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                idx: completed_idx.min(self.items.len().saturating_sub(1)),
+                position_ticks: self.last_valid_pos,
+                played: false,
+                error: None,
+            });
+            return false;
+        }
         let natural       = reason == mpv_end_file_reason::Eof
             && self.items[completed_idx].runtime_ticks > 0;
         let near_end = is_near_end(completed_is_audio, natural, self.last_valid_pos, self.items[completed_idx].runtime_ticks);

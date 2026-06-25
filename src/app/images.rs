@@ -199,13 +199,7 @@ impl App {
         if inner.height < 2 || inner.width == 0 { return None; }
 
         let trunc = |s: &str| -> String {
-            let w = inner.width as usize;
-            if s.chars().count() > w {
-                format!("{}…", &s[..s.char_indices()
-                    .nth(w.saturating_sub(1))
-                    .map(|(b, _)| b)
-                    .unwrap_or(s.len())])
-            } else { s.to_string() }
+            super::ui_util::trunc_str(s, inner.width as usize)
         };
 
         let put = |f: &mut Frame, y: u16, para: Paragraph| {
