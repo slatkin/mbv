@@ -345,11 +345,11 @@ impl App {
         };
         drop(pst);
         let sub_color = if active {
-            if sub_id != 0 { palette::RED } else { palette::MUTED }
+            if sub_id != 0 { palette::YELLOW } else { palette::MUTED }
         } else {
             let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
             match mode.as_str() {
-                "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::RED,
+                "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::YELLOW,
                 _ => palette::MUTED,
             }
         };
