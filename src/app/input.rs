@@ -844,8 +844,22 @@ impl App {
 
         match key.code {
             KeyCode::Char('q') => { return self.try_quit(); }
-            KeyCode::Tab => { let n = (self.tab_idx + 1) % self.tab_count(); self.set_tab(n); }
-            KeyCode::BackTab => { let n = self.tab_count(); self.set_tab((self.tab_idx + n - 1) % n); }
+            KeyCode::Tab => {
+                if self.playlist_view == PLAYLIST_VIEW_POWER {
+                    self.power_focus_next();
+                } else {
+                    let n = (self.tab_idx + 1) % self.tab_count();
+                    self.set_tab(n);
+                }
+            }
+            KeyCode::BackTab => {
+                if self.playlist_view == PLAYLIST_VIEW_POWER {
+                    self.power_focus_prev();
+                } else {
+                    let n = self.tab_count();
+                    self.set_tab((self.tab_idx + n - 1) % n);
+                }
+            }
             KeyCode::Up | KeyCode::Left
                 if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_view == PLAYLIST_VIEW_CARDS) => {
                     self.last_nav_at = Instant::now();

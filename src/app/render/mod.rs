@@ -34,10 +34,13 @@ impl App {
         let in_power       = self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER;
         let status_h:   u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
         let controls_h: u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 2 } else { 0 };
+        let tabs_h:  u16 = if in_power { 0 } else { 1 };
+        let gap_h:   u16 = if in_power { 0 } else { 1 };
+        let title_h: u16 = if in_power { 0 } else { 1 };
         let [tabs_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
-            Constraint::Length(1),
-            Constraint::Length(1),
-            Constraint::Length(1),
+            Constraint::Length(tabs_h),
+            Constraint::Length(gap_h),
+            Constraint::Length(title_h),
             Constraint::Length(controls_h),
             Constraint::Length(status_h),
             Constraint::Min(0),
@@ -46,143 +49,19 @@ impl App {
         const VOL_W: u16 = 9; // " Vol XXX%"
         let right_w = VOL_W + 1; // +1 so the trailing % aligns with the last ] on the divider row
 
-        {
-            let dash_style = Style::default().fg(palette::MUTED);
-            let bracket = Style::default().fg(palette::WHITE);
-
-            let pst = self.player.status.lock().unwrap();
-            let active = pst.active;
-            let sub_id = pst.sub_id;
-
-            let res_h = pst.video_height;
-            let is_audio_only = active && (res_h == 0 || pst.video_is_image);
-            let res_str = if is_audio_only {
-                if pst.audio_codec.is_empty() { "--".to_string() } else { pst.audio_codec.to_uppercase() }
-            } else {
-                format!("{}p", res_h)
-            };
-            let res_color = if res_str == "--" { palette::MUTED } else { palette::FOAM };
-
-            let raw_lang = pst.audio_lang.to_lowercase();
-            let (au_text, au_color): (String, Color) = if raw_lang.is_empty() {
-                ("x".into(), palette::MUTED)
-            } else {
-                (raw_lang.chars().take(2).collect(), palette::YELLOW)
-            };
-
-            let (pb_text, pb_color): (&str, Color) = if pst.active && !pst.paused {
-                if self.use_nerd_fonts { ("\u{f04b}", palette::PINE) } else { (">", palette::PINE) }
-            } else if pst.active && pst.paused {
-                if self.use_nerd_fonts { ("\u{f04c}", palette::YELLOW) } else { ("||", palette::YELLOW) }
-            } else {
-                if self.use_nerd_fonts { ("\u{f04d}", palette::MUTED) } else { (" ", palette::MUTED) }
-            };
-            drop(pst);
-
-            // When playing: RED if a subtitle track is active, MUTED if off.
-            // When idle: RED if the configured default mode would enable subs, MUTED otherwise.
-            let sub_color = if active {
-                if sub_id != 0 { palette::RED } else { palette::MUTED }
-            } else {
-                let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
-                match mode.as_str() {
-                    "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::RED,
-                    _ => palette::MUTED,
-                }
-            };
-
-            let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
-
-            let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
-                ("↯", palette::PINE)
-            } else {
-                ("↯", palette::MUTED)
-            };
-
-            let ind_w = |text: &str| -> u16 { 1 + text.width() as u16 + 1 + 1 }; // "[X]─"
-            // [res] and [au] only when playing video; [字] hidden for audio-only
-            let playback_ind_w = if active { ind_w(&res_str) + if is_audio_only { 0 } else { ind_w(&au_text) } } else { 0 };
-            let sub_ind_w = if is_audio_only { 0 } else { ind_w("字") };
-            let dash_count = gap_area.width.saturating_sub(
-                playback_ind_w + sub_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
-            ) as usize;
-
-            // Store indicator Rects for mouse hit-testing
-            {
-                let ind_rect = |x: u16, text: &str| -> Rect {
-                    Rect { x, y: gap_area.y, width: text.width() as u16 + 2, height: 1 }
-                };
-                let ind_adv = |text: &str| -> u16 { text.width() as u16 + 3 };
-                let mut ix = gap_area.x + dash_count as u16;
-                if active {
-                    ix += ind_adv(&res_str); // [res] — no click action
-                    if !is_audio_only {
-                        self.layout_ind_au = ind_rect(ix, &au_text); ix += ind_adv(&au_text);
-                    } else {
-                        self.layout_ind_au = Rect::default();
-                    }
-                } else {
-                    self.layout_ind_au = Rect::default();
-                }
-                if !is_audio_only {
-                    self.layout_ind_sub = ind_rect(ix, "字"); ix += ind_adv("字");
-                } else {
-                    self.layout_ind_sub = Rect::default();
-                }
-                self.layout_ind_rc = ind_rect(ix, rc_text);  ix += ind_adv(rc_text);
-                self.layout_ind_mu = ind_rect(ix, "m");       ix += ind_adv("m");
-                self.layout_ind_pb = ind_rect(ix, pb_text);
-            }
-
-            let mut spans: Vec<Span> = vec![Span::styled("─".repeat(dash_count), dash_style)];
-            if active {
-                spans.extend([
-                    Span::styled("[", bracket),
-                    Span::styled(res_str.clone(), Style::default().fg(res_color).add_modifier(Modifier::BOLD)),
-                    Span::styled("]", bracket),
-                    Span::styled("─", dash_style),
-                ]);
-                if !is_audio_only {
-                    spans.extend([
-                        Span::styled("[", bracket),
-                        Span::styled(au_text.clone(), Style::default().fg(au_color).add_modifier(Modifier::BOLD)),
-                        Span::styled("]", bracket),
-                        Span::styled("─", dash_style),
-                    ]);
-                }
-            }
-            if !is_audio_only {
-                spans.extend([
-                    Span::styled("[", bracket),
-                    Span::styled("字", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
-                    Span::styled("]", bracket),
-                    Span::styled("─", dash_style),
-                ]);
-            }
-            spans.extend([
-                Span::styled("[", bracket),
-                Span::styled(rc_text.to_string(), if self.connected_session_id.is_some() { Style::default().fg(rc_color).add_modifier(Modifier::BOLD) } else { Style::default().fg(rc_color) }),
-                Span::styled("]", bracket),
-                Span::styled("─", dash_style),
-                Span::styled("[", bracket),
-                Span::styled("m", Style::default().fg(mu_color).add_modifier(Modifier::BOLD)),
-                Span::styled("]", bracket),
-                Span::styled("─", dash_style),
-                Span::styled("[", bracket),
-                Span::styled(pb_text.to_string(), Style::default().fg(pb_color).add_modifier(Modifier::BOLD)),
-                Span::styled("]", bracket),
-                Span::styled("─", dash_style),
-            ]);
-            f.render_widget(Paragraph::new(Line::from(spans)), gap_area);
+        if !in_power {
+            self.render_indicator_bar(f, gap_area, false);
         }
-        let vol_area = Rect {
-            x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
-            y: tabs_area.y, width: VOL_W, height: 1,
-        };
-        self.layout_tabbar_vol_area = vol_area;
-        self.render_volume_bar(f, vol_area);
-        let tabs_area = Rect { width: tabs_area.width.saturating_sub(right_w), ..tabs_area };
-        self.layout_tabs_area = tabs_area;
+
+        if !in_power {
+            let vol_area = Rect {
+                x: tabs_area.x + tabs_area.width.saturating_sub(right_w),
+                y: tabs_area.y, width: VOL_W, height: 1,
+            };
+            self.layout_tabbar_vol_area = vol_area;
+            self.render_volume_bar(f, vol_area);
+            let tabs_area = Rect { width: tabs_area.width.saturating_sub(right_w), ..tabs_area };
+            self.layout_tabs_area = tabs_area;
 
         let (vis_start, vis_end) = self.visible_tab_range(tabs_area.width);
         let has_left  = vis_start > 0;
@@ -235,6 +114,10 @@ impl App {
                 .padding("", ""),
             inner_tabs,
         );
+        } else {
+            self.layout_tabbar_vol_area = Rect::default();
+            self.layout_tabs_area = Rect::default();
+        }
 
         let now_playing: Option<String> = if active {
             let idx = self.player.status.lock().unwrap().current_idx;
@@ -259,19 +142,14 @@ impl App {
             None
         };
         if let Some((ref title, color)) = now_playing_title {
-            let render_title_area = if in_power {
-                let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
-                let divider_x = area.x + left_w;
-                Rect { x: divider_x + 1, width: area.width.saturating_sub(left_w + 1), ..title_area }
-            } else {
-                title_area
-            };
-            f.render_widget(
-                Paragraph::new(title.as_str())
-                    .alignment(Alignment::Center)
-                    .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                render_title_area,
-            );
+            if !in_power {
+                f.render_widget(
+                    Paragraph::new(title.as_str())
+                        .alignment(Alignment::Center)
+                        .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                    title_area,
+                );
+            }
         }
         let is_library_tab = self.tab_idx >= self.lib_tab_offset()
             && self.tab_idx != self.log_tab_idx();
@@ -439,6 +317,126 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(all)), Rect { x, y, width, height: 1 });
     }
 
+    pub(super) fn render_indicator_bar(&mut self, f: &mut Frame, area: Rect, highlight: bool) {
+        let dash_style = Style::default().fg(if highlight { palette::IRIS } else { palette::MUTED });
+        let bracket = Style::default().fg(palette::WHITE);
+
+        let pst = self.player.status.lock().unwrap();
+        let active = pst.active;
+        let sub_id = pst.sub_id;
+        let res_h = pst.video_height;
+        let is_audio_only = active && (res_h == 0 || pst.video_is_image);
+        let res_str = if is_audio_only {
+            if pst.audio_codec.is_empty() { "--".to_string() } else { pst.audio_codec.to_uppercase() }
+        } else {
+            format!("{}p", res_h)
+        };
+        let res_color = if res_str == "--" { palette::MUTED } else { palette::FOAM };
+        let raw_lang = pst.audio_lang.to_lowercase();
+        let (au_text, au_color): (String, Color) = if raw_lang.is_empty() {
+            ("x".into(), palette::MUTED)
+        } else {
+            (raw_lang.chars().take(2).collect(), palette::YELLOW)
+        };
+        let (pb_text, pb_color): (&str, Color) = if pst.active && !pst.paused {
+            if self.use_nerd_fonts { ("\u{f04b}", palette::PINE) } else { (">", palette::PINE) }
+        } else if pst.active && pst.paused {
+            if self.use_nerd_fonts { ("\u{f04c}", palette::YELLOW) } else { ("||", palette::YELLOW) }
+        } else {
+            if self.use_nerd_fonts { ("\u{f04d}", palette::MUTED) } else { (" ", palette::MUTED) }
+        };
+        drop(pst);
+        let sub_color = if active {
+            if sub_id != 0 { palette::RED } else { palette::MUTED }
+        } else {
+            let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
+            match mode.as_str() {
+                "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::RED,
+                _ => palette::MUTED,
+            }
+        };
+        let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
+        let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
+            ("↯", palette::PINE)
+        } else {
+            ("↯", palette::MUTED)
+        };
+
+        let ind_w = |text: &str| -> u16 { 1 + text.width() as u16 + 1 + 1 }; // "[X]─"
+        let playback_ind_w = if active { ind_w(&res_str) + if is_audio_only { 0 } else { ind_w(&au_text) } } else { 0 };
+        let sub_ind_w = if is_audio_only { 0 } else { ind_w("字") };
+        let dash_count = area.width.saturating_sub(
+            playback_ind_w + sub_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
+        ) as usize;
+
+        {
+            let ind_rect = |x: u16, text: &str| -> Rect {
+                Rect { x, y: area.y, width: text.width() as u16 + 2, height: 1 }
+            };
+            let ind_adv = |text: &str| -> u16 { text.width() as u16 + 3 };
+            let mut ix = area.x + dash_count as u16;
+            if active {
+                ix += ind_adv(&res_str); // [res] — no click action
+                if !is_audio_only {
+                    self.layout_ind_au = ind_rect(ix, &au_text); ix += ind_adv(&au_text);
+                } else {
+                    self.layout_ind_au = Rect::default();
+                }
+            } else {
+                self.layout_ind_au = Rect::default();
+            }
+            if !is_audio_only {
+                self.layout_ind_sub = ind_rect(ix, "字"); ix += ind_adv("字");
+            } else {
+                self.layout_ind_sub = Rect::default();
+            }
+            self.layout_ind_rc = ind_rect(ix, rc_text);  ix += ind_adv(rc_text);
+            self.layout_ind_mu = ind_rect(ix, "m");       ix += ind_adv("m");
+            self.layout_ind_pb = ind_rect(ix, pb_text);
+        }
+
+        let mut spans: Vec<Span> = vec![Span::styled("─".repeat(dash_count), dash_style)];
+        if active {
+            spans.extend([
+                Span::styled("[", bracket),
+                Span::styled(res_str.clone(), Style::default().fg(res_color).add_modifier(Modifier::BOLD)),
+                Span::styled("]", bracket),
+                Span::styled("─", dash_style),
+            ]);
+            if !is_audio_only {
+                spans.extend([
+                    Span::styled("[", bracket),
+                    Span::styled(au_text.clone(), Style::default().fg(au_color).add_modifier(Modifier::BOLD)),
+                    Span::styled("]", bracket),
+                    Span::styled("─", dash_style),
+                ]);
+            }
+        }
+        if !is_audio_only {
+            spans.extend([
+                Span::styled("[", bracket),
+                Span::styled("字", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
+                Span::styled("]", bracket),
+                Span::styled("─", dash_style),
+            ]);
+        }
+        spans.extend([
+            Span::styled("[", bracket),
+            Span::styled(rc_text.to_string(), if self.connected_session_id.is_some() { Style::default().fg(rc_color).add_modifier(Modifier::BOLD) } else { Style::default().fg(rc_color) }),
+            Span::styled("]", bracket),
+            Span::styled("─", dash_style),
+            Span::styled("[", bracket),
+            Span::styled("m", Style::default().fg(mu_color).add_modifier(Modifier::BOLD)),
+            Span::styled("]", bracket),
+            Span::styled("─", dash_style),
+            Span::styled("[", bracket),
+            Span::styled(pb_text.to_string(), Style::default().fg(pb_color).add_modifier(Modifier::BOLD)),
+            Span::styled("]", bracket),
+            Span::styled("─", dash_style),
+        ]);
+        f.render_widget(Paragraph::new(Line::from(spans)), area);
+    }
+
     fn render_playback_controls(&mut self, f: &mut Frame, area: Rect) {
         if area.height == 0 { return; }
 
@@ -468,11 +466,11 @@ impl App {
         let pos_str = fmt_duration(pos_s);
         let dur_str = fmt_duration(dur_s);
 
-        const BTNS_W: u16 = 30;
+        let seek_w = area.width * 85 / 100;
+        let seek_x = area.x + (area.width.saturating_sub(seek_w)) / 2;
         let btn_row_y = area.y + 1;
 
-        let seek_w = area.width * 3 / 4;
-        let seek_x = area.x + (area.width.saturating_sub(seek_w)) / 2;
+        const BTNS_W: u16 = 30;
         self.layout_seekbar_area = Rect { x: seek_x, y: area.y, width: seek_w, height: 1 };
         self.layout_tracks_area  = Rect::default();
         self.layout_vol_area     = Rect::default();
@@ -496,12 +494,12 @@ impl App {
         let total_w   = dur_str.chars().count() as u16;
         f.render_widget(
             Paragraph::new(Span::styled(pos_str, time_style)),
-            Rect { x: seek_x, y: btn_row_y, width: elapsed_w.min(seek_w), height: 1 },
+            Rect { x: area.x, y: btn_row_y, width: elapsed_w.min(area.width), height: 1 },
         );
-        let total_x = seek_x + seek_w.saturating_sub(total_w);
+        let total_x = area.x + area.width.saturating_sub(total_w);
         f.render_widget(
             Paragraph::new(Span::styled(dur_str, time_style)),
-            Rect { x: total_x, y: btn_row_y, width: total_w.min(seek_w), height: 1 },
+            Rect { x: total_x, y: btn_row_y, width: total_w.min(area.width), height: 1 },
         );
 
         if self.use_nerd_fonts {

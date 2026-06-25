@@ -17,7 +17,7 @@ impl App {
         let min_lib_h: u16 = 4;
         let top_max = area.height.saturating_sub(min_lib_h);
         let top_h = if top_max >= min_queue_h {
-            let preferred = (area.height as u32 * 3 / 5) as u16;
+            let preferred = (area.height as u32 / 2) as u16;
             preferred.clamp(min_queue_h, top_max)
         } else {
             top_max
@@ -96,23 +96,43 @@ impl App {
     fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) {
         if area.height < 3 { return; }
 
-        let div_fg = if focused { palette::IRIS } else { palette::OVERLAY };
-
         let active = self.player.status.lock().unwrap().active
             || self.connected_session_state.is_some();
-        let list_area = if active {
-            // top 2 rows: playback controls (80% width, centered), then a divider
-            let ctrl_w = (area.width as u32 * 4 / 5) as u16;
-            let ctrl_x = area.x + (area.width.saturating_sub(ctrl_w)) / 2;
-            let controls_area = Rect { x: ctrl_x, y: area.y, width: ctrl_w, height: 2 };
+
+        // Title row: now-playing name, centered, at the very top of the queue area.
+        let area = if active && self.show_playback_panel {
+            let title: Option<String> = {
+                let pst = self.player.status.lock().unwrap();
+                if pst.active {
+                    let idx = pst.current_idx;
+                    drop(pst);
+                    self.player_tab.items.get(idx).map(|i| i.playback_label())
+                } else {
+                    drop(pst);
+                    self.connected_session_state.as_ref().and_then(|s| s.now_playing.clone())
+                }
+            };
+            if let Some(t) = title {
+                f.render_widget(
+                    Paragraph::new(t)
+                        .alignment(Alignment::Center)
+                        .style(Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
+                    Rect { x: area.x, y: area.y, width: area.width, height: 1 },
+                );
+            }
+            Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area }
+        } else {
+            area
+        };
+
+        let list_area = if active && self.show_playback_panel {
+            // 2 rows: seekbar then time+buttons; then indicator bar divider
+            let ctrl_w = area.width;
+            let controls_area = Rect { x: area.x, y: area.y, width: ctrl_w, height: 2 };
             let divider_y = area.y + 2;
             self.render_playback_controls(f, controls_area);
             if area.height > 2 {
-                let hdiv = "\u{2500}".repeat(area.width as usize);
-                f.render_widget(
-                    Paragraph::new(Span::styled(hdiv, Style::default().fg(div_fg))),
-                    Rect { x: area.x, y: divider_y, width: area.width, height: 1 },
-                );
+                self.render_indicator_bar(f, Rect { x: area.x, y: divider_y, width: area.width, height: 1 }, focused);
             }
             Rect { y: area.y + 3, height: area.height.saturating_sub(3), ..area }
         } else {
@@ -157,7 +177,7 @@ impl App {
                 let fg = if focused { palette::FOAM } else { palette::MUTED };
                 Style::default().fg(fg).add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(palette::WHITE)
+                Style::default().fg(if focused { palette::WHITE } else { palette::SUBTLE })
             };
             let (pt, rt) = if is_active {
                 let pos = if live_pos > 0 { live_pos } else { item.playback_position_ticks };
@@ -293,10 +313,11 @@ impl App {
 
         // Scroll indicator: [N/Total] in bottom-right corner of the library section
         if n_libs > n_cols {
-            let indicator = format!("[{}/{}]", col_scroll + 1, n_libs);
+            let shown_pos = if let PowerFocus::Library(idx) = self.power_focus { idx + 1 } else { col_scroll + 1 };
+            let indicator = format!("[{}/{}]", shown_pos, n_libs);
             let iw = indicator.len() as u16;
             let ind_x = area.x + area.width.saturating_sub(iw);
-            let ind_y = area.y + area.height.saturating_sub(1);
+            let ind_y = area.y;
             f.render_widget(
                 Paragraph::new(Span::styled(indicator, Style::default().fg(palette::SUBTLE))),
                 Rect { x: ind_x, y: ind_y, width: iw, height: 1 },
