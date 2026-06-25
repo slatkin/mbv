@@ -1926,9 +1926,9 @@ if idx < self.sessions.len() {
                                         log::info!(target: "mouse",
                                             "carousel dbl-center: active={active} active_idx={active_idx} item_idx={item_idx}");
                                         if active && active_idx == *item_idx {
-                                            self.player.send_command(PlayerCommand::TogglePause);
+                                            let _ = self.player.send_command(PlayerCommand::TogglePause);
                                         } else if active {
-                                            self.player.send_command(PlayerCommand::JumpTo(*item_idx))
+                                            let _ = self.player.send_command(PlayerCommand::JumpTo(*item_idx));
                                         } else if !self.player_tab.items.is_empty() {
                                             let items = self.player_tab.items.clone();
                                             let item_idx = *item_idx;

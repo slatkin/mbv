@@ -1198,8 +1198,8 @@ impl App {
     /// Returns true if the caller's event loop should `continue` (skip render for this tick).
     fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
         match ev {
-            PlayerEvent::Stopped { idx, position_ticks, played } => {
-                log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played}",
+            PlayerEvent::Stopped { idx, position_ticks, played, error } => {
+                log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played} error={error:?}",
                     position_ticks / crate::api::TICKS_PER_SECOND);
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;

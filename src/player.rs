@@ -58,7 +58,7 @@ pub struct PlayerStatus {
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum PlayerEvent {
-    Stopped { idx: usize, position_ticks: i64, played: bool },
+    Stopped { idx: usize, position_ticks: i64, played: bool, error: Option<String> },
     TrackChanged(usize),
     TrackCompleted { idx: usize, position_ticks: i64, played: bool, consume: bool },
     NextUpThreshold { series_id: String, season: i64, episode: i64 },
@@ -861,6 +861,7 @@ impl SingleSession {
                 idx: 0,
                 position_ticks: 0,
                 played: !self.reporter.is_audio.load(Ordering::Relaxed),
+                error: None,
             });
             self.stopped_event_sent = true;
         }
@@ -905,6 +906,7 @@ impl SingleSession {
                 idx: 0,
                 position_ticks: self.last_valid_pos,
                 played: near_end,
+                error: None,
             });
         }
         // mpv exited on its own (not via our stop command) — tell the app to quit.
@@ -943,6 +945,7 @@ impl SingleSession {
                     idx: 0,
                     position_ticks: self.last_valid_pos,
                     played: near_end,
+                    error: None,
                 });
                 return;
             }
@@ -1010,11 +1013,16 @@ impl SingleSession {
             }
         }
         })); // end catch_unwind
-        if result.is_err() {
+        if let Err(panic) = result {
+            let msg = panic.downcast_ref::<&str>().map(|s| s.to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            log::error!(target: "player", "SingleSession panicked: {msg}");
             let _ = event_tx_panic.send(PlayerEvent::Stopped {
                 idx: 0,
                 position_ticks: 0,
                 played: false,
+                error: Some(msg),
             });
         }
     }
@@ -1479,6 +1487,7 @@ impl PlaylistSession {
                 idx: completed_idx,
                 position_ticks: completed_pos,
                 played: played_out,
+                error: None,
             });
             return false; // signals run() to return
         }
@@ -1545,6 +1554,7 @@ impl PlaylistSession {
             idx: self.current_idx,
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
+            error: None,
         });
         // mpv exited on its own (not via our stop command) — tell the app to quit.
         if self.quit_at.is_none() {
@@ -1577,6 +1587,7 @@ impl PlaylistSession {
                     idx: self.current_idx,
                     position_ticks: self.last_valid_pos,
                     played: self.stopped_near_end,
+                    error: None,
                 });
                 return;
             }
@@ -1652,11 +1663,16 @@ impl PlaylistSession {
             }
         }
         })); // end catch_unwind
-        if result.is_err() {
+        if let Err(panic) = result {
+            let msg = panic.downcast_ref::<&str>().map(|s| s.to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            log::error!(target: "player", "PlaylistSession panicked: {msg}");
             let _ = event_tx_panic.send(PlayerEvent::Stopped {
                 idx: current_idx_panic,
                 position_ticks: 0,
                 played: false,
+                error: Some(msg),
             });
         }
     }
@@ -1773,9 +1789,12 @@ impl Player {
         }
     }
 
-    pub fn send_command(&self, cmd: PlayerCommand) {
+    /// Returns `true` if the command was sent, `false` if the player thread is gone.
+    pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         if let Some(tx) = self.cmd_tx.lock().unwrap().as_ref() {
-            let _ = tx.send(cmd);
+            tx.send(cmd).is_ok()
+        } else {
+            false
         }
     }
 
@@ -2069,7 +2088,7 @@ impl PlayerProxy {
         }
     }
 
-    pub fn send_command(&self, cmd: PlayerCommand) {
+    pub fn send_command(&self, cmd: PlayerCommand) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(p)  => p.send_command(cmd),
             PlayerProxyInner::Remote(r) => r.send_command(cmd),

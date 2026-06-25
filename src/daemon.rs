@@ -176,6 +176,14 @@ pub fn run(client: EmbyClient) -> ! {
                 }
             };
 
+            // Restrict socket permissions to owner-only (prevents other users
+            // on multi-user systems from controlling playback).
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+            }
+
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 let Ok(stream_w) = stream.try_clone() else { continue };

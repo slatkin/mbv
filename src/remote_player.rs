@@ -94,7 +94,7 @@ impl RemotePlayer {
             }
             disconnected_r.store(true, Ordering::SeqCst);
             log::info!(target: "remote", "daemon disconnected");
-            let _ = event_tx_r.send(PlayerEvent::Stopped { idx: 0, position_ticks: 0, played: false });
+            let _ = event_tx_r.send(PlayerEvent::Stopped { idx: 0, position_ticks: 0, played: false, error: None });
         });
 
         // Writer thread: serializes CtrlCmd to daemon
@@ -115,8 +115,8 @@ impl RemotePlayer {
         self.disconnected.load(Ordering::SeqCst)
     }
 
-    pub fn send_command(&self, cmd: PlayerCommand) {
-        let _ = self.cmd_tx.send(CtrlCmd::PlayerCmd(cmd));
+    pub fn send_command(&self, cmd: PlayerCommand) -> bool {
+        self.cmd_tx.send(CtrlCmd::PlayerCmd(cmd)).is_ok()
     }
 
     pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _initial_volume: u8) {

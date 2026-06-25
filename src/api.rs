@@ -347,6 +347,12 @@ fn save_cached_token(server_url: &str, token: &str, user_id: &str) {
     }
     let json = serde_json::json!({"server_url": server_url, "token": token, "user_id": user_id});
     let _ = std::fs::write(&path, json.to_string());
+    // Restrict token file to owner-only to protect credentials.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
 }
 
 #[derive(Clone)]
@@ -707,9 +713,16 @@ impl EmbyClient {
             "QueueableMediaTypes": ["Audio", "Video"],
         });
         log::info!(target: "api", "outbound: Playing item={} msid={media_source_id} pos={}", item.id, item.playback_position_ticks);
-        match self.post("/Sessions/Playing").send_json(body) {
+        match self.post("/Sessions/Playing").send_json(body.clone()) {
             Ok(r)  => log::info!(target: "api", "inbound: {} Playing", r.status()),
-            Err(e) => log::warn!(target: "api", "err: Playing: {e}"),
+            Err(e) => {
+                log::warn!(target: "api", "err: Playing: {e}, retrying...");
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                match self.post("/Sessions/Playing").send_json(body) {
+                    Ok(r)  => log::info!(target: "api", "inbound: {} Playing (retry)", r.status()),
+                    Err(e) => log::warn!(target: "api", "err: Playing retry failed: {e}"),
+                }
+            }
         }
     }
 
@@ -735,7 +748,10 @@ impl EmbyClient {
         let pos_s = position_ticks / TICKS_PER_SECOND;
         let run_s = runtime_ticks / TICKS_PER_SECOND;
         log::info!(target: "api", "outbound: ws Progress pos={pos_s}s/{run_s}s paused={is_paused} event={event_name}");
-        let _ = ws_tx.send(msg);
+        if ws_tx.send(msg).is_err() {
+            log::warn!(target: "api", "ws channel disconnected, falling back to HTTP");
+            self.report_progress_http(item_id, media_source_id, position_ticks, is_paused, session_id, event_name);
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -786,12 +802,17 @@ impl EmbyClient {
             "QueueableMediaTypes": ["Audio", "Video"],
         });
         log::info!(target: "api", "outbound: Stopped pos={position_ticks}");
-        match self.post("/Sessions/Playing/Stopped").send_json(body) {
+        match self.post("/Sessions/Playing/Stopped").send_json(body.clone()) {
             Ok(r)  => {
                 log::info!(target: "api", "inbound: {} Stopped", r.status());
             }
             Err(e) => {
-                log::warn!(target: "api", "err: Stopped: {e}");
+                log::warn!(target: "api", "err: Stopped: {e}, retrying...");
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                match self.post("/Sessions/Playing/Stopped").send_json(body) {
+                    Ok(r)  => log::info!(target: "api", "inbound: {} Stopped (retry)", r.status()),
+                    Err(e) => log::warn!(target: "api", "err: Stopped retry failed: {e}"),
+                }
             }
         }
     }
