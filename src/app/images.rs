@@ -1,4 +1,5 @@
 use std::io::Read as IoRead;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use textwrap::wrap;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
@@ -8,6 +9,9 @@ use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use crate::api::TICKS_PER_SECOND;
 use super::{App, palette, LibEvent};
 use super::ui_util::fmt_duration;
+
+static IMAGE_FETCH_ACTIVE: AtomicUsize = AtomicUsize::new(0);
+const MAX_IMAGE_FETCHES: usize = 4;
 
 impl App {
     pub(super) fn fetch_album_year(&mut self, album_id: String) {
@@ -39,6 +43,9 @@ impl App {
         if self.card_image_loading.contains(&cache_key) || self.card_image_states.contains_key(&cache_key) {
             return;
         }
+        if IMAGE_FETCH_ACTIVE.load(Ordering::Relaxed) >= MAX_IMAGE_FETCHES {
+            return;
+        }
         self.card_image_loading.insert(cache_key.clone());
         let (server_url, token) = {
             let c = self.client.lock().unwrap();
@@ -47,14 +54,24 @@ impl App {
         let types_owned: Vec<String> = types.iter().map(|s| s.to_string()).collect();
         let tx = self.card_image_tx.clone();
         std::thread::spawn(move || {
+            IMAGE_FETCH_ACTIVE.fetch_add(1, Ordering::Relaxed);
+            // Wrap in catch_unwind so a panic in image fetching/resizing still
+            // decrements the concurrency counter and sends a result, preventing
+            // the cache_key from staying in card_image_loading forever (H9).
+            let cache_key_outer = cache_key.clone();
+            let tx_outer = tx.clone();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
                 let _ = tx.send((cache_key, Some(cached)));
                 return;
             }
             let fetch_url = |url: &str| -> Option<Vec<u8>> {
-                ureq::get(url).call().ok().and_then(|r| {
+                let agent = ureq::AgentBuilder::new()
+                    .timeout(std::time::Duration::from_secs(10))
+                    .build();
+                agent.get(url).call().ok().and_then(|r| {
                     let mut buf = Vec::new();
-                    r.into_reader().read_to_end(&mut buf).ok()?;
+                    r.into_reader().take(10 * 1024 * 1024).read_to_end(&mut buf).ok()?;
                     Some(buf)
                 })
             };
@@ -94,6 +111,11 @@ impl App {
                 crate::config::write_image_disk_cache(&cache_key, b);
             }
             let _ = tx.send((cache_key, bytes));
+            })); // end catch_unwind
+            IMAGE_FETCH_ACTIVE.fetch_sub(1, Ordering::Relaxed);
+            if result.is_err() {
+                let _ = tx_outer.send((cache_key_outer, None));
+            }
         });
     }
 
@@ -383,14 +405,23 @@ pub(super) fn magick_resize(bytes: &[u8]) -> Option<Vec<u8>> {
             .args(["-", "-filter", "Lanczos", "-resize", "400x400>", "-quality", "85", "png:-"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::null())
+            .stderr(Stdio::piped())
             .spawn() else { continue };
         let Some(mut stdin) = child.stdin.take() else { continue };
         if stdin.write_all(bytes).is_err() { continue; }
         drop(stdin); // close pipe so magick knows EOF
+        let child_id = child.id();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            #[cfg(unix)]
+            unsafe { libc::kill(child_id as i32, libc::SIGKILL); }
+        });
         let Ok(out) = child.wait_with_output() else { continue };
         if out.status.success() && !out.stdout.is_empty() {
             return Some(out.stdout);
+        }
+        if !out.stderr.is_empty() {
+            log::debug!(target: "img", "magick stderr: {}", String::from_utf8_lossy(&out.stderr));
         }
     }
     None
