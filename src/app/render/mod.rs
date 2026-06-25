@@ -451,7 +451,9 @@ impl App {
         const BTNS_W: u16 = 30;
         let btn_row_y = area.y + 1;
 
-        self.layout_seekbar_area = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+        let seek_w = area.width * 3 / 4;
+        let seek_x = area.x + (area.width.saturating_sub(seek_w)) / 2;
+        self.layout_seekbar_area = Rect { x: seek_x, y: area.y, width: seek_w, height: 1 };
         self.layout_tracks_area  = Rect::default();
         self.layout_vol_area     = Rect::default();
         self.layout_sub_area     = Rect::default();
@@ -460,7 +462,7 @@ impl App {
         let ratio = if runtime_ticks > 0 {
             (position_ticks as f64 / runtime_ticks as f64).clamp(0.0, 1.0)
         } else { 0.0 };
-        let seek_rect = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+        let seek_rect = Rect { x: seek_x, y: area.y, width: seek_w, height: 1 };
         let bar_w = seek_rect.width as usize;
         let filled = (ratio * bar_w as f64).round() as usize;
         let unfilled = bar_w.saturating_sub(filled);

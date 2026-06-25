@@ -61,17 +61,19 @@ impl App {
         let crumb_row = crumb_area.map(|a| a.y).unwrap_or(area.y);
         let mut x = area.x + 2;
 
-        let crumb_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
+        let crumb_parent_style = Style::default().fg(palette::MUTED);
+        let crumb_current_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
         let mut crumb_spans: Vec<Span<'static>> = Vec::new();
         let mut new_breadcrumbs: Vec<(u16, u16, u16, usize)> = Vec::new();
         for (ci, (name, target_depth)) in crumb_names.iter().enumerate() {
             let is_last = ci + 1 == crumb_names.len();
             let w = name.chars().count() as u16;
             new_breadcrumbs.push((x, x + w, crumb_row, *target_depth));
-            crumb_spans.push(Span::styled(name.clone(), crumb_style));
+            let style = if is_last { crumb_current_style } else { crumb_parent_style };
+            crumb_spans.push(Span::styled(name.clone(), style));
             x += w;
             if !is_last {
-                crumb_spans.push(Span::styled(sep, crumb_style));
+                crumb_spans.push(Span::styled(sep, Style::default().fg(palette::IRIS)));
                 x += sep.len() as u16;
             }
         }
