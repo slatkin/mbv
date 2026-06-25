@@ -421,23 +421,12 @@ impl EmbyClient {
         let Some((cached_url, token, user_id)) = load_cached_token() else {
             return Err("No cached credentials".to_string());
         };
-        if self.config.server_url.is_empty() && !cached_url.is_empty() {
+        if !cached_url.is_empty() {
             self.config.server_url = cached_url;
         }
         self.token = token;
         self.user_id = user_id;
-        match self.get("/Users/Me").call() {
-            Ok(_) => Ok(()),
-            Err(ureq::Error::Status(401, _)) | Err(ureq::Error::Status(403, _)) => {
-                self.token.clear();
-                self.user_id.clear();
-                Err("Cached token rejected".to_string())
-            }
-            Err(_) => {
-                // Network error — keep token and proceed; UI surfaces errors when loading content.
-                Ok(())
-            }
-        }
+        Ok(())
     }
 
     // Authenticate using credentials in self.config (password or api_key).

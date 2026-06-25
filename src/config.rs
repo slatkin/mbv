@@ -520,6 +520,11 @@ pub fn save_config_settings(cfg: &Config) {
         }
     }
 
+    if !cfg.server_url.is_empty() {
+        let server = section!("server");
+        server.insert("url".to_string(), toml::Value::String(cfg.server_url.clone()));
+    }
+
     let general = section!("general");
     general.insert("daemon_mode_on_exit".to_string(),     toml::Value::Boolean(cfg.daemon_mode_on_exit));
     general.insert("always_skip_intro".to_string(),       toml::Value::Boolean(cfg.always_skip_intro));

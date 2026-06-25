@@ -173,10 +173,14 @@ fn main() {
         Some(state_dir.join("mbv.log"))
     };
     applog::init(log_capacity, log_stderr, log_path);
+    log::info!(target: "startup", "mbv starting");
 
     let mut client = EmbyClient::new(config);
 
-    if client.authenticate().is_err() {
+    let t0 = std::time::Instant::now();
+    let auth_result = client.authenticate();
+    log::info!(target: "startup", "authenticate: {}ms result={}", t0.elapsed().as_millis(), if auth_result.is_ok() { "ok" } else { "err" });
+    if auth_result.is_err() {
         if daemon_inner {
             eprintln!("mbv daemon: no cached credentials — run mbv interactively first");
             std::process::exit(1);
@@ -227,8 +231,10 @@ fn main() {
     // If a daemon is running, try to connect to it instead of standalone mode.
     let daemon_existed = daemon_running();
     if daemon_existed {
+        log::info!(target: "startup", "daemon detected; connecting to control socket");
         match remote_player::RemotePlayer::connect() {
             Ok((remote, player_rx)) => {
+                log::info!(target: "startup", "daemon socket connected");
                 if let Err(e) = App::new_remote(client, remote, player_rx).run() {
                     eprintln!("Error: {e}");
                     std::process::exit(1);

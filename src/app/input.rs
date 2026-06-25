@@ -309,7 +309,7 @@ impl App {
                 crate::api::clear_cached_token();
                 self.confirm_logout = false;
                 self.show_settings = false;
-                self.flash_status_high("Logged out — restart mbv to sign in again".into());
+                return Some(true);
             } else {
                 self.confirm_logout = false;
             }
@@ -386,6 +386,7 @@ impl App {
                 if let Some(sess) = self.sessions.get(self.sessions_cursor) {
                     let id = sess.id.clone();
                     let name = sess.device_name.clone();
+                    log::info!(target: "sessions", "connect: device={name:?} pos={}s runtime={}s", sess.position_s, sess.runtime_s);
                     self.connected_session_id = Some(id);
                     self.connected_session_state = Some(sess.clone());
                     self.session_miss_count = 0;
@@ -1636,6 +1637,7 @@ if idx < self.sessions.len() {
                             if let Some(sess) = self.sessions.get(idx) {
                                 let id = sess.id.clone();
                                 let name = sess.device_name.clone();
+                                log::info!(target: "sessions", "connect: device={name:?} pos={}s runtime={}s", sess.position_s, sess.runtime_s);
                                 self.connected_session_id = Some(id);
                                 self.connected_session_state = Some(sess.clone());
                                 self.session_miss_count = 0;

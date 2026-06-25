@@ -683,10 +683,13 @@ impl App {
             }
         });
         let player = PlayerProxy::local(raw_player, always_play_next);
-        let mut client = client;
-        client.probe_chapter_api();
+        let client_arc = Arc::new(Mutex::new(client));
+        {
+            let c = client_arc.clone();
+            std::thread::spawn(move || { c.lock().unwrap().probe_chapter_api(); });
+        }
         Self::build(AppInit {
-            client: Arc::new(Mutex::new(client)),
+            client: client_arc,
             player,
             player_rx,
             ws_rx,
@@ -729,13 +732,16 @@ impl App {
         let image_cache_size = client.config.image_cache_size;
         let use_nerd_fonts = client.config.use_nerd_fonts;
         crate::config::evict_old_image_cache();
-        let mut client = client;
-        client.probe_chapter_api();
+        let client_arc = Arc::new(Mutex::new(client));
+        {
+            let c = client_arc.clone();
+            std::thread::spawn(move || { c.lock().unwrap().probe_chapter_api(); });
+        }
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let player = PlayerProxy::remote(remote, always_play_next);
         Self::build(AppInit {
-            client: Arc::new(Mutex::new(client)),
+            client: client_arc,
             player,
             player_rx,
             ws_rx,

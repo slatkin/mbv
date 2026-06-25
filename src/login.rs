@@ -121,7 +121,10 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {
-                    Ok(()) => done = Some(Ok(client)),
+                    Ok(()) => {
+                        crate::config::save_config_settings(&client.config);
+                        done = Some(Ok(client));
+                    }
                     Err(e) => {
                         form.error = e;
                         form.fields[2].clear();

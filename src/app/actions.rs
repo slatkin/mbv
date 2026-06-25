@@ -1305,7 +1305,8 @@ impl App {
             }
             LibEvent::QueueRestored { items, source, last_played_item_id, last_played_completed } => {
                 if items.is_empty() {
-                    crate::config::clear_queue_state();
+                    // Fetch returned empty — could be a network failure at startup, not a genuinely
+                    // empty queue. Leave queue_state.json intact so next startup can retry.
                     return;
                 }
                 let cursor = if let Some(ref id) = last_played_item_id {
