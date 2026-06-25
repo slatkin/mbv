@@ -1395,6 +1395,20 @@ impl App {
             let center = self.layout_carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
+        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+            if let Some(lib_idx) = self.power_focused_lib_idx() {
+                let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
+                let cursor = self.libs[lib_idx].nav_stack.last().map(|lvl| {
+                    self.libs[lib_idx].search.as_ref()
+                        .and_then(|s| s.results.get(s.cursor).copied())
+                        .unwrap_or(lvl.cursor)
+                }).unwrap_or(0);
+                let visible = tbl.height as usize;
+                let scroll = if cursor >= visible { cursor - visible + 1 } else { 0 };
+                let row = (cursor - scroll) as u16;
+                return (tbl.x + 2, tbl.y + row);
+            }
+        }
         if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
             let inner = self.layout_playlist_inner;
             let row = self.layout_presentation_visual_cursor

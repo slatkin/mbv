@@ -360,11 +360,13 @@ impl App {
             ("↯", palette::MUTED)
         };
 
+        let is_playlist = matches!(&self.queue_source, crate::config::QueueSource::Playlist { .. });
         let ind_w = |text: &str| -> u16 { 1 + text.width() as u16 + 1 + 1 }; // "[X]─"
         let playback_ind_w = if active { ind_w(&res_str) + if is_audio_only { 0 } else { ind_w(&au_text) } } else { 0 };
         let sub_ind_w = if is_audio_only { 0 } else { ind_w("CC") };
+        let pl_ind_w = if is_playlist { ind_w("≡") } else { 0 };
         let dash_count = area.width.saturating_sub(
-            playback_ind_w + sub_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
+            playback_ind_w + sub_ind_w + pl_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
         ) as usize;
 
         {
@@ -388,6 +390,7 @@ impl App {
             } else {
                 self.layout_ind_sub = Rect::default();
             }
+            if is_playlist { ix += ind_adv("≡"); }
             self.layout_ind_rc = ind_rect(ix, rc_text);  ix += ind_adv(rc_text);
             self.layout_ind_mu = ind_rect(ix, "m");       ix += ind_adv("m");
             self.layout_ind_pb = ind_rect(ix, pb_text);
@@ -414,6 +417,14 @@ impl App {
             spans.extend([
                 Span::styled("[", bracket),
                 Span::styled("CC", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
+                Span::styled("]", bracket),
+                Span::styled("─", dash_style),
+            ]);
+        }
+        if is_playlist {
+            spans.extend([
+                Span::styled("[", bracket),
+                Span::styled("≡", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
                 Span::styled("]", bracket),
                 Span::styled("─", dash_style),
             ]);

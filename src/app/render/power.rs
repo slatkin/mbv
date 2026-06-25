@@ -147,18 +147,7 @@ impl App {
         }
 
         // Reuse the presentation-view queue table, adjusted for our area.
-        let is_playlist = self.queue_is_saved_playlist();
-        let bar_h = if is_playlist { 1u16 } else { 0 };
-        let table_area = Rect { height: list_area.height.saturating_sub(bar_h), ..list_area };
-        if is_playlist {
-            let bar_bg = palette::IRIS;
-            self.render_playlist_bar_bg(f, Rect {
-                y: list_area.y + table_area.height,
-                height: 1,
-                ..list_area
-            }, bar_bg, false);
-        }
-
+        let table_area = list_area;
         self.power_queue_area = table_area;
 
         let (active, active_idx, live_pos, live_runtime, _) = self.effective_playback_state();
