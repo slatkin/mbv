@@ -362,7 +362,7 @@ impl App {
 
         let ind_w = |text: &str| -> u16 { 1 + text.width() as u16 + 1 + 1 }; // "[X]─"
         let playback_ind_w = if active { ind_w(&res_str) + if is_audio_only { 0 } else { ind_w(&au_text) } } else { 0 };
-        let sub_ind_w = if is_audio_only { 0 } else { ind_w("字") };
+        let sub_ind_w = if is_audio_only { 0 } else { ind_w("CC") };
         let dash_count = area.width.saturating_sub(
             playback_ind_w + sub_ind_w + ind_w(rc_text) + ind_w("m") + ind_w(pb_text)
         ) as usize;
@@ -384,7 +384,7 @@ impl App {
                 self.layout_ind_au = Rect::default();
             }
             if !is_audio_only {
-                self.layout_ind_sub = ind_rect(ix, "字"); ix += ind_adv("字");
+                self.layout_ind_sub = ind_rect(ix, "CC"); ix += ind_adv("CC");
             } else {
                 self.layout_ind_sub = Rect::default();
             }
@@ -413,7 +413,7 @@ impl App {
         if !is_audio_only {
             spans.extend([
                 Span::styled("[", bracket),
-                Span::styled("字", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
+                Span::styled("CC", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)),
                 Span::styled("]", bracket),
                 Span::styled("─", dash_style),
             ]);

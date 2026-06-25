@@ -1,7 +1,7 @@
 # Tech Stack
 
 - **Language**: Rust, edition 2021
-- **Version**: mbv 0.6.9 (Cargo.toml)
+- **Version**: mbv 0.7.0 (Cargo.toml)
 - **TUI**: ratatui 0.30, crossterm 0.29
 - **Media**: libmpv2 6, libmpv2-sys 4
 - **HTTP**: ureq 2 (native-tls, json features)

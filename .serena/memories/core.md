@@ -14,6 +14,7 @@ Terminal UI Emby client. Rust + ratatui + libmpv2. Single binary.
 | `src/app/render/library.rs` | Library table, album view, season grid |
 | `src/app/render/home.rs` | Home/combined panel, home cards |
 | `src/app/render/playlist.rs` | Playlist views (list, filmstrip, cards, presentation) |
+| `src/app/render/power.rs` | Power view: image card, queue panel, multi-column library browser |
 | `src/app/render/overlays.rs` | Settings panel, playlists panel, sessions overlay, context menu, modals |
 | `src/app/render/log.rs` | Log tab |
 | `src/app/images.rs` | Image fetch, card rendering, album year fetch |

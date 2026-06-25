@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Rules
 
+**USE SERENA AND JCODEMUNCH FOR CODE EXPLORATION** I mean please use these are they are meant to be used rather than grepping all over the code.
+
 **NEVER ADD CO-AUTHORED-BY.** Do not add `Co-Authored-By` trailers to commit messages.
 
 **NEVER GUESS.** Read the source before assuming anything. Use Grep, Glob, or Read first.
