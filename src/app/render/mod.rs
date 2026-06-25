@@ -345,17 +345,17 @@ impl App {
         };
         drop(pst);
         let sub_color = if active {
-            if sub_id != 0 { palette::YELLOW } else { palette::MUTED }
+            if sub_id != 0 { palette::FOAM } else { palette::MUTED }
         } else {
             let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
             match mode.as_str() {
-                "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::YELLOW,
+                "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::FOAM,
                 _ => palette::MUTED,
             }
         };
         let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
         let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
-            ("↯", palette::PINE)
+            ("↯", palette::YELLOW)
         } else {
             ("↯", palette::MUTED)
         };
