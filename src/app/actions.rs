@@ -776,7 +776,19 @@ impl App {
         let result = if item.played { client.mark_unplayed(&item.id) } else { client.mark_played(&item.id) };
         drop(client);
         match result {
-            Ok(()) => self.refresh_lib(),
+            Ok(()) => {
+                if !item.played {
+                    let lib_idx = self.tab_idx - self.lib_tab_offset();
+                    if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                        if lvl.unplayed_only {
+                            lvl.items.remove(lvl.cursor);
+                            lvl.total_count = lvl.total_count.saturating_sub(1);
+                            lvl.cursor = lvl.cursor.min(lvl.items.len().saturating_sub(1));
+                        }
+                    }
+                }
+                self.refresh_lib();
+            }
             Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
     }

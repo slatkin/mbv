@@ -293,13 +293,34 @@ impl App {
                     Rect { x, y: area.y, width: w, height: 1 },
                 );
             }
-            // underline beneath header
+            // underline beneath header — replaced with search label when active
             if area.height > 1 {
-                let uline = "\u{2500}".repeat(w as usize);
-                f.render_widget(
-                    Paragraph::new(Span::styled(uline, Style::default().fg(header_fg))),
-                    Rect { x, y: area.y + 1, width: w, height: 1 },
-                );
+                if let Some(s) = &self.libs[lib_idx].search {
+                    let query_text = if s.loading {
+                        format!(" Search \u{2026}: {}\u{2588} ", s.query)
+                    } else {
+                        format!(" Search: {}\u{2588} ", s.query)
+                    };
+                    let label_w = query_text.chars().count().min(w as usize);
+                    let remaining = (w as usize).saturating_sub(1 + label_w);
+                    let mut spans = vec![
+                        Span::styled("\u{2500}", Style::default().fg(header_fg)),
+                        Span::styled(trunc_str(&query_text, label_w), Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
+                    ];
+                    if remaining > 0 {
+                        spans.push(Span::styled("\u{2500}".repeat(remaining), Style::default().fg(header_fg)));
+                    }
+                    f.render_widget(
+                        Paragraph::new(Line::from(spans)),
+                        Rect { x, y: area.y + 1, width: w, height: 1 },
+                    );
+                } else {
+                    let uline = "\u{2500}".repeat(w as usize);
+                    f.render_widget(
+                        Paragraph::new(Span::styled(uline, Style::default().fg(header_fg))),
+                        Rect { x, y: area.y + 1, width: w, height: 1 },
+                    );
+                }
             }
 
             let content_area = Rect { y: area.y + 2, height: col_area.height.saturating_sub(2), ..col_area };

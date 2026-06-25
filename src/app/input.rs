@@ -128,6 +128,44 @@ impl App {
             }
             return false;
         }
+        // Power-view: when the focused library column has an active search, intercept all keys
+        if self.playlist_view == PLAYLIST_VIEW_POWER
+            && !key.modifiers.contains(KeyModifiers::ALT)
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
+            && self.context_menu.is_none()
+        {
+            if let Some(lib_idx) = self.power_focused_lib_idx() {
+                if self.libs[lib_idx].search.is_some() {
+                    let saved = self.tab_idx;
+                    self.tab_idx = self.lib_tab_offset() + lib_idx;
+                    match key.code {
+                        KeyCode::Esc => { self.libs[lib_idx].search = None; }
+                        KeyCode::Backspace => {
+                            let empty = self.libs[lib_idx].search.as_ref().is_none_or(|s| s.query.is_empty());
+                            if empty { self.libs[lib_idx].search = None; }
+                            else {
+                                self.libs[lib_idx].search.as_mut().unwrap().query.pop();
+                                self.update_lib_search(lib_idx);
+                            }
+                        }
+                        KeyCode::Up       => self.move_lib_cursor(-1),
+                        KeyCode::Down     => self.move_lib_cursor(1),
+                        KeyCode::PageUp   => { let p = self.lib_page_size(); self.move_lib_cursor(-(p as i64)); }
+                        KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
+                        KeyCode::Home     => self.jump_lib_cursor(false),
+                        KeyCode::End      => self.jump_lib_cursor(true),
+                        KeyCode::Enter    => self.select(),
+                        KeyCode::Char(c)  => {
+                            self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
+                            self.update_lib_search(lib_idx);
+                        }
+                        _ => {}
+                    }
+                    self.tab_idx = saved;
+                    return false;
+                }
+            }
+        }
         // When library search is active, unmodified keys feed the search
         if self.tab_idx > 1
             && self.tab_idx != self.log_tab_idx()
@@ -596,6 +634,7 @@ impl App {
                 self.status = format!("Rescan '{name}'? (Y/n)");
                 self.confirm_rescan = true;
             }
+            KeyCode::Char('r') => self.refresh_lib(),
             KeyCode::Char('o') if alt => self.open_context_menu(),
             KeyCode::Char('o') if !alt => self.open_context_menu(),
             KeyCode::Char(c @ '1'..='9') => {
@@ -827,6 +866,9 @@ impl App {
                     | KeyCode::Enter | KeyCode::Esc | KeyCode::Backspace => true,
                     KeyCode::Char('/') => true,
                     KeyCode::Char('q') => true,
+                    KeyCode::Char('o') => true,
+                    KeyCode::Char('r') => true,
+                    KeyCode::Char('1'..='9') => true,
                     KeyCode::Char(_) if key.modifiers.contains(KeyModifiers::CONTROL)
                                      || key.modifiers.contains(KeyModifiers::ALT) => true,
                     _ => false,
