@@ -228,13 +228,14 @@ pub fn run(client: EmbyClient) -> ! {
         });
     }
 
-    // Broadcast current PlayerStatus to connected TUIs every 500ms so the
+    // Broadcast current PlayerStatus to connected TUIs so the
     // seekbar and toggle state stay in sync without sending the full queue.
     {
+        let broadcast_interval = std::time::Duration::from_millis(client.config.daemon_broadcast_ms);
         let player_status = player.status.clone();
         let ctrl_clients = ctrl_clients.clone();
         std::thread::spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_millis(500));
+            std::thread::sleep(broadcast_interval);
             if ctrl_clients.lock().unwrap().is_empty() { continue; }
             let status = player_status.lock().unwrap().clone();
             broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));

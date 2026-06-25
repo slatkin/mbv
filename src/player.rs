@@ -490,9 +490,10 @@ fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
 
 fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
     let (stop_tx, stop_rx) = mpsc::channel::<()>();
+    let interval = Duration::from_secs(reporter.client.config.progress_interval_secs);
     let handle = thread::spawn(move || {
         loop {
-            match stop_rx.recv_timeout(Duration::from_secs(10)) {
+            match stop_rx.recv_timeout(interval) {
                 Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 Err(mpsc::RecvTimeoutError::Timeout) => {
                     if reporter.is_audio.load(Ordering::Relaxed) {

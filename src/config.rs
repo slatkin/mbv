@@ -33,6 +33,8 @@ pub struct Config {
     pub my_languages: Vec<String>,  // user's relevant languages; filters subtitle/audio lang cycling
     pub feed_view_libraries: Vec<String>, // libraries treated as feed view (unplayed, date-sorted)
     pub config_version: u32,              // schema version for future migrations (0 = unversioned)
+    pub progress_interval_secs: u64,      // how often to report playback progress to Emby (seconds)
+    pub daemon_broadcast_ms: u64,         // how often the daemon broadcasts status to connected TUIs (ms)
 }
 
 impl Default for Config {
@@ -67,6 +69,8 @@ impl Default for Config {
             my_languages: vec![],
             feed_view_libraries: vec![],
             config_version: 0,
+            progress_interval_secs: 10,
+            daemon_broadcast_ms: 500,
         }
     }
 }
@@ -436,6 +440,18 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_integer())
         .unwrap_or(0) as u32;
 
+    let progress_interval_secs = general
+        .and_then(|m| m.get("progress_interval_secs"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v.max(1) as u64)
+        .unwrap_or(10);
+
+    let daemon_broadcast_ms = daemon
+        .and_then(|d| d.get("broadcast_ms"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v.max(100) as u64)
+        .unwrap_or(500);
+
     let feed_view_libraries: Vec<String> = general
         .and_then(|m| m.get("feed_view_libraries"))
         .and_then(|v| v.as_array())
@@ -472,6 +488,8 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         my_languages,
         feed_view_libraries,
         config_version,
+        progress_interval_secs,
+        daemon_broadcast_ms,
     })
 }
 
