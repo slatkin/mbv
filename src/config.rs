@@ -160,7 +160,10 @@ pub fn save_queue_state(state: &QueueState) {
     let path = queue_state_path();
     if let Some(dir) = path.parent() { let _ = std::fs::create_dir_all(dir); }
     if let Ok(json) = serde_json::to_string(state) {
-        let _ = std::fs::write(path, json);
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
     }
 }
 
@@ -550,7 +553,10 @@ pub fn save_config_settings(cfg: &Config) {
         ));
     }
     if let Ok(s) = toml::to_string(&doc) {
-        let _ = std::fs::write(path, s);
+        let tmp = path.with_extension("toml.tmp");
+        if std::fs::write(&tmp, &s).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
     }
 }
 

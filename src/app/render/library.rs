@@ -15,6 +15,9 @@ impl App {
     // shared breadcrumb row — skip the top border and write crumb text there instead.
     // When None, own the top border (showing it only when there's something to display).
     pub(super) fn render_library(&mut self, f: &mut Frame, area: Rect, lib_idx: usize, crumb_area: Option<Rect>) {
+        if lib_idx >= self.libs.len() {
+            return;
+        }
         let panel_visible = crumb_area.is_some();
         let is_loading = self.libs[lib_idx].nav_stack.last().map(|l| l.loading).unwrap_or(true);
         if is_loading && self.libs[lib_idx].search.is_none() {
@@ -126,6 +129,9 @@ impl App {
     }
 
     pub(super) fn render_album_view(&mut self, f: &mut Frame, area: Rect, lib_idx: usize) {
+        if lib_idx >= self.libs.len() {
+            return;
+        }
         let (items, cursor, album_id) = {
             let lvl = match self.libs[lib_idx].nav_stack.last() { Some(l) => l, None => return };
             (lvl.items.clone(), lvl.cursor, lvl.parent_id.clone())
@@ -237,6 +243,9 @@ impl App {
     }
 
     pub(super) fn render_season_grid(&mut self, f: &mut Frame, area: Rect, lib_idx: usize) {
+        if lib_idx >= self.libs.len() {
+            return;
+        }
         const COLS: usize = 4;
         const TEXT_ROWS: u16 = 3;
         const H_GAP: u16 = 2;
@@ -371,6 +380,9 @@ impl App {
     }
 
     pub(super) fn render_library_table(&mut self, f: &mut Frame, area: Rect, lib_idx: usize) {
+        if lib_idx >= self.libs.len() {
+            return;
+        }
         if self.is_viewing_season_grid(lib_idx) {
             self.render_season_grid(f, area, lib_idx);
             return;

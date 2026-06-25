@@ -366,17 +366,22 @@ impl SessionReporter {
         self.client.report_ping(&sid);
     }
 
-    // get_playback_info + report_start for a new item, then update tracking ids atomically.
+    // get_playback_info + report_start for a new item, updating tracking ids
+    // *before* the network call so the progress reporter thread never sends
+    // stale IDs to Emby.
     // Returns ext_sub_urls from the playback info response.
     fn start_item(&self, item: &MediaItem) -> Vec<String> {
         let (new_sid, new_msid, ext_sub_urls) = self.client.get_playback_info(&item.id);
-        self.client.report_start(item, &new_msid, &new_sid);
-        let mut ids = self.ids.lock().unwrap();
-        ids.0 = item.id.clone();
-        ids.1 = new_msid;
-        ids.2 = new_sid;
-        drop(ids);
+        // Update ids before report_start so the progress reporter (which reads
+        // ids on a 10-second timer) always sees the new item.
+        {
+            let mut ids = self.ids.lock().unwrap();
+            ids.0 = item.id.clone();
+            ids.1 = new_msid.clone();
+            ids.2 = new_sid.clone();
+        }
         self.is_audio.store(item.is_audio(), Ordering::Relaxed);
+        self.client.report_start(item, &new_msid, &new_sid);
         ext_sub_urls
     }
 
@@ -621,7 +626,7 @@ impl SingleSession {
     }
 
     // Returns true if a pending quit should be cancelled (LoadNew arrived).
-    fn handle_command(&mut self, cmd: PlayerCommand, mpv: &Mpv) -> bool {
+    fn handle_command(&mut self, cmd: PlayerCommand, mpv: &Mpv, progress: &mut ProgressGuard) -> bool {
         let mut cancel_stop = false;
         match cmd {
             PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
@@ -685,7 +690,10 @@ impl SingleSession {
                 // Cancel any pending quit so the new file loads in the same window.
                 cancel_stop = true;
                 self.quit_at = None;
+                // Stop progress reporter during transition to prevent stale reports.
+                progress.stop_and_join();
                 self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
+                *progress = spawn_progress_reporter(self.reporter.clone());
 
                 self.last_valid_pos = item.playback_position_ticks;
                 self.osd_title      = item.display_name();
@@ -914,7 +922,7 @@ impl SingleSession {
             // the quit instead of fighting with it.
             let mut cancel_stop = false;
             while let Ok(cmd) = cmd_rx.try_recv() {
-                cancel_stop |= self.handle_command(cmd, &mpv);
+                cancel_stop |= self.handle_command(cmd, &mpv, &mut progress);
             }
 
             if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
@@ -1118,7 +1126,7 @@ impl PlaylistSession {
         self.intro_hide  = past;
     }
 
-    fn handle_command(&mut self, cmd: PlayerCommand, mpv: &Mpv) -> bool {
+    fn handle_command(&mut self, cmd: PlayerCommand, mpv: &Mpv, progress: &mut ProgressGuard) -> bool {
         let mut cancel_stop = false;
         match cmd {
             PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist } => {
@@ -1157,6 +1165,12 @@ impl PlaylistSession {
                         self.forced_idx = if idx == fi { None }
                                           else if idx < fi { Some(fi - 1) }
                                           else { Some(fi) };
+                    }
+                    if idx == self.current_idx {
+                        // Currently playing track removed — clear reporter item_id to prevent
+                        // stale progress reports until on_end_file transitions to the next track.
+                        let mut ids = self.reporter.ids.lock().unwrap();
+                        ids.0.clear();
                     }
                 }
             }
@@ -1221,7 +1235,11 @@ impl PlaylistSession {
                 let (s, e) = load_intro_times(&self.reporter.client, &new_items[start_idx].id);
                 self.set_intro(s, e, new_items[start_idx].playback_position_ticks);
 
+                // Stop progress reporter during transition to prevent stale reports,
+                // then restart for the new item.
+                progress.stop_and_join();
                 self.reporter.start_item(&new_items[start_idx]);
+                *progress = spawn_progress_reporter(self.reporter.clone());
                 self.n          = new_items.len();
                 self.current_idx = start_idx;
                 self.items      = new_items;
@@ -1273,7 +1291,10 @@ impl PlaylistSession {
                 self.quit_at          = None;
                 self.playlist_cancelled = true;
 
+                // Stop progress reporter during transition to prevent stale reports.
+                progress.stop_and_join();
                 self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
+                *progress = spawn_progress_reporter(self.reporter.clone());
 
                 self.last_valid_pos    = item.playback_position_ticks;
                 self.tracks_initialized = false;
@@ -1487,7 +1508,10 @@ impl PlaylistSession {
         send_ep_info(mpv, &self.items[self.current_idx]);
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
+        // Stop progress reporter during transition to prevent stale reports.
+        progress.stop_and_join();
         self.reporter.start_item(&self.items[self.current_idx]);
+        *progress = spawn_progress_reporter(self.reporter.clone());
 
         let (s, e) = load_intro_times(&self.reporter.client, &self.items[self.current_idx].id);
         self.set_intro(s, e, self.items[self.current_idx].playback_position_ticks);
@@ -1535,7 +1559,7 @@ impl PlaylistSession {
         loop {
             let mut cancel_stop = false;
             while let Ok(cmd) = cmd_rx.try_recv() {
-                cancel_stop |= self.handle_command(cmd, &mpv);
+                cancel_stop |= self.handle_command(cmd, &mpv, &mut progress);
             }
 
             if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {

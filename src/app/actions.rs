@@ -1189,31 +1189,33 @@ impl App {
     pub(super) fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
             LibEvent::Loaded { lib_idx, parent_id, level } => {
+                let is_album = self.is_album_level(lib_idx);
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if let Some(last) = lib.nav_stack.last_mut() {
                         if last.parent_id == parent_id && last.loading {
                             *last = level;
                         }
                     }
-                }
-                if self.is_album_level(lib_idx) {
-                    let title = self.libs[lib_idx].nav_stack.last()
-                        .map(|l| l.title.clone())
-                        .unwrap_or_default();
-                    log::debug!(target: "app", "album: entered «{title}»");
-                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                        sort_audio_tracks(&mut last.items);
+                    if is_album {
+                        let title = lib.nav_stack.last()
+                            .map(|l| l.title.clone())
+                            .unwrap_or_default();
+                        log::debug!(target: "app", "album: entered «{title}»");
+                        if let Some(last) = lib.nav_stack.last_mut() {
+                            sort_audio_tracks(&mut last.items);
+                        }
                     }
-                }
-                if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                    if last.items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
-                        sort_episodes(&mut last.items);
+                    if let Some(last) = lib.nav_stack.last_mut() {
+                        if last.items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
+                            sort_episodes(&mut last.items);
+                        }
                     }
                 }
                 self.maybe_fetch_next_page(lib_idx);
                 self.spawn_all_items_prefetch(lib_idx);
             }
             LibEvent::PageAppended { lib_idx, parent_id, items, total_count } => {
+                let is_album = self.is_album_level(lib_idx);
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if let Some(last) = lib.nav_stack.last_mut() {
                         if last.parent_id == parent_id && last.loading {
@@ -1222,20 +1224,21 @@ impl App {
                             last.loading = false;
                         }
                     }
-                }
-                if self.is_album_level(lib_idx) {
-                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                        sort_audio_tracks(&mut last.items);
+                    if is_album {
+                        if let Some(last) = lib.nav_stack.last_mut() {
+                            sort_audio_tracks(&mut last.items);
+                        }
                     }
-                }
-                if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                    if last.items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
-                        sort_episodes(&mut last.items);
+                    if let Some(last) = lib.nav_stack.last_mut() {
+                        if last.items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
+                            sort_episodes(&mut last.items);
+                        }
                     }
                 }
                 self.maybe_fetch_next_page(lib_idx);
             }
             LibEvent::Refreshed { lib_idx, parent_id, items, total_count } => {
+                let is_album = self.is_album_level(lib_idx);
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if let Some(last) = lib.nav_stack.last_mut() {
                         if last.parent_id == parent_id {
@@ -1244,15 +1247,15 @@ impl App {
                             last.loading = false;
                         }
                     }
-                }
-                if self.is_album_level(lib_idx) {
-                    if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                        sort_audio_tracks(&mut last.items);
+                    if is_album {
+                        if let Some(last) = lib.nav_stack.last_mut() {
+                            sort_audio_tracks(&mut last.items);
+                        }
                     }
-                }
-                if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
-                    if last.items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
-                        sort_episodes(&mut last.items);
+                    if let Some(last) = lib.nav_stack.last_mut() {
+                        if last.items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
+                            sort_episodes(&mut last.items);
+                        }
                     }
                 }
                 self.spawn_all_items_prefetch(lib_idx);
