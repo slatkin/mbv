@@ -1,5 +1,4 @@
 use std::io::Read as IoRead;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use textwrap::wrap;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Rect};
@@ -10,8 +9,15 @@ use crate::api::TICKS_PER_SECOND;
 use super::{App, palette, LibEvent};
 use super::ui_util::fmt_duration;
 
-static IMAGE_FETCH_ACTIVE: AtomicUsize = AtomicUsize::new(0);
-const MAX_IMAGE_FETCHES: usize = 4;
+const MAX_IMAGE_FETCHES: usize = 6;
+
+/// A pending card-image fetch, queued when the in-flight limit is reached.
+pub(super) struct ImageFetchReq {
+    pub cache_key: String,
+    pub item_id: String,
+    pub series_id: String,
+    pub types: Vec<String>,
+}
 
 impl App {
     pub(super) fn fetch_album_year(&mut self, album_id: String) {
@@ -43,76 +49,95 @@ impl App {
         if self.card_image_loading.contains(&cache_key) || self.card_image_states.contains_key(&cache_key) {
             return;
         }
-        if IMAGE_FETCH_ACTIVE.load(Ordering::Relaxed) >= MAX_IMAGE_FETCHES {
+        // Reserve the key immediately so duplicate (and queued) requests dedupe.
+        self.card_image_loading.insert(cache_key.clone());
+        let req = ImageFetchReq {
+            cache_key,
+            item_id,
+            series_id,
+            types: types.iter().map(|s| s.to_string()).collect(),
+        };
+        if self.image_fetches_active >= MAX_IMAGE_FETCHES {
+            // Queue instead of dropping: a slot will pick it up on completion.
+            self.pending_image_fetches.push_back(req);
             return;
         }
-        self.card_image_loading.insert(cache_key.clone());
+        self.spawn_image_fetch(req);
+    }
+
+    /// Spawn queued image fetches until the in-flight limit is reached. Called
+    /// whenever an in-flight fetch completes and frees a slot (see the card-image
+    /// receiver in `mod.rs`).
+    pub(super) fn drain_image_fetches(&mut self) {
+        while self.image_fetches_active < MAX_IMAGE_FETCHES {
+            let Some(req) = self.pending_image_fetches.pop_front() else { break };
+            self.spawn_image_fetch(req);
+        }
+    }
+
+    fn spawn_image_fetch(&mut self, req: ImageFetchReq) {
+        self.image_fetches_active += 1;
         let (server_url, token) = {
             let c = self.client.lock().unwrap();
             (c.config.server_url.clone(), c.token.clone())
         };
-        let types_owned: Vec<String> = types.iter().map(|s| s.to_string()).collect();
         let tx = self.card_image_tx.clone();
+        let ImageFetchReq { cache_key, item_id, series_id, types } = req;
         std::thread::spawn(move || {
-            IMAGE_FETCH_ACTIVE.fetch_add(1, Ordering::Relaxed);
-            // Wrap in catch_unwind so a panic in image fetching/resizing still
-            // decrements the concurrency counter and sends a result, preventing
-            // the cache_key from staying in card_image_loading forever (H9).
+            // catch_unwind so a panic during fetch/decode still reports a result,
+            // freeing the in-flight slot and the loading reservation (H9). Exactly
+            // one message is sent per spawn, so the receiver can balance the count.
             let cache_key_outer = cache_key.clone();
             let tx_outer = tx.clone();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
-                let _ = tx.send((cache_key, Some(cached)));
-                return;
-            }
-            let fetch_url = |url: &str| -> Option<Vec<u8>> {
-                let agent = ureq::AgentBuilder::new()
-                    .timeout(std::time::Duration::from_secs(10))
-                    .build();
-                agent.get(url).call().ok().and_then(|r| {
-                    let mut buf = Vec::new();
-                    r.into_reader().take(10 * 1024 * 1024).read_to_end(&mut buf).ok()?;
-                    Some(buf)
-                })
-            };
-            let bytes = types_owned.iter().find_map(|t| {
-                if t == "AudioChild" {
-                    let child_url = format!("{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=1&api_key={}",
-                        server_url, item_id, token);
-                    let child_id: Option<String> = fetch_url(&child_url)
-                        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-                        .and_then(|v| v["Items"].get(0).and_then(|i| i["Id"].as_str().map(|s| s.to_string())));
-                    let child_id = child_id?;
-                    let url = format!("{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}",
-                        server_url, child_id, token);
-                    return fetch_url(&url);
-                }
-                let src = match t.as_str() {
-                    "Logo" | "Backdrop" if !series_id.is_empty() => &series_id,
-                    _ => &item_id,
-                };
-                let url = match t.as_str() {
-                    "Backdrop" => format!("{}/Items/{}/Images/Backdrop/0?maxHeight=400&quality=80&api_key={}", server_url, src, token),
-                    "Logo"     => format!("{}/Items/{}/Images/Logo?maxHeight=400&quality=80&api_key={}", server_url, src, token),
-                    _          => format!("{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}", server_url, src, token),
-                };
-                fetch_url(&url)
-            });
-            let bytes = bytes.map(|b| {
-                match magick_resize(&b) {
-                    Some(resized) => resized,
-                    None => {
-                        log::warn!(target: "img", "magick_resize failed for {cache_key}, using raw bytes");
-                        b
+                let bytes: Option<Vec<u8>> = if let Some(cached) = crate::config::read_image_disk_cache(&cache_key) {
+                    Some(cached)
+                } else {
+                    let fetch_url = |url: &str| -> Option<Vec<u8>> {
+                        let agent = ureq::AgentBuilder::new()
+                            .timeout(std::time::Duration::from_secs(10))
+                            .build();
+                        agent.get(url).call().ok().and_then(|r| {
+                            let mut buf = Vec::new();
+                            r.into_reader().take(10 * 1024 * 1024).read_to_end(&mut buf).ok()?;
+                            Some(buf)
+                        })
+                    };
+                    let fetched = types.iter().find_map(|t| {
+                        if t == "AudioChild" {
+                            let child_url = format!("{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=1&api_key={}",
+                                server_url, item_id, token);
+                            let child_id: Option<String> = fetch_url(&child_url)
+                                .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+                                .and_then(|v| v["Items"].get(0).and_then(|i| i["Id"].as_str().map(|s| s.to_string())));
+                            let child_id = child_id?;
+                            let url = format!("{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}",
+                                server_url, child_id, token);
+                            return fetch_url(&url);
+                        }
+                        let src = match t.as_str() {
+                            "Logo" | "Backdrop" if !series_id.is_empty() => &series_id,
+                            _ => &item_id,
+                        };
+                        let url = match t.as_str() {
+                            "Backdrop" => format!("{}/Items/{}/Images/Backdrop/0?maxHeight=400&quality=80&api_key={}", server_url, src, token),
+                            "Logo"     => format!("{}/Items/{}/Images/Logo?maxHeight=400&quality=80&api_key={}", server_url, src, token),
+                            _          => format!("{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}", server_url, src, token),
+                        };
+                        fetch_url(&url)
+                    });
+                    // Cache the original server bytes as-is. Emby already sized them
+                    // (maxHeight=400&quality=80); no client-side re-encode, so quality
+                    // is unchanged and the cache stays small for fast decode.
+                    if let Some(ref b) = fetched {
+                        crate::config::write_image_disk_cache(&cache_key, b);
                     }
-                }
-            });
-            if let Some(ref b) = bytes {
-                crate::config::write_image_disk_cache(&cache_key, b);
-            }
-            let _ = tx.send((cache_key, bytes));
-            })); // end catch_unwind
-            IMAGE_FETCH_ACTIVE.fetch_sub(1, Ordering::Relaxed);
+                    fetched
+                };
+                // Decode off the UI thread; the main loop only builds the protocol.
+                let img = bytes.and_then(|b| image::load_from_memory(&b).ok());
+                let _ = tx.send((cache_key, img));
+            }));
             if result.is_err() {
                 let _ = tx_outer.send((cache_key_outer, None));
             }
@@ -385,38 +410,4 @@ impl App {
     }
 }
 
-pub(super) fn magick_resize(bytes: &[u8]) -> Option<Vec<u8>> {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-    let args: &[&[&str]] = &[
-        &["magick", "convert"],
-        &["convert"],
-    ];
-    for a in args {
-        let (cmd, extra) = (a[0], &a[1..]);
-        let Ok(mut child) = Command::new(cmd)
-            .args(extra)
-            .args(["-", "-filter", "Lanczos", "-resize", "400x400>", "-quality", "85", "png:-"])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn() else { continue };
-        let Some(mut stdin) = child.stdin.take() else { continue };
-        if stdin.write_all(bytes).is_err() { continue; }
-        drop(stdin); // close pipe so magick knows EOF
-        let child_id = child.id();
-        std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_secs(5));
-            #[cfg(unix)]
-            unsafe { libc::kill(child_id as i32, libc::SIGKILL); }
-        });
-        let Ok(out) = child.wait_with_output() else { continue };
-        if out.status.success() && !out.stdout.is_empty() {
-            return Some(out.stdout);
-        }
-        if !out.stderr.is_empty() {
-            log::debug!(target: "img", "magick stderr: {}", String::from_utf8_lossy(&out.stderr));
-        }
-    }
-    None
-}
+

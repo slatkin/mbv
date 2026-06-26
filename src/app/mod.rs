@@ -324,8 +324,10 @@ pub struct App {
     image_lru: std::collections::VecDeque<String>,
     image_cache_size: usize,
     card_image_loading: std::collections::HashSet<String>,
-    card_image_tx: mpsc::Sender<(String, Option<Vec<u8>>)>,
-    card_image_rx: mpsc::Receiver<(String, Option<Vec<u8>>)>,
+    pending_image_fetches: std::collections::VecDeque<images::ImageFetchReq>,
+    image_fetches_active: usize,
+    card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
+    card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
     image_picker: Option<Picker>,
     context_menu: Option<ContextMenu>,
     context_menu_rect: Option<Rect>,
@@ -418,8 +420,8 @@ struct AppInit {
     lib_rx: mpsc::Receiver<LibEvent>,
     sessions_tx: mpsc::Sender<SessionEvent>,
     sessions_rx: mpsc::Receiver<SessionEvent>,
-    card_image_tx: mpsc::Sender<(String, Option<Vec<u8>>)>,
-    card_image_rx: mpsc::Receiver<(String, Option<Vec<u8>>)>,
+    card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
+    card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
     notif_action_tx: mpsc::Sender<String>,
     notif_action_rx: mpsc::Receiver<String>,
     search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
@@ -640,6 +642,8 @@ impl App {
             album_year_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
+            pending_image_fetches: std::collections::VecDeque::new(),
+            image_fetches_active: 0,
             confirm_rescan: false,
         }
     }
@@ -649,7 +653,7 @@ impl App {
         let (ws_tx, ws_rx) = mpsc::channel();
         let (lib_tx, lib_rx) = mpsc::channel();
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
-        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
+        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
         let server_url = client.config.server_url.clone();
@@ -732,7 +736,7 @@ impl App {
         let (_, ws_rx) = mpsc::channel::<crate::ws::WsEvent>();
         let (lib_tx, lib_rx) = mpsc::channel();
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
-        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<Vec<u8>>)>();
+        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
         let hidden_libraries = client.config.hidden_libraries.clone();
@@ -1020,11 +1024,14 @@ impl App {
                 }
             }
 
-            while let Ok((item_id, bytes_opt)) = self.card_image_rx.try_recv() {
+            while let Ok((item_id, img_opt)) = self.card_image_rx.try_recv() {
                 had_events = true;
                 self.card_image_loading.remove(&item_id);
-                let state: Option<StatefulProtocol> = bytes_opt
-                    .and_then(|b| image::load_from_memory(&b).ok())
+                // A spawned fetch always sends exactly one result, so the in-flight
+                // count is balanced here; free the slot and start any queued fetch.
+                self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
+                // Image was decoded off-thread; just build the render protocol.
+                let state: Option<StatefulProtocol> = img_opt
                     .and_then(|dyn_img| {
                         self.image_picker.as_ref().map(|p| p.new_resize_protocol(dyn_img))
                     });
@@ -1039,6 +1046,7 @@ impl App {
                 }
                 self.card_image_states.insert(item_id, state);
             }
+            self.drain_image_fetches();
 
             while let Ok(ev) = self.ws_rx.try_recv() {
                 had_events = true;
@@ -1682,6 +1690,8 @@ mod tests {
             album_year_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
+            pending_image_fetches: std::collections::VecDeque::new(),
+            image_fetches_active: 0,
             image_cache_size: 50,
             image_protocol_enabled: false,
             confirm_rescan: false,
