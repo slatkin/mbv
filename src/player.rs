@@ -1882,8 +1882,13 @@ impl Player {
     }
 
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
-        // If a video is already playing, load the new file into the existing mpv window.
-        if self.status.lock().unwrap().active {
+        // Reuse the existing mpv window only when it can correctly display the new
+        // item: never load a video into the hidden (headless) audio window — that
+        // would launch the video off-screen. Mirror play_playlist's guard.
+        let new_is_headless = !self.show_audio_window && item.is_audio();
+        if self.status.lock().unwrap().active
+            && (!self.current_is_headless.load(Ordering::Relaxed) || new_is_headless)
+        {
             let ep = if item.is_audio() { "Audio" } else { "Videos" };
             let url = format!(
                 "{}/{}/{}/stream?static=true&api_key={}",
