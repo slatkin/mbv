@@ -169,6 +169,7 @@ impl App {
         if self.tab_idx == 0 {
             self.render_combined(f, main_area);
         } else if self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER {
+            let main_area = Rect { x: main_area.x + 1, width: main_area.width.saturating_sub(2), ..main_area };
             self.render_power_view(f, main_area);
         } else if self.tab_idx == 1 {
             self.render_playlist_panel(f, main_area);
@@ -313,7 +314,6 @@ impl App {
 
         let pst = self.player.status.lock().unwrap();
         let active = pst.active;
-        let sub_id = pst.sub_id;
         let res_h = pst.video_height;
         let video_is_image = pst.video_is_image;
         // is_audio_only: confirmed still-image files only. res_h==0 means video-params/h hasn't
@@ -337,18 +337,9 @@ impl App {
         } else if pst.active && pst.paused {
             if self.use_nerd_fonts { ("\u{f04c}", palette::YELLOW) } else { ("||", palette::YELLOW) }
         } else {
-            if self.use_nerd_fonts { ("\u{f04d}", palette::MUTED) } else { (" ", palette::MUTED) }
+            if self.use_nerd_fonts { ("\u{f04d}", palette::SUBTLE) } else { (" ", palette::MUTED) }
         };
         drop(pst);
-        let sub_color = if active {
-            if sub_id != 0 { palette::FOAM } else { palette::MUTED }
-        } else {
-            let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
-            match mode.as_str() {
-                "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::FOAM,
-                _ => palette::MUTED,
-            }
-        };
         let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
         let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
             ("↯", palette::YELLOW)
@@ -368,29 +359,41 @@ impl App {
             if s.active { if s.muted { 0 } else { s.volume } } else { self.ui_volume as i64 }
         };
         let vol_color = if volume > 100 { palette::RED } else if volume > 60 { palette::YELLOW } else { palette::PINE };
-        let vol_text = format!("Vol{:>3}%", volume); // e.g. "Vol 97%"
+        let vol_text = format!("Vol {}%", volume);
 
-        // In power view (highlight=true) indicators are left-aligned in reversed order.
+        // In power view (highlight=true): indicators are left-aligned; vol is right-aligned separately.
         let left_aligned = highlight;
 
         let pb_w  = pb_text.width() as u16;
         let rc_w  = rc_text.width() as u16;
         let pl_w  = if is_playlist { 1u16 } else { 0 };
         let vol_w = vol_text.width() as u16;
-        // Always-present: vol, pb, m(1), rc; conditionally: pl
-        // Power view also includes: CC, au, res
-        let n_inds: u16 = 4
-            + if is_playlist { 1 } else { 0 }
-            + if left_aligned && !is_audio_only { 1 } else { 0 }
-            + if left_aligned && active && !is_audio_only { 1 } else { 0 }
-            + if left_aligned && active { 1 } else { 0 };
         let au_w  = if left_aligned && active && !is_audio_only { au_text.width() as u16 } else { 0 };
         let res_w = if left_aligned && active { res_str.width() as u16 } else { 0 };
-        let sub_w = if left_aligned && !is_audio_only { 2u16 } else { 0 };
-        let sum_widths = vol_w + pb_w + 1 /*m*/ + rc_w + pl_w + sub_w + au_w + res_w;
+        let sub_w = 0u16;
+
+        // Power view: vol is excluded from the left group and rendered right-aligned instead.
+        let n_inds: u16 = if left_aligned {
+            3 // pb, m, rc
+            + if is_playlist { 1 } else { 0 }
+            + if active && !is_audio_only { 1 } else { 0 } // au
+            + if active { 1 } else { 0 }                   // res
+        } else {
+            4 // vol, pb, m, rc
+            + if is_playlist { 1 } else { 0 }
+        };
+        let sum_widths = if left_aligned {
+            pb_w + 1 /*m*/ + rc_w + pl_w + sub_w + au_w + res_w
+        } else {
+            vol_w + pb_w + 1 /*m*/ + rc_w + pl_w
+        };
         // "─ " + widths + " ─ " seps + " ─"  = 3 + widths + 3*(n-1)
         let group_w = 3 + sum_widths + 3 * n_inds.saturating_sub(1);
-        let dash_count = area.width.saturating_sub(group_w) as usize;
+        let dash_count = if left_aligned {
+            area.width.saturating_sub(group_w + 5 + vol_w) as usize
+        } else {
+            area.width.saturating_sub(group_w) as usize
+        };
 
         {
             let ind_rect = |x: u16, w: u16| -> Rect {
@@ -398,18 +401,13 @@ impl App {
             };
             let sep_w = 3u16; // " ─ "
             if left_aligned {
-                // Reversed: vol ─ pb ─ m ─ rc ─ [≡ ─] [CC ─] [au ─] [res]
+                // Power view: pb ─ m ─ rc ─ [≡ ─] [CC ─] [au ─] [res]  ...dashes... Vol%
                 let mut ix = area.x + 2;
-                ix += vol_w + sep_w;
                 self.layout_ind_pb = ind_rect(ix, pb_w); ix += pb_w + sep_w;
                 self.layout_ind_mu = ind_rect(ix, 1);    ix += 1 + sep_w;
                 self.layout_ind_rc = ind_rect(ix, rc_w); ix += rc_w + sep_w;
                 if is_playlist { ix += pl_w + sep_w; }
-                if !is_audio_only {
-                    self.layout_ind_sub = ind_rect(ix, sub_w); ix += sub_w + sep_w;
-                } else {
-                    self.layout_ind_sub = Rect::default();
-                }
+                self.layout_ind_sub = Rect::default();
                 if active {
                     if !is_audio_only {
                         self.layout_ind_au = ind_rect(ix, au_w);
@@ -438,12 +436,11 @@ impl App {
         };
         let mut items: Vec<Span> = Vec::new();
         if left_aligned {
-            items.push(Span::styled(vol_text.clone(), Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
+            // Vol is rendered separately at the right — excluded from this group.
             items.push(Span::styled(pb_text.to_string(), Style::default().fg(pb_color).add_modifier(Modifier::BOLD)));
             items.push(Span::styled("m", Style::default().fg(mu_color).add_modifier(Modifier::BOLD)));
             items.push(Span::styled(rc_text.to_string(), rc_style));
             if is_playlist { items.push(Span::styled("≡", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD))); }
-            if !is_audio_only { items.push(Span::styled("CC", Style::default().fg(sub_color).add_modifier(Modifier::BOLD))); }
             if active {
                 if !is_audio_only { items.push(Span::styled(au_text.clone(), Style::default().fg(au_color).add_modifier(Modifier::BOLD))); }
                 items.push(Span::styled(res_str.clone(), Style::default().fg(res_color).add_modifier(Modifier::BOLD)));
@@ -465,10 +462,18 @@ impl App {
 
         let mut spans: Vec<Span> = Vec::new();
         if left_aligned {
-            spans.push(Span::styled("─ ", dash_style));
+            let bracket_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
+            spans.push(Span::styled("[", bracket_style));
+            spans.push(Span::raw(" "));
             spans.extend(inner);
-            spans.push(Span::styled(" ─", dash_style));
-            spans.push(Span::styled("─".repeat(dash_count), dash_style));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled("]", bracket_style));
+            spans.push(Span::raw(" ".repeat(dash_count)));
+            spans.push(Span::styled("[", bracket_style));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(vol_text, Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled("]", bracket_style));
         } else {
             spans.push(Span::styled("─".repeat(dash_count), dash_style));
             spans.push(Span::styled("─ ", dash_style));
@@ -594,16 +599,24 @@ impl App {
 
         if self.use_nerd_fonts {
             let btn_style = Style::default().fg(Color::Rgb(203, 212, 241));
+            let stop_style = Style::default().fg(palette::SUBTLE);
             let pp_icon = if !paused { "\u{F03E4}" } else { "\u{F040A}" };
-            let btn_icons = ["\u{F04AE}", "\u{F04A}", pp_icon, "\u{F04DB}", "\u{F04E}", "\u{F04AD}"];
+            let btn_icons: &[(&str, Style)] = &[
+                ("\u{F04AE}", btn_style),
+                ("\u{F04A}",  btn_style),
+                (pp_icon,     btn_style),
+                ("\u{F04DB}", stop_style),
+                ("\u{F04E}",  btn_style),
+                ("\u{F04AD}", btn_style),
+            ];
 
             // Build the centered row: elapsed | <buttons> | total
             let mut spans: Vec<Span> = vec![
                 Span::styled(pos_str.clone(), time_style),
                 Span::styled(" \u{2502} ", delim_style),
             ];
-            for icon in btn_icons.iter() {
-                spans.push(Span::styled(format!("  {icon}  "), btn_style));
+            for (icon, style) in btn_icons.iter() {
+                spans.push(Span::styled(format!("  {icon}  "), *style));
             }
             spans.push(Span::styled(" \u{2502} ", delim_style));
             spans.push(Span::styled(dur_str.clone(), time_style));
