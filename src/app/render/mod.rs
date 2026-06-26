@@ -46,7 +46,9 @@ impl App {
             Constraint::Min(0),
         ]).areas(area);
 
-        self.render_indicator_bar(f, gap_area, in_power);
+        if !in_power {
+            self.render_indicator_bar(f, gap_area, false);
+        }
 
         if !in_power {
             let tabs_area = tabs_area;
@@ -315,9 +317,6 @@ impl App {
         let active = pst.active;
         let res_h = pst.video_height;
         let video_is_image = pst.video_is_image;
-        // is_audio_only: confirmed still-image files only. res_h==0 means video-params/h hasn't
-        // arrived yet — don't treat that as audio-only or we'd hide [CC] permanently on files
-        // where that property never fires (e.g. invalid video timestamps).
         let is_audio_only = active && video_is_image;
         let res_str = if video_is_image || (active && res_h == 0) {
             if pst.audio_codec.is_empty() { "--".to_string() } else { pst.audio_codec.to_uppercase() }
@@ -348,6 +347,8 @@ impl App {
         } else {
             if self.use_nerd_fonts { ("\u{f04d}", palette::SUBTLE) } else { (" ", palette::MUTED) }
         };
+        let pos_ticks_player = pst.position_ticks;
+        let rt_ticks_player  = pst.runtime_ticks;
         drop(pst);
         let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
         let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
@@ -357,10 +358,8 @@ impl App {
         };
 
         let is_playlist = matches!(&self.queue_source, crate::config::QueueSource::Playlist { .. });
-        // Inner dashes between indicators are always muted grey regardless of highlight.
-        let inner_dash = Style::default().fg(palette::MUTED);
+        let inner_dash = Style::default().fg(if highlight { palette::IRIS } else { palette::MUTED });
 
-        // Volume indicator: always present.
         let volume = if let Some(ref remote) = self.connected_session_state {
             remote.volume
         } else {
@@ -368,10 +367,20 @@ impl App {
             if s.active { if s.muted { 0 } else { s.volume } } else { self.ui_volume as i64 }
         };
         let vol_color = if volume > 100 { palette::RED } else if volume > 60 { palette::YELLOW } else { palette::PINE };
-        let vol_text = format!("Vol {}%", volume);
+        let vol_text = format!("Vol: {}%", volume);
 
-        // In power view (highlight=true): indicators are left-aligned; vol is right-aligned separately.
         let left_aligned = highlight;
+
+        let seek_ratio = if left_aligned {
+            let (seek_pos, seek_rt) = if let Some(ref remote) = self.connected_session_state {
+                let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
+                let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
+                ((pos_s * crate::api::TICKS_PER_SECOND as f64) as i64, remote.runtime_s * crate::api::TICKS_PER_SECOND)
+            } else {
+                (pos_ticks_player, rt_ticks_player)
+            };
+            if seek_rt > 0 { (seek_pos as f64 / seek_rt as f64).clamp(0.0, 1.0) } else { 0.0 }
+        } else { 0.0 };
 
         let pb_w  = pb_text.width() as u16;
         let rc_w  = rc_text.width() as u16;
@@ -381,25 +390,24 @@ impl App {
         let res_w = if left_aligned && active { res_str.width() as u16 } else { 0 };
         let sub_w = 0u16;
 
-        // Power view: vol is excluded from the left group and rendered right-aligned instead.
         let n_inds: u16 = if left_aligned {
-            3 // pb, m, rc
+            3
             + if is_playlist { 1 } else { 0 }
-            + if active && !is_audio_only { 1 } else { 0 } // au
-            + if active { 1 } else { 0 }                   // res
+            + if active && !is_audio_only { 1 } else { 0 }
+            + if active { 1 } else { 0 }
         } else {
-            4 // vol, pb, m, rc
-            + if is_playlist { 1 } else { 0 }
+            4 + if is_playlist { 1 } else { 0 }
         };
         let sum_widths = if left_aligned {
             pb_w + 1 /*m*/ + rc_w + pl_w + sub_w + au_w + res_w
         } else {
             vol_w + pb_w + 1 /*m*/ + rc_w + pl_w
         };
-        // "─ " + widths + " ─ " seps + " ─"  = 3 + widths + 3*(n-1)
         let group_w = 3 + sum_widths + 3 * n_inds.saturating_sub(1);
         let dash_count = if left_aligned {
-            area.width.saturating_sub(group_w + 5 + vol_w) as usize
+            // "[ " + items joined by " " + " ]" = 4 + sum_widths + (n_inds-1)
+            let left_group_w = 4 + sum_widths + n_inds.saturating_sub(1);
+            area.width.saturating_sub(left_group_w + vol_w) as usize
         } else {
             area.width.saturating_sub(group_w) as usize
         };
@@ -408,14 +416,13 @@ impl App {
             let ind_rect = |x: u16, w: u16| -> Rect {
                 Rect { x, y: area.y, width: w, height: 1 }
             };
-            let sep_w = 3u16; // " ─ "
             if left_aligned {
-                // Power view: pb ─ m ─ rc ─ [≡ ─] [CC ─] [au ─] [res]  ...dashes... Vol%
+                // "[ pb m rc ... ]": start after "[ " (2 chars), items separated by 1 space
                 let mut ix = area.x + 2;
-                self.layout_ind_pb = ind_rect(ix, pb_w); ix += pb_w + sep_w;
-                self.layout_ind_mu = ind_rect(ix, 1);    ix += 1 + sep_w;
-                self.layout_ind_rc = ind_rect(ix, rc_w); ix += rc_w + sep_w;
-                if is_playlist { ix += pl_w + sep_w; }
+                self.layout_ind_pb = ind_rect(ix, pb_w); ix += pb_w + 1;
+                self.layout_ind_mu = ind_rect(ix, 1);    ix += 1 + 1;
+                self.layout_ind_rc = ind_rect(ix, rc_w); ix += rc_w + 1;
+                if is_playlist { ix += pl_w + 1; }
                 self.layout_ind_sub = Rect::default();
                 if active {
                     if !is_audio_only {
@@ -427,7 +434,7 @@ impl App {
                     self.layout_ind_au = Rect::default();
                 }
             } else {
-                // Normal: ≡ ─ rc ─ m ─ pb ─ vol (right-aligned)
+                let sep_w = 3u16;
                 self.layout_ind_au  = Rect::default();
                 self.layout_ind_sub = Rect::default();
                 let mut ix = area.x + dash_count as u16 + 2;
@@ -445,7 +452,6 @@ impl App {
         };
         let mut items: Vec<Span> = Vec::new();
         if left_aligned {
-            // Vol is rendered separately at the right — excluded from this group.
             items.push(Span::styled(pb_text.to_string(), Style::default().fg(pb_color).add_modifier(Modifier::BOLD)));
             items.push(Span::styled("m", Style::default().fg(mu_color).add_modifier(Modifier::BOLD)));
             items.push(Span::styled(rc_text.to_string(), rc_style));
@@ -462,7 +468,12 @@ impl App {
             items.push(Span::styled(vol_text.clone(), Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
         }
 
-        let sep = Span::styled(" ─ ", inner_dash);
+        // Separator: spaces only inside brackets (left_aligned), dashes otherwise.
+        let sep = if left_aligned {
+            Span::raw(" ")
+        } else {
+            Span::styled(" \u{2500} ", inner_dash)
+        };
         let mut inner: Vec<Span> = Vec::with_capacity(items.len() * 2);
         for (i, s) in items.into_iter().enumerate() {
             if i > 0 { inner.push(sep.clone()); }
@@ -471,23 +482,31 @@ impl App {
 
         let mut spans: Vec<Span> = Vec::new();
         if left_aligned {
-            let bracket_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
-            spans.push(Span::styled("[", bracket_style));
+            let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
+            spans.push(Span::styled("[", bracket));
             spans.push(Span::raw(" "));
             spans.extend(inner);
             spans.push(Span::raw(" "));
-            spans.push(Span::styled("]", bracket_style));
-            spans.push(Span::raw(" ".repeat(dash_count)));
-            spans.push(Span::styled("[", bracket_style));
-            spans.push(Span::raw(" "));
+            spans.push(Span::styled("]", bracket));
+            match dash_count {
+                0 => {}
+                1 => { spans.push(Span::raw(" ")); }
+                _ => {
+                    spans.push(Span::raw(" "));
+                    let bar_w = dash_count - 2;
+                    let filled = (seek_ratio * bar_w as f64).round() as usize;
+                    let unfilled = bar_w.saturating_sub(filled);
+                    spans.push(Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)));
+                    spans.push(Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)));
+                    spans.push(Span::raw(" "));
+                }
+            }
             spans.push(Span::styled(vol_text, Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled("]", bracket_style));
         } else {
-            spans.push(Span::styled("─".repeat(dash_count), dash_style));
-            spans.push(Span::styled("─ ", dash_style));
+            spans.push(Span::styled("\u{2500}".repeat(dash_count), dash_style));
+            spans.push(Span::styled("\u{2500} ", dash_style));
             spans.extend(inner);
-            spans.push(Span::styled(" ─", dash_style));
+            spans.push(Span::styled(" \u{2500}", dash_style));
         }
         f.render_widget(Paragraph::new(Line::from(spans)), area);
     }

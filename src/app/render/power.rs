@@ -1,6 +1,6 @@
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Rect};
-use ratatui::style::{Modifier, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState};
 use crate::api::TICKS_PER_SECOND;
@@ -30,9 +30,14 @@ impl App {
         // ── top section ──────────────────────────────────────────────────────
         let left_w = ((top_area.width as u32 * 2 / 5) as u16).clamp(20, 60);
         let right_w = top_area.width.saturating_sub(left_w + 1);
-        let left_area  = Rect { x: top_area.x,          y: top_area.y, width: left_w,  height: top_h };
         let divider_x  = top_area.x + left_w;
-        let right_area = Rect { x: divider_x + 1,       y: top_area.y, width: right_w, height: top_h };
+        let right_area = Rect { x: divider_x + 1, y: top_area.y, width: right_w, height: top_h };
+        // Indicator bar: render in the gap row above main_area, aligned to the queue panel only.
+        let indicator_y = area.y.saturating_sub(1);
+        let ind_area = Rect { x: right_area.x, y: indicator_y, width: right_area.width, height: 1 };
+        self.render_indicator_bar(f, ind_area, true);
+        // Card image: extend upward into the now-free indicator row for extra height.
+        let left_area = Rect { x: top_area.x, y: indicator_y, width: left_w, height: top_h + 1 };
 
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
 
@@ -93,6 +98,74 @@ impl App {
         }
     }
 
+    fn render_power_playback_controls(&mut self, f: &mut Frame, area: Rect) {
+        if area.height == 0 { return; }
+        let (position_ticks, runtime_ticks, paused) = if let Some(ref remote) = self.connected_session_state {
+            let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
+            let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
+            let pos_ticks = (pos_s * crate::api::TICKS_PER_SECOND as f64) as i64;
+            (pos_ticks, remote.runtime_s * crate::api::TICKS_PER_SECOND, remote.is_paused)
+        } else {
+            let s = self.player.status.lock().unwrap();
+            (s.position_ticks, s.runtime_ticks, s.paused)
+        };
+        let pos_s = position_ticks / TICKS_PER_SECOND;
+        let dur_s = runtime_ticks / TICKS_PER_SECOND;
+        let pos_str = fmt_duration(pos_s);
+        let dur_str = fmt_duration(dur_s);
+        let time_style  = Style::default().fg(palette::SUBTLE);
+        let delim_style = Style::default().fg(palette::OVERLAY);
+        let elapsed_w = pos_str.chars().count() as u16;
+        let total_w   = dur_str.chars().count() as u16;
+        self.layout_seekbar_area = Rect::default();
+        self.layout_tracks_area  = Rect::default();
+        self.layout_vol_area     = Rect::default();
+        self.layout_sub_area     = Rect::default();
+        self.layout_audio_area   = Rect::default();
+        if self.use_nerd_fonts {
+            const BTNS_W: u16 = 30;
+            let btn_style  = Style::default().fg(Color::Rgb(203, 212, 241));
+            let stop_style = Style::default().fg(palette::SUBTLE);
+            let pp_icon = if !paused { "\u{F03E4}" } else { "\u{F040A}" };
+            let btn_icons: &[(&str, Style)] = &[
+                ("\u{F04AE}", btn_style),
+                ("\u{F04A}",  btn_style),
+                (pp_icon,     btn_style),
+                ("\u{F04DB}", stop_style),
+                ("\u{F04E}",  btn_style),
+                ("\u{F04AD}", btn_style),
+            ];
+            let mut spans: Vec<Span> = vec![
+                Span::styled(pos_str.clone(), time_style),
+                Span::styled(" \u{2502} ", delim_style),
+            ];
+            for (icon, style) in btn_icons.iter() {
+                spans.push(Span::styled(format!("  {icon}  "), *style));
+            }
+            spans.push(Span::styled(" \u{2502} ", delim_style));
+            spans.push(Span::styled(dur_str.clone(), time_style));
+            const DELIM_W: u16 = 3;
+            let row_w = elapsed_w + DELIM_W + BTNS_W + DELIM_W + total_w;
+            let btn_x = area.x + area.width.saturating_sub(row_w) / 2 + elapsed_w + DELIM_W;
+            self.layout_button_area = Rect { x: btn_x, y: area.y, width: BTNS_W, height: 1 };
+            f.render_widget(
+                Paragraph::new(Line::from(spans)).alignment(Alignment::Center),
+                Rect { x: area.x, y: area.y, width: area.width, height: 1 },
+            );
+        } else {
+            f.render_widget(
+                Paragraph::new(Span::styled(pos_str, time_style)),
+                Rect { x: area.x, y: area.y, width: elapsed_w.min(area.width), height: 1 },
+            );
+            let total_x = area.x + area.width.saturating_sub(total_w);
+            f.render_widget(
+                Paragraph::new(Span::styled(dur_str, time_style)),
+                Rect { x: total_x, y: area.y, width: total_w.min(area.width), height: 1 },
+            );
+            self.layout_button_area = Rect::default();
+        }
+    }
+
     fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) {
         if area.height < 3 { return; }
 
@@ -126,11 +199,8 @@ impl App {
         };
 
         let list_area = if active && self.show_playback_panel {
-            // 2 rows: seekbar then time+buttons
-            let ctrl_w = area.width;
-            let controls_area = Rect { x: area.x, y: area.y, width: ctrl_w, height: 2 };
-            self.render_playback_controls(f, controls_area);
-            Rect { y: area.y + 2, height: area.height.saturating_sub(2), ..area }
+            self.render_power_playback_controls(f, Rect { x: area.x, y: area.y, width: area.width, height: 1 });
+            Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area }
         } else {
             area
         };
