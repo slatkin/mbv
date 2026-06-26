@@ -254,33 +254,60 @@ impl App {
             self.ensure_lib_loaded_for(col_scroll + ci);
         }
 
+        // Scroll indicator shown in the right-most panel header when scrollable.
+        let indicator = if n_libs > n_cols {
+            let shown_pos = if let PowerFocus::Library(idx) = self.power_focus { idx + 1 } else { col_scroll + 1 };
+            format!("[{}/{}]", shown_pos, n_libs)
+        } else {
+            String::new()
+        };
+
         for ci in 0..n_cols {
             let lib_idx = col_scroll + ci;
             if lib_idx >= n_libs { break; }
 
             let x = area.x + ci as u16 * col_w;
             let w = if ci == n_cols - 1 { col_w + extra } else { col_w };
-            let col_area = Rect { x, y: area.y, width: w, height: area.height.saturating_sub(1) };
+            let col_area = Rect { x, y: area.y, width: w, height: area.height };
             self.power_lib_col_areas.push((lib_idx, col_area));
 
             // Column header: library name, highlighted green if focused
             let focused = matches!(self.power_focus, PowerFocus::Library(idx) if idx == lib_idx);
             let lib_name = self.libs[lib_idx].library.name.clone();
             let header_fg = palette::IRIS;
+            let is_rightmost = ci == n_cols - 1 && !indicator.is_empty();
+            let ind_len = if is_rightmost { indicator.len() as u16 } else { 0 };
+
             if focused {
-                let label = format!("  {}  ", trunc_str(&lib_name, (w as usize).saturating_sub(4)));
+                let title_budget = (w as usize).saturating_sub(4 + ind_len as usize);
+                let label = format!("  {}  ", trunc_str(&lib_name, title_budget));
+                let title_w = w.saturating_sub(ind_len);
                 f.render_widget(
                     Paragraph::new(Span::styled(label, Style::default().fg(palette::WHITE).bg(palette::IRIS).add_modifier(Modifier::BOLD))),
-                    Rect { x, y: area.y, width: w, height: 1 },
+                    Rect { x, y: area.y, width: title_w, height: 1 },
                 );
+                if is_rightmost {
+                    f.render_widget(
+                        Paragraph::new(Span::styled(indicator.clone(), Style::default().fg(palette::SUBTLE))),
+                        Rect { x: x + title_w, y: area.y, width: ind_len, height: 1 },
+                    );
+                }
             } else {
+                let title_budget = (w as usize).saturating_sub(2 + ind_len as usize);
+                let title_w = w.saturating_sub(ind_len);
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
                         Span::raw(" "),
-                        Span::styled(trunc_str(&lib_name, (w as usize).saturating_sub(2)), Style::default().fg(palette::YELLOW)),
+                        Span::styled(trunc_str(&lib_name, title_budget), Style::default().fg(palette::YELLOW)),
                     ])),
-                    Rect { x, y: area.y, width: w, height: 1 },
+                    Rect { x, y: area.y, width: title_w, height: 1 },
                 );
+                if is_rightmost {
+                    f.render_widget(
+                        Paragraph::new(Span::styled(indicator.clone(), Style::default().fg(palette::SUBTLE))),
+                        Rect { x: x + title_w, y: area.y, width: ind_len, height: 1 },
+                    );
+                }
             }
             // underline beneath header — replaced with search label when active
             if area.height > 1 {
@@ -315,19 +342,6 @@ impl App {
             let content_area = Rect { y: area.y + 2, height: col_area.height.saturating_sub(2), ..col_area };
 
             self.render_power_lib_col(f, content_area, lib_idx, focused);
-        }
-
-        // Scroll indicator: [N/Total] in bottom-right corner of the library section
-        if n_libs > n_cols {
-            let shown_pos = if let PowerFocus::Library(idx) = self.power_focus { idx + 1 } else { col_scroll + 1 };
-            let indicator = format!("[{}/{}]", shown_pos, n_libs);
-            let iw = indicator.len() as u16;
-            let ind_x = area.x + area.width.saturating_sub(iw);
-            let ind_y = area.y + area.height.saturating_sub(1);
-            f.render_widget(
-                Paragraph::new(Span::styled(indicator, Style::default().fg(palette::SUBTLE))),
-                Rect { x: ind_x, y: ind_y, width: iw, height: 1 },
-            );
         }
     }
 
