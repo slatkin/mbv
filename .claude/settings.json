@@ -13,7 +13,11 @@
       "Bash(addr2line -e /home/slatkin/Dev/mbv/target/debug/mbv -f 0x0000556c1d54a5be)",
       "Read(//proc/sys/kernel/**)",
       "Bash(ulimit -c)",
-      "Bash(journalctl -t systemd-coredump --since \"10 minutes ago\")"
+      "Bash(journalctl -t systemd-coredump --since \"10 minutes ago\")",
+      "mcp__jcodemunch__resolve_repo",
+      "mcp__jcodemunch__plan_turn",
+      "mcp__jcodemunch__search_text",
+      "mcp__jcodemunch__get_symbol_source"
     ]
   }
 }
