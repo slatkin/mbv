@@ -37,13 +37,13 @@ impl App {
         let tabs_h:  u16 = if in_power { 0 } else { 1 };
         let gap_h:   u16 = 1;
         let title_h: u16 = if in_power { 0 } else { 1 };
-        let [gap_area, title_area, controls_area, status_area, main_area, tabs_area] = Layout::vertical([
+        let [tabs_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
+            Constraint::Length(tabs_h),
             Constraint::Length(gap_h),
             Constraint::Length(title_h),
             Constraint::Length(controls_h),
             Constraint::Length(status_h),
             Constraint::Min(0),
-            Constraint::Length(tabs_h),
         ]).areas(area);
 
         if !in_power {
@@ -54,6 +54,10 @@ impl App {
             let tabs_area = tabs_area;
             self.layout_tabbar_vol_area = Rect::default();
             self.layout_tabs_area = tabs_area;
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::IRIS)),
+                tabs_area,
+            );
 
         let (vis_start, vis_end) = self.visible_tab_range(tabs_area.width);
         let has_left  = vis_start > 0;
@@ -92,9 +96,9 @@ impl App {
         let tab_titles: Vec<Span> = all_names[vis_start..vis_end]
             .iter().enumerate().map(|(i, n)| {
                 if i == selected_tab {
-                    Span::styled(format!("  {n}  "), Style::default().fg(palette::WHITE).bg(palette::IRIS).add_modifier(Modifier::BOLD))
+                    Span::styled(format!("  {n}  "), Style::default().fg(palette::YELLOW).bg(palette::IRIS).add_modifier(Modifier::BOLD))
                 } else {
-                    Span::styled(format!("  {n}  "), Style::default().fg(palette::YELLOW))
+                    Span::styled(format!("  {n}  "), Style::default().fg(palette::WHITE).bg(palette::IRIS))
                 }
             }).collect();
         f.render_widget(
