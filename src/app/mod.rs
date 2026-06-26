@@ -306,8 +306,8 @@ pub struct App {
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
     power_focus: PowerFocus,
-    power_lib_col_scroll: usize,       // index of leftmost visible library column
-    power_lib_col_areas: Vec<(usize, Rect)>, // (lib_idx, area) for each rendered column
+    power_lib_col_scroll: usize,       // index of leftmost visible column (into power_panels())
+    power_lib_col_areas: Vec<(PowerPanel, Rect)>, // (panel, area) for each rendered column
     power_queue_area: Rect,
     home_card_view: bool,
     last_played_item_id: Option<String>,
@@ -436,7 +436,15 @@ enum PendingQueueAction {
 pub(super) enum PowerFocus {
     #[default]
     Queue,
-    Library(usize), // focused library column index (into libs, not col position)
+    ContinueWatching,         // the Continue Watching column (shares home.continue_items)
+    Library(usize),           // focused library column index (into libs, not col position)
+}
+
+/// A lower-panel column in the Power view, left-to-right.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum PowerPanel {
+    ContinueWatching,
+    Library(usize),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

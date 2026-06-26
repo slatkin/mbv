@@ -5,14 +5,20 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState};
 use crate::api::TICKS_PER_SECOND;
-use super::super::{App, PowerFocus, palette};
+use super::super::{App, PowerFocus, PowerPanel, palette};
 use super::super::ui_util::{fmt_duration, item_text_and_style, trunc_str};
 
-const MIN_COL_W: u16 = 35;
+const MIN_COL_W: u16 = 30;
 
 impl App {
     pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
         if area.height < 6 { return; }
+
+        // Drop focus if it points at a column that no longer exists (e.g. the
+        // Continue Watching panel after its last item was removed).
+        if matches!(self.power_focus, PowerFocus::ContinueWatching) && self.home.continue_items.is_empty() {
+            self.power_focus = PowerFocus::Queue;
+        }
 
         let min_queue_h: u16 = 8;
         let min_lib_h: u16 = 4;
@@ -335,18 +341,20 @@ impl App {
     }
 
     fn render_power_libraries(&mut self, f: &mut Frame, area: Rect) {
-        let n_libs = self.libs.len();
-        if n_libs == 0 || area.height == 0 || area.width == 0 { return; }
+        // Columns are the Continue Watching panel (when present) followed by libraries.
+        let panels = self.power_panels();
+        let n_panels = panels.len();
+        if n_panels == 0 || area.height == 0 || area.width == 0 { return; }
 
         // How many columns fit? Always show at least 2, then add more at MIN_COL_W.
         let n_cols = if area.width >= MIN_COL_W * 3 {
             (area.width / MIN_COL_W) as usize
         } else {
             2usize // squeeze: 2 share the space even below min
-        }.min(n_libs);
+        }.min(n_panels);
 
         // Clamp scroll so we don't show empty columns on the right.
-        let max_scroll = n_libs.saturating_sub(n_cols);
+        let max_scroll = n_panels.saturating_sub(n_cols);
         self.power_lib_col_scroll = self.power_lib_col_scroll.min(max_scroll);
         let col_scroll = self.power_lib_col_scroll;
 
@@ -357,29 +365,43 @@ impl App {
 
         // Ensure each visible library column has triggered its initial load.
         for ci in 0..n_cols {
-            self.ensure_lib_loaded_for(col_scroll + ci);
+            if let Some(PowerPanel::Library(idx)) = panels.get(col_scroll + ci) {
+                self.ensure_lib_loaded_for(*idx);
+            }
         }
 
         // Scroll indicator shown in the right-most panel header when scrollable.
-        let indicator = if n_libs > n_cols {
-            let shown_pos = if let PowerFocus::Library(idx) = self.power_focus { idx + 1 } else { col_scroll + 1 };
-            format!("[{}/{}]", shown_pos, n_libs)
+        let indicator = if n_panels > n_cols {
+            let focus_pos = self.power_focus_panel_pos(&panels);
+            let shown_pos = focus_pos.unwrap_or(col_scroll) + 1;
+            format!("[{}/{}]", shown_pos, n_panels)
         } else {
             String::new()
         };
 
         for ci in 0..n_cols {
-            let lib_idx = col_scroll + ci;
-            if lib_idx >= n_libs { break; }
+            let panel = match panels.get(col_scroll + ci) { Some(&p) => p, None => break };
 
             let x = area.x + ci as u16 * col_w;
             let w = if ci == n_cols - 1 { col_w + extra } else { col_w };
             let col_area = Rect { x, y: area.y, width: w, height: area.height };
-            self.power_lib_col_areas.push((lib_idx, col_area));
+            self.power_lib_col_areas.push((panel, col_area));
 
-            // Column header: library name, highlighted green if focused
-            let focused = matches!(self.power_focus, PowerFocus::Library(idx) if idx == lib_idx);
-            let lib_name = self.libs[lib_idx].library.name.clone();
+            // Column header: panel name, highlighted green if focused
+            let focused = self.power_focus_panel_pos(&panels) == Some(col_scroll + ci);
+            let (lib_name, search_label): (String, Option<String>) = match panel {
+                PowerPanel::ContinueWatching => ("Continue Watching".to_string(), None),
+                PowerPanel::Library(idx) => {
+                    let label = self.libs[idx].search.as_ref().map(|s| {
+                        if s.loading {
+                            format!(" Search \u{2026}: {}\u{2588} ", s.query)
+                        } else {
+                            format!(" Search: {}\u{2588} ", s.query)
+                        }
+                    });
+                    (self.libs[idx].library.name.clone(), label)
+                }
+            };
             let header_fg = palette::IRIS;
             let is_rightmost = ci == n_cols - 1 && !indicator.is_empty();
             let ind_len = if is_rightmost { indicator.len() as u16 } else { 0 };
@@ -417,12 +439,7 @@ impl App {
             }
             // underline beneath header — replaced with search label when active
             if area.height > 1 {
-                if let Some(s) = &self.libs[lib_idx].search {
-                    let query_text = if s.loading {
-                        format!(" Search \u{2026}: {}\u{2588} ", s.query)
-                    } else {
-                        format!(" Search: {}\u{2588} ", s.query)
-                    };
+                if let Some(query_text) = search_label {
                     let label_w = query_text.chars().count().min(w as usize);
                     let remaining = (w as usize).saturating_sub(1 + label_w);
                     let mut spans = vec![
@@ -447,7 +464,74 @@ impl App {
 
             let content_area = Rect { y: area.y + 2, height: col_area.height.saturating_sub(2), ..col_area };
 
-            self.render_power_lib_col(f, content_area, lib_idx, focused);
+            match panel {
+                PowerPanel::ContinueWatching => self.render_power_cw_col(f, content_area, focused),
+                PowerPanel::Library(idx) => self.render_power_lib_col(f, content_area, idx, focused),
+            }
+        }
+    }
+
+    /// Render the Continue Watching column (shares state with the Home tab).
+    fn render_power_cw_col(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        let items = self.home.continue_items.clone();
+        let n = items.len();
+        if n == 0 {
+            f.render_widget(
+                Paragraph::new(Span::styled("(empty)", Style::default().fg(palette::MUTED))),
+                area,
+            );
+            return;
+        }
+        let cursor = self.home.continue_cursor.min(n - 1);
+        let visible = area.height as usize;
+        let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
+
+        // Store the table area for mouse hit-testing.
+        if let Some(entry) = self.power_lib_col_areas.iter_mut().find(|(p, _)| *p == PowerPanel::ContinueWatching) {
+            entry.1 = area;
+        }
+
+        let list_items: Vec<ListItem> = items.iter().skip(offset).take(visible).enumerate().map(|(i, item)| {
+            let abs = offset + i;
+            let selected = abs == cursor;
+            let (text, _) = item_text_and_style(item, selected);
+            let title = trunc_str(&text, (area.width as usize).saturating_sub(2));
+            let fg = if !focused {
+                palette::SUBTLE
+            } else if item.is_folder {
+                palette::WHITE
+            } else {
+                palette::TEXT
+            };
+            let line = if selected && focused {
+                Line::from(vec![
+                    Span::styled("\u{258c}", Style::default().fg(palette::IRIS)),
+                    Span::styled(title, Style::default().fg(palette::YELLOW)),
+                ])
+            } else {
+                Line::from(vec![
+                    Span::raw(" "),
+                    Span::styled(title, Style::default().fg(fg)),
+                ])
+            };
+            ListItem::new(line)
+        }).collect();
+
+        let mut state = ListState::default();
+        state.select(Some(cursor.saturating_sub(offset)));
+        f.render_stateful_widget(List::new(list_items).highlight_style(Style::default()), area, &mut state);
+
+        if focused && n > visible {
+            let max_off = n.saturating_sub(visible);
+            let mut sb = ScrollbarState::new(max_off + 1).position(offset);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("\u{2590}")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None).end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                area, &mut sb,
+            );
         }
     }
 
@@ -490,7 +574,7 @@ impl App {
         let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
 
         // Store the table area for mouse hit-testing
-        if let Some(entry) = self.power_lib_col_areas.iter_mut().find(|(idx, _)| *idx == lib_idx) {
+        if let Some(entry) = self.power_lib_col_areas.iter_mut().find(|(p, _)| *p == PowerPanel::Library(lib_idx)) {
             entry.1 = area;
         }
         if let Some(v) = self.layout_lib_table_area.get_mut(lib_idx) { *v = area; }

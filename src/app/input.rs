@@ -1,4 +1,4 @@
-use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION, PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus};
+use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION, PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus, PowerPanel};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -821,6 +821,37 @@ impl App {
         }
     }
 
+    /// Handle a key for the focused Continue Watching power column.
+    /// Returns true if the key was consumed (others fall through to focus nav).
+    fn handle_power_cw_key(&mut self, key: KeyEvent) -> bool {
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+        let n = self.home.continue_items.len();
+        match key.code {
+            KeyCode::Up   => { self.power_cw_move_cursor(-1); true }
+            KeyCode::Down => { self.power_cw_move_cursor(1);  true }
+            KeyCode::PageUp   => { self.power_cw_move_cursor(-(self.power_cw_page() as i64)); true }
+            KeyCode::PageDown => { self.power_cw_move_cursor(self.power_cw_page() as i64);    true }
+            KeyCode::Home => { self.home.continue_cursor = 0; true }
+            KeyCode::End  => { if n > 0 { self.home.continue_cursor = n - 1; } true }
+            KeyCode::Enter if ctrl => { self.power_cw_enqueue(); true }
+            KeyCode::Enter => { self.power_cw_play(); true }
+            KeyCode::Char('q') if ctrl => { self.power_cw_enqueue(); true }
+            KeyCode::Char('w') if ctrl => { self.power_cw_toggle_watched(); true }
+            KeyCode::Char('o') => { self.open_context_menu(); true }
+            KeyCode::Delete => { self.remove_from_continue_watching(); true }
+            _ => false,
+        }
+    }
+
+    /// Page size for the Continue Watching column = its rendered height.
+    fn power_cw_page(&self) -> usize {
+        self.power_lib_col_areas.iter()
+            .find(|(p, _)| *p == PowerPanel::ContinueWatching)
+            .map(|(_, r)| r.height as usize)
+            .unwrap_or(5)
+            .max(1)
+    }
+
     fn handle_playlist_key(&mut self, key: KeyEvent) -> bool {
         if let Some(t) = self.confirm_remove_idx {
             self.confirm_remove_idx = None;
@@ -836,8 +867,11 @@ impl App {
             return false;
         }
 
-        // In power view, route nav keys to the focused library column.
+        // In power view, route nav keys to the focused lower-panel column.
         if self.playlist_view == PLAYLIST_VIEW_POWER {
+            if matches!(self.power_focus, PowerFocus::ContinueWatching) && self.handle_power_cw_key(key) {
+                return false;
+            }
             if let Some(lib_idx) = self.power_focused_lib_idx() {
                 let is_power_nav = matches!(key.code, KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down)
                     && key.modifiers.contains(KeyModifiers::ALT);
@@ -1299,7 +1333,12 @@ impl App {
         let mut items: Vec<&'static str> = vec![];
         let mut actions: Vec<ContextAction> = vec![];
 
-        let current_item = if self.home_search.is_some() || self.tab_idx == 0 {
+        let cw_focused = self.playlist_view == PLAYLIST_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::ContinueWatching);
+
+        let current_item = if cw_focused {
+            self.home.continue_items.get(self.home.continue_cursor).cloned()
+        } else if self.home_search.is_some() || self.tab_idx == 0 {
             self.current_home_item()
         } else if self.tab_idx == 1 {
             self.player_tab.items.get(self.player_tab.playlist_cursor).cloned()
@@ -1328,7 +1367,7 @@ impl App {
             } else {
                 items.push("Play");
                 actions.push(ContextAction::Play);
-                if self.home_search.is_some() || self.tab_idx != 1 {
+                if cw_focused || self.home_search.is_some() || self.tab_idx != 1 {
                     items.push("Add to Queue");
                     actions.push(ContextAction::Enqueue);
                 }
@@ -1342,11 +1381,11 @@ impl App {
                         actions.push(ContextAction::MarkPlayed(item.id.clone()));
                     }
                 }
-                if self.home_search.is_none() && self.tab_idx == 0 && self.home.section == 0 {
+                if cw_focused || (self.home_search.is_none() && self.tab_idx == 0 && self.home.section == 0) {
                     items.push("Remove from Continue Watching");
                     actions.push(ContextAction::RemoveFromContinueWatching);
                 }
-                if self.home_search.is_none() && self.tab_idx == 1 {
+                if !cw_focused && self.home_search.is_none() && self.tab_idx == 1 {
                     items.push("Remove from Playlist");
                     actions.push(ContextAction::RemoveFromPlaylist(self.player_tab.playlist_cursor));
                 }
@@ -1377,6 +1416,16 @@ impl App {
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
         if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+            if matches!(self.power_focus, PowerFocus::ContinueWatching) {
+                if let Some((_, area)) = self.power_lib_col_areas.iter().find(|(p, _)| *p == PowerPanel::ContinueWatching) {
+                    let n = self.home.continue_items.len().max(1);
+                    let cursor = self.home.continue_cursor.min(n - 1);
+                    let visible = area.height as usize;
+                    let offset = if visible > 0 && cursor >= visible { cursor - visible + 1 } else { 0 };
+                    let row = cursor.saturating_sub(offset) as u16;
+                    return (area.x + 2, area.y + row);
+                }
+            }
             if let Some(lib_idx) = self.power_focused_lib_idx() {
                 let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
                 let cursor = self.libs[lib_idx].nav_stack.last().map(|lvl| {
@@ -1494,32 +1543,50 @@ impl App {
                 if click_y < n { self.player_tab.playlist_cursor = click_y; }
                 return true;
             }
-            // Click in a library column: focus it and set its cursor.
+            // Click in a lower-panel column: focus it and set its cursor.
             let col_areas = self.power_lib_col_areas.clone();
-            for (lib_idx, col_area) in col_areas {
-                let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
-                if col_area.contains((col, row).into()) {
-                    self.power_focus = PowerFocus::Library(lib_idx);
-                    if tbl.contains((col, row).into()) {
-                        let click_y = row - tbl.y;
-                        let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
-                        let display_pos = {
-                            let mut y = 0u16;
-                            let mut found = scroll;
-                            for (vi, &h) in self.layout_lib_row_heights.get(lib_idx).map(|v| v.as_slice()).unwrap_or(&[]).iter().enumerate() {
-                                if click_y < y + h { found = scroll + vi; break; }
-                                y += h;
+            for (panel, col_area) in col_areas {
+                match panel {
+                    PowerPanel::ContinueWatching => {
+                        if col_area.contains((col, row).into()) {
+                            self.power_focus = PowerFocus::ContinueWatching;
+                            let n = self.home.continue_items.len();
+                            if n > 0 && row >= col_area.y {
+                                let visible = col_area.height as usize;
+                                let cursor = self.home.continue_cursor.min(n - 1);
+                                let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
+                                let clicked = offset + (row - col_area.y) as usize;
+                                if clicked < n { self.home.continue_cursor = clicked; }
                             }
-                            found
-                        };
-                        let lib = &mut self.libs[lib_idx];
-                        if let Some(s) = &mut lib.search {
-                            if display_pos < s.results.len() { s.cursor = display_pos; }
-                        } else if let Some(lvl) = lib.nav_stack.last_mut() {
-                            if display_pos < lvl.items.len() { lvl.cursor = display_pos; }
+                            return true;
                         }
                     }
-                    return true;
+                    PowerPanel::Library(lib_idx) => {
+                        let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
+                        if col_area.contains((col, row).into()) {
+                            self.power_focus = PowerFocus::Library(lib_idx);
+                            if tbl.contains((col, row).into()) {
+                                let click_y = row - tbl.y;
+                                let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
+                                let display_pos = {
+                                    let mut y = 0u16;
+                                    let mut found = scroll;
+                                    for (vi, &h) in self.layout_lib_row_heights.get(lib_idx).map(|v| v.as_slice()).unwrap_or(&[]).iter().enumerate() {
+                                        if click_y < y + h { found = scroll + vi; break; }
+                                        y += h;
+                                    }
+                                    found
+                                };
+                                let lib = &mut self.libs[lib_idx];
+                                if let Some(s) = &mut lib.search {
+                                    if display_pos < s.results.len() { s.cursor = display_pos; }
+                                } else if let Some(lvl) = lib.nav_stack.last_mut() {
+                                    if display_pos < lvl.items.len() { lvl.cursor = display_pos; }
+                                }
+                            }
+                            return true;
+                        }
+                    }
                 }
             }
         } else if self.tab_idx == 1 {
@@ -1859,11 +1926,16 @@ if idx < self.sessions.len() {
                             self.player_tab.playlist_cursor =
                                 (self.player_tab.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                         }
-                    } else if let Some(&(lib_idx, _)) = col_areas.iter().find(|(_, r)| r.contains((col, row).into())) {
-                        let saved = self.tab_idx;
-                        self.tab_idx = self.lib_tab_offset() + lib_idx;
-                        self.move_lib_cursor(delta);
-                        self.tab_idx = saved;
+                    } else if let Some(&(panel, _)) = col_areas.iter().find(|(_, r)| r.contains((col, row).into())) {
+                        match panel {
+                            PowerPanel::ContinueWatching => self.power_cw_move_cursor(delta),
+                            PowerPanel::Library(lib_idx) => {
+                                let saved = self.tab_idx;
+                                self.tab_idx = self.lib_tab_offset() + lib_idx;
+                                self.move_lib_cursor(delta);
+                                self.tab_idx = saved;
+                            }
+                        }
                     }
                 } else if self.tab_idx == 1 {
                     if self.playlist_view == PLAYLIST_VIEW_PRESENTATION {

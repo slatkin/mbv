@@ -33,17 +33,17 @@ impl App {
         let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
         let in_power       = self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER;
         let status_h:   u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
-        let controls_h: u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 2 } else { 0 };
+        let controls_h: u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
         let tabs_h:  u16 = if in_power { 0 } else { 1 };
         let gap_h:   u16 = 1;
         let title_h: u16 = if in_power { 0 } else { 1 };
-        let [tabs_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
-            Constraint::Length(tabs_h),
+        let [gap_area, title_area, controls_area, status_area, main_area, tabs_area] = Layout::vertical([
             Constraint::Length(gap_h),
             Constraint::Length(title_h),
             Constraint::Length(controls_h),
             Constraint::Length(status_h),
             Constraint::Min(0),
+            Constraint::Length(tabs_h),
         ]).areas(area);
 
         if !in_power {
@@ -234,24 +234,6 @@ impl App {
         Line::from(Span::styled(s.to_string(), text_style))
     }
 
-    fn render_volume_bar(&self, f: &mut Frame, area: Rect) {
-        let (volume, _volume_max) = if let Some(ref remote) = self.connected_session_state {
-            (remote.volume, 100)
-        } else {
-            let s = self.player.status.lock().unwrap();
-            if s.active { (if s.muted { 0 } else { s.volume }, s.volume_max) }
-            else { (self.ui_volume as i64, 100) }
-        };
-        let color = if volume > 100 { palette::RED }
-            else if volume > 60 { palette::YELLOW }
-            else { palette::PINE };
-        let line = Line::from(vec![
-            Span::styled(" Vol ", Style::default().fg(Color::Rgb(230, 230, 230))),
-            Span::styled(format!("{:>3}%", volume), Style::default().fg(color)),
-        ]);
-        f.render_widget(Paragraph::new(line), area);
-    }
-
     pub(super) fn render_panel_shell(
         f: &mut Frame,
         full: Rect,
@@ -337,9 +319,9 @@ impl App {
         drop(pst);
         let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
         let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
-            ("↯", palette::YELLOW)
+            ("⇌", palette::YELLOW)
         } else {
-            ("↯", palette::MUTED)
+            ("⇌", palette::MUTED)
         };
 
         let is_playlist = matches!(&self.queue_source, crate::config::QueueSource::Playlist { .. });
@@ -352,7 +334,7 @@ impl App {
             if s.active { if s.muted { 0 } else { s.volume } } else { self.ui_volume as i64 }
         };
         let vol_color = if volume > 100 { palette::RED } else if volume > 60 { palette::YELLOW } else { palette::PINE };
-        let vol_text = format!("Vol: {}%", volume);
+        let vol_text = format!("Vol {}", volume);
 
         let left_aligned = highlight;
 
@@ -387,8 +369,8 @@ impl App {
         };
         let group_w = 3 + sum_widths + 3 * n_inds.saturating_sub(1);
         let dash_count = if left_aligned {
-            // "[ " + items joined by " " + " ]"
-            let left_group_w = 4 + sum_widths + n_inds.saturating_sub(1);
+            // "ind ind ... <dashes> Vol": a space flanks the bar on each side = 2 fixed chars
+            let left_group_w = sum_widths + n_inds.saturating_sub(1) + 2;
             area.width.saturating_sub(left_group_w + vol_w) as usize
         } else {
             area.width.saturating_sub(group_w) as usize
@@ -399,8 +381,8 @@ impl App {
                 Rect { x, y: area.y, width: w, height: 1 }
             };
             if left_aligned {
-                // "[ pb m rc ... ]": start after "[ " (2 chars), items separated by 1 space
-                let mut ix = area.x + 2;
+                // "pb m rc ≡│...": indicators start at the left edge, separated by 1 space
+                let mut ix = area.x;
                 self.layout_ind_pb = ind_rect(ix, pb_w); ix += pb_w + 1;
                 self.layout_ind_mu = ind_rect(ix, 1);    ix += 1 + 1;
                 self.layout_ind_rc = ind_rect(ix, rc_w);
@@ -452,26 +434,22 @@ impl App {
 
         let mut spans: Vec<Span> = Vec::new();
         if left_aligned {
-            let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
-            spans.push(Span::styled("[", bracket));
-            spans.push(Span::raw(" "));
+            // "ind ind ... <seekbar> Vol". In the presentation view the middle is just a
+            // plain green divider line — that view has its own dedicated seekbar.
+            let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
             spans.extend(inner);
             spans.push(Span::raw(" "));
-            spans.push(Span::styled("]", bracket));
-            match dash_count {
-                0 => {}
-                1 => { spans.push(Span::raw(" ")); }
-                _ => {
-                    spans.push(Span::raw(" "));
-                    let bar_w = dash_count - 2;
-                    let filled = (seek_ratio * bar_w as f64).round() as usize;
-                    let unfilled = bar_w.saturating_sub(filled);
-                    spans.push(Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)));
-                    spans.push(Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)));
-                    spans.push(Span::raw(" "));
-                }
+            if in_presentation {
+                spans.push(Span::styled("\u{2500}".repeat(dash_count), Style::default().fg(palette::IRIS)));
+            } else {
+                let filled = (seek_ratio * dash_count as f64).round() as usize;
+                let unfilled = dash_count.saturating_sub(filled);
+                spans.push(Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)));
+                spans.push(Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)));
             }
-            spans.push(Span::styled(vol_text, Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled("Vol ", Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
+            spans.push(Span::styled(volume.to_string(), Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)));
         } else {
             spans.push(Span::styled("\u{2500}".repeat(dash_count), dash_style));
             spans.push(Span::styled("\u{2500} ", dash_style));
@@ -608,28 +586,14 @@ impl App {
         let pos_str = fmt_duration(pos_s);
         let dur_str = fmt_duration(dur_s);
 
-        let seek_w = area.width * 85 / 100;
-        let seek_x = area.x + (area.width.saturating_sub(seek_w)) / 2;
-        let btn_row_y = area.y + 1;
+        let btn_row_y = area.y;
 
         const BTNS_W: u16 = 30;
-        self.layout_seekbar_area = Rect { x: seek_x, y: area.y, width: seek_w, height: 1 };
+        self.layout_seekbar_area = Rect::default();
         self.layout_tracks_area  = Rect::default();
         self.layout_vol_area     = Rect::default();
         self.layout_sub_area     = Rect::default();
         self.layout_audio_area   = Rect::default();
-
-        let ratio = if runtime_ticks > 0 {
-            (position_ticks as f64 / runtime_ticks as f64).clamp(0.0, 1.0)
-        } else { 0.0 };
-        let seek_rect = Rect { x: seek_x, y: area.y, width: seek_w, height: 1 };
-        let bar_w = seek_rect.width as usize;
-        let filled = (ratio * bar_w as f64).round() as usize;
-        let unfilled = bar_w.saturating_sub(filled);
-        f.render_widget(Paragraph::new(Line::from(vec![
-            Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)),
-            Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)),
-        ])), seek_rect);
 
         let time_style = Style::default().fg(palette::SUBTLE);
         let delim_style = Style::default().fg(palette::OVERLAY);

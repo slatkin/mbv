@@ -366,7 +366,7 @@ impl App {
         } else {
             Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)
         };
-        let rule_style = Style::default().fg(palette::OVERLAY);
+        let rule_style = Style::default().fg(palette::MUTED);
 
         // Header: bold title + right-padded rule on the same row
         let title_chars = title.chars().count() as u16;

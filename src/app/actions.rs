@@ -7,7 +7,7 @@ use crate::player::PlayerCommand;
 use crate::ws::WsEvent;
 use super::{
     App, PAGE_SIZE, PREFETCH_AHEAD,
-    PendingQueueAction, ContextAction, LibEvent, SessionEvent, BrowseLevel, PowerFocus,
+    PendingQueueAction, ContextAction, LibEvent, SessionEvent, BrowseLevel, PowerFocus, PowerPanel,
 };
 use super::ui_util::{natural_sort_key, is_playable, sort_episodes, sort_audio_tracks};
 
@@ -692,7 +692,11 @@ impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
         match action {
             Some(ContextAction::Play) => {
-                if self.tab_idx == 0 { self.select_home(); }
+                if self.playlist_view == super::PLAYLIST_VIEW_POWER
+                    && matches!(self.power_focus, PowerFocus::ContinueWatching) {
+                    self.power_cw_play();
+                }
+                else if self.tab_idx == 0 { self.select_home(); }
                 else if self.tab_idx == 1 {
                     let t = self.player_tab.playlist_cursor;
                     if t < self.player_tab.items.len() {
@@ -720,7 +724,14 @@ impl App {
             Some(ContextAction::ShuffleFolder(id)) => {
                 self.shuffle_folder(&id);
             }
-            Some(ContextAction::Enqueue) => self.enqueue_selected(),
+            Some(ContextAction::Enqueue) => {
+                if self.playlist_view == super::PLAYLIST_VIEW_POWER
+                    && matches!(self.power_focus, PowerFocus::ContinueWatching) {
+                    self.power_cw_enqueue();
+                } else {
+                    self.enqueue_selected();
+                }
+            }
             Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),
             Some(ContextAction::MarkPlayed(id))   => self.context_set_played(&id, true),
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
@@ -1502,17 +1513,55 @@ impl App {
     pub(super) fn power_focused_lib_idx(&self) -> Option<usize> {
         match self.power_focus {
             PowerFocus::Library(idx) => Some(idx),
+            PowerFocus::ContinueWatching | PowerFocus::Queue => None,
+        }
+    }
+
+    /// Lower-panel columns of the Power view, left-to-right: Continue Watching
+    /// (only when there are resume items) followed by each library.
+    pub(super) fn power_panels(&self) -> Vec<PowerPanel> {
+        let mut panels = Vec::with_capacity(self.libs.len() + 1);
+        if !self.home.continue_items.is_empty() {
+            panels.push(PowerPanel::ContinueWatching);
+        }
+        for i in 0..self.libs.len() {
+            panels.push(PowerPanel::Library(i));
+        }
+        panels
+    }
+
+    fn power_focus_panel(&self) -> Option<PowerPanel> {
+        match self.power_focus {
             PowerFocus::Queue => None,
+            PowerFocus::ContinueWatching => Some(PowerPanel::ContinueWatching),
+            PowerFocus::Library(i) => Some(PowerPanel::Library(i)),
+        }
+    }
+
+    /// Position of the focused panel within the given panel list, if any.
+    pub(super) fn power_focus_panel_pos(&self, panels: &[PowerPanel]) -> Option<usize> {
+        let panel = self.power_focus_panel()?;
+        panels.iter().position(|&x| x == panel)
+    }
+
+    fn power_panel_focus(panel: PowerPanel) -> PowerFocus {
+        match panel {
+            PowerPanel::ContinueWatching => PowerFocus::ContinueWatching,
+            PowerPanel::Library(i) => PowerFocus::Library(i),
         }
     }
 
     pub(super) fn power_focus_next(&mut self) {
-        let n = self.libs.len();
-        self.power_focus = match self.power_focus {
-            PowerFocus::Queue => if n > 0 { PowerFocus::Library(0) } else { PowerFocus::Queue },
-            PowerFocus::Library(idx) => {
-                if idx + 1 < n {
-                    PowerFocus::Library(idx + 1)
+        let panels = self.power_panels();
+        self.power_focus = match self.power_focus_panel() {
+            None => match panels.first() {
+                Some(&p) => Self::power_panel_focus(p),
+                None => PowerFocus::Queue,
+            },
+            Some(p) => {
+                let pos = panels.iter().position(|&x| x == p).unwrap_or(0);
+                if pos + 1 < panels.len() {
+                    Self::power_panel_focus(panels[pos + 1])
                 } else {
                     self.power_lib_col_scroll = 0;
                     PowerFocus::Queue
@@ -1523,23 +1572,68 @@ impl App {
     }
 
     pub(super) fn power_focus_prev(&mut self) {
-        let n = self.libs.len();
-        self.power_focus = match self.power_focus {
-            PowerFocus::Queue => if n > 0 { PowerFocus::Library(n - 1) } else { PowerFocus::Queue },
-            PowerFocus::Library(0) => PowerFocus::Queue,
-            PowerFocus::Library(idx) => PowerFocus::Library(idx - 1),
+        let panels = self.power_panels();
+        self.power_focus = match self.power_focus_panel() {
+            None => match panels.last() {
+                Some(&p) => Self::power_panel_focus(p),
+                None => PowerFocus::Queue,
+            },
+            Some(p) => {
+                let pos = panels.iter().position(|&x| x == p).unwrap_or(0);
+                if pos == 0 { PowerFocus::Queue } else { Self::power_panel_focus(panels[pos - 1]) }
+            }
         };
         self.power_ensure_focused_visible();
     }
 
     fn power_ensure_focused_visible(&mut self) {
-        let PowerFocus::Library(lib_idx) = self.power_focus else { return };
+        let Some(panel) = self.power_focus_panel() else { return };
+        let panels = self.power_panels();
+        let Some(pos) = panels.iter().position(|&x| x == panel) else { return };
         let n_cols = self.power_lib_col_areas.len().max(2);
-        if lib_idx < self.power_lib_col_scroll {
-            self.power_lib_col_scroll = lib_idx;
-        } else if lib_idx >= self.power_lib_col_scroll + n_cols {
-            self.power_lib_col_scroll = lib_idx + 1 - n_cols;
+        if pos < self.power_lib_col_scroll {
+            self.power_lib_col_scroll = pos;
+        } else if pos >= self.power_lib_col_scroll + n_cols {
+            self.power_lib_col_scroll = pos + 1 - n_cols;
         }
+    }
+
+    /// Move the cursor in the Continue Watching power column, clamped to its bounds.
+    pub(super) fn power_cw_move_cursor(&mut self, delta: i64) {
+        let n = self.home.continue_items.len();
+        if n == 0 { return; }
+        let cur = self.home.continue_cursor.min(n - 1) as i64;
+        self.home.continue_cursor = (cur + delta).clamp(0, n as i64 - 1) as usize;
+    }
+
+    // The Continue Watching power column shares state with the Home tab's
+    // Continue Watching section, so these reuse the Home actions by briefly
+    // pointing the Home context at that section.
+    pub(super) fn power_cw_play(&mut self) {
+        let Some(item) = self.home.continue_items.get(self.home.continue_cursor).cloned() else { return };
+        if item.is_folder { return; }
+        let (saved_tab, saved_sec) = (self.tab_idx, self.home.section);
+        self.tab_idx = 0;
+        self.home.section = 0;
+        self.select_home();
+        self.tab_idx = saved_tab;
+        self.home.section = saved_sec;
+    }
+
+    pub(super) fn power_cw_enqueue(&mut self) {
+        let (saved_tab, saved_sec) = (self.tab_idx, self.home.section);
+        self.tab_idx = 0;
+        self.home.section = 0;
+        self.enqueue_selected();
+        self.tab_idx = saved_tab;
+        self.home.section = saved_sec;
+    }
+
+    pub(super) fn power_cw_toggle_watched(&mut self) {
+        let saved_sec = self.home.section;
+        self.home.section = 0;
+        self.toggle_watched_home();
+        self.home.section = saved_sec;
     }
 
     pub(super) fn save_queue_state(&self) {

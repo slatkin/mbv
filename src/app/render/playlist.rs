@@ -11,35 +11,6 @@ use super::super::{App, palette};
 use super::super::ui_util::{fmt_duration, trunc_str};
 
 impl App {
-    pub(super) fn render_playlist_bar(&self, f: &mut Frame, area: Rect) {
-        self.render_playlist_bar_bg(f, area, palette::IRIS, false);
-    }
-
-    pub(super) fn render_playlist_bar_bg(&self, f: &mut Frame, area: Rect, bg: ratatui::style::Color, centered: bool) {
-        let name = self.queue_playlist_name().to_string();
-        let max_name = (area.width as usize).saturating_sub(12);
-        let name_trunc = trunc_str(&name, max_name);
-        let focused = bg != palette::OVERLAY;
-        let label_fg = if focused { palette::YELLOW } else { palette::SUBTLE };
-        let name_fg = palette::WHITE;
-        let line = if centered {
-            Line::from(vec![
-                Span::styled("Playlist: ", Style::default().fg(label_fg).bold()),
-                Span::styled(name_trunc, Style::default().fg(name_fg).bold()),
-            ]).alignment(Alignment::Center)
-        } else {
-            Line::from(vec![
-                Span::raw(" "),
-                Span::styled("Playlist: ", Style::default().fg(label_fg).bold()),
-                Span::styled(name_trunc, Style::default().fg(name_fg).bold()),
-            ])
-        };
-        f.render_widget(
-            Paragraph::new(line).style(Style::default().bg(bg)),
-            area,
-        );
-    }
-
     pub(super) fn render_combined(&mut self, f: &mut Frame, area: Rect) {
         self.home_rect = area;
         self.layout_carousel_left_arrow = None;
