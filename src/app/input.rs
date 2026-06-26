@@ -409,7 +409,6 @@ impl App {
                     self.connected_session_id = Some(id);
                     self.connected_session_state = Some(sess.clone());
                     self.session_miss_count = 0;
-                    self.remote_mute_on = false;
                     self.remote_pos_s = sess.position_s;
                     self.remote_pos_at = Instant::now();
                     self.remote_api_pos_advanced_at = Instant::now();
@@ -423,7 +422,6 @@ impl App {
                 self.connected_session_state = None;
                 self.session_miss_count = 0;
                 self.remote_pos_s = 0;
-                self.remote_mute_on = false;
                 self.show_sessions = false;
                 self.flash_status("Disconnected from remote session".to_string());
             }
@@ -804,14 +802,8 @@ impl App {
             KeyCode::Char('+') | KeyCode::Char('=') => { self.adjust_volume(5); return Some(false); }
             KeyCode::Char('z') if !key.modifiers.contains(KeyModifiers::CONTROL) => { self.toggle_sub(); return Some(false); }
             KeyCode::Char('m') => {
-                if let Some(ref conn_id) = self.connected_session_id.clone() {
-                    self.remote_mute_on = !self.remote_mute_on;
-                    let id = conn_id.clone();
-                    self.do_session_command(move |c| c.session_transport(&id, "ToggleMute"));
-                } else {
-                    self.mute_on = !self.mute_on;
-                    self.player.send_command(PlayerCommand::SetMute(self.mute_on));
-                }
+                self.mute_on = !self.mute_on;
+                self.player.send_command(PlayerCommand::SetMute(self.mute_on));
                 return Some(false);
             }
             _ => {}
@@ -1692,7 +1684,6 @@ if idx < self.sessions.len() {
                                 self.connected_session_id = Some(id);
                                 self.connected_session_state = Some(sess.clone());
                                 self.session_miss_count = 0;
-                                self.remote_mute_on = false;
                                 self.remote_pos_s = sess.position_s;
                                 self.remote_pos_at = Instant::now();
                                 self.remote_api_pos_advanced_at = Instant::now();

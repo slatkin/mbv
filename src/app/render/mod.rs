@@ -349,9 +349,7 @@ impl App {
             if self.use_nerd_fonts { ("\u{f04d}", palette::SUBTLE) } else { (" ", palette::MUTED) }
         };
         drop(pst);
-        let mu_color = if self.connected_session_id.is_some() {
-            if self.remote_mute_on { palette::RED } else { palette::MUTED }
-        } else if self.mute_on { palette::RED } else { palette::MUTED };
+        let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
         let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
             ("↯", palette::YELLOW)
         } else {
