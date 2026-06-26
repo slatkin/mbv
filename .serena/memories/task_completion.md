@@ -2,10 +2,13 @@
 
 Run these before considering a coding task done:
 
-1. `cargo build` — must compile clean (zero errors)
-2. `cargo clippy` — must pass with zero warnings (fix by deleting dead code, not suppressing)
-3. `cargo test` — all tests must pass
-4. If Lua script changed: `cp scripts/mbv.lua ~/.local/share/mbv/scripts/mbv.lua`
+1. **Build**: `cargo build` — must succeed with zero errors
+2. **Lint**: `cargo clippy` — fix all warnings; delete unused code rather than suppressing
+3. **Tests**: `cargo test` — all must pass
+4. **Lua copy** (if `scripts/mbv.lua` was edited): `cp scripts/mbv.lua ~/.local/share/mbv/scripts/mbv.lua`
 5. **Ask user before committing or pushing** (CHECKIN.md requirement)
 
-See CHECKIN.md and RELEASE.md for full pre-commit and release steps.
+## Commit format
+
+- Message: imperative summary, no Co-Authored-By trailer
+- Release commits: `Release X.Y.Z: <one-line summary>`

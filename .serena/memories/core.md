@@ -1,64 +1,53 @@
 # mbv — Core
 
-Terminal UI Emby client. Rust + ratatui + libmpv2. Single binary.
+Terminal UI Emby media-server client. Embeds mpv for playback, syncs position with Emby, full remote control via Emby WebSocket. Single Rust binary. **Emby only — never say Jellyfin.**
 
-## Source map
+## Source map (`src/`)
 
 | Path | Role |
 |------|------|
-| `src/main.rs` | Entry: auth, daemon/remote mode selection, launches `App::run()` |
-| `src/app/mod.rs` | `App` struct, constructors (`build(AppInit)`), `run()` event loop |
-| `src/app/input.rs` | `handle_key`, `handle_mouse`, input dispatch |
-| `src/app/actions.rs` | State mutations: nav, playback, queue, `handle_lib_event`, `handle_ws_event` |
-| `src/app/render/mod.rs` | `render()`, playback controls, divider indicators, volume bar |
-| `src/app/render/library.rs` | Library table, album view, season grid |
-| `src/app/render/home.rs` | Home/combined panel, home cards |
-| `src/app/render/playlist.rs` | Playlist views (list, filmstrip, cards, presentation) |
-| `src/app/render/power.rs` | Power view: image card, queue panel, multi-column library browser |
-| `src/app/render/overlays.rs` | Settings panel, playlists panel, sessions overlay, context menu, modals |
-| `src/app/render/log.rs` | Log tab |
-| `src/app/images.rs` | Image fetch, card rendering, album year fetch |
-| `src/app/ui_util.rs` | Pure helpers: `fmt_duration`, `natural_sort_key`, `trunc_str`, etc. |
-| `src/app/settings.rs` | Settings key/label/value helpers |
-| `src/app/palette.rs` | Color constants (`FOAM`=Emby blue, `IRIS`=Emby green) |
-| `src/api.rs` | `EmbyClient`, `MediaItem`, `parse_item()`, `fetch_items()` |
-| `src/config.rs` | Config parsing (`~/.config/mbv/config.toml`) + credential storage |
-| `src/player.rs` | `Player` wraps libmpv2; own thread; sends `PlayerEvent` via mpsc |
-| `src/ws.rs` | WebSocket thread: Emby remote-control → `WsEvent` |
-| `src/daemon.rs` | Headless background player, Unix socket at `$XDG_RUNTIME_DIR/mbv-ctl.sock` |
-| `src/remote_player.rs` | Client side of daemon socket |
-| `src/mpris.rs` | MPRIS2 D-Bus (media keys, playerctl) |
-| `src/login.rs` | Full-screen TUI login flow |
-| `src/applog.rs` | In-process log ring buffer (Log tab) |
-| `src/ctrl.rs` | Wire types (`CtrlCmd`, `CtrlEvent`, `CtrlState`) for daemon↔remote_player |
-| `scripts/mbv.lua` | mpv OSC Lua script; deploy to `~/.local/share/mbv/scripts/` for `cargo run` |
+| `main.rs` | Entry: auth, daemon/remote mode selection, launches `App::run()` |
+| `api.rs` | `EmbyClient` + `MediaItem`; all HTTP; `parse_item()`, `fetch_items()` |
+| `config.rs` | Config parsing (`~/.config/mbv/config.toml`), credential storage |
+| `player.rs` | `Player` wraps libmpv2; own thread; sends `PlayerEvent` via mpsc |
+| `ws.rs` | WebSocket thread → sends `WsEvent` to App |
+| `daemon.rs` | Headless player mode; exposes Unix socket |
+| `remote_player.rs` | Client side of daemon socket |
+| `mpris.rs` | MPRIS2 D-Bus (tokio, own thread) |
+| `login.rs` | Full-screen TUI login flow |
+| `applog.rs` | In-process log ring buffer (Log tab) |
+| `ctrl.rs` | Wire types: `CtrlCmd`, `CtrlEvent`, `CtrlState` |
+| `app/` | All UI — see `mem:app_module` |
 
 ## Key invariants
 
-- All `impl App` blocks split across files in `src/app/`; methods `pub(super)` by default.
-- Background work via `std::thread::spawn`; results over mpsc channels (`lib_rx`, `player_rx`, `ws_rx`, `card_image_rx`).
-- `App::new()` / `App::new_remote()` both call `App::build(AppInit)` for shared defaults.
-- `card_image_states` keyed `"{item_id}:{slot}"`.
-- `music_levels: Vec<String>` from config maps nav depth to folder semantics.
-- Language table in `parse_audio_info` (`api.rs`) **must stay in sync** with `lang_code_to_name()` in `player.rs`.
-- Playback ticks: `TICKS_PER_SECOND = 10_000_000`.
+- Background work: always `std::thread::spawn` + mpsc channels (`lib_rx`, `player_rx`, `ws_rx`, `card_image_rx`). Nothing async except MPRIS.
+- Playback ticks: `TICKS_PER_SECOND = 10_000_000` (Emby format).
+- Lang table in `parse_audio_info` (api.rs) **must stay in sync** with `lang_code_to_name()` in player.rs — same ISO 639-1/2 → English name mapping, nothing enforces it at compile time.
+- `App::new()` and `App::new_remote()` both call `App::build(AppInit)` for shared defaults. New `App` fields: add to struct, set default in `build()`, add to `AppInit` only if constructors need different values.
 
-## Docs
+## Persistent state files
 
-- `docs/library-rendering.md` — touch before editing `render/library.rs`, `images.rs`, album year logic.
-- `docs/player-internals.md` — touch before editing `player.rs` session structs.
-- `docs/divider-indicators.md` — recipe for adding a new divider indicator.
-
-## Persistent state
-
-- `~/.local/state/mbv/queue_state.json` — queue item IDs, cursor, `QueueSource`
+- `~/.local/state/mbv/queue_state.json` — queue item IDs, cursor, last-played, `QueueSource`; updated on every structural queue change
 - `~/.config/mbv/config.toml` — user config
 - `~/.local/share/mbv/mbv.pid` — daemon PID
 
-## Logs
+## Log files (check these first when debugging)
 
-- `~/.local/state/mbv/mbv.log` — main log (check first when debugging)
+- `~/.local/state/mbv/mbv.log` — main log (Rust `log` crate); mpv Lua `msg.warn()` appears as `source=mpv` lines
 - `~/.local/state/mbv/player-diag.log` — mpv/player diagnostics
-- Lua `msg.warn(...)` appears as `source=mpv` lines in mbv.log
+- `~/.local/state/mbv/mbv.log.old` — previous session
 
-Related: `mem:tech_stack`, `mem:conventions`, `mem:task_completion`, `mem:suggested_commands`
+## Daemon mode
+
+`mbv -d` spawns `mbv --daemon-inner` detached. Inner daemon runs `daemon::run()`, holds a `Player`, listens on `$XDG_RUNTIME_DIR/mbv-ctl.sock`. A TUI that detects the daemon connects via `RemotePlayer` instead of creating its own `Player`.
+
+## Lua script
+
+`osc_script_path()` checks `~/.local/share/mbv/scripts/mbv.lua` first — shadows source. When debugging with `cargo run`, copy after editing: `cp scripts/mbv.lua ~/.local/share/mbv/scripts/mbv.lua`
+
+## Further memories
+
+- App module detail: `mem:app_module`
+- api.rs structure/gotchas: `mem:api`
+- Playback sync / player internals: `mem:player`
