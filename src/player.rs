@@ -457,7 +457,8 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
     };
 
     unsafe {
-        libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), c"warn".as_ptr() as _);
+        let log_level = if cfg!(debug_assertions) { c"warn" } else { c"error" };
+        libmpv2_sys::mpv_request_log_messages(mpv.ctx.as_ptr(), log_level.as_ptr() as _);
     }
 
     // Set after init so user's mpv.conf cannot override these.
@@ -802,7 +803,15 @@ impl SingleSession {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
-        { let mut st = self.status.lock().unwrap(); st.video_height = 0; st.audio_codec.clear(); st.video_is_image = false; }
+        {
+            let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
+            let is_img: bool = mpv.get_property("current-tracks/video/image").unwrap_or(false);
+            let codec: String = mpv.get_property("audio-codec-name").unwrap_or_default();
+            let mut st = self.status.lock().unwrap();
+            st.video_height = h;
+            st.audio_codec = codec.to_lowercase();
+            st.video_is_image = is_img;
+        }
         let event_name: &str;
         if !self.tracks_initialized {
             let prefs = self.subtitle_prefs.lock().unwrap().clone();
@@ -812,6 +821,7 @@ impl SingleSession {
                 }
             }
             auto_select_tracks(mpv, &self.status, &prefs);
+            log::info!(target: "player", "after auto_select_tracks: sub_id={}", self.status.lock().unwrap().sub_id);
             self.tracks_initialized = true;
             let val = if self.season > 0 && self.episode > 0 {
                 format!("Season {}  Episode {}", self.season, self.episode)
@@ -977,12 +987,17 @@ impl SingleSession {
                     self.status.lock().unwrap().muted = m;
                 }
                 Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
+                    log::info!(target: "player", "video-params/h: h={h}");
                     self.status.lock().unwrap().video_height = h;
+                }
+                Some(Ok(Event::PropertyChange { name: "video-params/h", change, .. })) => {
+                    log::warn!(target: "player", "video-params/h unexpected type: {:?}", change);
                 }
                 Some(Ok(Event::PropertyChange { name: "audio-codec-name", change: PropertyData::Str(s), .. })) => {
                     self.status.lock().unwrap().audio_codec = s.to_lowercase();
                 }
                 Some(Ok(Event::PropertyChange { name: "current-tracks/video/image", change: PropertyData::Flag(is_img), .. })) => {
+                    log::info!(target: "player", "video/image: is_img={is_img}");
                     self.status.lock().unwrap().video_is_image = is_img;
                 }
                 Some(Ok(Event::PlaybackRestart)) => {
@@ -1392,7 +1407,15 @@ impl PlaylistSession {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
-        { let mut st = self.status.lock().unwrap(); st.video_height = 0; st.audio_codec.clear(); st.video_is_image = false; }
+        {
+            let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
+            let is_img: bool = mpv.get_property("current-tracks/video/image").unwrap_or(false);
+            let codec: String = mpv.get_property("audio-codec-name").unwrap_or_default();
+            let mut st = self.status.lock().unwrap();
+            st.video_height = h;
+            st.audio_codec = codec.to_lowercase();
+            st.video_is_image = is_img;
+        }
         if self.pending_initial_jump {
             // mpv ignored playlist-pos before the event loop started; now that
             // playback is live (first PlaybackRestart), the jump is honored.
@@ -1644,7 +1667,9 @@ impl PlaylistSession {
                     }
                 }
                 Some(Ok(Event::PropertyChange { name: "sid", change: PropertyData::Str(s), .. })) => {
-                    self.status.lock().unwrap().sub_id = s.parse::<i64>().unwrap_or(0);
+                    let id = s.parse::<i64>().unwrap_or(0);
+                    log::info!(target: "player", "sid PropertyChange: raw={s:?} parsed={id}");
+                    self.status.lock().unwrap().sub_id = id;
                 }
                 Some(Ok(Event::PropertyChange { name: "aid", change: PropertyData::Str(_), .. })) => {
                     refresh_tracks(&mpv, &self.status);
@@ -1653,12 +1678,17 @@ impl PlaylistSession {
                     self.status.lock().unwrap().muted = m;
                 }
                 Some(Ok(Event::PropertyChange { name: "video-params/h", change: PropertyData::Int64(h), .. })) => {
+                    log::info!(target: "player", "video-params/h (playlist): h={h}");
                     self.status.lock().unwrap().video_height = h;
+                }
+                Some(Ok(Event::PropertyChange { name: "video-params/h", change, .. })) => {
+                    log::warn!(target: "player", "video-params/h (playlist) unexpected type: {:?}", change);
                 }
                 Some(Ok(Event::PropertyChange { name: "audio-codec-name", change: PropertyData::Str(s), .. })) => {
                     self.status.lock().unwrap().audio_codec = s.to_lowercase();
                 }
                 Some(Ok(Event::PropertyChange { name: "current-tracks/video/image", change: PropertyData::Flag(is_img), .. })) => {
+                    log::info!(target: "player", "video/image (playlist): is_img={is_img}");
                     self.status.lock().unwrap().video_is_image = is_img;
                 }
                 Some(Ok(Event::PlaybackRestart)) => {
