@@ -462,6 +462,7 @@ impl App {
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
         self.on_queue_replace_silent();
+        self.power_focus = PowerFocus::Queue;
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
             let id = conn_id.clone();
@@ -479,6 +480,7 @@ impl App {
 
     pub(super) fn play_item(&mut self, item: MediaItem) {
         self.on_queue_replace_silent();
+        self.power_focus = PowerFocus::Queue;
         let label = item.playback_label();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
