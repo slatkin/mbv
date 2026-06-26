@@ -554,6 +554,7 @@ impl App {
         };
         let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
         let mut ind_spans: Vec<Span> = Vec::new();
+        ind_spans.push(Span::raw(" "));
         ind_spans.push(Span::styled("[", bracket));
         ind_spans.push(Span::raw(" "));
         ind_spans.push(Span::styled(res_str, Style::default().fg(res_color).add_modifier(Modifier::BOLD)));
@@ -565,6 +566,7 @@ impl App {
         }
         ind_spans.push(Span::raw(" "));
         ind_spans.push(Span::styled("]", bracket));
+        ind_spans.push(Span::raw(" "));
         let ind_w: u16 = ind_spans.iter().map(|s| s.content.width() as u16).sum();
         let total_dashes = area.width.saturating_sub(ind_w);
         let left_dashes  = total_dashes / 2;

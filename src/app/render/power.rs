@@ -211,17 +211,19 @@ impl App {
             if let Some(inner) = self.build_status_indicator_spans() {
                 let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
                 let inner_w: u16 = inner.iter().map(|s| s.content.width() as u16).sum();
-                let group_w = inner_w + 4;
+                let group_w = inner_w + 6; // "─ [ " + inner + " ] ─" (spaces flank the brackets)
                 let total_dashes = div_w.saturating_sub(group_w);
                 let left_dashes  = total_dashes / 2;
                 let right_dashes = total_dashes - left_dashes;
                 let mut spans: Vec<Span> = Vec::new();
                 spans.push(Span::styled("─".repeat(left_dashes as usize),  dash));
+                spans.push(Span::raw(" "));
                 spans.push(Span::styled("[", bracket));
                 spans.push(Span::raw(" "));
                 spans.extend(inner);
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled("]", bracket));
+                spans.push(Span::raw(" "));
                 spans.push(Span::styled("─".repeat(right_dashes as usize), dash));
                 f.render_widget(
                     Paragraph::new(Line::from(spans)),
