@@ -1,3 +1,4 @@
+use unicode_width::UnicodeWidthStr;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -24,7 +25,7 @@ impl App {
         };
         let bot_h = area.height.saturating_sub(top_h);
         // Top section is inset by 1 column on each side; bottom library panels use full width.
-        let top_area = Rect { x: area.x + 1, y: area.y, width: area.width.saturating_sub(2), height: top_h };
+        let top_area = Rect { x: area.x, y: area.y, width: area.width, height: top_h };
         let bot_area = Rect { x: area.x, y: area.y + top_h, width: area.width, height: bot_h };
 
         // ── top section ──────────────────────────────────────────────────────
@@ -47,10 +48,12 @@ impl App {
         // ── horizontal divider ───────────────────────────────────────────────
         let hdiv_fg = palette::IRIS;
         let hdiv_str = "\u{2500}".repeat(area.width as usize);
+        let hdiv_y = area.y + top_h;
         f.render_widget(
             Paragraph::new(Span::styled(hdiv_str, Style::default().fg(hdiv_fg))),
-            Rect { x: area.x, y: area.y + top_h, width: area.width, height: 1 },
+            Rect { x: area.x, y: hdiv_y, width: area.width, height: 1 },
         );
+
         let bot_area = Rect { y: bot_area.y + 1, height: bot_h.saturating_sub(1), ..bot_area };
 
         // ── bottom library columns ───────────────────────────────────────────
@@ -200,13 +203,36 @@ impl App {
 
         let list_area = if active && self.show_playback_panel {
             self.render_power_playback_controls(f, Rect { x: area.x, y: area.y, width: area.width, height: 1 });
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    "\u{2500}".repeat(area.width as usize),
-                    Style::default().fg(palette::IRIS),
-                )),
-                Rect { x: area.x, y: area.y + 1, width: area.width, height: 1 },
-            );
+            let div_y = area.y + 1;
+            let div_w = area.width;
+            // Inner dashes divider: ─── [ 1080p en CC ] ───
+            let hdiv_fg = palette::IRIS;
+            if let Some(inner) = self.build_status_indicator_spans() {
+                let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
+                let dash    = Style::default().fg(hdiv_fg);
+                let inner_w: u16 = inner.iter().map(|s| s.content.width() as u16).sum();
+                let group_w = inner_w + 4; // "[ " + inner + " ]"
+                let total_dashes = div_w.saturating_sub(group_w);
+                let left_dashes  = total_dashes / 2;
+                let right_dashes = total_dashes - left_dashes;
+                let mut spans: Vec<Span> = Vec::new();
+                spans.push(Span::styled("\u{2500}".repeat(left_dashes as usize), dash));
+                spans.push(Span::styled("[", bracket));
+                spans.push(Span::raw(" "));
+                spans.extend(inner);
+                spans.push(Span::raw(" "));
+                spans.push(Span::styled("]", bracket));
+                spans.push(Span::styled("\u{2500}".repeat(right_dashes as usize), dash));
+                f.render_widget(
+                    Paragraph::new(Line::from(spans)),
+                    Rect { x: area.x, y: div_y, width: div_w, height: 1 },
+                );
+            } else {
+                f.render_widget(
+                    Paragraph::new(Span::styled("\u{2500}".repeat(div_w as usize), Style::default().fg(hdiv_fg))),
+                    Rect { x: area.x, y: div_y, width: div_w, height: 1 },
+                );
+            }
             Rect { y: area.y + 2, height: area.height.saturating_sub(2), ..area }
         } else {
             area

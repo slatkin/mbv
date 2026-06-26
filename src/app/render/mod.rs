@@ -510,15 +510,16 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(spans)), area);
     }
 
-    fn render_status_indicators(&mut self, f: &mut Frame, area: Rect) {
-        if area.height == 0 { return; }
+    /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
+    /// Returns None if the local player is not active.
+    /// Callers wrap these in [ ... ] with whatever surrounding style they need.
+    pub(super) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
         let pst = self.player.status.lock().unwrap();
-        let active = pst.active;
-        if !active { return; }
+        if !pst.active { return None; }
         let video_is_image = pst.video_is_image;
         let res_h = pst.video_height;
-        let is_audio_only = active && video_is_image;
-        let res_str = if video_is_image || (active && res_h == 0) {
+        let is_audio_only = video_is_image;
+        let res_str = if video_is_image || res_h == 0 {
             if pst.audio_codec.is_empty() { "--".to_string() } else { pst.audio_codec.to_uppercase() }
         } else {
             format!("{}p", res_h)
@@ -540,30 +541,34 @@ impl App {
                 _ => palette::MUTED,
             }}
         };
-        let bracket = Style::default().fg(palette::WHITE);
-        let dash = Style::default().fg(palette::MUTED);
-        let sep = Span::styled(" ─ ", dash);
-        let mut spans: Vec<Span> = Vec::new();
-        // left-aligned, inverted spacing: "─ [1080p] ─ [en] ─ [CC] " then dashes fill right
-        spans.push(Span::styled("─ ", dash));
-        spans.push(Span::styled("[", bracket));
-        spans.push(Span::styled(res_str.clone(), Style::default().fg(res_color).add_modifier(Modifier::BOLD)));
-        spans.push(Span::styled("]", bracket));
+        let mut spans: Vec<Span<'static>> = Vec::new();
+        spans.push(Span::styled(res_str, Style::default().fg(res_color).add_modifier(Modifier::BOLD)));
         if !is_audio_only {
-            spans.push(sep.clone());
-            spans.push(Span::styled("[", bracket));
-            spans.push(Span::styled(au_text.clone(), Style::default().fg(au_color).add_modifier(Modifier::BOLD)));
-            spans.push(Span::styled("]", bracket));
-            spans.push(sep.clone());
-            spans.push(Span::styled("[", bracket));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(au_text, Style::default().fg(au_color).add_modifier(Modifier::BOLD)));
+            spans.push(Span::raw(" "));
             spans.push(Span::styled("CC", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)));
-            spans.push(Span::styled("]", bracket));
         }
+        Some(spans)
+    }
+
+    fn render_status_indicators(&mut self, f: &mut Frame, area: Rect) {
+        if area.height == 0 { return; }
+        let Some(inner) = self.build_status_indicator_spans() else { return; };
+        let bracket = Style::default().fg(palette::WHITE);
+        let dash    = Style::default().fg(palette::MUTED);
+        let mut spans: Vec<Span> = Vec::new();
+        spans.push(Span::styled("[", bracket));
         spans.push(Span::raw(" "));
+        spans.extend(inner);
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled("]", bracket));
+        spans.push(Span::styled(" ─", dash));
         let ind_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
+        let ind_x = area.x + area.width.saturating_sub(ind_w);
         f.render_widget(
             Paragraph::new(Line::from(spans)),
-            Rect { x: area.x, y: area.y, width: ind_w.min(area.width), height: 1 },
+            Rect { x: ind_x, y: area.y, width: ind_w.min(area.width), height: 1 },
         );
     }
 
