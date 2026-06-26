@@ -205,12 +205,9 @@ impl App {
             self.render_power_playback_controls(f, Rect { x: area.x, y: area.y, width: area.width, height: 1 });
             let div_y = area.y + 1;
             let div_w = area.width;
-            // Inner dashes divider: ━━━ [ 1080p en CC ] ━━━ (seekbar)
+            // Inner dashes divider: ─── [ 1080p en CC ] ───
             let hdiv_fg = palette::IRIS;
-            let (position_ticks, runtime_ticks) = {
-                let pst = self.player.status.lock().unwrap();
-                (pst.position_ticks, pst.runtime_ticks)
-            };
+            let dash = Style::default().fg(hdiv_fg);
             if let Some(inner) = self.build_status_indicator_spans() {
                 let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
                 let inner_w: u16 = inner.iter().map(|s| s.content.width() as u16).sum();
@@ -218,31 +215,21 @@ impl App {
                 let total_dashes = div_w.saturating_sub(group_w);
                 let left_dashes  = total_dashes / 2;
                 let right_dashes = total_dashes - left_dashes;
-                let seek_ratio = if runtime_ticks > 0 {
-                    (position_ticks as f64 / runtime_ticks as f64).clamp(0.0, 1.0)
-                } else { 0.0 };
-                let total_filled   = (seek_ratio * total_dashes as f64).round() as usize;
-                let left_filled    = total_filled.min(left_dashes as usize);
-                let left_unfilled  = (left_dashes as usize).saturating_sub(left_filled);
-                let right_filled   = total_filled.saturating_sub(left_filled);
-                let right_unfilled = (right_dashes as usize).saturating_sub(right_filled);
                 let mut spans: Vec<Span> = Vec::new();
-                spans.push(Span::styled("━".repeat(left_filled),   Style::default().fg(hdiv_fg)));
-                spans.push(Span::styled("─".repeat(left_unfilled), Style::default().fg(palette::IRIS_DIM)));
+                spans.push(Span::styled("─".repeat(left_dashes as usize),  dash));
                 spans.push(Span::styled("[", bracket));
                 spans.push(Span::raw(" "));
                 spans.extend(inner);
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled("]", bracket));
-                spans.push(Span::styled("━".repeat(right_filled),   Style::default().fg(hdiv_fg)));
-                spans.push(Span::styled("─".repeat(right_unfilled), Style::default().fg(palette::IRIS_DIM)));
+                spans.push(Span::styled("─".repeat(right_dashes as usize), dash));
                 f.render_widget(
                     Paragraph::new(Line::from(spans)),
                     Rect { x: area.x, y: div_y, width: div_w, height: 1 },
                 );
             } else {
                 f.render_widget(
-                    Paragraph::new(Span::styled("─".repeat(div_w as usize), Style::default().fg(hdiv_fg))),
+                    Paragraph::new(Span::styled("─".repeat(div_w as usize), dash)),
                     Rect { x: area.x, y: div_y, width: div_w, height: 1 },
                 );
             }
