@@ -388,6 +388,7 @@ pub struct App {
     ui_volume: u8,
     pre_mute_volume: Option<u8>,
     mute_on: bool,
+    remote_mute_on: bool,
     layout_tabbar_vol_area: Rect,
     last_scroll_at: Instant,
     last_nav_at: Instant,
@@ -567,6 +568,7 @@ impl App {
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
             mute_on: false,
+            remote_mute_on: false,
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             last_played_completed: false,
@@ -994,6 +996,7 @@ impl App {
                                     self.connected_session_state = None;
                                     self.session_miss_count = 0;
                                     self.remote_pos_s = 0;
+                                    self.remote_mute_on = false;
                                 } else {
                                     log::warn!(target: "sessions", "connected session not in poll ({}/3); holding", self.session_miss_count);
                                 }
@@ -1633,6 +1636,7 @@ mod tests {
             ui_volume: 100,
             pre_mute_volume: None,
             mute_on: false,
+            remote_mute_on: false,
             layout_tabbar_vol_area: Rect::default(),
             sessions: Vec::new(),
             sessions_cursor: 0,

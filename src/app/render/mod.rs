@@ -169,7 +169,6 @@ impl App {
         if self.tab_idx == 0 {
             self.render_combined(f, main_area);
         } else if self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER {
-            let main_area = Rect { x: main_area.x + 1, width: main_area.width.saturating_sub(2), ..main_area };
             self.render_power_view(f, main_area);
         } else if self.tab_idx == 1 {
             self.render_playlist_panel(f, main_area);
@@ -332,7 +331,17 @@ impl App {
         } else {
             (raw_lang.chars().take(2).collect(), palette::YELLOW)
         };
-        let (pb_text, pb_color): (&str, Color) = if pst.active && !pst.paused {
+        let (pb_text, pb_color): (&str, Color) = if let Some(ref rs) = self.connected_session_state {
+            let rs_active = rs.now_playing.is_some();
+            let rs_paused = rs.is_paused;
+            if rs_active && !rs_paused {
+                if self.use_nerd_fonts { ("\u{f04b}", palette::PINE) } else { (">", palette::PINE) }
+            } else if rs_active && rs_paused {
+                if self.use_nerd_fonts { ("\u{f04c}", palette::YELLOW) } else { ("||", palette::YELLOW) }
+            } else {
+                if self.use_nerd_fonts { ("\u{f04d}", palette::SUBTLE) } else { (" ", palette::MUTED) }
+            }
+        } else if pst.active && !pst.paused {
             if self.use_nerd_fonts { ("\u{f04b}", palette::PINE) } else { (">", palette::PINE) }
         } else if pst.active && pst.paused {
             if self.use_nerd_fonts { ("\u{f04c}", palette::YELLOW) } else { ("||", palette::YELLOW) }
@@ -340,7 +349,9 @@ impl App {
             if self.use_nerd_fonts { ("\u{f04d}", palette::SUBTLE) } else { (" ", palette::MUTED) }
         };
         drop(pst);
-        let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
+        let mu_color = if self.connected_session_id.is_some() {
+            if self.remote_mute_on { palette::RED } else { palette::MUTED }
+        } else if self.mute_on { palette::RED } else { palette::MUTED };
         let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
             ("↯", palette::YELLOW)
         } else {

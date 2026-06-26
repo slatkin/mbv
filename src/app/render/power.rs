@@ -23,14 +23,15 @@ impl App {
             top_max
         };
         let bot_h = area.height.saturating_sub(top_h);
-        let top_area = Rect { x: area.x, y: area.y, width: area.width, height: top_h };
+        // Top section is inset by 1 column on each side; bottom library panels use full width.
+        let top_area = Rect { x: area.x + 1, y: area.y, width: area.width.saturating_sub(2), height: top_h };
         let bot_area = Rect { x: area.x, y: area.y + top_h, width: area.width, height: bot_h };
 
         // ── top section ──────────────────────────────────────────────────────
-        let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
-        let right_w = area.width.saturating_sub(left_w + 1);
-        let left_area  = Rect { x: area.x,              y: top_area.y, width: left_w,  height: top_h };
-        let divider_x  = area.x + left_w;
+        let left_w = ((top_area.width as u32 * 2 / 5) as u16).clamp(20, 60);
+        let right_w = top_area.width.saturating_sub(left_w + 1);
+        let left_area  = Rect { x: top_area.x,          y: top_area.y, width: left_w,  height: top_h };
+        let divider_x  = top_area.x + left_w;
         let right_area = Rect { x: divider_x + 1,       y: top_area.y, width: right_w, height: top_h };
 
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
