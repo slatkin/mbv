@@ -1528,4 +1528,185 @@ mod tests {
     }
 
     static ENV_MTX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    // ── decode_html_entities ─────────────────────────────────────────────────
+
+    #[test]
+    fn decode_html_entities_known_entities() {
+        assert_eq!(decode_html_entities("&quot;hi&quot;"), "\"hi\"");
+        assert_eq!(decode_html_entities("it&apos;s"), "it's");
+        assert_eq!(decode_html_entities("a &lt; b &gt; c"), "a < b > c");
+        assert_eq!(decode_html_entities("a &amp; b"), "a & b");
+    }
+
+    #[test]
+    fn decode_html_entities_passthrough() {
+        assert_eq!(decode_html_entities("plain text"), "plain text");
+        assert_eq!(decode_html_entities(""), "");
+    }
+
+    // ── parse_video_info ─────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_video_info_4k() {
+        let streams = json!([{"Type": "Video", "Width": 3840, "Height": 2160, "Codec": "hevc"}]);
+        assert_eq!(parse_video_info(streams.as_array().unwrap()), "4K HEVC");
+    }
+
+    #[test]
+    fn parse_video_info_1080p() {
+        let streams = json!([{"Type": "Video", "Width": 1920, "Height": 1080, "Codec": "h264"}]);
+        assert_eq!(parse_video_info(streams.as_array().unwrap()), "1080p H264");
+    }
+
+    #[test]
+    fn parse_video_info_720p() {
+        let streams = json!([{"Type": "Video", "Width": 1280, "Height": 720, "Codec": "h264"}]);
+        assert_eq!(parse_video_info(streams.as_array().unwrap()), "720p H264");
+    }
+
+    #[test]
+    fn parse_video_info_codec_only_when_no_resolution() {
+        let streams = json!([{"Type": "Video", "Width": 0, "Height": 0, "Codec": "vp9"}]);
+        assert_eq!(parse_video_info(streams.as_array().unwrap()), "VP9");
+    }
+
+    #[test]
+    fn parse_video_info_empty_when_no_video_stream() {
+        let streams = json!([{"Type": "Audio", "Codec": "aac"}]);
+        assert_eq!(parse_video_info(streams.as_array().unwrap()), "");
+    }
+
+    // ── parse_audio_info ─────────────────────────────────────────────────────
+
+    fn audio_stream(lang: &str, codec: &str, layout: &str) -> serde_json::Value {
+        json!({"Type": "Audio", "Language": lang, "Codec": codec, "ChannelLayout": layout})
+    }
+
+    #[test]
+    fn parse_audio_info_single_track() {
+        let streams = json!([audio_stream("eng", "ac3", "5.1")]);
+        assert_eq!(parse_audio_info(streams.as_array().unwrap()), "English AC3 5.1");
+    }
+
+    #[test]
+    fn parse_audio_info_multiple_tracks() {
+        let streams = json!([
+            audio_stream("eng", "ac3", "5.1"),
+            audio_stream("fra", "aac", "stereo"),
+        ]);
+        assert_eq!(parse_audio_info(streams.as_array().unwrap()), "English AC3 5.1  |  French AAC Stereo");
+    }
+
+    #[test]
+    fn parse_audio_info_unknown_lang_omitted_from_label() {
+        let streams = json!([audio_stream("und", "aac", "stereo")]);
+        assert_eq!(parse_audio_info(streams.as_array().unwrap()), "AAC Stereo");
+    }
+
+    #[test]
+    fn parse_audio_info_skips_non_audio_streams() {
+        let streams = json!([
+            {"Type": "Video", "Language": "eng", "Codec": "h264", "ChannelLayout": ""},
+            audio_stream("eng", "aac", "stereo"),
+        ]);
+        assert_eq!(parse_audio_info(streams.as_array().unwrap()), "English AAC Stereo");
+    }
+
+    // Sync guard: every ISO code in parse_audio_info must produce the same English
+    // name as lang_code_to_name() in player.rs. Both tables must be updated together.
+    // The mirror test in player.rs::tests::lang_code_to_name_matches_api_table checks
+    // the other side.
+    #[test]
+    fn parse_audio_info_lang_table_matches_player_lang_code_to_name() {
+        let cases: &[(&str, &str)] = &[
+            ("en", "English"),    ("eng", "English"),
+            ("fr", "French"),     ("fre", "French"),    ("fra", "French"),
+            ("de", "German"),     ("ger", "German"),    ("deu", "German"),
+            ("es", "Spanish"),    ("spa", "Spanish"),
+            ("it", "Italian"),    ("ita", "Italian"),
+            ("pt", "Portuguese"), ("por", "Portuguese"),
+            ("ja", "Japanese"),   ("jpn", "Japanese"),
+            ("ko", "Korean"),     ("kor", "Korean"),
+            ("zh", "Chinese"),    ("chi", "Chinese"),   ("zho", "Chinese"),
+            ("ru", "Russian"),    ("rus", "Russian"),
+            ("ar", "Arabic"),     ("ara", "Arabic"),
+            ("nl", "Dutch"),      ("nld", "Dutch"),     ("dut", "Dutch"),
+            ("sv", "Swedish"),    ("swe", "Swedish"),
+            ("no", "Norwegian"),  ("nor", "Norwegian"),
+            ("da", "Danish"),     ("dan", "Danish"),
+            ("fi", "Finnish"),    ("fin", "Finnish"),
+            ("pl", "Polish"),     ("pol", "Polish"),
+            ("cs", "Czech"),      ("cze", "Czech"),     ("ces", "Czech"),
+            ("tr", "Turkish"),    ("tur", "Turkish"),
+        ];
+        for (code, expected) in cases {
+            let streams = json!([{"Type": "Audio", "Language": code, "Codec": "", "ChannelLayout": ""}]);
+            let result = parse_audio_info(streams.as_array().unwrap());
+            assert_eq!(result, *expected,
+                "parse_audio_info: code {:?} → expected {:?}, got {:?}", code, expected, result);
+        }
+    }
+
+    // ── is_audio / is_video ──────────────────────────────────────────────────
+
+    #[test]
+    fn is_audio_true_for_audio_media_type() {
+        let mut item = make_item("Song", "Audio");
+        item.media_type = "Audio".into();
+        assert!(item.is_audio());
+        assert!(!item.is_video());
+    }
+
+    #[test]
+    fn is_audio_true_for_audio_item_type() {
+        let mut item = make_item("Song", "Audio");
+        item.media_type = String::new();
+        assert!(item.is_audio());
+    }
+
+    #[test]
+    fn is_video_true_for_video_media_type() {
+        let item = make_item("Film", "Movie"); // make_item sets media_type = "Video"
+        assert!(item.is_video());
+        assert!(!item.is_audio());
+    }
+
+    // ── should_resume ────────────────────────────────────────────────────────
+
+    #[test]
+    fn should_resume_zero_position_returns_false() {
+        assert!(!make_item("X", "Movie").should_resume());
+    }
+
+    #[test]
+    fn should_resume_negative_position_returns_false() {
+        let mut item = make_item("X", "Movie");
+        item.playback_position_ticks = -1;
+        assert!(!item.should_resume());
+    }
+
+    #[test]
+    fn should_resume_mid_way_returns_true() {
+        let mut item = make_item("X", "Movie");
+        item.runtime_ticks = TICKS_PER_SECOND * 7200;
+        item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 50%
+        assert!(item.should_resume());
+    }
+
+    #[test]
+    fn should_resume_under_one_percent_returns_false() {
+        let mut item = make_item("X", "Movie");
+        item.runtime_ticks = TICKS_PER_SECOND * 7200; // 2h
+        item.playback_position_ticks = TICKS_PER_SECOND; // ~0.01%
+        assert!(!item.should_resume());
+    }
+
+    #[test]
+    fn should_resume_with_unknown_runtime_returns_true() {
+        let mut item = make_item("X", "Movie");
+        item.runtime_ticks = 0;
+        item.playback_position_ticks = TICKS_PER_SECOND * 60;
+        assert!(item.should_resume());
+    }
 }
