@@ -1509,7 +1509,12 @@ impl App {
         self.power_focus = match self.power_focus {
             PowerFocus::Queue => if n > 0 { PowerFocus::Library(0) } else { PowerFocus::Queue },
             PowerFocus::Library(idx) => {
-                if idx + 1 < n { PowerFocus::Library(idx + 1) } else { PowerFocus::Queue }
+                if idx + 1 < n {
+                    PowerFocus::Library(idx + 1)
+                } else {
+                    self.power_lib_col_scroll = 0;
+                    PowerFocus::Queue
+                }
             }
         };
         self.power_ensure_focused_visible();
