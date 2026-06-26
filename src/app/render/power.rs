@@ -420,8 +420,8 @@ impl App {
         state.select(Some(cursor.saturating_sub(offset)));
         f.render_stateful_widget(List::new(list_items).highlight_style(Style::default()), area, &mut state);
 
-        // Scrollbar
-        if n > visible {
+        // Scrollbar: only shown for the focused column.
+        if focused && n > visible {
             let max_off = n.saturating_sub(visible);
             let mut sb = ScrollbarState::new(max_off + 1).position(offset);
             f.render_stateful_widget(
@@ -429,7 +429,7 @@ impl App {
                     .thumb_symbol("\u{2590}")
                     .track_symbol(Some(" "))
                     .begin_symbol(None).end_symbol(None)
-                    .style(Style::default().fg(if focused { palette::IRIS } else { palette::SUBTLE })),
+                    .style(Style::default().fg(palette::SUBTLE)),
                 area, &mut sb,
             );
         }
