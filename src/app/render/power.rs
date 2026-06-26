@@ -17,7 +17,7 @@ impl App {
         let min_lib_h: u16 = 4;
         let top_max = area.height.saturating_sub(min_lib_h);
         let top_h = if top_max >= min_queue_h {
-            let preferred = (area.height as u32 * 45 / 100) as u16;
+            let preferred = (area.height as u32 * 50 / 100) as u16;
             preferred.clamp(min_queue_h, top_max)
         } else {
             top_max
@@ -200,7 +200,14 @@ impl App {
 
         let list_area = if active && self.show_playback_panel {
             self.render_power_playback_controls(f, Rect { x: area.x, y: area.y, width: area.width, height: 1 });
-            Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area }
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    "\u{2500}".repeat(area.width as usize),
+                    Style::default().fg(palette::IRIS),
+                )),
+                Rect { x: area.x, y: area.y + 1, width: area.width, height: 1 },
+            );
+            Rect { y: area.y + 2, height: area.height.saturating_sub(2), ..area }
         } else {
             area
         };

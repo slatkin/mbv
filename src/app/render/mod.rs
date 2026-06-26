@@ -391,21 +391,20 @@ impl App {
         let sub_w = 0u16;
 
         let n_inds: u16 = if left_aligned {
-            3
-            + if is_playlist { 1 } else { 0 }
+            4 // pb, m, rc, ≡ (always shown)
             + if active && !is_audio_only { 1 } else { 0 }
             + if active { 1 } else { 0 }
         } else {
             4 + if is_playlist { 1 } else { 0 }
         };
         let sum_widths = if left_aligned {
-            pb_w + 1 /*m*/ + rc_w + pl_w + sub_w + au_w + res_w
+            pb_w + 1 /*m*/ + rc_w + 1 /*≡ always shown*/ + sub_w + au_w + res_w
         } else {
             vol_w + pb_w + 1 /*m*/ + rc_w + pl_w
         };
         let group_w = 3 + sum_widths + 3 * n_inds.saturating_sub(1);
         let dash_count = if left_aligned {
-            // "[ " + items joined by " " + " ]" = 4 + sum_widths + (n_inds-1)
+            // "[ " + items joined by " " + " ]"
             let left_group_w = 4 + sum_widths + n_inds.saturating_sub(1);
             area.width.saturating_sub(left_group_w + vol_w) as usize
         } else {
@@ -422,7 +421,7 @@ impl App {
                 self.layout_ind_pb = ind_rect(ix, pb_w); ix += pb_w + 1;
                 self.layout_ind_mu = ind_rect(ix, 1);    ix += 1 + 1;
                 self.layout_ind_rc = ind_rect(ix, rc_w); ix += rc_w + 1;
-                if is_playlist { ix += pl_w + 1; }
+                ix += 1 + 1; // ≡ always occupies a slot
                 self.layout_ind_sub = Rect::default();
                 if active {
                     if !is_audio_only {
@@ -455,7 +454,7 @@ impl App {
             items.push(Span::styled(pb_text.to_string(), Style::default().fg(pb_color).add_modifier(Modifier::BOLD)));
             items.push(Span::styled("m", Style::default().fg(mu_color).add_modifier(Modifier::BOLD)));
             items.push(Span::styled(rc_text.to_string(), rc_style));
-            if is_playlist { items.push(Span::styled("≡", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD))); }
+            items.push(Span::styled("≡", Style::default().fg(if is_playlist { palette::IRIS } else { palette::MUTED }).add_modifier(Modifier::BOLD)));
             if active {
                 if !is_audio_only { items.push(Span::styled(au_text.clone(), Style::default().fg(au_color).add_modifier(Modifier::BOLD))); }
                 items.push(Span::styled(res_str.clone(), Style::default().fg(res_color).add_modifier(Modifier::BOLD)));
