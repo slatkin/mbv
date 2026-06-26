@@ -1213,71 +1213,8 @@ impl PlaylistSession {
                 let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             }
             PlayerCommand::ReplacePlaylist { items: new_items, start_idx } => {
+                self.cmd_replace_playlist(new_items, start_idx, mpv, progress);
                 cancel_stop = true;
-                if new_items.is_empty() { return cancel_stop; }
-                // report_stopped for current item; is_audio zeroing handled inside.
-                self.reporter.report_stopped(self.last_valid_pos);
-                self.stop_reported = true;
-
-                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                // Remove all old playlist entries except the current one so that
-                // the subsequent loadfile "replace" starts from a clean slate.
-                // Without this, old entries remain and playlist-pos = start_idx
-                // lands on a stale file instead of new_items[start_idx].
-                let _ = mpv.command("playlist-clear", &[]);
-
-                let start_idx = start_idx.min(new_items.len() - 1);
-                for (i, item) in new_items.iter().enumerate() {
-                    let ep = if item.is_audio() { "Audio" } else { "Videos" };
-                    let url = format!("{}/{}/{}/stream?static=true&api_key={}", self.server_url, ep, item.id, self.token);
-                    let mode = if i == 0 { "replace" } else { "append-play" };
-                    let title_opt = mpv_title_opt(&item.display_name());
-                    if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
-                        log::warn!(target: "player", "ReplacePlaylist loadfile error: {}", mpv_err_str(&e));
-                    }
-                }
-                let _ = mpv.set_property("start", "0");
-                send_ep_info(mpv, &new_items[start_idx]);
-                // loadfile "replace" displaces the current file (EndFile #1).
-                // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
-                // Use = not += so a stale pending_load from a prior operation never stacks.
-                // Clear pending_initial_jump too since any in-flight initial jump is superseded.
-                self.pending_initial_jump = false;
-                self.pending_load = if start_idx > 0 { 2 } else { 1 };
-                if start_idx > 0 {
-                    let _ = mpv.set_property("playlist-pos", start_idx as i64);
-                }
-
-                self.last_valid_pos         = new_items[start_idx].playback_position_ticks;
-                self.tracks_initialized     = false;
-                // stop_reported stays true until pending_load drains to 0 in on_end_file,
-                // preventing a duplicate report_stopped for the displaced file's EndFile(Quit).
-                self.playlist_cancelled     = false;
-                self.forced_idx             = None;
-                self.playlist_next_up_fired = false;
-                self.playlist_next_up_armed = false;
-                self.next_up_jump           = false;
-                self.osd_title              = new_items[start_idx].display_name();
-                self.pending_resume_secs    = if !new_items[start_idx].is_audio() && new_items[start_idx].should_resume() {
-                    Some(new_items[start_idx].resume_seconds())
-                } else {
-                    None
-                };
-                log::info!(target: "player", "playlist queue-replace idx={start_idx} pending_resume={:?}s", self.pending_resume_secs);
-                let (s, e) = load_intro_times(&self.reporter.client, &new_items[start_idx].id);
-                self.set_intro(s, e, new_items[start_idx].playback_position_ticks);
-
-                // Stop progress reporter during transition to prevent stale reports,
-                // then restart for the new item.
-                progress.stop_and_join();
-                let (_urls, ok) = self.reporter.start_item(&new_items[start_idx]);
-                if !ok {
-                    log::warn!(target: "player", "start_item failed for playlist replace item={}", new_items[start_idx].id);
-                }
-                *progress = spawn_progress_reporter(self.reporter.clone());
-                self.n          = new_items.len();
-                self.current_idx = start_idx;
-                self.items      = new_items;
             }
             PlayerCommand::SetVolume(v) => {
                 let vol_max = self.status.lock().unwrap().volume_max;
@@ -1322,38 +1259,109 @@ impl PlaylistSession {
                 self.status.lock().unwrap().muted = m;
             }
             PlayerCommand::LoadNew { url, start_pos, item } => {
+                self.cmd_load_new(url, start_pos, item, mpv, progress);
                 cancel_stop = true;
-                self.quit_at          = None;
-                self.playlist_cancelled = true;
-
-                // Stop progress reporter during transition to prevent stale reports.
-                progress.stop_and_join();
-                self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
-                *progress = spawn_progress_reporter(self.reporter.clone());
-
-                self.last_valid_pos    = item.playback_position_ticks;
-                self.tracks_initialized = false;
-                self.stop_reported     = false;
-                self.pending_load      = 1;
-
-                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-                let (s, e) = load_intro_times(&self.reporter.client, &item.id);
-                self.set_intro(s, e, item.playback_position_ticks);
-
-                if start_pos > 0.0 {
-                    let _ = mpv.set_property("start", format!("{:.0}", start_pos));
-                } else {
-                    let _ = mpv.set_property("start", "0");
-                }
-                let title_opt = mpv_title_opt(&item.display_name());
-                log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
-                if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
-                    log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-                }
-                send_ep_info(mpv, &item);
             }
         }
         cancel_stop
+    }
+
+    fn cmd_replace_playlist(&mut self, new_items: Vec<MediaItem>, start_idx: usize, mpv: &Mpv, progress: &mut ProgressGuard) {
+        if new_items.is_empty() { return; }
+        // report_stopped for current item; is_audio zeroing handled inside.
+        self.reporter.report_stopped(self.last_valid_pos);
+        self.stop_reported = true;
+
+        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+        // Remove all old playlist entries except the current one so that
+        // the subsequent loadfile "replace" starts from a clean slate.
+        // Without this, old entries remain and playlist-pos = start_idx
+        // lands on a stale file instead of new_items[start_idx].
+        let _ = mpv.command("playlist-clear", &[]);
+
+        let start_idx = start_idx.min(new_items.len() - 1);
+        for (i, item) in new_items.iter().enumerate() {
+            let ep = if item.is_audio() { "Audio" } else { "Videos" };
+            let url = format!("{}/{}/{}/stream?static=true&api_key={}", self.server_url, ep, item.id, self.token);
+            let mode = if i == 0 { "replace" } else { "append-play" };
+            let title_opt = mpv_title_opt(&item.display_name());
+            if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()]) {
+                log::warn!(target: "player", "ReplacePlaylist loadfile error: {}", mpv_err_str(&e));
+            }
+        }
+        let _ = mpv.set_property("start", "0");
+        send_ep_info(mpv, &new_items[start_idx]);
+        // loadfile "replace" displaces the current file (EndFile #1).
+        // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
+        // Use = not += so a stale pending_load from a prior operation never stacks.
+        // Clear pending_initial_jump too since any in-flight initial jump is superseded.
+        self.pending_initial_jump = false;
+        self.pending_load = if start_idx > 0 { 2 } else { 1 };
+        if start_idx > 0 {
+            let _ = mpv.set_property("playlist-pos", start_idx as i64);
+        }
+
+        self.last_valid_pos         = new_items[start_idx].playback_position_ticks;
+        self.tracks_initialized     = false;
+        // stop_reported stays true until pending_load drains to 0 in on_end_file,
+        // preventing a duplicate report_stopped for the displaced file's EndFile(Quit).
+        self.playlist_cancelled     = false;
+        self.forced_idx             = None;
+        self.playlist_next_up_fired = false;
+        self.playlist_next_up_armed = false;
+        self.next_up_jump           = false;
+        self.osd_title              = new_items[start_idx].display_name();
+        self.pending_resume_secs    = if !new_items[start_idx].is_audio() && new_items[start_idx].should_resume() {
+            Some(new_items[start_idx].resume_seconds())
+        } else {
+            None
+        };
+        log::info!(target: "player", "playlist queue-replace idx={start_idx} pending_resume={:?}s", self.pending_resume_secs);
+        let (s, e) = load_intro_times(&self.reporter.client, &new_items[start_idx].id);
+        self.set_intro(s, e, new_items[start_idx].playback_position_ticks);
+
+        // Stop progress reporter during transition to prevent stale reports,
+        // then restart for the new item.
+        progress.stop_and_join();
+        let (_urls, ok) = self.reporter.start_item(&new_items[start_idx]);
+        if !ok {
+            log::warn!(target: "player", "start_item failed for playlist replace item={}", new_items[start_idx].id);
+        }
+        *progress = spawn_progress_reporter(self.reporter.clone());
+        self.n           = new_items.len();
+        self.current_idx = start_idx;
+        self.items       = new_items;
+    }
+
+    fn cmd_load_new(&mut self, url: String, start_pos: f64, item: Box<MediaItem>, mpv: &Mpv, progress: &mut ProgressGuard) {
+        self.quit_at           = None;
+        self.playlist_cancelled = true;
+
+        // Stop progress reporter during transition to prevent stale reports.
+        progress.stop_and_join();
+        self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
+        *progress = spawn_progress_reporter(self.reporter.clone());
+
+        self.last_valid_pos     = item.playback_position_ticks;
+        self.tracks_initialized = false;
+        self.stop_reported      = false;
+        self.pending_load       = 1;
+
+        let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+        let (s, e) = load_intro_times(&self.reporter.client, &item.id);
+        self.set_intro(s, e, item.playback_position_ticks);
+
+        if start_pos > 0.0 {
+            let _ = mpv.set_property("start", format!("{:.0}", start_pos));
+        } else {
+            let _ = mpv.set_property("start", "0");
+        }
+        let title_opt = mpv_title_opt(&item.display_name());
+        log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
+        if let Err(e) = mpv.command("loadfile", &[url.as_str(), "replace", "-1", title_opt.as_str()]) {
+            log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
+        }
+        send_ep_info(mpv, &item);
     }
 
     fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
@@ -2336,5 +2344,39 @@ mod tests {
     fn near_end_requires_runtime_known() {
         // If runtime_ticks is 0 (unknown), near-end must never trigger.
         assert!(!is_near_end(false, false, 1_000_000_000, 0));
+    }
+
+    // ── lang_code_to_name (sync with parse_audio_info in api.rs) ─────────────
+    // Mirror of parse_audio_info_lang_table_matches_player_lang_code_to_name in
+    // api.rs::tests. Both tables must be updated together when adding a language.
+    #[test]
+    fn lang_code_to_name_matches_api_table() {
+        let cases: &[(&str, &str)] = &[
+            ("en", "English"),    ("eng", "English"),
+            ("fr", "French"),     ("fre", "French"),    ("fra", "French"),
+            ("de", "German"),     ("ger", "German"),    ("deu", "German"),
+            ("es", "Spanish"),    ("spa", "Spanish"),
+            ("it", "Italian"),    ("ita", "Italian"),
+            ("pt", "Portuguese"), ("por", "Portuguese"),
+            ("ja", "Japanese"),   ("jpn", "Japanese"),
+            ("ko", "Korean"),     ("kor", "Korean"),
+            ("zh", "Chinese"),    ("chi", "Chinese"),   ("zho", "Chinese"),
+            ("ru", "Russian"),    ("rus", "Russian"),
+            ("ar", "Arabic"),     ("ara", "Arabic"),
+            ("nl", "Dutch"),      ("nld", "Dutch"),     ("dut", "Dutch"),
+            ("sv", "Swedish"),    ("swe", "Swedish"),
+            ("no", "Norwegian"),  ("nor", "Norwegian"),
+            ("da", "Danish"),     ("dan", "Danish"),
+            ("fi", "Finnish"),    ("fin", "Finnish"),
+            ("pl", "Polish"),     ("pol", "Polish"),
+            ("cs", "Czech"),      ("cze", "Czech"),     ("ces", "Czech"),
+            ("tr", "Turkish"),    ("tur", "Turkish"),
+        ];
+        for (code, expected) in cases {
+            assert_eq!(
+                lang_code_to_name(code), *expected,
+                "lang_code_to_name({:?})", code
+            );
+        }
     }
 }
