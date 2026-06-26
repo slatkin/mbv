@@ -126,7 +126,8 @@ impl App {
         let delim_style = Style::default().fg(palette::OVERLAY);
         let elapsed_w = pos_str.chars().count() as u16;
         let total_w   = dur_str.chars().count() as u16;
-        self.layout_seekbar_area = Rect::default();
+        // layout_seekbar_area is owned by the indicator bar (render_indicator_bar);
+        // don't clobber it here.
         self.layout_tracks_area  = Rect::default();
         self.layout_vol_area     = Rect::default();
         self.layout_sub_area     = Rect::default();

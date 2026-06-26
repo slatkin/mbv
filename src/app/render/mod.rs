@@ -35,10 +35,12 @@ impl App {
         let status_h:   u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
         let controls_h: u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
         let tabs_h:  u16 = if in_power { 0 } else { 1 };
+        let spacer_h: u16 = if in_power { 0 } else { 1 };
         let gap_h:   u16 = 1;
         let title_h: u16 = if in_power { 0 } else { 1 };
-        let [tabs_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
+        let [tabs_area, _spacer_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(tabs_h),
+            Constraint::Length(spacer_h),
             Constraint::Length(gap_h),
             Constraint::Length(title_h),
             Constraint::Length(controls_h),
@@ -444,8 +446,13 @@ impl App {
             spans.extend(inner);
             spans.push(Span::raw(" "));
             if in_presentation {
+                // Presentation view owns its own seekbar; this is just a divider.
                 spans.push(Span::styled("\u{2500}".repeat(dash_count), Style::default().fg(palette::IRIS)));
             } else {
+                // Record the bar region so the mouse handlers can double-click /
+                // drag to seek. The bar starts after the indicators + 1 space.
+                let seek_x = area.x + sum_widths + n_inds.saturating_sub(1) + 1;
+                self.layout_seekbar_area = Rect { x: seek_x, y: area.y, width: dash_count as u16, height: 1 };
                 let filled = (seek_ratio * dash_count as f64).round() as usize;
                 let unfilled = dash_count.saturating_sub(filled);
                 spans.push(Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)));
@@ -593,7 +600,8 @@ impl App {
         let btn_row_y = area.y;
 
         const BTNS_W: u16 = 30;
-        self.layout_seekbar_area = Rect::default();
+        // layout_seekbar_area is owned by the indicator bar now (set in
+        // render_indicator_bar); don't clobber it here.
         self.layout_tracks_area  = Rect::default();
         self.layout_vol_area     = Rect::default();
         self.layout_sub_area     = Rect::default();
