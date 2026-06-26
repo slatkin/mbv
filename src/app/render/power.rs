@@ -323,7 +323,7 @@ impl App {
             let indicator = format!("[{}/{}]", shown_pos, n_libs);
             let iw = indicator.len() as u16;
             let ind_x = area.x + area.width.saturating_sub(iw);
-            let ind_y = area.y;
+            let ind_y = area.y + area.height.saturating_sub(1);
             f.render_widget(
                 Paragraph::new(Span::styled(indicator, Style::default().fg(palette::SUBTLE))),
                 Rect { x: ind_x, y: ind_y, width: iw, height: 1 },

@@ -740,6 +740,23 @@ impl App {
         drop(client);
         match result {
             Ok(()) => {
+                if played {
+                    let lib_idx_opt = if self.tab_idx >= self.lib_tab_offset() {
+                        Some(self.tab_idx - self.lib_tab_offset())
+                    } else {
+                        self.power_focused_lib_idx()
+                    };
+                    if let Some(lib_idx) = lib_idx_opt {
+                        if let Some(lvl) = self.libs.get_mut(lib_idx).and_then(|l| l.nav_stack.last_mut()) {
+                            if lvl.unplayed_only {
+                                let id = item_id.to_string();
+                                lvl.items.retain(|i| i.id != id);
+                                lvl.total_count = lvl.total_count.saturating_sub(1);
+                                lvl.cursor = lvl.cursor.min(lvl.items.len().saturating_sub(1));
+                            }
+                        }
+                    }
+                }
                 if self.tab_idx == 0 { let _ = self.fetch_home(); } else { self.refresh_lib(); }
             }
             Err(e) => self.flash_status_high(format!("Error: {e}")),
@@ -1317,8 +1334,7 @@ impl App {
             }
             LibEvent::QueueRestored { items, source, last_played_item_id, last_played_completed } => {
                 if items.is_empty() {
-                    // Fetch returned empty — could be a network failure at startup, not a genuinely
-                    // empty queue. Leave queue_state.json intact so next startup can retry.
+                    crate::config::clear_queue_state();
                     return;
                 }
                 let cursor = if let Some(ref id) = last_played_item_id {
@@ -1547,7 +1563,14 @@ impl App {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
-            let mut items = client.get_items_by_ids(&item_ids).unwrap_or_default();
+            let items_result = client.get_items_by_ids(&item_ids);
+            let mut items = match items_result {
+                Ok(items) => items,
+                Err(e) => {
+                    log::warn!(target: "queue", "restore: network error, will retry next startup: {e}");
+                    return;
+                }
+            };
             // Apply locally-saved positions where they are fresher than what Emby returned.
             // Emby's UserData may lag by up to a few seconds after a Stopped report.
             for item in &mut items {

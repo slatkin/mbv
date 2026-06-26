@@ -686,7 +686,11 @@ impl App {
         let client_arc = Arc::new(Mutex::new(client));
         {
             let c = client_arc.clone();
-            std::thread::spawn(move || { c.lock().unwrap().probe_chapter_api(); });
+            std::thread::spawn(move || {
+                let mut probe = c.lock().unwrap().clone();
+                probe.probe_chapter_api();
+                c.lock().unwrap().chapter_api_available = probe.chapter_api_available;
+            });
         }
         Self::build(AppInit {
             client: client_arc,
@@ -735,7 +739,11 @@ impl App {
         let client_arc = Arc::new(Mutex::new(client));
         {
             let c = client_arc.clone();
-            std::thread::spawn(move || { c.lock().unwrap().probe_chapter_api(); });
+            std::thread::spawn(move || {
+                let mut probe = c.lock().unwrap().clone();
+                probe.probe_chapter_api();
+                c.lock().unwrap().chapter_api_available = probe.chapter_api_available;
+            });
         }
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_cursor = remote.status.lock().unwrap().current_idx;

@@ -136,32 +136,7 @@ impl App {
         {
             if let Some(lib_idx) = self.power_focused_lib_idx() {
                 if self.libs[lib_idx].search.is_some() {
-                    let saved = self.tab_idx;
-                    self.tab_idx = self.lib_tab_offset() + lib_idx;
-                    match key.code {
-                        KeyCode::Esc => { self.libs[lib_idx].search = None; }
-                        KeyCode::Backspace => {
-                            let empty = self.libs[lib_idx].search.as_ref().is_none_or(|s| s.query.is_empty());
-                            if empty { self.libs[lib_idx].search = None; }
-                            else {
-                                self.libs[lib_idx].search.as_mut().unwrap().query.pop();
-                                self.update_lib_search(lib_idx);
-                            }
-                        }
-                        KeyCode::Up       => self.move_lib_cursor(-1),
-                        KeyCode::Down     => self.move_lib_cursor(1),
-                        KeyCode::PageUp   => { let p = self.lib_page_size(); self.move_lib_cursor(-(p as i64)); }
-                        KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
-                        KeyCode::Home     => self.jump_lib_cursor(false),
-                        KeyCode::End      => self.jump_lib_cursor(true),
-                        KeyCode::Enter    => self.select(),
-                        KeyCode::Char(c)  => {
-                            self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
-                            self.update_lib_search(lib_idx);
-                        }
-                        _ => {}
-                    }
-                    self.tab_idx = saved;
+                    self.handle_lib_search_key(lib_idx, key);
                     return false;
                 }
             }
@@ -175,30 +150,7 @@ impl App {
             && self.context_menu.is_none()
         {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
-            let alt = key.modifiers.contains(KeyModifiers::ALT);
-            match key.code {
-                KeyCode::Esc => { self.libs[lib_idx].search = None; }
-                KeyCode::Backspace => {
-                    let empty = self.libs[lib_idx].search.as_ref().is_none_or(|s| s.query.is_empty());
-                    if empty { self.libs[lib_idx].search = None; }
-                    else {
-                        self.libs[lib_idx].search.as_mut().unwrap().query.pop();
-                        self.update_lib_search(lib_idx);
-                    }
-                }
-                KeyCode::Up       => self.move_lib_cursor(-1),
-                KeyCode::Down     => self.move_lib_cursor(1),
-                KeyCode::PageUp   => { let p = self.lib_page_size(); self.move_lib_cursor(-(p as i64)); }
-                KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
-                KeyCode::Home     => self.jump_lib_cursor(false),
-                KeyCode::End      => self.jump_lib_cursor(true),
-                KeyCode::Enter => self.select(),
-                KeyCode::Char(c) if !alt => {
-                    self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
-                    self.update_lib_search(lib_idx);
-                }
-                _ => {}
-            }
+            self.handle_lib_search_key(lib_idx, key);
             return false;
         }
         if key.code == KeyCode::Char('h') {
@@ -284,6 +236,35 @@ impl App {
         if self.tab_idx == 1 { return self.handle_playlist_key(key); }
         if self.tab_idx == self.log_tab_idx() { return self.handle_log_key(key); }
         self.handle_lib_key(key)
+    }
+
+    fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
+        let saved = self.tab_idx;
+        self.tab_idx = self.lib_tab_offset() + lib_idx;
+        match key.code {
+            KeyCode::Esc => { self.libs[lib_idx].search = None; }
+            KeyCode::Backspace => {
+                let empty = self.libs[lib_idx].search.as_ref().is_none_or(|s| s.query.is_empty());
+                if empty { self.libs[lib_idx].search = None; }
+                else {
+                    self.libs[lib_idx].search.as_mut().unwrap().query.pop();
+                    self.update_lib_search(lib_idx);
+                }
+            }
+            KeyCode::Up       => self.move_lib_cursor(-1),
+            KeyCode::Down     => self.move_lib_cursor(1),
+            KeyCode::PageUp   => { let p = self.lib_page_size(); self.move_lib_cursor(-(p as i64)); }
+            KeyCode::PageDown => { let p = self.lib_page_size(); self.move_lib_cursor(p as i64); }
+            KeyCode::Home     => self.jump_lib_cursor(false),
+            KeyCode::End      => self.jump_lib_cursor(true),
+            KeyCode::Enter    => self.select(),
+            KeyCode::Char(c)  => {
+                self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
+                self.update_lib_search(lib_idx);
+            }
+            _ => {}
+        }
+        self.tab_idx = saved;
     }
 
     fn handle_key_save_modal(&mut self, key: KeyEvent) -> Option<bool> {
@@ -1404,8 +1385,8 @@ impl App {
                         .unwrap_or(lvl.cursor)
                 }).unwrap_or(0);
                 let visible = tbl.height as usize;
-                let scroll = if cursor >= visible { cursor - visible + 1 } else { 0 };
-                let row = (cursor - scroll) as u16;
+                let scroll = if visible > 0 && cursor >= visible { cursor - visible + 1 } else { 0 };
+                let row = cursor.saturating_sub(scroll) as u16;
                 return (tbl.x + 2, tbl.y + row);
             }
         }
