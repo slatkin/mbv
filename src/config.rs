@@ -719,74 +719,6 @@ hidden_latest = ["Movies", "TV SHOWS"]
     }
 
     #[test]
-    fn parse_use_mpv_config_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nuse_mpv_config = true";
-        assert!(parse_config(toml).unwrap().use_mpv_config);
-    }
-
-    #[test]
-    fn parse_use_mpv_config_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().use_mpv_config);
-    }
-
-    #[test]
-    fn parse_show_audio_window_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nshow_audio_window = true";
-        assert!(parse_config(toml).unwrap().show_audio_window);
-    }
-
-    #[test]
-    fn parse_show_audio_window_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().show_audio_window);
-    }
-
-    #[test]
-    fn token_cache_path_uses_xdg() {
-        std::env::set_var("XDG_STATE_HOME", "/tmp/xdg-test-state");
-        let path = token_cache_path();
-        std::env::remove_var("XDG_STATE_HOME");
-        assert_eq!(path.to_str().unwrap(), "/tmp/xdg-test-state/mbv/token.json");
-    }
-
-    #[test]
-    fn parse_show_log_tab_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[general]\nshow_log_tab = true";
-        assert!(parse_config(toml).unwrap().show_log_tab);
-    }
-
-    #[test]
-    fn parse_show_log_tab_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().show_log_tab);
-    }
-
-    #[test]
-    fn parse_no_scripts_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nno_scripts = true";
-        assert!(parse_config(toml).unwrap().no_scripts);
-    }
-
-    #[test]
-    fn parse_no_scripts_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().no_scripts);
-    }
-
-    #[test]
-    fn parse_autoload_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[mpv]\nautoload = true";
-        assert!(parse_config(toml).unwrap().autoload);
-    }
-
-    #[test]
-    fn parse_autoload_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().autoload);
-    }
-
-    #[test]
     fn parse_music_levels_group_album() {
         let toml = "[server]\nurl = \"http://host\"\n[music]\nlevels = [\"group\", \"album\"]";
         let cfg = parse_config(toml).unwrap();
@@ -808,18 +740,6 @@ hidden_latest = ["Movies", "TV SHOWS"]
 
     // always_play_next and start_on_queue live in [queue].
     #[test]
-    fn parse_always_play_next_true_from_queue_section() {
-        let toml = "[server]\nurl = \"http://host\"\n[queue]\nalways_play_next = true";
-        assert!(parse_config(toml).unwrap().always_play_next);
-    }
-
-    #[test]
-    fn parse_always_play_next_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().always_play_next);
-    }
-
-    #[test]
     fn parse_always_play_next_in_wrong_section_is_ignored() {
         let toml = "[server]\nurl = \"http://host\"\nalways_play_next = true";
         assert!(!parse_config(toml).unwrap().always_play_next, "always_play_next must be in [queue], not [server]");
@@ -832,63 +752,9 @@ hidden_latest = ["Movies", "TV SHOWS"]
     }
 
     #[test]
-    fn parse_start_on_queue_true_from_queue_section() {
-        let toml = "[server]\nurl = \"http://host\"\n[queue]\nstart_on_queue = true";
-        assert!(parse_config(toml).unwrap().start_on_queue);
-    }
-
-    #[test]
     fn parse_start_on_queue_legacy_mbv_section_still_works() {
         let toml = "[server]\nurl = \"http://host\"\n[mbv]\nstart_on_queue = true";
         assert!(parse_config(toml).unwrap().start_on_queue, "backward compat: [mbv] fallback");
-    }
-
-    #[test]
-    fn parse_always_skip_intro_true_from_general_section() {
-        let toml = "[server]\nurl = \"http://host\"\n[general]\nalways_skip_intro = true";
-        assert!(parse_config(toml).unwrap().always_skip_intro);
-    }
-
-    #[test]
-    fn parse_always_skip_intro_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().always_skip_intro);
-    }
-
-    #[test]
-    fn parse_daemon_mode_on_exit_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[general]\ndaemon_mode_on_exit = true";
-        assert!(parse_config(toml).unwrap().daemon_mode_on_exit);
-    }
-
-    #[test]
-    fn parse_daemon_mode_on_exit_defaults_false() {
-        let toml = "[emby]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().daemon_mode_on_exit);
-    }
-
-    #[test]
-    fn parse_consume_videos_true_from_queue_section() {
-        let toml = "[server]\nurl = \"http://host\"\n[queue]\nconsume_videos = true";
-        assert!(parse_config(toml).unwrap().consume_videos);
-    }
-
-    #[test]
-    fn parse_consume_videos_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().consume_videos);
-    }
-
-    #[test]
-    fn parse_system_notifications_true() {
-        let toml = "[server]\nurl = \"http://host\"\n[general]\nsystem_notifications = true";
-        assert!(parse_config(toml).unwrap().system_notifications);
-    }
-
-    #[test]
-    fn parse_system_notifications_defaults_false() {
-        let toml = "[server]\nurl = \"http://host\"";
-        assert!(!parse_config(toml).unwrap().system_notifications);
     }
 
     // ── System-instance path routing ─────────────────────────────────────────

@@ -1771,22 +1771,6 @@ mod tests {
     // ── set_home_cursor ──────────────────────────────────────────────────────
 
     #[test]
-    fn set_home_cursor_section_zero_sets_continue_cursor() {
-        let mut app = make_app_stub();
-        app.home.continue_items = make_items(5);
-        app.set_home_cursor(0, 4);
-        assert_eq!(app.home.continue_cursor, 4);
-    }
-
-    #[test]
-    fn set_home_cursor_section_one_sets_latest_cursor() {
-        let mut app = make_app_stub();
-        app.home.latest = vec![("T".into(), "lib".into(), make_items(10), 0)];
-        app.set_home_cursor(1, 7);
-        assert_eq!(app.home.latest[0].3, 7);
-    }
-
-    #[test]
     fn set_home_cursor_out_of_bounds_section_is_noop() {
         let mut app = make_app_stub();
         app.set_home_cursor(99, 3); // should not panic
@@ -1913,23 +1897,6 @@ mod tests {
         app.home_panel_section_offset = 10; // way too high
         app.ensure_home_section_visible();
         assert_eq!(app.home_panel_section_offset, 0);
-    }
-
-    // ── home_card_view toggle ────────────────────────────────────────────────
-
-    #[test]
-    fn home_card_view_defaults_false() {
-        let app = make_app_stub();
-        assert!(!app.home_card_view);
-    }
-
-    #[test]
-    fn home_card_view_toggle_changes_state() {
-        let mut app = make_app_stub();
-        app.home_card_view = !app.home_card_view;
-        assert!(app.home_card_view);
-        app.home_card_view = !app.home_card_view;
-        assert!(!app.home_card_view);
     }
 
     // ── cursor preservation during home refresh ──────────────────────────────

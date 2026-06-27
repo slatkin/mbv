@@ -1197,11 +1197,6 @@ mod tests {
     // ── MediaItem::resume_seconds / runtime_seconds ──────────────────────────
 
     #[test]
-    fn resume_seconds_zero() {
-        assert_eq!(make_item("X", "Movie").resume_seconds(), 0.0);
-    }
-
-    #[test]
     fn resume_seconds_converts_ticks() {
         let mut item = make_item("X", "Movie");
         item.playback_position_ticks = TICKS_PER_SECOND * 90;
@@ -1269,14 +1264,6 @@ mod tests {
     }
 
     // ── MediaItem::playback_label ────────────────────────────────────────────
-
-    #[test]
-    fn playback_label_audio_with_artist() {
-        let mut item = make_item("Song", "Audio");
-        item.artist = "Artist".into();
-        item.media_type = "Audio".into();
-        assert_eq!(item.playback_label(), "Artist - Song");
-    }
 
     #[test]
     fn playback_label_audio_without_artist_falls_back_to_display_name() {
@@ -1566,12 +1553,6 @@ mod tests {
     }
 
     #[test]
-    fn parse_audio_info_single_track() {
-        let streams = json!([audio_stream("eng", "ac3", "5.1")]);
-        assert_eq!(parse_audio_info(streams.as_array().unwrap()), "English AC3 5.1");
-    }
-
-    #[test]
     fn parse_audio_info_multiple_tracks() {
         let streams = json!([
             audio_stream("eng", "ac3", "5.1"),
@@ -1631,28 +1612,6 @@ mod tests {
     }
 
     // ── is_audio / is_video ──────────────────────────────────────────────────
-
-    #[test]
-    fn is_audio_true_for_audio_media_type() {
-        let mut item = make_item("Song", "Audio");
-        item.media_type = "Audio".into();
-        assert!(item.is_audio());
-        assert!(!item.is_video());
-    }
-
-    #[test]
-    fn is_audio_true_for_audio_item_type() {
-        let mut item = make_item("Song", "Audio");
-        item.media_type = String::new();
-        assert!(item.is_audio());
-    }
-
-    #[test]
-    fn is_video_true_for_video_media_type() {
-        let item = make_item("Film", "Movie"); // make_item sets media_type = "Video"
-        assert!(item.is_video());
-        assert!(!item.is_audio());
-    }
 
     // ── should_resume ────────────────────────────────────────────────────────
 

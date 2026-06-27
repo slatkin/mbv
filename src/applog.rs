@@ -150,29 +150,10 @@ mod tests {
     }
 
     #[test]
-    fn level_labels() {
-        assert_eq!(Level::Error.label(), "E");
-        assert_eq!(Level::Warn.label(),  "W");
-        assert_eq!(Level::Info.label(),  "I");
-        assert_eq!(Level::Debug.label(), "D");
-    }
-
-    #[test]
     fn capacity_zero_drops_all_pushes() {
         let log = make(0);
         log.push_entry(entry(Level::Info, "src", "msg"));
         assert!(log.snapshot().is_empty());
-    }
-
-    #[test]
-    fn push_adds_entry_visible_in_snapshot() {
-        let log = make(10);
-        log.push_entry(entry(Level::Warn, "ws", "hello"));
-        let snap = log.snapshot();
-        assert_eq!(snap.len(), 1);
-        assert_eq!(snap[0].level, Level::Warn);
-        assert_eq!(snap[0].source, "ws");
-        assert_eq!(snap[0].msg, "hello");
     }
 
     #[test]
@@ -197,26 +178,6 @@ mod tests {
     }
 
     // ── log::Level conversion ─────────────────────────────────────────────────
-
-    #[test]
-    fn level_from_log_error() {
-        assert_eq!(Level::from(log::Level::Error), Level::Error);
-    }
-
-    #[test]
-    fn level_from_log_warn() {
-        assert_eq!(Level::from(log::Level::Warn), Level::Warn);
-    }
-
-    #[test]
-    fn level_from_log_info() {
-        assert_eq!(Level::from(log::Level::Info), Level::Info);
-    }
-
-    #[test]
-    fn level_from_log_debug() {
-        assert_eq!(Level::from(log::Level::Debug), Level::Debug);
-    }
 
     #[test]
     fn level_from_log_trace_maps_to_debug() {

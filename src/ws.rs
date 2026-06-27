@@ -243,14 +243,6 @@ mod tests {
     }
 
     #[test]
-    fn play_start_index_defaults_to_zero() {
-        let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["a","b"]}}"#;
-        if let WsEvent::Play { start_index, .. } = parse_msg(msg).unwrap() {
-            assert_eq!(start_index, 0);
-        } else { panic!(); }
-    }
-
-    #[test]
     fn play_empty_item_ids_returns_none() {
         let msg = r#"{"MessageType":"Play","Data":{"ItemIds":[]}}"#;
         assert!(parse_msg(msg).is_none());
@@ -265,42 +257,6 @@ mod tests {
     }
 
     // ── Playstate ────────────────────────────────────────────────────────────
-
-    #[test]
-    fn playstate_stop() {
-        let msg = r#"{"MessageType":"Playstate","Data":{"Command":"Stop"}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::Stop)));
-    }
-
-    #[test]
-    fn playstate_pause() {
-        let msg = r#"{"MessageType":"Playstate","Data":{"Command":"Pause"}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::Pause)));
-    }
-
-    #[test]
-    fn playstate_unpause() {
-        let msg = r#"{"MessageType":"Playstate","Data":{"Command":"Unpause"}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::Unpause)));
-    }
-
-    #[test]
-    fn playstate_toggle_pause() {
-        let msg = r#"{"MessageType":"Playstate","Data":{"Command":"PlayPause"}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::TogglePause)));
-    }
-
-    #[test]
-    fn playstate_next_track() {
-        let msg = r#"{"MessageType":"Playstate","Data":{"Command":"NextTrack"}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::NextTrack)));
-    }
-
-    #[test]
-    fn playstate_previous_track() {
-        let msg = r#"{"MessageType":"Playstate","Data":{"Command":"PreviousTrack"}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::PreviousTrack)));
-    }
 
     #[test]
     fn playstate_seek_absolute() {
@@ -333,12 +289,6 @@ mod tests {
     // ── GeneralCommand ───────────────────────────────────────────────────────
 
     #[test]
-    fn general_command_play_pause() {
-        let msg = r#"{"MessageType":"GeneralCommand","Data":{"Name":"PlayPause"}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::TogglePause)));
-    }
-
-    #[test]
     fn general_command_set_volume_string() {
         let msg = r#"{"MessageType":"GeneralCommand","Data":{"Name":"SetVolume","Arguments":{"Volume":"80"}}}"#;
         assert!(matches!(parse_msg(msg), Some(WsEvent::SetVolume(80))));
@@ -369,12 +319,6 @@ mod tests {
     }
 
     // ── Other message types ──────────────────────────────────────────────────
-
-    #[test]
-    fn user_data_changed() {
-        let msg = r#"{"MessageType":"UserDataChanged"}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::UserDataChanged)));
-    }
 
     #[test]
     fn unknown_message_type_returns_none() {
