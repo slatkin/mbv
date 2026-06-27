@@ -1,4 +1,4 @@
-use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION, PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus, PowerPanel};
+use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION, PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -128,17 +128,18 @@ impl App {
             }
             return false;
         }
-        // Power-view: when the focused library column has an active search, intercept all keys
+        // Power-view: when the left panel is focused on a library with active search, intercept keys
         if self.playlist_view == PLAYLIST_VIEW_POWER
             && !key.modifiers.contains(KeyModifiers::ALT)
             && !key.modifiers.contains(KeyModifiers::CONTROL)
             && self.context_menu.is_none()
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab > 0
         {
-            if let Some(lib_idx) = self.power_focused_lib_idx() {
-                if self.libs[lib_idx].search.is_some() {
-                    self.handle_lib_search_key(lib_idx, key);
-                    return false;
-                }
+            let lib_idx = self.power_left_tab - 1;
+            if self.libs[lib_idx].search.is_some() {
+                self.handle_lib_search_key(lib_idx, key);
+                return false;
             }
         }
         // When library search is active, unmodified keys feed the search
@@ -844,13 +845,8 @@ impl App {
         }
     }
 
-    /// Page size for the Continue Watching column = its rendered height.
     fn power_cw_page(&self) -> usize {
-        self.power_lib_col_areas.iter()
-            .find(|(p, _)| *p == PowerPanel::ContinueWatching)
-            .map(|(_, r)| r.height as usize)
-            .unwrap_or(5)
-            .max(1)
+        (self.power_left_area.height as usize).max(1)
     }
 
     fn handle_playlist_key(&mut self, key: KeyEvent) -> bool {
@@ -868,12 +864,13 @@ impl App {
             return false;
         }
 
-        // In power view, route nav keys to the focused lower-panel column.
-        if self.playlist_view == PLAYLIST_VIEW_POWER {
-            if matches!(self.power_focus, PowerFocus::ContinueWatching) && self.handle_power_cw_key(key) {
+        // In power view, route nav keys to the focused left panel.
+        if self.playlist_view == PLAYLIST_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left) {
+            if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
                 return false;
             }
-            if let Some(lib_idx) = self.power_focused_lib_idx() {
+            if self.power_left_tab > 0 {
+                let lib_idx = self.power_left_tab - 1;
                 let is_power_nav = matches!(key.code, KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down)
                     && key.modifiers.contains(KeyModifiers::ALT);
                 let is_lib_key = !is_power_nav && match key.code {
@@ -905,7 +902,7 @@ impl App {
             KeyCode::Char('q') => { return self.try_quit(); }
             KeyCode::Tab => {
                 if self.playlist_view == PLAYLIST_VIEW_POWER {
-                    self.power_focus_next();
+                    self.power_left_tab_next();
                 } else {
                     let n = (self.tab_idx + 1) % self.tab_count();
                     self.set_tab(n);
@@ -913,17 +910,17 @@ impl App {
             }
             KeyCode::BackTab => {
                 if self.playlist_view == PLAYLIST_VIEW_POWER {
-                    self.power_focus_prev();
+                    self.power_left_tab_prev();
                 } else {
                     let n = self.tab_count();
                     self.set_tab((self.tab_idx + n - 1) % n);
                 }
             }
-            KeyCode::Left if self.playlist_view == PLAYLIST_VIEW_POWER => {
-                self.power_focus_prev();
+            KeyCode::Char('<') if self.playlist_view == PLAYLIST_VIEW_POWER => {
+                self.power_focus = PowerFocus::Left;
             }
-            KeyCode::Right if self.playlist_view == PLAYLIST_VIEW_POWER => {
-                self.power_focus_next();
+            KeyCode::Char('>') if self.playlist_view == PLAYLIST_VIEW_POWER => {
+                self.power_focus = PowerFocus::Queue;
             }
             KeyCode::Up | KeyCode::Left
                 if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_view == PLAYLIST_VIEW_CARDS) => {
@@ -1054,13 +1051,13 @@ impl App {
                 if self.playlist_view == PLAYLIST_VIEW_POWER
                 && key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                self.power_focus_prev();
+                self.power_left_tab_prev();
             }
             KeyCode::Right | KeyCode::Down
                 if self.playlist_view == PLAYLIST_VIEW_POWER
                 && key.modifiers.contains(KeyModifiers::ALT) =>
             {
-                self.power_focus_next();
+                self.power_left_tab_next();
             }
             _ => {}
         }
@@ -1299,6 +1296,27 @@ impl App {
         None
     }
 
+    /// Map a column click to a power-view left-panel tab index (0=Home, 1+=library).
+    fn power_tab_idx_at(&self, col: u16) -> Option<usize> {
+        let area = self.layout_tabs_area;
+        if col < area.x || col >= area.x + area.width { return None; }
+        let rel = col - area.x;
+        let n = self.power_left_tab_count();
+        let pad = 2u16;
+        let mut x = 0u16;
+        for i in 0..n {
+            let name_w = if i == 0 {
+                "Home".len() as u16
+            } else {
+                self.libs[i - 1].library.name.chars().count() as u16
+            };
+            let w = name_w + pad;
+            if rel < x + w { return Some(i); }
+            x += w;
+        }
+        None
+    }
+
     pub(super) fn handle_button_click(&mut self, btn: usize) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             let pos_s = self.connected_session_state.as_ref().map(|s| s.position_s).unwrap_or(0);
@@ -1334,7 +1352,8 @@ impl App {
         let mut actions: Vec<ContextAction> = vec![];
 
         let cw_focused = self.playlist_view == PLAYLIST_VIEW_POWER
-            && matches!(self.power_focus, PowerFocus::ContinueWatching);
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab == 0;
 
         let current_item = if cw_focused {
             self.home.continue_items.get(self.home.continue_cursor).cloned()
@@ -1415,28 +1434,30 @@ impl App {
             let center = self.layout_carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
-        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
-            if matches!(self.power_focus, PowerFocus::ContinueWatching) {
-                if let Some((_, area)) = self.power_lib_col_areas.iter().find(|(p, _)| *p == PowerPanel::ContinueWatching) {
+        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Left)
+        {
+            let area = self.power_left_area;
+            if area.width > 0 {
+                if self.power_left_tab == 0 {
                     let n = self.home.continue_items.len().max(1);
                     let cursor = self.home.continue_cursor.min(n - 1);
                     let visible = area.height as usize;
                     let offset = if visible > 0 && cursor >= visible { cursor - visible + 1 } else { 0 };
                     let row = cursor.saturating_sub(offset) as u16;
                     return (area.x + 2, area.y + row);
+                } else {
+                    let lib_idx = self.power_left_tab - 1;
+                    let cursor = self.libs[lib_idx].nav_stack.last().map(|lvl| {
+                        self.libs[lib_idx].search.as_ref()
+                            .and_then(|s| s.results.get(s.cursor).copied())
+                            .unwrap_or(lvl.cursor)
+                    }).unwrap_or(0);
+                    let visible = area.height as usize;
+                    let scroll = if visible > 0 && cursor >= visible { cursor - visible + 1 } else { 0 };
+                    let row = cursor.saturating_sub(scroll) as u16;
+                    return (area.x + 2, area.y + row);
                 }
-            }
-            if let Some(lib_idx) = self.power_focused_lib_idx() {
-                let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
-                let cursor = self.libs[lib_idx].nav_stack.last().map(|lvl| {
-                    self.libs[lib_idx].search.as_ref()
-                        .and_then(|s| s.results.get(s.cursor).copied())
-                        .unwrap_or(lvl.cursor)
-                }).unwrap_or(0);
-                let visible = tbl.height as usize;
-                let scroll = if visible > 0 && cursor >= visible { cursor - visible + 1 } else { 0 };
-                let row = cursor.saturating_sub(scroll) as u16;
-                return (tbl.x + 2, tbl.y + row);
             }
         }
         if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
@@ -1543,51 +1564,34 @@ impl App {
                 if click_y < n { self.player_tab.playlist_cursor = click_y; }
                 return true;
             }
-            // Click in a lower-panel column: focus it and set its cursor.
-            let col_areas = self.power_lib_col_areas.clone();
-            for (panel, col_area) in col_areas {
-                match panel {
-                    PowerPanel::ContinueWatching => {
-                        if col_area.contains((col, row).into()) {
-                            self.power_focus = PowerFocus::ContinueWatching;
-                            let n = self.home.continue_items.len();
-                            if n > 0 && row >= col_area.y {
-                                let visible = col_area.height as usize;
-                                let cursor = self.home.continue_cursor.min(n - 1);
-                                let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
-                                let clicked = offset + (row - col_area.y) as usize;
-                                if clicked < n { self.home.continue_cursor = clicked; }
-                            }
-                            return true;
-                        }
+            // Click in the left panel: focus it and set its cursor.
+            let la = self.power_left_area;
+            if la.contains((col, row).into()) {
+                self.power_focus = PowerFocus::Left;
+                if self.power_left_tab == 0 {
+                    let n = self.home.continue_items.len();
+                    if n > 0 {
+                        let visible = la.height as usize;
+                        let cursor = self.home.continue_cursor.min(n - 1);
+                        let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
+                        let clicked = offset + (row - la.y) as usize;
+                        if clicked < n { self.home.continue_cursor = clicked; }
                     }
-                    PowerPanel::Library(lib_idx) => {
-                        let tbl = self.layout_lib_table_area.get(lib_idx).copied().unwrap_or_default();
-                        if col_area.contains((col, row).into()) {
-                            self.power_focus = PowerFocus::Library(lib_idx);
-                            if tbl.contains((col, row).into()) {
-                                let click_y = row - tbl.y;
-                                let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
-                                let display_pos = {
-                                    let mut y = 0u16;
-                                    let mut found = scroll;
-                                    for (vi, &h) in self.layout_lib_row_heights.get(lib_idx).map(|v| v.as_slice()).unwrap_or(&[]).iter().enumerate() {
-                                        if click_y < y + h { found = scroll + vi; break; }
-                                        y += h;
-                                    }
-                                    found
-                                };
-                                let lib = &mut self.libs[lib_idx];
-                                if let Some(s) = &mut lib.search {
-                                    if display_pos < s.results.len() { s.cursor = display_pos; }
-                                } else if let Some(lvl) = lib.nav_stack.last_mut() {
-                                    if display_pos < lvl.items.len() { lvl.cursor = display_pos; }
-                                }
-                            }
-                            return true;
-                        }
+                } else {
+                    let lib_idx = self.power_left_tab - 1;
+                    let click_y = row - la.y;
+                    let lib = &mut self.libs[lib_idx];
+                    if let Some(s) = &mut lib.search {
+                        let clicked = click_y as usize;
+                        if clicked < s.results.len() { s.cursor = clicked; }
+                    } else if let Some(lvl) = lib.nav_stack.last_mut() {
+                        let visible = la.height as usize;
+                        let offset = if lvl.cursor >= visible { lvl.cursor - visible + 1 } else { 0 };
+                        let clicked = offset + click_y as usize;
+                        if clicked < lvl.items.len() { lvl.cursor = clicked; }
                     }
                 }
+                return true;
             }
         } else if self.tab_idx == 1 {
             let inner = self.layout_playlist_inner;
@@ -1867,7 +1871,13 @@ if idx < self.sessions.len() {
 
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout_tabs_area.contains((col, row).into()) {
-                if let Some(idx) = self.tab_idx_at(col) {
+                if self.playlist_view == PLAYLIST_VIEW_POWER {
+                    // In power view, tab clicks change the left-panel selection, not the app tab.
+                    if let Some(idx) = self.power_tab_idx_at(col) {
+                        self.power_left_tab = idx;
+                        if idx > 0 { self.ensure_lib_loaded_for(idx - 1); }
+                    }
+                } else if let Some(idx) = self.tab_idx_at(col) {
                     if idx == usize::MAX - 1 {
                         self.tab_scroll = self.tab_scroll.saturating_sub(1);
                     } else if idx == usize::MAX {
@@ -1918,23 +1928,23 @@ if idx < self.sessions.len() {
                     }
                 } else if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
                     // Scroll in whichever power-view panel the mouse is over.
-                    let col_areas = self.power_lib_col_areas.clone();
                     let queue_area = self.power_queue_area;
+                    let left_area  = self.power_left_area;
                     if queue_area.contains((col, row).into()) {
                         let n = self.player_tab.items.len();
                         if n > 0 {
                             self.player_tab.playlist_cursor =
                                 (self.player_tab.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                         }
-                    } else if let Some(&(panel, _)) = col_areas.iter().find(|(_, r)| r.contains((col, row).into())) {
-                        match panel {
-                            PowerPanel::ContinueWatching => self.power_cw_move_cursor(delta),
-                            PowerPanel::Library(lib_idx) => {
-                                let saved = self.tab_idx;
-                                self.tab_idx = self.lib_tab_offset() + lib_idx;
-                                self.move_lib_cursor(delta);
-                                self.tab_idx = saved;
-                            }
+                    } else if left_area.contains((col, row).into()) {
+                        if self.power_left_tab == 0 {
+                            self.power_cw_move_cursor(delta);
+                        } else {
+                            let lib_idx = self.power_left_tab - 1;
+                            let saved = self.tab_idx;
+                            self.tab_idx = self.lib_tab_offset() + lib_idx;
+                            self.move_lib_cursor(delta);
+                            self.tab_idx = saved;
                         }
                     }
                 } else if self.tab_idx == 1 {

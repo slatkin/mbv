@@ -34,11 +34,11 @@ impl App {
         let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
         let in_power       = self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER;
         // The 3-state panel toggle (`h`) only applies while something is playing/connected and
-        // we're not in presentation or power view. Idle/presentation keep their historical layout.
+        // we're not in presentation view. Idle/presentation keep their historical layout.
         let mode = self.panel_mode;
-        let playing_panel = show_controls && !in_presentation && !in_power;
+        let playing_panel = show_controls && !in_presentation;
         let onerow = playing_panel && mode == crate::config::PanelMode::OneRow;
-        let tabs_h:  u16 = if in_power { 0 } else { 1 };
+        let tabs_h:  u16 = 1;
         let spacer_h: u16 = if in_power { 0 } else { 1 };
         // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
         // gap is only used as a divider line in the presentation view. (status is unused.)
@@ -75,8 +75,14 @@ impl App {
             );
         }
 
-        if !in_power {
-            self.layout_ind_pb = Rect::default(); // play is only clickable in the power view
+        // Indicator-bar click regions are never set anymore; clear them every frame.
+        self.layout_ind_pb  = Rect::default();
+        self.layout_ind_mu  = Rect::default();
+        self.layout_ind_rc  = Rect::default();
+        self.layout_ind_sub = Rect::default();
+        self.layout_ind_au  = Rect::default();
+
+        {
             // Control pill (m ⇌ ≡) on the far left of the tab bar.
             self.render_control_pill(f, tabs_area);
 
@@ -127,18 +133,36 @@ impl App {
             width: tabs_w.saturating_sub(left_w + right_w),
             height: tabs_area.height,
         };
-        let all_names: Vec<String> = std::iter::once("Home".to_string())
-            .chain(std::iter::once("Queue".to_string()))
-            .chain(self.libs.iter().map(|l| l.library.name.clone()))
-            .chain(self.show_log_tab.then(|| "Log".to_string()))
-            .collect();
-        let selected_tab = if (!self.show_log_tab && self.tab_idx == self.log_tab_idx()) || self.tab_idx < vis_start || self.tab_idx >= vis_end {
-            usize::MAX
+        // In power view, show Home + Libraries (no Queue); selection = power_left_tab.
+        // Otherwise, show the full tab list with the normal tab_idx highlight.
+        let tab_titles: Vec<Line> = if in_power {
+            let names: Vec<String> = std::iter::once("Home".to_string())
+                .chain(self.libs.iter().map(|l| l.library.name.clone()))
+                .collect();
+            let sel = self.power_left_tab;
+            names.into_iter().enumerate().map(|(i, n)| {
+                let n = n.to_uppercase();
+                if i == sel {
+                    Line::from(vec![
+                        Span::styled("▐", Style::default().fg(palette::IRIS)),
+                        Span::styled(format!(" {n}  "), Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)),
+                    ])
+                } else {
+                    Line::from(Span::styled(format!("  {n}  "), Style::default().fg(palette::SUBTLE)))
+                }
+            }).collect()
         } else {
-            self.tab_idx - vis_start
-        };
-        let tab_titles: Vec<Line> = all_names[vis_start..vis_end]
-            .iter().enumerate().map(|(i, n)| {
+            let all_names: Vec<String> = std::iter::once("Home".to_string())
+                .chain(std::iter::once("Queue".to_string()))
+                .chain(self.libs.iter().map(|l| l.library.name.clone()))
+                .chain(self.show_log_tab.then(|| "Log".to_string()))
+                .collect();
+            let selected_tab = if (!self.show_log_tab && self.tab_idx == self.log_tab_idx()) || self.tab_idx < vis_start || self.tab_idx >= vis_end {
+                usize::MAX
+            } else {
+                self.tab_idx - vis_start
+            };
+            all_names[vis_start..vis_end].iter().enumerate().map(|(i, n)| {
                 let n = n.to_uppercase();
                 if i == selected_tab {
                     // Left-aligned active tab: the queue-row indicator (▐, iris) flush
@@ -150,7 +174,8 @@ impl App {
                 } else {
                     Line::from(Span::styled(format!("  {n}  "), Style::default().fg(palette::SUBTLE)))
                 }
-            }).collect();
+            }).collect()
+        };
         f.render_widget(
             Tabs::new(tab_titles)
                 .select(usize::MAX)
@@ -160,9 +185,6 @@ impl App {
                 .padding("", ""),
             inner_tabs,
         );
-        } else {
-            self.layout_tabbar_vol_area = Rect::default();
-            self.layout_tabs_area = Rect::default();
         }
 
         let now_playing: Option<String> = if active {
@@ -176,11 +198,12 @@ impl App {
             self.status_expires = None;
             self.force_clear = true;
         }
+        let title_color = if in_power { palette::TEXT } else { palette::FOAM };
         let now_playing_title: Option<(String, Color)> = if playing_panel && mode != crate::config::PanelMode::Hidden {
             if active {
-                now_playing.map(|t| (t, palette::FOAM))
+                now_playing.map(|t| (t, title_color))
             } else if let Some(ref state) = self.connected_session_state {
-                state.now_playing.clone().map(|t| (t, palette::FOAM))
+                state.now_playing.clone().map(|t| (t, title_color))
             } else {
                 None
             }
@@ -196,6 +219,7 @@ impl App {
         self.layout_vol_area     = Rect::default();
         self.layout_sub_area     = Rect::default();
         self.layout_audio_area   = Rect::default();
+        self.layout_button_area  = Rect::default();
 
         if self.tab_idx == 0 {
             self.render_combined(f, main_area);
@@ -320,157 +344,6 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(all)), Rect { x, y, width, height: 1 });
     }
 
-    pub(super) fn render_indicator_bar(&mut self, f: &mut Frame, area: Rect, highlight: bool) {
-        let dash_style = Style::default().fg(if highlight { palette::IRIS } else { palette::MUTED });
-
-        let pst = self.player.status.lock().unwrap();
-
-        let (pb_text, pb_color): (&str, Color) = if let Some(ref rs) = self.connected_session_state {
-            let rs_active = rs.now_playing.is_some();
-            let rs_paused = rs.is_paused;
-            if rs_active && !rs_paused {
-                if self.use_nerd_fonts { ("\u{f04b}", palette::PINE) } else { (">", palette::PINE) }
-            } else if rs_active && rs_paused {
-                if self.use_nerd_fonts { ("\u{f04c}", palette::YELLOW) } else { ("||", palette::YELLOW) }
-            } else {
-                if self.use_nerd_fonts { ("\u{f04d}", palette::SUBTLE) } else { (" ", palette::MUTED) }
-            }
-        } else if pst.active && !pst.paused {
-            if self.use_nerd_fonts { ("\u{f04b}", palette::PINE) } else { (">", palette::PINE) }
-        } else if pst.active && pst.paused {
-            if self.use_nerd_fonts { ("\u{f04c}", palette::YELLOW) } else { ("||", palette::YELLOW) }
-        } else {
-            if self.use_nerd_fonts { ("\u{f04d}", palette::SUBTLE) } else { (" ", palette::MUTED) }
-        };
-        drop(pst);
-        let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
-        let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
-            ("⇌", palette::YELLOW)
-        } else {
-            ("⇌", palette::MUTED)
-        };
-
-        let is_playlist = matches!(&self.queue_source, crate::config::QueueSource::Playlist { .. });
-        let inner_dash = Style::default().fg(if highlight { palette::IRIS } else { palette::MUTED });
-
-        let volume = if let Some(ref remote) = self.connected_session_state {
-            remote.volume
-        } else {
-            let s = self.player.status.lock().unwrap();
-            if s.active { if s.muted { 0 } else { s.volume } } else { self.ui_volume as i64 }
-        };
-        let vol_color = if volume > 100 { palette::RED } else if volume > 60 { palette::YELLOW } else { palette::PINE };
-        let vol_text = format!("Vol {}", volume);
-
-        let left_aligned = highlight;
-
-        let pb_w  = pb_text.width() as u16;
-        let rc_w  = rc_text.width() as u16;
-        let pl_w  = if is_playlist { 1u16 } else { 0 };
-        let vol_w = vol_text.width() as u16;
-        let au_w  = 0u16;
-        let res_w = 0u16;
-        let sub_w = 0u16;
-
-        let n_inds: u16 = if left_aligned {
-            4 // pb, m, rc, ≡ (always shown)
-        } else {
-            4 + if is_playlist { 1 } else { 0 }
-        };
-        let sum_widths = if left_aligned {
-            pb_w + 1 /*m*/ + rc_w + 1 /*≡ always shown*/ + sub_w + au_w + res_w
-        } else {
-            vol_w + pb_w + 1 /*m*/ + rc_w + pl_w
-        };
-        let group_w = 3 + sum_widths + 3 * n_inds.saturating_sub(1);
-        let dash_count = if left_aligned {
-            // "ind ind ... <dashes> Vol": a space flanks the bar on each side = 2 fixed chars
-            let left_group_w = sum_widths + n_inds.saturating_sub(1) + 2;
-            area.width.saturating_sub(left_group_w + vol_w) as usize
-        } else {
-            area.width.saturating_sub(group_w) as usize
-        };
-
-        {
-            let ind_rect = |x: u16, w: u16| -> Rect {
-                Rect { x, y: area.y, width: w, height: 1 }
-            };
-            if left_aligned {
-                // "pb m rc ≡│...": indicators start at the left edge, separated by 1 space
-                let mut ix = area.x;
-                self.layout_ind_pb = ind_rect(ix, pb_w); ix += pb_w + 1;
-                self.layout_ind_mu = ind_rect(ix, 1);    ix += 1 + 1;
-                self.layout_ind_rc = ind_rect(ix, rc_w);
-                self.layout_ind_sub = Rect::default();
-                self.layout_ind_au = Rect::default();
-            } else {
-                let sep_w = 3u16;
-                self.layout_ind_au  = Rect::default();
-                self.layout_ind_sub = Rect::default();
-                let mut ix = area.x + dash_count as u16 + 2;
-                if is_playlist { ix += pl_w + sep_w; }
-                self.layout_ind_rc = ind_rect(ix, rc_w); ix += rc_w + sep_w;
-                self.layout_ind_mu = ind_rect(ix, 1);    ix += 1 + sep_w;
-                self.layout_ind_pb = ind_rect(ix, pb_w);
-            }
-        }
-
-        let rc_style = if self.connected_session_id.is_some() {
-            Style::default().fg(rc_color).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(rc_color)
-        };
-        let mut items: Vec<Span> = Vec::new();
-        if left_aligned {
-            items.push(Span::styled(pb_text.to_string(), Style::default().fg(pb_color).add_modifier(Modifier::BOLD)));
-            items.push(Span::styled("m", Style::default().fg(mu_color).add_modifier(Modifier::BOLD)));
-            items.push(Span::styled(rc_text.to_string(), rc_style));
-            items.push(Span::styled("≡", Style::default().fg(if is_playlist { palette::IRIS } else { palette::MUTED }).add_modifier(Modifier::BOLD)));
-
-        } else {
-            if is_playlist { items.push(Span::styled("≡", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD))); }
-            items.push(Span::styled(rc_text.to_string(), rc_style));
-            items.push(Span::styled("m", Style::default().fg(mu_color).add_modifier(Modifier::BOLD)));
-            items.push(Span::styled(pb_text.to_string(), Style::default().fg(pb_color).add_modifier(Modifier::BOLD)));
-            items.push(Span::styled(vol_text.clone(), Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
-        }
-
-        // Separator: spaces only inside brackets (left_aligned), dashes otherwise.
-        let sep = if left_aligned {
-            Span::raw(" ")
-        } else {
-            Span::styled(" \u{2500} ", inner_dash)
-        };
-        let mut inner: Vec<Span> = Vec::with_capacity(items.len() * 2);
-        for (i, s) in items.into_iter().enumerate() {
-            if i > 0 { inner.push(sep.clone()); }
-            inner.push(s);
-        }
-
-        let mut spans: Vec<Span> = Vec::new();
-        if left_aligned {
-            // "ind ind ... <seekbar> Vol". In the presentation view the middle is just a
-            // plain green divider line — that view has its own dedicated seekbar.
-            let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
-            spans.extend(inner);
-            spans.push(Span::raw(" "));
-            if in_presentation {
-                // Presentation view owns its own seekbar; this is just a divider.
-                spans.push(Span::styled("\u{2500}".repeat(dash_count), Style::default().fg(palette::IRIS)));
-            } else {
-                // The seekbar now lives on its own full-width row (render_seekbar);
-                // keep blank filler here so Vol stays right-aligned.
-                spans.push(Span::raw(" ".repeat(dash_count)));
-            }
-            // Volume is shown on the tab bar now, not here.
-        } else {
-            spans.push(Span::styled("\u{2500}".repeat(dash_count), dash_style));
-            spans.push(Span::styled("\u{2500} ", dash_style));
-            spans.extend(inner);
-            spans.push(Span::styled(" \u{2500}", dash_style));
-        }
-        f.render_widget(Paragraph::new(Line::from(spans)), area);
-    }
 
     /// Build the playback status indicator items (res/codec, audio lang, CC), space-separated.
     /// Returns None if the local player is not active.

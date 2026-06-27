@@ -310,8 +310,8 @@ pub struct App {
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
     power_focus: PowerFocus,
-    power_lib_col_scroll: usize,       // index of leftmost visible column (into power_panels())
-    power_lib_col_areas: Vec<(PowerPanel, Rect)>, // (panel, area) for each rendered column
+    power_left_tab: usize,   // 0 = Home/CW, 1..=libs.len() = library index
+    power_left_area: Rect,   // rendered area of the left panel (for mouse click / page calc)
     power_queue_area: Rect,
     home_card_view: bool,
     last_played_item_id: Option<String>,
@@ -444,16 +444,9 @@ enum PendingQueueAction {
 pub(super) enum PowerFocus {
     #[default]
     Queue,
-    ContinueWatching,         // the Continue Watching column (shares home.continue_items)
-    Library(usize),           // focused library column index (into libs, not col position)
+    Left,   // left panel; content driven by power_left_tab
 }
 
-/// A lower-panel column in the Power view, left-to-right.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum PowerPanel {
-    ContinueWatching,
-    Library(usize),
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingKey {
@@ -577,8 +570,8 @@ impl App {
             next_up_item: None,
             playlist_view: Self::load_playlist_view(),
             power_focus: PowerFocus::default(),
-            power_lib_col_scroll: 0,
-            power_lib_col_areas: Vec::new(),
+            power_left_tab: 0,
+            power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
@@ -1636,8 +1629,8 @@ mod tests {
             next_up_item: None,
             playlist_view: 0,
             power_focus: PowerFocus::default(),
-            power_lib_col_scroll: 0,
-            power_lib_col_areas: Vec::new(),
+            power_left_tab: 0,
+            power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
             home_card_view: false,
             last_played_item_id: None,

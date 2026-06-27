@@ -7,7 +7,7 @@ use crate::player::PlayerCommand;
 use crate::ws::WsEvent;
 use super::{
     App, PAGE_SIZE, PREFETCH_AHEAD,
-    PendingQueueAction, ContextAction, LibEvent, SessionEvent, BrowseLevel, PowerFocus, PowerPanel,
+    PendingQueueAction, ContextAction, LibEvent, SessionEvent, BrowseLevel, PowerFocus,
 };
 use super::ui_util::{natural_sort_key, is_playable, sort_episodes, sort_audio_tracks};
 
@@ -693,7 +693,8 @@ impl App {
         match action {
             Some(ContextAction::Play) => {
                 if self.playlist_view == super::PLAYLIST_VIEW_POWER
-                    && matches!(self.power_focus, PowerFocus::ContinueWatching) {
+                    && matches!(self.power_focus, PowerFocus::Left)
+                    && self.power_left_tab == 0 {
                     self.power_cw_play();
                 }
                 else if self.tab_idx == 0 { self.select_home(); }
@@ -726,7 +727,8 @@ impl App {
             }
             Some(ContextAction::Enqueue) => {
                 if self.playlist_view == super::PLAYLIST_VIEW_POWER
-                    && matches!(self.power_focus, PowerFocus::ContinueWatching) {
+                    && matches!(self.power_focus, PowerFocus::Left)
+                    && self.power_left_tab == 0 {
                     self.power_cw_enqueue();
                 } else {
                     self.enqueue_selected();
@@ -756,8 +758,13 @@ impl App {
                 if played {
                     let lib_idx_opt = if self.tab_idx >= self.lib_tab_offset() {
                         Some(self.tab_idx - self.lib_tab_offset())
+                    } else if self.playlist_view == super::PLAYLIST_VIEW_POWER
+                        && matches!(self.power_focus, PowerFocus::Left)
+                        && self.power_left_tab > 0
+                    {
+                        Some(self.power_left_tab - 1)
                     } else {
-                        self.power_focused_lib_idx()
+                        None
                     };
                     if let Some(lib_idx) = lib_idx_opt {
                         if let Some(lvl) = self.libs.get_mut(lib_idx).and_then(|l| l.nav_stack.last_mut()) {
@@ -1510,91 +1517,26 @@ impl App {
         }
     }
 
-    pub(super) fn power_focused_lib_idx(&self) -> Option<usize> {
-        match self.power_focus {
-            PowerFocus::Library(idx) => Some(idx),
-            PowerFocus::ContinueWatching | PowerFocus::Queue => None,
+    /// Number of selectable left-panel tabs in power view: Home/CW + all libraries.
+    pub(super) fn power_left_tab_count(&self) -> usize {
+        1 + self.libs.len()
+    }
+
+    /// Advance the left-panel tab (wrapping); load the library if needed.
+    pub(super) fn power_left_tab_next(&mut self) {
+        let n = self.power_left_tab_count();
+        self.power_left_tab = (self.power_left_tab + 1) % n;
+        if self.power_left_tab > 0 {
+            self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
     }
 
-    /// Lower-panel columns of the Power view, left-to-right: Continue Watching
-    /// (only when there are resume items) followed by each library.
-    pub(super) fn power_panels(&self) -> Vec<PowerPanel> {
-        let mut panels = Vec::with_capacity(self.libs.len() + 1);
-        if !self.home.continue_items.is_empty() {
-            panels.push(PowerPanel::ContinueWatching);
-        }
-        for i in 0..self.libs.len() {
-            panels.push(PowerPanel::Library(i));
-        }
-        panels
-    }
-
-    fn power_focus_panel(&self) -> Option<PowerPanel> {
-        match self.power_focus {
-            PowerFocus::Queue => None,
-            PowerFocus::ContinueWatching => Some(PowerPanel::ContinueWatching),
-            PowerFocus::Library(i) => Some(PowerPanel::Library(i)),
-        }
-    }
-
-    /// Position of the focused panel within the given panel list, if any.
-    pub(super) fn power_focus_panel_pos(&self, panels: &[PowerPanel]) -> Option<usize> {
-        let panel = self.power_focus_panel()?;
-        panels.iter().position(|&x| x == panel)
-    }
-
-    fn power_panel_focus(panel: PowerPanel) -> PowerFocus {
-        match panel {
-            PowerPanel::ContinueWatching => PowerFocus::ContinueWatching,
-            PowerPanel::Library(i) => PowerFocus::Library(i),
-        }
-    }
-
-    pub(super) fn power_focus_next(&mut self) {
-        let panels = self.power_panels();
-        self.power_focus = match self.power_focus_panel() {
-            None => match panels.first() {
-                Some(&p) => Self::power_panel_focus(p),
-                None => PowerFocus::Queue,
-            },
-            Some(p) => {
-                let pos = panels.iter().position(|&x| x == p).unwrap_or(0);
-                if pos + 1 < panels.len() {
-                    Self::power_panel_focus(panels[pos + 1])
-                } else {
-                    self.power_lib_col_scroll = 0;
-                    PowerFocus::Queue
-                }
-            }
-        };
-        self.power_ensure_focused_visible();
-    }
-
-    pub(super) fn power_focus_prev(&mut self) {
-        let panels = self.power_panels();
-        self.power_focus = match self.power_focus_panel() {
-            None => match panels.last() {
-                Some(&p) => Self::power_panel_focus(p),
-                None => PowerFocus::Queue,
-            },
-            Some(p) => {
-                let pos = panels.iter().position(|&x| x == p).unwrap_or(0);
-                if pos == 0 { PowerFocus::Queue } else { Self::power_panel_focus(panels[pos - 1]) }
-            }
-        };
-        self.power_ensure_focused_visible();
-    }
-
-    fn power_ensure_focused_visible(&mut self) {
-        let Some(panel) = self.power_focus_panel() else { return };
-        let panels = self.power_panels();
-        let Some(pos) = panels.iter().position(|&x| x == panel) else { return };
-        let n_cols = self.power_lib_col_areas.len().max(2);
-        if pos < self.power_lib_col_scroll {
-            self.power_lib_col_scroll = pos;
-        } else if pos >= self.power_lib_col_scroll + n_cols {
-            self.power_lib_col_scroll = pos + 1 - n_cols;
+    /// Retreat the left-panel tab (wrapping); load the library if needed.
+    pub(super) fn power_left_tab_prev(&mut self) {
+        let n = self.power_left_tab_count();
+        self.power_left_tab = (self.power_left_tab + n - 1) % n;
+        if self.power_left_tab > 0 {
+            self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
     }
 
