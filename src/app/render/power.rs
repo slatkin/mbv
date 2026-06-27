@@ -346,6 +346,37 @@ impl App {
         if self.images_enabled() || is_music_item {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         }
+
+        // Prefetch images for nearby items so they are ready before the cursor reaches them.
+        // Collect data first (releasing the borrow on items) then call fetch (&mut self).
+        const PREFETCH_AHEAD: usize = 3;
+        const PREFETCH_BEHIND: usize = 1;
+        let start = cursor.saturating_sub(PREFETCH_BEHIND);
+        let end = (cursor + PREFETCH_AHEAD + 1).min(n);
+        let prefetch: Vec<(String, String, String, String)> = self.player_tab.items[start..end].iter()
+            .enumerate()
+            .filter(|(i, _)| start + i != cursor)
+            .map(|(_, p)| {
+                let key = if p.item_type == "Audio" && !p.album_id.is_empty() {
+                    format!("{}:P", p.album_id)
+                } else {
+                    format!("{}:P", p.id)
+                };
+                (key, p.id.clone(), p.series_id.clone(), p.item_type.clone())
+            })
+            .collect();
+        for (pkey, pid, psid, ptype) in prefetch {
+            let ptypes: &[&str] = match ptype.as_str() {
+                "MusicAlbum" => &["AudioChild"],
+                "Audio"      => &["Primary"],
+                "Movie"      => &["Backdrop", "Primary", "Logo"],
+                _            => &["Primary", "Backdrop", "Logo"],
+            };
+            let is_music = matches!(ptypes, &["Primary"] | &["AudioChild"]);
+            if self.images_enabled() || is_music {
+                self.fetch_card_image(pkey, pid, psid, ptypes);
+            }
+        }
         if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
             type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
             let avail = ratatui::layout::Size { width: area.width, height: area.height };
