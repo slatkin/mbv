@@ -167,7 +167,7 @@ impl MediaItem {
 
     pub fn display_name(&self) -> String {
         if self.item_type == "Episode" && !self.series_name.is_empty() {
-            format!("{} - {}", self.series_name, self.name)
+            format!("{}⁄{}", self.series_name, self.name)
         } else {
             self.name.clone()
         }
@@ -1194,7 +1194,7 @@ mod tests {
         item.series_name = "Breaking Bad".into();
         item.parent_index_number = 1;
         item.index_number = 3;
-        assert_eq!(item.display_name(), "Breaking Bad - Pilot");
+        assert_eq!(item.display_name(), "Breaking Bad⁄Pilot");
     }
 
     #[test]
@@ -1203,7 +1203,7 @@ mod tests {
         item.series_name = "Show".into();
         item.parent_index_number = 10;
         item.index_number = 1;
-        assert_eq!(item.display_name(), "Show - Episode");
+        assert_eq!(item.display_name(), "Show⁄Episode");
     }
 
     #[test]
