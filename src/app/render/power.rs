@@ -34,9 +34,9 @@ impl App {
         let left_focused  = !queue_focused;
 
         let (bar_y, crumb_chars) = self.render_power_left_panel(f, left_area, left_focused);
-        let divider_ys = self.render_power_queue(f, right_area, queue_focused);
+        self.render_power_queue(f, right_area, queue_focused);
 
-        // Vertical divider; ┤ at bar_y, ├ at album-group divider rows, │ elsewhere.
+        // Vertical divider; ┤ at bar_y, │ elsewhere.
         // Ancestor breadcrumb level indicators [N] overlay the divider in MUTED.
         for y in area.y..area.y + area.height {
             if let Some((_, ch)) = crumb_chars.iter().find(|(cy, _)| *cy == y) {
@@ -46,11 +46,10 @@ impl App {
                     Rect { x: divider_x, y, width: 1, height: 1 },
                 );
             } else {
-                let ch = if divider_ys.contains(&y) { "\u{251c}" }
-                         else if Some(y) == bar_y   { "\u{2524}" }
-                         else                       { "\u{2502}" };
+                let ch = if Some(y) == bar_y { "\u{2524}" }
+                         else                { "\u{2502}" };
                 f.render_widget(
-                    Paragraph::new(Span::styled(ch, Style::default().fg(palette::IRIS))),
+                    Paragraph::new(Span::styled(ch, Style::default().fg(palette::SEEK_TRACK))),
                     Rect { x: divider_x, y, width: 1, height: 1 },
                 );
             }
@@ -59,8 +58,8 @@ impl App {
 
     
 
-    fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) -> Vec<u16> {
-        if area.height < 1 { return vec![]; }
+    fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        if area.height < 1 { return; }
         self.power_queue_area = area;
 
         let n = self.player_tab.items.len();
@@ -71,7 +70,7 @@ impl App {
                     .style(Style::default().fg(palette::MUTED)),
                 area,
             );
-            return vec![];
+            return;
         }
 
         let (active, active_idx, live_pos, live_runtime, _) = self.effective_playback_state();
@@ -133,9 +132,6 @@ impl App {
         // index group_for_header correctly for the visible window.
         let mut header_idx = display[..offset].iter().filter(|r| matches!(r, DRow::Header)).count();
 
-        // Collect absolute y positions of divider rows in the visible window.
-        let mut divider_ys: Vec<u16> = Vec::new();
-
         let need_sb = total > visible;
         let render_w = area.width.saturating_sub(if need_sb { 1 } else { 0 }) as usize;
         let show_length = render_w > 30;
@@ -155,24 +151,23 @@ impl App {
         self.power_queue_row_map.clear();
         let mut list_items: Vec<ListItem> = Vec::new();
 
-        for (row_idx, entry) in display.iter().skip(offset).take(visible).enumerate() {
+        for entry in display.iter().skip(offset).take(visible) {
             match entry {
                 DRow::Header => {
                     let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
                     header_idx += 1;
-                    // "─ TITLE ──────" — leading dash connects to the left divider.
-                    let max_label = render_w.saturating_sub(4); // 1 dash + 1 space + 1 space + 1+ dashes
+                    // " TITLE ──────" — a space (no connector) separates the divider from the header.
+                    let max_label = render_w.saturating_sub(3); // 1 space + 1 space + 1+ dashes
                     let label = trunc_str(group, max_label);
                     let label_w = label.width();
-                    let dashes = render_w.saturating_sub(1 + 1 + label_w + 1);
+                    let dashes = render_w.saturating_sub(1 + label_w + 1);
                     list_items.push(ListItem::new(Line::from(vec![
-                        Span::styled("\u{2500} ", Style::default().fg(palette::IRIS)),
+                        Span::raw(" "),
                         Span::styled(label, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
                         Span::raw(" "),
-                        Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::IRIS)),
+                        Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::SEEK_TRACK)),
                     ])));
                     self.power_queue_row_map.push(None);
-                    divider_ys.push(area.y + row_idx as u16);
                 }
                 DRow::Spacer => {
                     list_items.push(ListItem::new(Line::raw("")));
@@ -276,7 +271,7 @@ impl App {
                         spans.push(Span::styled(title, Style::default().fg(title_color)));
                     }
                     if !pct_str.is_empty() {
-                        let pct_color = if is_active { palette::IRIS } else { palette::YELLOW };
+                        let pct_color = if is_active { palette::IRIS } else { dim_color };
                         spans.push(Span::styled(pct_str, Style::default().fg(pct_color)));
                     }
                     if show_length && !dur.is_empty() {
@@ -316,8 +311,6 @@ impl App {
                 sb_area, &mut sb,
             );
         }
-
-        divider_ys
     }
 
     /// Renders the card image and returns the number of rows it actually occupied.
@@ -469,7 +462,7 @@ impl App {
         let used: usize = header_spans.iter().map(|s| s.content.as_ref().width()).sum();
         let dashes = w.saturating_sub(used + 1);
         header_spans.push(Span::raw(" "));
-        header_spans.push(Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::IRIS)));
+        header_spans.push(Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::SEEK_TRACK)));
         f.render_widget(
             Paragraph::new(Line::from(header_spans)),
             Rect { x: area.x, y: bar_y, width: area.width, height: 1 },
