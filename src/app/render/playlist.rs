@@ -84,7 +84,7 @@ impl App {
                     // FOAM), with a short FOAM tail to its right.
                     let max_label = title_col_width.saturating_sub(5);
                     let label = trunc_str(group, max_label);
-                    let pill = format!(" {label} ");
+                    let pill = format!(" {} ", label.to_uppercase());
                     let pill_w = pill.width();
                     let right = 2usize.min(title_col_width.saturating_sub(pill_w));
                     let left = title_col_width.saturating_sub(pill_w + right);

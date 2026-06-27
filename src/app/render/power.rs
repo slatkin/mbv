@@ -1,6 +1,6 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use crate::api::TICKS_PER_SECOND;
@@ -41,9 +41,13 @@ impl App {
         // Ancestor breadcrumb level indicators [N] overlay the divider in MUTED.
         for y in area.y..area.y + area.height {
             if let Some((_, ch)) = crumb_chars.iter().find(|(cy, _)| *cy == y) {
-                let color = if *ch == '\u{00b7}' { palette::SUBTLE } else { palette::FOAM };
+                let style = if *ch == '\u{00b7}' {
+                    Style::default().fg(palette::SUBTLE)
+                } else {
+                    Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)
+                };
                 f.render_widget(
-                    Paragraph::new(Span::styled(ch.to_string(), Style::default().fg(color))),
+                    Paragraph::new(Span::styled(ch.to_string(), style)),
                     Rect { x: divider_x, y, width: 1, height: 1 },
                 );
             } else {
@@ -127,7 +131,7 @@ impl App {
                     // FOAM), with a short FOAM tail to its right.
                     let max_label = render_w.saturating_sub(5);
                     let label = trunc_str(group, max_label);
-                    let pill = format!(" {label} ");
+                    let pill = format!(" {} ", label.to_uppercase());
                     let pill_w = pill.width();
                     let right = 2usize.min(render_w.saturating_sub(pill_w));
                     let left = render_w.saturating_sub(pill_w + right);
@@ -424,7 +428,7 @@ impl App {
         } else {
             trunc_str(&header_name, budget)
         };
-        let pill = format!(" {} ", label.to_lowercase());
+        let pill = format!(" {} ", label.to_uppercase());
         let pill_w = pill.width();
         let right = 2usize.min(w.saturating_sub(pill_w));
         let left = w.saturating_sub(pill_w + right);
