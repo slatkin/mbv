@@ -449,14 +449,23 @@ impl App {
                 // Presentation view owns its own seekbar; this is just a divider.
                 spans.push(Span::styled("\u{2500}".repeat(dash_count), Style::default().fg(palette::IRIS)));
             } else {
+                // Seekbar spans 70% of the available width between the indicators
+                // and Vol, centered: the remaining 30% is split as blank filler on
+                // each side so the bar is balanced and Vol stays right-aligned.
+                let bar_count = (dash_count * 95) / 100;
+                let pad_total = dash_count - bar_count;
+                let pad_left  = pad_total / 2;
+                let pad_right = pad_total - pad_left;
                 // Record the bar region so the mouse handlers can double-click /
-                // drag to seek. The bar starts after the indicators + 1 space.
-                let seek_x = area.x + sum_widths + n_inds.saturating_sub(1) + 1;
-                self.layout_seekbar_area = Rect { x: seek_x, y: area.y, width: dash_count as u16, height: 1 };
-                let filled = (seek_ratio * dash_count as f64).round() as usize;
-                let unfilled = dash_count.saturating_sub(filled);
+                // drag to seek. The bar starts after the indicators + 1 space + left pad.
+                let seek_x = area.x + sum_widths + n_inds.saturating_sub(1) + 1 + pad_left as u16;
+                self.layout_seekbar_area = Rect { x: seek_x, y: area.y, width: bar_count as u16, height: 1 };
+                let filled = (seek_ratio * bar_count as f64).round() as usize;
+                let unfilled = bar_count.saturating_sub(filled);
+                spans.push(Span::raw(" ".repeat(pad_left)));
                 spans.push(Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)));
                 spans.push(Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)));
+                spans.push(Span::raw(" ".repeat(pad_right)));
             }
             spans.push(Span::raw(" "));
             spans.push(Span::styled("Vol ", Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
@@ -542,24 +551,26 @@ impl App {
             }}
         };
         let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
+        // Each value gets its own bracket group: "[720p] [en] [CC]".
+        // Leading space gives a gap from the green line on the left.
         let mut ind_spans: Vec<Span> = Vec::new();
-        ind_spans.push(Span::raw(" "));
-        ind_spans.push(Span::styled("[", bracket));
-        ind_spans.push(Span::raw(" "));
-        ind_spans.push(Span::styled(res_str, Style::default().fg(res_color).add_modifier(Modifier::BOLD)));
+        let mut push_group = |text: String, color: Color| {
+            ind_spans.push(Span::raw(" "));
+            ind_spans.push(Span::styled("[", bracket));
+            ind_spans.push(Span::styled(text, Style::default().fg(color).add_modifier(Modifier::BOLD)));
+            ind_spans.push(Span::styled("]", bracket));
+        };
+        push_group(res_str, res_color);
         if !is_audio_only {
-            ind_spans.push(Span::raw(" "));
-            ind_spans.push(Span::styled(au_text, Style::default().fg(au_color).add_modifier(Modifier::BOLD)));
-            ind_spans.push(Span::raw(" "));
-            ind_spans.push(Span::styled("CC", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)));
+            push_group(au_text, au_color);
+            push_group("CC".to_string(), sub_color);
         }
-        ind_spans.push(Span::raw(" "));
-        ind_spans.push(Span::styled("]", bracket));
-        ind_spans.push(Span::raw(" "));
+        drop(push_group);
         let ind_w: u16 = ind_spans.iter().map(|s| s.content.width() as u16).sum();
         let total_dashes = area.width.saturating_sub(ind_w);
-        let left_dashes  = total_dashes / 2;
-        let right_dashes = total_dashes - left_dashes;
+        // Right-align the indicators: all filler dashes go on the left.
+        let left_dashes  = total_dashes;
+        let right_dashes = 0u16;
         let dash = Style::default().fg(palette::IRIS);
         let mut spans: Vec<Span> = Vec::new();
         spans.push(Span::styled("─".repeat(left_dashes as usize),  dash));
