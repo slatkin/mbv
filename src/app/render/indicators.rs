@@ -8,7 +8,6 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
 use crate::app::palette;
 
-const SUB_LABEL: &str = "CC";
 const ARROW: &str = "\u{E0B0}"; // powerline separator (needs a Nerd/Powerline font)
 
 /// Which visual treatment to use for the status-indicator cluster.

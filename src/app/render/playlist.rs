@@ -30,7 +30,7 @@ impl App {
             self.render_home_search(f, area);
             return;
         }
-        let (active, current_idx, live_pos, live_runtime, _live_paused) = self.effective_playback_state();
+        let (active, current_idx, live_pos, live_runtime, live_paused) = self.effective_playback_state();
 
         self.playlist_rect = area;
 
@@ -61,13 +61,17 @@ impl App {
             - if show_ep_cols { 21 } else { 13 }).max(0) as usize;
 
         const SPINNER_FRAMES: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
-        let spinner_char: &str = {
+        const PAUSED_CHAR: &str = "⠿";
+        let spinner_char: &str = if live_paused {
+            PAUSED_CHAR
+        } else {
             let ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis();
             SPINNER_FRAMES[(ms / 150) as usize % SPINNER_FRAMES.len()]
         };
+        let spinner_color = if live_paused { palette::YELLOW } else { palette::IRIS };
 
         // Build display rows (grouped or flat) and window them to the visible height.
         let (display, group_for_header) = build_queue_rows(&self.player_tab.items, self.playlist_group);
@@ -156,7 +160,7 @@ impl App {
                         let mut spans: Vec<Span> = Vec::new();
                         if indent > 0 { spans.push(Span::raw(" ")); }
                         if now_playing {
-                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(spinner_color)));
                             spans.push(Span::raw(" "));
                         }
                         spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
@@ -167,7 +171,7 @@ impl App {
                         let mut spans: Vec<Span> = Vec::new();
                         if indent > 0 { spans.push(Span::raw(" ")); }
                         if now_playing {
-                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(spinner_color)));
                             spans.push(Span::raw(" "));
                         }
                         spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));

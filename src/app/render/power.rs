@@ -110,7 +110,7 @@ impl App {
             return vec![];
         }
 
-        let (active, active_idx, live_pos, live_runtime, _) = self.effective_playback_state();
+        let (active, active_idx, live_pos, live_runtime, live_paused) = self.effective_playback_state();
         let cursor = self.player_tab.playlist_cursor;
         let items = &self.player_tab.items;
 
@@ -137,13 +137,17 @@ impl App {
 
         // Spinner character for the active item — computed once per frame, not per row.
         const SPINNER_FRAMES: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
-        let spinner_frame: &str = {
+        const PAUSED_CHAR: &str = "⠿";
+        let spinner_frame: &str = if live_paused {
+            PAUSED_CHAR
+        } else {
             let ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis();
             SPINNER_FRAMES[(ms / 150) as usize % SPINNER_FRAMES.len()]
         };
+        let spinner_color = if live_paused { palette::YELLOW } else { palette::IRIS };
 
         // Build visible ListItems and the row map simultaneously.
         self.power_queue_row_map.clear();
@@ -245,20 +249,20 @@ impl App {
                             let split = title.char_indices().nth(prefix_chars).map(|(i, _)| i).unwrap_or(title.len());
                             spans.push(Span::styled(title[..split].to_string(), Style::default().fg(dim_color)));
                             if is_active {
-                                spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                                spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(spinner_color)));
                                 spans.push(Span::raw(" "));
                             }
                             spans.push(Span::styled(title[split..].to_string(), Style::default().fg(title_color)));
                         } else {
                             if is_active {
-                                spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                                spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(spinner_color)));
                                 spans.push(Span::raw(" "));
                             }
                             spans.push(Span::styled(title, Style::default().fg(title_color)));
                         }
                     } else {
                         if is_active {
-                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(spinner_color)));
                             spans.push(Span::raw(" "));
                         }
                         spans.push(Span::styled(title, Style::default().fg(title_color)));
