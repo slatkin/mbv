@@ -148,27 +148,6 @@ impl App {
         self.image_protocol_enabled
     }
 
-    pub(super) fn evict_card_images(&mut self) {
-        let mut valid: std::collections::HashSet<String> = self.player_tab.items.iter()
-            .flat_map(|item| [format!("{}:A", item.id), format!("{}:S", item.id)])
-            .collect();
-        // Preserve the current power-view card image so switching back doesn't re-fetch.
-        if let Some(item) = self.player_tab.items.get(self.player_tab.playlist_cursor) {
-            valid.insert(format!("{}:P", item.id));
-        }
-        for lib in &self.libs {
-            if let Some(lvl) = lib.nav_stack.last() {
-                if let Some(item) = lvl.items.get(lvl.cursor) {
-                    valid.insert(format!("{}:lib", item.id));
-                }
-            }
-        }
-        self.card_image_states.retain(|k, _| valid.contains(k));
-        self.card_image_loading.retain(|k| valid.contains(k));
-        // Keep image_lru in sync so stale entries don't inflate the LRU and
-        // cause premature eviction of valid images.
-        self.image_lru.retain(|k| valid.contains(k));
-    }
 
     #[allow(clippy::too_many_arguments)]
     pub(super) fn render_card_slot(

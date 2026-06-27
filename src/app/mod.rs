@@ -15,9 +15,8 @@ static QUIT_REQUESTED:  AtomicBool = AtomicBool::new(false);
 // The watchdog's forced exit arms only on this flag so clean q-quits are never raced.
 static TERMINAL_GONE:   AtomicBool = AtomicBool::new(false);
 
-pub(super) const PLAYLIST_VIEW_CARDS: u8  = 1;
-pub(super) const PLAYLIST_VIEW_POWER: u8  = 2;
-pub(super) const PLAYLIST_VIEW_COUNT: u8  = 3;
+pub(super) const PLAYLIST_VIEW_POWER: u8  = 1;
+pub(super) const PLAYLIST_VIEW_COUNT: u8  = 2;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16      = 17;
 /// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
@@ -315,13 +314,10 @@ pub struct App {
     last_played_item_id: Option<String>,
     last_played_completed: bool,
     layout_carousel_slots: [(Option<usize>, Rect); 3],
-    layout_queue_strip_slots: Vec<(usize, Rect)>,
     layout_carousel_left_arrow: Option<Rect>,
     layout_carousel_right_arrow: Option<Rect>,
     layout_carousel_up_arrow: Option<Rect>,
     layout_carousel_down_arrow: Option<Rect>,
-    last_carousel_click_slot: Option<usize>,
-    last_carousel_click_time: Instant,
     card_image_states: std::collections::HashMap<String, Option<StatefulProtocol>>,
     image_lru: std::collections::VecDeque<String>,
     image_cache_size: usize,
@@ -582,13 +578,10 @@ impl App {
             last_played_item_id: None,
             last_played_completed: false,
             layout_carousel_slots: [(None, Rect::default()); 3],
-            layout_queue_strip_slots: Vec::new(),
             layout_carousel_left_arrow: None,
             layout_carousel_right_arrow: None,
             layout_carousel_up_arrow: None,
             layout_carousel_down_arrow: None,
-            last_carousel_click_slot: None,
-            last_carousel_click_time: Instant::now() - Duration::from_secs(1),
             card_image_states: std::collections::HashMap::new(),
             card_image_loading: std::collections::HashSet::new(),
             image_picker: None,
@@ -1642,13 +1635,10 @@ mod tests {
             last_played_item_id: None,
             last_played_completed: false,
             layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
-            layout_queue_strip_slots: Vec::new(),
             layout_carousel_left_arrow: None,
             layout_carousel_right_arrow: None,
             layout_carousel_up_arrow: None,
             layout_carousel_down_arrow: None,
-            last_carousel_click_slot: None,
-            last_carousel_click_time: std::time::Instant::now(),
             card_image_states: std::collections::HashMap::new(),
             card_image_loading: std::collections::HashSet::new(),
             card_image_tx,

@@ -1,4 +1,4 @@
-use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus};
+use super::{PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -916,14 +916,13 @@ impl App {
                 }
             }
 
-            KeyCode::Up | KeyCode::Left
-                if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_view == PLAYLIST_VIEW_CARDS) => {
+            KeyCode::Up
+                if self.player_tab.playlist_cursor > 0 => {
                     self.last_nav_at = Instant::now();
                     self.player_tab.playlist_cursor -= 1;
                 }
-            KeyCode::Down | KeyCode::Right
-                if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len()
-                && (key.code == KeyCode::Down || self.playlist_view == PLAYLIST_VIEW_CARDS) => {
+            KeyCode::Down
+                if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len() => {
                     self.last_nav_at = Instant::now();
                     self.player_tab.playlist_cursor += 1;
                 }
@@ -1424,7 +1423,7 @@ impl App {
     }
 
     fn context_menu_spawn_point(&self) -> (u16, u16) {
-        if (self.tab_idx == 0 && self.home_card_view) || (self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_CARDS) {
+        if self.tab_idx == 0 && self.home_card_view {
             let center = self.layout_carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
@@ -2019,62 +2018,6 @@ if idx < self.sessions.len() {
                     }
                 }
 
-                if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_CARDS {
-                    let slots = self.layout_carousel_slots;
-                    log::info!(target: "mouse",
-                        "carousel click ({col},{row}): slots=[({:?},{:?}),({:?},{:?}),({:?},{:?})]",
-                        slots[0].0, slots[0].1, slots[1].0, slots[1].1, slots[2].0, slots[2].1
-                    );
-                    for (slot_idx, (maybe_item_idx, card_rect)) in slots.iter().enumerate() {
-                        if card_rect.contains((col, row).into()) {
-                            let elapsed_ms = now.duration_since(self.last_carousel_click_time).as_millis();
-                            let is_double_slot = self.last_carousel_click_slot == Some(slot_idx)
-                                && now.duration_since(self.last_carousel_click_time) < Duration::from_millis(400);
-                            log::info!(target: "mouse",
-                                "carousel hit slot={slot_idx} item={maybe_item_idx:?} is_double={is_double_slot} elapsed={elapsed_ms}ms last_slot={:?}",
-                                self.last_carousel_click_slot);
-                            self.last_carousel_click_slot = Some(slot_idx);
-                            self.last_carousel_click_time = now;
-                            if slot_idx == 1 {
-                                if is_double_slot {
-                                    if let Some(item_idx) = maybe_item_idx {
-                                        let (active, active_idx) = {
-                                            let s = self.player.status.lock().unwrap();
-                                            (s.active, s.current_idx)
-                                        };
-                                        log::info!(target: "mouse",
-                                            "carousel dbl-center: active={active} active_idx={active_idx} item_idx={item_idx}");
-                                        if active && active_idx == *item_idx {
-                                            let _ = self.player.send_command(PlayerCommand::TogglePause);
-                                        } else if active {
-                                            let _ = self.player.send_command(PlayerCommand::JumpTo(*item_idx));
-                                        } else if !self.player_tab.items.is_empty() {
-                                            let items = self.player_tab.items.clone();
-                                            let item_idx = *item_idx;
-                                            self.play_items_routed(items, item_idx);
-                                        }
-                                    }
-                                }
-                            } else if let Some(item_idx) = maybe_item_idx {
-                                self.player_tab.playlist_cursor = *item_idx;
-                            }
-                            return;
-                        }
-                    }
-                    let strip_slots = self.layout_queue_strip_slots.clone();
-                    for (item_idx, rect) in &strip_slots {
-                        if rect.contains((col, row).into()) {
-                            self.player_tab.playlist_cursor = *item_idx;
-                            if !self.card_image_states.is_empty() { self.force_clear = true; }
-                            return;
-                        }
-                    }
-                    log::info!(target: "mouse", "carousel click ({col},{row}): no slot hit");
-                    if self.layout_playlist_inner.contains((col, row).into()) {
-                        return;
-                    }
-                }
-
                 let is_double = now.duration_since(self.last_click_time) < Duration::from_millis(400)
                     && self.last_click_pos == (col, row);
                 self.last_click_time = now;
@@ -2180,17 +2123,13 @@ if idx < self.sessions.len() {
                     self.adjust_volume(5);
                     return;
                 }
-                if (self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_CARDS) || (self.tab_idx == 0 && self.home_card_view) {
+                if self.tab_idx == 0 && self.home_card_view {
                     let slots = self.layout_carousel_slots;
                     for (maybe_item_idx, card_rect) in slots.iter() {
                         if card_rect.contains((col, row).into()) {
                             if let Some(item_idx) = maybe_item_idx {
-                                if self.tab_idx == 1 {
-                                    self.player_tab.playlist_cursor = *item_idx;
-                                } else {
-                                    let sec = self.home.section;
-                                    self.set_home_cursor(sec, *item_idx);
-                                }
+                                let sec = self.home.section;
+                                self.set_home_cursor(sec, *item_idx);
                                 let cx = card_rect.x + card_rect.width / 2;
                                 let cy = card_rect.y + card_rect.height / 2;
                                 self.open_context_menu_at(cx, cy);
