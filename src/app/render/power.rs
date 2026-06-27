@@ -6,6 +6,7 @@ use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, Scrollba
 use crate::api::TICKS_PER_SECOND;
 use super::super::{App, PowerFocus, palette};
 use super::super::ui_util::{fmt_duration, item_text_and_style, trunc_str};
+use unicode_width::UnicodeWidthStr;
 
 
 
@@ -32,12 +33,14 @@ impl App {
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
         let left_focused  = !queue_focused;
 
-        let bar_y = self.render_power_left_panel(f, left_area, left_focused);
-        self.render_power_queue(f, right_area, queue_focused);
+        let bar_y      = self.render_power_left_panel(f, left_area, left_focused);
+        let divider_ys = self.render_power_queue(f, right_area, queue_focused);
 
-        // Vertical divider; use ┤ at the row where the horizontal bar meets it.
+        // Vertical divider; ┤ at bar_y, ├ at album-group divider rows, │ elsewhere.
         for y in area.y..area.y + area.height {
-            let ch = if Some(y) == bar_y { "\u{2524}" } else { "\u{2502}" };
+            let ch = if divider_ys.contains(&y) { "\u{251c}" }
+                     else if Some(y) == bar_y   { "\u{2524}" }
+                     else                       { "\u{2502}" };
             f.render_widget(
                 Paragraph::new(Span::styled(ch, Style::default().fg(palette::IRIS))),
                 Rect { x: divider_x, y, width: 1, height: 1 },
@@ -47,8 +50,8 @@ impl App {
 
     
 
-    fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        if area.height < 1 { return; }
+    fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) -> Vec<u16> {
+        if area.height < 1 { return vec![]; }
         self.power_queue_area = area;
 
         let n = self.player_tab.items.len();
@@ -59,42 +62,70 @@ impl App {
                     .style(Style::default().fg(palette::MUTED)),
                 area,
             );
-            return;
+            return vec![];
         }
 
         let (active, active_idx, live_pos, live_runtime, _) = self.effective_playback_state();
         let cursor = self.player_tab.playlist_cursor;
         let items = &self.player_tab.items;
 
-        // Build display rows: album-name headers for audio items, then track rows.
-        // display[j] = None → album header; Some(i) → items[i].
-        // album_for_header[j] holds the album name when display[j] is None.
-        let mut display: Vec<Option<usize>> = Vec::new();
-        let mut album_for_header: Vec<String> = Vec::new();
-        let mut last_album: Option<&str> = None;
+        // Display row types for the queue.
+        // Track(item_idx, in_group) — in_group drives the 2-space indent.
+        #[derive(Clone)]
+        enum DRow { Header, Spacer, Track(usize, bool) }
+
+        // Build display rows.
+        // Audio items group by album ("Artist: Album"), episodes group by series name.
+        // Movies, home videos, and everything else are ungrouped (no header/divider).
+        // group_for_header[j] holds the display label for the j-th DRow::Header.
+        let mut display: Vec<DRow> = Vec::new();
+        let mut group_for_header: Vec<String> = Vec::new();
+        let mut last_group_key: Option<String> = None;
         for (i, item) in items.iter().enumerate() {
-            if item.is_audio() {
-                let album = item.album.as_str();
-                if last_album != Some(album) {
-                    display.push(None);
-                    album_for_header.push(item.album.clone());
-                    last_album = Some(album);
+            let group = if item.is_audio() && !item.album.is_empty() {
+                let key = format!("a:{}", item.album);
+                let label = if item.artist.is_empty() {
+                    item.album.clone()
+                } else {
+                    format!("{}: {}", item.artist, item.album)
+                };
+                Some((key, label))
+            } else if item.item_type == "Episode" && !item.series_name.is_empty() {
+                Some((format!("e:{}", item.series_name), item.series_name.clone()))
+            } else {
+                None
+            };
+
+            let in_group = group.is_some();
+            if let Some((key, label)) = group {
+                if last_group_key.as_deref() != Some(key.as_str()) {
+                    if last_group_key.is_some() {
+                        display.push(DRow::Spacer);
+                    }
+                    display.push(DRow::Header);
+                    group_for_header.push(label);
+                    last_group_key = Some(key);
                 }
             } else {
-                last_album = None;
+                last_group_key = None;
             }
-            display.push(Some(i));
+            display.push(DRow::Track(i, in_group));
         }
         let total = display.len();
         let visible = area.height as usize;
 
         // Visual row of the cursor item.
-        let cursor_row = display.iter().position(|r| *r == Some(cursor)).unwrap_or(0);
+        let cursor_row = display.iter().position(|r| {
+            if let DRow::Track(idx, _) = r { *idx == cursor } else { false }
+        }).unwrap_or(0);
         let offset = if cursor_row >= visible { cursor_row - visible + 1 } else { 0 };
 
-        // Count how many album headers appear before the scroll offset, so we
-        // index album_for_header correctly for the visible window.
-        let mut header_idx = display[..offset].iter().filter(|r| r.is_none()).count();
+        // Count how many group headers appear before the scroll offset, so we
+        // index group_for_header correctly for the visible window.
+        let mut header_idx = display[..offset].iter().filter(|r| matches!(r, DRow::Header)).count();
+
+        // Collect absolute y positions of divider rows in the visible window.
+        let mut divider_ys: Vec<u16> = Vec::new();
 
         let need_sb = total > visible;
         let render_w = area.width.saturating_sub(if need_sb { 1 } else { 0 }) as usize;
@@ -105,38 +136,44 @@ impl App {
         self.power_queue_row_map.clear();
         let mut list_items: Vec<ListItem> = Vec::new();
 
-        for entry in display.iter().skip(offset).take(visible) {
+        for (row_idx, entry) in display.iter().skip(offset).take(visible).enumerate() {
             match entry {
-                None => {
-                    let album = album_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
+                DRow::Header => {
+                    let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
                     header_idx += 1;
-                    let label = trunc_str(album, render_w.saturating_sub(1));
+                    // " TITLE ──────" — title overlaid on the divider line.
+                    let max_label = render_w.saturating_sub(3); // 1 prefix + 1 space + 1+ dashes
+                    let label = trunc_str(group, max_label);
+                    let label_w = label.width();
+                    let dashes = render_w.saturating_sub(1 + label_w + 1);
                     list_items.push(ListItem::new(Line::from(vec![
                         Span::raw(" "),
-                        Span::styled(label, Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
+                        Span::styled(label, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
+                        Span::raw(" "),
+                        Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::IRIS)),
                     ])));
                     self.power_queue_row_map.push(None);
+                    divider_ys.push(area.y + row_idx as u16);
                 }
-                Some(i) => {
-                    let i = *i;
+                DRow::Spacer => {
+                    list_items.push(ListItem::new(Line::raw("")));
+                    self.power_queue_row_map.push(None);
+                }
+                DRow::Track(idx, in_group) => {
+                    let i = *idx;
+                    let indent: usize = if *in_group { 2 } else { 0 };
                     let item = &items[i];
                     let is_active = i == active_idx && active;
                     let is_cursor = i == cursor && focused;
 
-                    let fg = if is_active {
-                        palette::WHITE
-                    } else if is_cursor {
+                    let fg = if is_cursor {
                         palette::YELLOW
                     } else if focused {
                         palette::WHITE
                     } else {
                         palette::SUBTLE
                     };
-                    let row_style = if is_active {
-                        Style::default().fg(fg).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(fg)
-                    };
+                    let row_style = Style::default().fg(fg);
 
                     let (pt, rt) = if is_active {
                         let pos = if live_pos > 0 { live_pos } else { item.playback_position_ticks };
@@ -160,7 +197,7 @@ impl App {
                     // Otherwise use the standard playback label.
                     let label = if item.is_audio() {
                         if item.index_number > 0 {
-                            format!("{:2}. {}", item.index_number, item.name)
+                            format!("{:02}. {}", item.index_number, item.name)
                         } else {
                             item.name.clone()
                         }
@@ -170,25 +207,63 @@ impl App {
 
                     let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
                     let dur = if len_secs > 0 { fmt_duration(len_secs) } else { String::new() };
+                    let dim_color = if focused { palette::SUBTLE } else { palette::MUTED };
 
-                    // Title truncated to leave room for duration + pct.
-                    let extra = dur_w + pct_str.chars().count();
-                    let title_w = render_w.saturating_sub(1 + extra); // 1 for marker
+                    // Braille spinner shown right after the title while the item is playing.
+                    const SPINNER_FRAMES: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+                    let spinner_char: &str = if is_active {
+                        let ms = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis();
+                        SPINNER_FRAMES[(ms / 150) as usize % SPINNER_FRAMES.len()]
+                    } else { "" };
+
+                    // Reserve 2 extra chars for " ⠋" when active.
+                    let spinner_w: usize = if is_active { 2 } else { 0 };
+                    // Title truncated to leave room for indent + marker + spinner + duration + pct.
+                    let extra = dur_w + pct_str.chars().count() + spinner_w;
+                    let title_w = render_w.saturating_sub(indent + 1 + extra); // 1 for marker
                     let title = trunc_str(&label, title_w);
 
-                    let mut spans = vec![marker, Span::raw(title)];
+                    let mut spans: Vec<Span> = Vec::new();
+                    if indent > 0 { spans.push(Span::raw("  ")); }
+                    spans.push(marker);
+                    // For audio tracks with an index: "01. ⠋ Title" when active,
+                    // "01. Title" otherwise. Spinner goes between the dim prefix and the name.
+                    if item.is_audio() && item.index_number > 0 {
+                        let prefix_chars = 4; // "01. "
+                        let tc = title.chars().count();
+                        if tc > prefix_chars {
+                            let split = title.char_indices().nth(prefix_chars).map(|(i, _)| i).unwrap_or(title.len());
+                            spans.push(Span::styled(title[..split].to_string(), Style::default().fg(dim_color)));
+                            if is_active {
+                                spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                                spans.push(Span::raw(" "));
+                            }
+                            spans.push(Span::raw(title[split..].to_string()));
+                        } else {
+                            if is_active {
+                                spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                                spans.push(Span::raw(" "));
+                            }
+                            spans.push(Span::raw(title));
+                        }
+                    } else {
+                        if is_active {
+                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                            spans.push(Span::raw(" "));
+                        }
+                        spans.push(Span::raw(title));
+                    }
                     if !pct_str.is_empty() {
                         spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
                     }
                     if show_length && !dur.is_empty() {
-                        let dur_color = if is_active {
-                            if focused { palette::SUBTLE } else { palette::MUTED }
-                        } else {
-                            palette::SUBTLE
-                        };
+                        let dur_color = dim_color;
                         // Right-align duration within render_w.
-                        let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
-                        let pad = render_w.saturating_sub(used + dur.chars().count());
+                        let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
+                        let pad = render_w.saturating_sub(used + dur.width());
                         spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur, Style::default().fg(dur_color)));
                     }
@@ -221,6 +296,8 @@ impl App {
                 sb_area, &mut sb,
             );
         }
+
+        divider_ys
     }
 
     /// Renders the card image and returns the number of rows it actually occupied.
@@ -237,7 +314,14 @@ impl App {
             _            => &["Primary", "Backdrop", "Logo"],
         };
         let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
-        let cache_key = format!("{}:P", item_id);
+        // For audio tracks, key by album_id so all tracks on the same album share
+        // one cached image. Fetch still uses the track ID (proven URL), but the
+        // result is stored under the album key so the second track hits the cache.
+        let cache_key = if item.item_type == "Audio" && !item.album_id.is_empty() {
+            format!("{}:P", item.album_id)
+        } else {
+            format!("{}:P", item_id)
+        };
         let is_music_item = matches!(img_types, &["Primary"] | &["AudioChild"]);
         if self.images_enabled() || is_music_item {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
@@ -292,12 +376,47 @@ impl App {
             Paragraph::new(Span::styled(uline, Style::default().fg(palette::IRIS))),
             Rect { x: area.x, y: bar_y, width: area.width, height: 1 },
         );
-        f.render_widget(
-            Paragraph::new(Line::from(vec![
+        // Build the header line: breadcrumbs when deep in a library, plain name otherwise.
+        let header_line: Line = {
+            let crumb_spans: Option<Vec<Span<'static>>> = if self.power_left_tab > 0 {
+                let lib_idx = self.power_left_tab - 1;
+                let lib = &self.libs[lib_idx];
+                let skip = if lib.nav_stack.first()
+                    .map(|l| l.title == lib.library.name).unwrap_or(false) { 1 } else { 0 };
+                let mut crumbs: Vec<String> = vec![lib.library.name.clone()];
+                for lvl in lib.nav_stack.iter().skip(skip) {
+                    crumbs.push(lvl.title.clone());
+                }
+                if crumbs.len() > 1 {
+                    let mut spans: Vec<Span<'static>> = vec![Span::raw(" ")];
+                    for (ci, name) in crumbs.iter().enumerate() {
+                        let is_last = ci + 1 == crumbs.len();
+                        let display: String = if is_last { name.clone() } else { format!("[{}]", ci + 1) };
+                        let style = if is_last {
+                            Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(palette::MUTED)
+                        };
+                        spans.push(Span::styled(display, style));
+                        if !is_last {
+                            spans.push(Span::styled("/", Style::default().fg(palette::IRIS)));
+                        }
+                    }
+                    Some(spans)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+            crumb_spans.map(Line::from).unwrap_or_else(|| Line::from(vec![
                 Span::raw(" "),
                 Span::styled(trunc_str(&header_name, budget),
                     Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
-            ])),
+            ]))
+        };
+        f.render_widget(
+            Paragraph::new(header_line),
             Rect { x: area.x, y: area.y + 1, width: area.width, height: 1 },
         );
 
