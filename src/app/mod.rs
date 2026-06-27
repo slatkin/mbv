@@ -1165,6 +1165,8 @@ impl App {
                 }
             }
 
+            self.sync_volume_from_player();
+
             if had_events || self.force_clear || last_render.elapsed() >= Duration::from_secs(1) {
                 if self.force_clear {
                     self.force_clear = false;
@@ -1229,6 +1231,26 @@ impl App {
         self.save_queue_state();
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
         Ok(())
+    }
+
+    /// Mirror mpv's actual volume into `ui_volume` and persist it, so volume
+    /// changes made inside the mpv window (not just via mbv's keys) are kept and
+    /// restored on the next launch. Skipped while controlling a remote session
+    /// (the remote owns its volume) and while temporarily muted (so a mute
+    /// doesn't clobber the saved level with 0).
+    fn sync_volume_from_player(&mut self) {
+        if self.connected_session_id.is_some() { return; }
+        if self.pre_mute_volume.is_some() { return; }
+        let player_vol = {
+            let s = self.player.status.lock().unwrap();
+            if s.active { Some(s.volume.clamp(0, 200) as u8) } else { None }
+        };
+        if let Some(v) = player_vol {
+            if v != self.ui_volume {
+                self.ui_volume = v;
+                self.save_prefs();
+            }
+        }
     }
 
     /// Handle a PlayerEvent received from the player thread.
