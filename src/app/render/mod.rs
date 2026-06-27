@@ -468,7 +468,7 @@ impl App {
         let green_len = ((ratio * w as f64).round() as usize).min(w);
         let gray_len = w - green_len;
         let spans = vec![
-            Span::styled("\u{2500}".repeat(green_len), Style::default().fg(palette::IRIS)),
+            Span::styled("\u{2500}".repeat(green_len), Style::default().fg(palette::PINE)),
             Span::styled("\u{2500}".repeat(gray_len), Style::default().fg(palette::SEEK_TRACK)),
         ];
         f.render_widget(Paragraph::new(Line::from(spans)), area);
