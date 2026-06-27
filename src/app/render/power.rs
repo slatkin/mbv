@@ -44,7 +44,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Line::from(vec![
                     Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
-                    Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
+                    Span::styled(pill, Style::default().fg(palette::WHITE).bg(palette::FOAM)),
                     Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
                 ])),
                 Rect { x: area.x, y: right_area.y, width: area.width, height: 1 },
@@ -74,7 +74,6 @@ impl App {
             let list_area = Rect { y: right_content.y + queue_h, height: list_h, ..right_content };
             let mut header_ys = self.render_power_queue(f, queue_area, queue_focused);
             let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
-            // The relocated list's header meets the divider from the right, like a queue header.
             if let Some(by) = list_bar_y { header_ys.push(by); }
             (None, Vec::new(), header_ys)
         } else {
@@ -83,6 +82,7 @@ impl App {
             let header_ys = self.render_power_queue(f, right_content, queue_focused);
             (bar_y, crumb_chars, header_ys)
         };
+
 
     }
 
@@ -151,16 +151,10 @@ impl App {
                     let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
                     header_idx += 1;
                     header_ys.push(area.y + row_idx as u16);
-                    // "  LABEL ────────────────" — label-left with a trailing SUBTLE line.
-                    let max_label = render_w.saturating_sub(3);
-                    let label = trunc_str(group, max_label);
-                    let label_span = format!("  {} ", label.to_uppercase());
-                    let label_w = label_span.width();
-                    let trail = render_w.saturating_sub(label_w);
-                    list_items.push(ListItem::new(Line::from(vec![
-                        Span::styled(label_span, Style::default().fg(palette::PINE).add_modifier(ratatui::style::Modifier::BOLD)),
-                        Span::styled("\u{2500}".repeat(trail), Style::default().fg(palette::SUBTLE)),
-                    ])));
+                    let label = trunc_str(group, render_w.saturating_sub(2));
+                    list_items.push(ListItem::new(Line::from(
+                        Span::styled(format!("  {}", label.to_uppercase()), Style::default().fg(palette::YELLOW).add_modifier(ratatui::style::Modifier::BOLD)),
+                    )));
                     self.power_queue_row_map.push(None);
                 }
                 QueueRow::Spacer => {
@@ -265,7 +259,7 @@ impl App {
                         spans.push(Span::styled(title, Style::default().fg(title_color)));
                     }
                     if !pct_str.is_empty() {
-                        let pct_color = if is_active { palette::IRIS } else { dim_color };
+                        let pct_color = if is_active { palette::IRIS } else { palette::MUTED };
                         spans.push(Span::styled(pct_str, Style::default().fg(pct_color)));
                     }
                     if show_length && !dur.is_empty() {
@@ -451,7 +445,7 @@ impl App {
         let right = w.saturating_sub(pill_w + left);
         let header_spans: Vec<Span<'static>> = vec![
             Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
-            Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
+            Span::styled(pill, Style::default().fg(palette::WHITE).bg(palette::FOAM)),
             Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
         ];
         f.render_widget(
@@ -512,21 +506,50 @@ impl App {
         let list_items: Vec<ListItem> = items.iter().skip(offset).take(visible).enumerate().map(|(i, item)| {
             let abs = offset + i;
             let selected = abs == cursor;
-            let (text, _) = item_text_and_style(item, selected);
-            let title = trunc_str(&text, (area.width as usize).saturating_sub(2));
+
+            // Compute name and duration as separate strings so they can be styled
+            // independently: name in the normal fg, duration in OVERLAY (no parens).
+            let (item_name, dur_str) = if item.is_folder {
+                let name = if item.item_type == "Folder" && item.total_count > 0 {
+                    format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+                } else if item.unplayed_item_count > 0 {
+                    format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                } else {
+                    item.display_name()
+                };
+                (name, String::new())
+            } else {
+                let dur = if item.runtime_ticks > 0 {
+                    let secs = (item.runtime_ticks / TICKS_PER_SECOND) as u64;
+                    let h = secs / 3600;
+                    let m = (secs % 3600) / 60;
+                    if h > 0 { format!(" {h}h{m:02}m") } else { format!(" {m}m") }
+                } else {
+                    String::new()
+                };
+                (item.display_name(), dur)
+            };
+
+            let avail = (area.width as usize).saturating_sub(2);
+            let name_w = avail.saturating_sub(dur_str.width());
+            let title = trunc_str(&item_name, name_w);
             let fg = if focused { palette::WHITE } else { palette::SUBTLE };
-            let line = if selected && focused {
-                Line::from(vec![
+
+            let mut spans: Vec<Span> = if selected && focused {
+                vec![
                     Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
                     Span::styled(title, Style::default().fg(palette::YELLOW)),
-                ])
+                ]
             } else {
-                Line::from(vec![
+                vec![
                     Span::raw(" "),
                     Span::styled(title, Style::default().fg(fg)),
-                ])
+                ]
             };
-            ListItem::new(line)
+            if !dur_str.is_empty() {
+                spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+            }
+            ListItem::new(Line::from(spans))
         }).collect();
 
         let mut state = ListState::default();

@@ -36,10 +36,13 @@ impl App {
         let mode = self.panel_mode;
         let playing_panel = show_controls;
         let onerow = playing_panel && mode == crate::config::PanelMode::OneRow;
+        // In power view always reserve the player rows (title + controls) so that
+        // content doesn't shift when the player appears or disappears.
+        let reserve_player_rows = in_power && mode == crate::config::PanelMode::OneRow;
         let tabs_h:  u16 = 1;
         let spacer_h: u16 = 0;
         // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it. (status is unused.)
-        let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) = if onerow {
+        let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) = if onerow || reserve_player_rows {
             (1, 0, 1, 1, 0)
         } else {
             (1, 0, 0, 0, 0)

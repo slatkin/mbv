@@ -155,8 +155,8 @@ impl App {
                     };
                     let title_cell = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
                         let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
-                        // Now-playing progress is green; other in-progress rows are grey.
-                        let pct_style = if now_playing { palette::IRIS } else { palette::SUBTLE };
+                        // Now-playing progress is green; other in-progress rows are dim.
+                        let pct_style = if now_playing { palette::IRIS } else { palette::MUTED };
                         let pct_str = format!(" {pct}%");
                         let max_title = avail.saturating_sub(pct_str.chars().count() + spin_w);
                         let mut spans: Vec<Span> = Vec::new();
