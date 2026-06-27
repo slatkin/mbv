@@ -141,13 +141,13 @@ impl App {
                 DRow::Header => {
                     let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
                     header_idx += 1;
-                    // " TITLE ──────" — title overlaid on the divider line.
-                    let max_label = render_w.saturating_sub(3); // 1 prefix + 1 space + 1+ dashes
+                    // "─ TITLE ──────" — leading dash connects to the left divider.
+                    let max_label = render_w.saturating_sub(4); // 1 dash + 1 space + 1 space + 1+ dashes
                     let label = trunc_str(group, max_label);
                     let label_w = label.width();
-                    let dashes = render_w.saturating_sub(1 + label_w + 1);
+                    let dashes = render_w.saturating_sub(1 + 1 + label_w + 1);
                     list_items.push(ListItem::new(Line::from(vec![
-                        Span::raw(" "),
+                        Span::styled("\u{2500} ", Style::default().fg(palette::IRIS)),
                         Span::styled(label, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
                         Span::raw(" "),
                         Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::IRIS)),
@@ -161,7 +161,7 @@ impl App {
                 }
                 DRow::Track(idx, in_group) => {
                     let i = *idx;
-                    let indent: usize = if *in_group { 2 } else { 0 };
+                    let indent: usize = if *in_group { 3 } else { 0 };
                     let item = &items[i];
                     let is_active = i == active_idx && active;
                     let is_cursor = i == cursor && focused;
@@ -233,7 +233,7 @@ impl App {
                     let title_color = if is_active { palette::FOAM } else { fg };
 
                     let mut spans: Vec<Span> = Vec::new();
-                    if indent > 0 { spans.push(Span::raw("  ")); }
+                    if indent > 0 { spans.push(Span::raw("   ")); }
                     spans.push(marker);
                     // For audio tracks with an index: "01. ⠋ Title" when active,
                     // "01. Title" otherwise. Spinner goes between the dim prefix and the name.
