@@ -854,6 +854,7 @@ impl App {
         // In power view, bare Left/Right switch focus between the two panels.
         if self.playlist_view == PLAYLIST_VIEW_POWER && !key.modifiers.contains(KeyModifiers::ALT) {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Left) {
+                self.power_detail_item = None;
                 self.power_focus = PowerFocus::Queue;
                 return false;
             }
@@ -870,6 +871,42 @@ impl App {
             }
             if self.power_left_tab > 0 {
                 let lib_idx = self.power_left_tab - 1;
+
+                // Detail mode: Enter plays, Backspace/Esc dismisses; all other keys swallowed.
+                if self.power_detail_item.is_some() {
+                    if key.code == KeyCode::Enter {
+                        self.power_detail_item = None;
+                        let saved = self.tab_idx;
+                        self.tab_idx = self.lib_tab_offset() + lib_idx;
+                        self.select();
+                        self.tab_idx = saved;
+                    } else if matches!(key.code, KeyCode::Backspace | KeyCode::Esc) {
+                        self.power_detail_item = None;
+                    }
+                    return false;
+                }
+
+                // Enter on a leaf Movie: show detail panel instead of playing.
+                if key.code == KeyCode::Enter
+                    && !key.modifiers.contains(KeyModifiers::ALT)
+                    && !key.modifiers.contains(KeyModifiers::CONTROL)
+                {
+                    let maybe_movie: Option<crate::api::MediaItem> = self.libs.get(lib_idx).and_then(|lib| {
+                        if let Some(s) = &lib.search {
+                            let &idx = s.results.get(s.cursor)?;
+                            s.items.get(idx).cloned()
+                        } else {
+                            lib.nav_stack.last().and_then(|lvl| lvl.items.get(lvl.cursor).cloned())
+                        }
+                    });
+                    if let Some(item) = maybe_movie {
+                        if !item.is_folder && item.item_type == "Movie" {
+                            self.power_detail_item = Some(item);
+                            return false;
+                        }
+                    }
+                }
+
                 let is_power_nav = matches!(key.code, KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down)
                     && key.modifiers.contains(KeyModifiers::ALT);
                 let is_lib_key = !is_power_nav && match key.code {

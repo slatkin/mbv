@@ -73,14 +73,24 @@ impl App {
             let queue_area = Rect { height: queue_h, ..right_content };
             let list_area = Rect { y: right_content.y + queue_h, height: list_h, ..right_content };
             let mut header_ys = self.render_power_queue(f, queue_area, queue_focused);
-            let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
-            if let Some(by) = list_bar_y { header_ys.push(by); }
+            if self.power_detail_item.is_some() {
+                self.render_power_detail(f, list_area);
+            } else {
+                let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
+                if let Some(by) = list_bar_y { header_ys.push(by); }
+            }
             (None, Vec::new(), header_ys)
         } else {
             let lib_area = Rect { y: left_area.y + card_h, height: left_remaining, ..left_area };
-            let (bar_y, crumb_chars) = self.render_power_list(f, lib_area, left_focused);
-            let header_ys = self.render_power_queue(f, right_content, queue_focused);
-            (bar_y, crumb_chars, header_ys)
+            if self.power_detail_item.is_some() {
+                self.render_power_detail(f, lib_area);
+                let header_ys = self.render_power_queue(f, right_content, queue_focused);
+                (None, Vec::new(), header_ys)
+            } else {
+                let (bar_y, crumb_chars) = self.render_power_list(f, lib_area, left_focused);
+                let header_ys = self.render_power_queue(f, right_content, queue_focused);
+                (bar_y, crumb_chars, header_ys)
+            }
         };
 
 
@@ -308,6 +318,36 @@ impl App {
     /// `image_loading` is true when a fetch is in-flight (caller should defer
     /// rendering the rest of the view until the image arrives).
     fn render_power_card(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
+        // If a movie detail is pinned, show that item's image instead of the queue cursor item.
+        if self.power_detail_item.is_some() {
+            let (detail_id, series_id) = {
+                let d = self.power_detail_item.as_ref().unwrap();
+                (d.id.clone(), d.series_id.clone())
+            };
+            let img_types: &[&str] = &["Backdrop", "Primary", "Logo"];
+            let cache_key = format!("{}:P", detail_id);
+            if self.images_enabled() {
+                self.fetch_card_image(cache_key.clone(), detail_id, series_id, img_types);
+            }
+            let image_loading = self.card_image_loading.contains(&cache_key);
+            if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
+                type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
+                let avail = ratatui::layout::Size { width: area.width.saturating_sub(2), height: area.height };
+                let actual = state.size_for(
+                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
+                );
+                let img_x = area.x + 1 + (area.width.saturating_sub(2).saturating_sub(actual.width)) / 2;
+                let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
+                    img_rect, state,
+                );
+                return (actual.height, false);
+            } else {
+                return (0, image_loading);
+            }
+        }
+
         let cursor = self.player_tab.playlist_cursor;
         let n = self.player_tab.items.len();
         if n == 0 { return (0, false); }
@@ -569,5 +609,120 @@ impl App {
             );
         }
         (Some(bar_y), crumb_chars)
+    }
+
+    /// Renders the movie detail panel (title, metadata, overview, director) into `area`.
+    /// Called instead of `render_power_list` when `power_detail_item` is Some.
+    fn render_power_detail(&mut self, f: &mut Frame, area: Rect) {
+        let Some(ref item) = self.power_detail_item else { return; };
+        if area.height == 0 { return; }
+
+        let inner_x = area.x + 1;
+        let inner_w = (area.width as usize).saturating_sub(2);
+        let inner_w16 = area.width.saturating_sub(2);
+        let max_y = area.y + area.height;
+        let mut row = area.y;
+
+        // — Title (YELLOW) —
+        if row < max_y {
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&item.name, inner_w),
+                    Style::default().fg(palette::YELLOW),
+                ))),
+                Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
+            );
+            row += 1;
+        }
+
+        // — Meta: genre  year  duration (SUBTLE) —
+        if row < max_y {
+            let dur_str = if item.runtime_ticks > 0 {
+                let secs = (item.runtime_ticks / TICKS_PER_SECOND) as u64;
+                let h = secs / 3600;
+                let m = (secs % 3600) / 60;
+                if h > 0 { format!("{}h{}m", h, m) } else { format!("{}m", m) }
+            } else {
+                String::new()
+            };
+            let year_str = if item.production_year > 0 { item.production_year.to_string() } else { String::new() };
+            let meta = [item.genre.as_str(), year_str.as_str(), dur_str.as_str()]
+                .iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join("  ");
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&meta, inner_w),
+                    Style::default().fg(palette::SUBTLE),
+                ))),
+                Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
+            );
+            row += 1;
+        }
+
+        // — Technical: video_info  audio_info (MUTED) —
+        if row < max_y && (!item.video_info.is_empty() || !item.audio_info.is_empty()) {
+            let tech = [item.video_info.as_str(), item.audio_info.as_str()]
+                .iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join("  ");
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&tech, inner_w),
+                    Style::default().fg(palette::MUTED),
+                ))),
+                Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
+            );
+            row += 1;
+        }
+
+        // — Blank separator —
+        if row < max_y { row += 1; }
+
+        // — Overview word-wrapped (SUBTLE) —
+        if !item.overview.is_empty() && row < max_y {
+            let dir_reserve: u16 = if item.director.is_empty() { 0 } else { 1 };
+            let avail = max_y.saturating_sub(row).saturating_sub(dir_reserve) as usize;
+            if avail > 0 {
+                // Simple word-wrap respecting terminal character widths.
+                let mut ov_lines: Vec<String> = Vec::new();
+                let mut cur = String::new();
+                for word in item.overview.split_whitespace() {
+                    let word_w = word.width();
+                    if cur.is_empty() {
+                        cur.push_str(word);
+                    } else if cur.width() + 1 + word_w <= inner_w {
+                        cur.push(' ');
+                        cur.push_str(word);
+                    } else {
+                        ov_lines.push(std::mem::take(&mut cur));
+                        if ov_lines.len() >= avail { break; }
+                        cur.push_str(word);
+                    }
+                }
+                if !cur.is_empty() && ov_lines.len() < avail {
+                    ov_lines.push(cur);
+                }
+                for line_text in ov_lines {
+                    if row >= max_y.saturating_sub(dir_reserve) { break; }
+                    f.render_widget(
+                        Paragraph::new(Line::from(Span::styled(
+                            line_text, Style::default().fg(palette::SUBTLE),
+                        ))),
+                        Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
+                    );
+                    row += 1;
+                }
+            }
+        }
+
+        // — Director (MUTED, pinned to last row) —
+        let _ = row;
+        if !item.director.is_empty() && max_y > area.y {
+            let dir_str = format!("Director: {}", item.director);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&dir_str, inner_w),
+                    Style::default().fg(palette::MUTED),
+                ))),
+                Rect { x: inner_x, y: max_y - 1, width: inner_w16, height: 1 },
+            );
+        }
     }
 }
