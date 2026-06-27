@@ -1427,7 +1427,7 @@ dependencies = [
 
 [[package]]
 name = "mbv"
-version = "0.7.5"
+version = "0.8.0"
 dependencies = [
  "crossterm",
  "fuzzy-matcher",
