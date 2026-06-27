@@ -57,9 +57,6 @@ impl App {
         // below it. At low heights the card can consume the whole column, so relocate
         // the list under the queue on the right instead of cramming it in.
         let (card_h, image_loading) = self.render_power_card(f, left_area);
-        // If the card image fetch is in-flight, skip the rest of the view so
-        // the queue and list don't flash in before the image has arrived.
-        if image_loading { return; }
         let left_remaining = left_area.height.saturating_sub(card_h);
 
         const MIN_LIST_ROWS: u16 = 6;
@@ -73,24 +70,27 @@ impl App {
             let queue_area = Rect { height: queue_h, ..right_content };
             let list_area = Rect { y: right_content.y + queue_h, height: list_h, ..right_content };
             let mut header_ys = self.render_power_queue(f, queue_area, queue_focused);
-            if self.power_detail_item.is_some() {
-                self.render_power_detail(f, list_area, left_focused);
-            } else {
-                let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
-                if let Some(by) = list_bar_y { header_ys.push(by); }
+            // Only skip left-panel content while the image is loading, not the whole view.
+            if !image_loading {
+                if self.power_detail_item.is_some() {
+                    self.render_power_detail(f, list_area, left_focused);
+                } else {
+                    let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
+                    if let Some(by) = list_bar_y { header_ys.push(by); }
+                }
             }
             (None, Vec::new(), header_ys)
         } else {
             let lib_area = Rect { y: left_area.y + card_h, height: left_remaining, ..left_area };
-            if self.power_detail_item.is_some() {
-                self.render_power_detail(f, lib_area, left_focused);
-                let header_ys = self.render_power_queue(f, right_content, queue_focused);
-                (None, Vec::new(), header_ys)
-            } else {
-                let (bar_y, crumb_chars) = self.render_power_list(f, lib_area, left_focused);
-                let header_ys = self.render_power_queue(f, right_content, queue_focused);
-                (bar_y, crumb_chars, header_ys)
+            let header_ys = self.render_power_queue(f, right_content, queue_focused);
+            if !image_loading {
+                if self.power_detail_item.is_some() {
+                    self.render_power_detail(f, lib_area, left_focused);
+                } else {
+                    self.render_power_list(f, lib_area, left_focused);
+                }
             }
+            (None::<u16>, Vec::<(u16, char)>::new(), header_ys)
         };
 
 
