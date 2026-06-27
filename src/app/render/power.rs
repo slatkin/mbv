@@ -14,13 +14,12 @@ impl App {
     pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
         if area.height < 4 { return; }
 
-        // Left panel (fixed 44 cols) │ Right panel (queue, remaining).
+        // Left panel (fixed 44 cols) | Right panel (queue, remaining).
         let left_w: u16 = 44;
-        let right_w = area.width.saturating_sub(left_w + 1);
-        let divider_x = area.x + left_w;
+        let right_w = area.width.saturating_sub(left_w);
 
         let left_area  = Rect { x: area.x, y: area.y + 1, width: left_w,  height: area.height.saturating_sub(1) };
-        let right_area = Rect { x: divider_x + 1, y: area.y, width: right_w, height: area.height };
+        let right_area = Rect { x: area.x + left_w, y: area.y, width: right_w, height: area.height };
 
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
         let left_focused  = !queue_focused;
