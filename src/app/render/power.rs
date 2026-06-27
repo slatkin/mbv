@@ -414,7 +414,7 @@ impl App {
             // Layout (vertical): │ 1 · 2 │ — digits with · between, surrounded by normal │.
             if crumbs.len() > 1 {
                 let n = crumbs.len() - 1;
-                let mut row: u16 = bar_y + 1;
+                let mut row: u16 = bar_y + 2; // +1 blank row above first digit
                 for ci in 0..n {
                     if ci > 0 {
                         crumb_chars.push((row, '\u{00b7}')); // middle dot between digits
