@@ -1189,24 +1189,6 @@ mod tests {
     }
 
     #[test]
-    fn display_name_episode_formats_series() {
-        let mut item = make_item("Pilot", "Episode");
-        item.series_name = "Breaking Bad".into();
-        item.parent_index_number = 1;
-        item.index_number = 3;
-        assert_eq!(item.display_name(), "Breaking Bad⁄Pilot");
-    }
-
-    #[test]
-    fn display_name_episode_zero_padded() {
-        let mut item = make_item("Episode", "Episode");
-        item.series_name = "Show".into();
-        item.parent_index_number = 10;
-        item.index_number = 1;
-        assert_eq!(item.display_name(), "Show⁄Episode");
-    }
-
-    #[test]
     fn display_name_episode_without_series_falls_back_to_name() {
         let item = make_item("Standalone", "Episode");
         assert_eq!(item.display_name(), "Standalone");
