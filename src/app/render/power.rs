@@ -1,8 +1,8 @@
 use ratatui::Frame;
-use ratatui::layout::{Alignment, Constraint, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState};
+use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use crate::api::TICKS_PER_SECOND;
 use super::super::{App, PowerFocus, palette};
 use super::super::ui_util::{fmt_duration, item_text_and_style, trunc_str};
@@ -32,13 +32,14 @@ impl App {
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
         let left_focused  = !queue_focused;
 
-        self.render_power_left_panel(f, left_area, left_focused);
+        let bar_y = self.render_power_left_panel(f, left_area, left_focused);
         self.render_power_queue(f, right_area, queue_focused);
 
-        // Vertical divider.
+        // Vertical divider; use ┤ at the row where the horizontal bar meets it.
         for y in area.y..area.y + area.height {
+            let ch = if Some(y) == bar_y { "\u{2524}" } else { "\u{2502}" };
             f.render_widget(
-                Paragraph::new(Span::styled("\u{2502}", Style::default().fg(palette::IRIS))),
+                Paragraph::new(Span::styled(ch, Style::default().fg(palette::IRIS))),
                 Rect { x: divider_x, y, width: 1, height: 1 },
             );
         }
@@ -48,92 +49,169 @@ impl App {
 
     fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) {
         if area.height < 1 { return; }
-
-        let list_area = area;
-
-        if list_area.height == 0 { return; }
+        self.power_queue_area = area;
 
         let n = self.player_tab.items.len();
         if n == 0 {
+            self.power_queue_row_map.clear();
             f.render_widget(
                 Paragraph::new("  Add items with p from Home or library tabs")
                     .style(Style::default().fg(palette::MUTED)),
-                list_area,
+                area,
             );
             return;
         }
 
-        // Reuse the presentation-view queue table, adjusted for our area.
-        let table_area = list_area;
-        self.power_queue_area = table_area;
-
         let (active, active_idx, live_pos, live_runtime, _) = self.effective_playback_state();
         let cursor = self.player_tab.playlist_cursor;
-        let show_length = table_area.width > 50;
-        let title_col_w = (table_area.width as usize).saturating_sub(if show_length { 10 } else { 0 });
+        let items = &self.player_tab.items;
 
-        let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
-            let is_active = i == active_idx && active;
-            let row_style = if is_active {
-                Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)
-            } else if i == cursor && focused {
-                Style::default().fg(palette::YELLOW)
+        // Build display rows: album-name headers for audio items, then track rows.
+        // display[j] = None → album header; Some(i) → items[i].
+        // album_for_header[j] holds the album name when display[j] is None.
+        let mut display: Vec<Option<usize>> = Vec::new();
+        let mut album_for_header: Vec<String> = Vec::new();
+        let mut last_album: Option<&str> = None;
+        for (i, item) in items.iter().enumerate() {
+            if item.is_audio() {
+                let album = item.album.as_str();
+                if last_album != Some(album) {
+                    display.push(None);
+                    album_for_header.push(item.album.clone());
+                    last_album = Some(album);
+                }
             } else {
-                Style::default().fg(if focused { palette::WHITE } else { palette::SUBTLE })
-            };
-            let (pt, rt) = if is_active {
-                let pos = if live_pos > 0 { live_pos } else { item.playback_position_ticks };
-                (pos, live_runtime)
-            } else {
-                (item.playback_position_ticks, item.runtime_ticks)
-            };
-            let pct_str = if pt > 0 && rt > 0 && !item.is_audio() {
-                let pct = (pt * 100 / rt.max(1)) as u64;
-                format!(" {pct}%")
-            } else { String::new() };
-            let marker = if i == cursor && focused {
-                Span::styled("\u{258c}", Style::default().fg(palette::IRIS))
-            } else {
-                Span::raw(" ")
-            };
-            let max_title = title_col_w.saturating_sub(1 + pct_str.chars().count());
-            let title = trunc_str(&item.playback_label(), max_title);
-            let mut spans = vec![marker, Span::raw(title)];
-            if !pct_str.is_empty() {
-                spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
+                last_album = None;
             }
-            let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
-            let length = if len_secs > 0 { fmt_duration(len_secs) } else { "\u{2014}".to_string() };
-            Row::new([
-                Cell::from(Line::from(spans)),
-                Cell::from(Line::from(length).alignment(Alignment::Right))
-                    .style(Style::default().fg(if is_active { if focused { palette::SUBTLE } else { palette::MUTED } } else { palette::SUBTLE })),
-            ]).style(row_style)
-        }).collect();
+            display.push(Some(i));
+        }
+        let total = display.len();
+        let visible = area.height as usize;
 
-        let mut state = TableState::default();
-        state.select(Some(cursor));
-        let table = Table::new(rows, [
-            Constraint::Min(10),
-            Constraint::Length(if show_length { 9 } else { 0 }),
-        ])
-        .column_spacing(0)
-        .row_highlight_style(Style::default());
-        let visible = table_area.height as usize;
-        let need_sb = n > visible;
-        // Reserve 1 char on the right for the scrollbar so it doesn't overlap the length column.
-        let render_area = if need_sb {
-            Rect { width: table_area.width.saturating_sub(1), ..table_area }
-        } else {
-            table_area
-        };
-        f.render_stateful_widget(table, render_area, &mut state);
+        // Visual row of the cursor item.
+        let cursor_row = display.iter().position(|r| *r == Some(cursor)).unwrap_or(0);
+        let offset = if cursor_row >= visible { cursor_row - visible + 1 } else { 0 };
+
+        // Count how many album headers appear before the scroll offset, so we
+        // index album_for_header correctly for the visible window.
+        let mut header_idx = display[..offset].iter().filter(|r| r.is_none()).count();
+
+        let need_sb = total > visible;
+        let render_w = area.width.saturating_sub(if need_sb { 1 } else { 0 }) as usize;
+        let show_length = render_w > 30;
+        let dur_w: usize = if show_length { 6 } else { 0 }; // "mm:ss" or "h:mm:ss"
+
+        // Build visible ListItems and the row map simultaneously.
+        self.power_queue_row_map.clear();
+        let mut list_items: Vec<ListItem> = Vec::new();
+
+        for entry in display.iter().skip(offset).take(visible) {
+            match entry {
+                None => {
+                    let album = album_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
+                    header_idx += 1;
+                    let label = trunc_str(album, render_w.saturating_sub(1));
+                    list_items.push(ListItem::new(Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(label, Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
+                    ])));
+                    self.power_queue_row_map.push(None);
+                }
+                Some(i) => {
+                    let i = *i;
+                    let item = &items[i];
+                    let is_active = i == active_idx && active;
+                    let is_cursor = i == cursor && focused;
+
+                    let fg = if is_active {
+                        palette::WHITE
+                    } else if is_cursor {
+                        palette::YELLOW
+                    } else if focused {
+                        palette::WHITE
+                    } else {
+                        palette::SUBTLE
+                    };
+                    let row_style = if is_active {
+                        Style::default().fg(fg).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(fg)
+                    };
+
+                    let (pt, rt) = if is_active {
+                        let pos = if live_pos > 0 { live_pos } else { item.playback_position_ticks };
+                        (pos, live_runtime)
+                    } else {
+                        (item.playback_position_ticks, item.runtime_ticks)
+                    };
+                    let pct_str = if pt > 0 && rt > 0 && !item.is_audio() {
+                        format!(" {}%", pt * 100 / rt.max(1))
+                    } else {
+                        String::new()
+                    };
+
+                    let marker = if is_cursor {
+                        Span::styled("\u{258c}", Style::default().fg(palette::IRIS))
+                    } else {
+                        Span::raw(" ")
+                    };
+
+                    // For audio under an album header: show track number + bare name.
+                    // Otherwise use the standard playback label.
+                    let label = if item.is_audio() {
+                        if item.index_number > 0 {
+                            format!("{:2}. {}", item.index_number, item.name)
+                        } else {
+                            item.name.clone()
+                        }
+                    } else {
+                        item.playback_label()
+                    };
+
+                    let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
+                    let dur = if len_secs > 0 { fmt_duration(len_secs) } else { String::new() };
+
+                    // Title truncated to leave room for duration + pct.
+                    let extra = dur_w + pct_str.chars().count();
+                    let title_w = render_w.saturating_sub(1 + extra); // 1 for marker
+                    let title = trunc_str(&label, title_w);
+
+                    let mut spans = vec![marker, Span::raw(title)];
+                    if !pct_str.is_empty() {
+                        spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
+                    }
+                    if show_length && !dur.is_empty() {
+                        let dur_color = if is_active {
+                            if focused { palette::SUBTLE } else { palette::MUTED }
+                        } else {
+                            palette::SUBTLE
+                        };
+                        // Right-align duration within render_w.
+                        let used: usize = spans.iter().map(|s| s.content.chars().count()).sum();
+                        let pad = render_w.saturating_sub(used + dur.chars().count());
+                        spans.push(Span::raw(" ".repeat(pad)));
+                        spans.push(Span::styled(dur, Style::default().fg(dur_color)));
+                    }
+
+                    list_items.push(ListItem::new(Line::from(spans)).style(row_style));
+                    self.power_queue_row_map.push(Some(i));
+                }
+            }
+        }
+
+        let mut state = ListState::default();
+        state.select(Some(cursor_row.saturating_sub(offset)));
+        let render_area = Rect { width: render_w as u16, ..area };
+        f.render_stateful_widget(
+            List::new(list_items).highlight_style(Style::default()),
+            render_area,
+            &mut state,
+        );
 
         if need_sb {
-            let offset = state.offset();
-            let max_off = n.saturating_sub(visible);
+            let max_off = total.saturating_sub(visible);
             let mut sb = ScrollbarState::new(max_off + 1).position(offset);
-            let sb_area = Rect { x: table_area.x + table_area.width.saturating_sub(1), width: 1, ..table_area };
+            let sb_area = Rect { x: area.x + area.width.saturating_sub(1), width: 1, ..area };
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .thumb_symbol("\u{2590}")
@@ -182,15 +260,17 @@ impl App {
         }
     }
 
-    fn render_power_left_panel(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        if area.height == 0 { return; }
+    /// Returns the y coordinate of the horizontal bar drawn at the top of the lib section,
+    /// so the caller can place a ┤ junction on the vertical divider at that row.
+    fn render_power_left_panel(&mut self, f: &mut Frame, area: Rect, focused: bool) -> Option<u16> {
+        if area.height == 0 { return None; }
 
         // Render card into the full area; it returns the rows it actually used.
         // The library panel then fills whatever vertical space remains.
         let card_h = self.render_power_card(f, area);
         let lib_area = Rect { y: area.y + card_h, height: area.height.saturating_sub(card_h), ..area };
 
-        if lib_area.height == 0 { return; }
+        if lib_area.height == 0 { return None; }
 
         // Ensure the library is loaded when a library tab is selected.
         if self.power_left_tab > 0 {
@@ -205,23 +285,24 @@ impl App {
             self.libs[self.power_left_tab - 1].library.name.clone()
         };
         let budget = (area.width as usize).saturating_sub(2);
-        if area.height < 2 { return; }
+        if area.height < 2 { return None; }
+        let bar_y = area.y;
         let uline = "\u{2500}".repeat(area.width as usize);
         f.render_widget(
             Paragraph::new(Span::styled(uline, Style::default().fg(palette::IRIS))),
-            Rect { x: area.x, y: area.y, width: area.width, height: 1 },
+            Rect { x: area.x, y: bar_y, width: area.width, height: 1 },
         );
-        let header_fg = if focused { palette::WHITE } else { palette::SUBTLE };
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::raw(" "),
-                Span::styled(trunc_str(&header_name, budget), Style::default().fg(header_fg)),
+                Span::styled(trunc_str(&header_name, budget),
+                    Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
             ])),
             Rect { x: area.x, y: area.y + 1, width: area.width, height: 1 },
         );
 
         let content_area = Rect { y: area.y + 2, height: area.height.saturating_sub(2), ..area };
-        if content_area.height == 0 { return; }
+        if content_area.height == 0 { return Some(bar_y); }
 
         // Store for click / page-size calculations.
         self.power_left_area = content_area;
@@ -264,7 +345,7 @@ impl App {
                 Paragraph::new(Span::styled(msg, Style::default().fg(palette::MUTED))),
                 content_area,
             );
-            return;
+            return Some(bar_y);
         }
 
         let visible = content_area.height as usize;
@@ -306,11 +387,6 @@ impl App {
                 content_area, &mut sb,
             );
         }
+        Some(bar_y)
     }
-
-    
-
-    
-
-    
 }

@@ -851,6 +851,18 @@ impl App {
             return false;
         }
 
+        // In power view, bare Left/Right switch focus between the two panels.
+        if self.playlist_view == PLAYLIST_VIEW_POWER && !key.modifiers.contains(KeyModifiers::ALT) {
+            if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Left) {
+                self.power_focus = PowerFocus::Queue;
+                return false;
+            }
+            if key.code == KeyCode::Left && matches!(self.power_focus, PowerFocus::Queue) {
+                self.power_focus = PowerFocus::Left;
+                return false;
+            }
+        }
+
         // In power view, route nav keys to the focused left panel.
         if self.playlist_view == PLAYLIST_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left) {
             if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
@@ -1536,8 +1548,9 @@ impl App {
             if qa.contains((col, row).into()) {
                 self.power_focus = PowerFocus::Queue;
                 let click_y = (row - qa.y) as usize;
-                let n = self.player_tab.items.len();
-                if click_y < n { self.player_tab.playlist_cursor = click_y; }
+                if let Some(&Some(item_idx)) = self.power_queue_row_map.get(click_y) {
+                    self.player_tab.playlist_cursor = item_idx;
+                }
                 return true;
             }
             // Click in the left panel: focus it and set its cursor.

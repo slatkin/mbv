@@ -37,7 +37,7 @@ impl App {
         let playing_panel = show_controls;
         let onerow = playing_panel && mode == crate::config::PanelMode::OneRow;
         let tabs_h:  u16 = 1;
-        let spacer_h: u16 = if in_power { 0 } else { 1 };
+        let spacer_h: u16 = 0;
         // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it. (status is unused.)
         let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) = if onerow {
             (1, 0, 1, 1, 0)
@@ -193,7 +193,7 @@ impl App {
             self.status_expires = None;
             self.force_clear = true;
         }
-        let title_color = if in_power { palette::TEXT } else { palette::FOAM };
+        let title_color = palette::FOAM;
         let now_playing_title: Option<(String, Color)> = if playing_panel && mode != crate::config::PanelMode::Hidden {
             if active {
                 now_playing.map(|t| (t, title_color))

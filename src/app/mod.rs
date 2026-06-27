@@ -310,6 +310,7 @@ pub struct App {
     power_left_tab: usize,   // 0 = Home/CW, 1..=libs.len() = library index
     power_left_area: Rect,   // rendered area of the left panel (for mouse click / page calc)
     power_queue_area: Rect,
+    power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
@@ -568,6 +569,7 @@ impl App {
             power_left_tab: 0,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
+            power_queue_row_map: Vec::new(),
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
@@ -1625,6 +1627,7 @@ mod tests {
             power_left_tab: 0,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
+            power_queue_row_map: Vec::new(),
             home_card_view: false,
             last_played_item_id: None,
             last_played_completed: false,
