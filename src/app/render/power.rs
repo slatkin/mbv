@@ -168,7 +168,7 @@ impl App {
                 }
                 QueueRow::Track { idx, in_group } => {
                     let i = *idx;
-                    let indent: usize = if *in_group { 1 } else { 0 };
+                    let indent: usize = if *in_group { 3 } else { 0 };
                     let item = &items[i];
                     let is_active = i == active_idx && active;
                     let is_cursor = i == cursor && focused;
@@ -331,11 +331,11 @@ impl App {
             let image_loading = self.card_image_loading.contains(&cache_key);
             if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
                 type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                let avail = ratatui::layout::Size { width: area.width.saturating_sub(2), height: area.height };
+                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height };
                 let actual = state.size_for(
                     ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
                 );
-                let img_x = area.x + 1 + (area.width.saturating_sub(2).saturating_sub(actual.width)) / 2;
+                let img_x = area.x + 2 + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
                 let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
                 f.render_stateful_widget(
                     SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
@@ -360,11 +360,11 @@ impl App {
             let image_loading = self.card_image_loading.contains(&cache_key);
             if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
                 type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                let avail = ratatui::layout::Size { width: area.width.saturating_sub(2), height: area.height };
+                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height };
                 let actual = state.size_for(
                     ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
                 );
-                let img_x = area.x + 1 + (area.width.saturating_sub(2).saturating_sub(actual.width)) / 2;
+                let img_x = area.x + 2 + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
                 let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
                 f.render_stateful_widget(
                     SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
@@ -793,50 +793,26 @@ impl App {
             (lvl.items.clone(), lvl.cursor, lvl.title.clone())
         };
         let n = items.len();
-        let first = match items.first() { Some(t) => t.clone(), None => return };
-        let artist = first.artist.clone();
-        let year = first.production_year;
+        if items.is_empty() { return; }
 
-        let inner_x   = area.x + 1;
-        let inner_w   = area.width.saturating_sub(2) as usize;
-        let inner_w16 = area.width.saturating_sub(2);
-        let max_y     = area.y + area.height;
+        let inner_w = area.width as usize;
+        let max_y   = area.y + area.height;
         let mut row   = area.y;
 
-        let title_color = if focused { palette::YELLOW } else { palette::SUBTLE };
-
-        // — Album name —
+        // — Album name (centered, yellow bg) —
         if row < max_y {
             f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    trunc_str(&album_name, inner_w),
-                    Style::default().fg(title_color),
-                ))),
-                Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
+                Paragraph::new(Line::from(vec![
+                    Span::raw(" "),
+                    Span::raw(trunc_str(&album_name, inner_w.saturating_sub(2))),
+                    Span::raw(" "),
+                ]))
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(palette::WHITE).bg(palette::FOAM)),
+                Rect { x: area.x, y: row, width: area.width, height: 1 },
             );
             row += 1;
         }
-
-        // — Artist  year (SUBTLE) —
-        if row < max_y {
-            let year_str = if year > 0 { year.to_string() } else { String::new() };
-            let meta = [artist.as_str(), year_str.as_str()]
-                .iter().filter(|s| !s.is_empty()).copied()
-                .collect::<Vec<_>>().join("  ");
-            if !meta.is_empty() {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        trunc_str(&meta, inner_w),
-                        Style::default().fg(palette::SUBTLE),
-                    ))),
-                    Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
-                );
-                row += 1;
-            }
-        }
-
-        // — Blank separator —
-        if row < max_y { row += 1; }
 
         // — Scrollable track list —
         let table_area = Rect { x: area.x, y: row, width: area.width, height: max_y.saturating_sub(row) };
