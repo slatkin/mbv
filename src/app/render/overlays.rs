@@ -58,7 +58,7 @@ impl App {
             // Indicator spans all 3 rows of the card.
             if selected {
                 let bar: Vec<Line> = (0..CARD_H)
-                    .map(|_| Line::from(Span::styled("\u{258c}", Style::default().fg(palette::IRIS))))
+                    .map(|_| Line::from(Span::styled("\u{258c}", Style::default().fg(palette::PINE))))
                     .collect();
                 f.render_widget(Paragraph::new(bar), Rect { x: ix, y: entry_y, width: 1, height: CARD_H });
             }
@@ -296,6 +296,7 @@ impl App {
             mk("i",                "Go to item in library"),
             mk("Del",              "Remove from Queue"),
             mk("v",                "Toggle view"),
+            mk("g",                "Toggle grouping"),
         ];
         let sec_home = vec![
             blank(),
@@ -745,7 +746,7 @@ impl App {
                 let val = setting_value(key, &cfg);
                 let label_style = if focused { Style::default().fg(palette::TEXT) } else { Style::default().fg(palette::MUTED) };
                 lines.push(Line::from(vec![
-                    Span::styled(indicator, Style::default().fg(palette::IRIS)),
+                    Span::styled(indicator, Style::default().fg(palette::PINE)),
                     Span::raw(" "),
                     Span::styled(format!("{:<lw$}", label, lw = label_w), label_style),
                     Span::styled(val, Style::default().fg(palette::FOAM)),
@@ -759,7 +760,7 @@ impl App {
         line_of_cursor.push(lines.len());
         if cursor == logout_cursor_idx { cursor_line = lines.len(); }
         let focused = cursor == logout_cursor_idx;
-        let indicator_color = if focused { palette::RED } else { palette::IRIS };
+        let indicator_color = if focused { palette::RED } else { palette::PINE };
         let (logout_text, logout_style) = if confirm_logout && focused {
             ("Log out? Press y to confirm", Style::default().fg(palette::RED))
         } else if focused {

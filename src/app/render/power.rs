@@ -1,11 +1,11 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use crate::api::TICKS_PER_SECOND;
 use super::super::{App, PowerFocus, palette};
-use super::super::ui_util::{fmt_duration, item_text_and_style, trunc_str};
+use super::super::ui_util::{build_queue_rows, fmt_duration, item_text_and_style, trunc_str, QueueRow};
 use unicode_width::UnicodeWidthStr;
 
 
@@ -34,9 +34,10 @@ impl App {
         let left_focused  = !queue_focused;
 
         let (bar_y, crumb_chars) = self.render_power_left_panel(f, left_area, left_focused);
-        self.render_power_queue(f, right_area, queue_focused);
+        let header_ys = self.render_power_queue(f, right_area, queue_focused);
 
-        // Vertical divider; ┤ at bar_y, │ elsewhere.
+        // Vertical divider; ┤ at the left-panel header bar, ├ where a queue group-header
+        // line meets the divider from the right, │ elsewhere.
         // Ancestor breadcrumb level indicators [N] overlay the divider in MUTED.
         for y in area.y..area.y + area.height {
             if let Some((_, ch)) = crumb_chars.iter().find(|(cy, _)| *cy == y) {
@@ -46,10 +47,11 @@ impl App {
                     Rect { x: divider_x, y, width: 1, height: 1 },
                 );
             } else {
-                let ch = if Some(y) == bar_y { "\u{2524}" }
-                         else                { "\u{2502}" };
+                let ch = if Some(y) == bar_y          { "\u{2524}" }
+                         else if header_ys.contains(&y) { "\u{251c}" }
+                         else                         { "\u{2502}" };
                 f.render_widget(
-                    Paragraph::new(Span::styled(ch, Style::default().fg(palette::SEEK_TRACK))),
+                    Paragraph::new(Span::styled(ch, Style::default().fg(palette::FOAM))),
                     Rect { x: divider_x, y, width: 1, height: 1 },
                 );
             }
@@ -58,8 +60,10 @@ impl App {
 
     
 
-    fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        if area.height < 1 { return; }
+    /// Returns the absolute y positions of visible group-header rows, so the caller
+    /// can draw a ├ junction where each header line meets the vertical divider.
+    fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) -> Vec<u16> {
+        if area.height < 1 { return vec![]; }
         self.power_queue_area = area;
 
         let n = self.player_tab.items.len();
@@ -70,67 +74,28 @@ impl App {
                     .style(Style::default().fg(palette::MUTED)),
                 area,
             );
-            return;
+            return vec![];
         }
 
         let (active, active_idx, live_pos, live_runtime, _) = self.effective_playback_state();
         let cursor = self.player_tab.playlist_cursor;
         let items = &self.player_tab.items;
 
-        // Display row types for the queue.
-        // Track(item_idx, in_group) — in_group drives the 2-space indent.
-        #[derive(Clone)]
-        enum DRow { Header, Spacer, Track(usize, bool) }
-
-        // Build display rows.
-        // Audio items group by album ("Artist: Album"), episodes group by series name.
-        // Movies, home videos, and everything else are ungrouped (no header/divider).
-        // group_for_header[j] holds the display label for the j-th DRow::Header.
-        let mut display: Vec<DRow> = Vec::new();
-        let mut group_for_header: Vec<String> = Vec::new();
-        let mut last_group_key: Option<String> = None;
-        for (i, item) in items.iter().enumerate() {
-            let group = if item.is_audio() && !item.album.is_empty() {
-                let key = format!("a:{}", item.album_id);
-                let label = if item.artist.is_empty() {
-                    item.album.clone()
-                } else {
-                    format!("{}: {}", item.artist, item.album)
-                };
-                Some((key, label))
-            } else if item.item_type == "Episode" && !item.series_name.is_empty() {
-                Some((format!("e:{}", item.series_name), item.series_name.clone()))
-            } else {
-                None
-            };
-
-            let in_group = group.is_some();
-            if let Some((key, label)) = group {
-                if last_group_key.as_deref() != Some(key.as_str()) {
-                    if last_group_key.is_some() {
-                        display.push(DRow::Spacer);
-                    }
-                    display.push(DRow::Header);
-                    group_for_header.push(label);
-                    last_group_key = Some(key);
-                }
-            } else {
-                last_group_key = None;
-            }
-            display.push(DRow::Track(i, in_group));
-        }
+        // Build display rows: audio grouped by album, episodes by series, the rest
+        // flat. group_for_header[j] holds the label for the j-th Header.
+        let (display, group_for_header) = build_queue_rows(items, true);
         let total = display.len();
         let visible = area.height as usize;
 
         // Visual row of the cursor item.
         let cursor_row = display.iter().position(|r| {
-            if let DRow::Track(idx, _) = r { *idx == cursor } else { false }
+            if let QueueRow::Track { idx, .. } = r { *idx == cursor } else { false }
         }).unwrap_or(0);
         let offset = if cursor_row >= visible { cursor_row - visible + 1 } else { 0 };
 
         // Count how many group headers appear before the scroll offset, so we
         // index group_for_header correctly for the visible window.
-        let mut header_idx = display[..offset].iter().filter(|r| matches!(r, DRow::Header)).count();
+        let mut header_idx = display[..offset].iter().filter(|r| matches!(r, QueueRow::Header)).count();
 
         let need_sb = total > visible;
         let render_w = area.width.saturating_sub(if need_sb { 1 } else { 0 }) as usize;
@@ -150,30 +115,34 @@ impl App {
         // Build visible ListItems and the row map simultaneously.
         self.power_queue_row_map.clear();
         let mut list_items: Vec<ListItem> = Vec::new();
+        let mut header_ys: Vec<u16> = Vec::new();
 
-        for entry in display.iter().skip(offset).take(visible) {
+        for (row_idx, entry) in display.iter().skip(offset).take(visible).enumerate() {
             match entry {
-                DRow::Header => {
+                QueueRow::Header => {
                     let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
                     header_idx += 1;
-                    // " TITLE ──────" — a space (no connector) separates the divider from the header.
-                    let max_label = render_w.saturating_sub(3); // 1 space + 1 space + 1+ dashes
+                    header_ys.push(area.y + row_idx as u16);
+                    // "────[ LABEL ]──" — FOAM line running into a label pill (dark text on
+                    // FOAM), with a short FOAM tail to its right.
+                    let max_label = render_w.saturating_sub(5);
                     let label = trunc_str(group, max_label);
-                    let label_w = label.width();
-                    let dashes = render_w.saturating_sub(1 + label_w + 1);
+                    let pill = format!(" {label} ");
+                    let pill_w = pill.width();
+                    let right = 2usize.min(render_w.saturating_sub(pill_w));
+                    let left = render_w.saturating_sub(pill_w + right);
                     list_items.push(ListItem::new(Line::from(vec![
-                        Span::raw(" "),
-                        Span::styled(label, Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
-                        Span::raw(" "),
-                        Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::SEEK_TRACK)),
+                        Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
+                        Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
+                        Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
                     ])));
                     self.power_queue_row_map.push(None);
                 }
-                DRow::Spacer => {
+                QueueRow::Spacer => {
                     list_items.push(ListItem::new(Line::raw("")));
                     self.power_queue_row_map.push(None);
                 }
-                DRow::Track(idx, in_group) => {
+                QueueRow::Track { idx, in_group } => {
                     let i = *idx;
                     let indent: usize = if *in_group { 1 } else { 0 };
                     let item = &items[i];
@@ -202,7 +171,7 @@ impl App {
                     };
 
                     let marker = if is_cursor {
-                        Span::styled("\u{258c}", Style::default().fg(palette::IRIS))
+                        Span::styled("\u{258c}", Style::default().fg(palette::PINE))
                     } else {
                         Span::raw(" ")
                     };
@@ -276,9 +245,10 @@ impl App {
                     }
                     if show_length && !dur.is_empty() {
                         let dur_color = dim_color;
-                        // Right-align duration within render_w.
+                        // Right-align duration to the blue header box's right edge, which
+                        // sits 2 cols in from render_w (the header's 2-dash tail).
                         let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
-                        let pad = render_w.saturating_sub(used + dur.width());
+                        let pad = render_w.saturating_sub(2 + used + dur.width());
                         spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur, Style::default().fg(dur_color)));
                     }
@@ -311,6 +281,7 @@ impl App {
                 sb_area, &mut sb,
             );
         }
+        header_ys
     }
 
     /// Renders the card image and returns the number of rows it actually occupied.
@@ -406,7 +377,7 @@ impl App {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
 
-        // Header: " NAME ─────" overlaid on the iris bar (matches queue group-header style).
+        // Header: "───── NAME" — FOAM line with a right-aligned label pill (matches queue group-header style).
         let area = lib_area;
         let header_name = if self.power_left_tab == 0 {
             "Continue".to_string()
@@ -417,12 +388,13 @@ impl App {
         let bar_y = area.y;
         let w = area.width as usize;
 
-        // Build the text spans (prefix space + label), then append " ────" to fill width.
+        // FOAM line on the left, right-aligned label pill (dark text on FOAM) at the
+        // panel edge — matches the queue group-header style.
         // Ancestor breadcrumb levels are NOT shown in the header — they appear as [N] indicators
         // stacked vertically on the right divider (see crumb_chars below).
-        let mut header_spans: Vec<Span<'static>> = vec![Span::raw(" ")];
         let mut crumb_chars: Vec<(u16, char)> = Vec::new();
-        if self.power_left_tab > 0 {
+        let budget = w.saturating_sub(5);
+        let label = if self.power_left_tab > 0 {
             let lib_idx = self.power_left_tab - 1;
             let lib = &self.libs[lib_idx];
             let skip = if lib.nav_stack.first()
@@ -432,11 +404,7 @@ impl App {
                 crumbs.push(lvl.title.clone());
             }
             // Always show only the current (last) level in the header.
-            let budget = w.saturating_sub(3);
-            header_spans.push(Span::styled(
-                trunc_str(crumbs.last().unwrap_or(&header_name), budget),
-                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
-            ));
+            let lbl = trunc_str(crumbs.last().unwrap_or(&header_name), budget);
             // Build vertical digit indicators for ancestor levels (all but the last crumb).
             // Layout (vertical): │ 1 · 2 │ — digits with · between, surrounded by normal │.
             if crumbs.len() > 1 {
@@ -452,17 +420,19 @@ impl App {
                     row += 1;
                 }
             }
+            lbl
         } else {
-            let budget = w.saturating_sub(3);
-            header_spans.push(Span::styled(
-                trunc_str(&header_name, budget),
-                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
-            ));
-        }
-        let used: usize = header_spans.iter().map(|s| s.content.as_ref().width()).sum();
-        let dashes = w.saturating_sub(used + 1);
-        header_spans.push(Span::raw(" "));
-        header_spans.push(Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::SEEK_TRACK)));
+            trunc_str(&header_name, budget)
+        };
+        let pill = format!(" {} ", label.to_lowercase());
+        let pill_w = pill.width();
+        let right = 2usize.min(w.saturating_sub(pill_w));
+        let left = w.saturating_sub(pill_w + right);
+        let header_spans: Vec<Span<'static>> = vec![
+            Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
+            Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
+            Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
+        ];
         f.render_widget(
             Paragraph::new(Line::from(header_spans)),
             Rect { x: area.x, y: bar_y, width: area.width, height: 1 },
@@ -526,7 +496,7 @@ impl App {
             let fg = if focused { palette::WHITE } else { palette::SUBTLE };
             let line = if selected && focused {
                 Line::from(vec![
-                    Span::styled("\u{258c}", Style::default().fg(palette::IRIS)),
+                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
                     Span::styled(title, Style::default().fg(palette::YELLOW)),
                 ])
             } else {

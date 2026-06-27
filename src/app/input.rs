@@ -1026,6 +1026,10 @@ impl App {
                 }
                 if !self.card_image_states.is_empty() { self.force_clear = true; }
             }
+            KeyCode::Char('g') if self.tab_idx == 1 && self.playlist_view != PLAYLIST_VIEW_POWER => {
+                self.playlist_group = !self.playlist_group;
+                self.save_prefs();
+            }
             KeyCode::Char('.') => {
                 let s = self.player.status.lock().unwrap();
                 if s.active {
@@ -1499,6 +1503,10 @@ impl App {
         0 // default to list view; the old "playlist_card_view" boolean and cards view no longer exist
     }
 
+    pub(super) fn load_playlist_group() -> bool {
+        Self::load_prefs()["playlist_group"].as_bool().unwrap_or(true)
+    }
+
     pub(super) fn load_home_card_view() -> bool {
         Self::load_prefs()["home_card_view"].as_bool().unwrap_or(false)
     }
@@ -1511,6 +1519,7 @@ impl App {
         let path = crate::config::prefs_path();
         let v = serde_json::json!({
             "playlist_view": self.playlist_view,
+            "playlist_group": self.playlist_group,
             "home_card_view": self.home_card_view,
             "ui_volume": self.ui_volume,
         });
@@ -1589,19 +1598,10 @@ impl App {
         } else if self.tab_idx == 1 {
             let inner = self.layout_playlist_inner;
             if inner.contains((col, row).into()) {
-                let row_idx = (row - inner.y) as usize;
-                if row_idx > 0 {
-                    let data_row = row_idx - 1;
-                    let visible = inner.height.saturating_sub(1) as usize;
-                    let n = self.player_tab.items.len();
-                    let cur = self.player_tab.playlist_cursor;
-                    let scroll_start = cur.saturating_sub(visible.saturating_sub(1))
-                        .min(n.saturating_sub(visible));
-                    let clicked = scroll_start + data_row;
-                    if clicked < n {
-                        self.player_tab.playlist_cursor = clicked;
-                        return true;
-                    }
+                let click_y = (row - inner.y) as usize;
+                if let Some(&Some(idx)) = self.playlist_row_map.get(click_y) {
+                    self.player_tab.playlist_cursor = idx;
+                    return true;
                 }
             }
         } else if self.tab_idx == 0 {

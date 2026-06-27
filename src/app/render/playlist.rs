@@ -2,10 +2,11 @@ use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Cell, Paragraph, Row, Table, TableState};
+use ratatui::widgets::{Cell, Paragraph, Row, Table};
+use unicode_width::UnicodeWidthStr;
 use crate::api::TICKS_PER_SECOND;
 use super::super::{App, palette};
-use super::super::ui_util::{fmt_duration, trunc_str};
+use super::super::ui_util::{build_queue_rows, fmt_duration, trunc_str, QueueRow};
 
 impl App {
     pub(super) fn render_combined(&mut self, f: &mut Frame, area: Rect) {
@@ -35,6 +36,7 @@ impl App {
 
         let inner = area;
         self.layout_playlist_inner = inner;
+        self.playlist_row_map.clear();
 
         if self.player_tab.items.is_empty() {
             f.render_widget(
@@ -62,82 +64,148 @@ impl App {
             SPINNER_FRAMES[(ms / 150) as usize % SPINNER_FRAMES.len()]
         };
 
-        let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
-            let now_playing = i == current_idx && active;
-            let row_style = if i == cursor {
-                Style::default().fg(palette::YELLOW)
-            } else {
-                Style::default().fg(palette::WHITE)
-            };
+        // Build display rows (grouped or flat) and window them to the visible height.
+        let (display, group_for_header) = build_queue_rows(&self.player_tab.items, self.playlist_group);
+        let visible = table_area.height as usize;
+        let cursor_row = display.iter().position(|r| {
+            if let QueueRow::Track { idx, .. } = r { *idx == cursor } else { false }
+        }).unwrap_or(0);
+        let offset = if cursor_row >= visible { cursor_row - visible + 1 } else { 0 };
+        let mut header_idx = display[..offset].iter().filter(|r| matches!(r, QueueRow::Header)).count();
 
-            let indicator = if i == cursor {
-                Cell::from("▐").style(Style::default().fg(palette::IRIS))
-            } else {
-                Cell::from(" ")
-            };
+        let items = &self.player_tab.items;
+        let mut rows: Vec<Row> = Vec::new();
+        for entry in display.iter().skip(offset).take(visible) {
+            match entry {
+                QueueRow::Header => {
+                    let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
+                    header_idx += 1;
+                    // "────[ LABEL ]──" — FOAM line running into a label pill (dark text on
+                    // FOAM), with a short FOAM tail to its right.
+                    let max_label = title_col_width.saturating_sub(5);
+                    let label = trunc_str(group, max_label);
+                    let pill = format!(" {label} ");
+                    let pill_w = pill.width();
+                    let right = 2usize.min(title_col_width.saturating_sub(pill_w));
+                    let left = title_col_width.saturating_sub(pill_w + right);
+                    let header_cell = Cell::from(Line::from(vec![
+                        Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
+                        Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
+                        Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
+                    ]));
+                    rows.push(Row::new([
+                        Cell::from(" "),
+                        header_cell,
+                        Cell::from(""),
+                        Cell::from(""),
+                        Cell::from(""),
+                    ]));
+                    self.playlist_row_map.push(None);
+                }
+                QueueRow::Spacer => {
+                    rows.push(Row::new([
+                        Cell::from(""), Cell::from(""), Cell::from(""), Cell::from(""), Cell::from(""),
+                    ]));
+                    self.playlist_row_map.push(None);
+                }
+                QueueRow::Track { idx, in_group } => {
+                    let i = *idx;
+                    let item = &items[i];
+                    let now_playing = i == current_idx && active;
+                    let row_style = if i == cursor {
+                        Style::default().fg(palette::YELLOW)
+                    } else {
+                        Style::default().fg(palette::WHITE)
+                    };
+                    let indicator = if i == cursor {
+                        Cell::from("▐").style(Style::default().fg(palette::PINE))
+                    } else {
+                        Cell::from(" ")
+                    };
 
-            let title = item.playback_label();
-            let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
-            let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
-            let (pos_ticks, rt_ticks) = if i == current_idx && active {
-                let pos = if live_pos > 0 { live_pos } else { item.playback_position_ticks };
-                (pos, live_runtime)
-            } else {
-                (item.playback_position_ticks, item.runtime_ticks)
-            };
-            // Spinner prefix "⠋ " costs 2 chars when now-playing.
-            let spin_w: usize = if now_playing { 2 } else { 0 };
-            // Now-playing title text is emby blue (not bold); others inherit row_style.
-            let title_span_style = if now_playing {
-                Style::default().fg(palette::FOAM)
-            } else {
-                Style::default()
-            };
-            let title_cell = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
-                let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
-                // Now-playing progress is green; other in-progress rows are grey.
-                let pct_style = if now_playing { palette::IRIS } else { palette::SUBTLE };
-                let pct_str = format!(" {pct}%");
-                let max_title = title_col_width.saturating_sub(pct_str.chars().count() + spin_w);
-                let mut spans: Vec<Span> = if now_playing {
-                    vec![Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)), Span::raw(" ")]
-                } else { vec![] };
-                spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
-                spans.push(Span::styled(pct_str, Style::default().fg(pct_style)));
-                Cell::from(Line::from(spans))
-            } else {
-                let max_title = title_col_width.saturating_sub(spin_w);
-                let mut spans: Vec<Span> = if now_playing {
-                    vec![Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)), Span::raw(" ")]
-                } else { vec![] };
-                spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
-                Cell::from(Line::from(spans))
-            };
+                    // Under a group header, show bare names (mirror the power view).
+                    let title = if *in_group && item.is_audio() {
+                        if item.index_number > 0 {
+                            format!("{:02}. {}", item.index_number, item.name)
+                        } else {
+                            item.name.clone()
+                        }
+                    } else if *in_group && item.item_type == "Episode" {
+                        item.name.clone()
+                    } else {
+                        item.playback_label()
+                    };
+                    let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
+                    let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
+                    let (pos_ticks, rt_ticks) = if now_playing {
+                        let pos = if live_pos > 0 { live_pos } else { item.playback_position_ticks };
+                        (pos, live_runtime)
+                    } else {
+                        (item.playback_position_ticks, item.runtime_ticks)
+                    };
+                    // Spinner prefix "⠋ " costs 2 chars when now-playing.
+                    let spin_w: usize = if now_playing { 2 } else { 0 };
+                    let indent: usize = if *in_group { 1 } else { 0 };
+                    let avail = title_col_width.saturating_sub(indent);
+                    // Now-playing title text is emby blue (not bold); others inherit row_style.
+                    let title_span_style = if now_playing {
+                        Style::default().fg(palette::FOAM)
+                    } else {
+                        Style::default()
+                    };
+                    let title_cell = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
+                        let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
+                        // Now-playing progress is green; other in-progress rows are grey.
+                        let pct_style = if now_playing { palette::IRIS } else { palette::SUBTLE };
+                        let pct_str = format!(" {pct}%");
+                        let max_title = avail.saturating_sub(pct_str.chars().count() + spin_w);
+                        let mut spans: Vec<Span> = Vec::new();
+                        if indent > 0 { spans.push(Span::raw(" ")); }
+                        if now_playing {
+                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                            spans.push(Span::raw(" "));
+                        }
+                        spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
+                        spans.push(Span::styled(pct_str, Style::default().fg(pct_style)));
+                        Cell::from(Line::from(spans))
+                    } else {
+                        let max_title = avail.saturating_sub(spin_w);
+                        let mut spans: Vec<Span> = Vec::new();
+                        if indent > 0 { spans.push(Span::raw(" ")); }
+                        if now_playing {
+                            spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
+                            spans.push(Span::raw(" "));
+                        }
+                        spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
+                        Cell::from(Line::from(spans))
+                    };
 
-            if show_ep_cols {
-                let ep_tag = if item.item_type == "Episode" && item.parent_index_number > 0 {
-                    format!("S{:02}/E{:02}", item.parent_index_number, item.index_number)
-                } else { String::new() };
-                Row::new([
-                    indicator,
-                    title_cell,
-                    Cell::from(Line::from(ep_tag).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
-                    Cell::from(Line::from(length).alignment(Alignment::Right)),
-                    Cell::from(""),
-                ]).style(row_style)
-            } else {
-                Row::new([
-                    indicator,
-                    title_cell,
-                    Cell::from(""),
-                    Cell::from(Line::from(length).alignment(Alignment::Right)),
-                    Cell::from(""),
-                ]).style(row_style)
+                    let row = if show_ep_cols {
+                        let ep_tag = if item.item_type == "Episode" && item.parent_index_number > 0 {
+                            format!("S{:02}/E{:02}", item.parent_index_number, item.index_number)
+                        } else { String::new() };
+                        Row::new([
+                            indicator,
+                            title_cell,
+                            Cell::from(Line::from(ep_tag).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
+                            Cell::from(Line::from(length).alignment(Alignment::Right)),
+                            Cell::from(""),
+                        ]).style(row_style)
+                    } else {
+                        Row::new([
+                            indicator,
+                            title_cell,
+                            Cell::from(""),
+                            Cell::from(Line::from(length).alignment(Alignment::Right)),
+                            Cell::from(""),
+                        ]).style(row_style)
+                    };
+                    rows.push(row);
+                    self.playlist_row_map.push(Some(i));
+                }
             }
-        }).collect();
+        }
 
-        let mut state = TableState::default();
-        state.select(Some(cursor));
         let table = Table::new(rows, [
             Constraint::Length(1),
             Constraint::Min(10),
@@ -145,8 +213,7 @@ impl App {
             Constraint::Length(7),
             Constraint::Length(1),
         ])
-        .column_spacing(1)
-        .row_highlight_style(Style::default());
-        f.render_stateful_widget(table, table_area, &mut state);
+        .column_spacing(1);
+        f.render_widget(table, table_area);
     }
 }

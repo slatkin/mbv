@@ -327,3 +327,60 @@ pub fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text
 pub fn highlight_style_continue(_item: &MediaItem) -> Style {
     Style::default().bg(palette::FOCUSED)
 }
+
+/// A visual row in the queue: a group header, a blank spacer between groups, or a
+/// track (item index + whether it sits under a group header, which drives the indent).
+#[derive(Clone)]
+pub(super) enum QueueRow {
+    Header,
+    Spacer,
+    Track { idx: usize, in_group: bool },
+}
+
+/// Build the visual rows for the queue.
+///
+/// When `group` is true, audio items are grouped by album ("Artist: Album") and
+/// episodes by series name, with a `Header` before each group and a `Spacer` between
+/// consecutive groups; movies and everything else stay ungrouped. When `group` is
+/// false, every item is a flat `Track` with no headers. The returned `Vec<String>`
+/// holds the label for the i-th `Header`.
+pub(super) fn build_queue_rows(items: &[MediaItem], group: bool) -> (Vec<QueueRow>, Vec<String>) {
+    let mut display: Vec<QueueRow> = Vec::new();
+    let mut group_for_header: Vec<String> = Vec::new();
+    if !group {
+        display.extend((0..items.len()).map(|idx| QueueRow::Track { idx, in_group: false }));
+        return (display, group_for_header);
+    }
+    let mut last_group_key: Option<String> = None;
+    for (i, item) in items.iter().enumerate() {
+        let group = if item.is_audio() && !item.album.is_empty() {
+            let key = format!("a:{}", item.album_id);
+            let label = if item.artist.is_empty() {
+                item.album.clone()
+            } else {
+                format!("{}: {}", item.artist, item.album)
+            };
+            Some((key, label))
+        } else if item.item_type == "Episode" && !item.series_name.is_empty() {
+            Some((format!("e:{}", item.series_name), item.series_name.clone()))
+        } else {
+            None
+        };
+
+        let in_group = group.is_some();
+        if let Some((key, label)) = group {
+            if last_group_key.as_deref() != Some(key.as_str()) {
+                if last_group_key.is_some() {
+                    display.push(QueueRow::Spacer);
+                }
+                display.push(QueueRow::Header);
+                group_for_header.push(label);
+                last_group_key = Some(key);
+            }
+        } else {
+            last_group_key = None;
+        }
+        display.push(QueueRow::Track { idx: i, in_group });
+    }
+    (display, group_for_header)
+}

@@ -305,6 +305,8 @@ pub struct App {
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
+    playlist_group: bool,                    // list view: group audio by album / episodes by series
+    playlist_row_map: Vec<Option<usize>>,    // list view visual row → item index (None = header/spacer)
     power_focus: PowerFocus,
     power_left_tab: usize,   // 0 = Home/CW, 1..=libs.len() = library index
     power_left_area: Rect,   // rendered area of the left panel (for mouse click / page calc)
@@ -565,6 +567,8 @@ impl App {
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: Self::load_playlist_view(),
+            playlist_group: Self::load_playlist_group(),
+            playlist_row_map: Vec::new(),
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
             power_left_area: Rect::default(),
@@ -1629,6 +1633,8 @@ mod tests {
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: 0,
+            playlist_group: true,
+            playlist_row_map: Vec::new(),
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
             power_left_area: Rect::default(),

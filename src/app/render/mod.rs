@@ -139,7 +139,7 @@ impl App {
                 let n = n.to_uppercase();
                 if i == sel {
                     Line::from(vec![
-                        Span::styled("▐", Style::default().fg(palette::IRIS)),
+                        Span::styled("▐", Style::default().fg(palette::PINE)),
                         Span::styled(format!(" {n}  "), Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)),
                     ])
                 } else {
@@ -160,10 +160,10 @@ impl App {
             all_names[vis_start..vis_end].iter().enumerate().map(|(i, n)| {
                 let n = n.to_uppercase();
                 if i == selected_tab {
-                    // Left-aligned active tab: the queue-row indicator (▐, iris) flush
+                    // Left-aligned active tab: the queue-row indicator (▐, pine) flush
                     // against the bold white label, no underline.
                     Line::from(vec![
-                        Span::styled("▐", Style::default().fg(palette::IRIS)),
+                        Span::styled("▐", Style::default().fg(palette::PINE)),
                         Span::styled(format!(" {n}  "), Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)),
                     ])
                 } else {
@@ -332,7 +332,7 @@ impl App {
     pub(super) fn render_panel_row(f: &mut Frame, x: u16, y: u16, width: u16, selected: bool, spans: Vec<Span>) {
         let indicator = Span::styled(
             if selected { "\u{258c}" } else { " " },
-            Style::default().fg(palette::IRIS),
+            Style::default().fg(palette::PINE),
         );
         let mut all = vec![indicator, Span::raw(" ")];
         all.extend(spans);

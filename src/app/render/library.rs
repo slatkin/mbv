@@ -189,7 +189,7 @@ impl App {
                 Style::default().fg(palette::WHITE)
             };
             let marker = if is_cursor {
-                Span::styled("▌", Style::default().fg(palette::IRIS))
+                Span::styled("▌", Style::default().fg(palette::PINE))
             } else {
                 Span::raw(" ")
             };
@@ -628,7 +628,7 @@ impl App {
             let is_episode_like = item.item_type == "Episode" || (is_feed_lib && item.item_type == "Video");
             if selected && !is_album_folder && !matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") && !is_episode_like {
                 let bar: Vec<Line> = (0..ind_rect.height)
-                    .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::IRIS))))
+                    .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::PINE))))
                     .collect();
                 f.render_widget(Paragraph::new(bar), ind_rect);
             }
