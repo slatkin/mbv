@@ -203,11 +203,19 @@ impl App {
             self.playlists_scroll = self.playlists_cursor + 1 - list_h;
         }
 
+        // Highlight the playlist that is currently loaded into the queue.
+        let loaded_id: Option<&str> = if let crate::config::QueueSource::Playlist { id: Some(ref id), .. } = self.queue_source {
+            Some(id.as_str())
+        } else {
+            None
+        };
+
         for (vi, pl) in self.playlists[self.playlists_scroll..].iter().enumerate() {
             if vi >= list_h { break; }
             let abs_idx = self.playlists_scroll + vi;
             let selected = abs_idx == self.playlists_cursor;
-            let fg = if selected { palette::IRIS } else { palette::TEXT };
+            let is_loaded = loaded_id.map(|id| id == pl.id.as_str()).unwrap_or(false);
+            let fg = if selected { palette::IRIS } else if is_loaded { palette::FOAM } else { palette::TEXT };
             let count_str = if pl.total_count > 0 { format!(" ({})", pl.total_count) } else { String::new() };
             let name_max = Self::panel_row_text_width(content.width).saturating_sub(count_str.len());
             let row_y = content.y + vi as u16;
