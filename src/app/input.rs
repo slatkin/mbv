@@ -872,6 +872,8 @@ impl App {
                 let lib_idx = self.power_left_tab - 1;
 
                 // Detail mode: scroll overview, Enter plays, Backspace/Esc dismisses.
+                // Nav keys are consumed to prevent cursor movement in the underlying list.
+                // All other keys (q, /, Tab, etc.) fall through to their normal handlers.
                 if self.power_detail_item.is_some() {
                     match key.code {
                         KeyCode::Enter => {
@@ -880,30 +882,40 @@ impl App {
                             self.tab_idx = self.lib_tab_offset() + lib_idx;
                             self.select();
                             self.tab_idx = saved;
+                            return false;
                         }
                         KeyCode::Backspace | KeyCode::Esc => {
                             self.power_detail_item = None;
+                            return false;
                         }
                         KeyCode::Up => {
                             self.power_detail_scroll =
                                 self.power_detail_scroll.saturating_sub(1);
+                            return false;
                         }
                         KeyCode::Down => {
                             self.power_detail_scroll =
                                 (self.power_detail_scroll + 1).min(self.power_detail_max_scroll);
+                            return false;
                         }
                         KeyCode::PageUp => {
                             self.power_detail_scroll =
                                 self.power_detail_scroll.saturating_sub(self.power_detail_page_h);
+                            return false;
                         }
                         KeyCode::PageDown => {
                             self.power_detail_scroll =
                                 (self.power_detail_scroll + self.power_detail_page_h)
                                     .min(self.power_detail_max_scroll);
+                            return false;
                         }
+                        // Left/Right/Home/End: swallow to block underlying list nav.
+                        KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End => {
+                            return false;
+                        }
+                        // Everything else (q, /, Tab, …) falls through to normal handlers.
                         _ => {}
                     }
-                    return false;
                 }
 
                 // Enter on a leaf Movie: show detail panel instead of playing.
