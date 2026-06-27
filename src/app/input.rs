@@ -1298,7 +1298,7 @@ impl App {
         if col < area.x || col >= area.x + area.width { return None; }
         let rel = col - area.x;
         let n = self.power_left_tab_count();
-        let pad = 2u16;
+        let pad = 4u16; // rendered as "  NAME  " (2 leading + 2 trailing spaces)
         let mut x = 0u16;
         for i in 0..n {
             let name_w = if i == 0 {
@@ -1496,7 +1496,7 @@ impl App {
         if let Some(v) = prefs["playlist_view"].as_u64() {
             return v.min((super::PLAYLIST_VIEW_COUNT - 1) as u64) as u8;
         }
-        prefs["playlist_card_view"].as_bool().unwrap_or(false) as u8
+        0 // default to list view; the old "playlist_card_view" boolean and cards view no longer exist
     }
 
     pub(super) fn load_home_card_view() -> bool {
@@ -1573,7 +1573,9 @@ impl App {
                     let click_y = row - la.y;
                     let lib = &mut self.libs[lib_idx];
                     if let Some(s) = &mut lib.search {
-                        let clicked = click_y as usize;
+                        let visible = la.height as usize;
+                        let offset = if s.cursor >= visible { s.cursor - visible + 1 } else { 0 };
+                        let clicked = offset + click_y as usize;
                         if clicked < s.results.len() { s.cursor = clicked; }
                     } else if let Some(lvl) = lib.nav_stack.last_mut() {
                         let visible = la.height as usize;

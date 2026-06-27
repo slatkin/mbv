@@ -46,16 +46,14 @@ impl App {
         }
 
         let cursor = self.player_tab.playlist_cursor;
-        // The list occupies 90% of the available width, centered.
-        let table_w = inner.width * 90 / 100;
-        let table_area = Rect { x: inner.x + (inner.width - table_w) / 2, width: table_w, ..inner };
+        let table_area = inner;
         let show_ep_cols = self.player_tab.items.iter().any(|it| it.item_type == "Episode");
 
         // Fixed column widths + inter-column gaps of 1.
         let title_col_width = (table_area.width as i32
             - if show_ep_cols { 21 } else { 13 }).max(0) as usize;
 
-        const SPINNER_FRAMES: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+        const SPINNER_FRAMES: &[&str] = &["-", "\\", "|", "/"];
         let spinner_char: &str = {
             let ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

@@ -189,6 +189,7 @@ pub fn clear_queue_state() {
 #[serde(rename_all = "snake_case")]
 pub enum PanelMode {
     #[default]
+    #[serde(alias = "expanded")] // old variant name; map to OneRow on load
     OneRow,
     Hidden,
 }
