@@ -194,6 +194,7 @@ impl App {
                     };
 
                     // For audio under an album header: show track number + bare name.
+                    // For episodes under a series header: bare episode name (series already shown).
                     // Otherwise use the standard playback label.
                     let label = if item.is_audio() {
                         if item.index_number > 0 {
@@ -201,6 +202,8 @@ impl App {
                         } else {
                             item.name.clone()
                         }
+                    } else if *in_group && item.item_type == "Episode" {
+                        item.name.clone()
                     } else {
                         item.playback_label()
                     };
@@ -226,6 +229,9 @@ impl App {
                     let title_w = render_w.saturating_sub(indent + 1 + extra); // 1 for marker
                     let title = trunc_str(&label, title_w);
 
+                    // Now-playing title text is always emby blue, regardless of focus state.
+                    let title_color = if is_active { palette::FOAM } else { fg };
+
                     let mut spans: Vec<Span> = Vec::new();
                     if indent > 0 { spans.push(Span::raw("  ")); }
                     spans.push(marker);
@@ -241,23 +247,24 @@ impl App {
                                 spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
                                 spans.push(Span::raw(" "));
                             }
-                            spans.push(Span::raw(title[split..].to_string()));
+                            spans.push(Span::styled(title[split..].to_string(), Style::default().fg(title_color)));
                         } else {
                             if is_active {
                                 spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
                                 spans.push(Span::raw(" "));
                             }
-                            spans.push(Span::raw(title));
+                            spans.push(Span::styled(title, Style::default().fg(title_color)));
                         }
                     } else {
                         if is_active {
                             spans.push(Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)));
                             spans.push(Span::raw(" "));
                         }
-                        spans.push(Span::raw(title));
+                        spans.push(Span::styled(title, Style::default().fg(title_color)));
                     }
                     if !pct_str.is_empty() {
-                        spans.push(Span::styled(pct_str, Style::default().fg(palette::YELLOW)));
+                        let pct_color = if is_active { palette::IRIS } else { palette::YELLOW };
+                        spans.push(Span::styled(pct_str, Style::default().fg(pct_color)));
                     }
                     if show_length && !dur.is_empty() {
                         let dur_color = dim_color;
@@ -361,66 +368,66 @@ impl App {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
 
-        // Header: iris bar on top, panel name below.
+        // Header: " NAME ─────" overlaid on the iris bar (matches queue group-header style).
         let area = lib_area;
         let header_name = if self.power_left_tab == 0 {
-            "Continue Watching".to_string()
+            "Continue".to_string()
         } else {
             self.libs[self.power_left_tab - 1].library.name.clone()
         };
-        let budget = (area.width as usize).saturating_sub(2);
-        if area.height < 2 { return None; }
+        if area.height < 1 { return None; }
         let bar_y = area.y;
-        let uline = "\u{2500}".repeat(area.width as usize);
-        f.render_widget(
-            Paragraph::new(Span::styled(uline, Style::default().fg(palette::IRIS))),
-            Rect { x: area.x, y: bar_y, width: area.width, height: 1 },
-        );
-        // Build the header line: breadcrumbs when deep in a library, plain name otherwise.
-        let header_line: Line = {
-            let crumb_spans: Option<Vec<Span<'static>>> = if self.power_left_tab > 0 {
-                let lib_idx = self.power_left_tab - 1;
-                let lib = &self.libs[lib_idx];
-                let skip = if lib.nav_stack.first()
-                    .map(|l| l.title == lib.library.name).unwrap_or(false) { 1 } else { 0 };
-                let mut crumbs: Vec<String> = vec![lib.library.name.clone()];
-                for lvl in lib.nav_stack.iter().skip(skip) {
-                    crumbs.push(lvl.title.clone());
-                }
-                if crumbs.len() > 1 {
-                    let mut spans: Vec<Span<'static>> = vec![Span::raw(" ")];
-                    for (ci, name) in crumbs.iter().enumerate() {
-                        let is_last = ci + 1 == crumbs.len();
-                        let display: String = if is_last { name.clone() } else { format!("[{}]", ci + 1) };
-                        let style = if is_last {
-                            Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().fg(palette::MUTED)
-                        };
-                        spans.push(Span::styled(display, style));
-                        if !is_last {
-                            spans.push(Span::styled("/", Style::default().fg(palette::IRIS)));
-                        }
+        let w = area.width as usize;
+
+        // Build the text spans (prefix space + label), then append " ────" to fill width.
+        let mut header_spans: Vec<Span<'static>> = vec![Span::raw(" ")];
+        if self.power_left_tab > 0 {
+            let lib_idx = self.power_left_tab - 1;
+            let lib = &self.libs[lib_idx];
+            let skip = if lib.nav_stack.first()
+                .map(|l| l.title == lib.library.name).unwrap_or(false) { 1 } else { 0 };
+            let mut crumbs: Vec<String> = vec![lib.library.name.clone()];
+            for lvl in lib.nav_stack.iter().skip(skip) {
+                crumbs.push(lvl.title.clone());
+            }
+            if crumbs.len() > 1 {
+                for (ci, name) in crumbs.iter().enumerate() {
+                    let is_last = ci + 1 == crumbs.len();
+                    let display: String = if is_last { name.clone() } else { format!("[{}]", ci + 1) };
+                    let style = if is_last {
+                        Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(palette::MUTED)
+                    };
+                    header_spans.push(Span::styled(display, style));
+                    if !is_last {
+                        header_spans.push(Span::styled("/", Style::default().fg(palette::IRIS)));
                     }
-                    Some(spans)
-                } else {
-                    None
                 }
             } else {
-                None
-            };
-            crumb_spans.map(Line::from).unwrap_or_else(|| Line::from(vec![
-                Span::raw(" "),
-                Span::styled(trunc_str(&header_name, budget),
-                    Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)),
-            ]))
-        };
+                let budget = w.saturating_sub(3);
+                header_spans.push(Span::styled(
+                    trunc_str(&header_name, budget),
+                    Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
+                ));
+            }
+        } else {
+            let budget = w.saturating_sub(3);
+            header_spans.push(Span::styled(
+                trunc_str(&header_name, budget),
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
+            ));
+        }
+        let used: usize = header_spans.iter().map(|s| s.content.as_ref().width()).sum();
+        let dashes = w.saturating_sub(used + 1);
+        header_spans.push(Span::raw(" "));
+        header_spans.push(Span::styled("\u{2500}".repeat(dashes), Style::default().fg(palette::IRIS)));
         f.render_widget(
-            Paragraph::new(header_line),
-            Rect { x: area.x, y: area.y + 1, width: area.width, height: 1 },
+            Paragraph::new(Line::from(header_spans)),
+            Rect { x: area.x, y: bar_y, width: area.width, height: 1 },
         );
 
-        let content_area = Rect { y: area.y + 2, height: area.height.saturating_sub(2), ..area };
+        let content_area = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
         if content_area.height == 0 { return Some(bar_y); }
 
         // Store for click / page-size calculations.

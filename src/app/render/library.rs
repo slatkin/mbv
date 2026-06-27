@@ -53,7 +53,7 @@ impl App {
             crumb_names.push((lvl.title.clone(), i + 1));
         }
 
-        let sep = " \u{bb} ";
+        let sep = "/";
         let is_deep = crumb_names.len() > 1;
         let has_search = self.libs[lib_idx].search.is_some();
         let show_border = !panel_visible && (is_deep || has_search);
@@ -67,10 +67,12 @@ impl App {
         let mut new_breadcrumbs: Vec<(u16, u16, u16, usize)> = Vec::new();
         for (ci, (name, target_depth)) in crumb_names.iter().enumerate() {
             let is_last = ci + 1 == crumb_names.len();
-            let w = name.chars().count() as u16;
+            // Parent levels show [N] instead of their full name to save space.
+            let display: String = if is_last { name.clone() } else { format!("[{}]", ci + 1) };
+            let w = display.chars().count() as u16;
             new_breadcrumbs.push((x, x + w, crumb_row, *target_depth));
             let style = if is_last { crumb_current_style } else { crumb_parent_style };
-            crumb_spans.push(Span::styled(name.clone(), style));
+            crumb_spans.push(Span::styled(display, style));
             x += w;
             if !is_last {
                 crumb_spans.push(Span::styled(sep, Style::default().fg(palette::IRIS)));

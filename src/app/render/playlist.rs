@@ -80,6 +80,15 @@ impl App {
         let title_col_width = (table_area.width as i32
             - if show_ep_cols { 21 } else { 13 }).max(0) as usize;
 
+        const SPINNER_FRAMES: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
+        let spinner_char: &str = {
+            let ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis();
+            SPINNER_FRAMES[(ms / 150) as usize % SPINNER_FRAMES.len()]
+        };
+
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let now_playing = i == current_idx && active;
             let row_style = if i == cursor {
@@ -103,18 +112,33 @@ impl App {
             } else {
                 (item.playback_position_ticks, item.runtime_ticks)
             };
+            // Spinner prefix "⠋ " costs 2 chars when now-playing.
+            let spin_w: usize = if now_playing { 2 } else { 0 };
+            // Now-playing title text is emby blue (not bold); others inherit row_style.
+            let title_span_style = if now_playing {
+                Style::default().fg(palette::FOAM)
+            } else {
+                Style::default()
+            };
             let title_cell = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
                 let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
                 // Now-playing progress is green; other in-progress rows are yellow.
                 let pct_style = if now_playing { palette::IRIS } else { palette::YELLOW };
                 let pct_str = format!(" {pct}%");
-                let max_title = title_col_width.saturating_sub(pct_str.chars().count());
-                Cell::from(Line::from(vec![
-                    Span::raw(trunc_str(&title, max_title)),
-                    Span::styled(pct_str, Style::default().fg(pct_style)),
-                ]))
+                let max_title = title_col_width.saturating_sub(pct_str.chars().count() + spin_w);
+                let mut spans: Vec<Span> = if now_playing {
+                    vec![Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)), Span::raw(" ")]
+                } else { vec![] };
+                spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
+                spans.push(Span::styled(pct_str, Style::default().fg(pct_style)));
+                Cell::from(Line::from(spans))
             } else {
-                Cell::from(trunc_str(&title, title_col_width))
+                let max_title = title_col_width.saturating_sub(spin_w);
+                let mut spans: Vec<Span> = if now_playing {
+                    vec![Span::styled(spinner_char.to_string(), Style::default().fg(palette::IRIS)), Span::raw(" ")]
+                } else { vec![] };
+                spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
+                Cell::from(Line::from(spans))
             };
 
             if show_ep_cols {

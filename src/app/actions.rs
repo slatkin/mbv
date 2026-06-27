@@ -1363,6 +1363,7 @@ impl App {
                 self.player_tab.playlist_cursor = cursor;
                 self.queue_source = source;
                 self.queue_restored = true;
+                self.queue_restore_pending = false;
                 self.queue_dirty = false;
                 if self.client.lock().unwrap().config.start_on_queue {
                     self.tab_idx = 1;
@@ -1387,6 +1388,7 @@ impl App {
     pub(super) fn on_queue_replace_silent(&mut self) {
         self.queue_source = crate::config::QueueSource::Unknown;
         self.queue_restored = false;
+        self.queue_restore_pending = false;
         self.queue_dirty = false;
     }
 
@@ -1569,6 +1571,10 @@ impl App {
     }
 
     pub(super) fn save_queue_state(&self) {
+        // Don't overwrite the on-disk state while the initial restore is still
+        // in-flight: the queue is empty only because QueueRestored hasn't been
+        // processed yet, not because the user actually has an empty queue.
+        if self.queue_restore_pending { return; }
         let positions: std::collections::HashMap<String, i64> = self.player_tab.items.iter()
             .filter(|i| i.playback_position_ticks > 0 && !i.is_audio())
             .map(|i| (i.id.clone(), i.playback_position_ticks))
@@ -1591,6 +1597,9 @@ impl App {
     pub(super) fn spawn_restore_queue_state(&mut self) {
         let Some(state) = crate::config::load_queue_state() else { return };
         if state.item_ids.is_empty() { return; }
+        // Mark the restore as in-flight so save_queue_state won't overwrite
+        // the on-disk state with an empty queue before the response arrives.
+        self.queue_restore_pending = true;
         let (item_ids, source, last_played_item_id, last_played_completed, positions) =
             (state.item_ids, state.source, state.last_played_item_id, state.last_played_completed, state.positions);
         let client = self.client.lock().unwrap().clone();

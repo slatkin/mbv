@@ -369,6 +369,10 @@ pub struct App {
     playlists_open_loading: bool,
     queue_source: crate::config::QueueSource,
     queue_restored: bool,
+    /// True from `spawn_restore_queue_state` until the `QueueRestored` event
+    /// is processed. Prevents `save_queue_state` from overwriting the on-disk
+    /// state with an empty queue while the restore is still in-flight.
+    queue_restore_pending: bool,
     queue_dirty: bool,
     pending_queue_action: Option<PendingQueueAction>,
     show_save_playlist_modal: bool,
@@ -617,6 +621,7 @@ impl App {
             playlists_open_loading: false,
             queue_source: crate::config::QueueSource::Unknown,
             queue_restored: false,
+            queue_restore_pending: false,
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
@@ -1161,7 +1166,12 @@ impl App {
 
             self.sync_volume_from_player();
 
-            if had_events || self.force_clear || last_render.elapsed() >= Duration::from_secs(1) {
+            // Animate the now-playing spinner at ~150 ms; fall back to 1 s when idle.
+            let render_interval = {
+                let st = self.player.status.lock().unwrap();
+                if st.active { Duration::from_millis(150) } else { Duration::from_secs(1) }
+            };
+            if had_events || self.force_clear || last_render.elapsed() >= render_interval {
                 if self.force_clear {
                     self.force_clear = false;
                     terminal.clear()?;
@@ -1688,6 +1698,7 @@ mod tests {
             playlists_open_loading: false,
             queue_source: crate::config::QueueSource::Unknown,
             queue_restored: false,
+            queue_restore_pending: false,
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
