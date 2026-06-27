@@ -49,7 +49,7 @@ impl App {
             let s = offset + i;
             let (title, items, cursor) = if s == 0 {
                 (
-                    "Continue Watching".to_string(),
+                    "Continue".to_string(),
                     self.home.continue_items.clone(),
                     self.home.continue_cursor,
                 )
@@ -289,7 +289,7 @@ impl App {
                 areas[0] = row_area;
                 let cont_focused = home_focused && self.home.section == 0;
                 scrolls[0] = self.render_home_section(
-                    f, row_area, "Continue Watching",
+                    f, row_area, "Continue",
                     &self.home.continue_items, self.home.continue_cursor, cont_focused, true,
                 );
             } else {

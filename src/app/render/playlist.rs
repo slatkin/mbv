@@ -122,33 +122,13 @@ impl App {
             };
             let title_cell = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
                 let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
-                if now_playing {
-                    // Play = filled green chip (white triangle); progress = plain green text.
-                    let play_chip = Span::styled("\u{25B6}", Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD));
-                    let pct_chip = Span::styled(format!("{pct}%"), Style::default().fg(palette::IRIS));
-                    let suffix_w = 1 + pct_chip.width() + play_chip.width();
-                    let max_title = title_col_width.saturating_sub(suffix_w);
-                    Cell::from(Line::from(vec![
-                        Span::raw(trunc_str(&title, max_title)),
-                        Span::raw(" "),
-                        pct_chip,
-                        play_chip,
-                    ]))
-                } else {
-                    let pct_str = format!(" {pct}%");
-                    let max_title = title_col_width.saturating_sub(pct_str.chars().count());
-                    Cell::from(Line::from(vec![
-                        Span::raw(trunc_str(&title, max_title)),
-                        Span::styled(pct_str, Style::default().fg(palette::YELLOW)),
-                    ]))
-                }
-            } else if now_playing {
-                let play_chip = Span::styled("\u{25B6}", Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD));
-                let max_title = title_col_width.saturating_sub(1 + play_chip.width());
+                // Now-playing progress is green; other in-progress rows are yellow.
+                let pct_style = if now_playing { palette::IRIS } else { palette::YELLOW };
+                let pct_str = format!(" {pct}%");
+                let max_title = title_col_width.saturating_sub(pct_str.chars().count());
                 Cell::from(Line::from(vec![
                     Span::raw(trunc_str(&title, max_title)),
-                    Span::raw(" "),
-                    play_chip,
+                    Span::styled(pct_str, Style::default().fg(pct_style)),
                 ]))
             } else {
                 Cell::from(trunc_str(&title, title_col_width))
