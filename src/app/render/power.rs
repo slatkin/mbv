@@ -1,11 +1,11 @@
 use ratatui::Frame;
-use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::layout::{Alignment, Constraint, Rect};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState};
 use crate::api::TICKS_PER_SECOND;
 use super::super::{App, PowerFocus, palette};
-use super::super::ui_util::{build_queue_rows, fmt_duration, item_text_and_style, trunc_str, QueueRow};
+use super::super::ui_util::{build_queue_rows, fmt_duration, trunc_str, QueueRow};
 use unicode_width::UnicodeWidthStr;
 
 
@@ -13,17 +13,6 @@ use unicode_width::UnicodeWidthStr;
 impl App {
     pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
         if area.height < 4 { return; }
-
-        // Drop focus to Queue only if the left panel truly has nothing to show
-        // (no Continue Watching AND no libraries). Don't drop on launch while
-        // continue_items is still loading — libraries are still browsable.
-        if matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab == 0
-            && self.home.continue_items.is_empty()
-            && self.libs.is_empty()
-        {
-            self.power_focus = PowerFocus::Queue;
-        }
 
         // Left panel (fixed 44 cols) │ Right panel (queue, remaining).
         let left_w: u16 = 44;
@@ -77,6 +66,8 @@ impl App {
             if !image_loading {
                 if self.power_detail_item.is_some() {
                     self.render_power_detail(f, list_area, left_focused);
+                } else if self.power_left_tab > 0 && self.is_album_level(self.power_left_tab - 1) {
+                    self.render_power_album_detail(f, list_area, self.power_left_tab - 1, left_focused);
                 } else {
                     let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
                     if let Some(by) = list_bar_y { header_ys.push(by); }
@@ -89,6 +80,8 @@ impl App {
             if !image_loading {
                 if self.power_detail_item.is_some() {
                     self.render_power_detail(f, lib_area, left_focused);
+                } else if self.power_left_tab > 0 && self.is_album_level(self.power_left_tab - 1) {
+                    self.render_power_album_detail(f, lib_area, self.power_left_tab - 1, left_focused);
                 } else {
                     self.render_power_list(f, lib_area, left_focused);
                 }
@@ -323,6 +316,39 @@ impl App {
     fn render_power_card(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
         // If a movie detail is pinned, show that item's image instead of the queue cursor item.
         if self.power_detail_item.is_some() {
+            // (handled below)
+        } else if self.power_left_tab > 0 && self.is_album_level(self.power_left_tab - 1) {
+            // When browsing a music album's tracks, show the album art in the card slot.
+            let lib_idx = self.power_left_tab - 1;
+            let (album_id, fallback_id) = {
+                let lib = &self.libs[lib_idx];
+                let lvl = match lib.nav_stack.last() { Some(l) => l, None => return (0, false) };
+                let fid = lvl.items.first().map(|t| t.id.clone()).unwrap_or_default();
+                (lvl.parent_id.clone(), fid)
+            };
+            let fetch_id = if !album_id.is_empty() { album_id.clone() } else { fallback_id };
+            let cache_key = format!("{}:pwr_al", album_id);
+            self.fetch_card_image(cache_key.clone(), fetch_id, String::new(), &["AudioChild", "Primary"]);
+            let image_loading = self.card_image_loading.contains(&cache_key);
+            if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
+                type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
+                let avail = ratatui::layout::Size { width: area.width.saturating_sub(2), height: area.height };
+                let actual = state.size_for(
+                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
+                );
+                let img_x = area.x + 1 + (area.width.saturating_sub(2).saturating_sub(actual.width)) / 2;
+                let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
+                    img_rect, state,
+                );
+                return (actual.height, false);
+            } else {
+                return (0, image_loading);
+            }
+        }
+
+        if self.power_detail_item.is_some() {
             let (detail_id, series_id) = {
                 let d = self.power_detail_item.as_ref().unwrap();
                 (d.id.clone(), d.series_id.clone())
@@ -438,7 +464,7 @@ impl App {
 
         // Header: "───── NAME" — FOAM line with a right-aligned label pill (matches queue group-header style).
         let header_name = if self.power_left_tab == 0 {
-            "Continue Watching".to_string()
+            "Keep Watching".to_string()
         } else {
             self.libs[self.power_left_tab - 1].library.name.clone()
         };
@@ -752,6 +778,148 @@ impl App {
                     Style::default().fg(palette::MUTED),
                 ))),
                 Rect { x: inner_x, y: max_y - 1, width: inner_w16, height: 1 },
+            );
+        }
+    }
+
+    /// Renders the music album detail panel (track list) into `area` — the lib
+    /// slot below the card. The card itself already shows the album art (handled
+    /// in `render_power_card`). Mirrors `render_power_detail` for movies.
+    fn render_power_album_detail(&mut self, f: &mut Frame, area: Rect, lib_idx: usize, focused: bool) {
+        if area.height == 0 { return; }
+
+        let (items, cursor, album_name) = {
+            let lib = &self.libs[lib_idx];
+            let lvl = match lib.nav_stack.last() { Some(l) => l, None => return };
+            (lvl.items.clone(), lvl.cursor, lvl.title.clone())
+        };
+        let n = items.len();
+        let first = match items.first() { Some(t) => t.clone(), None => return };
+        let artist = first.artist.clone();
+        let year = first.production_year;
+
+        let inner_x   = area.x + 1;
+        let inner_w   = area.width.saturating_sub(2) as usize;
+        let inner_w16 = area.width.saturating_sub(2);
+        let max_y     = area.y + area.height;
+        let mut row   = area.y;
+
+        let title_color = if focused { palette::YELLOW } else { palette::SUBTLE };
+
+        // — Album name —
+        if row < max_y {
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&album_name, inner_w),
+                    Style::default().fg(title_color),
+                ))),
+                Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
+            );
+            row += 1;
+        }
+
+        // — Artist  year (SUBTLE) —
+        if row < max_y {
+            let year_str = if year > 0 { year.to_string() } else { String::new() };
+            let meta = [artist.as_str(), year_str.as_str()]
+                .iter().filter(|s| !s.is_empty()).copied()
+                .collect::<Vec<_>>().join("  ");
+            if !meta.is_empty() {
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        trunc_str(&meta, inner_w),
+                        Style::default().fg(palette::SUBTLE),
+                    ))),
+                    Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
+                );
+                row += 1;
+            }
+        }
+
+        // — Blank separator —
+        if row < max_y { row += 1; }
+
+        // — Scrollable track list —
+        let table_area = Rect { x: area.x, y: row, width: area.width, height: max_y.saturating_sub(row) };
+        if table_area.height == 0 { return; }
+
+        let (active, active_idx, _, _, _) = self.effective_playback_state();
+        let now_playing_id: Option<String> = if active {
+            self.player_tab.items.get(active_idx).map(|i| i.id.clone())
+        } else {
+            None
+        };
+
+        let show_length = table_area.width > 40;
+        let dur_col_w: usize = if show_length { 7 } else { 0 };
+        let title_col_w = (table_area.width as usize)
+            .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
+
+        let rows: Vec<Row> = items.iter().enumerate().map(|(i, item)| {
+            let is_cursor  = i == cursor;
+            let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
+            let row_style = if is_playing {
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+            } else if is_cursor && focused {
+                Style::default().fg(palette::YELLOW)
+            } else if focused {
+                Style::default().fg(palette::WHITE)
+            } else {
+                Style::default().fg(palette::SUBTLE)
+            };
+            let marker = if is_cursor && focused {
+                Span::styled("\u{258c}", Style::default().fg(palette::PINE))
+            } else {
+                Span::raw(" ")
+            };
+            let track_num = if item.index_number > 0 {
+                format!("{}. ", item.index_number)
+            } else {
+                format!("{}. ", i + 1)
+            };
+            let num_w = track_num.chars().count();
+            let title = trunc_str(&item.name, title_col_w.saturating_sub(num_w));
+            let title_cell = Cell::from(Line::from(vec![
+                marker,
+                Span::styled(track_num, Style::default().fg(palette::SUBTLE)),
+                Span::raw(title),
+            ]));
+            let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
+            let length = if len_secs > 0 { fmt_duration(len_secs) } else { "\u{2014}".to_string() };
+            if show_length {
+                Row::new([
+                    title_cell,
+                    Cell::from(Line::from(length).alignment(Alignment::Right))
+                        .style(Style::default().fg(palette::SUBTLE)),
+                    Cell::from(""),
+                ]).style(row_style)
+            } else {
+                Row::new([title_cell, Cell::from(""), Cell::from("")]).style(row_style)
+            }
+        }).collect();
+
+        let mut state = TableState::default();
+        state.select(Some(cursor));
+        let table = Table::new(rows, [
+            Constraint::Min(10),
+            Constraint::Length(if show_length { dur_col_w as u16 } else { 0 }),
+            Constraint::Length(1),
+        ])
+        .column_spacing(1)
+        .row_highlight_style(Style::default());
+        f.render_stateful_widget(table, table_area, &mut state);
+
+        let visible_rows = table_area.height as usize;
+        if n > visible_rows {
+            let max_offset = n.saturating_sub(visible_rows);
+            let mut sb_state = ScrollbarState::new(max_offset + 1).position(state.offset());
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("\u{2590}")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None).end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                table_area, &mut sb_state,
             );
         }
     }
