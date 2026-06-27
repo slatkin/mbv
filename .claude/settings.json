@@ -21,7 +21,23 @@
       "mcp__jcodemunch__search_symbols",
       "mcp__jcodemunch__find_references",
       "mcp__jcodemunch__get_file_outline",
-      "mcp__jcodemunch__register_edit"
+      "mcp__jcodemunch__register_edit",
+      "mcp__serena__search_for_pattern",
+      "mcp__serena__find_symbol",
+      "Bash(rustup which *)",
+      "Bash(mkdir -p ~/.local/bin)",
+      "Bash(ln -sf /usr/bin/rust-analyzer ~/.local/bin/rust-analyzer)",
+      "mcp__serena__get_current_config",
+      "Bash(rust-analyzer --version)",
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__replace_content",
+      "Skill(update-config)",
+      "Skill(update-config:*)",
+      "Bash(command -v serena-hooks)",
+      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/slatkin/.claude.json'\\)\\); p=d.get\\('projects',{}\\).get\\('/home/slatkin/Dev/mbv'\\); print\\('project entry exists:', p is not None\\); print\\('hasTrustDialogAccepted:', p.get\\('hasTrustDialogAccepted'\\) if p else 'N/A'\\); print\\('keys:', list\\(p.keys\\(\\)\\) if p else 'N/A'\\)\")"
+    ],
+    "additionalDirectories": [
+      "/home/slatkin/.claude"
     ]
   }
 }
