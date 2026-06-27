@@ -14,10 +14,13 @@ impl App {
     pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
         if area.height < 4 { return; }
 
-        // Drop focus if Continue Watching panel has been emptied while Left is focused.
+        // Drop focus to Queue only if the left panel truly has nothing to show
+        // (no Continue Watching AND no libraries). Don't drop on launch while
+        // continue_items is still loading — libraries are still browsable.
         if matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab == 0
             && self.home.continue_items.is_empty()
+            && self.libs.is_empty()
         {
             self.power_focus = PowerFocus::Queue;
         }
