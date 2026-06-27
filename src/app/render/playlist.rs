@@ -48,7 +48,12 @@ impl App {
         }
 
         let cursor = self.player_tab.playlist_cursor;
-        let table_area = inner;
+
+        // List view occupies 90% of available width, centered.
+        let list_w = (area.width as u32 * 9 / 10) as u16;
+        let list_x = area.x + (area.width.saturating_sub(list_w)) / 2;
+        let table_area = Rect { x: list_x, width: list_w, ..inner };
+
         let show_ep_cols = self.player_tab.items.iter().any(|it| it.item_type == "Episode");
 
         // Fixed column widths + inter-column gaps of 1.
@@ -75,30 +80,19 @@ impl App {
 
         let items = &self.player_tab.items;
         let mut rows: Vec<Row> = Vec::new();
-        for entry in display.iter().skip(offset).take(visible) {
+        // Header rows are rendered as full-width overlays after the table; collect their
+        // positions and labels here.
+        let mut header_overlays: Vec<(u16, String)> = Vec::new();
+
+        for (row_idx, entry) in display.iter().skip(offset).take(visible).enumerate() {
             match entry {
                 QueueRow::Header => {
                     let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
                     header_idx += 1;
-                    // "────[ LABEL ]──" — FOAM line running into a label pill (dark text on
-                    // FOAM), with a short FOAM tail to its right.
-                    let max_label = title_col_width.saturating_sub(5);
-                    let label = trunc_str(group, max_label);
-                    let pill = format!(" {} ", label.to_uppercase());
-                    let pill_w = pill.width();
-                    let right = 2usize.min(title_col_width.saturating_sub(pill_w));
-                    let left = title_col_width.saturating_sub(pill_w + right);
-                    let header_cell = Cell::from(Line::from(vec![
-                        Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
-                        Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
-                        Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
-                    ]));
+                    header_overlays.push((table_area.y + row_idx as u16, group.to_string()));
+                    // Placeholder row keeps table row indices aligned with the display list.
                     rows.push(Row::new([
-                        Cell::from(" "),
-                        header_cell,
-                        Cell::from(""),
-                        Cell::from(""),
-                        Cell::from(""),
+                        Cell::from(""), Cell::from(""), Cell::from(""), Cell::from(""), Cell::from(""),
                     ]));
                     self.playlist_row_map.push(None);
                 }
@@ -215,5 +209,25 @@ impl App {
         ])
         .column_spacing(1);
         f.render_widget(table, table_area);
+
+        // Render group headers as full-width overlays so the FOAM line spans the
+        // entire list area rather than just the title column.
+        let full_w = table_area.width as usize;
+        for (y, group) in &header_overlays {
+            let max_label = full_w.saturating_sub(5);
+            let label = trunc_str(group, max_label);
+            let pill = format!(" {} ", label.to_uppercase());
+            let pill_w = pill.width();
+            let right = 2usize.min(full_w.saturating_sub(pill_w));
+            let left = full_w.saturating_sub(pill_w + right);
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
+                    Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
+                    Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
+                ])),
+                Rect { x: table_area.x, y: *y, width: table_area.width, height: 1 },
+            );
+        }
     }
 }

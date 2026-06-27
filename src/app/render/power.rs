@@ -331,7 +331,7 @@ impl App {
             let image_loading = self.card_image_loading.contains(&cache_key);
             if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
                 type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height };
+                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height.min(18) };
                 let actual = state.size_for(
                     ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
                 );
@@ -360,7 +360,7 @@ impl App {
             let image_loading = self.card_image_loading.contains(&cache_key);
             if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
                 type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height };
+                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height.min(18) };
                 let actual = state.size_for(
                     ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
                 );
@@ -787,13 +787,21 @@ impl App {
     fn render_power_album_detail(&mut self, f: &mut Frame, area: Rect, lib_idx: usize, focused: bool) {
         if area.height == 0 { return; }
 
-        let (items, cursor, album_name) = {
+        let (items, cursor) = {
             let lib = &self.libs[lib_idx];
             let lvl = match lib.nav_stack.last() { Some(l) => l, None => return };
-            (lvl.items.clone(), lvl.cursor, lvl.title.clone())
+            (lvl.items.clone(), lvl.cursor)
         };
         let n = items.len();
         if items.is_empty() { return; }
+        let first = &items[0];
+        let album_name = if !first.artist.is_empty() && !first.album.is_empty() {
+            format!("{} / {}", first.artist, first.album)
+        } else if !first.album.is_empty() {
+            first.album.clone()
+        } else {
+            first.artist.clone()
+        };
 
         let inner_w = area.width as usize;
         let max_y   = area.y + area.height;
