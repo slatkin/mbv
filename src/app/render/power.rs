@@ -395,7 +395,7 @@ impl App {
 
         // Header: "───── NAME" — FOAM line with a right-aligned label pill (matches queue group-header style).
         let header_name = if self.power_left_tab == 0 {
-            "Continue".to_string()
+            "Continue Watching".to_string()
         } else {
             self.libs[self.power_left_tab - 1].library.name.clone()
         };
