@@ -37,6 +37,7 @@ impl RemotePlayer {
             audio_id: 0,
             audio_lang: String::new(),
             sub_id: 0,
+            sub_lang: String::new(),
             muted: false,
             video_height: 0,
             audio_codec: String::new(),

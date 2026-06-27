@@ -1,6 +1,6 @@
 use ratatui::Frame;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use crate::api::TICKS_PER_SECOND;
@@ -22,33 +22,56 @@ impl App {
             self.power_focus = PowerFocus::Queue;
         }
 
-        // Left panel (fixed 38 cols) │ Right panel (queue, remaining).
+        // Left panel (fixed 44 cols) │ Right panel (queue, remaining).
         let left_w: u16 = 44;
         let right_w = area.width.saturating_sub(left_w + 1);
         let divider_x = area.x + left_w;
 
-        let left_area  = Rect { x: area.x,        y: area.y, width: left_w,  height: area.height };
+        let left_area  = Rect { x: area.x, y: area.y + 1, width: left_w,  height: area.height.saturating_sub(1) };
         let right_area = Rect { x: divider_x + 1, y: area.y, width: right_w, height: area.height };
 
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
         let left_focused  = !queue_focused;
 
+        // Static "Queue" header spanning the full terminal width at the top row.
+        // (The left panel is shifted down one row so this row is clear on both sides.)
+        {
+            let full_w = area.width as usize;
+            let pill = " QUEUE ";
+            let pill_w = pill.len();
+            let right = 3usize.min(full_w.saturating_sub(pill_w));
+            let left = full_w.saturating_sub(pill_w + right);
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
+                    Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
+                    Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
+                ])),
+                Rect { x: area.x, y: right_area.y, width: area.width, height: 1 },
+            );
+        }
+        // Content area for the queue list sits one row below the static header.
+        let right_content = Rect { y: right_area.y + 1, height: right_area.height.saturating_sub(1), ..right_area };
+
         // The card fills the left column; the Continue/library list takes the rows
         // below it. At low heights the card can consume the whole column, so relocate
         // the list under the queue on the right instead of cramming it in.
-        let card_h = self.render_power_card(f, left_area);
+        let (card_h, image_loading) = self.render_power_card(f, left_area);
+        // If the card image fetch is in-flight, skip the rest of the view so
+        // the queue and list don't flash in before the image has arrived.
+        if image_loading { return; }
         let left_remaining = left_area.height.saturating_sub(card_h);
 
         const MIN_LIST_ROWS: u16 = 6;
-        let (bar_y, crumb_chars, header_ys) = if left_remaining < MIN_LIST_ROWS {
+        let _ = if left_remaining < MIN_LIST_ROWS {
             // Split the right column: queue on top, relocated list on the bottom.
-            let h = right_area.height;
+            let h = right_content.height;
             let min_l = MIN_LIST_ROWS.min(h);
             let max_l = h.saturating_sub(MIN_LIST_ROWS).max(min_l);
             let list_h = (h / 3).clamp(min_l, max_l);
             let queue_h = h.saturating_sub(list_h);
-            let queue_area = Rect { height: queue_h, ..right_area };
-            let list_area = Rect { y: right_area.y + queue_h, height: list_h, ..right_area };
+            let queue_area = Rect { height: queue_h, ..right_content };
+            let list_area = Rect { y: right_content.y + queue_h, height: list_h, ..right_content };
             let mut header_ys = self.render_power_queue(f, queue_area, queue_focused);
             let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
             // The relocated list's header meets the divider from the right, like a queue header.
@@ -57,34 +80,10 @@ impl App {
         } else {
             let lib_area = Rect { y: left_area.y + card_h, height: left_remaining, ..left_area };
             let (bar_y, crumb_chars) = self.render_power_list(f, lib_area, left_focused);
-            let header_ys = self.render_power_queue(f, right_area, queue_focused);
+            let header_ys = self.render_power_queue(f, right_content, queue_focused);
             (bar_y, crumb_chars, header_ys)
         };
 
-        // Vertical divider; ┤ at the left-panel header bar, ├ where a queue group-header
-        // line meets the divider from the right, │ elsewhere.
-        // Ancestor breadcrumb level indicators [N] overlay the divider in MUTED.
-        for y in area.y..area.y + area.height {
-            if let Some((_, ch)) = crumb_chars.iter().find(|(cy, _)| *cy == y) {
-                let style = if *ch == '\u{00b7}' {
-                    Style::default().fg(palette::SUBTLE)
-                } else {
-                    Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)
-                };
-                f.render_widget(
-                    Paragraph::new(Span::styled(ch.to_string(), style)),
-                    Rect { x: divider_x, y, width: 1, height: 1 },
-                );
-            } else {
-                let ch = if Some(y) == bar_y          { "\u{2524}" }
-                         else if header_ys.contains(&y) { "\u{251c}" }
-                         else                         { "\u{2502}" };
-                f.render_widget(
-                    Paragraph::new(Span::styled(ch, Style::default().fg(palette::FOAM))),
-                    Rect { x: divider_x, y, width: 1, height: 1 },
-                );
-            }
-        }
     }
 
     
@@ -152,18 +151,15 @@ impl App {
                     let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
                     header_idx += 1;
                     header_ys.push(area.y + row_idx as u16);
-                    // "────[ LABEL ]──" — FOAM line running into a label pill (dark text on
-                    // FOAM), with a short FOAM tail to its right.
-                    let max_label = render_w.saturating_sub(5);
+                    // "  LABEL ────────────────" — label-left with a trailing SUBTLE line.
+                    let max_label = render_w.saturating_sub(3);
                     let label = trunc_str(group, max_label);
-                    let pill = format!(" {} ", label.to_uppercase());
-                    let pill_w = pill.width();
-                    let right = 2usize.min(render_w.saturating_sub(pill_w));
-                    let left = render_w.saturating_sub(pill_w + right);
+                    let label_span = format!("  {} ", label.to_uppercase());
+                    let label_w = label_span.width();
+                    let trail = render_w.saturating_sub(label_w);
                     list_items.push(ListItem::new(Line::from(vec![
-                        Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
-                        Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
-                        Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
+                        Span::styled(label_span, Style::default().fg(palette::PINE).add_modifier(ratatui::style::Modifier::BOLD)),
+                        Span::styled("\u{2500}".repeat(trail), Style::default().fg(palette::SUBTLE)),
                     ])));
                     self.power_queue_row_map.push(None);
                 }
@@ -277,7 +273,7 @@ impl App {
                         // Right-align duration to the blue header box's right edge, which
                         // sits 2 cols in from render_w (the header's 2-dash tail).
                         let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
-                        let pad = render_w.saturating_sub(2 + used + dur.width());
+                        let pad = render_w.saturating_sub(3 + used + dur.width());
                         spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur, Style::default().fg(dur_color)));
                     }
@@ -313,12 +309,14 @@ impl App {
         header_ys
     }
 
-    /// Renders the card image and returns the number of rows it actually occupied.
-    /// Returns 0 if the queue is empty or the image is not yet loaded.
-    fn render_power_card(&mut self, f: &mut Frame, area: Rect) -> u16 {
+    /// Renders the card image and returns `(rows_used, image_loading)`.
+    /// `rows_used` is 0 if the queue is empty or the image is not yet ready.
+    /// `image_loading` is true when a fetch is in-flight (caller should defer
+    /// rendering the rest of the view until the image arrives).
+    fn render_power_card(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
         let cursor = self.player_tab.playlist_cursor;
         let n = self.player_tab.items.len();
-        if n == 0 { return 0; }
+        if n == 0 { return (0, false); }
         let item = &self.player_tab.items[cursor];
         let img_types: &[&str] = match item.item_type.as_str() {
             "MusicAlbum" => &["AudioChild"],
@@ -370,6 +368,7 @@ impl App {
                 self.fetch_card_image(pkey, pid, psid, ptypes);
             }
         }
+        let image_loading = self.card_image_loading.contains(&cache_key);
         if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
             type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
             let avail = ratatui::layout::Size { width: area.width, height: area.height };
@@ -382,9 +381,9 @@ impl App {
                 SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
                 img_rect, state,
             );
-            actual.height
+            (actual.height, false)
         } else {
-            0
+            (0, image_loading)
         }
     }
 
@@ -448,8 +447,8 @@ impl App {
         };
         let pill = format!(" {} ", label.to_uppercase());
         let pill_w = pill.width();
-        let right = 2usize.min(w.saturating_sub(pill_w));
-        let left = w.saturating_sub(pill_w + right);
+        let left = 2usize.min(w.saturating_sub(pill_w));
+        let right = w.saturating_sub(pill_w + left);
         let header_spans: Vec<Span<'static>> = vec![
             Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
             Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),

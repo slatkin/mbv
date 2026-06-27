@@ -52,6 +52,7 @@ pub struct PlayerStatus {
     pub audio_id: i64,   // 0 = none/unknown
     pub audio_lang: String, // raw lang code of selected audio track, e.g. "en", "ru"
     pub sub_id: i64,    // 0 = off
+    pub sub_lang: String, // raw lang code of selected sub track, e.g. "en", "eng"
     pub muted: bool,
     pub video_height: i64,  // 0 = no video / audio-only
     #[serde(default)]
@@ -238,6 +239,7 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
     let mut audio_id:   i64    = 0;
     let mut audio_lang: String = String::new();
     let mut sub_id:     i64    = 0;
+    let mut sub_lang:   String = String::new();
 
     for i in 0..count {
         let ttype: String = mpv.get_property(&format!("track-list/{i}/type")).unwrap_or_default();
@@ -264,7 +266,7 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
                 audio.push((id, label));
             }
             "sub" if !is_image_sub(&codec) => {
-                if sel { sub_id = id; }
+                if sel { sub_id = id; sub_lang = lang.clone(); }
                 let forced: bool = mpv.get_property(&format!("track-list/{i}/forced")).unwrap_or(false);
                 let name = lang_code_to_name(&lang);
                 let base_label = if !title.is_empty() { title.clone() }
@@ -284,6 +286,7 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
     s.audio_id     = audio_id;
     s.audio_lang   = audio_lang;
     s.sub_id       = sub_id;
+    s.sub_lang     = sub_lang;
 }
 
 // ── Session infrastructure ────────────────────────────────────────────────────
@@ -1841,6 +1844,7 @@ impl Player {
                 audio_id: 0,
                 audio_lang: String::new(),
                 sub_id: 0,
+                sub_lang: String::new(),
                 muted: false,
                 video_height: 0,
                 audio_codec: String::new(),

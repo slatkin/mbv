@@ -362,10 +362,14 @@ impl App {
             (raw_lang.chars().take(2).collect(), false)
         };
         let sub_id = pst.sub_id;
+        let raw_sub_lang = pst.sub_lang.to_lowercase();
         drop(pst);
-        let sub_on = sub_id != 0 || {
-            let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
-            matches!(mode.as_str(), "Always" | "Smart" | "OnlyForced" | "HearingImpaired")
+        let sub_label: String = if sub_id == 0 {
+            "off".into()
+        } else if !raw_sub_lang.is_empty() {
+            raw_sub_lang.chars().take(3).collect()
+        } else {
+            "CC".into()
         };
         let data = indicators::IndicatorData {
             res_label: res_str,
@@ -373,7 +377,7 @@ impl App {
             audio_label: au_text,
             audio_dim,
             audio_only: is_audio_only,
-            sub_on,
+            sub_label,
         };
         Some(indicators::indicator_spans(self.indicator_style, &data, self.use_nerd_fonts))
     }
@@ -468,7 +472,7 @@ impl App {
         let green_len = ((ratio * w as f64).round() as usize).min(w);
         let gray_len = w - green_len;
         let spans = vec![
-            Span::styled("\u{2501}".repeat(green_len), Style::default().fg(palette::PINE)),
+            Span::styled("\u{2500}".repeat(green_len), Style::default().fg(palette::PINE)),
             Span::styled("\u{2500}".repeat(gray_len), Style::default().fg(palette::SEEK_TRACK)),
         ];
         f.render_widget(Paragraph::new(Line::from(spans)), area);
