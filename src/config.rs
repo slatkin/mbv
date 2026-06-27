@@ -188,18 +188,16 @@ pub fn clear_queue_state() {
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PanelMode {
-    OneRow,
     #[default]
-    Expanded,
+    OneRow,
     Hidden,
 }
 
 impl PanelMode {
-    /// Cycle order: One-row → Expanded → Hidden → (One-row).
+    /// `h` toggles between the one-row panel and hidden.
     pub fn next(self) -> Self {
         match self {
-            PanelMode::OneRow => PanelMode::Expanded,
-            PanelMode::Expanded => PanelMode::Hidden,
+            PanelMode::OneRow => PanelMode::Hidden,
             PanelMode::Hidden => PanelMode::OneRow,
         }
     }

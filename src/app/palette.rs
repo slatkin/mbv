@@ -12,5 +12,5 @@ pub const IRIS:      Color = Color::Rgb(82,  181, 75);   // emby green — activ
 pub const IRIS_DIM:  Color = Color::Rgb(83,  133, 80);   // seekbar downloaded-unplayed: IRIS@50% over #555555
 pub const FOCUSED:   Color = Color::Rgb(83,  83,  83);   // focused item bg (#535353)
 pub const RED:       Color = Color::Rgb(220, 60,  60);   // loud volume
+pub const PILL_BG:    Color = Color::Rgb(60,  66,  74);  // subtle grey control-pill background
 pub const SEEK_TRACK: Color = Color::Rgb(70,  84,  95);  // unplayed seek track (design #46545f)
-pub const SEEK_KNOB:  Color = Color::Rgb(155, 224, 124); // played-endpoint dot (design #9be07c)

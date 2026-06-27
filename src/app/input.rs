@@ -1253,8 +1253,7 @@ impl App {
             self.tab_scroll = self.tab_idx;
             return;
         }
-        const RIGHT_W: u16 = 14 + 1 + 2;
-        let tab_w = self.terminal_width.saturating_sub(RIGHT_W);
+        let tab_w = self.terminal_width.saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
         loop {
             let (_, end) = self.visible_tab_range(tab_w);
             if self.tab_idx < end { break; }

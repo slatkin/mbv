@@ -19,6 +19,10 @@ pub(super) const PLAYLIST_VIEW_CARDS: u8        = 1;
 pub(super) const PLAYLIST_VIEW_PRESENTATION: u8 = 2;
 pub(super) const PLAYLIST_VIEW_POWER: u8        = 3;
 pub(super) const PLAYLIST_VIEW_COUNT: u8        = 4;
+/// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
+pub(super) const TABBAR_RIGHT_RESERVE: u16      = 17;
+/// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
+pub(super) const TABBAR_LEFT_RESERVE: u16       = 10;
 
 extern "C" fn handle_quit_signal(signum: i32) {
     QUIT_REQUESTED.store(true, Ordering::Relaxed);

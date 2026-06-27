@@ -37,24 +37,19 @@ impl App {
         // we're not in presentation or power view. Idle/presentation keep their historical layout.
         let mode = self.panel_mode;
         let playing_panel = show_controls && !in_presentation && !in_power;
-        let expanded = playing_panel && mode == crate::config::PanelMode::Expanded;
-        let onerow   = playing_panel && mode == crate::config::PanelMode::OneRow;
+        let onerow = playing_panel && mode == crate::config::PanelMode::OneRow;
         let tabs_h:  u16 = if in_power { 0 } else { 1 };
         let spacer_h: u16 = if in_power { 0 } else { 1 };
-        // seek = full-width seekbar row; gap = transport mini-icons + Vol row;
-        // title = title row; controls = transport buttons; status = badge line.
-        let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) = if playing_panel {
-            match mode {
-                crate::config::PanelMode::Expanded => (1, 1, 1, 1, 1),
-                // One-row: seekbar row + title row + a blank spacer row (controls_h) below it.
-                crate::config::PanelMode::OneRow   => (1, 0, 1, 1, 0),
-                crate::config::PanelMode::Hidden   => (0, 0, 0, 0, 0),
-            }
+        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
+        // gap is only used as a divider line in the presentation view. (status is unused.)
+        let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) = if onerow {
+            (1, 0, 1, 1, 0)
+        } else if in_presentation {
+            (0, 1, 0, 0, 0)
         } else {
-            // Idle / presentation: keep today's behavior (indicator bar + title row, no controls).
-            (0, if in_power { 0 } else { 1 }, if in_power { 0 } else { 1 }, 0, 0)
+            (0, 0, 0, 0, 0)
         };
-        let [tabs_area, _spacer_area, seek_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
+        let [tabs_area, _spacer_area, seek_area, gap_area, title_area, _controls_area, _status_area, main_area] = Layout::vertical([
             Constraint::Length(tabs_h),
             Constraint::Length(spacer_h),
             Constraint::Length(seek_h),
@@ -71,21 +66,44 @@ impl App {
         } else {
             self.layout_seekbar_area = Rect::default();
         }
-        // Transport mini-icons + Vol row (expanded / idle only).
-        if !in_power && gap_h > 0 {
-            self.render_indicator_bar(f, gap_area, true);
-        } else if !in_power {
-            self.layout_ind_pb = Rect::default();
-            self.layout_ind_mu = Rect::default();
-            self.layout_ind_rc = Rect::default();
+        // The seekbar has its own row (above). The gap row is only a divider line
+        // in the presentation view.
+        if in_presentation && gap_h > 0 {
+            f.render_widget(
+                Paragraph::new(Span::styled("\u{2500}".repeat(gap_area.width as usize), Style::default().fg(palette::IRIS))),
+                gap_area,
+            );
         }
 
         if !in_power {
-            let tabs_area = tabs_area;
-            self.layout_tabbar_vol_area = Rect::default();
-            self.layout_tabs_area = tabs_area;
+            self.layout_ind_pb = Rect::default(); // play is only clickable in the power view
+            // Control pill (m ⇌ ≡) on the far left of the tab bar.
+            self.render_control_pill(f, tabs_area);
 
-        let (vis_start, vis_end) = self.visible_tab_range(tabs_area.width);
+            // Tabs occupy the space between the control pill (left) and VOL (right).
+            let tabs_x = tabs_area.x + super::TABBAR_LEFT_RESERVE;
+            let tabs_w = tabs_area.width.saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
+            self.layout_tabs_area = Rect { x: tabs_x, width: tabs_w, ..tabs_area };
+
+            // Volume badge (right-aligned), in the key·value badge style:
+            // dim "VOL" key + bold value colored by level.
+            let volume = if let Some(ref remote) = self.connected_session_state {
+                remote.volume
+            } else {
+                let s = self.player.status.lock().unwrap();
+                if s.active { if s.muted { 0 } else { s.volume } } else { self.ui_volume as i64 }
+            };
+            let vol_color = if volume > 100 { palette::RED } else if volume > 60 { palette::YELLOW } else { palette::PINE };
+            let vol_spans = vec![
+                Span::styled("VOL ", Style::default().fg(palette::MUTED)),
+                Span::styled(volume.to_string(), Style::default().fg(vol_color).add_modifier(Modifier::BOLD)),
+            ];
+            let vol_w: u16 = vol_spans.iter().map(|s| s.content.width() as u16).sum();
+            let vol_rect = Rect { x: tabs_area.x + tabs_area.width.saturating_sub(vol_w), y: tabs_area.y, width: vol_w, height: 1 };
+            self.layout_tabbar_vol_area = vol_rect;
+            f.render_widget(Paragraph::new(Line::from(vol_spans)), vol_rect);
+
+        let (vis_start, vis_end) = self.visible_tab_range(tabs_w);
         let has_left  = vis_start > 0;
         let has_right = vis_end < self.tab_count();
         let ind_style = Style::default().fg(palette::WHITE);
@@ -94,19 +112,19 @@ impl App {
         if has_left {
             f.render_widget(
                 Paragraph::new("« ").style(ind_style),
-                Rect { x: tabs_area.x, y: tabs_area.y, width: 2, height: 1 },
+                Rect { x: tabs_x, y: tabs_area.y, width: 2, height: 1 },
             );
         }
         if has_right {
             f.render_widget(
                 Paragraph::new(" »").style(ind_style),
-                Rect { x: tabs_area.x + tabs_area.width - 2, y: tabs_area.y, width: 2, height: 1 },
+                Rect { x: tabs_x + tabs_w.saturating_sub(2), y: tabs_area.y, width: 2, height: 1 },
             );
         }
         let inner_tabs = Rect {
-            x: tabs_area.x + left_w,
+            x: tabs_x + left_w,
             y: tabs_area.y,
-            width: tabs_area.width.saturating_sub(left_w + right_w),
+            width: tabs_w.saturating_sub(left_w + right_w),
             height: tabs_area.height,
         };
         let all_names: Vec<String> = std::iter::once("Home".to_string())
@@ -121,13 +139,13 @@ impl App {
         };
         let tab_titles: Vec<Line> = all_names[vis_start..vis_end]
             .iter().enumerate().map(|(i, n)| {
+                let n = n.to_uppercase();
                 if i == selected_tab {
-                    // White text with a green underline that extends one space into
-                    // the padding on each side of the word.
+                    // Left-aligned active tab: the queue-row indicator (▐, iris) flush
+                    // against the bold white label, no underline.
                     Line::from(vec![
-                        Span::raw(" "),
-                        Span::styled(format!(" {n} "), Style::default().fg(palette::WHITE).underline_color(palette::IRIS).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)),
-                        Span::raw(" "),
+                        Span::styled("▐", Style::default().fg(palette::IRIS)),
+                        Span::styled(format!(" {n}  "), Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)),
                     ])
                 } else {
                     Line::from(Span::styled(format!("  {n}  "), Style::default().fg(palette::SUBTLE)))
@@ -170,42 +188,14 @@ impl App {
             None
         };
         if let Some((ref title, color)) = now_playing_title {
-            if onerow {
-                // One-row: consolidated "▶ Title │ time … badges" row.
-                self.render_title_row(f, title_area, title, color);
-            } else {
-                // Expanded: original centered title.
-                f.render_widget(
-                    Paragraph::new(title.as_str())
-                        .alignment(Alignment::Center)
-                        .style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                    title_area,
-                );
-            }
+            // The one-row now-playing header: "▶ Title │ time … badges".
+            self.render_title_row(f, title_area, title, color);
         }
-        let is_library_tab = self.tab_idx >= self.lib_tab_offset()
-            && self.tab_idx != self.log_tab_idx();
-        let panel_and_library = expanded && is_library_tab;
-
-        if expanded {
-            // Draw the dashes; render_library overlays breadcrumb text on top when
-            // this is a library tab. Badges sit right-aligned on this line.
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    "─".repeat(area.width as usize),
-                    Style::default().fg(palette::MUTED),
-                )),
-                status_area,
-            );
-            self.render_status_indicators(f, status_area);
-            self.render_playback_controls(f, controls_area);
-        } else if !in_presentation {
-            self.layout_button_area  = Rect::default();
-            self.layout_tracks_area  = Rect::default();
-            self.layout_vol_area     = Rect::default();
-            self.layout_sub_area     = Rect::default();
-            self.layout_audio_area   = Rect::default();
-        }
+        // These control regions no longer exist (expanded view removed).
+        self.layout_tracks_area  = Rect::default();
+        self.layout_vol_area     = Rect::default();
+        self.layout_sub_area     = Rect::default();
+        self.layout_audio_area   = Rect::default();
 
         if self.tab_idx == 0 {
             self.render_combined(f, main_area);
@@ -216,8 +206,7 @@ impl App {
         } else if self.tab_idx == self.log_tab_idx() {
             self.render_log(f, main_area);
         } else {
-            let crumb_area = if panel_and_library { Some(status_area) } else { None };
-            self.render_library(f, main_area, self.tab_idx - self.lib_tab_offset(), crumb_area);
+            self.render_library(f, main_area, self.tab_idx - self.lib_tab_offset(), None);
         }
 
         if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {
@@ -473,9 +462,7 @@ impl App {
                 // keep blank filler here so Vol stays right-aligned.
                 spans.push(Span::raw(" ".repeat(dash_count)));
             }
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled("Vol ", Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
-            spans.push(Span::styled(volume.to_string(), Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)));
+            // Volume is shown on the tab bar now, not here.
         } else {
             spans.push(Span::styled("\u{2500}".repeat(dash_count), dash_style));
             spans.push(Span::styled("\u{2500} ", dash_style));
@@ -558,23 +545,7 @@ impl App {
         f.render_widget(Paragraph::new(Line::from(spans)), area);
     }
 
-    /// Expanded-mode badge line: status indicators right-aligned over a green
-    /// divider, with one leading space before the cluster.
-    fn render_status_indicators(&mut self, f: &mut Frame, area: Rect) {
-        if area.height == 0 { return; }
-        let ind_spans = match self.build_status_indicator_spans() {
-            Some(s) => s,
-            None => return,
-        };
-        let ind_w: u16 = 1 + ind_spans.iter().map(|s| s.content.width() as u16).sum::<u16>();
-        let left_dashes = area.width.saturating_sub(ind_w);
-        let dash = Style::default().fg(palette::IRIS);
-        let mut spans: Vec<Span> = Vec::new();
-        spans.push(Span::styled("\u{2500}".repeat(left_dashes as usize), dash));
-        spans.push(Span::raw(" "));
-        spans.extend(ind_spans);
-        f.render_widget(Paragraph::new(Line::from(spans)), area);
-    }
+    
 
     /// Current playback position / runtime (ticks) and paused state, from the
     /// connected remote session if any, otherwise the local player.
@@ -589,118 +560,51 @@ impl App {
         }
     }
 
-    /// Full-width seekbar row: green played `━`, a bright dot at the playhead,
-    /// gray `─` track for the remainder. Records the click region for seeking.
+    /// Control pill on the far left of the tab bar: `  m ⇌ ≡  ` on an always-green
+    /// background. Each icon is its assigned color when ON, or reverse-video
+    /// (dark on green) when OFF. `m` mute and `⇌` remote are clickable.
+    fn render_control_pill(&mut self, f: &mut Frame, tabs_area: Rect) {
+        let bg = palette::PILL_BG;
+        let mute_on = self.mute_on;
+        let connected = self.connected_session_id.is_some();
+        let is_playlist = matches!(&self.queue_source, crate::config::QueueSource::Playlist { .. });
+        let icon = |on: bool, on_color: Color| {
+            // OFF: no explicit foreground (terminal default bleeds through).
+            Style::default().bg(bg).fg(if on { on_color } else { Color::Reset }).add_modifier(Modifier::BOLD)
+        };
+        let pad = Style::default().bg(bg);
+        let (x, y) = (tabs_area.x, tabs_area.y);
+        // Layout: "  m ⇌ ≡  " — m at x+2, ⇌ at x+4, ≡ at x+6.
+        self.layout_ind_mu = Rect { x: x + 2, y, width: 1, height: 1 };
+        self.layout_ind_rc = Rect { x: x + 4, y, width: 1, height: 1 };
+        let spans = vec![
+            Span::styled("  ", pad),
+            Span::styled("m", icon(mute_on, palette::RED)),
+            Span::styled(" ", pad),
+            Span::styled("\u{21CC}", icon(connected, palette::YELLOW)),
+            Span::styled(" ", pad),
+            Span::styled("\u{2261}", icon(is_playlist, palette::FOAM)),
+            Span::styled("  ", pad),
+        ];
+        f.render_widget(Paragraph::new(Line::from(spans)), Rect { x, y, width: 9, height: 1 });
+    }
+
+    /// Full-width seekbar row: green up to the playhead, gray for the remainder.
+    /// No knob — the green/gray boundary marks the position. Records the click region.
     fn render_seekbar(&mut self, f: &mut Frame, area: Rect) {
         if area.height == 0 || area.width == 0 { self.layout_seekbar_area = Rect::default(); return; }
         let (pos_ticks, rt_ticks, _paused) = self.playback_progress();
         let ratio = if rt_ticks > 0 { (pos_ticks as f64 / rt_ticks as f64).clamp(0.0, 1.0) } else { 0.0 };
         self.layout_seekbar_area = area;
         let w = area.width as usize;
-        let dot_pos = ((ratio * w as f64).round() as usize).min(w - 1);
-        let green_len = dot_pos;
-        let gray_len = w - dot_pos - 1;
+        let green_len = ((ratio * w as f64).round() as usize).min(w);
+        let gray_len = w - green_len;
         let spans = vec![
             Span::styled("\u{2500}".repeat(green_len), Style::default().fg(palette::IRIS)),
-            Span::styled("\u{2022}".to_string(), Style::default().fg(palette::SEEK_KNOB)),
             Span::styled("\u{2500}".repeat(gray_len), Style::default().fg(palette::SEEK_TRACK)),
         ];
         f.render_widget(Paragraph::new(Line::from(spans)), area);
     }
 
-    fn render_playback_controls(&mut self, f: &mut Frame, area: Rect) {
-        if area.height == 0 { return; }
-
-        let inner_w = area.width.min(100);
-        let inner_x = area.x + (area.width.saturating_sub(inner_w)) / 2;
-        let area = Rect { x: inner_x, y: area.y, width: inner_w, height: area.height };
-
-        let (position_ticks, runtime_ticks, paused) = if let Some(ref remote) = self.connected_session_state {
-            let pos_ticks = {
-                let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
-                let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
-                (pos_s * crate::api::TICKS_PER_SECOND as f64) as i64
-            };
-            (
-                pos_ticks,
-                remote.runtime_s * crate::api::TICKS_PER_SECOND,
-                remote.is_paused,
-            )
-        } else {
-            let s = self.player.status.lock().unwrap();
-            (s.position_ticks, s.runtime_ticks, s.paused)
-        };
-
-        let pos_s = position_ticks / TICKS_PER_SECOND;
-        let dur_s = runtime_ticks / TICKS_PER_SECOND;
-
-        let pos_str = fmt_duration(pos_s);
-        let dur_str = fmt_duration(dur_s);
-
-        let btn_row_y = area.y;
-
-        const BTNS_W: u16 = 30;
-        // layout_seekbar_area is owned by the indicator bar now (set in
-        // render_indicator_bar); don't clobber it here.
-        self.layout_tracks_area  = Rect::default();
-        self.layout_vol_area     = Rect::default();
-        self.layout_sub_area     = Rect::default();
-        self.layout_audio_area   = Rect::default();
-
-        let time_style = Style::default().fg(palette::SUBTLE);
-        let delim_style = Style::default().fg(palette::OVERLAY);
-        let elapsed_w = pos_str.chars().count() as u16;
-        let total_w   = dur_str.chars().count() as u16;
-
-        if self.use_nerd_fonts {
-            let btn_style = Style::default().fg(Color::Rgb(203, 212, 241));
-            let stop_style = Style::default().fg(palette::SUBTLE);
-            // The active glyph (play/pause) is emphasized brighter than the rest.
-            let pp_style = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
-            let pp_icon = if !paused { "\u{F03E4}" } else { "\u{F040A}" };
-            let btn_icons: &[(&str, Style)] = &[
-                ("\u{F04AE}", btn_style),
-                ("\u{F04A}",  btn_style),
-                (pp_icon,     pp_style),
-                ("\u{F04DB}", stop_style),
-                ("\u{F04E}",  btn_style),
-                ("\u{F04AD}", btn_style),
-            ];
-
-            // Build the centered row: elapsed | <buttons> | total
-            let mut spans: Vec<Span> = vec![
-                Span::styled(pos_str.clone(), time_style),
-                Span::styled(" \u{2502} ", delim_style),
-            ];
-            for (icon, style) in btn_icons.iter() {
-                spans.push(Span::styled(format!("  {icon}  "), *style));
-            }
-            spans.push(Span::styled(" \u{2502} ", delim_style));
-            spans.push(Span::styled(dur_str.clone(), time_style));
-
-            // Total visible width: elapsed + " | " + buttons + " | " + total.
-            const DELIM_W: u16 = 3; // " | "
-            let row_w = elapsed_w + DELIM_W + BTNS_W + DELIM_W + total_w;
-            let row_x = area.x + area.width.saturating_sub(row_w) / 2;
-            // Buttons start after elapsed + first delimiter.
-            let btn_x = row_x + elapsed_w + DELIM_W;
-            self.layout_button_area = Rect { x: btn_x, y: btn_row_y, width: BTNS_W, height: 1 };
-            f.render_widget(
-                Paragraph::new(Line::from(spans)).alignment(Alignment::Center),
-                Rect { x: area.x, y: btn_row_y, width: area.width, height: 1 },
-            );
-        } else {
-            // No buttons: keep the times at the edges of the control row.
-            f.render_widget(
-                Paragraph::new(Span::styled(pos_str, time_style)),
-                Rect { x: area.x, y: btn_row_y, width: elapsed_w.min(area.width), height: 1 },
-            );
-            let total_x = area.x + area.width.saturating_sub(total_w);
-            f.render_widget(
-                Paragraph::new(Span::styled(dur_str, time_style)),
-                Rect { x: total_x, y: btn_row_y, width: total_w.min(area.width), height: 1 },
-            );
-            self.layout_button_area = Rect::default();
-        }
-    }
+    
 }

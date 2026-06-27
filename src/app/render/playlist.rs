@@ -88,17 +88,18 @@ impl App {
         }
 
         let cursor = self.player_tab.playlist_cursor;
-        let table_area = inner;
+        // The list occupies 90% of the available width, centered.
+        let table_w = inner.width * 90 / 100;
+        let table_area = Rect { x: inner.x + (inner.width - table_w) / 2, width: table_w, ..inner };
         let show_ep_cols = self.player_tab.items.iter().any(|it| it.item_type == "Episode");
 
-        // Fixed column widths + 5 inter-column gaps of 1 = 5 overhead
+        // Fixed column widths + inter-column gaps of 1.
         let title_col_width = (table_area.width as i32
-            - if show_ep_cols { 32 } else { 24 }).max(0) as usize;
+            - if show_ep_cols { 21 } else { 13 }).max(0) as usize;
 
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
-            let row_style = if i == current_idx && active {
-                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
-            } else if i == cursor {
+            let now_playing = i == current_idx && active;
+            let row_style = if i == cursor {
                 Style::default().fg(palette::YELLOW)
             } else {
                 Style::default().fg(palette::WHITE)
@@ -113,7 +114,6 @@ impl App {
             let title = item.playback_label();
             let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
             let length = if len_secs > 0 { fmt_duration(len_secs) } else { "—".to_string() };
-            let media_type_str = if !item.item_type.is_empty() { item.item_type.clone() } else { "—".to_string() };
             let (pos_ticks, rt_ticks) = if i == current_idx && active {
                 let pos = if live_pos > 0 { live_pos } else { item.playback_position_ticks };
                 (pos, live_runtime)
@@ -122,11 +122,33 @@ impl App {
             };
             let title_cell = if pos_ticks > 0 && rt_ticks > 0 && !item.is_audio() {
                 let pct = (pos_ticks * 100 / rt_ticks.max(1)) as u64;
-                let pct_str = format!(" {pct}%");
-                let max_title = title_col_width.saturating_sub(pct_str.chars().count());
+                if now_playing {
+                    // Play = filled green chip (white triangle); progress = plain green text.
+                    let play_chip = Span::styled("\u{25B6}", Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD));
+                    let pct_chip = Span::styled(format!("{pct}%"), Style::default().fg(palette::IRIS));
+                    let suffix_w = 1 + pct_chip.width() + play_chip.width();
+                    let max_title = title_col_width.saturating_sub(suffix_w);
+                    Cell::from(Line::from(vec![
+                        Span::raw(trunc_str(&title, max_title)),
+                        Span::raw(" "),
+                        pct_chip,
+                        play_chip,
+                    ]))
+                } else {
+                    let pct_str = format!(" {pct}%");
+                    let max_title = title_col_width.saturating_sub(pct_str.chars().count());
+                    Cell::from(Line::from(vec![
+                        Span::raw(trunc_str(&title, max_title)),
+                        Span::styled(pct_str, Style::default().fg(palette::YELLOW)),
+                    ]))
+                }
+            } else if now_playing {
+                let play_chip = Span::styled("\u{25B6}", Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD));
+                let max_title = title_col_width.saturating_sub(1 + play_chip.width());
                 Cell::from(Line::from(vec![
                     Span::raw(trunc_str(&title, max_title)),
-                    Span::styled(pct_str, Style::default().fg(palette::YELLOW)),
+                    Span::raw(" "),
+                    play_chip,
                 ]))
             } else {
                 Cell::from(trunc_str(&title, title_col_width))
@@ -141,7 +163,6 @@ impl App {
                     title_cell,
                     Cell::from(Line::from(ep_tag).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
                     Cell::from(Line::from(length).alignment(Alignment::Right)),
-                    Cell::from(Line::from(media_type_str).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
                     Cell::from(""),
                 ]).style(row_style)
             } else {
@@ -150,7 +171,6 @@ impl App {
                     title_cell,
                     Cell::from(""),
                     Cell::from(Line::from(length).alignment(Alignment::Right)),
-                    Cell::from(Line::from(media_type_str).alignment(Alignment::Right)).style(Style::default().fg(palette::SUBTLE)),
                     Cell::from(""),
                 ]).style(row_style)
             }
@@ -163,7 +183,6 @@ impl App {
             Constraint::Min(10),
             Constraint::Length(if show_ep_cols { 8 } else { 0 }),
             Constraint::Length(7),
-            Constraint::Length(10),
             Constraint::Length(1),
         ])
         .column_spacing(1)
