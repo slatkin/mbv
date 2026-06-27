@@ -33,18 +33,27 @@ impl App {
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
         let left_focused  = !queue_focused;
 
-        let bar_y      = self.render_power_left_panel(f, left_area, left_focused);
+        let (bar_y, crumb_chars) = self.render_power_left_panel(f, left_area, left_focused);
         let divider_ys = self.render_power_queue(f, right_area, queue_focused);
 
         // Vertical divider; ┤ at bar_y, ├ at album-group divider rows, │ elsewhere.
+        // Ancestor breadcrumb level indicators [N] overlay the divider in MUTED.
         for y in area.y..area.y + area.height {
-            let ch = if divider_ys.contains(&y) { "\u{251c}" }
-                     else if Some(y) == bar_y   { "\u{2524}" }
-                     else                       { "\u{2502}" };
-            f.render_widget(
-                Paragraph::new(Span::styled(ch, Style::default().fg(palette::IRIS))),
-                Rect { x: divider_x, y, width: 1, height: 1 },
-            );
+            if let Some((_, ch)) = crumb_chars.iter().find(|(cy, _)| *cy == y) {
+                let color = if *ch == '\u{00b7}' { palette::SUBTLE } else { palette::FOAM };
+                f.render_widget(
+                    Paragraph::new(Span::styled(ch.to_string(), Style::default().fg(color))),
+                    Rect { x: divider_x, y, width: 1, height: 1 },
+                );
+            } else {
+                let ch = if divider_ys.contains(&y) { "\u{251c}" }
+                         else if Some(y) == bar_y   { "\u{2524}" }
+                         else                       { "\u{2502}" };
+                f.render_widget(
+                    Paragraph::new(Span::styled(ch, Style::default().fg(palette::IRIS))),
+                    Rect { x: divider_x, y, width: 1, height: 1 },
+                );
+            }
         }
     }
 
@@ -352,17 +361,18 @@ impl App {
         }
     }
 
-    /// Returns the y coordinate of the horizontal bar drawn at the top of the lib section,
-    /// so the caller can place a ┤ junction on the vertical divider at that row.
-    fn render_power_left_panel(&mut self, f: &mut Frame, area: Rect, focused: bool) -> Option<u16> {
-        if area.height == 0 { return None; }
+    /// Returns (bar_y, crumb_chars) where bar_y is the y of the horizontal bar so the
+    /// caller can place a ┤ junction, and crumb_chars is a list of (abs_y, char) pairs
+    /// for ancestor-level indicators to overlay on the vertical divider.
+    fn render_power_left_panel(&mut self, f: &mut Frame, area: Rect, focused: bool) -> (Option<u16>, Vec<(u16, char)>) {
+        if area.height == 0 { return (None, vec![]); }
 
         // Render card into the full area; it returns the rows it actually used.
         // The library panel then fills whatever vertical space remains.
         let card_h = self.render_power_card(f, area);
         let lib_area = Rect { y: area.y + card_h, height: area.height.saturating_sub(card_h), ..area };
 
-        if lib_area.height == 0 { return None; }
+        if lib_area.height == 0 { return (None, vec![]); }
 
         // Ensure the library is loaded when a library tab is selected.
         if self.power_left_tab > 0 {
@@ -376,12 +386,15 @@ impl App {
         } else {
             self.libs[self.power_left_tab - 1].library.name.clone()
         };
-        if area.height < 1 { return None; }
+        if area.height < 1 { return (None, vec![]); }
         let bar_y = area.y;
         let w = area.width as usize;
 
         // Build the text spans (prefix space + label), then append " ────" to fill width.
+        // Ancestor breadcrumb levels are NOT shown in the header — they appear as [N] indicators
+        // stacked vertically on the right divider (see crumb_chars below).
         let mut header_spans: Vec<Span<'static>> = vec![Span::raw(" ")];
+        let mut crumb_chars: Vec<(u16, char)> = Vec::new();
         if self.power_left_tab > 0 {
             let lib_idx = self.power_left_tab - 1;
             let lib = &self.libs[lib_idx];
@@ -391,26 +404,26 @@ impl App {
             for lvl in lib.nav_stack.iter().skip(skip) {
                 crumbs.push(lvl.title.clone());
             }
+            // Always show only the current (last) level in the header.
+            let budget = w.saturating_sub(3);
+            header_spans.push(Span::styled(
+                trunc_str(crumbs.last().unwrap_or(&header_name), budget),
+                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
+            ));
+            // Build vertical digit indicators for ancestor levels (all but the last crumb).
+            // Layout (vertical): │ 1 · 2 │ — digits with · between, surrounded by normal │.
             if crumbs.len() > 1 {
-                for (ci, name) in crumbs.iter().enumerate() {
-                    let is_last = ci + 1 == crumbs.len();
-                    let display: String = if is_last { name.clone() } else { format!("[{}]", ci + 1) };
-                    let style = if is_last {
-                        Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(palette::MUTED)
-                    };
-                    header_spans.push(Span::styled(display, style));
-                    if !is_last {
-                        header_spans.push(Span::styled("/", Style::default().fg(palette::IRIS)));
+                let n = crumbs.len() - 1;
+                let mut row: u16 = bar_y + 1;
+                for ci in 0..n {
+                    if ci > 0 {
+                        crumb_chars.push((row, '\u{00b7}')); // middle dot between digits
+                        row += 1;
                     }
+                    let digit = char::from_digit((ci + 1) as u32, 10).unwrap_or('?');
+                    crumb_chars.push((row, digit));
+                    row += 1;
                 }
-            } else {
-                let budget = w.saturating_sub(3);
-                header_spans.push(Span::styled(
-                    trunc_str(&header_name, budget),
-                    Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
-                ));
             }
         } else {
             let budget = w.saturating_sub(3);
@@ -429,7 +442,7 @@ impl App {
         );
 
         let content_area = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
-        if content_area.height == 0 { return Some(bar_y); }
+        if content_area.height == 0 { return (Some(bar_y), crumb_chars); }
 
         // Store for click / page-size calculations.
         self.power_left_area = content_area;
@@ -472,7 +485,7 @@ impl App {
                 Paragraph::new(Span::styled(msg, Style::default().fg(palette::MUTED))),
                 content_area,
             );
-            return Some(bar_y);
+            return (Some(bar_y), crumb_chars);
         }
 
         let visible = content_area.height as usize;
@@ -514,6 +527,6 @@ impl App {
                 content_area, &mut sb,
             );
         }
-        Some(bar_y)
+        (Some(bar_y), crumb_chars)
     }
 }
