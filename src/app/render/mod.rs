@@ -1,4 +1,5 @@
 mod home;
+pub mod indicators;
 mod library;
 mod log;
 mod overlays;
@@ -32,15 +33,31 @@ impl App {
         let show_controls = active || self.connected_session_id.is_some();
         let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
         let in_power       = self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER;
-        let status_h:   u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
-        let controls_h: u16 = if show_controls && !in_presentation && !in_power && self.show_playback_panel { 1 } else { 0 };
+        // The 3-state panel toggle (`h`) only applies while something is playing/connected and
+        // we're not in presentation or power view. Idle/presentation keep their historical layout.
+        let mode = self.panel_mode;
+        let playing_panel = show_controls && !in_presentation && !in_power;
+        let expanded = playing_panel && mode == crate::config::PanelMode::Expanded;
+        let onerow   = playing_panel && mode == crate::config::PanelMode::OneRow;
         let tabs_h:  u16 = if in_power { 0 } else { 1 };
         let spacer_h: u16 = if in_power { 0 } else { 1 };
-        let gap_h:   u16 = 1;
-        let title_h: u16 = if in_power { 0 } else { 1 };
-        let [tabs_area, _spacer_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
+        // seek = full-width seekbar row; gap = transport mini-icons + Vol row;
+        // title = title row; controls = transport buttons; status = badge line.
+        let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) = if playing_panel {
+            match mode {
+                crate::config::PanelMode::Expanded => (1, 1, 1, 1, 1),
+                // One-row: seekbar row + title row + a blank spacer row (controls_h) below it.
+                crate::config::PanelMode::OneRow   => (1, 0, 1, 1, 0),
+                crate::config::PanelMode::Hidden   => (0, 0, 0, 0, 0),
+            }
+        } else {
+            // Idle / presentation: keep today's behavior (indicator bar + title row, no controls).
+            (0, if in_power { 0 } else { 1 }, if in_power { 0 } else { 1 }, 0, 0)
+        };
+        let [tabs_area, _spacer_area, seek_area, gap_area, title_area, controls_area, status_area, main_area] = Layout::vertical([
             Constraint::Length(tabs_h),
             Constraint::Length(spacer_h),
+            Constraint::Length(seek_h),
             Constraint::Length(gap_h),
             Constraint::Length(title_h),
             Constraint::Length(controls_h),
@@ -48,18 +65,25 @@ impl App {
             Constraint::Min(0),
         ]).areas(area);
 
-        if !in_power {
+        // Full-width seekbar row (shown in one-row and expanded modes).
+        if seek_h > 0 {
+            self.render_seekbar(f, seek_area);
+        } else {
+            self.layout_seekbar_area = Rect::default();
+        }
+        // Transport mini-icons + Vol row (expanded / idle only).
+        if !in_power && gap_h > 0 {
             self.render_indicator_bar(f, gap_area, true);
+        } else if !in_power {
+            self.layout_ind_pb = Rect::default();
+            self.layout_ind_mu = Rect::default();
+            self.layout_ind_rc = Rect::default();
         }
 
         if !in_power {
             let tabs_area = tabs_area;
             self.layout_tabbar_vol_area = Rect::default();
             self.layout_tabs_area = tabs_area;
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::IRIS)),
-                tabs_area,
-            );
 
         let (vis_start, vis_end) = self.visible_tab_range(tabs_area.width);
         let has_left  = vis_start > 0;
@@ -95,12 +119,18 @@ impl App {
         } else {
             self.tab_idx - vis_start
         };
-        let tab_titles: Vec<Span> = all_names[vis_start..vis_end]
+        let tab_titles: Vec<Line> = all_names[vis_start..vis_end]
             .iter().enumerate().map(|(i, n)| {
                 if i == selected_tab {
-                    Span::styled(format!("  {n}  "), Style::default().fg(palette::YELLOW).bg(palette::IRIS).add_modifier(Modifier::BOLD))
+                    // White text with a green underline that extends one space into
+                    // the padding on each side of the word.
+                    Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(format!(" {n} "), Style::default().fg(palette::WHITE).underline_color(palette::IRIS).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)),
+                        Span::raw(" "),
+                    ])
                 } else {
-                    Span::styled(format!("  {n}  "), Style::default().fg(palette::WHITE).bg(palette::IRIS))
+                    Line::from(Span::styled(format!("  {n}  "), Style::default().fg(palette::SUBTLE)))
                 }
             }).collect();
         f.render_widget(
@@ -128,7 +158,7 @@ impl App {
             self.status_expires = None;
             self.force_clear = true;
         }
-        let now_playing_title: Option<(String, Color)> = if show_controls && !in_presentation && self.show_playback_panel {
+        let now_playing_title: Option<(String, Color)> = if playing_panel && mode != crate::config::PanelMode::Hidden {
             if active {
                 now_playing.map(|t| (t, palette::FOAM))
             } else if let Some(ref state) = self.connected_session_state {
@@ -140,7 +170,11 @@ impl App {
             None
         };
         if let Some((ref title, color)) = now_playing_title {
-            if !in_power {
+            if onerow {
+                // One-row: consolidated "▶ Title │ time … badges" row.
+                self.render_title_row(f, title_area, title, color);
+            } else {
+                // Expanded: original centered title.
                 f.render_widget(
                     Paragraph::new(title.as_str())
                         .alignment(Alignment::Center)
@@ -151,11 +185,11 @@ impl App {
         }
         let is_library_tab = self.tab_idx >= self.lib_tab_offset()
             && self.tab_idx != self.log_tab_idx();
-        let panel_and_library = show_controls && !in_presentation && self.show_playback_panel && is_library_tab;
+        let panel_and_library = expanded && is_library_tab;
 
-        if show_controls && !in_presentation && self.show_playback_panel {
-            // Always draw the dashes; render_library overlays breadcrumb text
-            // on top when this is a library tab.
+        if expanded {
+            // Draw the dashes; render_library overlays breadcrumb text on top when
+            // this is a library tab. Badges sit right-aligned on this line.
             f.render_widget(
                 Paragraph::new(Span::styled(
                     "─".repeat(area.width as usize),
@@ -166,7 +200,6 @@ impl App {
             self.render_status_indicators(f, status_area);
             self.render_playback_controls(f, controls_area);
         } else if !in_presentation {
-            self.layout_seekbar_area = Rect::default();
             self.layout_button_area  = Rect::default();
             self.layout_tracks_area  = Rect::default();
             self.layout_vol_area     = Rect::default();
@@ -320,8 +353,6 @@ impl App {
         } else {
             if self.use_nerd_fonts { ("\u{f04d}", palette::SUBTLE) } else { (" ", palette::MUTED) }
         };
-        let pos_ticks_player = pst.position_ticks;
-        let rt_ticks_player  = pst.runtime_ticks;
         drop(pst);
         let mu_color = if self.mute_on { palette::RED } else { palette::MUTED };
         let (rc_text, rc_color): (&str, Color) = if self.connected_session_id.is_some() {
@@ -343,17 +374,6 @@ impl App {
         let vol_text = format!("Vol {}", volume);
 
         let left_aligned = highlight;
-
-        let seek_ratio = if left_aligned {
-            let (seek_pos, seek_rt) = if let Some(ref remote) = self.connected_session_state {
-                let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
-                let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
-                ((pos_s * crate::api::TICKS_PER_SECOND as f64) as i64, remote.runtime_s * crate::api::TICKS_PER_SECOND)
-            } else {
-                (pos_ticks_player, rt_ticks_player)
-            };
-            if seek_rt > 0 { (seek_pos as f64 / seek_rt as f64).clamp(0.0, 1.0) } else { 0.0 }
-        } else { 0.0 };
 
         let pb_w  = pb_text.width() as u16;
         let rc_w  = rc_text.width() as u16;
@@ -449,23 +469,9 @@ impl App {
                 // Presentation view owns its own seekbar; this is just a divider.
                 spans.push(Span::styled("\u{2500}".repeat(dash_count), Style::default().fg(palette::IRIS)));
             } else {
-                // Seekbar spans 70% of the available width between the indicators
-                // and Vol, centered: the remaining 30% is split as blank filler on
-                // each side so the bar is balanced and Vol stays right-aligned.
-                let bar_count = (dash_count * 95) / 100;
-                let pad_total = dash_count - bar_count;
-                let pad_left  = pad_total / 2;
-                let pad_right = pad_total - pad_left;
-                // Record the bar region so the mouse handlers can double-click /
-                // drag to seek. The bar starts after the indicators + 1 space + left pad.
-                let seek_x = area.x + sum_widths + n_inds.saturating_sub(1) + 1 + pad_left as u16;
-                self.layout_seekbar_area = Rect { x: seek_x, y: area.y, width: bar_count as u16, height: 1 };
-                let filled = (seek_ratio * bar_count as f64).round() as usize;
-                let unfilled = bar_count.saturating_sub(filled);
-                spans.push(Span::raw(" ".repeat(pad_left)));
-                spans.push(Span::styled("\u{2501}".repeat(filled),   Style::default().fg(palette::IRIS)));
-                spans.push(Span::styled("\u{2500}".repeat(unfilled), Style::default().fg(palette::IRIS_DIM)));
-                spans.push(Span::raw(" ".repeat(pad_right)));
+                // The seekbar now lives on its own full-width row (render_seekbar);
+                // keep blank filler here so Vol stays right-aligned.
+                spans.push(Span::raw(" ".repeat(dash_count)));
             }
             spans.push(Span::raw(" "));
             spans.push(Span::styled("Vol ", Style::default().fg(vol_color).add_modifier(Modifier::BOLD)));
@@ -493,89 +499,112 @@ impl App {
         } else {
             format!("{}p", res_h)
         };
-        let res_color = if res_str == "--" { palette::MUTED } else { palette::FOAM };
+        let res_dim = res_str == "--";
         let raw_lang = pst.audio_lang.to_lowercase();
-        let (au_text, au_color): (String, Color) = if raw_lang.is_empty() {
-            ("x".into(), palette::MUTED)
+        let (au_text, audio_dim): (String, bool) = if raw_lang.is_empty() {
+            ("x".into(), true)
         } else {
-            (raw_lang.chars().take(2).collect(), palette::YELLOW)
+            (raw_lang.chars().take(2).collect(), false)
         };
         let sub_id = pst.sub_id;
         drop(pst);
-        let sub_color = {
+        let sub_on = sub_id != 0 || {
             let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
-            if sub_id != 0 { palette::FOAM }
-            else { match mode.as_str() {
-                "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::FOAM,
-                _ => palette::MUTED,
-            }}
+            matches!(mode.as_str(), "Always" | "Smart" | "OnlyForced" | "HearingImpaired")
         };
-        let mut spans: Vec<Span<'static>> = Vec::new();
-        spans.push(Span::styled(res_str, Style::default().fg(res_color).add_modifier(Modifier::BOLD)));
-        if !is_audio_only {
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(au_text, Style::default().fg(au_color).add_modifier(Modifier::BOLD)));
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled("CC", Style::default().fg(sub_color).add_modifier(Modifier::BOLD)));
-        }
-        Some(spans)
+        let data = indicators::IndicatorData {
+            res_label: res_str,
+            res_dim,
+            audio_label: au_text,
+            audio_dim,
+            audio_only: is_audio_only,
+            sub_on,
+        };
+        Some(indicators::indicator_spans(self.indicator_style, &data, self.use_nerd_fonts))
     }
 
+    /// One-line now-playing header: `▶ Title │ elapsed / total` on the left,
+    /// the status-indicator badges right-aligned. Mirrors the design handoff.
+    fn render_title_row(&mut self, f: &mut Frame, area: Rect, title: &str, title_color: Color) {
+        if area.height == 0 || area.width == 0 { return; }
+
+        let (pos_ticks, rt_ticks, paused) = self.playback_progress();
+        let pos_str = fmt_duration(pos_ticks / TICKS_PER_SECOND);
+        let dur_str = fmt_duration(rt_ticks / TICKS_PER_SECOND);
+
+        let (glyph, gcolor): (&str, Color) = if paused {
+            (if self.use_nerd_fonts { "\u{f04c}" } else { "||" }, palette::YELLOW)
+        } else {
+            (if self.use_nerd_fonts { "\u{f04b}" } else { ">" }, palette::PINE)
+        };
+
+        // Left: glyph  title  │  elapsed / total
+        let mut left: Vec<Span> = Vec::new();
+        left.push(Span::styled(format!("{glyph} "), Style::default().fg(gcolor).add_modifier(Modifier::BOLD)));
+        left.push(Span::styled(title.to_string(), Style::default().fg(title_color).add_modifier(Modifier::BOLD)));
+        left.push(Span::styled(" \u{2502} ", Style::default().fg(palette::OVERLAY)));
+        left.push(Span::styled(format!("{pos_str} / {dur_str}"), Style::default().fg(palette::SUBTLE)));
+
+        // Right: status-indicator badges.
+        let right = self.build_status_indicator_spans().unwrap_or_default();
+
+        let left_w:  u16 = left.iter().map(|s| s.content.width() as u16).sum();
+        let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
+        let gap = area.width.saturating_sub(left_w + right_w) as usize;
+
+        let mut spans = left;
+        spans.push(Span::raw(" ".repeat(gap)));
+        spans.extend(right);
+        f.render_widget(Paragraph::new(Line::from(spans)), area);
+    }
+
+    /// Expanded-mode badge line: status indicators right-aligned over a green
+    /// divider, with one leading space before the cluster.
     fn render_status_indicators(&mut self, f: &mut Frame, area: Rect) {
         if area.height == 0 { return; }
-        let pst = self.player.status.lock().unwrap();
-        if !pst.active { return; }
-        let video_is_image = pst.video_is_image;
-        let res_h = pst.video_height;
-        let is_audio_only = video_is_image;
-        let res_str = if video_is_image || res_h == 0 {
-            if pst.audio_codec.is_empty() { "--".to_string() } else { pst.audio_codec.to_uppercase() }
-        } else {
-            format!("{}p", res_h)
+        let ind_spans = match self.build_status_indicator_spans() {
+            Some(s) => s,
+            None => return,
         };
-        let res_color = if res_str == "--" { palette::MUTED } else { palette::FOAM };
-        let raw_lang = pst.audio_lang.to_lowercase();
-        let (au_text, au_color): (String, Color) = if raw_lang.is_empty() {
-            ("x".into(), palette::MUTED)
-        } else {
-            (raw_lang.chars().take(2).collect(), palette::YELLOW)
-        };
-        let sub_id = pst.sub_id;
-        drop(pst);
-        let sub_color = {
-            let mode = self.player.subtitle_prefs.lock().unwrap().mode.clone();
-            if sub_id != 0 { palette::FOAM }
-            else { match mode.as_str() {
-                "Always" | "Smart" | "OnlyForced" | "HearingImpaired" => palette::FOAM,
-                _ => palette::MUTED,
-            }}
-        };
-        let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
-        // Each value gets its own bracket group: "[720p] [en] [CC]".
-        // Leading space gives a gap from the green line on the left.
-        let mut ind_spans: Vec<Span> = Vec::new();
-        let mut push_group = |text: String, color: Color| {
-            ind_spans.push(Span::raw(" "));
-            ind_spans.push(Span::styled("[", bracket));
-            ind_spans.push(Span::styled(text, Style::default().fg(color).add_modifier(Modifier::BOLD)));
-            ind_spans.push(Span::styled("]", bracket));
-        };
-        push_group(res_str, res_color);
-        if !is_audio_only {
-            push_group(au_text, au_color);
-            push_group("CC".to_string(), sub_color);
-        }
-        drop(push_group);
-        let ind_w: u16 = ind_spans.iter().map(|s| s.content.width() as u16).sum();
-        let total_dashes = area.width.saturating_sub(ind_w);
-        // Right-align the indicators: all filler dashes go on the left.
-        let left_dashes  = total_dashes;
-        let right_dashes = 0u16;
+        let ind_w: u16 = 1 + ind_spans.iter().map(|s| s.content.width() as u16).sum::<u16>();
+        let left_dashes = area.width.saturating_sub(ind_w);
         let dash = Style::default().fg(palette::IRIS);
         let mut spans: Vec<Span> = Vec::new();
-        spans.push(Span::styled("─".repeat(left_dashes as usize),  dash));
+        spans.push(Span::styled("\u{2500}".repeat(left_dashes as usize), dash));
+        spans.push(Span::raw(" "));
         spans.extend(ind_spans);
-        spans.push(Span::styled("─".repeat(right_dashes as usize), dash));
+        f.render_widget(Paragraph::new(Line::from(spans)), area);
+    }
+
+    /// Current playback position / runtime (ticks) and paused state, from the
+    /// connected remote session if any, otherwise the local player.
+    fn playback_progress(&self) -> (i64, i64, bool) {
+        if let Some(ref remote) = self.connected_session_state {
+            let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
+            let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
+            ((pos_s * TICKS_PER_SECOND as f64) as i64, remote.runtime_s * TICKS_PER_SECOND, remote.is_paused)
+        } else {
+            let s = self.player.status.lock().unwrap();
+            (s.position_ticks, s.runtime_ticks, s.paused)
+        }
+    }
+
+    /// Full-width seekbar row: green played `━`, a bright dot at the playhead,
+    /// gray `─` track for the remainder. Records the click region for seeking.
+    fn render_seekbar(&mut self, f: &mut Frame, area: Rect) {
+        if area.height == 0 || area.width == 0 { self.layout_seekbar_area = Rect::default(); return; }
+        let (pos_ticks, rt_ticks, _paused) = self.playback_progress();
+        let ratio = if rt_ticks > 0 { (pos_ticks as f64 / rt_ticks as f64).clamp(0.0, 1.0) } else { 0.0 };
+        self.layout_seekbar_area = area;
+        let w = area.width as usize;
+        let dot_pos = ((ratio * w as f64).round() as usize).min(w - 1);
+        let green_len = dot_pos;
+        let gray_len = w - dot_pos - 1;
+        let spans = vec![
+            Span::styled("\u{2500}".repeat(green_len), Style::default().fg(palette::IRIS)),
+            Span::styled("\u{2022}".to_string(), Style::default().fg(palette::SEEK_KNOB)),
+            Span::styled("\u{2500}".repeat(gray_len), Style::default().fg(palette::SEEK_TRACK)),
+        ];
         f.render_widget(Paragraph::new(Line::from(spans)), area);
     }
 
@@ -626,11 +655,13 @@ impl App {
         if self.use_nerd_fonts {
             let btn_style = Style::default().fg(Color::Rgb(203, 212, 241));
             let stop_style = Style::default().fg(palette::SUBTLE);
+            // The active glyph (play/pause) is emphasized brighter than the rest.
+            let pp_style = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
             let pp_icon = if !paused { "\u{F03E4}" } else { "\u{F040A}" };
             let btn_icons: &[(&str, Style)] = &[
                 ("\u{F04AE}", btn_style),
                 ("\u{F04A}",  btn_style),
-                (pp_icon,     btn_style),
+                (pp_icon,     pp_style),
                 ("\u{F04DB}", stop_style),
                 ("\u{F04E}",  btn_style),
                 ("\u{F04AD}", btn_style),

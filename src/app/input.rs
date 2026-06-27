@@ -158,7 +158,8 @@ impl App {
             let show_controls = active || self.connected_session_id.is_some();
             let in_presentation = self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION;
             if show_controls && !in_presentation {
-                self.show_playback_panel = !self.show_playback_panel;
+                self.panel_mode = self.panel_mode.next();
+                crate::config::save_ui_state(&crate::config::UiState { panel_mode: self.panel_mode });
             }
             return false;
         }

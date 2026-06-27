@@ -156,16 +156,6 @@ impl App {
             }
         }).collect();
 
-        let header_style = Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD);
-        let header = Row::new([
-            Cell::from(""),
-            Cell::from("Title").style(header_style),
-            Cell::from(""),
-            Cell::from(Line::from("Length").alignment(Alignment::Right)).style(header_style),
-            Cell::from(Line::from("Type").alignment(Alignment::Right)).style(header_style),
-            Cell::from(""),
-        ]);
-
         let mut state = TableState::default();
         state.select(Some(cursor));
         let table = Table::new(rows, [
@@ -176,7 +166,6 @@ impl App {
             Constraint::Length(10),
             Constraint::Length(1),
         ])
-        .header(header)
         .column_spacing(1)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);

@@ -26,6 +26,7 @@ pub struct Config {
     pub image_cache_size: usize,
     pub save_playlist_on_consume: bool,
     pub use_nerd_fonts: bool,
+    pub indicator_style: String,    // status-indicator treatment: chips|brackets|outlined|dots|pipes|keyvalue|powerline
     // [playback] — client-only subtitle/audio preferences (never pushed to Emby server)
     pub subtitle_mode: String,      // "Default"|"Always"|"Smart"|"OnlyForced"|"None"|"HearingImpaired"; "" = inherit from Emby
     pub subtitle_lang: String,      // full language name, e.g. "English"; "" = any
@@ -63,6 +64,7 @@ impl Default for Config {
             image_cache_size: 50,
             save_playlist_on_consume: false,
             use_nerd_fonts: false,
+            indicator_style: "keyvalue".into(),
             subtitle_mode: String::new(),
             subtitle_lang: String::new(),
             audio_lang: String::new(),
@@ -180,6 +182,53 @@ pub fn load_queue_state() -> Option<QueueState> {
 
 pub fn clear_queue_state() {
     let _ = std::fs::remove_file(queue_state_path());
+}
+
+/// Visibility/size of the now-playing panel, cycled with `h` and remembered across restarts.
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum PanelMode {
+    OneRow,
+    #[default]
+    Expanded,
+    Hidden,
+}
+
+impl PanelMode {
+    /// Cycle order: One-row → Expanded → Hidden → (One-row).
+    pub fn next(self) -> Self {
+        match self {
+            PanelMode::OneRow => PanelMode::Expanded,
+            PanelMode::Expanded => PanelMode::Hidden,
+            PanelMode::Hidden => PanelMode::OneRow,
+        }
+    }
+}
+
+fn ui_state_path() -> PathBuf {
+    state_dir().join("ui_state.json")
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+pub struct UiState {
+    #[serde(default)]
+    pub panel_mode: PanelMode,
+}
+
+pub fn save_ui_state(state: &UiState) {
+    let path = ui_state_path();
+    if let Some(dir) = path.parent() { let _ = std::fs::create_dir_all(dir); }
+    if let Ok(json) = serde_json::to_string(state) {
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+pub fn load_ui_state() -> Option<UiState> {
+    let text = std::fs::read_to_string(ui_state_path()).ok()?;
+    serde_json::from_str(&text).ok()
 }
 
 pub fn image_disk_cache_dir() -> PathBuf {
@@ -415,6 +464,12 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let indicator_style = general
+        .and_then(|m| m.get("indicator_style"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("keyvalue")
+        .to_string();
+
     let playback = doc.get("playback");
     let subtitle_mode = playback
         .and_then(|p| p.get("subtitle_mode"))
@@ -482,6 +537,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         image_cache_size,
         save_playlist_on_consume,
         use_nerd_fonts,
+        indicator_style,
         subtitle_mode,
         subtitle_lang,
         audio_lang,

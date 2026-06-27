@@ -183,7 +183,7 @@ impl App {
             || self.connected_session_state.is_some();
 
         // Title row: now-playing name, centered, at the very top of the queue area.
-        let area = if active && self.show_playback_panel {
+        let area = if active && self.panel_mode != crate::config::PanelMode::Hidden {
             let title: Option<String> = {
                 let pst = self.player.status.lock().unwrap();
                 if pst.active {
@@ -208,7 +208,7 @@ impl App {
             area
         };
 
-        let list_area = if active && self.show_playback_panel {
+        let list_area = if active && self.panel_mode != crate::config::PanelMode::Hidden {
             self.render_power_playback_controls(f, Rect { x: area.x, y: area.y, width: area.width, height: 1 });
             let div_y = area.y + 1;
             let div_w = area.width;
@@ -216,20 +216,15 @@ impl App {
             let hdiv_fg = palette::IRIS;
             let dash = Style::default().fg(hdiv_fg);
             if let Some(inner) = self.build_status_indicator_spans() {
-                let bracket = Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD);
                 let inner_w: u16 = inner.iter().map(|s| s.content.width() as u16).sum();
-                let group_w = inner_w + 6; // "─ [ " + inner + " ] ─" (spaces flank the brackets)
+                let group_w = inner_w + 2; // a space flanks the cluster on each side
                 let total_dashes = div_w.saturating_sub(group_w);
                 let left_dashes  = total_dashes / 2;
                 let right_dashes = total_dashes - left_dashes;
                 let mut spans: Vec<Span> = Vec::new();
                 spans.push(Span::styled("─".repeat(left_dashes as usize),  dash));
                 spans.push(Span::raw(" "));
-                spans.push(Span::styled("[", bracket));
-                spans.push(Span::raw(" "));
                 spans.extend(inner);
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled("]", bracket));
                 spans.push(Span::raw(" "));
                 spans.push(Span::styled("─".repeat(right_dashes as usize), dash));
                 f.render_widget(

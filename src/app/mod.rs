@@ -371,7 +371,8 @@ pub struct App {
     pending_queue_action: Option<PendingQueueAction>,
     show_save_playlist_modal: bool,
     use_nerd_fonts: bool,
-    show_playback_panel: bool,
+    indicator_style: render::indicators::IndicatorStyle,
+    panel_mode: crate::config::PanelMode,
     ws_send_tx: Option<mpsc::Sender<String>>,
     last_keepalive: Instant,
     last_capabilities: Instant,
@@ -414,6 +415,7 @@ struct AppInit {
     hidden_latest: Vec<String>,
     music_levels: Vec<String>,
     use_nerd_fonts: bool,
+    indicator_style: render::indicators::IndicatorStyle,
     image_cache_size: usize,
     start_on_queue: bool,
     lib_tx: mpsc::Sender<LibEvent>,
@@ -507,6 +509,7 @@ impl App {
             hidden_latest: init.hidden_latest,
             music_levels: init.music_levels,
             use_nerd_fonts: init.use_nerd_fonts,
+            indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
             tab_idx: if init.start_on_queue { 1 } else { 0 },
             lib_tx: init.lib_tx,
@@ -623,7 +626,7 @@ impl App {
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
-            show_playback_panel: true,
+            panel_mode: crate::config::load_ui_state().map(|s| s.panel_mode).unwrap_or_default(),
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
             connected_session_id: None,
@@ -666,6 +669,7 @@ impl App {
         let image_protocol_enabled = client.config.image_protocol.is_some();
         let image_cache_size = client.config.image_cache_size;
         let use_nerd_fonts = client.config.use_nerd_fonts;
+        let indicator_style: render::indicators::IndicatorStyle = client.config.indicator_style.parse().unwrap_or_default();
         let start_on_queue = client.config.start_on_queue;
         let always_play_next = client.config.always_play_next;
         let always_skip_intro = client.config.always_skip_intro;
@@ -718,6 +722,7 @@ impl App {
             hidden_latest,
             music_levels,
             use_nerd_fonts,
+            indicator_style,
             image_cache_size,
             start_on_queue,
             lib_tx, lib_rx,
@@ -747,6 +752,7 @@ impl App {
         let image_protocol_enabled = client.config.image_protocol.is_some();
         let image_cache_size = client.config.image_cache_size;
         let use_nerd_fonts = client.config.use_nerd_fonts;
+        let indicator_style: render::indicators::IndicatorStyle = client.config.indicator_style.parse().unwrap_or_default();
         crate::config::evict_old_image_cache();
         let client_arc = Arc::new(Mutex::new(client));
         {
@@ -774,6 +780,7 @@ impl App {
             hidden_latest,
             music_levels,
             use_nerd_fonts,
+            indicator_style,
             image_cache_size,
             start_on_queue,
             lib_tx, lib_rx,
@@ -1670,7 +1677,8 @@ mod tests {
             pending_queue_action: None,
             show_save_playlist_modal: false,
             use_nerd_fonts: false,
-            show_playback_panel: true,
+            indicator_style: Default::default(),
+            panel_mode: Default::default(),
             ws_send_tx: None,
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
