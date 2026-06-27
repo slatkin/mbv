@@ -1,4 +1,4 @@
-use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_PRESENTATION, PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus};
+use super::{PLAYLIST_VIEW_CARDS, PLAYLIST_VIEW_POWER, PLAYLIST_VIEW_COUNT, PowerFocus};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -157,8 +157,7 @@ impl App {
         if key.code == KeyCode::Char('h') {
             let active = self.player.status.lock().unwrap().active;
             let show_controls = active || self.connected_session_id.is_some();
-            let in_presentation = self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION;
-            if show_controls && !in_presentation {
+            if show_controls {
                 self.panel_mode = self.panel_mode.next();
                 crate::config::save_ui_state(&crate::config::UiState { panel_mode: self.panel_mode });
             }
@@ -772,22 +771,12 @@ impl App {
                     self.do_session_command(move |c| c.session_transport(&id, "Stop"));
                     return Some(false);
                 }
-                KeyCode::Left if key.modifiers == KeyModifiers::ALT => {
+                KeyCode::Char('[') => {
                     let ticks = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND;
                     self.do_session_command(move |c| c.session_seek(&id, ticks));
                     return Some(false);
                 }
-                KeyCode::Right if key.modifiers == KeyModifiers::ALT => {
-                    let ticks = (pos_s + 5) * crate::api::TICKS_PER_SECOND;
-                    self.do_session_command(move |c| c.session_seek(&id, ticks));
-                    return Some(false);
-                }
-                KeyCode::Char('<') => {
-                    let ticks = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND;
-                    self.do_session_command(move |c| c.session_seek(&id, ticks));
-                    return Some(false);
-                }
-                KeyCode::Char('>') => {
+                KeyCode::Char(']') => {
                     let ticks = (pos_s + 5) * crate::api::TICKS_PER_SECOND;
                     self.do_session_command(move |c| c.session_seek(&id, ticks));
                     return Some(false);
@@ -814,10 +803,8 @@ impl App {
         match key.code {
             KeyCode::Enter if alt => { self.player.stop(); Some(false) }
             KeyCode::Char(' ') => { self.player.send_command(PlayerCommand::TogglePause); Some(false) }
-            KeyCode::Left  if key.modifiers == KeyModifiers::ALT => { self.player.send_command(PlayerCommand::Seek(-5.0)); Some(false) }
-            KeyCode::Right if key.modifiers == KeyModifiers::ALT => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
-            KeyCode::Char('<') => { self.player.send_command(PlayerCommand::Seek(-5.0)); Some(false) }
-            KeyCode::Char('>') => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
+            KeyCode::Char('[') => { self.player.send_command(PlayerCommand::Seek(-5.0)); Some(false) }
+            KeyCode::Char(']') => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
             KeyCode::Char('a') => { if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); } Some(false) }
             _ => None,
         }
@@ -916,12 +903,7 @@ impl App {
                     self.set_tab((self.tab_idx + n - 1) % n);
                 }
             }
-            KeyCode::Char('<') if self.playlist_view == PLAYLIST_VIEW_POWER => {
-                self.power_focus = PowerFocus::Left;
-            }
-            KeyCode::Char('>') if self.playlist_view == PLAYLIST_VIEW_POWER => {
-                self.power_focus = PowerFocus::Queue;
-            }
+
             KeyCode::Up | KeyCode::Left
                 if self.player_tab.playlist_cursor > 0 && (key.code == KeyCode::Up || self.playlist_view == PLAYLIST_VIEW_CARDS) => {
                     self.last_nav_at = Instant::now();
@@ -1460,12 +1442,6 @@ impl App {
                 }
             }
         }
-        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
-            let inner = self.layout_playlist_inner;
-            let row = self.layout_presentation_visual_cursor
-                .saturating_sub(self.layout_presentation_scroll) as u16;
-            return (inner.x + 2, inner.y + row);
-        }
         if self.tab_idx == 0 {
             let sec = self.home.section;
             if let Some(area) = self.layout_section_areas.get(sec) {
@@ -1948,17 +1924,6 @@ if idx < self.sessions.len() {
                         }
                     }
                 } else if self.tab_idx == 1 {
-                    if self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
-                        let sb = self.layout_presentation_sb;
-                        if sb.width > 0 && sb.contains((col, row).into()) {
-                            let n = self.player_tab.items.len();
-                            if n > 0 {
-                                self.player_tab.playlist_cursor =
-                                    (self.player_tab.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
-                            }
-                            return;
-                        }
-                    }
                     let n = self.player_tab.items.len();
                     if n > 0 {
                         self.player_tab.playlist_cursor =
@@ -2179,14 +2144,6 @@ if idx < self.sessions.len() {
                     }
                 }
 
-                if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION {
-                    let sb = self.layout_presentation_sb;
-                    if sb.width > 0 && sb.contains((col, row).into()) {
-                        self.presentation_scrollbar_seek(row);
-                        return;
-                    }
-                }
-
                 if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
                     let crumbs = self.layout_breadcrumbs.clone();
                     let lib_off = self.lib_tab_offset();
@@ -2240,13 +2197,6 @@ if idx < self.sessions.len() {
                     sb.width > 0 && sb.contains((col, row).into())
                 } => {
                     self.home_scrollbar_seek(row);
-                }
-            MouseEventKind::Drag(MouseButton::Left)
-                if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_PRESENTATION && {
-                    let sb = self.layout_presentation_sb;
-                    sb.width > 0 && sb.contains((col, row).into())
-                } => {
-                    self.presentation_scrollbar_seek(row);
                 }
             MouseEventKind::Drag(MouseButton::Left)
                 if self.layout_seekbar_area.contains((col, row).into())

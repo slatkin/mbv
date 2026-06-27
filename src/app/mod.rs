@@ -15,10 +15,9 @@ static QUIT_REQUESTED:  AtomicBool = AtomicBool::new(false);
 // The watchdog's forced exit arms only on this flag so clean q-quits are never raced.
 static TERMINAL_GONE:   AtomicBool = AtomicBool::new(false);
 
-pub(super) const PLAYLIST_VIEW_CARDS: u8        = 1;
-pub(super) const PLAYLIST_VIEW_PRESENTATION: u8 = 2;
-pub(super) const PLAYLIST_VIEW_POWER: u8        = 3;
-pub(super) const PLAYLIST_VIEW_COUNT: u8        = 4;
+pub(super) const PLAYLIST_VIEW_CARDS: u8  = 1;
+pub(super) const PLAYLIST_VIEW_POWER: u8  = 2;
+pub(super) const PLAYLIST_VIEW_COUNT: u8  = 3;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16      = 17;
 /// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
@@ -279,9 +278,7 @@ pub struct App {
     layout_lib_row_heights: Vec<Vec<u16>>, // per lib_idx: height of each visible row, from scroll
     layout_home_scrolls: Vec<usize>,
     layout_home_scrollbar: Rect,
-    layout_presentation_sb: Rect,
-    layout_presentation_scroll: usize,
-    layout_presentation_visual_cursor: usize,
+
     home_panel_section_offset: usize,
     home_cards_section_offset: usize,
     layout_home_card_strips: Vec<(usize, Rect)>,
@@ -539,9 +536,7 @@ impl App {
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
             layout_home_scrollbar: Rect::default(),
-            layout_presentation_sb: Rect::default(),
-            layout_presentation_scroll: 0,
-            layout_presentation_visual_cursor: 0,
+
             home_panel_section_offset: 0,
             home_cards_section_offset: 0,
             layout_home_card_strips: Vec::new(),
@@ -1598,9 +1593,7 @@ mod tests {
             layout_lib_row_heights: Vec::new(),
             layout_home_scrolls: Vec::new(),
             layout_home_scrollbar: Rect::default(),
-            layout_presentation_sb: Rect::default(),
-            layout_presentation_scroll: 0,
-            layout_presentation_visual_cursor: 0,
+
             home_panel_section_offset: 0,
             home_cards_section_offset: 0,
             layout_home_card_strips: Vec::new(),

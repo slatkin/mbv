@@ -172,7 +172,8 @@ fn keyval_group(key: &str, value: &str, color: Color, out: &mut Vec<Span<'static
 
 fn keyvalue(d: &IndicatorData) -> Vec<Span<'static>> {
     let mut out = Vec::new();
-    keyval_group("RES", &d.res_label, d.res_color(), &mut out);
+    let res_key = if d.audio_only { "CODEC" } else { "RES" };
+    keyval_group(res_key, &d.res_label, d.res_color(), &mut out);
     if !d.audio_only {
         out.push(Span::raw("  "));
         keyval_group("AUD", &d.audio_label, d.audio_color(), &mut out);

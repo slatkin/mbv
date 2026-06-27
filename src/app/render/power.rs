@@ -21,8 +21,8 @@ impl App {
             self.power_focus = PowerFocus::Queue;
         }
 
-        // Left panel (~40%) │ Right panel (queue, remaining).
-        let left_w = ((area.width as u32 * 2 / 5) as u16).clamp(20, 60);
+        // Left panel (fixed 38 cols) │ Right panel (queue, remaining).
+        let left_w: u16 = 44;
         let right_w = area.width.saturating_sub(left_w + 1);
         let divider_x = area.x + left_w;
 
@@ -75,7 +75,7 @@ impl App {
         let rows: Vec<Row> = self.player_tab.items.iter().enumerate().map(|(i, item)| {
             let is_active = i == active_idx && active;
             let row_style = if is_active {
-                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD)
+                Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)
             } else if i == cursor && focused {
                 Style::default().fg(palette::YELLOW)
             } else {
@@ -107,7 +107,7 @@ impl App {
             Row::new([
                 Cell::from(Line::from(spans)),
                 Cell::from(Line::from(length).alignment(Alignment::Right))
-                    .style(Style::default().fg(if is_active { if focused { palette::FOAM } else { palette::MUTED } } else { palette::SUBTLE })),
+                    .style(Style::default().fg(if is_active { if focused { palette::SUBTLE } else { palette::MUTED } } else { palette::SUBTLE })),
             ]).style(row_style)
         }).collect();
 
@@ -145,16 +145,12 @@ impl App {
         }
     }
 
-    fn render_power_card(&mut self, f: &mut Frame, area: Rect) {
+    /// Renders the card image and returns the number of rows it actually occupied.
+    /// Returns 0 if the queue is empty or the image is not yet loaded.
+    fn render_power_card(&mut self, f: &mut Frame, area: Rect) -> u16 {
         let cursor = self.player_tab.playlist_cursor;
         let n = self.player_tab.items.len();
-        if n == 0 {
-            f.render_widget(
-                Paragraph::new("Queue is empty").style(Style::default().fg(palette::MUTED)),
-                area,
-            );
-            return;
-        }
+        if n == 0 { return 0; }
         let item = &self.player_tab.items[cursor];
         let img_types: &[&str] = match item.item_type.as_str() {
             "MusicAlbum" => &["AudioChild"],
@@ -180,18 +176,19 @@ impl App {
                 SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
                 img_rect, state,
             );
+            actual.height
+        } else {
+            0
         }
     }
 
     fn render_power_left_panel(&mut self, f: &mut Frame, area: Rect, focused: bool) {
         if area.height == 0 { return; }
 
-        // Top portion: card image (~40% of left panel height, min 4 rows).
-        let card_h = ((area.height as u32 * 2 / 5) as u16).clamp(4, area.height.saturating_sub(4));
-        let card_area = Rect { height: card_h, ..area };
-        let lib_area  = Rect { y: area.y + card_h, height: area.height.saturating_sub(card_h), ..area };
-
-        self.render_power_card(f, card_area);
+        // Render card into the full area; it returns the rows it actually used.
+        // The library panel then fills whatever vertical space remains.
+        let card_h = self.render_power_card(f, area);
+        let lib_area = Rect { y: area.y + card_h, height: area.height.saturating_sub(card_h), ..area };
 
         if lib_area.height == 0 { return; }
 
@@ -200,7 +197,7 @@ impl App {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
 
-        // Header: panel name + underline.
+        // Header: iris bar on top, panel name below.
         let area = lib_area;
         let header_name = if self.power_left_tab == 0 {
             "Continue Watching".to_string()
@@ -208,27 +205,18 @@ impl App {
             self.libs[self.power_left_tab - 1].library.name.clone()
         };
         let budget = (area.width as usize).saturating_sub(2);
-        if focused {
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    format!("  {}  ", trunc_str(&header_name, budget.saturating_sub(2))),
-                    Style::default().fg(palette::WHITE).bg(palette::IRIS).add_modifier(Modifier::BOLD),
-                )),
-                Rect { x: area.x, y: area.y, width: area.width, height: 1 },
-            );
-        } else {
-            f.render_widget(
-                Paragraph::new(Line::from(vec![
-                    Span::raw(" "),
-                    Span::styled(trunc_str(&header_name, budget), Style::default().fg(palette::YELLOW)),
-                ])),
-                Rect { x: area.x, y: area.y, width: area.width, height: 1 },
-            );
-        }
         if area.height < 2 { return; }
         let uline = "\u{2500}".repeat(area.width as usize);
         f.render_widget(
             Paragraph::new(Span::styled(uline, Style::default().fg(palette::IRIS))),
+            Rect { x: area.x, y: area.y, width: area.width, height: 1 },
+        );
+        let header_fg = if focused { palette::WHITE } else { palette::SUBTLE };
+        f.render_widget(
+            Paragraph::new(Line::from(vec![
+                Span::raw(" "),
+                Span::styled(trunc_str(&header_name, budget), Style::default().fg(header_fg)),
+            ])),
             Rect { x: area.x, y: area.y + 1, width: area.width, height: 1 },
         );
 
@@ -287,13 +275,7 @@ impl App {
             let selected = abs == cursor;
             let (text, _) = item_text_and_style(item, selected);
             let title = trunc_str(&text, (area.width as usize).saturating_sub(2));
-            let fg = if !focused {
-                palette::SUBTLE
-            } else if item.is_folder {
-                palette::WHITE
-            } else {
-                palette::TEXT
-            };
+            let fg = if focused { palette::WHITE } else { palette::SUBTLE };
             let line = if selected && focused {
                 Line::from(vec![
                     Span::styled("\u{258c}", Style::default().fg(palette::IRIS)),

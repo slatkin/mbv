@@ -127,16 +127,6 @@ impl App {
         }
     }
 
-    pub(super) fn presentation_scrollbar_seek(&mut self, row: u16) {
-        let sb = self.layout_presentation_sb;
-        if sb.height == 0 { return; }
-        let n = self.player_tab.items.len();
-        if n == 0 { return; }
-        let frac = (row.saturating_sub(sb.y)) as f64 / sb.height as f64;
-        let target = ((frac * n as f64).round() as usize).min(n - 1);
-        self.player_tab.playlist_cursor = target;
-    }
-
     pub(super) fn home_scrollbar_seek(&mut self, row: u16) {
         let sb = self.layout_home_scrollbar;
         if sb.height == 0 { return; }

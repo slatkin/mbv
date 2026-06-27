@@ -31,25 +31,20 @@ impl App {
 
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
-        let in_presentation = self.tab_idx == 1 && self.playlist_view == 2;
-        let in_power       = self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER;
-        // The 3-state panel toggle (`h`) only applies while something is playing/connected and
-        // we're not in presentation view. Idle/presentation keep their historical layout.
+        let in_power = self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER;
+        // The 3-state panel toggle (`h`) only applies while something is playing/connected.
         let mode = self.panel_mode;
-        let playing_panel = show_controls && !in_presentation;
+        let playing_panel = show_controls;
         let onerow = playing_panel && mode == crate::config::PanelMode::OneRow;
         let tabs_h:  u16 = 1;
         let spacer_h: u16 = if in_power { 0 } else { 1 };
-        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
-        // gap is only used as a divider line in the presentation view. (status is unused.)
+        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it. (status is unused.)
         let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) = if onerow {
             (1, 0, 1, 1, 0)
-        } else if in_presentation {
-            (0, 1, 0, 0, 0)
         } else {
-            (0, 0, 0, 0, 0)
+            (1, 0, 0, 0, 0)
         };
-        let [tabs_area, _spacer_area, seek_area, gap_area, title_area, _controls_area, _status_area, main_area] = Layout::vertical([
+        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, _status_area, main_area] = Layout::vertical([
             Constraint::Length(tabs_h),
             Constraint::Length(spacer_h),
             Constraint::Length(seek_h),
@@ -60,21 +55,21 @@ impl App {
             Constraint::Min(0),
         ]).areas(area);
 
-        // Full-width seekbar row (shown in one-row and expanded modes).
+        // Full-width seekbar row: live bar when playing, plain grey divider otherwise.
         if seek_h > 0 {
-            self.render_seekbar(f, seek_area);
+            if show_controls {
+                self.render_seekbar(f, seek_area);
+            } else {
+                self.layout_seekbar_area = Rect::default();
+                let bar = "\u{2500}".repeat(seek_area.width as usize);
+                f.render_widget(
+                    Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
+                    seek_area,
+                );
+            }
         } else {
             self.layout_seekbar_area = Rect::default();
         }
-        // The seekbar has its own row (above). The gap row is only a divider line
-        // in the presentation view.
-        if in_presentation && gap_h > 0 {
-            f.render_widget(
-                Paragraph::new(Span::styled("\u{2500}".repeat(gap_area.width as usize), Style::default().fg(palette::IRIS))),
-                gap_area,
-            );
-        }
-
         // Indicator-bar click regions are never set anymore; clear them every frame.
         self.layout_ind_pb  = Rect::default();
         self.layout_ind_mu  = Rect::default();
