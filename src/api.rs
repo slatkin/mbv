@@ -167,7 +167,7 @@ impl MediaItem {
 
     pub fn display_name(&self) -> String {
         if self.item_type == "Episode" && !self.series_name.is_empty() {
-            format!("{}⁄{}", self.series_name, self.name)
+            format!("{} - {}", self.series_name, self.name)
         } else {
             self.name.clone()
         }
