@@ -137,16 +137,9 @@ impl App {
 
         // Spinner character for the active item — computed once per frame, not per row.
         const SPINNER_FRAMES: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
-        const PAUSED_CHAR: &str = "⠿";
-        let spinner_frame: &str = if live_paused {
-            PAUSED_CHAR
-        } else {
-            let ms = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis();
-            SPINNER_FRAMES[(ms / 150) as usize % SPINNER_FRAMES.len()]
-        };
+        // Drive frame index from playback position (10M ticks/sec; 1.5M ticks = 150ms per frame).
+        // live_pos is frozen when paused, so the spinner naturally freezes at the right frame.
+        let spinner_frame: &str = SPINNER_FRAMES[(live_pos.max(0) / 1_500_000) as usize % SPINNER_FRAMES.len()];
         let spinner_color = if live_paused { palette::YELLOW } else { palette::IRIS };
 
         // Build visible ListItems and the row map simultaneously.
