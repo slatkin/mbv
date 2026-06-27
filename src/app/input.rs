@@ -1091,7 +1091,7 @@ impl App {
             KeyCode::Char('v') => {
                 self.playlist_view = (self.playlist_view + 1) % PLAYLIST_VIEW_COUNT;
                 self.save_playlist_view();
-                if self.playlist_view != PLAYLIST_VIEW_POWER {
+                if self.playlist_view == PLAYLIST_VIEW_POWER {
                     self.power_focus = PowerFocus::Left;
                 }
                 if !self.card_image_states.is_empty() { self.force_clear = true; }
