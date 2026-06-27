@@ -854,7 +854,6 @@ impl App {
         // In power view, bare Left/Right switch focus between the two panels.
         if self.playlist_view == PLAYLIST_VIEW_POWER && !key.modifiers.contains(KeyModifiers::ALT) {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Left) {
-                self.power_detail_item = None;
                 self.power_focus = PowerFocus::Queue;
                 return false;
             }

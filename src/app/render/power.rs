@@ -74,7 +74,7 @@ impl App {
             let list_area = Rect { y: right_content.y + queue_h, height: list_h, ..right_content };
             let mut header_ys = self.render_power_queue(f, queue_area, queue_focused);
             if self.power_detail_item.is_some() {
-                self.render_power_detail(f, list_area);
+                self.render_power_detail(f, list_area, left_focused);
             } else {
                 let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
                 if let Some(by) = list_bar_y { header_ys.push(by); }
@@ -83,7 +83,7 @@ impl App {
         } else {
             let lib_area = Rect { y: left_area.y + card_h, height: left_remaining, ..left_area };
             if self.power_detail_item.is_some() {
-                self.render_power_detail(f, lib_area);
+                self.render_power_detail(f, lib_area, left_focused);
                 let header_ys = self.render_power_queue(f, right_content, queue_focused);
                 (None, Vec::new(), header_ys)
             } else {
@@ -613,7 +613,7 @@ impl App {
 
     /// Renders the movie detail panel (title, metadata, overview, director) into `area`.
     /// Called instead of `render_power_list` when `power_detail_item` is Some.
-    fn render_power_detail(&mut self, f: &mut Frame, area: Rect) {
+    fn render_power_detail(&mut self, f: &mut Frame, area: Rect, focused: bool) {
         let Some(ref item) = self.power_detail_item else { return; };
         if area.height == 0 { return; }
 
@@ -623,12 +623,15 @@ impl App {
         let max_y = area.y + area.height;
         let mut row = area.y;
 
-        // — Title (YELLOW) —
+        let title_color = if focused { palette::YELLOW } else { palette::SUBTLE };
+        let text_color  = if focused { palette::WHITE  } else { palette::SUBTLE };
+
+        // — Title —
         if row < max_y {
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
                     trunc_str(&item.name, inner_w),
-                    Style::default().fg(palette::YELLOW),
+                    Style::default().fg(title_color),
                 ))),
                 Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
             );
@@ -703,7 +706,7 @@ impl App {
                     if row >= max_y.saturating_sub(dir_reserve) { break; }
                     f.render_widget(
                         Paragraph::new(Line::from(Span::styled(
-                            line_text, Style::default().fg(palette::SUBTLE),
+                            line_text, Style::default().fg(text_color),
                         ))),
                         Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
                     );
