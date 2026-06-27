@@ -170,7 +170,7 @@ impl App {
                 }
                 DRow::Track(idx, in_group) => {
                     let i = *idx;
-                    let indent: usize = if *in_group { 2 } else { 0 };
+                    let indent: usize = if *in_group { 1 } else { 0 };
                     let item = &items[i];
                     let is_active = i == active_idx && active;
                     let is_cursor = i == cursor && focused;
@@ -242,7 +242,7 @@ impl App {
                     let title_color = if is_active { palette::FOAM } else { fg };
 
                     let mut spans: Vec<Span> = Vec::new();
-                    if indent > 0 { spans.push(Span::raw("  ")); }
+                    if indent > 0 { spans.push(Span::raw(" ")); }
                     spans.push(marker);
                     spans.push(Span::raw(" "));
                     // For audio tracks with an index: "01. ⠋ Title" when active,

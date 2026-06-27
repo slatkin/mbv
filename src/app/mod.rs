@@ -440,8 +440,8 @@ enum PendingQueueAction {
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum PowerFocus {
-    #[default]
     Queue,
+    #[default]
     Left,   // left panel; content driven by power_left_tab
 }
 
