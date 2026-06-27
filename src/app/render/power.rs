@@ -614,7 +614,8 @@ impl App {
     /// Renders the movie detail panel (title, metadata, overview, director) into `area`.
     /// Called instead of `render_power_list` when `power_detail_item` is Some.
     fn render_power_detail(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        let Some(ref item) = self.power_detail_item else { return; };
+        // Clone so self is free for scroll-state writes below.
+        let item = match self.power_detail_item.clone() { Some(it) => it, None => return };
         if area.height == 0 { return; }
 
         let inner_x = area.x + 1;
@@ -678,39 +679,62 @@ impl App {
         // — Blank separator —
         if row < max_y { row += 1; }
 
-        // — Overview word-wrapped (SUBTLE) —
+        // — Overview (scrollable, word-wrapped) —
         if !item.overview.is_empty() && row < max_y {
             let dir_reserve: u16 = if item.director.is_empty() { 0 } else { 1 };
             let avail = max_y.saturating_sub(row).saturating_sub(dir_reserve) as usize;
+            let ov_start_y = row;
+
+            // Word-wrap ALL overview lines so we can scroll through them.
+            let mut all_ov_lines: Vec<String> = Vec::new();
+            let mut cur = String::new();
+            for word in item.overview.split_whitespace() {
+                let word_w = word.width();
+                if cur.is_empty() {
+                    cur.push_str(word);
+                } else if cur.width() + 1 + word_w <= inner_w {
+                    cur.push(' ');
+                    cur.push_str(word);
+                } else {
+                    all_ov_lines.push(std::mem::take(&mut cur));
+                    cur.push_str(word);
+                }
+            }
+            if !cur.is_empty() { all_ov_lines.push(cur); }
+
+            let total = all_ov_lines.len();
+            let max_scroll = total.saturating_sub(avail);
+            let scroll = self.power_detail_scroll.min(max_scroll);
+            self.power_detail_scroll = scroll;
+            self.power_detail_max_scroll = max_scroll;
+            self.power_detail_page_h = avail.max(1);
+
             if avail > 0 {
-                // Simple word-wrap respecting terminal character widths.
-                let mut ov_lines: Vec<String> = Vec::new();
-                let mut cur = String::new();
-                for word in item.overview.split_whitespace() {
-                    let word_w = word.width();
-                    if cur.is_empty() {
-                        cur.push_str(word);
-                    } else if cur.width() + 1 + word_w <= inner_w {
-                        cur.push(' ');
-                        cur.push_str(word);
-                    } else {
-                        ov_lines.push(std::mem::take(&mut cur));
-                        if ov_lines.len() >= avail { break; }
-                        cur.push_str(word);
-                    }
-                }
-                if !cur.is_empty() && ov_lines.len() < avail {
-                    ov_lines.push(cur);
-                }
-                for line_text in ov_lines {
+                for line_text in all_ov_lines.iter().skip(scroll).take(avail) {
                     if row >= max_y.saturating_sub(dir_reserve) { break; }
                     f.render_widget(
                         Paragraph::new(Line::from(Span::styled(
-                            line_text, Style::default().fg(text_color),
+                            line_text.clone(), Style::default().fg(text_color),
                         ))),
                         Rect { x: inner_x, y: row, width: inner_w16, height: 1 },
                     );
                     row += 1;
+                }
+
+                if max_scroll > 0 {
+                    let ov_area = Rect {
+                        x: area.x, y: ov_start_y,
+                        width: area.width, height: avail as u16,
+                    };
+                    let mut sb = ScrollbarState::new(max_scroll + 1).position(scroll);
+                    f.render_stateful_widget(
+                        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                            .thumb_symbol("\u{2590}")
+                            .track_symbol(Some(" "))
+                            .begin_symbol(None).end_symbol(None)
+                            .style(Style::default().fg(palette::SUBTLE)),
+                        ov_area, &mut sb,
+                    );
                 }
             }
         }

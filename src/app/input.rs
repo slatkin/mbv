@@ -871,16 +871,37 @@ impl App {
             if self.power_left_tab > 0 {
                 let lib_idx = self.power_left_tab - 1;
 
-                // Detail mode: Enter plays, Backspace/Esc dismisses; all other keys swallowed.
+                // Detail mode: scroll overview, Enter plays, Backspace/Esc dismisses.
                 if self.power_detail_item.is_some() {
-                    if key.code == KeyCode::Enter {
-                        self.power_detail_item = None;
-                        let saved = self.tab_idx;
-                        self.tab_idx = self.lib_tab_offset() + lib_idx;
-                        self.select();
-                        self.tab_idx = saved;
-                    } else if matches!(key.code, KeyCode::Backspace | KeyCode::Esc) {
-                        self.power_detail_item = None;
+                    match key.code {
+                        KeyCode::Enter => {
+                            self.power_detail_item = None;
+                            let saved = self.tab_idx;
+                            self.tab_idx = self.lib_tab_offset() + lib_idx;
+                            self.select();
+                            self.tab_idx = saved;
+                        }
+                        KeyCode::Backspace | KeyCode::Esc => {
+                            self.power_detail_item = None;
+                        }
+                        KeyCode::Up => {
+                            self.power_detail_scroll =
+                                self.power_detail_scroll.saturating_sub(1);
+                        }
+                        KeyCode::Down => {
+                            self.power_detail_scroll =
+                                (self.power_detail_scroll + 1).min(self.power_detail_max_scroll);
+                        }
+                        KeyCode::PageUp => {
+                            self.power_detail_scroll =
+                                self.power_detail_scroll.saturating_sub(self.power_detail_page_h);
+                        }
+                        KeyCode::PageDown => {
+                            self.power_detail_scroll =
+                                (self.power_detail_scroll + self.power_detail_page_h)
+                                    .min(self.power_detail_max_scroll);
+                        }
+                        _ => {}
                     }
                     return false;
                 }
@@ -901,6 +922,7 @@ impl App {
                     if let Some(item) = maybe_movie {
                         if !item.is_folder && item.item_type == "Movie" {
                             self.power_detail_item = Some(item);
+                            self.power_detail_scroll = 0;
                             return false;
                         }
                     }

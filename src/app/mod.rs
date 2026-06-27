@@ -313,6 +313,9 @@ pub struct App {
     power_queue_area: Rect,
     power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
     power_detail_item: Option<crate::api::MediaItem>, // movie pinned for detail view in power left panel
+    power_detail_scroll: usize,      // scroll offset into the overview lines
+    power_detail_max_scroll: usize,  // max valid scroll (set each render frame)
+    power_detail_page_h: usize,      // visible overview line count (set each render frame)
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
@@ -576,6 +579,9 @@ impl App {
             power_queue_area: Rect::default(),
             power_queue_row_map: Vec::new(),
             power_detail_item: None,
+            power_detail_scroll: 0,
+            power_detail_max_scroll: 0,
+            power_detail_page_h: 5,
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
