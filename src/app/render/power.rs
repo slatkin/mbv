@@ -161,7 +161,7 @@ impl App {
                 }
                 DRow::Track(idx, in_group) => {
                     let i = *idx;
-                    let indent: usize = if *in_group { 3 } else { 0 };
+                    let indent: usize = if *in_group { 2 } else { 0 };
                     let item = &items[i];
                     let is_active = i == active_idx && active;
                     let is_cursor = i == cursor && focused;
@@ -226,15 +226,16 @@ impl App {
                     let spinner_w: usize = if is_active { 2 } else { 0 };
                     // Title truncated to leave room for indent + marker + spinner + duration + pct.
                     let extra = dur_w + pct_str.chars().count() + spinner_w;
-                    let title_w = render_w.saturating_sub(indent + 1 + extra); // 1 for marker
+                    let title_w = render_w.saturating_sub(indent + 2 + extra); // 1 marker + 1 space
                     let title = trunc_str(&label, title_w);
 
                     // Now-playing title text is always emby blue, regardless of focus state.
                     let title_color = if is_active { palette::FOAM } else { fg };
 
                     let mut spans: Vec<Span> = Vec::new();
-                    if indent > 0 { spans.push(Span::raw("   ")); }
+                    if indent > 0 { spans.push(Span::raw("  ")); }
                     spans.push(marker);
+                    spans.push(Span::raw(" "));
                     // For audio tracks with an index: "01. ⠋ Title" when active,
                     // "01. Title" otherwise. Spinner goes between the dim prefix and the name.
                     if item.is_audio() && item.index_number > 0 {
