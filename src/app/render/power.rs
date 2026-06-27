@@ -33,8 +33,33 @@ impl App {
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
         let left_focused  = !queue_focused;
 
-        let (bar_y, crumb_chars) = self.render_power_left_panel(f, left_area, left_focused);
-        let header_ys = self.render_power_queue(f, right_area, queue_focused);
+        // The card fills the left column; the Continue/library list takes the rows
+        // below it. At low heights the card can consume the whole column, so relocate
+        // the list under the queue on the right instead of cramming it in.
+        let card_h = self.render_power_card(f, left_area);
+        let left_remaining = left_area.height.saturating_sub(card_h);
+
+        const MIN_LIST_ROWS: u16 = 6;
+        let (bar_y, crumb_chars, header_ys) = if left_remaining < MIN_LIST_ROWS {
+            // Split the right column: queue on top, relocated list on the bottom.
+            let h = right_area.height;
+            let min_l = MIN_LIST_ROWS.min(h);
+            let max_l = h.saturating_sub(MIN_LIST_ROWS).max(min_l);
+            let list_h = (h / 3).clamp(min_l, max_l);
+            let queue_h = h.saturating_sub(list_h);
+            let queue_area = Rect { height: queue_h, ..right_area };
+            let list_area = Rect { y: right_area.y + queue_h, height: list_h, ..right_area };
+            let mut header_ys = self.render_power_queue(f, queue_area, queue_focused);
+            let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
+            // The relocated list's header meets the divider from the right, like a queue header.
+            if let Some(by) = list_bar_y { header_ys.push(by); }
+            (None, Vec::new(), header_ys)
+        } else {
+            let lib_area = Rect { y: left_area.y + card_h, height: left_remaining, ..left_area };
+            let (bar_y, crumb_chars) = self.render_power_list(f, lib_area, left_focused);
+            let header_ys = self.render_power_queue(f, right_area, queue_focused);
+            (bar_y, crumb_chars, header_ys)
+        };
 
         // Vertical divider; ┤ at the left-panel header bar, ├ where a queue group-header
         // line meets the divider from the right, │ elsewhere.
@@ -363,18 +388,12 @@ impl App {
         }
     }
 
-    /// Returns (bar_y, crumb_chars) where bar_y is the y of the horizontal bar so the
-    /// caller can place a ┤ junction, and crumb_chars is a list of (abs_y, char) pairs
-    /// for ancestor-level indicators to overlay on the vertical divider.
-    fn render_power_left_panel(&mut self, f: &mut Frame, area: Rect, focused: bool) -> (Option<u16>, Vec<(u16, char)>) {
+    /// Renders the Continue/library list (header + items) into `area` — the rows below
+    /// the card, or a relocated slot under the queue at low heights.
+    /// Returns (bar_y, crumb_chars): bar_y is the header row for a ┤/├ divider junction,
+    /// and crumb_chars are ancestor-level digit indicators to overlay on the divider.
+    fn render_power_list(&mut self, f: &mut Frame, area: Rect, focused: bool) -> (Option<u16>, Vec<(u16, char)>) {
         if area.height == 0 { return (None, vec![]); }
-
-        // Render card into the full area; it returns the rows it actually used.
-        // The library panel then fills whatever vertical space remains.
-        let card_h = self.render_power_card(f, area);
-        let lib_area = Rect { y: area.y + card_h, height: area.height.saturating_sub(card_h), ..area };
-
-        if lib_area.height == 0 { return (None, vec![]); }
 
         // Ensure the library is loaded when a library tab is selected.
         if self.power_left_tab > 0 {
@@ -382,7 +401,6 @@ impl App {
         }
 
         // Header: "───── NAME" — FOAM line with a right-aligned label pill (matches queue group-header style).
-        let area = lib_area;
         let header_name = if self.power_left_tab == 0 {
             "Continue".to_string()
         } else {
