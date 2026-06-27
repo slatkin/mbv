@@ -142,7 +142,7 @@ impl App {
         let dur_w: usize = if show_length { 6 } else { 0 }; // "mm:ss" or "h:mm:ss"
 
         // Spinner character for the active item — computed once per frame, not per row.
-        const SPINNER_FRAMES: &[&str] = &["-", "\\", "|", "/"];
+        const SPINNER_FRAMES: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
         let spinner_frame: &str = {
             let ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -234,7 +234,7 @@ impl App {
                     // Spinner shown right after the title while the item is playing.
                     let spinner_char: &str = if is_active { spinner_frame } else { "" };
 
-                    // Reserve 2 extra chars for " |" when active.
+                    // Reserve 2 extra chars for " ⠋" when active.
                     let spinner_w: usize = if is_active { 2 } else { 0 };
                     // Title truncated to leave room for indent + marker + spinner + duration + pct.
                     let extra = dur_w + pct_str.chars().count() + spinner_w;

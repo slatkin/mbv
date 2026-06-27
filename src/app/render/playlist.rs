@@ -53,7 +53,7 @@ impl App {
         let title_col_width = (table_area.width as i32
             - if show_ep_cols { 21 } else { 13 }).max(0) as usize;
 
-        const SPINNER_FRAMES: &[&str] = &["-", "\\", "|", "/"];
+        const SPINNER_FRAMES: &[&str] = &["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"];
         let spinner_char: &str = {
             let ms = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
