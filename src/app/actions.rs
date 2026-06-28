@@ -1516,7 +1516,6 @@ impl App {
 
     /// Advance the left-panel tab (wrapping); load the library if needed.
     pub(super) fn power_left_tab_next(&mut self) {
-        self.power_detail_item = None;
         let n = self.power_left_tab_count();
         self.power_left_tab = (self.power_left_tab + 1) % n;
         if self.power_left_tab > 0 {
@@ -1526,7 +1525,6 @@ impl App {
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
     pub(super) fn power_left_tab_prev(&mut self) {
-        self.power_detail_item = None;
         let n = self.power_left_tab_count();
         self.power_left_tab = (self.power_left_tab + n - 1) % n;
         if self.power_left_tab > 0 {
@@ -1711,7 +1709,7 @@ impl App {
                     loading: false, all_items: lvl.all_items.clone(),
                 }).collect())
                 .unwrap_or_default();
-            self.libs.push(super::LibraryTab { library: view.clone(), nav_stack: stack, search: None });
+            self.libs.push(super::LibraryTab { library: view.clone(), nav_stack: stack, search: None, power_detail_item: None, power_detail_scroll: 0 });
         }
         let n = self.libs.len();
         self.layout_lib_scroll.resize(n, 0);

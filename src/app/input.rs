@@ -874,10 +874,10 @@ impl App {
                 // Detail mode: scroll overview, Enter plays, Backspace/Esc dismisses.
                 // Nav keys are consumed to prevent cursor movement in the underlying list.
                 // All other keys (q, /, Tab, etc.) fall through to their normal handlers.
-                if self.power_detail_item.is_some() {
+                if self.libs[lib_idx].power_detail_item.is_some() {
                     match key.code {
                         KeyCode::Enter => {
-                            self.power_detail_item = None;
+                            self.libs[lib_idx].power_detail_item = None;
                             let saved = self.tab_idx;
                             self.tab_idx = self.lib_tab_offset() + lib_idx;
                             self.select();
@@ -885,27 +885,27 @@ impl App {
                             return false;
                         }
                         KeyCode::Backspace | KeyCode::Esc => {
-                            self.power_detail_item = None;
+                            self.libs[lib_idx].power_detail_item = None;
                             return false;
                         }
                         KeyCode::Up => {
-                            self.power_detail_scroll =
-                                self.power_detail_scroll.saturating_sub(1);
+                            self.libs[lib_idx].power_detail_scroll =
+                                self.libs[lib_idx].power_detail_scroll.saturating_sub(1);
                             return false;
                         }
                         KeyCode::Down => {
-                            self.power_detail_scroll =
-                                (self.power_detail_scroll + 1).min(self.power_detail_max_scroll);
+                            self.libs[lib_idx].power_detail_scroll =
+                                (self.libs[lib_idx].power_detail_scroll + 1).min(self.power_detail_max_scroll);
                             return false;
                         }
                         KeyCode::PageUp => {
-                            self.power_detail_scroll =
-                                self.power_detail_scroll.saturating_sub(self.power_detail_page_h);
+                            self.libs[lib_idx].power_detail_scroll =
+                                self.libs[lib_idx].power_detail_scroll.saturating_sub(self.power_detail_page_h);
                             return false;
                         }
                         KeyCode::PageDown => {
-                            self.power_detail_scroll =
-                                (self.power_detail_scroll + self.power_detail_page_h)
+                            self.libs[lib_idx].power_detail_scroll =
+                                (self.libs[lib_idx].power_detail_scroll + self.power_detail_page_h)
                                     .min(self.power_detail_max_scroll);
                             return false;
                         }
@@ -933,8 +933,8 @@ impl App {
                     });
                     if let Some(item) = maybe_movie {
                         if !item.is_folder && item.item_type == "Movie" {
-                            self.power_detail_item = Some(item);
-                            self.power_detail_scroll = 0;
+                            self.libs[lib_idx].power_detail_item = Some(item);
+                            self.libs[lib_idx].power_detail_scroll = 0;
                             return false;
                         }
                     }

@@ -63,10 +63,13 @@ impl App {
             let mut header_ys = self.render_power_queue(f, queue_area, queue_focused);
             // Only skip left-panel content while the image is loading, not the whole view.
             if !image_loading {
-                if self.power_detail_item.is_some() {
-                    self.render_power_detail(f, list_area, left_focused);
-                } else if self.power_left_tab > 0 && self.is_album_level(self.power_left_tab - 1) {
-                    self.render_power_album_detail(f, list_area, self.power_left_tab - 1, left_focused);
+                let lib_idx = self.power_left_tab.saturating_sub(1);
+                let has_detail = self.power_left_tab > 0
+                    && self.libs[lib_idx].power_detail_item.is_some();
+                if has_detail {
+                    self.render_power_detail(f, list_area, lib_idx, left_focused);
+                } else if self.power_left_tab > 0 && self.is_album_level(lib_idx) {
+                    self.render_power_album_detail(f, list_area, lib_idx, left_focused);
                 } else {
                     let (list_bar_y, _crumbs) = self.render_power_list(f, list_area, left_focused);
                     if let Some(by) = list_bar_y { header_ys.push(by); }
@@ -77,10 +80,13 @@ impl App {
             let lib_area = Rect { y: left_area.y + card_h, height: left_remaining, ..left_area };
             let header_ys = self.render_power_queue(f, right_content, queue_focused);
             if !image_loading {
-                if self.power_detail_item.is_some() {
-                    self.render_power_detail(f, lib_area, left_focused);
-                } else if self.power_left_tab > 0 && self.is_album_level(self.power_left_tab - 1) {
-                    self.render_power_album_detail(f, lib_area, self.power_left_tab - 1, left_focused);
+                let lib_idx = self.power_left_tab.saturating_sub(1);
+                let has_detail = self.power_left_tab > 0
+                    && self.libs[lib_idx].power_detail_item.is_some();
+                if has_detail {
+                    self.render_power_detail(f, lib_area, lib_idx, left_focused);
+                } else if self.power_left_tab > 0 && self.is_album_level(lib_idx) {
+                    self.render_power_album_detail(f, lib_area, lib_idx, left_focused);
                 } else {
                     self.render_power_list(f, lib_area, left_focused);
                 }
@@ -311,7 +317,9 @@ impl App {
     /// rendering the rest of the view until the image arrives).
     fn render_power_card(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
         // If a movie detail is pinned, show that item's image instead of the queue cursor item.
-        if self.power_detail_item.is_some() {
+        let power_detail_pinned = self.power_left_tab > 0
+            && self.libs[self.power_left_tab - 1].power_detail_item.is_some();
+        if power_detail_pinned {
             // (handled below)
         } else if self.power_left_tab > 0 && self.is_album_level(self.power_left_tab - 1) {
             // When browsing a music album's tracks, show the album art in the card slot.
@@ -344,9 +352,10 @@ impl App {
             }
         }
 
-        if self.power_detail_item.is_some() {
+        if power_detail_pinned {
             let (detail_id, series_id) = {
-                let d = self.power_detail_item.as_ref().unwrap();
+                let lib_idx = self.power_left_tab - 1;
+                let d = self.libs[lib_idx].power_detail_item.as_ref().unwrap();
                 (d.id.clone(), d.series_id.clone())
             };
             let img_types: &[&str] = &["Backdrop", "Primary", "Logo"];
@@ -638,9 +647,9 @@ impl App {
 
     /// Renders the movie detail panel (title, metadata, overview, director) into `area`.
     /// Called instead of `render_power_list` when `power_detail_item` is Some.
-    fn render_power_detail(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+    fn render_power_detail(&mut self, f: &mut Frame, area: Rect, lib_idx: usize, focused: bool) {
         // Clone so self is free for scroll-state writes below.
-        let item = match self.power_detail_item.clone() { Some(it) => it, None => return };
+        let item = match self.libs[lib_idx].power_detail_item.clone() { Some(it) => it, None => return };
         if area.height == 0 { return; }
 
         let inner_x = area.x + 1;
@@ -729,8 +738,8 @@ impl App {
 
             let total = all_ov_lines.len();
             let max_scroll = total.saturating_sub(avail);
-            let scroll = self.power_detail_scroll.min(max_scroll);
-            self.power_detail_scroll = scroll;
+            let scroll = self.libs[lib_idx].power_detail_scroll.min(max_scroll);
+            self.libs[lib_idx].power_detail_scroll = scroll;
             self.power_detail_max_scroll = max_scroll;
             self.power_detail_page_h = avail.max(1);
 
