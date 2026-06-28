@@ -567,6 +567,32 @@ impl App {
         }
     }
 
+    /// Renders a cached card image centered in `area`, returning `(rows_used, image_loading)`.
+    /// Uses `last_card_height` as a stable placeholder while the image is loading.
+    fn render_card_image(&mut self, f: &mut Frame, area: Rect, cache_key: &str, max_h: u16) -> (u16, bool) {
+        let image_loading = self.card_image_loading.contains(cache_key);
+        if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
+            type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
+            let avail = ratatui::layout::Size {
+                width: area.width.saturating_sub(4),
+                height: max_h.saturating_sub(1),
+            };
+            let actual = state.size_for(
+                ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
+            );
+            let img_x = area.x + 2 + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
+            let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
+            f.render_stateful_widget(
+                SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
+                img_rect, state,
+            );
+            self.last_card_height = actual.height + 1;
+            (actual.height + 1, false)
+        } else {
+            (self.last_card_height, image_loading)
+        }
+    }
+
     /// Renders the card image and returns `(rows_used, image_loading)`.
     /// `rows_used` is 0 if the queue is empty or the image is not yet ready.
     /// `image_loading` is true when a fetch is in-flight (caller should defer
@@ -593,25 +619,7 @@ impl App {
             let fetch_id = if !album_id.is_empty() { album_id.clone() } else { fallback_id };
             let cache_key = format!("{}:pwr_al", album_id);
             self.fetch_card_image(cache_key.clone(), fetch_id, String::new(), &["AudioChild", "Primary"]);
-            let image_loading = self.card_image_loading.contains(&cache_key);
-            if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                // Reserve 1 gap row between image and the Queue pill line.
-                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height.min(18).saturating_sub(1) };
-                let actual = state.size_for(
-                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
-                );
-                let img_x = area.x + 2 + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
-                let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
-                    img_rect, state,
-                );
-                self.last_card_height = actual.height + 1;
-                return (actual.height + 1, false);
-            } else {
-                return (self.last_card_height, image_loading);
-            }
+            return self.render_card_image(f, area, &cache_key, area.height.min(18));
         } else if lib_focused && self.power_left_tab > 0
             && self.is_series_view(self.power_left_tab - 1)
         {
@@ -648,24 +656,7 @@ impl App {
                 }
             };
             self.fetch_card_image(cache_key.clone(), item_id, series_id, &["Primary", "Backdrop"]);
-            let image_loading = self.card_image_loading.contains(&cache_key);
-            if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height.min(18).saturating_sub(1) };
-                let actual = state.size_for(
-                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
-                );
-                let img_x = area.x + 2 + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
-                let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
-                    img_rect, state,
-                );
-                self.last_card_height = actual.height + 1;
-                return (actual.height + 1, false);
-            } else {
-                return (self.last_card_height, image_loading);
-            }
+            return self.render_card_image(f, area, &cache_key, area.height.min(18));
         } else if lib_focused && self.power_left_tab > 0
             && self.is_home_video_view(self.power_left_tab - 1)
         {
@@ -681,28 +672,7 @@ impl App {
             };
             let cache_key = format!("{}:pwr_hv", item_id);
             self.fetch_card_image(cache_key.clone(), item_id, series_id, &["Primary", "Backdrop"]);
-            let image_loading = self.card_image_loading.contains(&cache_key);
-            if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                let avail = ratatui::layout::Size {
-                    width: area.width.saturating_sub(4),
-                    height: area.height.min(18).saturating_sub(1),
-                };
-                let actual = state.size_for(
-                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
-                );
-                let img_x = area.x + 2
-                    + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
-                let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
-                    img_rect, state,
-                );
-                self.last_card_height = actual.height + 1;
-                return (actual.height + 1, false);
-            } else {
-                return (self.last_card_height, image_loading);
-            }
+            return self.render_card_image(f, area, &cache_key, area.height.min(18));
         }
 
         if power_detail_pinned {
@@ -716,25 +686,7 @@ impl App {
             if self.images_enabled() {
                 self.fetch_card_image(cache_key.clone(), detail_id, series_id, img_types);
             }
-            let image_loading = self.card_image_loading.contains(&cache_key);
-            if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-                type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-                // Reserve 1 gap row between image and the Queue pill line.
-                let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height.min(18).saturating_sub(1) };
-                let actual = state.size_for(
-                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
-                );
-                let img_x = area.x + 2 + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
-                let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
-                    img_rect, state,
-                );
-                self.last_card_height = actual.height + 1;
-                return (actual.height + 1, false);
-            } else {
-                return (self.last_card_height, image_loading);
-            }
+            return self.render_card_image(f, area, &cache_key, area.height.min(18));
         }
 
         let cursor = self.player_tab.playlist_cursor;
@@ -791,25 +743,7 @@ impl App {
                 self.fetch_card_image(pkey, pid, psid, ptypes);
             }
         }
-        let image_loading = self.card_image_loading.contains(&cache_key);
-        if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
-            type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
-            // Reserve 1 gap row between image and the Queue pill line.
-            let avail = ratatui::layout::Size { width: area.width.saturating_sub(4), height: area.height.saturating_sub(1) };
-            let actual = state.size_for(
-                ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
-            );
-            let img_x = area.x + 2 + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
-            let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
-            f.render_stateful_widget(
-                SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
-                img_rect, state,
-            );
-            self.last_card_height = actual.height + 1;
-            (actual.height + 1, false)
-        } else {
-            (self.last_card_height, image_loading)
-        }
+        self.render_card_image(f, area, &cache_key, area.height)
     }
 
     /// Renders the Continue/library list items into `area`.
