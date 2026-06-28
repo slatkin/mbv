@@ -1748,6 +1748,7 @@ impl App {
     pub(super) fn power_left_tab_next(&mut self) {
         let n = self.power_left_tab_count();
         self.power_left_tab = (self.power_left_tab + 1) % n;
+        self.last_card_height = 0; // reset stale image height for new view
         if self.power_left_tab > 0 {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
@@ -1758,6 +1759,7 @@ impl App {
     pub(super) fn power_left_tab_prev(&mut self) {
         let n = self.power_left_tab_count();
         self.power_left_tab = (self.power_left_tab + n - 1) % n;
+        self.last_card_height = 0;
         if self.power_left_tab > 0 {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }

@@ -843,10 +843,12 @@ impl App {
         if self.playlist_view == PLAYLIST_VIEW_POWER && !key.modifiers.contains(KeyModifiers::ALT) {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
                 self.power_focus = PowerFocus::Left;
+                self.last_card_height = 0; // reset stale image height for new view
                 return false;
             }
             if key.code == KeyCode::Left && matches!(self.power_focus, PowerFocus::Left) {
                 self.power_focus = PowerFocus::Queue;
+                self.last_card_height = 0;
                 return false;
             }
         }
@@ -1649,6 +1651,7 @@ impl App {
             // Click in queue area: focus queue and move cursor.
             let qa = self.power_queue_area;
             if qa.contains((col, row).into()) {
+                if !matches!(self.power_focus, PowerFocus::Queue) { self.last_card_height = 0; }
                 self.power_focus = PowerFocus::Queue;
                 let content_y = (row - qa.y) as usize;
                 if let Some(&Some(item_idx)) = self.power_queue_row_map.get(content_y) {
@@ -1659,6 +1662,7 @@ impl App {
             // Click in the left panel: focus it and set its cursor.
             let la = self.power_left_area;
             if la.contains((col, row).into()) {
+                if !matches!(self.power_focus, PowerFocus::Left) { self.last_card_height = 0; }
                 self.power_focus = PowerFocus::Left;
                 if self.power_left_tab == 0 {
                     let n = self.home.continue_items.len();
