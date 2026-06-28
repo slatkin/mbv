@@ -8,6 +8,7 @@ use crate::ws::WsEvent;
 use super::{
     App, PAGE_SIZE, PREFETCH_AHEAD,
     PendingQueueAction, ContextAction, LibEvent, SessionEvent, BrowseLevel, PowerFocus,
+    PLAYLIST_VIEW_POWER,
 };
 use super::ui_util::{natural_sort_key, is_playable, sort_episodes, sort_audio_tracks};
 
@@ -219,6 +220,79 @@ impl App {
         if lib.search.is_some() { return false; }
         let lvl = match lib.nav_stack.last() { Some(l) => l, None => return false };
         lvl.items.first().map(|i| i.item_type == "Season").unwrap_or(false)
+    }
+    /// True when the power view should show the combined series view:
+    /// either at episode level (with a Season level directly above), or at
+    /// season level while episodes are still loading.
+    pub(super) fn is_series_view(&self, lib_idx: usize) -> bool {
+        let lib = &self.libs[lib_idx];
+        if lib.search.is_some() { return false; }
+        let lvl = match lib.nav_stack.last() { Some(l) => l, None => return false };
+        // Normal state: at episode level with a season list one level up.
+        if lvl.items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
+            let len = lib.nav_stack.len();
+            return len >= 2 && lib.nav_stack[len - 2].items.first()
+                .map(|i| i.item_type == "Season").unwrap_or(false);
+        }
+        // Loading state: still at the season level (episodes not yet arrived).
+        lvl.items.first().map(|i| i.item_type == "Season").unwrap_or(false)
+    }
+
+    pub(super) fn is_home_video_view(&self, lib_idx: usize) -> bool {
+        let lib = &self.libs[lib_idx];
+        if lib.power_detail_item.is_some() { return false; }
+        lib.library.collection_type == "homevideos"
+    }
+
+    /// Switch to the previous (`delta == -1`) or next (`delta == 1`) season
+    /// while in the combined series view. Pops the current episode level,
+    /// adjusts the season cursor, then kicks off a fetch for the new season.
+    pub(super) fn switch_season(&mut self, lib_idx: usize, delta: i64) {
+        let stack_len = self.libs[lib_idx].nav_stack.len();
+        if stack_len < 2 { return; }
+        let at_episodes = self.libs[lib_idx].nav_stack.last()
+            .map(|l| l.items.first().map(|i| i.item_type == "Episode").unwrap_or(false))
+            .unwrap_or(false);
+        if !at_episodes { return; }
+
+        // Check season count before popping so we never lose the episode level.
+        let n = self.libs[lib_idx].nav_stack[stack_len - 2].items.len();
+        if n == 0 { return; }
+
+        // Pop the episode level.
+        self.libs[lib_idx].nav_stack.pop();
+        let cur = self.libs[lib_idx].nav_stack.last().map(|l| l.cursor).unwrap_or(0);
+        let new_cursor = (cur as i64 + delta).clamp(0, n as i64 - 1) as usize;
+        if let Some(season_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+            season_lvl.cursor = new_cursor;
+        }
+
+        // Reset per-episode scroll/detail state.
+        self.libs[lib_idx].power_detail_scroll = 0;
+
+        // Collect the new season's identity.
+        let (season_id, season_name) = self.libs[lib_idx].nav_stack.last()
+            .and_then(|l| l.items.get(new_cursor))
+            .map(|s| (s.id.clone(), s.name.clone()))
+            .unwrap_or_default();
+        if season_id.is_empty() { return; }
+
+        // Push a loading placeholder so the Loaded handler can fill it in.
+        self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            parent_id:    season_id.clone(),
+            title:        season_name.clone(),
+            items:        vec![],
+            total_count:  0,
+            cursor:       0,
+            item_types:   Some("Episode".into()),
+            unplayed_only: false,
+            sort_by:      "SortName".into(),
+            sort_order:   "Ascending".into(),
+            loading:      true,
+            all_items:    None,
+        });
+        self.spawn_browse(lib_idx, season_id, season_name,
+            Some("Episode".into()), false, "SortName".into(), "Ascending".into());
     }
 
     pub(super) fn is_audio_item(&self) -> bool {
@@ -452,7 +526,10 @@ impl App {
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
         self.on_queue_replace_silent();
-        self.power_focus = PowerFocus::Queue;
+        // Keep library focus when playing from the power-view library panel.
+        if !(self.playlist_view == PLAYLIST_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
+            self.power_focus = PowerFocus::Queue;
+        }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
             let id = conn_id.clone();
@@ -470,7 +547,10 @@ impl App {
 
     pub(super) fn play_item(&mut self, item: MediaItem) {
         self.on_queue_replace_silent();
-        self.power_focus = PowerFocus::Queue;
+        // Keep library focus when playing from the power-view library panel.
+        if !(self.playlist_view == PLAYLIST_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
+            self.power_focus = PowerFocus::Queue;
+        }
         let label = item.playback_label();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
@@ -665,16 +745,50 @@ impl App {
         if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
             let lib_off = self.lib_tab_offset();
             let lib_idx = self.tab_idx - lib_off;
-            let lib = &mut self.libs[lib_idx];
-            if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
-                let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
-                lib.nav_stack.pop();
-                if let (Some(folder_id), Some(parent)) = (child_folder_id, lib.nav_stack.last_mut()) {
-                    if let Some(idx) = parent.items.iter().position(|i| i.id == folder_id) {
-                        parent.cursor = idx;
+
+            // Primary pop — scoped so the mutable borrow of libs[lib_idx] ends here.
+            let did_pop = {
+                let lib = &mut self.libs[lib_idx];
+                if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
+                    let child_folder_id = lib.nav_stack.last().map(|l| l.parent_id.clone());
+                    lib.nav_stack.pop();
+                    if let (Some(folder_id), Some(parent)) =
+                        (child_folder_id, lib.nav_stack.last_mut())
+                    {
+                        if let Some(idx) = parent.items.iter().position(|i| i.id == folder_id) {
+                            parent.cursor = idx;
+                        }
+                    }
+                    true
+                } else {
+                    false
+                }
+            };
+
+            if did_pop {
+                if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) { *v = 0; }
+
+                // In the power view, skip past the auto-pushed Season level so
+                // a single Escape takes the user back to the series list.
+                if self.playlist_view == PLAYLIST_VIEW_POWER
+                    && self.power_left_tab == lib_idx + 1
+                {
+                    let exposed_seasons = self.libs[lib_idx].nav_stack.last()
+                        .map(|l| l.items.first().map(|i| i.item_type == "Season").unwrap_or(false))
+                        .unwrap_or(false);
+                    if exposed_seasons && self.libs[lib_idx].nav_stack.len() > 1 {
+                        let child_id2 = self.libs[lib_idx].nav_stack.last()
+                            .map(|l| l.parent_id.clone());
+                        self.libs[lib_idx].nav_stack.pop();
+                        if let (Some(fid), Some(parent)) =
+                            (child_id2, self.libs[lib_idx].nav_stack.last_mut())
+                        {
+                            if let Some(idx) = parent.items.iter().position(|i| i.id == fid) {
+                                parent.cursor = idx;
+                            }
+                        }
                     }
                 }
-                if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) { *v = 0; }
             }
         }
     }
@@ -1005,6 +1119,9 @@ impl App {
         std::thread::spawn(move || {
             match client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, 0, PAGE_SIZE, &sort_by, &sort_order) {
                 Ok((items, total_count)) => {
+                    log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} first3={:?}",
+                        items.len(),
+                        items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
                     let _ = tx.send(LibEvent::Loaded {
                         lib_idx,
                         parent_id: parent_id.clone(),
@@ -1080,7 +1197,7 @@ impl App {
                     loading: false, all_items: None,
                 });
             }
-            let _ = tx.send(LibEvent::NavigateTo { lib_idx, nav_stack });
+            let _ = tx.send(LibEvent::NavigateTo { lib_idx, nav_stack, switch_tab: true });
         });
     }
 
@@ -1145,6 +1262,9 @@ impl App {
         std::thread::spawn(move || {
             match client.get_items_sorted(&parent_id, item_types.as_deref(), unplayed_only, 0, limit, &sort_by, &sort_order) {
                 Ok((items, total_count)) => {
+                    log::info!(target: "browse", "Refreshed lib_idx={lib_idx} parent={parent_id} total={total_count} got={} first3={:?}",
+                        items.len(),
+                        items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
                     let _ = tx.send(LibEvent::Refreshed { lib_idx, parent_id, items, total_count });
                 }
                 Err(e) => { let _ = tx.send(LibEvent::Error(e)); }
@@ -1248,6 +1368,46 @@ impl App {
                         }
                     }
                 }
+                // In the power view: when a season list arrives for a TV library,
+                // automatically push a loading placeholder and fetch the first season's
+                // episodes so the user lands directly in the combined series view.
+                let should_auto_push = self.playlist_view == PLAYLIST_VIEW_POWER
+                    && self.power_left_tab == lib_idx + 1
+                    && self.libs.get(lib_idx).map(|lib| {
+                        lib.library.collection_type == "tvshows"
+                            && lib.nav_stack.last()
+                                .map(|l| l.items.first().map(|i| i.item_type == "Season").unwrap_or(false))
+                                .unwrap_or(false)
+                    }).unwrap_or(false);
+
+                if should_auto_push {
+                    let (season_id, season_name) = self.libs.get(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last())
+                        .and_then(|l| l.items.get(l.cursor))
+                        .map(|s| (s.id.clone(), s.name.clone()))
+                        .unwrap_or_default();
+                    if !season_id.is_empty() {
+                        if let Some(lib) = self.libs.get_mut(lib_idx) {
+                            lib.nav_stack.push(BrowseLevel {
+                                parent_id:    season_id.clone(),
+                                title:        season_name.clone(),
+                                items:        vec![],
+                                total_count:  0,
+                                cursor:       0,
+                                item_types:   Some("Episode".into()),
+                                unplayed_only: false,
+                                sort_by:      "SortName".into(),
+                                sort_order:   "Ascending".into(),
+                                loading:      true,
+                                all_items:    None,
+                            });
+                        }
+                        self.spawn_browse(lib_idx, season_id, season_name,
+                            Some("Episode".into()), false,
+                            "SortName".into(), "Ascending".into());
+                    }
+                }
+
                 self.maybe_fetch_next_page(lib_idx);
                 self.spawn_all_items_prefetch(lib_idx);
             }
@@ -1322,14 +1482,16 @@ impl App {
                 self.album_year_loading.remove(&album_id);
                 self.album_year_cache.insert(album_id, year);
             }
-            LibEvent::NavigateTo { lib_idx, nav_stack } => {
+            LibEvent::NavigateTo { lib_idx, nav_stack, switch_tab } => {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack = nav_stack;
                     lib.search = None;
                 }
-                self.home_search = None;
-                let target_tab = lib_idx + self.lib_tab_offset();
-                self.set_tab(target_tab);
+                if switch_tab {
+                    self.home_search = None;
+                    let target_tab = lib_idx + self.lib_tab_offset();
+                    self.set_tab(target_tab);
+                }
             }
             LibEvent::PlaylistsLoaded(items) => {
                 self.playlists = items;
@@ -1380,6 +1542,7 @@ impl App {
             self.replace_queue_or_prompt(PendingQueueAction::Quit);
             false
         } else {
+            self.save_power_ui_state();
             if !self.player.is_remote() { self.player.stop(); }
             true
         }
@@ -1514,22 +1677,93 @@ impl App {
         1 + self.libs.len()
     }
 
+    /// Re-fetch all levels of a saved nav stack and send NavigateTo to restore the position.
+    fn spawn_restore_nav(&self, lib_idx: usize, levels: Vec<crate::config::SavedNavLevel>) {
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let mut nav_stack: Vec<super::BrowseLevel> = Vec::new();
+            for lvl in &levels {
+                match client.get_items_sorted(
+                    &lvl.parent_id, lvl.item_types.as_deref(), lvl.unplayed_only,
+                    0, 500, &lvl.sort_by, &lvl.sort_order,
+                ) {
+                    Ok((mut items, total_count)) => {
+                        log::info!(target: "browse", "RestoreNav lib_idx={lib_idx} parent={} total={total_count} got={} first3={:?}",
+                            lvl.parent_id, items.len(),
+                            items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
+                        if items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
+                            sort_episodes(&mut items);
+                        }
+                        sort_audio_tracks(&mut items);
+                        let cursor = lvl.cursor.min(items.len().saturating_sub(1));
+                        nav_stack.push(super::BrowseLevel {
+                            parent_id: lvl.parent_id.clone(),
+                            title: lvl.title.clone(),
+                            items, total_count, cursor,
+                            item_types: lvl.item_types.clone(),
+                            unplayed_only: lvl.unplayed_only,
+                            sort_by: lvl.sort_by.clone(),
+                            sort_order: lvl.sort_order.clone(),
+                            loading: false, all_items: None,
+                        });
+                    }
+                    Err(e) => {
+                        log::warn!(target: "restore_nav", "level {} fetch failed: {e}", lvl.parent_id);
+                        break;
+                    }
+                }
+            }
+            if !nav_stack.is_empty() {
+                let _ = tx.send(LibEvent::NavigateTo { lib_idx, nav_stack, switch_tab: false });
+            }
+        });
+    }
+
+    /// Save power-view UI state (active, tab + full nav stack per library) to disk.
+    pub(super) fn save_power_ui_state(&self) {
+        crate::config::save_ui_state(&crate::config::UiState {
+            panel_mode: self.panel_mode,
+            power_view_active: self.playlist_view == PLAYLIST_VIEW_POWER,
+            power_left_tab: self.power_left_tab,
+            power_lib_nav: self.libs.iter()
+                .filter(|lib| !lib.nav_stack.is_empty())
+                .map(|lib| {
+                    let levels = lib.nav_stack.iter().map(|lvl| crate::config::SavedNavLevel {
+                        parent_id: lvl.parent_id.clone(),
+                        title: lvl.title.clone(),
+                        cursor: lvl.cursor,
+                        item_types: lvl.item_types.clone(),
+                        unplayed_only: lvl.unplayed_only,
+                        sort_by: lvl.sort_by.clone(),
+                        sort_order: lvl.sort_order.clone(),
+                    }).collect();
+                    (lib.library.id.clone(), levels)
+                })
+                .collect(),
+        });
+    }
+
     /// Advance the left-panel tab (wrapping); load the library if needed.
     pub(super) fn power_left_tab_next(&mut self) {
         let n = self.power_left_tab_count();
         self.power_left_tab = (self.power_left_tab + 1) % n;
+        self.last_card_height = 0; // reset stale image height for new view
         if self.power_left_tab > 0 {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
+        self.save_power_ui_state();
     }
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
     pub(super) fn power_left_tab_prev(&mut self) {
         let n = self.power_left_tab_count();
         self.power_left_tab = (self.power_left_tab + n - 1) % n;
+        self.last_card_height = 0;
         if self.power_left_tab > 0 {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
+        self.save_power_ui_state();
     }
 
     /// Move the cursor in the Continue Watching power column, clamped to its bounds.
@@ -1695,13 +1929,21 @@ impl App {
         self.home.continue_items = client.get_continue_watching(10).unwrap_or_default();
 
         let all_views = client.get_views()?;
-        let old_libs: HashMap<String, Vec<BrowseLevel>> = self.libs.drain(..)
-            .map(|mut l| (l.library.id.clone(), std::mem::take(&mut l.nav_stack)))
+        // Drain existing libs, preserving nav stacks, the pinned detail item, and scroll pos
+        // so that a UserDataChanged websocket refresh (fired when playback starts) doesn't
+        // silently dismiss the movie detail panel.
+        struct SavedLibState { nav_stack: Vec<BrowseLevel>, detail_item: Option<crate::api::MediaItem>, detail_scroll: usize }
+        let old_libs: HashMap<String, SavedLibState> = self.libs.drain(..)
+            .map(|mut l| (l.library.id.clone(), SavedLibState {
+                nav_stack: std::mem::take(&mut l.nav_stack),
+                detail_item: l.power_detail_item,
+                detail_scroll: l.power_detail_scroll,
+            }))
             .collect();
 
         for view in all_views.iter().filter(|v| v.collection_type != "playlists" && !self.hidden_libraries.contains(&v.name.to_lowercase())) {
-            let stack = old_libs.get(&view.id)
-                .map(|s| s.iter().map(|lvl| BrowseLevel {
+            let saved = old_libs.get(&view.id);
+            let stack = saved.map(|s| s.nav_stack.iter().map(|lvl| BrowseLevel {
                     parent_id: lvl.parent_id.clone(), title: lvl.title.clone(),
                     items: lvl.items.clone(), total_count: lvl.total_count, cursor: lvl.cursor,
                     item_types: lvl.item_types.clone(), unplayed_only: lvl.unplayed_only,
@@ -1709,12 +1951,20 @@ impl App {
                     loading: false, all_items: lvl.all_items.clone(),
                 }).collect())
                 .unwrap_or_default();
-            self.libs.push(super::LibraryTab { library: view.clone(), nav_stack: stack, search: None, power_detail_item: None, power_detail_scroll: 0 });
+            let detail_item   = saved.and_then(|s| s.detail_item.clone());
+            let detail_scroll = saved.map(|s| s.detail_scroll).unwrap_or(0);
+            self.libs.push(super::LibraryTab { library: view.clone(), nav_stack: stack, search: None, power_detail_item: detail_item, power_detail_scroll: detail_scroll });
         }
         let n = self.libs.len();
         self.layout_lib_scroll.resize(n, 0);
         self.layout_lib_row_heights.resize_with(n, Vec::new);
         self.layout_lib_table_area.resize(n, ratatui::layout::Rect::default());
+
+        // Restore the saved power-view library tab now that we know how many libs exist.
+        if self.power_left_tab_restore > 0 {
+            self.power_left_tab = self.power_left_tab_restore.min(n);
+            self.power_left_tab_restore = 0;
+        }
 
         let old_cursors: HashMap<String, usize> = self.home.latest.iter()
             .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
@@ -1740,6 +1990,31 @@ impl App {
         }
         drop(client);
         self.home.latest = latest;
+
+        // Restore saved nav stacks (after client lock is released — spawn_restore_nav
+        // needs to clone the client). Push a loading placeholder so ensure_lib_loaded_for
+        // doesn't spawn a competing root browse, then re-fetch all levels in a thread.
+        let restore_nav = std::mem::take(&mut self.power_restore_nav);
+        for (lib_id, saved_levels) in restore_nav {
+            if saved_levels.is_empty() { continue; }
+            let lib_idx = match self.libs.iter().position(|l| l.library.id == lib_id) {
+                Some(i) => i,
+                None => continue,
+            };
+            if !self.libs[lib_idx].nav_stack.is_empty() { continue; }
+            let root = &saved_levels[0];
+            self.libs[lib_idx].nav_stack.push(super::BrowseLevel {
+                parent_id: root.parent_id.clone(),
+                title: root.title.clone(),
+                items: vec![], total_count: 0, cursor: 0,
+                item_types: root.item_types.clone(),
+                unplayed_only: root.unplayed_only,
+                sort_by: root.sort_by.clone(),
+                sort_order: root.sort_order.clone(),
+                loading: true, all_items: None,
+            });
+            self.spawn_restore_nav(lib_idx, saved_levels);
+        }
 
         let n = 1 + self.home.latest.len();
         if self.home.section >= n {

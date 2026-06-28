@@ -208,10 +208,35 @@ fn ui_state_path() -> PathBuf {
     state_dir().join("ui_state.json")
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct SavedNavLevel {
+    pub parent_id: String,
+    pub title: String,
+    pub cursor: usize,
+    #[serde(default)]
+    pub item_types: Option<String>,
+    #[serde(default)]
+    pub unplayed_only: bool,
+    #[serde(default = "default_sort_name")]
+    pub sort_by: String,
+    #[serde(default = "default_sort_ascending")]
+    pub sort_order: String,
+}
+
+fn default_sort_name() -> String { "SortName".to_string() }
+fn default_sort_ascending() -> String { "Ascending".to_string() }
+
 #[derive(serde::Serialize, serde::Deserialize, Default)]
 pub struct UiState {
     #[serde(default)]
     pub panel_mode: PanelMode,
+    #[serde(default)]
+    pub power_view_active: bool,
+    #[serde(default)]
+    pub power_left_tab: usize,
+    /// Full nav stack per library (no items, just metadata), keyed by library ID.
+    #[serde(default)]
+    pub power_lib_nav: std::collections::HashMap<String, Vec<SavedNavLevel>>,
 }
 
 pub fn save_ui_state(state: &UiState) {

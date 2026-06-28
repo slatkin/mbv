@@ -159,7 +159,7 @@ impl App {
             let show_controls = active || self.connected_session_id.is_some();
             if show_controls {
                 self.panel_mode = self.panel_mode.next();
-                crate::config::save_ui_state(&crate::config::UiState { panel_mode: self.panel_mode });
+                self.save_power_ui_state();
             }
             return false;
         }
@@ -760,7 +760,6 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         let alt = key.modifiers.contains(KeyModifiers::ALT);
         if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let pos_s = self.connected_session_state.as_ref().map(|s| s.position_s).unwrap_or(0);
             let id = conn_id.clone();
             match key.code {
                 KeyCode::Char(' ') => {
@@ -769,16 +768,6 @@ impl App {
                 }
                 KeyCode::Enter if alt => {
                     self.do_session_command(move |c| c.session_transport(&id, "Stop"));
-                    return Some(false);
-                }
-                KeyCode::Char('[') => {
-                    let ticks = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND;
-                    self.do_session_command(move |c| c.session_seek(&id, ticks));
-                    return Some(false);
-                }
-                KeyCode::Char(']') => {
-                    let ticks = (pos_s + 5) * crate::api::TICKS_PER_SECOND;
-                    self.do_session_command(move |c| c.session_seek(&id, ticks));
                     return Some(false);
                 }
                 KeyCode::Char('z') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -803,8 +792,6 @@ impl App {
         match key.code {
             KeyCode::Enter if alt => { self.player.stop(); Some(false) }
             KeyCode::Char(' ') => { self.player.send_command(PlayerCommand::TogglePause); Some(false) }
-            KeyCode::Char('[') => { self.player.send_command(PlayerCommand::Seek(-5.0)); Some(false) }
-            KeyCode::Char(']') => { self.player.send_command(PlayerCommand::Seek(5.0));  Some(false) }
             KeyCode::Char('a') => { if self.is_audio_item() { self.toggle_mute(); } else { self.cycle_audio(); } Some(false) }
             _ => None,
         }
@@ -852,18 +839,21 @@ impl App {
         }
 
         // In power view, bare Left/Right switch focus between the two panels.
+        // Queue is on the left; library is on the right.
         if self.playlist_view == PLAYLIST_VIEW_POWER && !key.modifiers.contains(KeyModifiers::ALT) {
-            if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Left) {
-                self.power_focus = PowerFocus::Queue;
+            if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
+                self.power_focus = PowerFocus::Left;
+                self.last_card_height = 0; // reset stale image height for new view
                 return false;
             }
-            if key.code == KeyCode::Left && matches!(self.power_focus, PowerFocus::Queue) {
-                self.power_focus = PowerFocus::Left;
+            if key.code == KeyCode::Left && matches!(self.power_focus, PowerFocus::Left) {
+                self.power_focus = PowerFocus::Queue;
+                self.last_card_height = 0;
                 return false;
             }
         }
 
-        // In power view, route nav keys to the focused left panel.
+        // In power view, route nav keys to the focused library panel.
         if self.playlist_view == PLAYLIST_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left) {
             if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
                 return false;
@@ -877,7 +867,6 @@ impl App {
                 if self.libs[lib_idx].power_detail_item.is_some() {
                     match key.code {
                         KeyCode::Enter => {
-                            self.libs[lib_idx].power_detail_item = None;
                             let saved = self.tab_idx;
                             self.tab_idx = self.lib_tab_offset() + lib_idx;
                             self.select();
@@ -940,6 +929,20 @@ impl App {
                     }
                 }
 
+                // Season switching: [ = previous season, ] = next season.
+                if !key.modifiers.contains(KeyModifiers::CONTROL)
+                    && !key.modifiers.contains(KeyModifiers::ALT)
+                {
+                    if key.code == KeyCode::Char('[') && self.is_series_view(lib_idx) {
+                        self.switch_season(lib_idx, -1);
+                        return false;
+                    }
+                    if key.code == KeyCode::Char(']') && self.is_series_view(lib_idx) {
+                        self.switch_season(lib_idx, 1);
+                        return false;
+                    }
+                }
+
                 let is_power_nav = matches!(key.code, KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down)
                     && key.modifiers.contains(KeyModifiers::ALT);
                 let is_lib_key = !is_power_nav && match key.code {
@@ -964,6 +967,27 @@ impl App {
                     if is_quit_key { return result; }
                     return false;
                 }
+            }
+        }
+
+        // Power view queue focus: PageUp/PageDown use the actual queue panel height.
+        if self.playlist_view == PLAYLIST_VIEW_POWER && matches!(self.power_focus, PowerFocus::Queue) {
+            let page = self.power_queue_area.height.saturating_sub(1).max(1) as usize;
+            match key.code {
+                KeyCode::PageUp => {
+                    self.last_nav_at = Instant::now();
+                    self.player_tab.playlist_cursor =
+                        self.player_tab.playlist_cursor.saturating_sub(page);
+                    return false;
+                }
+                KeyCode::PageDown => {
+                    self.last_nav_at = Instant::now();
+                    let n = self.player_tab.items.len();
+                    self.player_tab.playlist_cursor =
+                        (self.player_tab.playlist_cursor + page).min(n.saturating_sub(1));
+                    return false;
+                }
+                _ => {}
             }
         }
 
@@ -1627,9 +1651,10 @@ impl App {
             // Click in queue area: focus queue and move cursor.
             let qa = self.power_queue_area;
             if qa.contains((col, row).into()) {
+                if !matches!(self.power_focus, PowerFocus::Queue) { self.last_card_height = 0; }
                 self.power_focus = PowerFocus::Queue;
-                let click_y = (row - qa.y) as usize;
-                if let Some(&Some(item_idx)) = self.power_queue_row_map.get(click_y) {
+                let content_y = (row - qa.y) as usize;
+                if let Some(&Some(item_idx)) = self.power_queue_row_map.get(content_y) {
                     self.player_tab.playlist_cursor = item_idx;
                 }
                 return true;
@@ -1637,6 +1662,7 @@ impl App {
             // Click in the left panel: focus it and set its cursor.
             let la = self.power_left_area;
             if la.contains((col, row).into()) {
+                if !matches!(self.power_focus, PowerFocus::Left) { self.last_card_height = 0; }
                 self.power_focus = PowerFocus::Left;
                 if self.power_left_tab == 0 {
                     let n = self.home.continue_items.len();
@@ -1939,6 +1965,7 @@ if idx < self.sessions.len() {
                     if let Some(idx) = self.power_tab_idx_at(col) {
                         self.power_left_tab = idx;
                         if idx > 0 { self.ensure_lib_loaded_for(idx - 1); }
+                        self.save_power_ui_state();
                     }
                 } else if let Some(idx) = self.tab_idx_at(col) {
                     if idx == usize::MAX - 1 {
