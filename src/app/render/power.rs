@@ -28,15 +28,13 @@ impl App {
         // (The left panel is shifted down one row so this row is clear on both sides.)
         {
             let full_w = area.width as usize;
-            let pill = " QUEUE ";
+            let pill = " Queue ";
             let pill_w = pill.len();
-            let right = 3usize.min(full_w.saturating_sub(pill_w));
-            let left = full_w.saturating_sub(pill_w + right);
+            let left = full_w.saturating_sub(pill_w);
             f.render_widget(
                 Paragraph::new(Line::from(vec![
                     Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
-                    Span::styled(pill, Style::default().fg(palette::WHITE).bg(palette::FOAM)),
-                    Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
+                    Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
                 ])),
                 Rect { x: area.x, y: right_area.y, width: area.width, height: 1 },
             );
@@ -159,10 +157,14 @@ impl App {
                     let group = group_for_header.get(header_idx).map(|s| s.as_str()).unwrap_or("");
                     header_idx += 1;
                     header_ys.push(area.y + row_idx as u16);
-                    let label = trunc_str(group, render_w.saturating_sub(2));
-                    list_items.push(ListItem::new(Line::from(
-                        Span::styled(format!("  {}", label.to_uppercase()), Style::default().fg(palette::YELLOW).add_modifier(ratatui::style::Modifier::BOLD)),
-                    )));
+                    let label = trunc_str(group, render_w.saturating_sub(4));
+                    let pill = format!(" {} ", label);
+                    let pill_w = pill.width();
+                    let right = render_w.saturating_sub(pill_w);
+                    list_items.push(ListItem::new(Line::from(vec![
+                        Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
+                        Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
+                    ])));
                     self.power_queue_row_map.push(None);
                 }
                 QueueRow::Spacer => {
@@ -513,13 +515,11 @@ impl App {
         } else {
             trunc_str(&header_name, budget)
         };
-        let pill = format!(" {} ", label.to_uppercase());
+        let pill = format!(" {} ", label);
         let pill_w = pill.width();
-        let left = 2usize.min(w.saturating_sub(pill_w));
-        let right = w.saturating_sub(pill_w + left);
+        let right = w.saturating_sub(pill_w);
         let header_spans: Vec<Span<'static>> = vec![
-            Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
-            Span::styled(pill, Style::default().fg(palette::WHITE).bg(palette::FOAM)),
+            Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
             Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
         ];
         f.render_widget(
@@ -527,7 +527,7 @@ impl App {
             Rect { x: area.x, y: bar_y, width: area.width, height: 1 },
         );
 
-        let content_area = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
+        let content_area = Rect { y: area.y + 2, height: area.height.saturating_sub(2), ..area };
         if content_area.height == 0 { return (Some(bar_y), crumb_chars); }
 
         // Store for click / page-size calculations.
