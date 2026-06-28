@@ -255,12 +255,12 @@ impl App {
             .unwrap_or(false);
         if !at_episodes { return; }
 
+        // Check season count before popping so we never lose the episode level.
+        let n = self.libs[lib_idx].nav_stack[stack_len - 2].items.len();
+        if n == 0 { return; }
+
         // Pop the episode level.
         self.libs[lib_idx].nav_stack.pop();
-
-        // Advance the season cursor.
-        let n = self.libs[lib_idx].nav_stack.last().map(|l| l.items.len()).unwrap_or(0);
-        if n == 0 { return; }
         let cur = self.libs[lib_idx].nav_stack.last().map(|l| l.cursor).unwrap_or(0);
         let new_cursor = (cur as i64 + delta).clamp(0, n as i64 - 1) as usize;
         if let Some(season_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
