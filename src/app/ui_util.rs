@@ -69,12 +69,15 @@ pub fn fmt_duration(s: i64) -> String {
 }
 
 /// Format duration without seconds — for video items in the queue.
-/// Examples: "37m", "1h37m", "2h3m".
+/// Examples: "<1m", "37m", "1h05m", "2h03m".
 pub fn fmt_duration_approx(s: i64) -> String {
     let total_mins = s / 60;
     let h = total_mins / 60;
     let m = total_mins % 60;
-    if h > 0 { format!("{}h{}m", h, m) } else { format!("{}m", m) }
+    if h > 0 { format!("{}h{:02}m", h, m) }
+    else if m > 0 { format!("{}m", m) }
+    else if s > 0 { "<1m".to_string() }
+    else { "0m".to_string() }
 }
 
 pub fn trunc_overview(s: &str) -> String {
