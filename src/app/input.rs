@@ -1650,8 +1650,7 @@ impl App {
             let qa = self.power_queue_area;
             if qa.contains((col, row).into()) {
                 self.power_focus = PowerFocus::Queue;
-                // Row 0 of the queue area is the static "Queue" header; content starts at row 1.
-                let content_y = (row - qa.y).saturating_sub(1) as usize;
+                let content_y = (row - qa.y) as usize;
                 if let Some(&Some(item_idx)) = self.power_queue_row_map.get(content_y) {
                     self.player_tab.playlist_cursor = item_idx;
                 }

@@ -187,7 +187,6 @@ impl App {
     /// can draw a ├ junction where each header line meets the vertical divider.
     fn render_power_queue(&mut self, f: &mut Frame, area: Rect, focused: bool) -> Vec<u16> {
         if area.height < 1 { return vec![]; }
-        self.power_queue_area = area;
 
         // Static "Queue" pill header at the top of the panel — pill on the right.
         {
@@ -203,6 +202,8 @@ impl App {
             );
         }
         let area = Rect { y: area.y + 1, height: area.height.saturating_sub(1), ..area };
+        // Store the content area (after header) so mouse clicks map to the right rows.
+        self.power_queue_area = area;
 
         let n = self.player_tab.items.len();
         if n == 0 {
