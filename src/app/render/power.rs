@@ -516,9 +516,7 @@ impl App {
                 }
                 let dur_s = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
                 if dur_s > 0 {
-                    let h = dur_s / 3600;
-                    let m = (dur_s % 3600) / 60;
-                    parts.push(if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") });
+                    parts.push(fmt_duration_approx(dur_s));
                 }
                 if !parts.is_empty() {
                     meta_spans.push(Span::styled(parts.join("  "), Style::default().fg(palette::SUBTLE)));
@@ -1055,10 +1053,7 @@ impl App {
                     (name, String::new())
                 } else {
                     let dur = if item.runtime_ticks > 0 {
-                        let secs = (item.runtime_ticks / TICKS_PER_SECOND) as u64;
-                        let h = secs / 3600;
-                        let m = (secs % 3600) / 60;
-                        if h > 0 { format!(" {h}h{m:02}m") } else { format!(" {m}m") }
+                        format!(" {}", fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND))
                     } else {
                         String::new()
                     };
@@ -1192,10 +1187,7 @@ impl App {
         // — Meta: genre  year  duration (SUBTLE) —
         if row < max_y {
             let dur_str = if item.runtime_ticks > 0 {
-                let secs = (item.runtime_ticks / TICKS_PER_SECOND) as u64;
-                let h = secs / 3600;
-                let m = (secs % 3600) / 60;
-                if h > 0 { format!("{}h{}m", h, m) } else { format!("{}m", m) }
+                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
             } else {
                 String::new()
             };
@@ -1688,10 +1680,7 @@ impl App {
             // ── Episode metadata (year + duration only) ───────────────────────
             if row < max_y {
                 let dur_str = if item.runtime_ticks > 0 {
-                    let secs = (item.runtime_ticks / TICKS_PER_SECOND) as u64;
-                    let h = secs / 3600;
-                    let m = (secs % 3600) / 60;
-                    if h > 0 { format!("{}h{}m", h, m) } else { format!("{}m", m) }
+                    fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
                 } else { String::new() };
                 let year_str = if item.production_year > 0 {
                     item.production_year.to_string()
