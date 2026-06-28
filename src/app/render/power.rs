@@ -8,6 +8,31 @@ use super::super::{App, PowerFocus, palette};
 use super::super::ui_util::{build_queue_rows, fmt_duration, trunc_str, QueueRow};
 use unicode_width::UnicodeWidthStr;
 
+/// For folder-based music libraries where albums are stored as directories named
+/// "Artist (YYYY) Album Title", parse out the three components.
+/// Returns `(artist, year, album_title)` on success.
+fn parse_album_folder_name(name: &str) -> Option<(String, u32, String)> {
+    let mut search_from = 0;
+    while let Some(rel) = name[search_from..].find(" (") {
+        let sp_pos = search_from + rel;    // position of the space before '('
+        let after_open = sp_pos + 2;      // position of first char after '('
+        if let Some(close_rel) = name[after_open..].find(')') {
+            let year_str = &name[after_open..after_open + close_rel];
+            if year_str.len() == 4 {
+                if let Ok(year) = year_str.parse::<u32>() {
+                    let close_pos = after_open + close_rel; // position of ')'
+                    if name[close_pos..].starts_with(") ") {
+                        let artist = name[..sp_pos].to_string();
+                        let album  = name[close_pos + 2..].to_string();
+                        return Some((artist, year, album));
+                    }
+                }
+            }
+        }
+        search_from = sp_pos + 2;
+    }
+    None
+}
 
 
 impl App {
@@ -555,6 +580,13 @@ impl App {
             (items, cur)
         };
 
+        // When at the album level of a music library, group albums under artist headers.
+        let show_grouped = if self.power_left_tab > 0 {
+            self.is_viewing_album_folders(self.power_left_tab - 1)
+        } else {
+            false
+        };
+
         let n = items.len();
         if n == 0 {
             let msg = if self.power_left_tab > 0 {
@@ -575,73 +607,164 @@ impl App {
         }
 
         let visible = content_area.height as usize;
-        let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
 
-        let list_items: Vec<ListItem> = items.iter().skip(offset).take(visible).enumerate().map(|(i, item)| {
-            let abs = offset + i;
-            let selected = abs == cursor;
+        if show_grouped {
+            // Build a display row list that interleaves artist headers with album rows.
+            enum DisplayRow { ArtistHeader(String), Album(usize) }
 
-            // Compute name and duration as separate strings so they can be styled
-            // independently: name in the normal fg, duration in OVERLAY (no parens).
-            let (item_name, dur_str) = if item.is_folder {
-                let name = if item.item_type == "Folder" && item.total_count > 0 {
-                    format!("{} \u{b7} {} items", item.display_name(), item.total_count)
-                } else if item.unplayed_item_count > 0 {
-                    format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+            // Precompute (artist, row_prefix, album_name) for each item.
+            // When proper Emby metadata is available (item.artist non-empty), use it directly.
+            // Otherwise fall back to parsing "Artist (YYYY) Album" from the folder name.
+            let album_info: Vec<(String, String, String)> = items.iter().map(|item| {
+                if !item.artist.is_empty() {
+                    let prefix = if item.production_year > 0 {
+                        format!("   ({}) ", item.production_year)
+                    } else {
+                        "   ".to_string()
+                    };
+                    (item.artist.clone(), prefix, item.display_name())
+                } else if let Some((artist, year, album)) = parse_album_folder_name(&item.name) {
+                    (artist, format!("   ({}) ", year), album)
                 } else {
-                    item.display_name()
-                };
-                (name, String::new())
-            } else {
-                let dur = if item.runtime_ticks > 0 {
-                    let secs = (item.runtime_ticks / TICKS_PER_SECOND) as u64;
-                    let h = secs / 3600;
-                    let m = (secs % 3600) / 60;
-                    if h > 0 { format!(" {h}h{m:02}m") } else { format!(" {m}m") }
-                } else {
-                    String::new()
-                };
-                (item.display_name(), dur)
-            };
+                    ("Unknown Artist".to_string(), "   ".to_string(), item.display_name())
+                }
+            }).collect();
+
+            let mut display_rows: Vec<DisplayRow> = Vec::new();
+            let mut last_artist = String::new();
+            for (idx, (artist, _, _)) in album_info.iter().enumerate() {
+                if artist != &last_artist {
+                    display_rows.push(DisplayRow::ArtistHeader(artist.clone()));
+                    last_artist = artist.clone();
+                }
+                display_rows.push(DisplayRow::Album(idx));
+            }
+
+            // Locate the display row for the current cursor item and derive scroll offset.
+            let display_cursor = display_rows.iter().position(|r| {
+                matches!(r, DisplayRow::Album(i) if *i == cursor)
+            }).unwrap_or(0);
+            let offset = if display_cursor >= visible { display_cursor - visible + 1 } else { 0 };
 
             let avail = (area.width as usize).saturating_sub(2);
-            let name_w = avail.saturating_sub(dur_str.width());
-            let title = trunc_str(&item_name, name_w);
-            let fg = if focused { palette::WHITE } else { palette::SUBTLE };
 
-            let mut spans: Vec<Span> = if selected && focused {
-                vec![
-                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                    Span::styled(title, Style::default().fg(palette::YELLOW)),
-                ]
-            } else {
-                vec![
-                    Span::raw(" "),
-                    Span::styled(title, Style::default().fg(fg)),
-                ]
-            };
-            if !dur_str.is_empty() {
-                spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+            let list_items: Vec<ListItem> = display_rows.iter().skip(offset).take(visible).map(|row| {
+                match row {
+                    DisplayRow::ArtistHeader(name) => {
+                        let artist_label = trunc_str(name, avail);
+                        ListItem::new(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled(artist_label, Style::default().fg(palette::FOAM)),
+                        ]))
+                    }
+                    DisplayRow::Album(idx) => {
+                        let selected = *idx == cursor;
+                        let (_, prefix, album_name) = &album_info[*idx];
+                        let name_w = avail.saturating_sub(prefix.width());
+                        let album_text = format!("{}{}", prefix, trunc_str(album_name, name_w));
+                        let fg = if focused { palette::WHITE } else { palette::SUBTLE };
+                        if selected && focused {
+                            ListItem::new(Line::from(vec![
+                                Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                                Span::styled(album_text, Style::default().fg(palette::YELLOW)),
+                            ]))
+                        } else {
+                            ListItem::new(Line::from(vec![
+                                Span::raw(" "),
+                                Span::styled(album_text, Style::default().fg(fg)),
+                            ]))
+                        }
+                    }
+                }
+            }).collect();
+
+            let mut state = ListState::default();
+            state.select(Some(display_cursor.saturating_sub(offset)));
+            f.render_stateful_widget(List::new(list_items).highlight_style(Style::default()), content_area, &mut state);
+
+            let display_n = display_rows.len();
+            if focused && display_n > visible {
+                let max_off = display_n.saturating_sub(visible);
+                let mut sb = ScrollbarState::new(max_off + 1).position(offset);
+                f.render_stateful_widget(
+                    Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                        .thumb_symbol("\u{2590}")
+                        .track_symbol(Some(" "))
+                        .begin_symbol(None).end_symbol(None)
+                        .style(Style::default().fg(palette::SUBTLE)),
+                    content_area, &mut sb,
+                );
             }
-            ListItem::new(Line::from(spans))
-        }).collect();
+        } else {
+            let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
 
-        let mut state = ListState::default();
-        state.select(Some(cursor.saturating_sub(offset)));
-        f.render_stateful_widget(List::new(list_items).highlight_style(Style::default()), content_area, &mut state);
+            let list_items: Vec<ListItem> = items.iter().skip(offset).take(visible).enumerate().map(|(i, item)| {
+                let abs = offset + i;
+                let selected = abs == cursor;
 
-        if focused && n > visible {
-            let max_off = n.saturating_sub(visible);
-            let mut sb = ScrollbarState::new(max_off + 1).position(offset);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("\u{2590}")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None).end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                content_area, &mut sb,
-            );
+                // Compute name and duration as separate strings so they can be styled
+                // independently: name in the normal fg, duration in OVERLAY (no parens).
+                let (item_name, dur_str) = if item.is_folder {
+                    let name = if item.item_type == "Folder" && item.total_count > 0 {
+                        format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+                    } else if item.unplayed_item_count > 0 {
+                        format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                    } else {
+                        item.display_name()
+                    };
+                    (name, String::new())
+                } else {
+                    let dur = if item.runtime_ticks > 0 {
+                        let secs = (item.runtime_ticks / TICKS_PER_SECOND) as u64;
+                        let h = secs / 3600;
+                        let m = (secs % 3600) / 60;
+                        if h > 0 { format!(" {h}h{m:02}m") } else { format!(" {m}m") }
+                    } else {
+                        String::new()
+                    };
+                    (item.display_name(), dur)
+                };
+
+                let avail = (area.width as usize).saturating_sub(2);
+                let name_w = avail.saturating_sub(dur_str.width());
+                let title = trunc_str(&item_name, name_w);
+                let fg = if focused { palette::WHITE } else { palette::SUBTLE };
+
+                let mut spans: Vec<Span> = if selected && focused {
+                    vec![
+                        Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                        Span::styled(title, Style::default().fg(palette::YELLOW)),
+                    ]
+                } else {
+                    vec![
+                        Span::raw(" "),
+                        Span::styled(title, Style::default().fg(fg)),
+                    ]
+                };
+                if !dur_str.is_empty() {
+                    spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+                }
+                ListItem::new(Line::from(spans))
+            }).collect();
+
+            let mut state = ListState::default();
+            state.select(Some(cursor.saturating_sub(offset)));
+            f.render_stateful_widget(List::new(list_items).highlight_style(Style::default()), content_area, &mut state);
+
+            if focused && n > visible {
+                let max_off = n.saturating_sub(visible);
+                let mut sb = ScrollbarState::new(max_off + 1).position(offset);
+                f.render_stateful_widget(
+                    Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                        .thumb_symbol("\u{2590}")
+                        .track_symbol(Some(" "))
+                        .begin_symbol(None).end_symbol(None)
+                        .style(Style::default().fg(palette::SUBTLE)),
+                    content_area, &mut sb,
+                );
+            }
         }
+
         (Some(bar_y), crumb_chars)
     }
 
