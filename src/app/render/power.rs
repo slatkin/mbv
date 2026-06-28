@@ -130,7 +130,7 @@ impl App {
         let left_remaining = left_area.height.saturating_sub(card_h);
 
         const MIN_LIST_ROWS: u16 = 6;
-        let _ = if left_remaining < MIN_LIST_ROWS {
+        let (lib_area, queue_area) = if left_remaining < MIN_LIST_ROWS {
             // Not enough room for the queue in the left column — split the right column:
             // library on top, relocated queue at the bottom.
             let h = right_area.height;
@@ -138,50 +138,37 @@ impl App {
             let max_q = h.saturating_sub(MIN_LIST_ROWS).max(min_q);
             let queue_h = (h / 3).clamp(min_q, max_q);
             let lib_h = h.saturating_sub(queue_h);
-            let lib_area   = Rect { height: lib_h, ..right_area };
-            let queue_area = Rect { y: right_area.y + lib_h, height: queue_h, ..right_area };
-            let header_ys = self.render_power_queue(f, queue_area, queue_focused);
-            let lib_idx = self.power_left_tab.saturating_sub(1);
-            let has_detail = self.power_left_tab > 0
-                && self.libs[lib_idx].power_detail_item.is_some();
-            if has_detail {
-                self.render_power_detail(f, lib_area, lib_idx, left_focused);
-            } else if self.power_left_tab > 0 && self.is_album_level(lib_idx) {
-                self.render_power_album_detail(f, lib_area, lib_idx, left_focused);
-            } else if self.power_left_tab > 0 && self.is_series_view(lib_idx) {
-                self.render_power_episode_detail(f, lib_area, lib_idx, left_focused);
-            } else if self.power_left_tab > 0 && self.is_home_video_view(lib_idx) {
-                self.render_power_home_video_list(f, lib_area, lib_idx, left_focused);
-            } else {
-                self.render_power_list(f, lib_area, left_focused);
-            }
-            (None, Vec::new(), header_ys)
+            (Rect { height: lib_h, ..right_area },
+             Rect { y: right_area.y + lib_h, height: queue_h, ..right_area })
         } else {
             // Normal mode: queue in left column below card,
             // library fills the entire right column.
-            let queue_area = Rect { y: left_area.y + card_h, height: left_remaining, ..left_area };
-            let header_ys = self.render_power_queue(f, queue_area, queue_focused);
-            let lib_idx = self.power_left_tab.saturating_sub(1);
-            let has_detail = self.power_left_tab > 0
-                && self.libs[lib_idx].power_detail_item.is_some();
-            if has_detail {
-                self.render_power_detail(f, right_area, lib_idx, left_focused);
-            } else if self.power_left_tab > 0 && self.is_album_level(lib_idx) {
-                self.render_power_album_detail(f, right_area, lib_idx, left_focused);
-            } else if self.power_left_tab > 0 && self.is_series_view(lib_idx) {
-                self.render_power_episode_detail(f, right_area, lib_idx, left_focused);
-            } else if self.power_left_tab > 0 && self.is_home_video_view(lib_idx) {
-                self.render_power_home_video_list(f, right_area, lib_idx, left_focused);
-            } else {
-                self.render_power_list(f, right_area, left_focused);
-            }
-            (None::<u16>, Vec::<(u16, char)>::new(), header_ys)
+            (right_area,
+             Rect { y: left_area.y + card_h, height: left_remaining, ..left_area })
         };
 
+        self.render_power_queue(f, queue_area, queue_focused);
+        self.render_power_library(f, lib_area, left_focused);
 
     }
 
-
+    /// Dispatches to the appropriate library-panel renderer based on current view type.
+    fn render_power_library(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        let lib_idx = self.power_left_tab.saturating_sub(1);
+        let has_detail = self.power_left_tab > 0
+            && self.libs[lib_idx].power_detail_item.is_some();
+        if has_detail {
+            self.render_power_detail(f, area, lib_idx, focused);
+        } else if self.power_left_tab > 0 && self.is_album_level(lib_idx) {
+            self.render_power_album_detail(f, area, lib_idx, focused);
+        } else if self.power_left_tab > 0 && self.is_series_view(lib_idx) {
+            self.render_power_episode_detail(f, area, lib_idx, focused);
+        } else if self.power_left_tab > 0 && self.is_home_video_view(lib_idx) {
+            self.render_power_home_video_list(f, area, lib_idx, focused);
+        } else {
+            self.render_power_list(f, area, focused);
+        }
+    }
 
     /// Returns the absolute y positions of visible group-header rows, so the caller
     /// can draw a ├ junction where each header line meets the vertical divider.
