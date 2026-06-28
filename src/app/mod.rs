@@ -216,7 +216,9 @@ enum LibEvent {
     SearchItemsLoaded { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
     AllItemsPrefetched { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
     AlbumYearFetched { album_id: String, year: u32 },
-    NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel> },
+    /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
+    /// false for startup restore (just populate nav_stack, stay on current tab).
+    NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel>, switch_tab: bool },
     PlaylistsLoaded(Vec<MediaItem>),
     PlaylistItemsLoaded { playlist_id: String, items: Vec<MediaItem> },
     QueueRestored { items: Vec<MediaItem>, source: crate::config::QueueSource, last_played_item_id: Option<String>, last_played_completed: bool },
@@ -316,6 +318,8 @@ pub struct App {
     power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
     power_detail_max_scroll: usize,  // max valid scroll (set each render frame)
     power_detail_page_h: usize,      // visible overview line count (set each render frame)
+    power_restore_nav: std::collections::HashMap<String, Vec<crate::config::SavedNavLevel>>, // lib_id → nav stack to restore
+    power_left_tab_restore: usize, // desired power_left_tab from saved state; applied after libs load
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
@@ -328,6 +332,7 @@ pub struct App {
     image_lru: std::collections::VecDeque<String>,
     image_cache_size: usize,
     card_image_loading: std::collections::HashSet<String>,
+    last_card_height: u16,
     pending_image_fetches: std::collections::VecDeque<images::ImageFetchReq>,
     image_fetches_active: usize,
     card_image_tx: mpsc::Sender<(String, Option<image::DynamicImage>)>,
@@ -394,6 +399,7 @@ pub struct App {
     remote_pos_at: Instant,          // when remote_pos_s was last anchored
     remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
     remote_seek_pending_until: Instant,  // suppress poll pos-reconcile after a seek
+    runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -446,9 +452,9 @@ enum PendingQueueAction {
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum PowerFocus {
-    Queue,
     #[default]
-    Left,   // left panel; content driven by power_left_tab
+    Queue,          // left panel (queue list below the card)
+    Left,           // right panel (library browser); driven by power_left_tab
 }
 
 
@@ -496,6 +502,7 @@ const PLAYLISTS_PANEL_W: u16 = 48;
 const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
     fn build(init: AppInit) -> Self {
+        let saved_ui: crate::config::UiState = crate::config::load_ui_state().unwrap_or_default();
         App {
             client: init.client,
             player: init.player,
@@ -512,7 +519,7 @@ impl App {
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
-            tab_idx: if init.start_on_queue { 1 } else { 0 },
+            tab_idx: if init.start_on_queue || saved_ui.power_view_active { 1 } else { 0 },
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
             home_search: None,
@@ -570,7 +577,7 @@ impl App {
             playlist_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
-            playlist_view: Self::load_playlist_view(),
+            playlist_view: if saved_ui.power_view_active { PLAYLIST_VIEW_POWER } else { Self::load_playlist_view() },
             playlist_group: Self::load_playlist_group(),
             playlist_row_map: Vec::new(),
             power_focus: PowerFocus::default(),
@@ -580,6 +587,8 @@ impl App {
             power_queue_row_map: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
+            power_restore_nav: saved_ui.power_lib_nav,
+            power_left_tab_restore: saved_ui.power_left_tab,
             home_card_view: Self::load_home_card_view(),
             ui_volume: Self::load_ui_volume(),
             pre_mute_volume: None,
@@ -594,6 +603,7 @@ impl App {
             layout_carousel_down_arrow: None,
             card_image_states: std::collections::HashMap::new(),
             card_image_loading: std::collections::HashSet::new(),
+            last_card_height: 0,
             image_picker: None,
             show_help: false,
             show_settings: false,
@@ -628,7 +638,7 @@ impl App {
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
-            panel_mode: crate::config::load_ui_state().map(|s| s.panel_mode).unwrap_or_default(),
+            panel_mode: saved_ui.panel_mode,
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
             connected_session_id: None,
@@ -639,6 +649,7 @@ impl App {
             remote_pos_at: Instant::now(),
             remote_api_pos_advanced_at: Instant::now() - Duration::from_secs(60),
             remote_seek_pending_until: Instant::now() - Duration::from_secs(1),
+            runtime_zero_since: None,
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -999,12 +1010,21 @@ impl App {
                                     {
                                         self.player_tab.playlist_cursor = new_idx;
                                     }
+                                    self.runtime_zero_since = None;
                                 }
                                 self.connected_session_state = Some(s.clone());
                                 self.session_miss_count = 0;
-                                // Remote hasn't started playing yet — repoll sooner
+                                // Remote hasn't started playing yet — repoll sooner.
+                                // Cap fast-poll at 30 s: if runtime stays 0 that long the
+                                // remote client likely won't report it and we stop hammering.
                                 if s.runtime_s == 0 {
-                                    self.last_session_poll = Instant::now() - Duration::from_millis(500);
+                                    let since = self.runtime_zero_since
+                                        .get_or_insert_with(Instant::now);
+                                    if since.elapsed() < Duration::from_secs(30) {
+                                        self.last_session_poll = Instant::now() - Duration::from_millis(500);
+                                    }
+                                } else {
+                                    self.runtime_zero_since = None;
                                 }
                             } else {
                                 self.session_miss_count += 1;
@@ -1648,6 +1668,8 @@ mod tests {
             power_queue_row_map: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
+            power_restore_nav: std::collections::HashMap::new(),
+            power_left_tab_restore: 0,
             home_card_view: false,
             last_played_item_id: None,
             last_played_completed: false,
@@ -1658,6 +1680,7 @@ mod tests {
             layout_carousel_down_arrow: None,
             card_image_states: std::collections::HashMap::new(),
             card_image_loading: std::collections::HashSet::new(),
+            last_card_height: 0,
             card_image_tx,
             card_image_rx,
             image_picker: None,
@@ -1725,6 +1748,7 @@ mod tests {
             remote_pos_at: std::time::Instant::now(),
             remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
             remote_seek_pending_until: std::time::Instant::now() - Duration::from_secs(1),
+            runtime_zero_since: None,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
