@@ -1383,7 +1383,7 @@ impl App {
                 if should_auto_push {
                     let (season_id, season_name) = self.libs.get(lib_idx)
                         .and_then(|lib| lib.nav_stack.last())
-                        .and_then(|l| l.items.first())
+                        .and_then(|l| l.items.get(l.cursor))
                         .map(|s| (s.id.clone(), s.name.clone()))
                         .unwrap_or_default();
                     if !season_id.is_empty() {
