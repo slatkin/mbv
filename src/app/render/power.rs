@@ -570,6 +570,9 @@ impl App {
     /// Renders a cached card image centered in `area`, returning `(rows_used, image_loading)`.
     /// Uses `last_card_height` as a stable placeholder while the image is loading.
     fn render_card_image(&mut self, f: &mut Frame, area: Rect, cache_key: &str, max_h: u16) -> (u16, bool) {
+        // On short terminals (<= 30 rows) cap the card image at 12 rows so the queue
+        // list keeps adequate space; taller terminals cap at 18 rows.
+        let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 18 });
         let image_loading = self.card_image_loading.contains(cache_key);
         if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
             type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
