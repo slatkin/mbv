@@ -764,7 +764,7 @@ impl App {
         // Gather items and cursor from the appropriate source.
         let (items, cursor) = if self.power_left_tab == 0 {
             let items = self.home.continue_items.clone();
-            let cursor = self.home.continue_cursor.min(items.len().saturating_sub(1).max(0));
+            let cursor = self.home.continue_cursor.min(items.len().saturating_sub(1));
             (items, cursor)
         } else {
             let lib_idx = self.power_left_tab - 1;
