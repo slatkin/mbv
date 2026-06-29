@@ -1886,12 +1886,12 @@ impl Player {
     }
 
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
-        // Reuse the existing mpv window only when it can correctly display the new
-        // item: never load a video into the hidden (headless) audio window — that
-        // would launch the video off-screen. Mirror play_playlist's guard.
+        // Reuse the existing mpv window only when the headless state matches:
+        // video→video and audio→audio reuse; video→audio and audio→video always
+        // spawn a new process so the window visibility is correct.
         let new_is_headless = !self.show_audio_window && item.is_audio();
         if self.status.lock().unwrap().active
-            && (!self.current_is_headless.load(Ordering::Relaxed) || new_is_headless)
+            && (self.current_is_headless.load(Ordering::Relaxed) == new_is_headless)
         {
             let ep = if item.is_audio() { "Audio" } else { "Videos" };
             let url = format!(
@@ -1994,11 +1994,12 @@ impl Player {
         let new_is_headless = !self.show_audio_window
             && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
 
-        // If playlist loop already running, replace in place (no window close),
-        // unless mpv was spawned headless but new items need a window.
+        // If playlist loop already running and headless state matches, replace in
+        // place (no window close). Mismatched state (e.g. video→audio-only or
+        // vice-versa) always spawns a new process so visibility is correct.
         if self.status.lock().unwrap().active
             && self.is_playlist_mode.load(Ordering::Relaxed)
-            && (!self.current_is_headless.load(Ordering::Relaxed) || new_is_headless)
+            && (self.current_is_headless.load(Ordering::Relaxed) == new_is_headless)
         {
             let start_idx = start_idx.min(items.len() - 1);
             {
