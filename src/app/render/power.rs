@@ -345,7 +345,7 @@ impl App {
                     let is_cursor = i == cursor && focused;
 
                     let fg = if is_cursor {
-                        palette::YELLOW
+                        palette::PINE
                     } else if focused {
                         palette::WHITE
                     } else {
