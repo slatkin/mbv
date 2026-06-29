@@ -491,7 +491,7 @@ enum SettingKey {
     LogOut,
 }
 
-// Sections rendered as IRIS blocks in a 2×2 grid.
+// Sections rendered as YELLOW blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest, SettingKey::FeedViewLibraries]),
@@ -502,10 +502,10 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[actions]",   &[SettingKey::LogOut]),
 ];
 
-const SESSIONS_PANEL_W:  u16 = 42;
-const HELP_PANEL_W:      u16 = 58;
-const SETTINGS_PANEL_W:  u16 = 56;
-const PLAYLISTS_PANEL_W: u16 = 48;
+const SESSIONS_PANEL_W:  u16 = 40;
+const HELP_PANEL_W:      u16 = 40;
+const SETTINGS_PANEL_W:  u16 = 40;
+const PLAYLISTS_PANEL_W: u16 = 40;
 const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
     fn build(init: AppInit) -> Self {

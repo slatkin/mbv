@@ -300,11 +300,10 @@ impl App {
                 Rect { x: sidebar.x + sidebar.width - 1, y: row, width: 1, height: 1 },
             );
         }
-        let inner_w = sidebar.width.saturating_sub(2);
-        let ix = sidebar.x + 1;
+        let inner_w = sidebar.width.saturating_sub(1);
+        let ix = sidebar.x;
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::raw(" "),
                 Span::styled(title.to_owned(), Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD)),
             ])).style(Style::default().bg(palette::FOCUSED)),
             Rect { x: sidebar.x, y: sidebar.y, width: sidebar.width.saturating_sub(1), height: 1 },
@@ -322,14 +321,14 @@ impl App {
             Paragraph::new(Span::styled(trunc_str(hints, inner_w as usize), Style::default().fg(palette::MUTED))),
             Rect { x: ix, y: footer_y + 1, width: inner_w, height: 1 },
         );
-        Rect { x: ix, y: sidebar.y + 2, width: inner_w, height: sidebar.height.saturating_sub(4) }
+        Rect { x: ix, y: sidebar.y + 1, width: inner_w, height: sidebar.height.saturating_sub(3) }
     }
 
     /// Render one row in a sidebar panel list.
     /// `content_spans` should not include the indicator — it is prepended automatically.
     /// Returns the usable text width (content area minus indicator and space).
     pub(super) fn panel_row_text_width(content_width: u16) -> usize {
-        content_width.saturating_sub(2) as usize // indicator char + space
+        content_width.saturating_sub(1) as usize // indicator char
     }
 
     pub(super) fn render_panel_row(f: &mut Frame, x: u16, y: u16, width: u16, selected: bool, spans: Vec<Span>) {
@@ -337,7 +336,7 @@ impl App {
             if selected { "\u{258c}" } else { " " },
             Style::default().fg(palette::PINE),
         );
-        let mut all = vec![indicator, Span::raw(" ")];
+        let mut all = vec![indicator];
         all.extend(spans);
         f.render_widget(Paragraph::new(Line::from(all)), Rect { x, y, width, height: 1 });
     }
