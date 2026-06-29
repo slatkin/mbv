@@ -11,13 +11,14 @@ use super::super::settings::{setting_label, setting_value, settings_cursor_to_ke
 use super::super::{
     MultiSelectKind, MultiSelectPopup, PendingQueueAction, SavePlaylistStage, SettingKey,
     SETTING_SECTIONS, SESSIONS_PANEL_W, PLAYLISTS_PANEL_W, HELP_PANEL_W, SETTINGS_PANEL_W,
+    PLAYLIST_VIEW_POWER,
 };
 
 impl App {
     pub(super) fn render_sessions_overlay(&self, f: &mut Frame) {
         let content = Self::render_panel_shell(
             f, f.area(), SESSIONS_PANEL_W,
-            "Remote Sessions",
+            "REMOTE SESSIONS",
             "[↑↓]select [↵]connect [d]disc [r]refresh [Esc]close",
         );
         let ix = content.x;
@@ -104,9 +105,9 @@ impl App {
     pub(super) fn render_playlists_panel(&mut self, f: &mut Frame) {
         let (title, hint) = if self.playlists_open.is_some() {
             let name = self.playlists_open.as_ref().map(|p| p.name.as_str()).unwrap_or("Playlist");
-            (name.to_string(), "[↑↓]select [↵]play [←]back [Esc]close".to_string())
+            (name.to_uppercase(), "[↑↓]select [↵]play [←]back [Esc]close".to_string())
         } else {
-            ("Playlists".to_string(), "[↑↓]select [↵]play [→]browse [r]refresh [Esc]close".to_string())
+            ("PLAYLISTS".to_string(), "[↑↓]select [↵]play [→]browse [r]refresh [Esc]close".to_string())
         };
 
         let content = Self::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint);
@@ -229,7 +230,7 @@ impl App {
     pub(super) fn render_help_panel(&mut self, f: &mut Frame) {
         let content = Self::render_panel_shell(
             f, f.area(), HELP_PANEL_W,
-            "Keyboard Shortcuts",
+            "KEYBOARD SHORTCUTS",
             "[↑↓]scroll [Esc]close",
         );
         let w = content.width as usize;
@@ -259,6 +260,7 @@ impl App {
         let blank = || Line::from("");
 
         let show_log = self.show_log_tab;
+        let show_power = self.playlist_view == PLAYLIST_VIEW_POWER;
 
         let sec_global = vec![
             blank(),
@@ -285,6 +287,7 @@ impl App {
             mk("< / >",            "Seek ±5 seconds"),
             mk("Alt+Enter",        "Stop"),
             mk("- / +",            "Volume down / up"),
+            mk("m",                "Mute"),
             mk("a",                "Cycle audio track"),
             mk("z",                "Enable subtitles"),
             mk("h",                "Hide / show playback panel"),
@@ -295,8 +298,10 @@ impl App {
             mk(".",                "Jump to playing item"),
             mk("i",                "Go to item in library"),
             mk("Del",              "Remove from Queue"),
+            mk("Ctrl+Z",           "Undo removal"),
             mk("v",                "Toggle view"),
             mk("g",                "Toggle grouping"),
+            mk("Ctrl+S",           "Save playlist"),
         ];
         let sec_home = vec![
             blank(),
@@ -314,6 +319,8 @@ impl App {
             mk("Ctrl+S",           "Shuffle and play selection"),
             mk("Ctrl+P",           "Play all (recursive)"),
             mk("Ctrl+Q",           "Add to Queue"),
+            mk("r",                "Refresh library"),
+            mk("Ctrl+R",           "Rescan (confirms)"),
         ];
         let sec_log = if show_log {
             vec![
@@ -329,28 +336,64 @@ impl App {
         } else {
             vec![]
         };
+        let sec_power = if show_power {
+            vec![
+                blank(),
+                section("POWER VIEW"),
+                mk("Left / Right",     "Switch focus (Queue ↔ Browser)"),
+                mk("Tab / BackTab",    "Cycle browser tabs"),
+                mk("[ / ]",            "Previous / next season"),
+                mk("Enter",            "Browse / view detail"),
+                mk("Esc / Backspace",  "Go back / close detail"),
+                mk("Up / Down",        "Navigate panel"),
+                mk("PgUp / PgDn",      "Page scroll"),
+                mk("Del",              "Remove from queue"),
+                mk("o",                "Context menu"),
+                mk("Ctrl+W",           "Toggle watched"),
+                mk("Ctrl+Q",           "Enqueue"),
+                mk("Ctrl+S",           "Shuffle and play"),
+                mk("Ctrl+R",           "Rescan (confirms)"),
+                mk("r",                "Refresh"),
+                mk("/",                "Search"),
+            ]
+        } else {
+            vec![]
+        };
 
         let is_log = show_log && self.tab_idx == self.log_tab_idx();
         let is_lib = self.tab_idx >= self.lib_tab_offset() && self.tab_idx < self.log_tab_idx();
         let is_queue = self.tab_idx == 1;
         let is_home = self.tab_idx == 0;
+        let is_power_active = is_queue && show_power;
 
         let mut ordered: Vec<Vec<Line>> = Vec::new();
-        if is_home {
+        if is_power_active {
+            ordered.push(sec_power);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_library);
+            ordered.push(sec_log);
+        } else if is_home {
             ordered.push(sec_home); ordered.push(sec_global); ordered.push(sec_playback);
             ordered.push(sec_queue); ordered.push(sec_library); ordered.push(sec_log);
+            ordered.push(sec_power);
         } else if is_queue {
             ordered.push(sec_queue); ordered.push(sec_global); ordered.push(sec_playback);
             ordered.push(sec_home); ordered.push(sec_library); ordered.push(sec_log);
+            ordered.push(sec_power);
         } else if is_lib {
             ordered.push(sec_library); ordered.push(sec_global); ordered.push(sec_playback);
             ordered.push(sec_queue); ordered.push(sec_home); ordered.push(sec_log);
+            ordered.push(sec_power);
         } else if is_log {
             ordered.push(sec_log); ordered.push(sec_global); ordered.push(sec_playback);
             ordered.push(sec_queue); ordered.push(sec_home); ordered.push(sec_library);
+            ordered.push(sec_power);
         } else {
             ordered.push(sec_global); ordered.push(sec_playback); ordered.push(sec_queue);
             ordered.push(sec_home); ordered.push(sec_library); ordered.push(sec_log);
+            ordered.push(sec_power);
         }
 
         let mut lines: Vec<Line> = ordered.into_iter().flatten().collect();
@@ -713,7 +756,7 @@ impl App {
     pub(super) fn render_settings_panel(&mut self, f: &mut Frame) {
         let content = Self::render_panel_shell(
             f, f.area(), SETTINGS_PANEL_W,
-            "Settings",
+            "SETTINGS",
             "[↑↓]navigate [Space/\u{21b5}]toggle [Esc]close",
         );
         let cfg = self.client.lock().unwrap().config.clone();

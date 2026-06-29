@@ -322,7 +322,7 @@ impl App {
             Paragraph::new(Span::styled(trunc_str(hints, inner_w as usize), Style::default().fg(palette::MUTED))),
             Rect { x: ix, y: footer_y + 1, width: inner_w, height: 1 },
         );
-        Rect { x: ix, y: sidebar.y + 1, width: inner_w, height: sidebar.height.saturating_sub(3) }
+        Rect { x: ix, y: sidebar.y + 2, width: inner_w, height: sidebar.height.saturating_sub(4) }
     }
 
     /// Render one row in a sidebar panel list.
