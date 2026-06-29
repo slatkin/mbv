@@ -797,21 +797,25 @@ impl App {
         }
     }
 
-    /// Handle a key for the focused Continue Watching power column.
+    /// Handle a key for the focused power-view home list (all groups: CW + library latest).
     /// Returns true if the key was consumed (others fall through to focus nav).
     fn handle_power_cw_key(&mut self, key: KeyEvent) -> bool {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
-        let n = self.home.continue_items.len();
         match key.code {
-            KeyCode::Up   => { self.power_cw_move_cursor(-1); true }
-            KeyCode::Down => { self.power_cw_move_cursor(1);  true }
-            KeyCode::PageUp   => { self.power_cw_move_cursor(-(self.power_cw_page() as i64)); true }
-            KeyCode::PageDown => { self.power_cw_move_cursor(self.power_cw_page() as i64);    true }
-            KeyCode::Home => { self.home.continue_cursor = 0; true }
-            KeyCode::End  => { if n > 0 { self.home.continue_cursor = n - 1; } true }
-            KeyCode::Enter if ctrl => { self.power_cw_enqueue(); true }
-            KeyCode::Enter => { self.power_cw_play(); true }
-            KeyCode::Char('q') if ctrl => { self.power_cw_enqueue(); true }
+            KeyCode::Up       => { self.power_home_move_cursor(-1); true }
+            KeyCode::Down     => { self.power_home_move_cursor(1);  true }
+            KeyCode::PageUp   => { self.power_home_move_cursor(-(self.power_cw_page() as i64)); true }
+            KeyCode::PageDown => { self.power_home_move_cursor(self.power_cw_page() as i64);    true }
+            KeyCode::Home     => { self.home.power_home_cursor = 0; true }
+            KeyCode::End      => {
+                let total = self.home.continue_items.len()
+                    + self.home.latest.iter().map(|(_, _, v, _)| v.len()).sum::<usize>();
+                if total > 0 { self.home.power_home_cursor = total - 1; }
+                true
+            }
+            KeyCode::Enter if ctrl => { self.power_home_enqueue(); true }
+            KeyCode::Enter        => { self.power_home_play(); true }
+            KeyCode::Char('q') if ctrl => { self.power_home_enqueue(); true }
             KeyCode::Char('w') if ctrl => { self.power_cw_toggle_watched(); true }
             KeyCode::Char('o') => { self.open_context_menu(); true }
             KeyCode::Delete => { self.remove_from_continue_watching(); true }
@@ -1665,13 +1669,10 @@ impl App {
                 if !matches!(self.power_focus, PowerFocus::Left) { self.last_card_height = 0; }
                 self.power_focus = PowerFocus::Left;
                 if self.power_left_tab == 0 {
-                    let n = self.home.continue_items.len();
-                    if n > 0 {
-                        let visible = la.height as usize;
-                        let cursor = self.home.continue_cursor.min(n - 1);
-                        let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
-                        let clicked = offset + (row - la.y) as usize;
-                        if clicked < n { self.home.continue_cursor = clicked; }
+                    // Row map is populated by render_power_home_list: None = header, Some(i) = flat item.
+                    let click_y = (row - la.y) as usize;
+                    if let Some(Some(flat_idx)) = self.power_left_row_map.get(click_y).copied() {
+                        self.home.power_home_cursor = flat_idx;
                     }
                 } else {
                     let lib_idx = self.power_left_tab - 1;

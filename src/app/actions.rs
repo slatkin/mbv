@@ -1804,6 +1804,81 @@ impl App {
         self.home.section = saved_sec;
     }
 
+    // ── Power-view home flat list ────────────────────────────────────────────
+
+    /// Total number of items across all power-home groups (CW + all latest sections).
+    fn power_home_total(&self) -> usize {
+        self.home.continue_items.len()
+            + self.home.latest.iter().map(|(_, _, items, _)| items.len()).sum::<usize>()
+    }
+
+    /// The MediaItem at the current flat `power_home_cursor`, or None.
+    pub(super) fn power_home_current_item(&self) -> Option<MediaItem> {
+        let cursor = self.home.power_home_cursor;
+        let mut pos = 0usize;
+        for item in &self.home.continue_items {
+            if pos == cursor { return Some(item.clone()); }
+            pos += 1;
+        }
+        for (_, _, items, _) in &self.home.latest {
+            for item in items {
+                if pos == cursor { return Some(item.clone()); }
+                pos += 1;
+            }
+        }
+        None
+    }
+
+    /// Move the flat power-home cursor by `delta`, clamped to bounds.
+    pub(super) fn power_home_move_cursor(&mut self, delta: i64) {
+        let total = self.power_home_total();
+        if total == 0 { return; }
+        let cur = self.home.power_home_cursor.min(total - 1) as i64;
+        self.home.power_home_cursor = (cur + delta).clamp(0, total as i64 - 1) as usize;
+    }
+
+    /// Play the item under the flat power-home cursor.
+    pub(super) fn power_home_play(&mut self) {
+        let Some(item) = self.power_home_current_item() else { return };
+        if item.is_folder { return; }
+        let cursor = self.home.power_home_cursor;
+        let cw_len = self.home.continue_items.len();
+        if cursor < cw_len {
+            // CW items: use select_home for proper resume handling.
+            let (saved_tab, saved_sec, saved_cursor) =
+                (self.tab_idx, self.home.section, self.home.continue_cursor);
+            self.tab_idx = 0;
+            self.home.section = 0;
+            self.home.continue_cursor = cursor;
+            self.select_home();
+            self.tab_idx = saved_tab;
+            self.home.section = saved_sec;
+            self.home.continue_cursor = saved_cursor;
+        } else {
+            self.play_item(item);
+        }
+    }
+
+    /// Enqueue the item under the flat power-home cursor.
+    pub(super) fn power_home_enqueue(&mut self) {
+        let cursor = self.home.power_home_cursor;
+        let cw_len = self.home.continue_items.len();
+        if cursor < cw_len {
+            let (saved_tab, saved_sec, saved_cursor) =
+                (self.tab_idx, self.home.section, self.home.continue_cursor);
+            self.tab_idx = 0;
+            self.home.section = 0;
+            self.home.continue_cursor = cursor;
+            self.enqueue_selected();
+            self.tab_idx = saved_tab;
+            self.home.section = saved_sec;
+            self.home.continue_cursor = saved_cursor;
+        } else {
+            let Some(item) = self.power_home_current_item() else { return };
+            self.do_enqueue_folder(item);
+        }
+    }
+
     pub(super) fn save_queue_state(&self) {
         // Don't overwrite the on-disk state while the initial restore is still
         // in-flight: the queue is empty only because QueueRestored hasn't been

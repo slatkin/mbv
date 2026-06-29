@@ -241,6 +241,8 @@ struct HomePane {
     continue_cursor: usize,
     latest: Vec<(String, String, Vec<MediaItem>, usize)>, // (title, lib_id, items, cursor)
     section: usize, // 0=continue, 1..=latest
+    /// Flat cursor for the power-view home list (spans continue_items then all latest sections).
+    power_home_cursor: usize,
 }
 
 struct LibraryTab {
@@ -535,7 +537,7 @@ impl App {
             card_image_rx: init.card_image_rx,
             notif_action_tx: init.notif_action_tx,
             notif_action_rx: init.notif_action_rx,
-            home: HomePane { continue_items: Vec::new(), continue_cursor: 0, latest: Vec::new(), section: 0 },
+            home: HomePane { continue_items: Vec::new(), continue_cursor: 0, latest: Vec::new(), section: 0, power_home_cursor: 0 },
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,

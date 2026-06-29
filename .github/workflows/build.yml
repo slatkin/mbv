@@ -76,6 +76,7 @@ jobs:
             gh release create "v${PKGVER}" --title "v${PKGVER}" --generate-notes
           gh release upload "v${PKGVER}" "${TARBALL}" --clobber
           gh release upload "v${PKGVER}" "${DEB}" --clobber
+          gh release edit "v${PKGVER}" --draft=false
 
       - name: Update PKGBUILD sha256 on main
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'

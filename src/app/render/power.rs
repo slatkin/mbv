@@ -56,14 +56,14 @@ fn effective_sort_str(item: &crate::api::MediaItem) -> &str {
 /// Returns the letter-group bucket label for `item` given `total` items in the list.
 /// Uses `sort_name` when available (so "The Wire" → 'W'), otherwise the article-stripped
 /// name. "#" for titles starting with a digit or non-letter; ranges for 50–999 items;
-/// individual letters for 1000+ items.
+/// individual letters for 250+ items.
 fn letter_bucket(item: &crate::api::MediaItem, total: usize) -> String {
     let key = effective_sort_str(item);
     let first = key.chars().next().map(|c| c.to_ascii_uppercase()).unwrap_or('\0');
     if !first.is_ascii_alphabetic() {
         return "#".to_string();
     }
-    if total >= 1000 {
+    if total >= 250 {
         return first.to_string();
     }
     match first {
@@ -98,7 +98,7 @@ impl App {
         {
             // Build (display_name, target_truncation_depth) pairs.
             let crumb_depths: Vec<(String, usize)> = if self.power_left_tab == 0 {
-                vec![("Keep Watching".to_string(), 0)]
+                vec![("mbv".to_string(), 0)]
             } else {
                 let lib_idx = self.power_left_tab - 1;
                 let lib = &self.libs[lib_idx];
@@ -230,6 +230,10 @@ impl App {
 
     /// Dispatches to the appropriate library-panel renderer based on current view type.
     fn render_power_library(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        if self.power_left_tab == 0 {
+            self.render_power_home_list(f, area, focused);
+            return;
+        }
         let lib_idx = self.power_left_tab.saturating_sub(1);
         let has_detail = self.power_left_tab > 0
             && self.libs[lib_idx].power_detail_item.is_some();
@@ -831,6 +835,149 @@ impl App {
             }
         }
         self.render_card_image(f, area, &cache_key, area.height)
+    }
+
+    /// Renders the power-view home tab: "Keep Watching" group + per-library "New X" groups,
+    /// all with yellow bold headers and a single flat cursor (`home.power_home_cursor`).
+    fn render_power_home_list(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        if area.height == 0 { return; }
+
+        // Build flat item list and display rows.
+        // DisplayRow::Header → yellow bold section label (not selectable).
+        // DisplayRow::Item(flat_idx) → item row, selected when flat_idx == power_home_cursor.
+        enum HomeRow { Spacer, Header(String), Item(usize) }
+
+        let continue_items = self.home.continue_items.clone();
+        let latest = self.home.latest.clone();
+
+        let total: usize = continue_items.len()
+            + latest.iter().map(|(_, _, items, _)| items.len()).sum::<usize>();
+
+        if total == 0 {
+            f.render_widget(
+                Paragraph::new(Span::styled("(nothing)", Style::default().fg(palette::MUTED))),
+                area,
+            );
+            return;
+        }
+
+        let cursor = self.home.power_home_cursor.min(total - 1);
+
+        let mut display_rows: Vec<HomeRow> = Vec::new();
+        let mut flat_idx = 0usize;
+        let mut first_group = true;
+
+        // Continue Watching group.
+        if !continue_items.is_empty() {
+            display_rows.push(HomeRow::Header("Keep Watching".to_string()));
+            for _ in &continue_items {
+                display_rows.push(HomeRow::Item(flat_idx));
+                flat_idx += 1;
+            }
+            first_group = false;
+        }
+
+        // Per-library latest groups — blank spacer before each header except the very first.
+        for (title, _, items, _) in &latest {
+            if items.is_empty() { continue; }
+            if !first_group { display_rows.push(HomeRow::Spacer); }
+            display_rows.push(HomeRow::Header(title.clone()));
+            for _ in items {
+                display_rows.push(HomeRow::Item(flat_idx));
+                flat_idx += 1;
+            }
+            first_group = false;
+        }
+
+        // Build a combined flat items vec for rendering.
+        let mut flat_items: Vec<crate::api::MediaItem> = Vec::with_capacity(total);
+        flat_items.extend(continue_items.iter().cloned());
+        for (_, _, items, _) in &latest {
+            flat_items.extend(items.iter().cloned());
+        }
+
+        // Locate the display row for the current cursor.
+        let display_cursor = display_rows.iter().position(|r| {
+            matches!(r, HomeRow::Item(i) if *i == cursor)
+        }).unwrap_or(0);
+
+        let visible = area.height as usize;
+        let offset = if display_cursor >= visible { display_cursor - visible + 1 } else { 0 };
+
+        // Build row map for mouse click handling.
+        self.power_left_row_map.clear();
+        for row in display_rows.iter().skip(offset).take(visible) {
+            self.power_left_row_map.push(match row {
+                HomeRow::Spacer | HomeRow::Header(_) => None,
+                HomeRow::Item(idx) => Some(*idx),
+            });
+        }
+
+        let avail = (area.width as usize).saturating_sub(2);
+        let list_items: Vec<ListItem> = display_rows.iter().skip(offset).take(visible).map(|row| {
+            match row {
+                HomeRow::Spacer => ListItem::new(Line::default()),
+                HomeRow::Header(label) => {
+                    ListItem::new(Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(
+                            trunc_str(label, avail).to_string(),
+                            Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
+                        ),
+                    ]))
+                }
+                HomeRow::Item(idx) => {
+                    let item = &flat_items[*idx];
+                    let selected = *idx == cursor;
+                    let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
+                        format!(" {}", fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND))
+                    } else {
+                        String::new()
+                    };
+                    let name_w = avail.saturating_sub(dur_str.width());
+                    let title = trunc_str(&item.display_name(), name_w);
+                    let fg = if focused { palette::WHITE } else { palette::SUBTLE };
+                    let mut spans: Vec<Span> = if selected && focused {
+                        vec![
+                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                            Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                        ]
+                    } else {
+                        vec![
+                            Span::raw(" "),
+                            Span::styled(title, Style::default().fg(fg)),
+                        ]
+                    };
+                    if !dur_str.is_empty() {
+                        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+                    }
+                    ListItem::new(Line::from(spans))
+                }
+            }
+        }).collect();
+
+        let mut state = ListState::default();
+        state.select(Some(display_cursor.saturating_sub(offset)));
+        f.render_stateful_widget(
+            List::new(list_items).highlight_style(Style::default()),
+            area,
+            &mut state,
+        );
+
+        let display_n = display_rows.len();
+        if focused && display_n > visible {
+            let max_off = display_n.saturating_sub(visible);
+            let mut sb = ScrollbarState::new(max_off + 1).position(offset);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("\u{2590}")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None).end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                area,
+                &mut sb,
+            );
+        }
     }
 
     /// Renders the Continue/library list items into `area`.
