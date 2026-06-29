@@ -16,6 +16,13 @@ type BrowseRefresh = (usize, String, Option<String>, bool, String, String, usize
 
 impl App {
     pub(super) fn lib_page_size(&self) -> usize {
+        // In power view the library list is rendered into the right panel, and the
+        // normal-view per-row height map (`layout_lib_row_heights`) is never populated,
+        // so it would fall back to 1. Use the panel height directly (rows are single-line;
+        // subtract 1 for the count/search header line).
+        if self.playlist_view == PLAYLIST_VIEW_POWER {
+            return (self.power_left_area.height as usize).saturating_sub(1).max(1);
+        }
         let lib_idx = if self.tab_idx >= self.lib_tab_offset() {
             self.tab_idx - self.lib_tab_offset()
         } else {
