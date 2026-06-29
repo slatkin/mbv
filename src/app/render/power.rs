@@ -50,61 +50,95 @@ impl App {
         let right_w = area.width.saturating_sub(left_w);
 
         // Full-width header: FOAM line + breadcrumb pill right-aligned.
-        // Pill shows the full nav path as "Library · Level · Level" with
-        // BASE-coloured dot separators on a FOAM background.
+        // Pill shows the nav path as "Library · Level" (bottom level omitted unless
+        // it is also the top level). Separator dots are white; the hovered crumb
+        // turns white. Clicking a crumb navigates back to that level.
         {
-            let crumbs: Vec<String> = if self.power_left_tab == 0 {
-                vec!["Keep Watching".to_string()]
+            // Build (display_name, target_truncation_depth) pairs.
+            let crumb_depths: Vec<(String, usize)> = if self.power_left_tab == 0 {
+                vec![("Keep Watching".to_string(), 0)]
             } else {
                 let lib_idx = self.power_left_tab - 1;
                 let lib = &self.libs[lib_idx];
                 let skip = if lib.nav_stack.first()
                     .map(|l| l.title == lib.library.name).unwrap_or(false) { 1 } else { 0 };
-                let mut c = vec![lib.library.name.clone()];
-                for lvl in lib.nav_stack.iter().skip(skip) {
-                    c.push(lvl.title.clone());
+                let mut cd: Vec<(String, usize)> = vec![(lib.library.name.clone(), skip)];
+                for (j, lvl) in lib.nav_stack.iter().enumerate().skip(skip) {
+                    cd.push((lvl.title.clone(), j + 1));
                 }
-                c
+                // Drop the current (deepest) level from the pill unless it's the only one.
+                if cd.len() > 1 { cd.pop(); }
+                cd
             };
 
             let pill_style = Style::default().fg(palette::BASE).bg(palette::FOAM);
+            let sep_style  = Style::default().fg(palette::WHITE).bg(palette::FOAM);
             const SEP: &str = " \u{00b7} "; // " · "
             const SEP_W: usize = 3;
 
             // Budget: leave at least a few dashes on the left.
             let budget = (area.width as usize).saturating_sub(4);
-            // Raw pill width = 1 (leading space) + crumbs + separators + 1 (trailing space).
             let raw_w = 1
-                + crumbs.iter().map(|c| c.width()).sum::<usize>()
-                + crumbs.len().saturating_sub(1) * SEP_W
+                + crumb_depths.iter().map(|(s, _)| s.width()).sum::<usize>()
+                + crumb_depths.len().saturating_sub(1) * SEP_W
                 + 1;
-            // If raw pill is too wide, truncate the last (deepest) crumb so it fits.
-            let last_crumb_budget = if raw_w > budget && crumbs.len() > 1 {
+            // If too wide, truncate the last displayed crumb so it fits.
+            let last_crumb_budget = if raw_w > budget && crumb_depths.len() > 1 {
                 let fixed_w = 1
-                    + crumbs[..crumbs.len() - 1].iter().map(|c| c.width()).sum::<usize>()
-                    + (crumbs.len() - 1) * SEP_W
+                    + crumb_depths[..crumb_depths.len() - 1].iter().map(|(s, _)| s.width()).sum::<usize>()
+                    + (crumb_depths.len() - 1) * SEP_W
                     + 1;
                 budget.saturating_sub(fixed_w)
             } else {
                 budget
             };
 
+            // Pre-compute display strings (with truncation applied).
+            let displays: Vec<(String, usize)> = crumb_depths.iter().enumerate()
+                .map(|(i, (name, depth))| {
+                    let s = if i == crumb_depths.len() - 1 {
+                        trunc_str(name, last_crumb_budget).to_string()
+                    } else {
+                        name.clone()
+                    };
+                    (s, *depth)
+                })
+                .collect();
+
+            // Pill geometry.
+            let pill_w: usize = 1
+                + displays.iter().map(|(s, _)| s.width()).sum::<usize>()
+                + displays.len().saturating_sub(1) * SEP_W
+                + 1;
+            let left_line_w = (area.width as usize).saturating_sub(pill_w);
+            let crumb_row = area.y;
+            // x of first crumb = pill_start + 1 leading space
+            let mut x_cursor: u16 = area.x + left_line_w as u16 + 1;
+
+            // Build spans and register hover/click regions in one pass.
             let mut pill_spans: Vec<Span> = vec![Span::styled(" ", pill_style)];
-            for (i, crumb) in crumbs.iter().enumerate() {
+            let mut new_power_crumbs: Vec<(u16, u16, u16, usize)> = Vec::new();
+            for (i, (display, target_depth)) in displays.iter().enumerate() {
                 if i > 0 {
-                    pill_spans.push(Span::styled(SEP, pill_style));
+                    pill_spans.push(Span::styled(SEP, sep_style));
+                    x_cursor += SEP_W as u16;
                 }
-                let text = if i == crumbs.len() - 1 {
-                    trunc_str(crumb, last_crumb_budget).to_string()
-                } else {
-                    crumb.clone()
-                };
-                pill_spans.push(Span::styled(text, pill_style));
+                let dw = display.width() as u16;
+                let x_start = x_cursor;
+                let x_end   = x_cursor + dw;
+                let hovered = self.mouse_row == crumb_row
+                    && self.mouse_col >= x_start
+                    && self.mouse_col < x_end;
+                let crumb_fg = if hovered { palette::WHITE } else { palette::BASE };
+                pill_spans.push(Span::styled(
+                    display.clone(),
+                    Style::default().fg(crumb_fg).bg(palette::FOAM),
+                ));
+                new_power_crumbs.push((x_start, x_end, crumb_row, *target_depth));
+                x_cursor = x_end;
             }
             pill_spans.push(Span::styled(" ", pill_style));
-
-            let pill_w: usize = pill_spans.iter().map(|s| s.content.width()).sum();
-            let left_line_w = (area.width as usize).saturating_sub(pill_w);
+            self.layout_power_breadcrumbs = new_power_crumbs;
 
             let mut line_spans = vec![
                 Span::styled("\u{2500}".repeat(left_line_w), Style::default().fg(palette::FOAM)),
@@ -592,7 +626,15 @@ impl App {
             self.last_card_height = actual.height + 1;
             (actual.height + 1, false)
         } else {
-            (self.last_card_height, image_loading)
+            // No image loaded yet — if a fetch is in-flight and we have never
+            // rendered a card before, reserve the full height cap so the queue
+            // panel doesn't expand then collapse when the first image arrives.
+            let placeholder = if self.last_card_height == 0 && image_loading {
+                max_h
+            } else {
+                self.last_card_height
+            };
+            (placeholder, image_loading)
         }
     }
 
