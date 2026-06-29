@@ -45,8 +45,8 @@ impl App {
             self.power_left_tab = 0;
         }
 
-        // Left panel (fixed 44 cols, card + queue) | Right panel (library, remaining).
-        let left_w: u16 = 44;
+        // Left panel (fixed 40 cols, card + queue) | Right panel (library, remaining).
+        let left_w: u16 = 40;
         let right_w = area.width.saturating_sub(left_w);
 
         // Full-width header: FOAM line + breadcrumb pill right-aligned.
