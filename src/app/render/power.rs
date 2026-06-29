@@ -577,13 +577,13 @@ impl App {
         if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
             type SImg = ratatui_image::StatefulImage::<ratatui_image::protocol::StatefulProtocol>;
             let avail = ratatui::layout::Size {
-                width: area.width.saturating_sub(4),
+                width: area.width,
                 height: max_h.saturating_sub(1),
             };
             let actual = state.size_for(
                 ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)), avail,
             );
-            let img_x = area.x + 2 + (area.width.saturating_sub(4).saturating_sub(actual.width)) / 2;
+            let img_x = area.x + (area.width.saturating_sub(actual.width)) / 2;
             let img_rect = Rect { x: img_x, y: area.y, width: actual.width, height: actual.height };
             f.render_stateful_widget(
                 SImg::default().resize(ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3))),
