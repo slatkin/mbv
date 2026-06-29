@@ -6,7 +6,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Cell, List, ListItem, ListSta
 use crate::api::TICKS_PER_SECOND;
 use super::super::{App, PowerFocus, palette};
 use textwrap::wrap;
-use super::super::ui_util::{build_queue_rows, fmt_duration, fmt_duration_approx, trunc_overview, trunc_str, QueueRow};
+use super::super::ui_util::{build_queue_rows, fmt_duration, fmt_duration_approx, natural_sort_key, trunc_overview, trunc_str, QueueRow};
 use unicode_width::UnicodeWidthStr;
 
 /// For folder-based music libraries where albums are stored as directories named
@@ -36,12 +36,29 @@ fn parse_album_folder_name(name: &str) -> Option<(String, u32, String)> {
 }
 
 
+/// Strips a leading article ("The ", "A ", "An ") from `s` (case-insensitive).
+/// Returns a slice of the original string starting after the article.
+fn strip_article(s: &str) -> &str {
+    for prefix in &["the ", "a ", "an "] {
+        if s.len() > prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix) {
+            return &s[prefix.len()..];
+        }
+    }
+    s
+}
+
+/// Returns the effective sort key for an item: `sort_name` when Emby provides it,
+/// otherwise the item's display name with any leading article stripped.
+fn effective_sort_str(item: &crate::api::MediaItem) -> &str {
+    if !item.sort_name.is_empty() { &item.sort_name } else { strip_article(&item.name) }
+}
+
 /// Returns the letter-group bucket label for `item` given `total` items in the list.
-/// Uses `sort_name` when available (so "The Wire" → 'W'), otherwise `name`.
-/// "#" for titles starting with a digit or non-letter; ranges for 50–199 items;
-/// individual letters for 200+ items.
+/// Uses `sort_name` when available (so "The Wire" → 'W'), otherwise the article-stripped
+/// name. "#" for titles starting with a digit or non-letter; ranges for 50–999 items;
+/// individual letters for 1000+ items.
 fn letter_bucket(item: &crate::api::MediaItem, total: usize) -> String {
-    let key = if !item.sort_name.is_empty() { &item.sort_name } else { &item.name };
+    let key = effective_sort_str(item);
     let first = key.chars().next().map(|c| c.to_ascii_uppercase()).unwrap_or('\0');
     if !first.is_ascii_alphabetic() {
         return "#".to_string();
@@ -1045,9 +1062,15 @@ impl App {
             // The spacer is omitted before the very first header.
             enum DisplayRow { Spacer, LetterHeader(String), Item(usize) }
 
+            // Sort item indices by the same effective key used for bucketing so that
+            // items within each group appear in article-stripped alphabetical order.
+            let mut sorted_indices: Vec<usize> = (0..n).collect();
+            sorted_indices.sort_by_key(|&i| natural_sort_key(effective_sort_str(&items[i])));
+
             let mut display_rows: Vec<DisplayRow> = Vec::new();
             let mut last_bucket = String::new();
-            for (idx, item) in items.iter().enumerate() {
+            for &idx in &sorted_indices {
+                let item = &items[idx];
                 let bucket = letter_bucket(item, n);
                 if bucket != last_bucket {
                     if !last_bucket.is_empty() {
