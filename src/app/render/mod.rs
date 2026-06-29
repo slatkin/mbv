@@ -293,7 +293,7 @@ impl App {
     ) -> Rect {
         let sidebar = Rect { x: full.x, y: full.y, width: width.min(full.width), height: full.height };
         f.render_widget(Clear, sidebar);
-        f.render_widget(Block::default().style(Style::default().bg(palette::BASE)), sidebar);
+        f.render_widget(Block::default().style(Style::default().bg(palette::PANEL_BG)), sidebar);
         for row in sidebar.y..sidebar.y + sidebar.height {
             f.render_widget(
                 Paragraph::new(Span::styled("\u{2502}", Style::default().fg(palette::OVERLAY))),

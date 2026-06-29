@@ -1,5 +1,6 @@
 use ratatui::style::Color;
 pub const BASE:      Color = Color::Rgb(26,  26,  26);   // near-black, for text on colored bg
+pub const PANEL_BG:  Color = Color::Rgb(60,  66,  74);   // #3c424a sidebar/panel background   // near-black, for text on colored bg
 pub const OVERLAY:   Color = Color::Rgb(63,  63,  63);   // gray, unfocused borders
 pub const MUTED:     Color = Color::Rgb(108, 108, 108);  // dim text, icons
 pub const SUBTLE:    Color = Color::Rgb(158, 158, 158);  // secondary text
