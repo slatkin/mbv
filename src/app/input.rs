@@ -1675,18 +1675,28 @@ impl App {
                     }
                 } else {
                     let lib_idx = self.power_left_tab - 1;
-                    let click_y = row - la.y;
+                    let click_y = (row - la.y) as usize;
+                    // Read the row map before taking a mutable borrow on libs (borrow checker).
+                    let use_row_map = !self.power_left_row_map.is_empty();
+                    let row_map_item = if use_row_map { self.power_left_row_map.get(click_y).copied() } else { None };
                     let lib = &mut self.libs[lib_idx];
                     if let Some(s) = &mut lib.search {
                         let visible = la.height as usize;
                         let offset = if s.cursor >= visible { s.cursor - visible + 1 } else { 0 };
-                        let clicked = offset + click_y as usize;
+                        let clicked = offset + click_y;
                         if clicked < s.results.len() { s.cursor = clicked; }
                     } else if let Some(lvl) = lib.nav_stack.last_mut() {
-                        let visible = la.height as usize;
-                        let offset = if lvl.cursor >= visible { lvl.cursor - visible + 1 } else { 0 };
-                        let clicked = offset + click_y as usize;
-                        if clicked < lvl.items.len() { lvl.cursor = clicked; }
+                        if use_row_map {
+                            // Letter-grouped mode: row map gives item index (None = header row).
+                            if let Some(Some(item_idx)) = row_map_item {
+                                if item_idx < lvl.items.len() { lvl.cursor = item_idx; }
+                            }
+                        } else {
+                            let visible = la.height as usize;
+                            let offset = if lvl.cursor >= visible { lvl.cursor - visible + 1 } else { 0 };
+                            let clicked = offset + click_y;
+                            if clicked < lvl.items.len() { lvl.cursor = clicked; }
+                        }
                     }
                 }
                 return true;

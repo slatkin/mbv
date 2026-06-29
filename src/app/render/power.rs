@@ -36,6 +36,31 @@ fn parse_album_folder_name(name: &str) -> Option<(String, u32, String)> {
 }
 
 
+/// Returns the letter-group bucket label for `item` given `total` items in the list.
+/// Uses `sort_name` when available (so "The Wire" → 'W'), otherwise `name`.
+/// "#" for titles starting with a digit or non-letter; ranges for 50–199 items;
+/// individual letters for 200+ items.
+fn letter_bucket(item: &crate::api::MediaItem, total: usize) -> String {
+    let key = if !item.sort_name.is_empty() { &item.sort_name } else { &item.name };
+    let first = key.chars().next().map(|c| c.to_ascii_uppercase()).unwrap_or('\0');
+    if !first.is_ascii_alphabetic() {
+        return "#".to_string();
+    }
+    if total >= 1000 {
+        return first.to_string();
+    }
+    match first {
+        'A'..='C' => "A\u{2013}C",
+        'D'..='F' => "D\u{2013}F",
+        'G'..='I' => "G\u{2013}I",
+        'J'..='L' => "J\u{2013}L",
+        'M'..='O' => "M\u{2013}O",
+        'P'..='R' => "P\u{2013}R",
+        'S'..='U' => "S\u{2013}U",
+        _         => "V\u{2013}Z",
+    }.to_string()
+}
+
 impl App {
     pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
         if area.height < 4 { return; }
@@ -504,7 +529,7 @@ impl App {
             let tw = (text_w.saturating_sub(1)) as u16;
 
             // — Title —
-            let title_color = if selected && focused { palette::YELLOW } else { palette::TEXT };
+            let title_color = if selected && focused { palette::IRIS } else { palette::TEXT };
             let title_style = if selected && focused {
                 Style::default().fg(title_color).add_modifier(Modifier::BOLD)
             } else {
@@ -837,6 +862,16 @@ impl App {
 
         let n = items.len();
 
+        // Letter grouping: applies to non-music library lists with 50+ items (not during search).
+        let use_letter_groups = !show_grouped
+            && self.power_left_tab > 0
+            && n >= 50
+            && {
+                let lib_idx = self.power_left_tab - 1;
+                self.libs[lib_idx].library.collection_type != "music"
+                    && self.libs[lib_idx].search.is_none()
+            };
+
         // First row area: search input box (when searching) or item count label.
         if focused && self.power_left_tab > 0 && content_area.height > 0 {
             let lib_idx = self.power_left_tab - 1;
@@ -962,7 +997,7 @@ impl App {
                         let name_w = avail.saturating_sub(prefix_w);
                         let trunc_name = trunc_str(album_name, name_w);
                         let fg = if focused { palette::WHITE } else { palette::SUBTLE };
-                        let name_color = if selected && focused { palette::YELLOW } else { fg };
+                        let name_color = if selected && focused { palette::IRIS } else { fg };
                         let mut spans: Vec<Span> = Vec::new();
                         if selected && focused {
                             spans.push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
@@ -986,6 +1021,7 @@ impl App {
             state.select(Some(display_cursor.saturating_sub(offset)));
             f.render_stateful_widget(List::new(list_items).highlight_style(Style::default()), content_area, &mut state);
 
+            self.power_left_row_map.clear();
             let display_n = display_rows.len();
             if focused && display_n > visible {
                 let max_off = display_n.saturating_sub(visible);
@@ -999,7 +1035,112 @@ impl App {
                     content_area, &mut sb,
                 );
             }
+        } else if use_letter_groups {
+            // Build display rows: inject a Spacer+LetterHeader at each bucket boundary.
+            // The spacer is omitted before the very first header.
+            enum DisplayRow { Spacer, LetterHeader(String), Item(usize) }
+
+            let mut display_rows: Vec<DisplayRow> = Vec::new();
+            let mut last_bucket = String::new();
+            for (idx, item) in items.iter().enumerate() {
+                let bucket = letter_bucket(item, n);
+                if bucket != last_bucket {
+                    if !last_bucket.is_empty() {
+                        display_rows.push(DisplayRow::Spacer);
+                    }
+                    display_rows.push(DisplayRow::LetterHeader(bucket.clone()));
+                    last_bucket = bucket;
+                }
+                display_rows.push(DisplayRow::Item(idx));
+            }
+            let total_display = display_rows.len();
+
+            // Find the visual row of the current cursor item for scrolling.
+            let display_cursor = display_rows.iter().position(|r| {
+                matches!(r, DisplayRow::Item(i) if *i == cursor)
+            }).unwrap_or(0);
+            let offset = if display_cursor >= visible { display_cursor - visible + 1 } else { 0 };
+
+            // Build row map so mouse clicks can map visual row → item index.
+            self.power_left_row_map.clear();
+            for row in display_rows.iter().skip(offset).take(visible) {
+                self.power_left_row_map.push(match row {
+                    DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
+                    DisplayRow::Item(idx) => Some(*idx),
+                });
+            }
+
+            let avail = (area.width as usize).saturating_sub(2);
+            let list_items: Vec<ListItem> = display_rows.iter().skip(offset).take(visible).map(|row| {
+                match row {
+                    DisplayRow::Spacer => ListItem::new(Line::default()),
+                    DisplayRow::LetterHeader(label) => {
+                        ListItem::new(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled(label.clone(),
+                                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)),
+                        ]))
+                    }
+                    DisplayRow::Item(idx) => {
+                        let item = &items[*idx];
+                        let selected = *idx == cursor;
+                        let (item_name, dur_str) = if item.is_folder {
+                            let name = if item.item_type == "Folder" && item.total_count > 0 {
+                                format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+                            } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
+                                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                            } else {
+                                item.display_name()
+                            };
+                            (name, String::new())
+                        } else {
+                            let dur = if item.runtime_ticks > 0 {
+                                format!(" {}", fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND))
+                            } else {
+                                String::new()
+                            };
+                            (item.display_name(), dur)
+                        };
+                        let name_w = avail.saturating_sub(dur_str.width());
+                        let title = trunc_str(&item_name, name_w);
+                        let fg = if focused { palette::WHITE } else { palette::SUBTLE };
+                        let mut spans: Vec<Span> = if selected && focused {
+                            vec![
+                                Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                                Span::styled(title, Style::default().fg(palette::IRIS)),
+                            ]
+                        } else {
+                            vec![
+                                Span::raw(" "),
+                                Span::styled(title, Style::default().fg(fg)),
+                            ]
+                        };
+                        if !dur_str.is_empty() {
+                            spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+                        }
+                        ListItem::new(Line::from(spans))
+                    }
+                }
+            }).collect();
+
+            let mut state = ListState::default();
+            state.select(Some(display_cursor.saturating_sub(offset)));
+            f.render_stateful_widget(List::new(list_items).highlight_style(Style::default()), content_area, &mut state);
+
+            if focused && total_display > visible {
+                let max_off = total_display.saturating_sub(visible);
+                let mut sb = ScrollbarState::new(max_off + 1).position(offset);
+                f.render_stateful_widget(
+                    Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                        .thumb_symbol("\u{2590}")
+                        .track_symbol(Some(" "))
+                        .begin_symbol(None).end_symbol(None)
+                        .style(Style::default().fg(palette::SUBTLE)),
+                    content_area, &mut sb,
+                );
+            }
         } else {
+            self.power_left_row_map.clear();
             let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
 
             let list_items: Vec<ListItem> = items.iter().skip(offset).take(visible).enumerate().map(|(i, item)| {
@@ -1034,7 +1175,7 @@ impl App {
                 let mut spans: Vec<Span> = if selected && focused {
                     vec![
                         Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                        Span::styled(title, Style::default().fg(palette::YELLOW)),
+                        Span::styled(title, Style::default().fg(palette::IRIS)),
                     ]
                 } else {
                     vec![

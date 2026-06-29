@@ -642,7 +642,7 @@ impl App {
 
             let is_now_playing = lib_now_playing_id.as_deref() == Some(item.id.as_str());
             let text_color = if is_now_playing { palette::FOAM }
-                else if selected { palette::YELLOW }
+                else if selected { palette::IRIS }
                 else { palette::TEXT };
 
             let title_line = match item.item_type.as_str() {

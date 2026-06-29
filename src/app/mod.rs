@@ -319,6 +319,7 @@ pub struct App {
     power_left_area: Rect,   // rendered area of the left panel (for mouse click / page calc)
     power_queue_area: Rect,
     power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
+    power_left_row_map: Vec<Option<usize>>,  // visual row → item index for library letter groups
     power_detail_max_scroll: usize,  // max valid scroll (set each render frame)
     power_detail_page_h: usize,      // visible overview line count (set each render frame)
     power_restore_nav: std::collections::HashMap<String, Vec<crate::config::SavedNavLevel>>, // lib_id → nav stack to restore
@@ -591,6 +592,7 @@ impl App {
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
             power_queue_row_map: Vec::new(),
+            power_left_row_map: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
             power_restore_nav: saved_ui.power_lib_nav,
@@ -1675,6 +1677,7 @@ mod tests {
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
             power_queue_row_map: Vec::new(),
+            power_left_row_map: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
             power_restore_nav: std::collections::HashMap::new(),
