@@ -1103,6 +1103,7 @@ impl App {
         let visible = content_area.height as usize;
 
         if show_grouped {
+            self.power_left_sorted_indices.clear();
             // Build a display row list that interleaves artist headers with album rows.
             enum DisplayRow { ArtistHeader(String), Album(usize) }
 
@@ -1213,6 +1214,8 @@ impl App {
             // items within each group appear in article-stripped alphabetical order.
             let mut sorted_indices: Vec<usize> = (0..n).collect();
             sorted_indices.sort_by_key(|&i| natural_sort_key(effective_sort_str(&items[i])));
+            // Publish the sorted order so cursor navigation can follow display order.
+            self.power_left_sorted_indices = sorted_indices.clone();
 
             let mut display_rows: Vec<DisplayRow> = Vec::new();
             let mut last_bucket = String::new();
@@ -1316,6 +1319,7 @@ impl App {
             }
         } else {
             self.power_left_row_map.clear();
+            self.power_left_sorted_indices.clear();
             let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
 
             let list_items: Vec<ListItem> = items.iter().skip(offset).take(visible).enumerate().map(|(i, item)| {

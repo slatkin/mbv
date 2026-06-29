@@ -44,6 +44,26 @@ impl App {
         self.last_nav_at = now;
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
+
+        // In power view with letter-grouped display, navigate in sorted display order so
+        // the cursor follows what the user sees (articles stripped) rather than raw item order.
+        if self.playlist_view == PLAYLIST_VIEW_POWER && !self.power_left_sorted_indices.is_empty() {
+            let needs_sorted = self.libs[lib_idx].search.is_none()
+                && self.libs[lib_idx].nav_stack.last().is_some();
+            if needs_sorted {
+                let current = self.libs[lib_idx].nav_stack.last().unwrap().cursor;
+                let sorted_n = self.power_left_sorted_indices.len();
+                let pos = self.power_left_sorted_indices.iter().position(|&i| i == current).unwrap_or(0);
+                let new_pos = (pos as i64 + delta).clamp(0, sorted_n as i64 - 1) as usize;
+                let new_cursor = self.power_left_sorted_indices[new_pos];
+                if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                    lvl.cursor = new_cursor;
+                }
+                if idle { self.maybe_fetch_next_page(lib_idx); }
+                return;
+            }
+        }
+
         let lib = &mut self.libs[lib_idx];
         if let Some(s) = &mut lib.search {
             let n = s.results.len();
@@ -64,6 +84,23 @@ impl App {
     pub(super) fn jump_lib_cursor(&mut self, to_end: bool) {
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
+
+        // In power view with letter-grouped display, Home/End jump to the first/last item
+        // in sorted display order (article-stripped), not raw item order.
+        if self.playlist_view == PLAYLIST_VIEW_POWER && !self.power_left_sorted_indices.is_empty() {
+            let needs_sorted = self.libs[lib_idx].search.is_none()
+                && !self.power_left_sorted_indices.is_empty();
+            if needs_sorted {
+                let n = self.power_left_sorted_indices.len();
+                let new_cursor = self.power_left_sorted_indices[if to_end { n - 1 } else { 0 }];
+                if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                    lvl.cursor = new_cursor;
+                }
+                self.maybe_fetch_next_page(lib_idx);
+                return;
+            }
+        }
+
         let lib = &mut self.libs[lib_idx];
         if let Some(s) = &mut lib.search {
             let n = s.results.len();
