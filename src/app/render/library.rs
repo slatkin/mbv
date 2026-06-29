@@ -831,7 +831,7 @@ impl App {
             {
                 let title_style = {
                     let s = Style::default().fg(text_color);
-                    if selected && (matches!(item.item_type.as_str(), "Movie" | "Series" | "Season" | "Episode") || is_episode_like) { s.add_modifier(Modifier::BOLD) } else { s }
+                    if selected { s.add_modifier(Modifier::BOLD) } else { s }
                 };
                 let title_line_widget = if let Some(count) = folder_count {
                     let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);

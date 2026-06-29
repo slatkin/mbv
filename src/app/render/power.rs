@@ -1011,7 +1011,12 @@ impl App {
                             spans.push(Span::styled(year_str.clone(), Style::default().fg(palette::PINE)));
                             spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
                         }
-                        spans.push(Span::styled(trunc_name.to_string(), Style::default().fg(name_color)));
+                        let name_style = if selected && focused {
+                            Style::default().fg(name_color).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(name_color)
+                        };
+                        spans.push(Span::styled(trunc_name.to_string(), name_style));
                         ListItem::new(Line::from(spans))
                     }
                 }
@@ -1107,7 +1112,7 @@ impl App {
                         let mut spans: Vec<Span> = if selected && focused {
                             vec![
                                 Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                                Span::styled(title, Style::default().fg(palette::IRIS)),
+                                Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
                             ]
                         } else {
                             vec![
@@ -1175,7 +1180,7 @@ impl App {
                 let mut spans: Vec<Span> = if selected && focused {
                     vec![
                         Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                        Span::styled(title, Style::default().fg(palette::IRIS)),
+                        Span::styled(title, Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
                     ]
                 } else {
                     vec![
