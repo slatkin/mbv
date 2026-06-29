@@ -1948,6 +1948,9 @@ if idx < self.sessions.len() {
         use crossterm::event::{MouseEventKind, MouseButton};
         let col = mouse.column;
         let row = mouse.row;
+        // Always track mouse position so hover rendering is up to date.
+        self.mouse_col = col;
+        self.mouse_row = row;
         if matches!(mouse.kind, MouseEventKind::ScrollUp | MouseEventKind::ScrollDown) {
             let now = Instant::now();
             if now.duration_since(self.last_scroll_at) < Duration::from_millis(30) {
@@ -2199,6 +2202,22 @@ if idx < self.sessions.len() {
                     if sb.width > 0 && sb.contains((col, row).into()) {
                         self.home_scrollbar_seek(row);
                         return;
+                    }
+                }
+
+                // Power-view header breadcrumb clicks.
+                if self.tab_idx == 1
+                    && self.playlist_view == PLAYLIST_VIEW_POWER
+                    && self.power_left_tab > 0
+                {
+                    let crumbs = self.layout_power_breadcrumbs.clone();
+                    let lib_idx = self.power_left_tab - 1;
+                    for (x_start, x_end, crumb_row, target_depth) in crumbs {
+                        if row == crumb_row && col >= x_start && col < x_end {
+                            self.libs[lib_idx].nav_stack.truncate(target_depth);
+                            self.libs[lib_idx].search = None;
+                            return;
+                        }
                     }
                 }
 
