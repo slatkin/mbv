@@ -1989,8 +1989,15 @@ impl App {
             // Blank spacer
             if row < max_y { row += 1; }
 
-            // Overview (word-wrapped, respects image shadow width)
-            let max_ov_rows = ((area.height / 3) as usize).clamp(1, 5);
+            // Overview (word-wrapped, respects image shadow width).
+            // Fill the space alongside/below the series image, reserving room for
+            // the play-status line, divider, and a usable episode list below.
+            let used = row.saturating_sub(area.y);
+            const OV_RESERVED: u16 = 8; // play status + spacer + divider + a few episode rows
+            let max_ov_rows = (area.height
+                .saturating_sub(used)
+                .saturating_sub(OV_RESERVED) as usize)
+                .clamp(1, 12);
             if !item.overview.is_empty() && row < max_y {
                 let mut ov_lines: Vec<String> = Vec::new();
                 let mut cur_line = String::new();
@@ -2024,37 +2031,6 @@ impl App {
                     row += 1;
                 }
                 if row < max_y { row += 1; }
-            }
-
-            // Play status
-            {
-                let (active, active_idx, _, _, _) = self.effective_playback_state();
-                let now_playing_id: Option<String> = if active {
-                    self.player_tab.items.get(active_idx).map(|i| i.id.clone())
-                } else { None };
-                let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
-                if row < max_y {
-                    let (_, tw16) = text_dims(row);
-                    if is_playing {
-                        f.render_widget(
-                            Paragraph::new(Line::from(Span::styled(
-                                "Playing",
-                                Style::default().fg(palette::FOAM).add_modifier(Modifier::BOLD),
-                            ))),
-                            Rect { x: inner_x, y: row, width: tw16, height: 1 },
-                        );
-                    } else {
-                        f.render_widget(
-                            Paragraph::new(Line::from(vec![
-                                Span::styled("Press ", Style::default().fg(palette::SUBTLE)),
-                                Span::styled("[ENTER]", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
-                                Span::styled(" to play", Style::default().fg(palette::SUBTLE)),
-                            ])),
-                            Rect { x: inner_x, y: row, width: tw16, height: 1 },
-                        );
-                    }
-                    row += 1;
-                }
             }
 
             // ── Render series image last so it layers over text ───────────────
