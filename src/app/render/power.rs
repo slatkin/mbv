@@ -756,7 +756,16 @@ impl App {
                     None => return (0, false),
                 }
             } else {
-                // Loading: use the season's own primary image as a stand-in.
+                // Transitional loading state (switch_season in flight): episodes
+                // haven't arrived yet. Return blank placeholder rows so neither
+                // the season poster nor the queue image flashes during the gap.
+                let is_switch_loading = self.libs[lib_idx].nav_stack.last()
+                    .map(|l| l.loading && l.items.is_empty())
+                    .unwrap_or(false);
+                if is_switch_loading {
+                    return (self.last_card_height, false);
+                }
+                // At-season level (before any drill-in): use the season's own image.
                 let lib = &self.libs[lib_idx];
                 let season_lvl = if stack_len >= 2 {
                     &lib.nav_stack[stack_len - 2]

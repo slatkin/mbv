@@ -278,7 +278,20 @@ impl App {
             return len >= 2 && lib.nav_stack[len - 2].items.first()
                 .map(|i| i.item_type == "Season").unwrap_or(false);
         }
-        // Loading state: still at the season level (episodes not yet arrived).
+        // Transitional state: switch_season pushed an empty loading BrowseLevel
+        // above the season level. Neither branch above fires for empty items, so
+        // detect this explicitly and keep treating it as a series view while the
+        // new season's episodes load (prevents flashing the queue image).
+        if lvl.loading && lvl.items.is_empty() {
+            let len = lib.nav_stack.len();
+            return len >= 2
+                && lib.nav_stack[len - 2]
+                    .items
+                    .first()
+                    .map(|i| i.item_type == "Season")
+                    .unwrap_or(false);
+        }
+        // At-season level: browsing seasons before drilling into episodes.
         lvl.items.first().map(|i| i.item_type == "Season").unwrap_or(false)
     }
 
