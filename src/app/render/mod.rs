@@ -347,7 +347,22 @@ impl App {
     /// Callers wrap these in [ ... ] with whatever surrounding style they need.
     pub(super) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
         let pst = self.player.status.lock().unwrap();
-        if !pst.active { return None; }
+        if !pst.active {
+            // Show placeholder indicators when monitoring a remote session.
+            if self.connected_session_id.is_some() {
+                drop(pst);
+                let data = indicators::IndicatorData {
+                    res_label: "---".to_string(),
+                    res_dim: true,
+                    audio_label: "---".to_string(),
+                    audio_dim: true,
+                    audio_only: false,
+                    sub_label: "---".to_string(),
+                };
+                return Some(indicators::indicator_spans(self.indicator_style, &data, self.use_nerd_fonts));
+            }
+            return None;
+        }
         let video_is_image = pst.video_is_image;
         let res_h = pst.video_height;
         let is_audio_only = video_is_image;
@@ -427,7 +442,11 @@ impl App {
         if let Some(ref remote) = self.connected_session_state {
             let elapsed_s = self.remote_pos_at.elapsed().as_secs_f64();
             let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
-            ((pos_s * TICKS_PER_SECOND as f64) as i64, remote.runtime_s * TICKS_PER_SECOND, remote.is_paused)
+            // Some Emby clients always report IsPaused=true even while playing.
+            // Trust the API position advancing as the authoritative "actually playing" signal.
+            let api_active = self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
+            let is_paused = remote.is_paused && !api_active;
+            ((pos_s * TICKS_PER_SECOND as f64) as i64, remote.runtime_s * TICKS_PER_SECOND, is_paused)
         } else {
             let s = self.player.status.lock().unwrap();
             (s.position_ticks, s.runtime_ticks, s.paused)
