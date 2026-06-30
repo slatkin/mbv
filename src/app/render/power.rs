@@ -81,7 +81,7 @@ fn letter_bucket(item: &crate::api::MediaItem, total: usize) -> String {
 impl App {
     pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
         if area.height < 4 { return; }
-        // Safety clamp — power_left_tab should already be valid, but guard against
+        // Safety clamp -- power_left_tab should already be valid, but guard against
         // any edge case where libs haven't populated yet.
         if self.power_left_tab > self.libs.len() {
             self.power_left_tab = 0;
@@ -157,6 +157,14 @@ impl App {
             // x of first crumb = pill_start + 1 leading space
             let mut x_cursor: u16 = area.x + left_line_w as u16 + 1;
 
+            // Music-group libraries don't use breadcrumb navigation -- the group
+            // selector bar inside the view replaces it. Suppress click regions for them.
+            let is_music_group_lib = self.power_left_tab > 0 && {
+                let li = self.power_left_tab - 1;
+                self.libs[li].library.collection_type == "music"
+                    && self.music_levels.first().map(|s| s == "group").unwrap_or(false)
+            };
+
             // Build spans and register hover/click regions in one pass.
             let mut pill_spans: Vec<Span> = vec![Span::styled(" ", pill_style)];
             let mut new_power_crumbs: Vec<(u16, u16, u16, usize)> = Vec::new();
@@ -168,7 +176,8 @@ impl App {
                 let dw = display.width() as u16;
                 let x_start = x_cursor;
                 let x_end   = x_cursor + dw;
-                let hovered = self.mouse_row == crumb_row
+                let hovered = !is_music_group_lib
+                    && self.mouse_row == crumb_row
                     && self.mouse_col >= x_start
                     && self.mouse_col < x_end;
                 let crumb_fg = if hovered { palette::WHITE } else { palette::BASE };
@@ -176,7 +185,9 @@ impl App {
                     display.clone(),
                     Style::default().fg(crumb_fg).bg(palette::FOAM),
                 ));
-                new_power_crumbs.push((x_start, x_end, crumb_row, *target_depth));
+                if !is_music_group_lib {
+                    new_power_crumbs.push((x_start, x_end, crumb_row, *target_depth));
+                }
                 x_cursor = x_end;
             }
             pill_spans.push(Span::styled(" ", pill_style));
@@ -207,7 +218,7 @@ impl App {
 
         const MIN_LIST_ROWS: u16 = 6;
         let (lib_area, queue_area) = if left_remaining < MIN_LIST_ROWS {
-            // Not enough room for the queue in the left column — split the right column:
+            // Not enough room for the queue in the left column -- split the right column:
             // library on top, relocated queue at the bottom.
             let h = right_area.height;
             let min_q = MIN_LIST_ROWS.min(h);
@@ -225,11 +236,15 @@ impl App {
 
         self.render_power_queue(f, queue_area, queue_focused);
         self.render_power_library(f, lib_area, left_focused);
-
     }
 
-    /// Dispatches to the appropriate library-panel renderer based on current view type.
     fn render_power_library(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        // If a music-group library's nav_stack was truncated to just the group
+        // level (e.g., stale breadcrumb click), immediately re-push the album level.
+        if self.power_left_tab > 0 {
+            self.ensure_music_group_album_level(self.power_left_tab - 1);
+        }
+
         if self.power_left_tab == 0 {
             self.render_power_home_list(f, area, focused);
             return;
@@ -239,6 +254,8 @@ impl App {
             && self.libs[lib_idx].power_detail_item.is_some();
         if has_detail {
             self.render_power_detail(f, area, lib_idx, focused);
+        } else if self.power_left_tab > 0 && self.is_music_group_view(lib_idx) {
+            self.render_power_music_group_view(f, area, lib_idx, focused);
         } else if self.power_left_tab > 0 && self.is_album_level(lib_idx) {
             self.render_power_album_detail(f, area, lib_idx, focused);
         } else if self.power_left_tab > 0 && self.is_series_view(lib_idx) {
@@ -2268,6 +2285,248 @@ impl App {
                     .begin_symbol(None).end_symbol(None)
                     .style(Style::default().fg(palette::SUBTLE)),
                 sb_area, &mut sb_state,
+            );
+        }
+    }
+
+
+    /// Renders the combined music group view: a horizontal group-selector bar
+    /// at the top (like the TV season bar) and the grouped-by-artist album
+    /// list below.
+    fn render_power_music_group_view(&mut self, f: &mut Frame, area: Rect, lib_idx: usize, focused: bool) {
+        if area.height == 0 { return; }
+
+        // ── Collect nav state ─────────────────────────────────────────────────
+        let stack_len = self.libs[lib_idx].nav_stack.len();
+        let (groups, group_cursor, albums, album_cursor) = {
+            let lib = &self.libs[lib_idx];
+            let last = match lib.nav_stack.last() { Some(l) => l, None => return };
+            if stack_len >= 2 {
+                let group_lvl = &lib.nav_stack[stack_len - 2];
+                (group_lvl.items.clone(), group_lvl.cursor,
+                 last.items.clone(), last.cursor)
+            } else {
+                (vec![], 0, last.items.clone(), last.cursor)
+            }
+        };
+
+        let max_y = area.y + area.height;
+        let mut row = area.y;
+
+        // ── Group selector bar (blank · pills · blank) ───────────────────────
+        // Blank spacer above pills.
+        if row < max_y { row += 1; }
+
+        // Pills row.
+        if row < max_y && !groups.is_empty() {
+            const MAX_LABEL: usize = 12;
+            let tab_labels: Vec<String> = groups.iter()
+                .map(|g| trunc_str(&g.name, MAX_LABEL).to_string())
+                .collect();
+            let n_tabs = tab_labels.len();
+
+            // Actual display width of each pill: " label " = label_w + 2.
+            // Gap between consecutive pills = 1 char.
+            let pill_widths: Vec<usize> = tab_labels.iter()
+                .map(|l| l.width() + 2)
+                .collect();
+            let bar_w = area.width as usize;
+
+            // Greedy count: how many pills fit starting at `start` within `avail` chars.
+            // Uses actual individual pill widths so short labels pack tightly.
+            let count_fitting = |start: usize, avail: usize| -> usize {
+                let mut used = 0usize;
+                let mut count = 0usize;
+                for i in start..n_tabs {
+                    let need = if count == 0 { pill_widths[i] } else { 1 + pill_widths[i] };
+                    if used + need > avail { break; }
+                    used += need;
+                    count += 1;
+                }
+                count
+            };
+
+            // Walk scroll_start forward until group_cursor is in the visible window.
+            let mut scroll_start = 0usize;
+            loop {
+                let avail = bar_w
+                    .saturating_sub(if scroll_start > 0 { 2 } else { 0 }) // "‹ "
+                    .saturating_sub(2); // reserve for " ›"
+                let cnt = count_fitting(scroll_start, avail);
+                if cnt == 0 || scroll_start + cnt > group_cursor { break; }
+                scroll_start += 1;
+            }
+
+            let has_left = scroll_start > 0;
+            let avail_pills = bar_w
+                .saturating_sub(if has_left { 2 } else { 0 })
+                .saturating_sub(2); // reserve for " ›"
+            let cnt = count_fitting(scroll_start, avail_pills);
+            let scroll_end = (scroll_start + cnt).min(n_tabs);
+            let has_right = scroll_end < n_tabs;
+
+            let mut spans: Vec<Span> = Vec::new();
+            if has_left {
+                spans.push(Span::styled("\u{2039} ", Style::default().fg(palette::FOAM)));
+            }
+            for (idx, label) in tab_labels[scroll_start..scroll_end].iter().enumerate() {
+                if idx > 0 {
+                    spans.push(Span::raw(" "));
+                }
+                let abs_idx = scroll_start + idx;
+                let selected = abs_idx == group_cursor;
+                let style = if selected {
+                    Style::default().fg(palette::YELLOW).bg(palette::FOAM).add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(palette::BASE).bg(palette::FOAM)
+                };
+                spans.push(Span::styled(format!(" {} ", label), style));
+            }
+            if has_right {
+                spans.push(Span::styled(" \u{203a}", Style::default().fg(palette::FOAM)));
+            }
+            f.render_widget(
+                Paragraph::new(Line::from(spans)),
+                Rect { x: area.x, y: row, width: area.width, height: 1 },
+            );
+        }
+        if row < max_y { row += 1; }
+
+        // Blank spacer below pills.
+        if row < max_y { row += 1; }
+
+        // ── Loading / empty state ─────────────────────────────────────────────
+        if albums.is_empty() {
+            if row < max_y {
+                let is_loading = self.libs[lib_idx].nav_stack.last()
+                    .map(|l| l.loading)
+                    .unwrap_or(false);
+                let msg = if is_loading { " Loading\u{2026}" } else { " (empty)" };
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        msg,
+                        Style::default().fg(palette::MUTED),
+                    ))),
+                    Rect { x: area.x, y: row, width: area.width, height: 1 },
+                );
+            }
+            return;
+        }
+
+        // ── Album list (grouped by artist) ────────────────────────────────────
+        let list_area = Rect {
+            x: area.x,
+            y: row,
+            width: area.width,
+            height: max_y.saturating_sub(row),
+        };
+        if list_area.height == 0 { return; }
+
+        // Store for click/page-size calculations (used by mouse handler and PageUp/Down).
+        self.power_left_area = list_area;
+        self.power_left_sorted_indices.clear();
+        self.power_left_row_map.clear();
+
+        let visible = list_area.height as usize;
+        let avail_chars = (list_area.width as usize).saturating_sub(2);
+
+        enum DisplayRow { ArtistHeader(String), Album(usize) }
+
+        // Extract (artist, year, album_name) for each album item.
+        let album_info: Vec<(String, String, String)> = albums.iter().map(|item| {
+            if !item.artist.is_empty() {
+                let year_str = if item.production_year > 0 {
+                    item.production_year.to_string()
+                } else {
+                    String::new()
+                };
+                (item.artist.clone(), year_str, item.display_name())
+            } else if let Some((artist, year, album)) = parse_album_folder_name(&item.name) {
+                let year_str = if year > 0 { year.to_string() } else { String::new() };
+                (artist, year_str, album)
+            } else {
+                ("Unknown Artist".to_string(), String::new(), item.display_name())
+            }
+        }).collect();
+
+        // Build display rows: inject artist header at each artist boundary.
+        let mut display_rows: Vec<DisplayRow> = Vec::new();
+        let mut last_artist = String::new();
+        for (idx, (artist, _, _)) in album_info.iter().enumerate() {
+            if artist != &last_artist {
+                display_rows.push(DisplayRow::ArtistHeader(artist.clone()));
+                last_artist = artist.clone();
+            }
+            display_rows.push(DisplayRow::Album(idx));
+        }
+
+        // Locate the cursor row and derive the scroll offset.
+        let display_cursor = display_rows.iter().position(|r| {
+            matches!(r, DisplayRow::Album(i) if *i == album_cursor)
+        }).unwrap_or(0);
+        let offset = if display_cursor >= visible { display_cursor - visible + 1 } else { 0 };
+
+        let list_items: Vec<ListItem> = display_rows.iter().skip(offset).take(visible).map(|dr| {
+            match dr {
+                DisplayRow::ArtistHeader(name) => {
+                    let artist_label = trunc_str(name, avail_chars);
+                    ListItem::new(Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(artist_label, Style::default().fg(palette::YELLOW)),
+                    ]))
+                }
+                DisplayRow::Album(idx) => {
+                    let selected = *idx == album_cursor;
+                    let (_, year_str, album_name) = &album_info[*idx];
+                    let prefix_w = if year_str.is_empty() { 3 } else { year_str.len() + 6 };
+                    let name_w = avail_chars.saturating_sub(prefix_w);
+                    let trunc_name = trunc_str(album_name, name_w);
+                    let fg = if focused { palette::WHITE } else { palette::SUBTLE };
+                    let name_color = if selected && focused { palette::IRIS } else { fg };
+                    let mut spans: Vec<Span> = Vec::new();
+                    if selected && focused {
+                        spans.push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
+                    } else {
+                        spans.push(Span::raw(" "));
+                    }
+                    if year_str.is_empty() {
+                        spans.push(Span::raw("   "));
+                    } else {
+                        spans.push(Span::styled("   (", Style::default().fg(palette::SUBTLE)));
+                        spans.push(Span::styled(year_str.clone(), Style::default().fg(palette::PINE)));
+                        spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
+                    }
+                    let name_style = if selected && focused {
+                        Style::default().fg(name_color).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(name_color)
+                    };
+                    spans.push(Span::styled(trunc_name.to_string(), name_style));
+                    ListItem::new(Line::from(spans))
+                }
+            }
+        }).collect();
+
+        let mut state = ListState::default();
+        state.select(Some(display_cursor.saturating_sub(offset)));
+        f.render_stateful_widget(
+            List::new(list_items).highlight_style(Style::default()),
+            list_area,
+            &mut state,
+        );
+
+        let display_n = display_rows.len();
+        if focused && display_n > visible {
+            let max_off = display_n.saturating_sub(visible);
+            let mut sb = ScrollbarState::new(max_off + 1).position(offset);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("\u{2590}")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None).end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                list_area,
+                &mut sb,
             );
         }
     }

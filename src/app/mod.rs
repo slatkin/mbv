@@ -325,8 +325,6 @@ pub struct App {
     power_left_sorted_indices: Vec<usize>,   // full sorted display order when letter-groups active
     power_detail_max_scroll: usize,  // max valid scroll (set each render frame)
     power_detail_page_h: usize,      // visible overview line count (set each render frame)
-    power_restore_nav: std::collections::HashMap<String, Vec<crate::config::SavedNavLevel>>, // lib_id → nav stack to restore
-    power_left_tab_restore: usize, // desired power_left_tab from saved state; applied after libs load
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
@@ -509,7 +507,7 @@ const PLAYLISTS_PANEL_W: u16 = 40;
 const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
     fn build(init: AppInit) -> Self {
-        let saved_ui: crate::config::UiState = crate::config::load_ui_state().unwrap_or_default();
+        let prefs = Self::load_prefs();
         App {
             client: init.client,
             player: init.player,
@@ -526,7 +524,7 @@ impl App {
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
-            tab_idx: if init.start_on_queue || saved_ui.power_view_active { 1 } else { 0 },
+            tab_idx: if init.start_on_queue { 1 } else { prefs["tab_idx"].as_u64().unwrap_or(0) as usize },
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
             home_search: None,
@@ -587,8 +585,8 @@ impl App {
             playlist_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
-            playlist_view: if saved_ui.power_view_active { PLAYLIST_VIEW_POWER } else { Self::load_playlist_view() },
-            playlist_group: Self::load_playlist_group(),
+            playlist_view: 0,
+            playlist_group: true,
             playlist_row_map: Vec::new(),
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
@@ -599,12 +597,10 @@ impl App {
             power_left_sorted_indices: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
-            power_restore_nav: saved_ui.power_lib_nav,
-            power_left_tab_restore: saved_ui.power_left_tab,
-            home_card_view: Self::load_home_card_view(),
-            ui_volume: Self::load_ui_volume(),
-            pre_mute_volume: None,
-            mute_on: false,
+            home_card_view: false,
+            ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
+            pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
+            mute_on: prefs["mute_on"].as_bool().unwrap_or(false),
             layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             last_played_completed: false,
@@ -650,7 +646,7 @@ impl App {
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
-            panel_mode: saved_ui.panel_mode,
+            panel_mode: crate::config::PanelMode::default(),
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
             connected_session_id: None,
@@ -1686,8 +1682,6 @@ mod tests {
             power_left_sorted_indices: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
-            power_restore_nav: std::collections::HashMap::new(),
-            power_left_tab_restore: 0,
             home_card_view: false,
             last_played_item_id: None,
             last_played_completed: false,

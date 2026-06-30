@@ -159,7 +159,6 @@ impl App {
             let show_controls = active || self.connected_session_id.is_some();
             if show_controls {
                 self.panel_mode = self.panel_mode.next();
-                self.save_power_ui_state();
             }
             return false;
         }
@@ -675,7 +674,6 @@ impl App {
             KeyCode::Char('v') => {
                 if self.images_enabled() {
                     self.home_card_view = !self.home_card_view;
-                    self.save_home_card_view();
                     if !self.card_image_states.is_empty() { self.force_clear = true; }
                 }
                 return false;
@@ -784,6 +782,7 @@ impl App {
             KeyCode::Char('m') => {
                 self.mute_on = !self.mute_on;
                 self.player.send_command(PlayerCommand::SetMute(self.mute_on));
+                self.save_prefs();
                 return Some(false);
             }
             _ => {}
@@ -943,6 +942,14 @@ impl App {
                     }
                     if key.code == KeyCode::Char(']') && self.is_series_view(lib_idx) {
                         self.switch_season(lib_idx, 1);
+                        return false;
+                    }
+                    if key.code == KeyCode::Char('[') && self.is_music_group_view(lib_idx) {
+                        self.switch_music_group(lib_idx, -1);
+                        return false;
+                    }
+                    if key.code == KeyCode::Char(']') && self.is_music_group_view(lib_idx) {
+                        self.switch_music_group(lib_idx, 1);
                         return false;
                     }
                 }
@@ -1118,7 +1125,6 @@ impl App {
             }
             KeyCode::Char('v') => {
                 self.playlist_view = (self.playlist_view + 1) % PLAYLIST_VIEW_COUNT;
-                self.save_playlist_view();
                 if self.playlist_view == PLAYLIST_VIEW_POWER {
                     self.power_focus = PowerFocus::Left;
                 }
@@ -1126,7 +1132,6 @@ impl App {
             }
             KeyCode::Char('g') if self.tab_idx == 1 && self.playlist_view != PLAYLIST_VIEW_POWER => {
                 self.playlist_group = !self.playlist_group;
-                self.save_prefs();
             }
             KeyCode::Char('.') => {
                 let s = self.player.status.lock().unwrap();
@@ -1593,41 +1598,19 @@ impl App {
             .unwrap_or_default()
     }
 
-    pub(super) fn load_playlist_view() -> u8 {
-        let prefs = Self::load_prefs();
-        if let Some(v) = prefs["playlist_view"].as_u64() {
-            return v.min((super::PLAYLIST_VIEW_COUNT - 1) as u64) as u8;
-        }
-        0 // default to list view; the old "playlist_card_view" boolean and cards view no longer exist
-    }
-
-    pub(super) fn load_playlist_group() -> bool {
-        Self::load_prefs()["playlist_group"].as_bool().unwrap_or(true)
-    }
-
-    pub(super) fn load_home_card_view() -> bool {
-        Self::load_prefs()["home_card_view"].as_bool().unwrap_or(false)
-    }
-
-    pub(super) fn load_ui_volume() -> u8 {
-        Self::load_prefs()["ui_volume"].as_u64().unwrap_or(100).min(200) as u8
-    }
-
     pub(super) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
         let v = serde_json::json!({
-            "playlist_view": self.playlist_view,
-            "playlist_group": self.playlist_group,
-            "home_card_view": self.home_card_view,
             "ui_volume": self.ui_volume,
+            "mute_on": self.mute_on,
+            "pre_mute_volume": self.pre_mute_volume,
+            "tab_idx": self.tab_idx,
         });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
         }
     }
 
-    pub(super) fn save_playlist_view(&self) { self.save_prefs(); }
-    pub(super) fn save_home_card_view(&self) { self.save_prefs(); }
 
     fn seek_to_col(&mut self, col: u16) {
         let bar = self.layout_seekbar_area;
@@ -1979,7 +1962,6 @@ if idx < self.sessions.len() {
                     if let Some(idx) = self.power_tab_idx_at(col) {
                         self.power_left_tab = idx;
                         if idx > 0 { self.ensure_lib_loaded_for(idx - 1); }
-                        self.save_power_ui_state();
                     }
                 } else if let Some(idx) = self.tab_idx_at(col) {
                     if idx == usize::MAX - 1 {

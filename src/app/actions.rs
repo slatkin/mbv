@@ -282,6 +282,23 @@ impl App {
         lvl.items.first().map(|i| i.item_type == "Season").unwrap_or(false)
     }
 
+
+    /// True when the power view should show the combined music group view:
+    /// a group-selector bar at top with the album list below.
+    /// Activated when `music.levels` starts with `"group"` and the nav stack
+    /// has a group level plus an album level above it.
+    pub(super) fn is_music_group_view(&self, lib_idx: usize) -> bool {
+        let lib = &self.libs[lib_idx];
+        if lib.library.collection_type != "music" { return false; }
+        if lib.search.is_some() { return false; }
+        // Only when the first configured level is "group".
+        if self.music_levels.first().map(|s| s != "group").unwrap_or(true) { return false; }
+        // Need at least a group level and an album level on the stack.
+        if lib.nav_stack.len() < 2 { return false; }
+        // The top nav level must be the album-folder level.
+        self.is_viewing_album_folders(lib_idx)
+    }
+
     pub(super) fn is_home_video_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         if lib.power_detail_item.is_some() { return false; }
@@ -339,6 +356,88 @@ impl App {
             Some("Episode".into()), false, "SortName".into(), "Ascending".into());
     }
 
+
+    /// Switch to the previous (`delta == -1`) or next (`delta == 1`) group
+    /// while in the combined music group view. Pops the current album level,
+    /// adjusts the group cursor (wraps around), then kicks off a fetch for
+    /// the new group's albums.
+    pub(super) fn switch_music_group(&mut self, lib_idx: usize, delta: i64) {
+        let stack_len = self.libs[lib_idx].nav_stack.len();
+        if stack_len < 2 { return; }
+
+        // Verify count before popping so we never lose the album level.
+        let n = self.libs[lib_idx].nav_stack[stack_len - 2].items.len();
+        if n == 0 { return; }
+
+        // Pop the album level.
+        self.libs[lib_idx].nav_stack.pop();
+        let cur = self.libs[lib_idx].nav_stack.last().map(|l| l.cursor).unwrap_or(0);
+        // Wrap-around navigation (unlike seasons which clamp).
+        let new_cursor = (cur as i64 + delta).rem_euclid(n as i64) as usize;
+        if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+            group_lvl.cursor = new_cursor;
+        }
+
+        // Collect new group's identity.
+        let (group_id, group_name) = self.libs[lib_idx].nav_stack.last()
+            .and_then(|l| l.items.get(new_cursor))
+            .map(|g| (g.id.clone(), g.name.clone()))
+            .unwrap_or_default();
+        if group_id.is_empty() { return; }
+
+        // Push a loading placeholder so the Loaded handler can fill it in.
+        self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            parent_id:    group_id.clone(),
+            title:        group_name.clone(),
+            items:        vec![],
+            total_count:  0,
+            cursor:       0,
+            item_types:   None,
+            unplayed_only: false,
+            sort_by:      "SortName".into(),
+            sort_order:   "Ascending".into(),
+            loading:      true,
+            all_items:    None,
+        });
+        self.spawn_browse(lib_idx, group_id, group_name,
+            None, false, "SortName".into(), "Ascending".into());
+    }
+
+
+    /// If the music-group library's nav_stack was truncated back to just the
+    /// group level (e.g., by a stale breadcrumb click), immediately re-push the
+    /// current group's album level so the combined view stays intact.
+    pub(super) fn ensure_music_group_album_level(&mut self, lib_idx: usize) {
+        if lib_idx >= self.libs.len() { return; }
+        let should_push = self.libs[lib_idx].library.collection_type == "music"
+            && self.music_levels.first().map(|s| s == "group").unwrap_or(false)
+            && self.libs[lib_idx].nav_stack.len() == 1
+            && !self.libs[lib_idx].nav_stack[0].items.is_empty();
+        if !should_push { return; }
+        let cur = self.libs[lib_idx].nav_stack[0].cursor;
+        let n = self.libs[lib_idx].nav_stack[0].items.len();
+        if cur >= n { return; }
+        let (group_id, group_name) = {
+            let g = &self.libs[lib_idx].nav_stack[0].items[cur];
+            (g.id.clone(), g.name.clone())
+        };
+        self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            parent_id:    group_id.clone(),
+            title:        group_name.clone(),
+            items:        vec![],
+            total_count:  0,
+            cursor:       0,
+            item_types:   None,
+            unplayed_only: false,
+            sort_by:      "SortName".into(),
+            sort_order:   "Ascending".into(),
+            loading:      true,
+            all_items:    None,
+        });
+        self.spawn_browse(lib_idx, group_id, group_name,
+            None, false, "SortName".into(), "Ascending".into());
+    }
+
     pub(super) fn is_audio_item(&self) -> bool {
         let idx = self.player_tab.playlist_cursor;
         self.player_tab.items.get(idx)
@@ -357,6 +456,7 @@ impl App {
             self.player.send_command(PlayerCommand::SetVolume(0));
             self.ui_volume = 0;
         }
+        self.save_prefs();
     }
 
     pub(super) fn cycle_audio(&mut self) {
@@ -790,7 +890,20 @@ impl App {
             let lib_off = self.lib_tab_offset();
             let lib_idx = self.tab_idx - lib_off;
 
-            // Primary pop — scoped so the mutable borrow of libs[lib_idx] ends here.
+            // Guard: don't pop when already at the root of the music group view
+            // (nav_stack[0]=groups, nav_stack[1]=albums; there is no list above to
+            // go back to). Search-clearing still falls through because this guard
+            // only fires when search is None.
+            if self.playlist_view == PLAYLIST_VIEW_POWER
+                && self.power_left_tab == lib_idx + 1
+                && self.libs[lib_idx].search.is_none()
+                && self.is_music_group_view(lib_idx)
+                && self.libs[lib_idx].nav_stack.len() == 2
+            {
+                return;
+            }
+
+            // Primary pop -- scoped so the mutable borrow of libs[lib_idx] ends here.
             let did_pop = {
                 let lib = &mut self.libs[lib_idx];
                 if lib.search.take().is_none() && lib.nav_stack.len() > 1 {
@@ -835,9 +948,7 @@ impl App {
                 }
             }
         }
-    }
-
-    pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
+    }pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
         match action {
             Some(ContextAction::Play) => {
                 if self.playlist_view == super::PLAYLIST_VIEW_POWER
@@ -1452,6 +1563,45 @@ impl App {
                     }
                 }
 
+                // In the power view: when the group list loads for a music library
+                // with levels = ["group", …], automatically push the first group's
+                // album level so the user lands directly in the combined group view.
+                let should_auto_push_music = self.playlist_view == PLAYLIST_VIEW_POWER
+                    && self.power_left_tab == lib_idx + 1
+                    && self.libs.get(lib_idx).map(|lib| {
+                        lib.library.collection_type == "music"
+                            && self.music_levels.first().map(|s| s == "group").unwrap_or(false)
+                            && lib.nav_stack.len() == 1
+                            && !lib.nav_stack[0].items.is_empty()
+                    }).unwrap_or(false);
+
+                if should_auto_push_music {
+                    let (group_id, group_name) = self.libs.get(lib_idx)
+                        .and_then(|lib| lib.nav_stack.last())
+                        .and_then(|l| l.items.get(l.cursor))
+                        .map(|g| (g.id.clone(), g.name.clone()))
+                        .unwrap_or_default();
+                    if !group_id.is_empty() {
+                        if let Some(lib) = self.libs.get_mut(lib_idx) {
+                            lib.nav_stack.push(BrowseLevel {
+                                parent_id:    group_id.clone(),
+                                title:        group_name.clone(),
+                                items:        vec![],
+                                total_count:  0,
+                                cursor:       0,
+                                item_types:   None,
+                                unplayed_only: false,
+                                sort_by:      "SortName".into(),
+                                sort_order:   "Ascending".into(),
+                                loading:      true,
+                                all_items:    None,
+                            });
+                        }
+                        self.spawn_browse(lib_idx, group_id, group_name,
+                            None, false, "SortName".into(), "Ascending".into());
+                    }
+                }
+
                 self.maybe_fetch_next_page(lib_idx);
                 self.spawn_all_items_prefetch(lib_idx);
             }
@@ -1586,7 +1736,7 @@ impl App {
             self.replace_queue_or_prompt(PendingQueueAction::Quit);
             false
         } else {
-            self.save_power_ui_state();
+            self.save_prefs();
             if !self.player.is_remote() { self.player.stop(); }
             true
         }
@@ -1721,73 +1871,6 @@ impl App {
         1 + self.libs.len()
     }
 
-    /// Re-fetch all levels of a saved nav stack and send NavigateTo to restore the position.
-    fn spawn_restore_nav(&self, lib_idx: usize, levels: Vec<crate::config::SavedNavLevel>) {
-        let client = self.client.lock().unwrap().clone();
-        let tx = self.lib_tx.clone();
-        std::thread::spawn(move || {
-            let mut nav_stack: Vec<super::BrowseLevel> = Vec::new();
-            for lvl in &levels {
-                match client.get_items_sorted(
-                    &lvl.parent_id, lvl.item_types.as_deref(), lvl.unplayed_only,
-                    0, 500, &lvl.sort_by, &lvl.sort_order,
-                ) {
-                    Ok((mut items, total_count)) => {
-                        log::info!(target: "browse", "RestoreNav lib_idx={lib_idx} parent={} total={total_count} got={} first3={:?}",
-                            lvl.parent_id, items.len(),
-                            items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
-                        if items.first().map(|i| i.item_type == "Episode").unwrap_or(false) {
-                            sort_episodes(&mut items);
-                        }
-                        sort_audio_tracks(&mut items);
-                        let cursor = lvl.cursor.min(items.len().saturating_sub(1));
-                        nav_stack.push(super::BrowseLevel {
-                            parent_id: lvl.parent_id.clone(),
-                            title: lvl.title.clone(),
-                            items, total_count, cursor,
-                            item_types: lvl.item_types.clone(),
-                            unplayed_only: lvl.unplayed_only,
-                            sort_by: lvl.sort_by.clone(),
-                            sort_order: lvl.sort_order.clone(),
-                            loading: false, all_items: None,
-                        });
-                    }
-                    Err(e) => {
-                        log::warn!(target: "restore_nav", "level {} fetch failed: {e}", lvl.parent_id);
-                        break;
-                    }
-                }
-            }
-            if !nav_stack.is_empty() {
-                let _ = tx.send(LibEvent::NavigateTo { lib_idx, nav_stack, switch_tab: false });
-            }
-        });
-    }
-
-    /// Save power-view UI state (active, tab + full nav stack per library) to disk.
-    pub(super) fn save_power_ui_state(&self) {
-        crate::config::save_ui_state(&crate::config::UiState {
-            panel_mode: self.panel_mode,
-            power_view_active: self.playlist_view == PLAYLIST_VIEW_POWER,
-            power_left_tab: self.power_left_tab,
-            power_lib_nav: self.libs.iter()
-                .filter(|lib| !lib.nav_stack.is_empty())
-                .map(|lib| {
-                    let levels = lib.nav_stack.iter().map(|lvl| crate::config::SavedNavLevel {
-                        parent_id: lvl.parent_id.clone(),
-                        title: lvl.title.clone(),
-                        cursor: lvl.cursor,
-                        item_types: lvl.item_types.clone(),
-                        unplayed_only: lvl.unplayed_only,
-                        sort_by: lvl.sort_by.clone(),
-                        sort_order: lvl.sort_order.clone(),
-                    }).collect();
-                    (lib.library.id.clone(), levels)
-                })
-                .collect(),
-        });
-    }
-
     /// Advance the left-panel tab (wrapping); load the library if needed.
     pub(super) fn power_left_tab_next(&mut self) {
         let n = self.power_left_tab_count();
@@ -1796,7 +1879,6 @@ impl App {
         if self.power_left_tab > 0 {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
-        self.save_power_ui_state();
     }
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
@@ -1807,7 +1889,6 @@ impl App {
         if self.power_left_tab > 0 {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
-        self.save_power_ui_state();
     }
 
     /// Move the cursor in the Continue Watching power column, clamped to its bounds.
@@ -2079,12 +2160,6 @@ impl App {
         self.layout_lib_row_heights.resize_with(n, Vec::new);
         self.layout_lib_table_area.resize(n, ratatui::layout::Rect::default());
 
-        // Restore the saved power-view library tab now that we know how many libs exist.
-        if self.power_left_tab_restore > 0 {
-            self.power_left_tab = self.power_left_tab_restore.min(n);
-            self.power_left_tab_restore = 0;
-        }
-
         let old_cursors: HashMap<String, usize> = self.home.latest.iter()
             .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
             .collect();
@@ -2109,31 +2184,6 @@ impl App {
         }
         drop(client);
         self.home.latest = latest;
-
-        // Restore saved nav stacks (after client lock is released — spawn_restore_nav
-        // needs to clone the client). Push a loading placeholder so ensure_lib_loaded_for
-        // doesn't spawn a competing root browse, then re-fetch all levels in a thread.
-        let restore_nav = std::mem::take(&mut self.power_restore_nav);
-        for (lib_id, saved_levels) in restore_nav {
-            if saved_levels.is_empty() { continue; }
-            let lib_idx = match self.libs.iter().position(|l| l.library.id == lib_id) {
-                Some(i) => i,
-                None => continue,
-            };
-            if !self.libs[lib_idx].nav_stack.is_empty() { continue; }
-            let root = &saved_levels[0];
-            self.libs[lib_idx].nav_stack.push(super::BrowseLevel {
-                parent_id: root.parent_id.clone(),
-                title: root.title.clone(),
-                items: vec![], total_count: 0, cursor: 0,
-                item_types: root.item_types.clone(),
-                unplayed_only: root.unplayed_only,
-                sort_by: root.sort_by.clone(),
-                sort_order: root.sort_order.clone(),
-                loading: true, all_items: None,
-            });
-            self.spawn_restore_nav(lib_idx, saved_levels);
-        }
 
         let n = 1 + self.home.latest.len();
         if self.home.section >= n {
