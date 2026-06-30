@@ -317,7 +317,8 @@ pub struct App {
     playlist_group: bool,                    // list view: group audio by album / episodes by series
     playlist_row_map: Vec<Option<usize>>,    // list view visual row → item index (None = header/spacer)
     power_focus: PowerFocus,
-    power_left_tab: usize,   // 0 = Home/CW, 1..=libs.len() = library index
+    power_left_tab: usize,          // 0 = Home/CW, 1..=libs.len() = library index
+    power_left_tab_pending: usize,  // restored from prefs; applied once libs have loaded
     power_left_area: Rect,   // rendered area of the left panel (for mouse click / page calc)
     power_queue_area: Rect,
     power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
@@ -585,11 +586,12 @@ impl App {
             playlist_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
-            playlist_view: 0,
+            playlist_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
             playlist_group: true,
             playlist_row_map: Vec::new(),
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
+            power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
             power_queue_row_map: Vec::new(),
@@ -1675,6 +1677,7 @@ mod tests {
             playlist_row_map: Vec::new(),
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
+            power_left_tab_pending: 0,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
             power_queue_row_map: Vec::new(),

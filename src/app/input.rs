@@ -817,7 +817,17 @@ impl App {
             KeyCode::Char('q') if ctrl => { self.power_home_enqueue(); true }
             KeyCode::Char('w') if ctrl => { self.power_cw_toggle_watched(); true }
             KeyCode::Char('o') => { self.open_context_menu(); true }
-            KeyCode::Delete => { self.remove_from_continue_watching(); true }
+            KeyCode::Delete => {
+                let cursor = self.home.power_home_cursor;
+                let cw_len = self.home.continue_items.len();
+                if cursor < cw_len {
+                    let saved = self.home.continue_cursor;
+                    self.home.continue_cursor = cursor;
+                    self.remove_from_continue_watching();
+                    self.home.continue_cursor = saved;
+                }
+                true
+            }
             _ => false,
         }
     }
@@ -1605,6 +1615,8 @@ impl App {
             "mute_on": self.mute_on,
             "pre_mute_volume": self.pre_mute_volume,
             "tab_idx": self.tab_idx,
+            "playlist_view": self.playlist_view,
+            "power_left_tab": self.power_left_tab,
         });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
@@ -1962,6 +1974,7 @@ if idx < self.sessions.len() {
                     if let Some(idx) = self.power_tab_idx_at(col) {
                         self.power_left_tab = idx;
                         if idx > 0 { self.ensure_lib_loaded_for(idx - 1); }
+                        self.save_prefs();
                     }
                 } else if let Some(idx) = self.tab_idx_at(col) {
                     if idx == usize::MAX - 1 {

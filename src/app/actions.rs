@@ -1879,6 +1879,7 @@ impl App {
         if self.power_left_tab > 0 {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
+        self.save_prefs();
     }
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
@@ -1889,6 +1890,7 @@ impl App {
         if self.power_left_tab > 0 {
             self.ensure_lib_loaded_for(self.power_left_tab - 1);
         }
+        self.save_prefs();
     }
 
     /// Move the cursor in the Continue Watching power column, clamped to its bounds.

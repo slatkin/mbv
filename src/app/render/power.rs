@@ -81,6 +81,11 @@ fn letter_bucket(item: &crate::api::MediaItem, total: usize) -> String {
 impl App {
     pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
         if area.height < 4 { return; }
+        // Apply the tab saved from the previous session once libs have loaded.
+        if self.power_left_tab_pending > 0 && !self.libs.is_empty() {
+            self.power_left_tab = self.power_left_tab_pending.min(self.libs.len());
+            self.power_left_tab_pending = 0;
+        }
         // Safety clamp -- power_left_tab should already be valid, but guard against
         // any edge case where libs haven't populated yet.
         if self.power_left_tab > self.libs.len() {
@@ -1081,10 +1086,7 @@ impl App {
                             ),
                     search_area,
                 );
-                // Place the terminal cursor at the end of the typed query.
-                let cursor_x = (search_area.x + 1 + s.query.width() as u16)
-                    .min(search_area.x + search_area.width.saturating_sub(2));
-                f.set_cursor_position((cursor_x, search_area.y + 1));
+
             } else if !has_search {
                 let count_label = format!(" {} items", n);
                 f.render_widget(
