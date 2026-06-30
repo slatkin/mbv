@@ -933,7 +933,9 @@ impl App {
         }).unwrap_or(0);
 
         let visible = area.height as usize;
-        let offset = if display_cursor >= visible { display_cursor - visible + 1 } else { 0 };
+        let offset = self.home.power_home_scroll
+            .clamp(display_cursor.saturating_sub(visible.saturating_sub(1)), display_cursor);
+        self.home.power_home_scroll = offset;
 
         // Build row map for mouse click handling.
         self.power_left_row_map.clear();
@@ -1026,26 +1028,26 @@ impl App {
         // Store for click / page-size calculations.
         self.power_left_area = content_area;
 
-        // Gather items and cursor from the appropriate source.
-        let (items, cursor) = if self.power_left_tab == 0 {
+        // Gather items, cursor, and stored scroll offset from the appropriate source.
+        let (items, cursor, stored_scroll) = if self.power_left_tab == 0 {
             let items = self.home.continue_items.clone();
             let cursor = self.home.continue_cursor.min(items.len().saturating_sub(1));
-            (items, cursor)
+            (items, cursor, 0usize)
         } else {
             let lib_idx = self.power_left_tab - 1;
             let lib = &self.libs[lib_idx];
-            let (items, cur) = if let Some(s) = &lib.search {
+            let (items, cur, scroll) = if let Some(s) = &lib.search {
                 let items: Vec<crate::api::MediaItem> = s.results.iter()
                     .filter_map(|&i| s.items.get(i).cloned())
                     .collect();
-                (items, s.cursor)
+                (items, s.cursor, s.scroll)
             } else {
                 match lib.nav_stack.last() {
-                    Some(lvl) => (lvl.items.clone(), lvl.cursor),
-                    None => (vec![], 0),
+                    Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll),
+                    None => (vec![], 0, 0),
                 }
             };
-            (items, cur)
+            (items, cur, scroll)
         };
 
         // When at the album level of a music library, group albums under artist headers.
@@ -1129,6 +1131,7 @@ impl App {
         }
 
         let visible = content_area.height as usize;
+        let final_offset: usize;
 
         if show_grouped {
             self.power_left_sorted_indices.clear();
@@ -1169,7 +1172,9 @@ impl App {
             let display_cursor = display_rows.iter().position(|r| {
                 matches!(r, DisplayRow::Album(i) if *i == cursor)
             }).unwrap_or(0);
-            let offset = if display_cursor >= visible { display_cursor - visible + 1 } else { 0 };
+            let offset = stored_scroll
+                .clamp(display_cursor.saturating_sub(visible.saturating_sub(1)), display_cursor);
+            final_offset = offset;
 
             let avail = (area.width as usize).saturating_sub(2);
 
@@ -1265,7 +1270,9 @@ impl App {
             let display_cursor = display_rows.iter().position(|r| {
                 matches!(r, DisplayRow::Item(i) if *i == cursor)
             }).unwrap_or(0);
-            let offset = if display_cursor >= visible { display_cursor - visible + 1 } else { 0 };
+            let offset = stored_scroll
+                .clamp(display_cursor.saturating_sub(visible.saturating_sub(1)), display_cursor);
+            final_offset = offset;
 
             // Build row map so mouse clicks can map visual row → item index.
             self.power_left_row_map.clear();
@@ -1348,7 +1355,9 @@ impl App {
         } else {
             self.power_left_row_map.clear();
             self.power_left_sorted_indices.clear();
-            let offset = if cursor >= visible { cursor - visible + 1 } else { 0 };
+            let offset = stored_scroll
+                .clamp(cursor.saturating_sub(visible.saturating_sub(1)), cursor);
+            final_offset = offset;
 
             let list_items: Vec<ListItem> = items.iter().skip(offset).take(visible).enumerate().map(|(i, item)| {
                 let abs = offset + i;
@@ -1411,6 +1420,17 @@ impl App {
                         .style(Style::default().fg(palette::SUBTLE)),
                     content_area, &mut sb,
                 );
+            }
+        }
+
+        // Persist the scroll offset so the viewport is remembered across frames.
+        // power_left_tab is always > 0 here (tab == 0 uses render_power_home_list).
+        if self.power_left_tab > 0 {
+            let lib_idx = self.power_left_tab - 1;
+            if let Some(s) = &mut self.libs[lib_idx].search {
+                s.scroll = final_offset;
+            } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                lvl.scroll = final_offset;
             }
         }
     }

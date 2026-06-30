@@ -636,6 +636,7 @@ impl App {
                     items,
                     results: (0..n).collect(),
                     cursor: 0,
+                    scroll: 0,
                     loading: needs_full_load,
                 });
                 if needs_full_load {

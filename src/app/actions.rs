@@ -363,6 +363,7 @@ impl App {
             sort_by:      "SortName".into(),
             sort_order:   "Ascending".into(),
             loading:      true,
+            scroll:       0,
             all_items:    None,
         });
         self.spawn_browse(lib_idx, season_id, season_name,
@@ -410,6 +411,7 @@ impl App {
             sort_by:      "SortName".into(),
             sort_order:   "Ascending".into(),
             loading:      true,
+            scroll:       0,
             all_items:    None,
         });
         self.spawn_browse(lib_idx, group_id, group_name,
@@ -445,6 +447,7 @@ impl App {
             sort_by:      "SortName".into(),
             sort_order:   "Ascending".into(),
             loading:      true,
+            scroll:       0,
             all_items:    None,
         });
         self.spawn_browse(lib_idx, group_id, group_name,
@@ -799,7 +802,7 @@ impl App {
                             items: vec![], total_count: 0, cursor: 0,
                             item_types: None, unplayed_only: false,
                             sort_by: "SortName".into(), sort_order: "Ascending".into(),
-                            loading: true, all_items: None,
+                            loading: true, scroll: 0, all_items: None,
                         });
                         self.set_tab(lib_idx + 2);
                         self.spawn_browse(lib_idx, item.id, item.name, None, false, "SortName".into(), "Ascending".into());
@@ -831,7 +834,7 @@ impl App {
                 items: vec![], total_count: 0, cursor: 0,
                 item_types: None, unplayed_only: false,
                 sort_by: "SortName".into(), sort_order: "Ascending".into(),
-                loading: true, all_items: None,
+                loading: true, scroll: 0, all_items: None,
             });
             if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) { *v = 0; }
             self.spawn_browse(lib_idx, item.id, item.name, None, false, "SortName".into(), "Ascending".into());
@@ -1260,7 +1263,7 @@ impl App {
                 items: vec![], total_count: 0, cursor: 0,
                 item_types: item_types.clone(), unplayed_only,
                 sort_by: sort_by.into(), sort_order: sort_order.into(),
-                loading: true, all_items: None,
+                loading: true, scroll: 0, all_items: None,
             });
             self.spawn_browse(idx, lib_id, lib_name, item_types, unplayed_only, sort_by.into(), sort_order.into());
         }
@@ -1297,7 +1300,7 @@ impl App {
                             parent_id, title, items, total_count, cursor: 0,
                             item_types, unplayed_only,
                             sort_by, sort_order,
-                            loading: false, all_items: None,
+                            loading: false, scroll: 0, all_items: None,
                         },
                     });
                 }
@@ -1362,7 +1365,7 @@ impl App {
                     items, total_count, cursor,
                     item_types: None, unplayed_only: false,
                     sort_by: "SortName".into(), sort_order: "Ascending".into(),
-                    loading: false, all_items: None,
+                    loading: false, scroll: 0, all_items: None,
                 });
             }
             let _ = tx.send(LibEvent::NavigateTo { lib_idx, nav_stack, switch_tab: true });
@@ -1567,6 +1570,7 @@ impl App {
                                 sort_by:      "SortName".into(),
                                 sort_order:   "Ascending".into(),
                                 loading:      true,
+                                scroll:       0,
                                 all_items:    None,
                             });
                         }
@@ -1607,6 +1611,7 @@ impl App {
                                 sort_by:      "SortName".into(),
                                 sort_order:   "Ascending".into(),
                                 loading:      true,
+                                scroll:       0,
                                 all_items:    None,
                             });
                         }
@@ -2163,7 +2168,7 @@ impl App {
                     items: lvl.items.clone(), total_count: lvl.total_count, cursor: lvl.cursor,
                     item_types: lvl.item_types.clone(), unplayed_only: lvl.unplayed_only,
                     sort_by: lvl.sort_by.clone(), sort_order: lvl.sort_order.clone(),
-                    loading: false, all_items: lvl.all_items.clone(),
+                    loading: false, scroll: lvl.scroll, all_items: lvl.all_items.clone(),
                 }).collect())
                 .unwrap_or_default();
             let detail_item   = saved.and_then(|s| s.detail_item.clone());
