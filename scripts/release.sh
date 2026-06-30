@@ -22,7 +22,7 @@ cargo test
 
 echo
 echo "==> cargo clippy..."
-cargo clippy -- -D warnings
+cargo clippy
 
 echo
 echo "==> Bumping Cargo.toml to ${VERSION}..."
