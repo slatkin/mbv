@@ -2247,19 +2247,16 @@ impl App {
                     self.player_tab.playlist_cursor = start_idx;
                     self.flash_status(format!("Playing {count} items"));
                     let c = Arc::new(self.client.lock().unwrap().clone());
-                    let active = self.player.status.lock().unwrap().active;
-                    log::info!(target: "ws", "Play multi: active={active}, count={count}, start_idx={start_idx}");
-                    if active {
-                        let mut start_item = items[start_idx].clone();
-                        if start_position_ticks > 0 { start_item.playback_position_ticks = start_position_ticks; }
-                        self.player.play(&start_item, c, self.ui_volume);
-                    } else {
-                        let mut items_with_pos = items.clone();
-                        if start_position_ticks > 0 {
-                            items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
-                        }
-                        self.player.play_playlist(items_with_pos, start_idx, c, self.ui_volume);
+                    log::info!(target: "ws", "Play multi: count={count}, start_idx={start_idx}");
+                    // Always hand the whole list to play_playlist (not just the clicked
+                    // item) so the remote-controlled queue continues past start_idx.
+                    // play_playlist already handles the "something is already playing"
+                    // case in place via ReplacePlaylist.
+                    let mut items_with_pos = items.clone();
+                    if start_position_ticks > 0 {
+                        items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
                     }
+                    self.player.play_playlist(items_with_pos, start_idx, c, self.ui_volume);
                 }
                 self.queue_source = crate::config::QueueSource::Remote;
                 self.save_queue_state();
