@@ -1,6 +1,6 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{mpsc, Arc, Mutex};
 
 use ksni::blocking::TrayMethods;
 
@@ -29,22 +29,26 @@ impl ksni::Tray for MbyTray {
         "mbv".into()
     }
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        vec![ksni::Icon { width: 24, height: 24, data: TRAY_ICON.to_vec() }]
+        vec![ksni::Icon {
+            width: 24,
+            height: 24,
+            data: TRAY_ICON.to_vec(),
+        }]
     }
     fn title(&self) -> String {
         "mbv".into()
     }
     fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
         use ksni::menu::*;
-        vec![
-            StandardItem {
-                label: "Quit".into(),
-                icon_name: "application-exit".into(),
-                activate: Box::new(|tray: &mut Self| { let _ = tray.shutdown_tx.try_send(()); }),
-                ..Default::default()
-            }
-            .into(),
-        ]
+        vec![StandardItem {
+            label: "Quit".into(),
+            icon_name: "application-exit".into(),
+            activate: Box::new(|tray: &mut Self| {
+                let _ = tray.shutdown_tx.try_send(());
+            }),
+            ..Default::default()
+        }
+        .into()]
     }
 }
 
@@ -56,10 +60,12 @@ pub fn pid_file() -> std::path::PathBuf {
 
 fn broadcast(clients: &ClientList, event: &CtrlEvent) {
     if let Ok(json) = serde_json::to_string(event) {
-        clients.lock().unwrap().retain(|tx| tx.send(json.clone()).is_ok());
+        clients
+            .lock()
+            .unwrap()
+            .retain(|tx| tx.send(json.clone()).is_ok());
     }
 }
-
 
 pub fn run(client: EmbyClient) -> ! {
     std::fs::write(pid_file(), std::process::id().to_string())
@@ -92,7 +98,7 @@ pub fn run(client: EmbyClient) -> ! {
     }
 
     let (player_tx, player_rx) = mpsc::channel();
-    let (ws_tx_chan, ws_rx)    = mpsc::channel();
+    let (ws_tx_chan, ws_rx) = mpsc::channel();
     let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan);
     let subtitle_prefs = if client.config.subtitle_mode.is_empty()
         && client.config.subtitle_lang.is_empty()
@@ -119,8 +125,8 @@ pub fn run(client: EmbyClient) -> ! {
         Some(ws_send_tx),
     );
 
-    let player_status  = player.status.clone();
-    let player_cmd_tx  = player.cmd_tx.clone();
+    let player_status = player.status.clone();
+    let player_cmd_tx = player.cmd_tx.clone();
     crate::mpris::start(player_status, move |cmd| {
         if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
             let _ = tx.send(cmd);
@@ -128,9 +134,14 @@ pub fn run(client: EmbyClient) -> ! {
     });
 
     let _tray = if client.config.show_systray_icon {
-        MbyTray { shutdown_tx: shutdown_signal_tx }.spawn()
-            .map_err(|e| { log::warn!(target: "tray", "not available: {e}"); })
-            .ok()
+        MbyTray {
+            shutdown_tx: shutdown_signal_tx,
+        }
+        .spawn()
+        .map_err(|e| {
+            log::warn!(target: "tray", "not available: {e}");
+        })
+        .ok()
     } else {
         None
     };
@@ -139,11 +150,15 @@ pub fn run(client: EmbyClient) -> ! {
 
     let tx = merged_tx.clone();
     std::thread::spawn(move || {
-        for ev in player_rx { let _ = tx.send(DaemonEvent::Player(ev)); }
+        for ev in player_rx {
+            let _ = tx.send(DaemonEvent::Player(ev));
+        }
     });
     let tx = merged_tx.clone();
     std::thread::spawn(move || {
-        for ev in ws_rx { let _ = tx.send(DaemonEvent::Ws(ev)); }
+        for ev in ws_rx {
+            let _ = tx.send(DaemonEvent::Ws(ev));
+        }
     });
     let tx = merged_tx.clone();
     std::thread::spawn(move || {
@@ -186,7 +201,9 @@ pub fn run(client: EmbyClient) -> ! {
 
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
-                let Ok(stream_w) = stream.try_clone() else { continue };
+                let Ok(stream_w) = stream.try_clone() else {
+                    continue;
+                };
 
                 let (ev_tx, ev_rx) = mpsc::channel::<String>();
 
@@ -218,7 +235,9 @@ pub fn run(client: EmbyClient) -> ! {
                     let reader = BufReader::new(stream);
                     for line in reader.lines() {
                         let Ok(line) = line else { break };
-                        if line.is_empty() { continue; }
+                        if line.is_empty() {
+                            continue;
+                        }
                         if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
                             let _ = ctrl_tx.send(DaemonEvent::Ctrl(cmd));
                         }
@@ -231,12 +250,15 @@ pub fn run(client: EmbyClient) -> ! {
     // Broadcast current PlayerStatus to connected TUIs so the
     // seekbar and toggle state stay in sync without sending the full queue.
     {
-        let broadcast_interval = std::time::Duration::from_millis(client.config.daemon_broadcast_ms);
+        let broadcast_interval =
+            std::time::Duration::from_millis(client.config.daemon_broadcast_ms);
         let player_status = player.status.clone();
         let ctrl_clients = ctrl_clients.clone();
         std::thread::spawn(move || loop {
             std::thread::sleep(broadcast_interval);
-            if ctrl_clients.lock().unwrap().is_empty() { continue; }
+            if ctrl_clients.lock().unwrap().is_empty() {
+                continue;
+            }
             let status = player_status.lock().unwrap().clone();
             broadcast(&ctrl_clients, &CtrlEvent::StatusOnly(status));
         });
@@ -251,46 +273,73 @@ pub fn run(client: EmbyClient) -> ! {
             DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => {
                 cursor = idx;
                 *shared_cursor.lock().unwrap() = idx;
-                broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::TrackChanged(idx)));
+                broadcast(
+                    &ctrl_clients,
+                    &CtrlEvent::Player(PlayerEvent::TrackChanged(idx)),
+                );
             }
-            DaemonEvent::Player(PlayerEvent::NextUpThreshold { series_id, season, episode }) => {
+            DaemonEvent::Player(PlayerEvent::NextUpThreshold {
+                series_id,
+                season,
+                episode,
+            }) => {
                 if let Some(item) = items.get(cursor + 1) {
                     player.send_command(PlayerCommand::NextUpShow {
-                        item_id:    item.id.clone(),
+                        item_id: item.id.clone(),
                         show_title: item.series_name.clone(),
-                        ep_title:   item.name.clone(),
-                        artist:     item.artist.clone(),
+                        ep_title: item.name.clone(),
+                        artist: item.artist.clone(),
                     });
                 }
-                broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::NextUpThreshold {
-                    series_id, season, episode,
-                }));
+                broadcast(
+                    &ctrl_clients,
+                    &CtrlEvent::Player(PlayerEvent::NextUpThreshold {
+                        series_id,
+                        season,
+                        episode,
+                    }),
+                );
             }
             DaemonEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }) => {
                 if let Some(item) = items.get(next_idx) {
                     player.send_command(PlayerCommand::NextUpShow {
-                        item_id:    item.id.clone(),
+                        item_id: item.id.clone(),
                         show_title: item.series_name.clone(),
-                        ep_title:   item.name.clone(),
-                        artist:     item.artist.clone(),
+                        ep_title: item.name.clone(),
+                        artist: item.artist.clone(),
                     });
                 }
-                broadcast(&ctrl_clients, &CtrlEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }));
+                broadcast(
+                    &ctrl_clients,
+                    &CtrlEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }),
+                );
             }
             DaemonEvent::Player(pe) => {
                 broadcast(&ctrl_clients, &CtrlEvent::Player(pe));
             }
             DaemonEvent::Ws(ws_ev) => {
                 handle_ws(
-                    ws_ev, &client, &player,
-                    &mut items, &mut cursor,
-                    &shared_items, &shared_cursor,
+                    ws_ev,
+                    &client,
+                    &player,
+                    &mut items,
+                    &mut cursor,
+                    &shared_items,
+                    &shared_cursor,
                     &ctrl_clients,
                 );
             }
             DaemonEvent::Ctrl(cmd) => {
-                handle_ctrl(cmd, &client, &player, &mut items, &mut cursor,
-                            &shared_items, &shared_cursor, &ctrl_clients);
+                handle_ctrl(
+                    cmd,
+                    &client,
+                    &player,
+                    &mut items,
+                    &mut cursor,
+                    &shared_items,
+                    &shared_cursor,
+                    &ctrl_clients,
+                );
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
@@ -318,7 +367,11 @@ fn handle_ctrl(
         CtrlCmd::PlayerCmd(pc) => {
             player.send_command(pc);
         }
-        CtrlCmd::PlayItems { item_ids, start_ticks } => {
+        CtrlCmd::PlayItems {
+            item_ids,
+            start_idx,
+            start_ticks,
+        } => {
             let fetched = {
                 let c = client.lock().unwrap();
                 match c.get_items_by_ids(&item_ids) {
@@ -329,21 +382,29 @@ fn handle_ctrl(
                     }
                 }
             };
-            if fetched.is_empty() { return; }
+            if fetched.is_empty() {
+                return;
+            }
             if fetched.len() == 1 {
                 let item = fetched[0].clone();
                 if !item.series_id.is_empty() && player.always_play_next {
-                    let queue = client.lock().unwrap().get_episodes_from(&item.series_id, &item.id);
+                    let queue = client
+                        .lock()
+                        .unwrap()
+                        .get_episodes_from(&item.series_id, &item.id);
                     if queue.len() > 1 {
                         *items = queue.clone();
                         *cursor = 0;
                         *shared_items.lock().unwrap() = queue.clone();
                         *shared_cursor.lock().unwrap() = 0;
-                        broadcast(ctrl_clients, &CtrlEvent::State(CtrlState {
-                            status: player.status.lock().unwrap().clone(),
-                            items: queue.clone(),
-                            cursor: 0,
-                        }));
+                        broadcast(
+                            ctrl_clients,
+                            &CtrlEvent::State(CtrlState {
+                                status: player.status.lock().unwrap().clone(),
+                                items: queue.clone(),
+                                cursor: 0,
+                            }),
+                        );
                         let c = Arc::new(client.lock().unwrap().clone());
                         player.play_playlist(queue, 0, c, 100);
                         return;
@@ -353,11 +414,14 @@ fn handle_ctrl(
                 *cursor = 0;
                 *shared_items.lock().unwrap() = items.clone();
                 *shared_cursor.lock().unwrap() = 0;
-                broadcast(ctrl_clients, &CtrlEvent::State(CtrlState {
-                    status: player.status.lock().unwrap().clone(),
-                    items: items.clone(),
-                    cursor: 0,
-                }));
+                broadcast(
+                    ctrl_clients,
+                    &CtrlEvent::State(CtrlState {
+                        status: player.status.lock().unwrap().clone(),
+                        items: items.clone(),
+                        cursor: 0,
+                    }),
+                );
                 let mut play_item = item;
                 if start_ticks > 0 {
                     play_item.playback_position_ticks = start_ticks;
@@ -365,22 +429,25 @@ fn handle_ctrl(
                 let c = Arc::new(client.lock().unwrap().clone());
                 player.play(&play_item, c, 100);
             } else {
-                *items = fetched.clone();
-                *cursor = 0;
-                *shared_items.lock().unwrap() = fetched.clone();
-                *shared_cursor.lock().unwrap() = 0;
-                broadcast(ctrl_clients, &CtrlEvent::State(CtrlState {
-                    status: player.status.lock().unwrap().clone(),
-                    items: fetched.clone(),
-                    cursor: 0,
-                }));
-                let c = Arc::new(client.lock().unwrap().clone());
-                let active = player.status.lock().unwrap().active;
-                if active {
-                    player.play(&fetched[0], c, 100);
-                } else {
-                    player.play_playlist(fetched, 0, c, 100);
+                let start_idx = start_idx.min(fetched.len().saturating_sub(1));
+                let mut play_items = fetched.clone();
+                if start_ticks > 0 {
+                    play_items[start_idx].playback_position_ticks = start_ticks;
                 }
+                *items = play_items.clone();
+                *cursor = start_idx;
+                *shared_items.lock().unwrap() = play_items.clone();
+                *shared_cursor.lock().unwrap() = start_idx;
+                broadcast(
+                    ctrl_clients,
+                    &CtrlEvent::State(CtrlState {
+                        status: player.status.lock().unwrap().clone(),
+                        items: play_items.clone(),
+                        cursor: start_idx,
+                    }),
+                );
+                let c = Arc::new(client.lock().unwrap().clone());
+                player.play_playlist(play_items, start_idx, c, 100);
             }
         }
         CtrlCmd::Stop => {
@@ -400,19 +467,31 @@ fn handle_ws(
     ctrl_clients: &ClientList,
 ) {
     match ev {
-        WsEvent::Play { item_ids, play_now, start_position_ticks, start_index } => {
-            if !play_now { return; }
+        WsEvent::Play {
+            item_ids,
+            play_now,
+            start_position_ticks,
+            start_index,
+        } => {
+            if !play_now {
+                return;
+            }
             let fetched = {
                 let c = client.lock().unwrap();
                 match c.get_items_by_ids(&item_ids) {
                     Ok(v) => v,
-                    Err(e) => { log::warn!(target: "daemon", "play error: {e}"); return; }
+                    Err(e) => {
+                        log::warn!(target: "daemon", "play error: {e}");
+                        return;
+                    }
                 }
             };
-            if fetched.is_empty() { return; }
+            if fetched.is_empty() {
+                return;
+            }
             // Clamp start_index in case the server sends an out-of-range value
             let start_idx = start_index.min(fetched.len().saturating_sub(1));
-            *items  = fetched.clone();
+            *items = fetched.clone();
             *cursor = start_idx;
             *shared_items.lock().unwrap() = fetched.clone();
             *shared_cursor.lock().unwrap() = start_idx;
@@ -422,7 +501,10 @@ fn handle_ws(
                 items: fetched.clone(),
                 cursor: start_idx,
             })) {
-                ctrl_clients.lock().unwrap().retain(|tx| tx.send(json.clone()).is_ok());
+                ctrl_clients
+                    .lock()
+                    .unwrap()
+                    .retain(|tx| tx.send(json.clone()).is_ok());
             }
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();
@@ -443,8 +525,10 @@ fn handle_ws(
                 player.play_playlist(items_with_pos, start_idx, c, 100);
             }
         }
-        WsEvent::Stop   => { player.stop(); }
-        WsEvent::Pause  => {
+        WsEvent::Stop => {
+            player.stop();
+        }
+        WsEvent::Pause => {
             if !player.status.lock().unwrap().paused {
                 player.send_command(PlayerCommand::TogglePause);
             }
@@ -462,7 +546,9 @@ fn handle_ws(
         }
         WsEvent::PreviousTrack => {
             let idx = player.status.lock().unwrap().current_idx;
-            if idx > 0 { player.send_command(PlayerCommand::JumpTo(idx - 1)); }
+            if idx > 0 {
+                player.send_command(PlayerCommand::JumpTo(idx - 1));
+            }
         }
         WsEvent::Seek(ticks) => {
             use crate::api::TICKS_PER_SECOND;
@@ -490,7 +576,19 @@ fn handle_ws(
             let v = (player.status.lock().unwrap().volume - 5).max(0);
             player.send_command(PlayerCommand::SetVolume(v));
         }
+        WsEvent::SetMute(muted) => {
+            player.send_command(PlayerCommand::SetMute(muted));
+        }
+        WsEvent::ToggleMute => {
+            let muted = !player.status.lock().unwrap().muted;
+            player.send_command(PlayerCommand::SetMute(muted));
+        }
+        WsEvent::SetAudio(index) => {
+            player.send_command(PlayerCommand::SetAudio(index));
+        }
+        WsEvent::SetSub(index) => {
+            player.send_command(PlayerCommand::SetSub(index));
+        }
         WsEvent::UserDataChanged => {}
     }
 }
-

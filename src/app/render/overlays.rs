@@ -1,22 +1,26 @@
-use std::time::{Duration, Instant};
-use ratatui::Frame;
+use super::super::palette;
+use super::super::settings::{
+    setting_label, setting_value, settings_cursor_to_key, settings_total_rows,
+};
+use super::super::ui_util::{fmt_duration, trunc_str};
+use super::super::App;
+use super::super::{
+    MultiSelectKind, MultiSelectPopup, PendingQueueAction, SavePlaylistStage, SettingKey,
+    HELP_PANEL_W, PLAYLISTS_PANEL_W, SESSIONS_PANEL_W, SETTINGS_PANEL_W, SETTING_SECTIONS,
+};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph};
-use super::super::App;
-use super::super::palette;
-use super::super::ui_util::{fmt_duration, trunc_str};
-use super::super::settings::{setting_label, setting_value, settings_cursor_to_key, settings_total_rows};
-use super::super::{
-    MultiSelectKind, MultiSelectPopup, PendingQueueAction, SavePlaylistStage, SettingKey,
-    SETTING_SECTIONS, SESSIONS_PANEL_W, PLAYLISTS_PANEL_W, HELP_PANEL_W, SETTINGS_PANEL_W,
-};
+use ratatui::Frame;
+use std::time::{Duration, Instant};
 
 impl App {
     pub(super) fn render_sessions_overlay(&self, f: &mut Frame) {
         let content = Self::render_panel_shell(
-            f, f.area(), SESSIONS_PANEL_W,
+            f,
+            f.area(),
+            SESSIONS_PANEL_W,
             "REMOTE SESSIONS",
             "[↵]conn [d]disc [r]refresh [Esc]close",
         );
@@ -28,38 +32,60 @@ impl App {
 
         if self.sessions_loading && self.sessions.is_empty() {
             f.render_widget(
-                Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE))),
+                Paragraph::new(Span::styled(
+                    " Loading\u{2026}",
+                    Style::default().fg(palette::SUBTLE),
+                )),
                 list_area,
             );
             return;
         }
         if self.sessions.is_empty() {
             f.render_widget(
-                Paragraph::new(Span::styled(" No other active sessions", Style::default().fg(palette::SUBTLE))),
+                Paragraph::new(Span::styled(
+                    " No other active sessions",
+                    Style::default().fg(palette::SUBTLE),
+                )),
                 list_area,
             );
             return;
         }
 
         const CARD_H: u16 = 3;
-        const DIV_H:  u16 = 1;
+        const DIV_H: u16 = 1;
         let entry_h = CARD_H + DIV_H;
 
         for (i, s) in self.sessions.iter().enumerate() {
             let entry_y = list_y + i as u16 * entry_h;
-            if entry_y + CARD_H > list_y + list_h { break; }
+            if entry_y + CARD_H > list_y + list_h {
+                break;
+            }
 
             let selected = i == self.sessions_cursor;
             let is_connected = self.connected_session_id.as_deref() == Some(s.id.as_str());
-            let name_color = if selected { palette::IRIS } else { palette::TEXT };
+            let name_color = if selected {
+                palette::IRIS
+            } else {
+                palette::TEXT
+            };
             let dim = Style::default().fg(palette::MUTED);
 
             // Indicator spans all 3 rows of the card.
             if selected {
                 let bar: Vec<Line> = (0..CARD_H)
-                    .map(|_| Line::from(Span::styled("\u{258c}", Style::default().fg(palette::PINE))))
+                    .map(|_| {
+                        Line::from(Span::styled("\u{258c}", Style::default().fg(palette::PINE)))
+                    })
                     .collect();
-                f.render_widget(Paragraph::new(bar), Rect { x: ix, y: entry_y, width: 1, height: CARD_H });
+                f.render_widget(
+                    Paragraph::new(bar),
+                    Rect {
+                        x: ix,
+                        y: entry_y,
+                        width: 1,
+                        height: CARD_H,
+                    },
+                );
             }
             let text_x = ix + 2; // indicator + space
             let text_w = inner_w.saturating_sub(2) as usize;
@@ -67,40 +93,89 @@ impl App {
             let badge = if is_connected { " \u{271A}" } else { "" };
             let name_max = text_w.saturating_sub(badge.len());
             let name_line = Line::from(vec![
-                Span::styled(trunc_str(&s.device_name, name_max), Style::default().fg(name_color).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    trunc_str(&s.device_name, name_max),
+                    Style::default().fg(name_color).add_modifier(Modifier::BOLD),
+                ),
                 Span::styled(badge, Style::default().fg(palette::IRIS)),
             ]);
-            f.render_widget(Paragraph::new(name_line), Rect { x: text_x, y: entry_y, width: inner_w.saturating_sub(2), height: 1 });
+            f.render_widget(
+                Paragraph::new(name_line),
+                Rect {
+                    x: text_x,
+                    y: entry_y,
+                    width: inner_w.saturating_sub(2),
+                    height: 1,
+                },
+            );
 
             let meta = format!("{} \u{b7} {}@{}", s.client, s.user_name, s.host);
             f.render_widget(
-                Paragraph::new(Span::styled(trunc_str(&meta, text_w), dim.fg(palette::SUBTLE))),
-                Rect { x: text_x, y: entry_y + 1, width: inner_w.saturating_sub(2), height: 1 },
+                Paragraph::new(Span::styled(
+                    trunc_str(&meta, text_w),
+                    dim.fg(palette::SUBTLE),
+                )),
+                Rect {
+                    x: text_x,
+                    y: entry_y + 1,
+                    width: inner_w.saturating_sub(2),
+                    height: 1,
+                },
             );
 
             let state_icon = if s.now_playing.is_some() {
-                if s.is_paused { "\u{23f8}" } else { "\u{25b6}" }
-            } else { "\u{25a0}" };
+                if s.is_paused {
+                    "\u{23f8}"
+                } else {
+                    "\u{25b6}"
+                }
+            } else {
+                "\u{25a0}"
+            };
             let time = if s.now_playing.is_some() {
-                format!(" {}/{}", fmt_duration(s.position_s), fmt_duration(s.runtime_s))
-            } else { String::new() };
+                format!(
+                    " {}/{}",
+                    fmt_duration(s.position_s),
+                    fmt_duration(s.runtime_s)
+                )
+            } else {
+                String::new()
+            };
             let title = s.now_playing.as_deref().unwrap_or("idle");
-            let playing = format!("{} {}{}", state_icon, trunc_str(title, text_w.saturating_sub(11)), time);
+            let playing = format!(
+                "{} {}{}",
+                state_icon,
+                trunc_str(title, text_w.saturating_sub(11)),
+                time
+            );
             f.render_widget(
                 Paragraph::new(Span::styled(trunc_str(&playing, text_w), dim)),
-                Rect { x: text_x, y: entry_y + 2, width: inner_w.saturating_sub(2), height: 1 },
+                Rect {
+                    x: text_x,
+                    y: entry_y + 2,
+                    width: inner_w.saturating_sub(2),
+                    height: 1,
+                },
             );
-
-
         }
     }
 
     pub(super) fn render_playlists_panel(&mut self, f: &mut Frame) {
         let (title, hint) = if self.playlists_open.is_some() {
-            let name = self.playlists_open.as_ref().map(|p| p.name.as_str()).unwrap_or("Playlist");
-            (name.to_uppercase(), "[↵]play [←]back [Esc]close".to_string())
+            let name = self
+                .playlists_open
+                .as_ref()
+                .map(|p| p.name.as_str())
+                .unwrap_or("Playlist");
+            (
+                name.to_uppercase(),
+                "[↵]play [←]back [Esc]close".to_string(),
+            )
         } else {
-            ("PLAYLISTS".to_string(), "[↵]play [→]browse [r]refresh [Esc]close".to_string())
+            (
+                "PLAYLISTS".to_string(),
+                "[↵]play [→]browse [r]refresh [Esc]close".to_string(),
+            )
         };
 
         let content = Self::render_panel_shell(f, f.area(), PLAYLISTS_PANEL_W, &title, &hint);
@@ -111,14 +186,20 @@ impl App {
         if self.playlists_open.is_some() {
             if self.playlists_open_loading && self.playlists_open_items.is_empty() {
                 f.render_widget(
-                    Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE))),
+                    Paragraph::new(Span::styled(
+                        " Loading\u{2026}",
+                        Style::default().fg(palette::SUBTLE),
+                    )),
                     content,
                 );
                 return;
             }
             if self.playlists_open_items.is_empty() {
                 f.render_widget(
-                    Paragraph::new(Span::styled(" Playlist is empty", Style::default().fg(palette::SUBTLE))),
+                    Paragraph::new(Span::styled(
+                        " Playlist is empty",
+                        Style::default().fg(palette::SUBTLE),
+                    )),
                     content,
                 );
                 return;
@@ -126,50 +207,89 @@ impl App {
 
             let item_lines = |label: &str| -> usize {
                 let text_w = iw.saturating_sub(6);
-                if label.len() <= text_w { 1 } else { 2 }
+                if label.len() <= text_w {
+                    1
+                } else {
+                    2
+                }
             };
 
             while self.playlists_open_scroll > self.playlists_open_cursor {
                 self.playlists_open_scroll = self.playlists_open_cursor;
             }
             loop {
-                if self.playlists_open_scroll >= self.playlists_open_cursor { break; }
+                if self.playlists_open_scroll >= self.playlists_open_cursor {
+                    break;
+                }
                 let lines_to_cursor: usize = self.playlists_open_items
                     [self.playlists_open_scroll..=self.playlists_open_cursor]
-                    .iter().map(|i| item_lines(&i.display_name())).sum();
-                if lines_to_cursor <= list_h { break; }
+                    .iter()
+                    .map(|i| item_lines(&i.display_name()))
+                    .sum();
+                if lines_to_cursor <= list_h {
+                    break;
+                }
                 self.playlists_open_scroll += 1;
             }
 
             let mut y = 0usize;
-            for (vi, item) in self.playlists_open_items[self.playlists_open_scroll..].iter().enumerate() {
-                if y >= list_h { break; }
+            for (vi, item) in self.playlists_open_items[self.playlists_open_scroll..]
+                .iter()
+                .enumerate()
+            {
+                if y >= list_h {
+                    break;
+                }
                 let abs_idx = self.playlists_open_scroll + vi;
                 let selected = abs_idx == self.playlists_open_cursor;
-                let fg = if selected { palette::IRIS } else { palette::TEXT };
+                let fg = if selected {
+                    palette::IRIS
+                } else {
+                    palette::TEXT
+                };
                 let num_str = format!("{:>2}. ", abs_idx + 1);
-                let text_w = Self::panel_row_text_width(content.width).saturating_sub(num_str.len());
+                let text_w =
+                    Self::panel_row_text_width(content.width).saturating_sub(num_str.len());
                 let indent = " ".repeat(2 + num_str.len()); // indicator + space + num
                 let label = item.display_name();
                 let (line1, line2) = if label.len() <= text_w {
                     (label, String::new())
                 } else {
                     let wrap_at = label[..text_w].rfind(' ').unwrap_or(text_w);
-                    (label[..wrap_at].to_string(), label[wrap_at..].trim_start().to_string())
+                    (
+                        label[..wrap_at].to_string(),
+                        label[wrap_at..].trim_start().to_string(),
+                    )
                 };
                 let row_y = content.y + y as u16;
-                Self::render_panel_row(f, ix, row_y, content.width, selected, vec![
-                    Span::styled(num_str, Style::default().fg(palette::MUTED)),
-                    Span::styled(line1, Style::default().fg(fg)),
-                ]);
+                Self::render_panel_row(
+                    f,
+                    ix,
+                    row_y,
+                    content.width,
+                    selected,
+                    vec![
+                        Span::styled(num_str, Style::default().fg(palette::MUTED)),
+                        Span::styled(line1, Style::default().fg(fg)),
+                    ],
+                );
                 y += 1;
                 if !line2.is_empty() && y < list_h {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
                             Span::raw(&indent),
-                            Span::styled(trunc_str(&line2, text_w), Style::default().fg(palette::SUBTLE)),
+                            Span::styled(
+                                trunc_str(&line2, text_w),
+                                Style::default().fg(palette::SUBTLE),
+                            ),
                         ])),
-                        Rect { x: ix, y: row_y + 1, width: content.width, height: 1 });
+                        Rect {
+                            x: ix,
+                            y: row_y + 1,
+                            width: content.width,
+                            height: 1,
+                        },
+                    );
                     y += 1;
                 }
             }
@@ -178,14 +298,20 @@ impl App {
 
         if self.playlists_loading && self.playlists.is_empty() {
             f.render_widget(
-                Paragraph::new(Span::styled(" Loading\u{2026}", Style::default().fg(palette::SUBTLE))),
+                Paragraph::new(Span::styled(
+                    " Loading\u{2026}",
+                    Style::default().fg(palette::SUBTLE),
+                )),
                 content,
             );
             return;
         }
         if self.playlists.is_empty() {
             f.render_widget(
-                Paragraph::new(Span::styled(" No playlists found", Style::default().fg(palette::SUBTLE))),
+                Paragraph::new(Span::styled(
+                    " No playlists found",
+                    Style::default().fg(palette::SUBTLE),
+                )),
                 content,
             );
             return;
@@ -198,31 +324,60 @@ impl App {
         }
 
         // Highlight the playlist that is currently loaded into the queue.
-        let loaded_id: Option<&str> = if let crate::config::QueueSource::Playlist { id: Some(ref id), .. } = self.queue_source {
+        let loaded_id: Option<&str> = if let crate::config::QueueSource::Playlist {
+            id: Some(ref id),
+            ..
+        } = self.queue_source
+        {
             Some(id.as_str())
         } else {
             None
         };
 
         for (vi, pl) in self.playlists[self.playlists_scroll..].iter().enumerate() {
-            if vi >= list_h { break; }
+            if vi >= list_h {
+                break;
+            }
             let abs_idx = self.playlists_scroll + vi;
             let selected = abs_idx == self.playlists_cursor;
             let is_loaded = loaded_id.map(|id| id == pl.id.as_str()).unwrap_or(false);
-            let fg = if selected { palette::IRIS } else if is_loaded { palette::FOAM } else { palette::TEXT };
-            let count_str = if pl.total_count > 0 { format!(" ({})", pl.total_count) } else { String::new() };
-            let name_max = Self::panel_row_text_width(content.width).saturating_sub(count_str.len());
+            let fg = if selected {
+                palette::IRIS
+            } else if is_loaded {
+                palette::FOAM
+            } else {
+                palette::TEXT
+            };
+            let count_str = if pl.total_count > 0 {
+                format!(" ({})", pl.total_count)
+            } else {
+                String::new()
+            };
+            let name_max =
+                Self::panel_row_text_width(content.width).saturating_sub(count_str.len());
             let row_y = content.y + vi as u16;
-            Self::render_panel_row(f, ix, row_y, content.width, selected, vec![
-                Span::styled(trunc_str(&pl.name, name_max), Style::default().fg(fg).add_modifier(Modifier::BOLD)),
-                Span::styled(count_str, Style::default().fg(palette::MUTED)),
-            ]);
+            Self::render_panel_row(
+                f,
+                ix,
+                row_y,
+                content.width,
+                selected,
+                vec![
+                    Span::styled(
+                        trunc_str(&pl.name, name_max),
+                        Style::default().fg(fg).add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(count_str, Style::default().fg(palette::MUTED)),
+                ],
+            );
         }
     }
 
     pub(super) fn render_help_panel(&mut self, f: &mut Frame) {
         let content = Self::render_panel_shell(
-            f, f.area(), HELP_PANEL_W,
+            f,
+            f.area(),
+            HELP_PANEL_W,
             "KEYBOARD SHORTCUTS",
             "[↑↓]scroll [Esc]close",
         );
@@ -233,7 +388,9 @@ impl App {
                 Span::raw(""),
                 Span::styled(
                     format!("{:<kw$}", key, kw = key_w),
-                    Style::default().fg(palette::TEXT).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(palette::TEXT)
+                        .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(desc.to_owned(), Style::default().fg(palette::SUBTLE)),
             ])
@@ -241,8 +398,12 @@ impl App {
         let section = |label: &str| -> Line<'static> {
             Line::from(vec![
                 Span::raw(""),
-                Span::styled(label.to_owned(), Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
-
+                Span::styled(
+                    label.to_owned(),
+                    Style::default()
+                        .fg(palette::IRIS)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ])
         };
         let blank = || Line::from("");
@@ -251,79 +412,78 @@ impl App {
 
         let sec_global = vec![
             section("[global]"),
-            mk("F1",               "Help"),
-            mk("F2",               "Settings"),
-            mk("F3",               "Remote sessions"),
-            mk("F4",               "Playlists"),
-            mk("F5",               "Refresh view"),
-            mk("Tab",              "Cycle menu"),
-            mk("1 – 9",            "Jump to tab"),
-            mk("↑ / ↓",            "Move cursor"),
-            mk("PgUp / PgDn",      "Page scroll"),
-            mk("Home / End",       "First/last item"),
-            mk("Enter",            "Select/Play/Open"),
-            mk("o",                "Context menu"),
-            mk("c",                "Clear Queue"),
-            mk("q",                "Quit"),
+            mk("F1", "Help"),
+            mk("F2", "Settings"),
+            mk("F3", "Remote sessions"),
+            mk("F4", "Playlists"),
+            mk("F5", "Refresh view"),
+            mk("Tab", "Cycle menu"),
+            mk("1 – 9", "Jump to tab"),
+            mk("↑ / ↓", "Move cursor"),
+            mk("PgUp / PgDn", "Page scroll"),
+            mk("Home / End", "First/last item"),
+            mk("Enter", "Select/Play/Open"),
+            mk("o", "Context menu"),
+            mk("c", "Clear Queue"),
+            mk("q", "Quit"),
             blank(),
         ];
         let sec_playback = vec![
             section("[playback]"),
-            mk("Space",            "Pause/Resume"),
-            mk("Alt+Enter",        "Stop"),
-            mk("< / >",            "Seek ±5 seconds"),
-            mk("- / +",            "Volume down / up"),
-            mk("m",                "Mute"),
-            mk("a",                "Cycle audio track"),
-            mk("z",                "Enable subtitles"),
-            mk("h",                "Hide/show player"),
+            mk("Space", "Pause/Resume"),
+            mk("Alt+Enter", "Stop"),
+            mk("< / >", "Seek ±5 seconds"),
+            mk("- / +", "Volume down / up"),
+            mk("m", "Mute"),
+            mk("a", "Cycle audio track"),
+            mk("z", "Enable subtitles"),
+            mk("h", "Hide/show player"),
             blank(),
-            ];
+        ];
         let sec_queue = vec![
             section("[queue]"),
-            mk(".",                "Jump to playing item"),
-            mk("i",                "Go to item in library"),
-            mk("Del",              "Remove from Queue"),
-            mk("Ctrl+Z",           "Undo removal"),
-            mk("v",                "Toggle view"),
-            mk("g",                "Toggle grouping"),
-            mk("Ctrl+S",           "Save playlist"),
+            mk(".", "Jump to playing item"),
+            mk("i", "Go to item in library"),
+            mk("Del", "Remove from Queue"),
+            mk("Ctrl+Z", "Undo removal"),
+            mk("v", "Toggle view"),
+            mk("g", "Toggle grouping"),
+            mk("Ctrl+S", "Save playlist"),
             blank(),
         ];
         let sec_home = vec![
             section("[home]"),
-            mk("Alt+↑ / ↓",        "Switch sections"),
-            mk("Ctrl+W",           "Toggle watched"),
-            mk("Ctrl+Q",           "Add to Queue"),
+            mk("Alt+↑ / ↓", "Switch sections"),
+            mk("Ctrl+W", "Toggle watched"),
+            mk("Ctrl+Q", "Add to Queue"),
             blank(),
         ];
         let sec_library = vec![
             section("[library]"),
-            mk("Esc / Backspace",  "Go back"),
-            mk("/",                "Search library"),
-            mk("Ctrl+W",           "Toggle watched"),
-            mk("Ctrl+S",           "Shuffle"),
-            mk("Ctrl+P",           "Play all"),
-            mk("Ctrl+Q",           "Add to Queue"),
-            mk("r",                "Refresh library"),
-            mk("Ctrl+R",           "Rescan"),
+            mk("Esc / Backspace", "Go back"),
+            mk("/", "Search library"),
+            mk("Ctrl+W", "Toggle watched"),
+            mk("Ctrl+S", "Shuffle"),
+            mk("Ctrl+P", "Play all"),
+            mk("Ctrl+Q", "Add to Queue"),
+            mk("r", "Refresh library"),
+            mk("Ctrl+R", "Rescan"),
             blank(),
         ];
         let sec_log = if show_log {
             vec![
                 section("[log]"),
-                mk("Alt+L",            "Open Log"),
-                mk("← / →",            "Switch pane (Sources / Log)"),
-                mk("↑ / ↓",            "Scroll log / navigate sources"),
-                mk("PgUp / PgDn",      "Page scroll"),
-                mk("Space",            "Toggle source on/off"),
-                mk("c",                "Copy log to clipboard"),
+                mk("Alt+L", "Open Log"),
+                mk("← / →", "Switch pane (Sources / Log)"),
+                mk("↑ / ↓", "Scroll log / navigate sources"),
+                mk("PgUp / PgDn", "Page scroll"),
+                mk("Space", "Toggle source on/off"),
+                mk("c", "Copy log to clipboard"),
                 blank(),
             ]
         } else {
             vec![]
         };
-
 
         let is_log = show_log && self.tab_idx == self.log_tab_idx();
         let is_lib = self.tab_idx >= self.lib_tab_offset() && self.tab_idx < self.log_tab_idx();
@@ -332,20 +492,40 @@ impl App {
 
         let mut ordered: Vec<Vec<Line>> = Vec::new();
         if is_home {
-            ordered.push(sec_home); ordered.push(sec_global); ordered.push(sec_playback);
-            ordered.push(sec_queue); ordered.push(sec_library); ordered.push(sec_log);
+            ordered.push(sec_home);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_library);
+            ordered.push(sec_log);
         } else if is_queue {
-            ordered.push(sec_queue); ordered.push(sec_global); ordered.push(sec_playback);
-            ordered.push(sec_home); ordered.push(sec_library); ordered.push(sec_log);
+            ordered.push(sec_queue);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_home);
+            ordered.push(sec_library);
+            ordered.push(sec_log);
         } else if is_lib {
-            ordered.push(sec_library); ordered.push(sec_global); ordered.push(sec_playback);
-            ordered.push(sec_queue); ordered.push(sec_home); ordered.push(sec_log);
+            ordered.push(sec_library);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_home);
+            ordered.push(sec_log);
         } else if is_log {
-            ordered.push(sec_log); ordered.push(sec_global); ordered.push(sec_playback);
-            ordered.push(sec_queue); ordered.push(sec_home); ordered.push(sec_library);
+            ordered.push(sec_log);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_home);
+            ordered.push(sec_library);
         } else {
-            ordered.push(sec_global); ordered.push(sec_playback); ordered.push(sec_queue);
-            ordered.push(sec_home); ordered.push(sec_library); ordered.push(sec_log);
+            ordered.push(sec_global);
+            ordered.push(sec_playback);
+            ordered.push(sec_queue);
+            ordered.push(sec_home);
+            ordered.push(sec_library);
+            ordered.push(sec_log);
         }
 
         let mut lines: Vec<Line> = ordered.into_iter().flatten().collect();
@@ -368,21 +548,35 @@ impl App {
     pub(crate) fn handle_settings_activate(&mut self) {
         let key = settings_cursor_to_key(self.settings_cursor);
         match key {
-            SettingKey::HiddenLibraries => { self.open_multiselect_popup(MultiSelectKind::HiddenLibraries); return; }
-            SettingKey::HiddenLatest    => { self.open_multiselect_popup(MultiSelectKind::HiddenLatest);    return; }
-            SettingKey::MyLanguages       => { self.open_multiselect_popup(MultiSelectKind::MyLanguages);       return; }
-            SettingKey::FeedViewLibraries => { self.open_multiselect_popup(MultiSelectKind::FeedViewLibraries); return; }
-            SettingKey::LogOut => { self.confirm_logout = true; }
+            SettingKey::HiddenLibraries => {
+                self.open_multiselect_popup(MultiSelectKind::HiddenLibraries);
+                return;
+            }
+            SettingKey::HiddenLatest => {
+                self.open_multiselect_popup(MultiSelectKind::HiddenLatest);
+                return;
+            }
+            SettingKey::MyLanguages => {
+                self.open_multiselect_popup(MultiSelectKind::MyLanguages);
+                return;
+            }
+            SettingKey::FeedViewLibraries => {
+                self.open_multiselect_popup(MultiSelectKind::FeedViewLibraries);
+                return;
+            }
+            SettingKey::LogOut => {
+                self.confirm_logout = true;
+            }
             SettingKey::ImageProtocol => {
                 let now_none = {
                     let mut c = self.client.lock().unwrap();
                     c.config.image_protocol = match c.config.image_protocol.as_deref() {
-                        None               => Some("halfblocks".into()),
+                        None => Some("halfblocks".into()),
                         Some("halfblocks") => Some("sixel".into()),
-                        Some("sixel")      => Some("kitty".into()),
-                        Some("kitty")      => Some("iterm2".into()),
-                        Some("iterm2")     => Some("auto".into()),
-                        _                  => None,
+                        Some("sixel") => Some("kitty".into()),
+                        Some("kitty") => Some("iterm2".into()),
+                        Some("iterm2") => Some("auto".into()),
+                        _ => None,
                     };
                     c.config.image_protocol.is_none()
                 };
@@ -414,7 +608,9 @@ impl App {
                 // Never pushed to the Emby server.
                 let new_mode = {
                     let mut c = self.client.lock().unwrap();
-                    c.config.subtitle_mode = super::super::ui_util::next_subtitle_mode(&c.config.subtitle_mode).to_string();
+                    c.config.subtitle_mode =
+                        super::super::ui_util::next_subtitle_mode(&c.config.subtitle_mode)
+                            .to_string();
                     c.config.subtitle_mode.clone()
                 };
                 self.player.subtitle_prefs.lock().unwrap().mode = new_mode;
@@ -423,7 +619,10 @@ impl App {
             SettingKey::SubtitleLanguage => {
                 let new_lang = {
                     let mut c = self.client.lock().unwrap();
-                    let new = super::super::ui_util::cycle_lang(&c.config.my_languages, &c.config.subtitle_lang);
+                    let new = super::super::ui_util::cycle_lang(
+                        &c.config.my_languages,
+                        &c.config.subtitle_lang,
+                    );
                     c.config.subtitle_lang = new.clone();
                     new
                 };
@@ -433,7 +632,10 @@ impl App {
             SettingKey::AudioLanguage => {
                 let new_lang = {
                     let mut c = self.client.lock().unwrap();
-                    let new = super::super::ui_util::cycle_lang(&c.config.my_languages, &c.config.audio_lang);
+                    let new = super::super::ui_util::cycle_lang(
+                        &c.config.my_languages,
+                        &c.config.audio_lang,
+                    );
                     c.config.audio_lang = new.clone();
                     new
                 };
@@ -443,18 +645,32 @@ impl App {
             _ => {
                 let mut c = self.client.lock().unwrap();
                 match key {
-                    SettingKey::DaemonModeOnExit => c.config.daemon_mode_on_exit = !c.config.daemon_mode_on_exit,
-                    SettingKey::StartOnQueue     => c.config.start_on_queue = !c.config.start_on_queue,
-                    SettingKey::AlwaysPlayNext   => c.config.always_play_next = !c.config.always_play_next,
-                    SettingKey::ConsumeVideos    => c.config.consume_videos = !c.config.consume_videos,
-                    SettingKey::SavePlaylistOnConsume => c.config.save_playlist_on_consume = !c.config.save_playlist_on_consume,
-                    SettingKey::AlwaysSkipIntro  => c.config.always_skip_intro = !c.config.always_skip_intro,
-                    SettingKey::ShowAudioWindow  => c.config.show_audio_window = !c.config.show_audio_window,
-                    SettingKey::UseMpvConfig     => c.config.use_mpv_config = !c.config.use_mpv_config,
-                    SettingKey::NoScripts        => c.config.no_scripts = !c.config.no_scripts,
-                    SettingKey::Autoload         => c.config.autoload = !c.config.autoload,
-                    SettingKey::AudioPipeEnabled => c.config.audio_pipe_enabled = !c.config.audio_pipe_enabled,
-                    SettingKey::ShowSysTrayIcon  => c.config.show_systray_icon = !c.config.show_systray_icon,
+                    SettingKey::DaemonModeOnExit => {
+                        c.config.daemon_mode_on_exit = !c.config.daemon_mode_on_exit
+                    }
+                    SettingKey::StartOnQueue => c.config.start_on_queue = !c.config.start_on_queue,
+                    SettingKey::AlwaysPlayNext => {
+                        c.config.always_play_next = !c.config.always_play_next
+                    }
+                    SettingKey::ConsumeVideos => c.config.consume_videos = !c.config.consume_videos,
+                    SettingKey::SavePlaylistOnConsume => {
+                        c.config.save_playlist_on_consume = !c.config.save_playlist_on_consume
+                    }
+                    SettingKey::AlwaysSkipIntro => {
+                        c.config.always_skip_intro = !c.config.always_skip_intro
+                    }
+                    SettingKey::ShowAudioWindow => {
+                        c.config.show_audio_window = !c.config.show_audio_window
+                    }
+                    SettingKey::UseMpvConfig => c.config.use_mpv_config = !c.config.use_mpv_config,
+                    SettingKey::NoScripts => c.config.no_scripts = !c.config.no_scripts,
+                    SettingKey::Autoload => c.config.autoload = !c.config.autoload,
+                    SettingKey::AudioPipeEnabled => {
+                        c.config.audio_pipe_enabled = !c.config.audio_pipe_enabled
+                    }
+                    SettingKey::ShowSysTrayIcon => {
+                        c.config.show_systray_icon = !c.config.show_systray_icon
+                    }
                     _ => {}
                 }
             }
@@ -465,47 +681,80 @@ impl App {
     pub(crate) fn open_multiselect_popup(&mut self, kind: MultiSelectKind) {
         if matches!(kind, MultiSelectKind::MyLanguages) {
             const ALL_LANGS: &[&str] = &[
-                "English", "French", "German", "Spanish", "Italian", "Portuguese",
-                "Japanese", "Korean", "Chinese", "Russian", "Arabic", "Dutch",
-                "Swedish", "Norwegian", "Danish", "Finnish", "Polish", "Czech", "Turkish",
+                "English",
+                "French",
+                "German",
+                "Spanish",
+                "Italian",
+                "Portuguese",
+                "Japanese",
+                "Korean",
+                "Chinese",
+                "Russian",
+                "Arabic",
+                "Dutch",
+                "Swedish",
+                "Norwegian",
+                "Danish",
+                "Finnish",
+                "Polish",
+                "Czech",
+                "Turkish",
             ];
             let my_langs = self.client.lock().unwrap().config.my_languages.clone();
-            let items = ALL_LANGS.iter().map(|&name| {
-                let selected = my_langs.iter().any(|l| l == name);
-                (name.to_lowercase(), name.to_string(), selected)
-            }).collect();
-            self.multiselect_popup = Some(MultiSelectPopup { kind, items, cursor: 0 });
+            let items = ALL_LANGS
+                .iter()
+                .map(|&name| {
+                    let selected = my_langs.iter().any(|l| l == name);
+                    (name.to_lowercase(), name.to_string(), selected)
+                })
+                .collect();
+            self.multiselect_popup = Some(MultiSelectPopup {
+                kind,
+                items,
+                cursor: 0,
+            });
             return;
         }
         let client = self.client.lock().unwrap();
         let all = match kind {
-            MultiSelectKind::HiddenLibraries  => client.get_views().unwrap_or_default(),
-            MultiSelectKind::HiddenLatest     => client.get_user_views().unwrap_or_default(),
+            MultiSelectKind::HiddenLibraries => client.get_views().unwrap_or_default(),
+            MultiSelectKind::HiddenLatest => client.get_user_views().unwrap_or_default(),
             MultiSelectKind::FeedViewLibraries => client.get_views().unwrap_or_default(),
-            MultiSelectKind::MyLanguages      => unreachable!(),
+            MultiSelectKind::MyLanguages => unreachable!(),
         };
         let selected_list = match kind {
-            MultiSelectKind::HiddenLibraries  => &client.config.hidden_libraries,
-            MultiSelectKind::HiddenLatest     => &client.config.hidden_latest,
+            MultiSelectKind::HiddenLibraries => &client.config.hidden_libraries,
+            MultiSelectKind::HiddenLatest => &client.config.hidden_latest,
             MultiSelectKind::FeedViewLibraries => &client.config.feed_view_libraries,
-            MultiSelectKind::MyLanguages      => unreachable!(),
+            MultiSelectKind::MyLanguages => unreachable!(),
         };
-        let items: Vec<(String, String, bool)> = all.iter()
+        let items: Vec<(String, String, bool)> = all
+            .iter()
             .filter(|v| v.collection_type != "playlists")
             .map(|v| {
                 let lower = v.name.to_lowercase();
                 let is_hidden = selected_list.contains(&lower);
                 (lower, v.name.clone(), is_hidden)
-            }).collect();
+            })
+            .collect();
         drop(client);
-        self.multiselect_popup = Some(MultiSelectPopup { kind, items, cursor: 0 });
+        self.multiselect_popup = Some(MultiSelectPopup {
+            kind,
+            items,
+            cursor: 0,
+        });
     }
 
     pub(crate) fn close_multiselect_popup(&mut self) {
-        let Some(popup) = self.multiselect_popup.take() else { return; };
+        let Some(popup) = self.multiselect_popup.take() else {
+            return;
+        };
 
         if matches!(popup.kind, MultiSelectKind::MyLanguages) {
-            let selected: Vec<String> = popup.items.iter()
+            let selected: Vec<String> = popup
+                .items
+                .iter()
                 .filter(|(_, _, is_sel)| *is_sel)
                 .map(|(_, name, _)| name.clone())
                 .collect();
@@ -513,7 +762,9 @@ impl App {
                 let mut c = self.client.lock().unwrap();
                 // If user removed a language that was chosen for subtitle/audio, clear it to "any"
                 if !selected.is_empty() {
-                    if !c.config.subtitle_lang.is_empty() && !selected.contains(&c.config.subtitle_lang) {
+                    if !c.config.subtitle_lang.is_empty()
+                        && !selected.contains(&c.config.subtitle_lang)
+                    {
                         c.config.subtitle_lang = String::new();
                     }
                     if !c.config.audio_lang.is_empty() && !selected.contains(&c.config.audio_lang) {
@@ -526,32 +777,36 @@ impl App {
             {
                 let mut p = self.player.subtitle_prefs.lock().unwrap();
                 p.subtitle_lang = cfg.subtitle_lang.clone();
-                p.audio_lang    = cfg.audio_lang.clone();
+                p.audio_lang = cfg.audio_lang.clone();
             }
             crate::config::save_config_settings(&cfg);
             return;
         }
 
-        let hidden: Vec<String> = popup.items.iter()
+        let hidden: Vec<String> = popup
+            .items
+            .iter()
             .filter(|(_, _, is_hidden)| *is_hidden)
             .map(|(lower, _, _)| lower.clone())
             .collect();
         {
             let mut c = self.client.lock().unwrap();
             match popup.kind {
-                MultiSelectKind::HiddenLibraries  => c.config.hidden_libraries    = hidden.clone(),
-                MultiSelectKind::HiddenLatest     => c.config.hidden_latest       = hidden.clone(),
+                MultiSelectKind::HiddenLibraries => c.config.hidden_libraries = hidden.clone(),
+                MultiSelectKind::HiddenLatest => c.config.hidden_latest = hidden.clone(),
                 MultiSelectKind::FeedViewLibraries => c.config.feed_view_libraries = hidden.clone(),
-                MultiSelectKind::MyLanguages      => unreachable!(),
+                MultiSelectKind::MyLanguages => unreachable!(),
             }
         }
         match popup.kind {
-            MultiSelectKind::HiddenLibraries  => self.hidden_libraries = hidden,
-            MultiSelectKind::HiddenLatest     => self.hidden_latest    = hidden,
+            MultiSelectKind::HiddenLibraries => self.hidden_libraries = hidden,
+            MultiSelectKind::HiddenLatest => self.hidden_latest = hidden,
             MultiSelectKind::FeedViewLibraries => {
-                for lib in &mut self.libs { lib.nav_stack.clear(); }
+                for lib in &mut self.libs {
+                    lib.nav_stack.clear();
+                }
             }
-            MultiSelectKind::MyLanguages      => unreachable!(),
+            MultiSelectKind::MyLanguages => unreachable!(),
         }
         let cfg = self.client.lock().unwrap().config.clone();
         crate::config::save_config_settings(&cfg);
@@ -559,16 +814,28 @@ impl App {
     }
 
     pub(super) fn render_save_playlist_dialog(&mut self, f: &mut Frame) {
-        let Some(ref dialog) = self.save_playlist_dialog else { return; };
+        let Some(ref dialog) = self.save_playlist_dialog else {
+            return;
+        };
         let full = f.area();
         let w: u16 = 52;
         let h: u16 = 7;
         let x = full.x + full.width.saturating_sub(w) / 2;
         let y = full.y + full.height.saturating_sub(h) / 2;
-        let rect = Rect { x, y, width: w, height: h };
+        let rect = Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
         f.render_widget(Clear, rect);
         let block = Block::default()
-            .title(Span::styled(" Save as Playlist ", Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)))
+            .title(Span::styled(
+                " Save as Playlist ",
+                Style::default()
+                    .fg(palette::IRIS)
+                    .add_modifier(Modifier::BOLD),
+            ))
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -580,18 +847,39 @@ impl App {
                 let label = "Name: ";
                 let cursor = "\u{258f}";
                 let max_input = inner.width as usize - label.len() - cursor.len() - 2;
-                let visible: String = dialog.input.chars().rev().take(max_input).collect::<String>().chars().rev().collect();
+                let visible: String = dialog
+                    .input
+                    .chars()
+                    .rev()
+                    .take(max_input)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect();
                 let input_line = format!("{}{}{}", label, visible, cursor);
                 let hint = "Enter to save · Esc to cancel";
                 let input_y = inner.y + (inner.height.saturating_sub(3)) / 2;
                 let hint_y = input_y + 2;
                 f.render_widget(
-                    Paragraph::new(Span::styled(input_line, Style::default().fg(palette::WHITE))),
-                    Rect { x: inner.x + 1, y: input_y, width: inner.width.saturating_sub(2), height: 1 },
+                    Paragraph::new(Span::styled(
+                        input_line,
+                        Style::default().fg(palette::WHITE),
+                    )),
+                    Rect {
+                        x: inner.x + 1,
+                        y: input_y,
+                        width: inner.width.saturating_sub(2),
+                        height: 1,
+                    },
                 );
                 f.render_widget(
                     Paragraph::new(Span::styled(hint, Style::default().fg(palette::SUBTLE))),
-                    Rect { x: inner.x + 1, y: hint_y, width: inner.width.saturating_sub(2), height: 1 },
+                    Rect {
+                        x: inner.x + 1,
+                        y: hint_y,
+                        width: inner.width.saturating_sub(2),
+                        height: 1,
+                    },
                 );
             }
             SavePlaylistStage::ConfirmOverwrite { .. } => {
@@ -601,11 +889,21 @@ impl App {
                 let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
                 f.render_widget(
                     Paragraph::new(Span::styled(line1, Style::default().fg(palette::WHITE))),
-                    Rect { x: inner.x + 1, y: base_y, width: inner.width.saturating_sub(2), height: 1 },
+                    Rect {
+                        x: inner.x + 1,
+                        y: base_y,
+                        width: inner.width.saturating_sub(2),
+                        height: 1,
+                    },
                 );
                 f.render_widget(
                     Paragraph::new(Span::styled(line2, Style::default().fg(palette::SUBTLE))),
-                    Rect { x: inner.x + 1, y: base_y + 2, width: inner.width.saturating_sub(2), height: 1 },
+                    Rect {
+                        x: inner.x + 1,
+                        y: base_y + 2,
+                        width: inner.width.saturating_sub(2),
+                        height: 1,
+                    },
                 );
             }
         }
@@ -619,10 +917,20 @@ impl App {
         let h: u16 = 7;
         let x = full.x + full.width.saturating_sub(w) / 2;
         let y = full.y + full.height.saturating_sub(h) / 2;
-        let rect = Rect { x, y, width: w, height: h };
+        let rect = Rect {
+            x,
+            y,
+            width: w,
+            height: h,
+        };
         f.render_widget(Clear, rect);
         let block = Block::default()
-            .title(Span::styled(" Unsaved Playlist Changes ", Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)))
+            .title(Span::styled(
+                " Unsaved Playlist Changes ",
+                Style::default()
+                    .fg(palette::YELLOW)
+                    .add_modifier(Modifier::BOLD),
+            ))
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -638,23 +946,40 @@ impl App {
         let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
         f.render_widget(
             Paragraph::new(Span::styled(line1, Style::default().fg(palette::WHITE))),
-            Rect { x: inner.x + 1, y: base_y, width: inner.width.saturating_sub(2), height: 1 },
+            Rect {
+                x: inner.x + 1,
+                y: base_y,
+                width: inner.width.saturating_sub(2),
+                height: 1,
+            },
         );
         f.render_widget(
             Paragraph::new(Span::styled(line2, Style::default().fg(palette::SUBTLE))),
-            Rect { x: inner.x + 1, y: base_y + 2, width: inner.width.saturating_sub(2), height: 1 },
+            Rect {
+                x: inner.x + 1,
+                y: base_y + 2,
+                width: inner.width.saturating_sub(2),
+                height: 1,
+            },
         );
     }
 
     pub(super) fn render_multiselect_popup(&mut self, f: &mut Frame) {
-        let Some(ref popup) = self.multiselect_popup else { return; };
-        let title = match popup.kind {
-            MultiSelectKind::HiddenLibraries  => " Hidden Libraries ",
-            MultiSelectKind::HiddenLatest     => " Hidden Latest ",
-            MultiSelectKind::FeedViewLibraries => " Feed View ",
-            MultiSelectKind::MyLanguages      => " My Languages ",
+        let Some(ref popup) = self.multiselect_popup else {
+            return;
         };
-        let max_name = popup.items.iter().map(|(_, n, _)| n.len()).max().unwrap_or(0);
+        let title = match popup.kind {
+            MultiSelectKind::HiddenLibraries => " Hidden Libraries ",
+            MultiSelectKind::HiddenLatest => " Hidden Latest ",
+            MultiSelectKind::FeedViewLibraries => " Feed View ",
+            MultiSelectKind::MyLanguages => " My Languages ",
+        };
+        let max_name = popup
+            .items
+            .iter()
+            .map(|(_, n, _)| n.len())
+            .max()
+            .unwrap_or(0);
         let inner_w = ((max_name + 6) as u16).clamp(36, 60);
         let width = inner_w + 2;
         let content_h = popup.items.len() as u16 + 1;
@@ -662,7 +987,12 @@ impl App {
         let height = (content_h + 2).min(area.height.saturating_sub(2));
         let x = area.x + area.width.saturating_sub(width) / 2;
         let y = area.y + area.height.saturating_sub(height) / 2;
-        let rect = Rect { x, y, width, height };
+        let rect = Rect {
+            x,
+            y,
+            width,
+            height,
+        };
 
         f.render_widget(Clear, rect);
 
@@ -670,45 +1000,76 @@ impl App {
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(palette::IRIS))
-            .title(Span::styled(title, Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)));
+            .title(Span::styled(
+                title,
+                Style::default()
+                    .fg(palette::WHITE)
+                    .add_modifier(Modifier::BOLD),
+            ));
         let inner = block.inner(rect);
         f.render_widget(block, rect);
 
         let hint = "Space toggle  \u{b7}  Esc / Enter close";
         f.render_widget(
             Paragraph::new(Span::styled(hint, Style::default().fg(palette::MUTED))),
-            Rect { x: inner.x, y: inner.y, width: inner.width, height: 1 },
+            Rect {
+                x: inner.x,
+                y: inner.y,
+                width: inner.width,
+                height: 1,
+            },
         );
 
         let list_area = Rect {
-            x: inner.x, y: inner.y + 1,
-            width: inner.width, height: inner.height.saturating_sub(1),
+            x: inner.x,
+            y: inner.y + 1,
+            width: inner.width,
+            height: inner.height.saturating_sub(1),
         };
         let list_h = list_area.height as usize;
         let cursor = popup.cursor;
-        let scroll = if cursor >= list_h { cursor + 1 - list_h } else { 0 };
+        let scroll = if cursor >= list_h {
+            cursor + 1 - list_h
+        } else {
+            0
+        };
 
-        let lines: Vec<Line> = popup.items.iter().enumerate()
-            .skip(scroll).take(list_h)
+        let lines: Vec<Line> = popup
+            .items
+            .iter()
+            .enumerate()
+            .skip(scroll)
+            .take(list_h)
             .map(|(i, (_, name, is_hidden))| {
                 let focused = i == cursor;
                 let arrow = if focused { "\u{25b8} " } else { "  " };
                 let check = if *is_hidden { "[x]" } else { "[ ]" };
-                let check_style = if focused { Style::default().fg(palette::FOAM) } else { Style::default().fg(palette::MUTED) };
-                let name_style = if focused { Style::default().fg(palette::TEXT) } else { Style::default().fg(palette::SUBTLE) };
+                let check_style = if focused {
+                    Style::default().fg(palette::FOAM)
+                } else {
+                    Style::default().fg(palette::MUTED)
+                };
+                let name_style = if focused {
+                    Style::default().fg(palette::TEXT)
+                } else {
+                    Style::default().fg(palette::SUBTLE)
+                };
                 Line::from(vec![
                     Span::raw(arrow),
                     Span::styled(check, check_style),
                     Span::raw(" "),
                     Span::styled(name.clone(), name_style),
                 ])
-            }).collect();
+            })
+            .collect();
         f.render_widget(Paragraph::new(lines), list_area);
     }
 
     pub(super) fn render_settings_panel(&mut self, f: &mut Frame) {
         let content = Self::render_panel_shell(
-            f, f.area(), SETTINGS_PANEL_W,
+            f,
+            f.area(),
+            SETTINGS_PANEL_W,
             "SETTINGS",
             "[Space]toggle [Esc]close",
         );
@@ -728,16 +1089,27 @@ impl App {
         for (sec_name, keys) in data_sections {
             lines.push(Line::from(vec![
                 Span::raw(""),
-                Span::styled((*sec_name).to_owned(), Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)),
+                Span::styled(
+                    (*sec_name).to_owned(),
+                    Style::default()
+                        .fg(palette::IRIS)
+                        .add_modifier(Modifier::BOLD),
+                ),
             ]));
             for &key in *keys {
                 line_of_cursor.push(lines.len());
-                if item_idx == cursor { cursor_line = lines.len(); }
+                if item_idx == cursor {
+                    cursor_line = lines.len();
+                }
                 let focused = item_idx == cursor;
                 let indicator = if focused { "\u{258c}" } else { " " };
                 let label = setting_label(key);
                 let val = setting_value(key, &cfg);
-                let label_style = if focused { Style::default().fg(palette::TEXT) } else { Style::default().fg(palette::MUTED) };
+                let label_style = if focused {
+                    Style::default().fg(palette::TEXT)
+                } else {
+                    Style::default().fg(palette::MUTED)
+                };
                 lines.push(Line::from(vec![
                     Span::styled(indicator, Style::default().fg(palette::PINE)),
                     Span::raw(" "),
@@ -751,18 +1123,26 @@ impl App {
 
         let logout_cursor_idx = settings_total_rows() - 1;
         line_of_cursor.push(lines.len());
-        if cursor == logout_cursor_idx { cursor_line = lines.len(); }
+        if cursor == logout_cursor_idx {
+            cursor_line = lines.len();
+        }
         let focused = cursor == logout_cursor_idx;
         let indicator_color = if focused { palette::RED } else { palette::PINE };
         let (logout_text, logout_style) = if confirm_logout && focused {
-            ("Log out? Press y to confirm", Style::default().fg(palette::RED))
+            (
+                "Log out? Press y to confirm",
+                Style::default().fg(palette::RED),
+            )
         } else if focused {
             ("Log out", Style::default().fg(palette::RED))
         } else {
             ("Log out", Style::default().fg(palette::MUTED))
         };
         lines.push(Line::from(vec![
-            Span::styled(if focused { "\u{258c}" } else { " " }, Style::default().fg(indicator_color)),
+            Span::styled(
+                if focused { "\u{258c}" } else { " " },
+                Style::default().fg(indicator_color),
+            ),
             Span::raw(" "),
             Span::styled(logout_text, logout_style),
         ]));
@@ -777,7 +1157,10 @@ impl App {
         self.settings_scroll = self.settings_scroll.min(total.saturating_sub(visible));
         self.settings_line_of_cursor = line_of_cursor;
 
-        f.render_widget(Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)), content);
+        f.render_widget(
+            Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)),
+            content,
+        );
     }
 
     pub(super) fn render_context_menu(&mut self, f: &mut Frame) {
@@ -790,24 +1173,40 @@ impl App {
         let full = f.area();
         let x = menu.x.min(full.width.saturating_sub(width));
         let y = menu.y.min(full.height.saturating_sub(height));
-        let rect = Rect { x, y, width, height };
+        let rect = Rect {
+            x,
+            y,
+            width,
+            height,
+        };
         self.context_menu_rect = Some(rect);
         f.render_widget(Clear, rect);
         f.render_widget(
             Block::default()
-                .borders(Borders::ALL).border_type(BorderType::Rounded)
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
                 .border_style(Style::default().fg(palette::IRIS)),
             rect,
         );
-        let list_items: Vec<ListItem> = menu.items.iter().enumerate().map(|(i, &label)| {
-            let style = if i == menu.cursor {
-                Style::default().fg(palette::BASE).bg(palette::IRIS)
-            } else {
-                Style::default().fg(palette::TEXT)
-            };
-            ListItem::new(format!(" {label} ")).style(style)
-        }).collect();
-        let inner = Rect { x: x + 1, y: y + 1, width: width - 2, height: height - 2 };
+        let list_items: Vec<ListItem> = menu
+            .items
+            .iter()
+            .enumerate()
+            .map(|(i, &label)| {
+                let style = if i == menu.cursor {
+                    Style::default().fg(palette::BASE).bg(palette::IRIS)
+                } else {
+                    Style::default().fg(palette::TEXT)
+                };
+                ListItem::new(format!(" {label} ")).style(style)
+            })
+            .collect();
+        let inner = Rect {
+            x: x + 1,
+            y: y + 1,
+            width: width - 2,
+            height: height - 2,
+        };
         f.render_widget(List::new(list_items), inner);
     }
 }

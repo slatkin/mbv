@@ -1,7 +1,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
-use std::sync::{Arc, Mutex, mpsc};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 
 use crate::api::{EmbyClient, MediaItem};
 use crate::ctrl::{CtrlCmd, CtrlEvent};
@@ -13,6 +13,44 @@ pub struct RemotePlayer {
     pub items: Arc<Mutex<Vec<MediaItem>>>,
     cmd_tx: mpsc::Sender<CtrlCmd>,
     disconnected: Arc<AtomicBool>,
+}
+
+fn apply_ctrl_event(
+    ev: CtrlEvent,
+    status: &Arc<Mutex<PlayerStatus>>,
+    items: &Arc<Mutex<Vec<MediaItem>>>,
+    event_tx: &mpsc::Sender<PlayerEvent>,
+) {
+    match ev {
+        CtrlEvent::StatusOnly(s) => {
+            let mut current = status.lock().unwrap();
+            let current_idx = current.current_idx;
+            *current = s;
+            current.current_idx = current_idx;
+        }
+        CtrlEvent::State(s) => {
+            let mut next_status = s.status;
+            next_status.current_idx = s.cursor;
+            *status.lock().unwrap() = next_status;
+            *items.lock().unwrap() = s.items.clone();
+            let _ = event_tx.send(PlayerEvent::QueueUpdated {
+                items: s.items,
+                cursor: s.cursor,
+            });
+        }
+        CtrlEvent::Player(pe) => {
+            match &pe {
+                PlayerEvent::Stopped { .. } => {
+                    status.lock().unwrap().active = false;
+                }
+                PlayerEvent::TrackChanged(idx) => {
+                    status.lock().unwrap().current_idx = *idx;
+                }
+                _ => {}
+            }
+            let _ = event_tx.send(pe);
+        }
+    }
 }
 
 impl RemotePlayer {
@@ -67,51 +105,43 @@ impl RemotePlayer {
                             log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                             continue;
                         };
-                        match ev {
-                            CtrlEvent::StatusOnly(s) => {
-                                *status_r.lock().unwrap() = s;
-                            }
-                            CtrlEvent::State(s) => {
-                                *status_r.lock().unwrap() = s.status;
-                                *items_r.lock().unwrap() = s.items.clone();
-                                let _ = event_tx_r.send(PlayerEvent::QueueUpdated {
-                                    items: s.items,
-                                    cursor: s.cursor,
-                                });
-                            }
-                            CtrlEvent::Player(pe) => {
-                                match &pe {
-                                    PlayerEvent::Stopped { .. } => {
-                                        status_r.lock().unwrap().active = false;
-                                    }
-                                    PlayerEvent::TrackChanged(idx) => {
-                                        status_r.lock().unwrap().current_idx = *idx;
-                                    }
-                                    _ => {}
-                                }
-                                let _ = event_tx_r.send(pe);
-                            }
-                        }
+                        apply_ctrl_event(ev, &status_r, &items_r, &event_tx_r);
                     }
                 }
             }
             disconnected_r.store(true, Ordering::SeqCst);
             log::info!(target: "remote", "daemon disconnected");
-            let _ = event_tx_r.send(PlayerEvent::Stopped { idx: 0, position_ticks: 0, played: false, error: None });
+            let _ = event_tx_r.send(PlayerEvent::Stopped {
+                idx: 0,
+                position_ticks: 0,
+                played: false,
+                error: None,
+            });
         });
 
         // Writer thread: serializes CtrlCmd to daemon
         let mut stream_w = stream;
         std::thread::spawn(move || {
             while let Ok(cmd) = cmd_rx.recv() {
-                let Ok(json) = serde_json::to_string(&cmd) else { continue };
+                let Ok(json) = serde_json::to_string(&cmd) else {
+                    continue;
+                };
                 if writeln!(stream_w, "{json}").is_err() {
                     break;
                 }
             }
         });
 
-        Ok((RemotePlayer { status, subtitle_prefs, items, cmd_tx, disconnected }, event_rx))
+        Ok((
+            RemotePlayer {
+                status,
+                subtitle_prefs,
+                items,
+                cmd_tx,
+                disconnected,
+            },
+            event_rx,
+        ))
     }
 
     pub fn is_disconnected(&self) -> bool {
@@ -125,6 +155,7 @@ impl RemotePlayer {
     pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _initial_volume: u8) {
         let _ = self.cmd_tx.send(CtrlCmd::PlayItems {
             item_ids: vec![item.id.clone()],
+            start_idx: 0,
             start_ticks: item.playback_position_ticks,
         });
         *self.items.lock().unwrap() = vec![item.clone()];
@@ -138,8 +169,14 @@ impl RemotePlayer {
         _initial_volume: u8,
     ) {
         let item_ids: Vec<String> = items.iter().map(|i| i.id.clone()).collect();
-        let start_ticks = items.get(start_idx).map_or(0, |i| i.playback_position_ticks);
-        let _ = self.cmd_tx.send(CtrlCmd::PlayItems { item_ids, start_ticks });
+        let start_ticks = items
+            .get(start_idx)
+            .map_or(0, |i| i.playback_position_ticks);
+        let _ = self.cmd_tx.send(CtrlCmd::PlayItems {
+            item_ids,
+            start_idx,
+            start_ticks,
+        });
         *self.items.lock().unwrap() = items;
     }
 
@@ -149,5 +186,75 @@ impl RemotePlayer {
 
     pub fn join(&self) {
         // No thread to join; daemon keeps running when TUI exits.
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ctrl::CtrlState;
+
+    fn status_with_idx(current_idx: usize) -> PlayerStatus {
+        PlayerStatus {
+            position_ticks: 0,
+            last_valid_pos: 0,
+            runtime_ticks: 0,
+            paused: false,
+            volume: 100,
+            volume_max: 130,
+            current_idx,
+            active: true,
+            title: String::new(),
+            audio_tracks: Vec::new(),
+            sub_tracks: Vec::new(),
+            audio_id: 0,
+            audio_lang: String::new(),
+            sub_id: 0,
+            sub_lang: String::new(),
+            muted: false,
+            video_height: 0,
+            audio_codec: String::new(),
+            video_is_image: false,
+        }
+    }
+
+    #[test]
+    fn status_only_preserves_event_confirmed_current_index() {
+        let status = Arc::new(Mutex::new(status_with_idx(3)));
+        let items = Arc::new(Mutex::new(Vec::new()));
+        let (tx, _rx) = mpsc::channel();
+
+        apply_ctrl_event(
+            CtrlEvent::StatusOnly(status_with_idx(5)),
+            &status,
+            &items,
+            &tx,
+        );
+
+        assert_eq!(status.lock().unwrap().current_idx, 3);
+    }
+
+    #[test]
+    fn state_uses_cursor_as_current_index() {
+        let status = Arc::new(Mutex::new(status_with_idx(0)));
+        let items = Arc::new(Mutex::new(Vec::new()));
+        let (tx, rx) = mpsc::channel();
+
+        apply_ctrl_event(
+            CtrlEvent::State(CtrlState {
+                status: status_with_idx(5),
+                items: Vec::new(),
+                cursor: 3,
+            }),
+            &status,
+            &items,
+            &tx,
+        );
+
+        assert_eq!(status.lock().unwrap().current_idx, 3);
+        assert!(matches!(
+            rx.recv().unwrap(),
+            PlayerEvent::QueueUpdated { cursor: 3, .. }
+        ));
     }
 }

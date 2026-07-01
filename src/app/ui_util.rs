@@ -1,24 +1,26 @@
-use ratatui::style::{Modifier, Style};
-use unicode_width::UnicodeWidthStr;
-use ratatui::text::{Line, Span, Text};
-use crate::api::MediaItem;
 use super::palette;
+use crate::api::MediaItem;
+use ratatui::style::{Modifier, Style};
+use ratatui::text::{Line, Span, Text};
+use unicode_width::UnicodeWidthStr;
 
 /// Advance subtitle mode through the standard cycle.
 pub(super) fn next_subtitle_mode(current: &str) -> &'static str {
     match current {
         "Default" | "" => "Always",
-        "Always"       => "Smart",
-        "Smart"        => "OnlyForced",
-        "OnlyForced"   => "None",
-        "None"         => "HearingImpaired",
-        _              => "Default",
+        "Always" => "Smart",
+        "Smart" => "OnlyForced",
+        "OnlyForced" => "None",
+        "None" => "HearingImpaired",
+        _ => "Default",
     }
 }
 
 /// Advance a language preference through `["" (any)] + my_languages`.
 pub(super) fn cycle_lang(my_languages: &[String], current: &str) -> String {
-    let cycle: Vec<&str> = std::iter::once("").chain(my_languages.iter().map(String::as_str)).collect();
+    let cycle: Vec<&str> = std::iter::once("")
+        .chain(my_languages.iter().map(String::as_str))
+        .collect();
     let idx = cycle.iter().position(|&l| l == current).unwrap_or(0);
     cycle[(idx + 1) % cycle.len()].to_string()
 }
@@ -64,8 +66,11 @@ pub fn sort_audio_tracks(items: &mut [MediaItem]) {
 }
 
 pub fn fmt_duration(s: i64) -> String {
-    if s >= 3600 { format!("{}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60) }
-    else         { format!("{}:{:02}", s / 60, s % 60) }
+    if s >= 3600 {
+        format!("{}:{:02}:{:02}", s / 3600, (s % 3600) / 60, s % 60)
+    } else {
+        format!("{}:{:02}", s / 60, s % 60)
+    }
 }
 
 /// Format duration without seconds — for video items in the queue.
@@ -74,10 +79,15 @@ pub fn fmt_duration_approx(s: i64) -> String {
     let total_mins = s / 60;
     let h = total_mins / 60;
     let m = total_mins % 60;
-    if h > 0 { format!("{}h{:02}m", h, m) }
-    else if m > 0 { format!("{}m", m) }
-    else if s > 0 { "<1m".to_string() }
-    else { "0m".to_string() }
+    if h > 0 {
+        format!("{}h{:02}m", h, m)
+    } else if m > 0 {
+        format!("{}m", m)
+    } else if s > 0 {
+        "<1m".to_string()
+    } else {
+        "0m".to_string()
+    }
 }
 
 pub fn trunc_overview(s: &str) -> String {
@@ -93,17 +103,30 @@ pub fn regex_strip_urls(s: &str) -> String {
             let mut buf = String::from(c);
             for expected in "ttp".chars() {
                 match chars.peek() {
-                    Some(&nc) if nc == expected => { buf.push(chars.next().unwrap()); }
-                    _ => { out.push_str(&buf); buf.clear(); break; }
+                    Some(&nc) if nc == expected => {
+                        buf.push(chars.next().unwrap());
+                    }
+                    _ => {
+                        out.push_str(&buf);
+                        buf.clear();
+                        break;
+                    }
                 }
             }
             if buf == "http" {
-                if chars.peek() == Some(&'s') { buf.push(chars.next().unwrap()); }
+                if chars.peek() == Some(&'s') {
+                    buf.push(chars.next().unwrap());
+                }
                 let mut ok = true;
                 for expected in "://".chars() {
                     match chars.peek() {
-                        Some(&nc) if nc == expected => { buf.push(chars.next().unwrap()); }
-                        _ => { ok = false; break; }
+                        Some(&nc) if nc == expected => {
+                            buf.push(chars.next().unwrap());
+                        }
+                        _ => {
+                            ok = false;
+                            break;
+                        }
                     }
                 }
                 if ok {
@@ -124,7 +147,9 @@ pub fn regex_strip_urls(s: &str) -> String {
     let mut prev_space = false;
     for c in out.chars() {
         if c.is_whitespace() {
-            if !prev_space { result.push(' '); }
+            if !prev_space {
+                result.push(' ');
+            }
             prev_space = true;
         } else {
             result.push(c);
@@ -135,13 +160,16 @@ pub fn regex_strip_urls(s: &str) -> String {
 }
 
 pub fn trunc_str(s: &str, max: usize) -> String {
-    if s.width() <= max { s.to_string() }
-    else {
+    if s.width() <= max {
+        s.to_string()
+    } else {
         let mut out = String::new();
         let mut w = 0;
         for c in s.chars() {
             let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
-            if w + cw + 1 > max { break; }
+            if w + cw + 1 > max {
+                break;
+            }
             out.push(c);
             w += cw;
         }
@@ -153,14 +181,21 @@ pub fn trunc_str(s: &str, max: usize) -> String {
 pub fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
     if item.is_folder {
         let text = if item.item_type == "Folder" && item.total_count > 0 {
-            format!("{} \u{00b7} {} items", item.display_name(), item.total_count)
+            format!(
+                "{} \u{00b7} {} items",
+                item.display_name(),
+                item.total_count
+            )
         } else if item.unplayed_item_count > 0 {
             format!("{} [{}]", item.display_name(), item.unplayed_item_count)
         } else {
             item.display_name()
         };
-        let style = if selected { Style::default() }
-            else               { Style::default().fg(palette::WHITE) };
+        let style = if selected {
+            Style::default()
+        } else {
+            Style::default().fg(palette::WHITE)
+        };
         return (text, style);
     }
     let mut suffix = String::new();
@@ -168,25 +203,35 @@ pub fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) 
         let s = item.runtime_seconds();
         let h = (s / 3600.0) as u64;
         let m = ((s % 3600.0) / 60.0) as u64;
-        let dur = if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") };
+        let dur = if h > 0 {
+            format!("{h}h{m:02}m")
+        } else {
+            format!("{m}m")
+        };
         suffix = format!(" ({dur})");
     }
     let text = format!("{}{}", item.display_name(), suffix);
-    let style = if selected { Style::default() }
-        else { Style::default().fg(palette::WHITE) };
+    let style = if selected {
+        Style::default()
+    } else {
+        Style::default().fg(palette::WHITE)
+    };
     (text, style)
 }
-
 
 pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
     let name_style = if selected {
         Style::default().add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(palette::WHITE)
+            .add_modifier(Modifier::BOLD)
     };
     let yellow = Style::default().fg(palette::YELLOW);
     let subtle = Style::default().fg(palette::SUBTLE);
-    let count_style = Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD);
+    let count_style = Style::default()
+        .fg(palette::IRIS)
+        .add_modifier(Modifier::BOLD);
 
     let in_progress = !item.is_folder && item.playback_position_ticks > 0;
 
@@ -194,8 +239,14 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
         let s = item.runtime_seconds();
         let h = (s / 3600.0) as u64;
         let m = ((s % 3600.0) / 60.0) as u64;
-        if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") }
-    } else { String::new() };
+        if h > 0 {
+            format!("{h}h{m:02}m")
+        } else {
+            format!("{m}m")
+        }
+    } else {
+        String::new()
+    };
 
     // Subtitle line: context metadata
     let subtitle: String = if item.is_folder {
@@ -204,13 +255,17 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
         let tag = format!("S{:02}E{:02}", item.parent_index_number, item.index_number);
         if !item.series_name.is_empty() {
             format!("{tag}  {}", item.series_name)
-        } else { tag }
+        } else {
+            tag
+        }
     } else if item.item_type == "Audio" {
         if !item.album.is_empty() && !item.artist.is_empty() {
             format!("{}  {}", item.artist, item.album)
         } else if !item.artist.is_empty() {
             item.artist.clone()
-        } else { String::new() }
+        } else {
+            String::new()
+        }
     } else if item.item_type == "MusicAlbum" && !item.artist.is_empty() {
         item.artist.clone()
     } else {
@@ -233,7 +288,9 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
         if item.runtime_ticks > 0 {
             let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
             format!("{pct}%")
-        } else { String::new() }
+        } else {
+            String::new()
+        }
     } else if has_subtitle {
         dur_str.clone()
     } else {
@@ -242,7 +299,13 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
 
     let name = trunc_str(&item.name, width.saturating_sub(suffix.width() + 2).max(1));
     let gap = width.saturating_sub(name.width() + suffix.width());
-    let suffix_style = if in_progress { yellow } else if item.is_folder { count_style } else { subtle };
+    let suffix_style = if in_progress {
+        yellow
+    } else if item.is_folder {
+        count_style
+    } else {
+        subtle
+    };
     let mut line1_spans = vec![Span::styled(name, name_style)];
     if !suffix.is_empty() {
         line1_spans.push(Span::styled(" ".repeat(gap.max(1)), Style::default()));
@@ -261,7 +324,11 @@ pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<
 }
 
 pub fn highlight_style(item: &MediaItem) -> Style {
-    if item.is_folder && item.item_type != "Series" && item.item_type != "MusicAlbum" && item.item_type != "MusicArtist" {
+    if item.is_folder
+        && item.item_type != "Series"
+        && item.item_type != "MusicAlbum"
+        && item.item_type != "MusicArtist"
+    {
         Style::default().fg(palette::BASE).bg(palette::PINE)
     } else if item.playback_position_ticks > 0 {
         Style::default().fg(palette::BASE).bg(palette::YELLOW)
@@ -274,7 +341,9 @@ pub fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text
     let name_style = if selected {
         Style::default().add_modifier(Modifier::BOLD)
     } else {
-        Style::default().fg(palette::WHITE).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(palette::WHITE)
+            .add_modifier(Modifier::BOLD)
     };
     let yellow = Style::default().fg(palette::YELLOW);
     let subtle = Style::default().fg(palette::SUBTLE);
@@ -284,17 +353,27 @@ pub fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text
         let s = item.runtime_seconds();
         let h = (s / 3600.0) as u64;
         let m = ((s % 3600.0) / 60.0) as u64;
-        if h > 0 { format!("{h}h{m:02}m") } else { format!("{m}m") }
-    } else { String::new() };
+        if h > 0 {
+            format!("{h}h{m:02}m")
+        } else {
+            format!("{m}m")
+        }
+    } else {
+        String::new()
+    };
 
     let pct_str = if item.runtime_ticks > 0 {
         let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
         format!("{pct}%")
-    } else { String::new() };
+    } else {
+        String::new()
+    };
 
     let ep_tag = if item.item_type == "Episode" && item.parent_index_number > 0 {
         format!("S{}E{:02}", item.parent_index_number, item.index_number)
-    } else { String::new() };
+    } else {
+        String::new()
+    };
 
     let context = if item.item_type == "Episode" {
         item.series_name.clone()
@@ -302,24 +381,42 @@ pub fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text
         item.artist.clone()
     } else if item.production_year > 0 {
         item.production_year.to_string()
-    } else { String::new() };
+    } else {
+        String::new()
+    };
 
     // Column layout (left to right):
     //   episode title | context (series/year/artist) | ep tag | pct | dur
     const CTX_W: usize = 20; // series name / year / artist
-    const TAG_W: usize =  9; // "S2025E31 "
-    const PCT_W: usize =  5; // " 100%"
-    const DUR_W: usize =  6; // " 1h23m"
+    const TAG_W: usize = 9; // "S2025E31 "
+    const PCT_W: usize = 5; // " 100%"
+    const DUR_W: usize = 6; // " 1h23m"
 
     let ctx_used = if context.is_empty() { 0 } else { CTX_W };
     let tag_used = if ep_tag.is_empty() { 0 } else { TAG_W };
     let fixed_w = ctx_used + tag_used + PCT_W + DUR_W;
     let name_w = width.saturating_sub(fixed_w).max(4);
 
-    let ctx_col = if context.is_empty() { String::new() } else { format!("{:<width$}", trunc_str(&context, CTX_W - 1), width = CTX_W) };
-    let tag_col = if ep_tag.is_empty() { String::new() } else { format!("{:<width$}", ep_tag, width = TAG_W) };
-    let pct_col = if pct_str.is_empty() { " ".repeat(PCT_W) } else { format!("{:>width$}", pct_str, width = PCT_W) };
-    let dur_col = if dur_str.is_empty() { " ".repeat(DUR_W) } else { format!("{:>width$}", dur_str, width = DUR_W) };
+    let ctx_col = if context.is_empty() {
+        String::new()
+    } else {
+        format!("{:<width$}", trunc_str(&context, CTX_W - 1), width = CTX_W)
+    };
+    let tag_col = if ep_tag.is_empty() {
+        String::new()
+    } else {
+        format!("{:<width$}", ep_tag, width = TAG_W)
+    };
+    let pct_col = if pct_str.is_empty() {
+        " ".repeat(PCT_W)
+    } else {
+        format!("{:>width$}", pct_str, width = PCT_W)
+    };
+    let dur_col = if dur_str.is_empty() {
+        " ".repeat(DUR_W)
+    } else {
+        format!("{:>width$}", dur_str, width = DUR_W)
+    };
 
     let col_style = subtle;
 
@@ -360,7 +457,10 @@ pub(super) fn build_queue_rows(items: &[MediaItem], group: bool) -> (Vec<QueueRo
     let mut display: Vec<QueueRow> = Vec::new();
     let mut group_for_header: Vec<String> = Vec::new();
     if !group {
-        display.extend((0..items.len()).map(|idx| QueueRow::Track { idx, in_group: false }));
+        display.extend((0..items.len()).map(|idx| QueueRow::Track {
+            idx,
+            in_group: false,
+        }));
         return (display, group_for_header);
     }
     let mut last_group_key: Option<String> = None;
