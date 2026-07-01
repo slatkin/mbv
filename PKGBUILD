@@ -17,5 +17,6 @@ package() {
     install -Dm644 "Material-Design-Iconic-Font.ttf" \
         "${pkgdir}/usr/share/${pkgname}/fonts/Material-Design-Iconic-Font.ttf"
     install -Dm644 "config.toml" "${pkgdir}/usr/share/${pkgname}/config.toml"
+    install -Dm644 "mbv.service" "${pkgdir}/usr/lib/systemd/system/mbv.service"
     install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE" 2>/dev/null || true
 }

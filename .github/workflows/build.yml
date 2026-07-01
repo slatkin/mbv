@@ -55,6 +55,7 @@ jobs:
           cp scripts/mbv.lua "${DIST}/"
           cp fonts/Material-Design-Iconic-Font.ttf "${DIST}/"
           cp dist/config.toml "${DIST}/"
+          cp contrib/mbv.service "${DIST}/"
           tar czf "${DIST}-linux-x86_64.tar.gz" "${DIST}"
           echo "TARBALL=${DIST}-linux-x86_64.tar.gz" >> "$GITHUB_ENV"
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"

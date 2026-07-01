@@ -35,5 +35,6 @@ package() {
     install -Dm644 "fonts/Material-Design-Iconic-Font.ttf" \
         "${pkgdir}/usr/share/mby/fonts/Material-Design-Iconic-Font.ttf"
     install -Dm644 "dist/config.toml" "${pkgdir}/usr/share/mby/config.toml"
+    install -Dm644 "contrib/mbv.service" "${pkgdir}/usr/lib/systemd/system/mbv.service"
     install -Dm644 "LICENSE" "${pkgdir}/usr/share/licenses/mby/LICENSE"
 }
