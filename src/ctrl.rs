@@ -41,7 +41,9 @@ impl CtrlHello {
             CTRL_CAP_STATUS_ONLY,
         ] {
             if !self.capabilities.iter().any(|cap| cap == required) {
-                return Err(format!("peer missing daemon protocol capability: {required}"));
+                return Err(format!(
+                    "peer missing daemon protocol capability: {required}"
+                ));
             }
         }
         Ok(())

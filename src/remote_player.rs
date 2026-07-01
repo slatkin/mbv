@@ -1,4 +1,5 @@
-use std::io::{BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,6 +21,7 @@ pub struct RemotePlayer {
 pub enum DaemonEndpoint {
     Local,
     Unix(PathBuf),
+    Tcp(SocketAddr),
 }
 
 impl DaemonEndpoint {
@@ -34,18 +36,72 @@ impl DaemonEndpoint {
             }
             return Ok(Self::Unix(PathBuf::from(path)));
         }
+        if let Some(value) = value.strip_prefix("tcp://") {
+            return Self::parse_tcp(value);
+        }
         if value.contains("://") {
             return Err(format!(
-                "daemon endpoint scheme is not supported yet: {value} (use local, unix:///path, or a plain socket path)"
+                "daemon endpoint scheme is not supported yet: {value} (use local, unix:///path, tcp://127.0.0.1:port, or a plain socket path)"
             ));
         }
         Ok(Self::Unix(PathBuf::from(value)))
     }
 
-    fn socket_path(&self) -> PathBuf {
+    fn parse_tcp(value: &str) -> Result<Self, String> {
+        let value = value.trim();
+        if value.is_empty() {
+            return Err("daemon endpoint tcp:// requires a host and port".to_string());
+        }
+
+        let (host, port) = if let Some(value) = value.strip_prefix('[') {
+            let Some((host, rest)) = value.split_once(']') else {
+                return Err(format!(
+                    "daemon endpoint tcp:// has an invalid IPv6 host: {value}"
+                ));
+            };
+            let Some(port) = rest.strip_prefix(':') else {
+                return Err(format!(
+                    "daemon endpoint tcp:// requires host:port: {value}"
+                ));
+            };
+            (host, port)
+        } else {
+            value
+                .rsplit_once(':')
+                .ok_or_else(|| format!("daemon endpoint tcp:// requires host:port: {value}"))?
+        };
+
+        let port: u16 = port
+            .parse()
+            .map_err(|_| format!("daemon endpoint tcp:// requires a numeric port: {value}"))?;
+
+        let ip = match host {
+            "localhost" | "127.0.0.1" => IpAddr::V4(Ipv4Addr::LOCALHOST),
+            "::1" => IpAddr::V6(Ipv6Addr::LOCALHOST),
+            _ => {
+                return Err(format!(
+                    "daemon endpoint tcp:// only supports localhost or loopback addresses: {value}"
+                ));
+            }
+        };
+
+        Ok(Self::Tcp(SocketAddr::new(ip, port)))
+    }
+
+    fn connect_stream(&self) -> Result<ControlStream, String> {
         match self {
-            Self::Local => PathBuf::from(crate::config::control_socket_path()),
-            Self::Unix(path) => path.clone(),
+            Self::Local => {
+                let path = PathBuf::from(crate::config::control_socket_path());
+                UnixStream::connect(&path)
+                    .map(ControlStream::Unix)
+                    .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}"))
+            }
+            Self::Unix(path) => UnixStream::connect(path)
+                .map(ControlStream::Unix)
+                .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
+            Self::Tcp(addr) => TcpStream::connect(addr)
+                .map(ControlStream::Tcp)
+                .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
         }
     }
 }
@@ -55,6 +111,46 @@ impl std::fmt::Display for DaemonEndpoint {
         match self {
             Self::Local => write!(f, "local ({})", crate::config::control_socket_path()),
             Self::Unix(path) => write!(f, "unix://{}", path.display()),
+            Self::Tcp(addr) => write!(f, "tcp://{addr}"),
+        }
+    }
+}
+
+enum ControlStream {
+    Unix(UnixStream),
+    Tcp(TcpStream),
+}
+
+impl ControlStream {
+    fn try_clone(&self) -> io::Result<Self> {
+        match self {
+            Self::Unix(stream) => stream.try_clone().map(Self::Unix),
+            Self::Tcp(stream) => stream.try_clone().map(Self::Tcp),
+        }
+    }
+}
+
+impl Read for ControlStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            Self::Unix(stream) => stream.read(buf),
+            Self::Tcp(stream) => stream.read(buf),
+        }
+    }
+}
+
+impl Write for ControlStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            Self::Unix(stream) => stream.write(buf),
+            Self::Tcp(stream) => stream.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            Self::Unix(stream) => stream.flush(),
+            Self::Tcp(stream) => stream.flush(),
         }
     }
 }
@@ -108,9 +204,7 @@ impl RemotePlayer {
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
-        let path = endpoint.socket_path();
-        let mut stream = UnixStream::connect(&path)
-            .map_err(|e| format!("cannot connect to daemon endpoint {endpoint}: {e}"))?;
+        let mut stream = endpoint.connect_stream()?;
         log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
 
         let status = Arc::new(Mutex::new(PlayerStatus {
@@ -304,7 +398,10 @@ mod tests {
 
     #[test]
     fn daemon_endpoint_parses_local_and_unix_paths() {
-        assert_eq!(DaemonEndpoint::parse("local").unwrap(), DaemonEndpoint::Local);
+        assert_eq!(
+            DaemonEndpoint::parse("local").unwrap(),
+            DaemonEndpoint::Local
+        );
         assert_eq!(DaemonEndpoint::parse("").unwrap(), DaemonEndpoint::Local);
         assert_eq!(
             DaemonEndpoint::parse("unix:///tmp/mbv.sock").unwrap(),
@@ -314,12 +411,25 @@ mod tests {
             DaemonEndpoint::parse("/tmp/mbv.sock").unwrap(),
             DaemonEndpoint::Unix(PathBuf::from("/tmp/mbv.sock"))
         );
+        assert_eq!(
+            DaemonEndpoint::parse("tcp://localhost:1234").unwrap(),
+            DaemonEndpoint::Tcp(SocketAddr::from(([127, 0, 0, 1], 1234)))
+        );
+        assert_eq!(
+            DaemonEndpoint::parse("tcp://127.0.0.1:1234").unwrap(),
+            DaemonEndpoint::Tcp(SocketAddr::from(([127, 0, 0, 1], 1234)))
+        );
+        assert_eq!(
+            DaemonEndpoint::parse("tcp://[::1]:4321").unwrap(),
+            DaemonEndpoint::Tcp(SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 1], 4321)))
+        );
     }
 
     #[test]
     fn daemon_endpoint_rejects_unsupported_schemes() {
-        assert!(DaemonEndpoint::parse("tcp://localhost:1234").is_err());
+        assert!(DaemonEndpoint::parse("tcp://10.0.0.1:1234").is_err());
         assert!(DaemonEndpoint::parse("unix://").is_err());
+        assert!(DaemonEndpoint::parse("http://localhost:1234").is_err());
     }
 
     #[test]

@@ -3118,11 +3118,7 @@ impl App {
                 let mut used = 0usize;
                 let mut count = 0usize;
                 for width in pill_widths.iter().take(n_tabs).skip(start) {
-                    let need = if count == 0 {
-                        *width
-                    } else {
-                        1 + *width
-                    };
+                    let need = if count == 0 { *width } else { 1 + *width };
                     if used + need > avail {
                         break;
                     }
