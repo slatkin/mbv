@@ -1807,6 +1807,7 @@ impl App {
                 self.player_tab.playlist_cursor = 0;
                 self.playlist_undo_stack.clear();
                 self.save_queue_state();
+                self.flash_status("Queue cleared".into());
             }
             PendingQueueAction::Quit => {
                 if !self.player.is_remote() { self.player.stop(); }
