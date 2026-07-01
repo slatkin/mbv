@@ -5,7 +5,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use ksni::blocking::TrayMethods;
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlState};
+use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, CtrlState};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
@@ -207,17 +207,11 @@ pub fn run(client: EmbyClient) -> ! {
 
                 let (ev_tx, ev_rx) = mpsc::channel::<String>();
 
-                // Build and enqueue initial state before registering, so it's
-                // the first thing the writer thread sends.
-                if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
-                    status: player_status.lock().unwrap().clone(),
-                    items: shared_items.lock().unwrap().clone(),
-                    cursor: *shared_cursor.lock().unwrap(),
-                })) {
-                    ev_tx.send(init_json).ok();
+                if let Ok(hello_json) =
+                    serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current()))
+                {
+                    ev_tx.send(hello_json).ok();
                 }
-
-                ctrl_clients.lock().unwrap().push(ev_tx);
 
                 // Writer thread: drains ev_rx → socket
                 std::thread::spawn(move || {
@@ -231,9 +225,44 @@ pub fn run(client: EmbyClient) -> ! {
 
                 // Reader thread: socket → merged_tx as DaemonEvent::Ctrl
                 let ctrl_tx = merged_tx2.clone();
+                let ctrl_clients = ctrl_clients.clone();
+                let ev_tx_init = ev_tx.clone();
+                let player_status = player_status.clone();
+                let shared_items = shared_items.clone();
+                let shared_cursor = shared_cursor.clone();
                 std::thread::spawn(move || {
                     let reader = BufReader::new(stream);
-                    for line in reader.lines() {
+                    let mut lines = reader.lines();
+                    let Some(Ok(line)) = lines.next() else {
+                        return;
+                    };
+                    match serde_json::from_str::<CtrlCmd>(&line) {
+                        Ok(CtrlCmd::Hello(info)) => {
+                            if let Err(e) = info.validate_peer() {
+                                log::warn!(target: "daemon", "rejecting ctrl client: {e}");
+                                return;
+                            }
+                        }
+                        Ok(_) => {
+                            log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
+                            return;
+                        }
+                        Err(e) => {
+                            log::warn!(target: "daemon", "rejecting ctrl client: invalid protocol hello: {e}");
+                            return;
+                        }
+                    }
+
+                    if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
+                        status: player_status.lock().unwrap().clone(),
+                        items: shared_items.lock().unwrap().clone(),
+                        cursor: *shared_cursor.lock().unwrap(),
+                    })) {
+                        ev_tx_init.send(init_json).ok();
+                    }
+                    ctrl_clients.lock().unwrap().push(ev_tx_init);
+
+                    for line in lines {
                         let Ok(line) = line else { break };
                         if line.is_empty() {
                             continue;
@@ -364,6 +393,9 @@ fn handle_ctrl(
     ctrl_clients: &ClientList,
 ) {
     match cmd {
+        CtrlCmd::Hello(_) => {
+            log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
+        }
         CtrlCmd::PlayerCmd(pc) => {
             player.send_command(pc);
         }

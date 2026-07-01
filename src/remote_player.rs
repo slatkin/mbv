@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlEvent};
+use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 pub struct RemotePlayer {
@@ -22,6 +22,9 @@ fn apply_ctrl_event(
     event_tx: &mpsc::Sender<PlayerEvent>,
 ) {
     match ev {
+        CtrlEvent::Hello(_) => {
+            log::warn!(target: "remote", "unexpected daemon protocol hello after negotiation");
+        }
         CtrlEvent::StatusOnly(s) => {
             let mut current = status.lock().unwrap();
             let current_idx = current.current_idx;
@@ -56,7 +59,7 @@ fn apply_ctrl_event(
 impl RemotePlayer {
     pub fn connect() -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
         let path = crate::config::control_socket_path();
-        let stream = UnixStream::connect(&path)
+        let mut stream = UnixStream::connect(&path)
             .map_err(|e| format!("cannot connect to daemon socket {path}: {e}"))?;
         log::info!(target: "remote", "connected to daemon socket {path}");
 
@@ -89,14 +92,43 @@ impl RemotePlayer {
         let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
 
+        let stream_r = stream.try_clone().map_err(|e| e.to_string())?;
+        let mut reader = BufReader::new(stream_r);
+        let mut first_line = String::new();
+        reader
+            .read_line(&mut first_line)
+            .map_err(|e| format!("failed to read daemon protocol hello: {e}"))?;
+        if first_line.trim().is_empty() {
+            return Err("daemon closed connection before protocol hello".to_string());
+        }
+        let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end())
+            .map_err(|e| format!("invalid daemon protocol hello: {e}"))?;
+        match hello {
+            CtrlEvent::Hello(info) => {
+                info.validate_peer()?;
+                log::info!(
+                    target: "remote",
+                    "daemon protocol ok: version={} app={} capabilities={:?}",
+                    info.protocol_version,
+                    info.app_version,
+                    info.capabilities
+                );
+            }
+            _ => {
+                return Err("daemon did not send protocol hello".to_string());
+            }
+        }
+        let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::current()))
+            .map_err(|e| e.to_string())?;
+        writeln!(stream, "{client_hello}")
+            .map_err(|e| format!("failed to send daemon protocol hello: {e}"))?;
+
         // Reader thread: deserializes CtrlEvent lines from daemon
         let status_r = status.clone();
         let items_r = items.clone();
         let disconnected_r = disconnected.clone();
         let event_tx_r = event_tx;
-        let stream_r = stream.try_clone().map_err(|e| e.to_string())?;
         std::thread::spawn(move || {
-            let reader = BufReader::new(stream_r);
             for line in reader.lines() {
                 match line {
                     Err(_) => break,
