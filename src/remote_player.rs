@@ -1,5 +1,6 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -13,6 +14,49 @@ pub struct RemotePlayer {
     pub items: Arc<Mutex<Vec<MediaItem>>>,
     cmd_tx: mpsc::Sender<CtrlCmd>,
     disconnected: Arc<AtomicBool>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum DaemonEndpoint {
+    Local,
+    Unix(PathBuf),
+}
+
+impl DaemonEndpoint {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        let value = value.trim();
+        if value.is_empty() || value == "local" {
+            return Ok(Self::Local);
+        }
+        if let Some(path) = value.strip_prefix("unix://") {
+            if path.is_empty() {
+                return Err("daemon endpoint unix:// requires a socket path".to_string());
+            }
+            return Ok(Self::Unix(PathBuf::from(path)));
+        }
+        if value.contains("://") {
+            return Err(format!(
+                "daemon endpoint scheme is not supported yet: {value} (use local, unix:///path, or a plain socket path)"
+            ));
+        }
+        Ok(Self::Unix(PathBuf::from(value)))
+    }
+
+    fn socket_path(&self) -> PathBuf {
+        match self {
+            Self::Local => PathBuf::from(crate::config::control_socket_path()),
+            Self::Unix(path) => path.clone(),
+        }
+    }
+}
+
+impl std::fmt::Display for DaemonEndpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Local => write!(f, "local ({})", crate::config::control_socket_path()),
+            Self::Unix(path) => write!(f, "unix://{}", path.display()),
+        }
+    }
 }
 
 fn apply_ctrl_event(
@@ -58,10 +102,16 @@ fn apply_ctrl_event(
 
 impl RemotePlayer {
     pub fn connect() -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
-        let path = crate::config::control_socket_path();
+        Self::connect_endpoint(&DaemonEndpoint::Local)
+    }
+
+    pub fn connect_endpoint(
+        endpoint: &DaemonEndpoint,
+    ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
+        let path = endpoint.socket_path();
         let mut stream = UnixStream::connect(&path)
-            .map_err(|e| format!("cannot connect to daemon socket {path}: {e}"))?;
-        log::info!(target: "remote", "connected to daemon socket {path}");
+            .map_err(|e| format!("cannot connect to daemon endpoint {endpoint}: {e}"))?;
+        log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
 
         let status = Arc::new(Mutex::new(PlayerStatus {
             position_ticks: 0,
@@ -250,6 +300,26 @@ mod tests {
             audio_codec: String::new(),
             video_is_image: false,
         }
+    }
+
+    #[test]
+    fn daemon_endpoint_parses_local_and_unix_paths() {
+        assert_eq!(DaemonEndpoint::parse("local").unwrap(), DaemonEndpoint::Local);
+        assert_eq!(DaemonEndpoint::parse("").unwrap(), DaemonEndpoint::Local);
+        assert_eq!(
+            DaemonEndpoint::parse("unix:///tmp/mbv.sock").unwrap(),
+            DaemonEndpoint::Unix(PathBuf::from("/tmp/mbv.sock"))
+        );
+        assert_eq!(
+            DaemonEndpoint::parse("/tmp/mbv.sock").unwrap(),
+            DaemonEndpoint::Unix(PathBuf::from("/tmp/mbv.sock"))
+        );
+    }
+
+    #[test]
+    fn daemon_endpoint_rejects_unsupported_schemes() {
+        assert!(DaemonEndpoint::parse("tcp://localhost:1234").is_err());
+        assert!(DaemonEndpoint::parse("unix://").is_err());
     }
 
     #[test]

@@ -39,6 +39,7 @@ pub struct Config {
     pub config_version: u32,   // schema version for future migrations (0 = unversioned)
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
+    pub daemon_client_endpoint: String, // [daemon.client] endpoint; empty = auto-detect local daemon
 }
 
 impl Default for Config {
@@ -79,6 +80,7 @@ impl Default for Config {
             config_version: 0,
             progress_interval_secs: 10,
             daemon_broadcast_ms: 500,
+            daemon_client_endpoint: String::new(),
         }
     }
 }
@@ -568,6 +570,13 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .map(|v| v.max(100) as u64)
         .unwrap_or(500);
 
+    let daemon_client_endpoint = daemon
+        .and_then(|d| d.get("client"))
+        .and_then(|c| c.get("endpoint"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+
     let feed_view_libraries: Vec<String> = general
         .and_then(|m| m.get("feed_view_libraries"))
         .and_then(|v| v.as_array())
@@ -615,6 +624,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         config_version,
         progress_interval_secs,
         daemon_broadcast_ms,
+        daemon_client_endpoint,
     })
 }
 
@@ -768,6 +778,23 @@ pub fn save_config_settings(cfg: &Config) {
         "show_systray_icon".to_string(),
         toml::Value::Boolean(cfg.show_systray_icon),
     );
+    daemon.insert(
+        "broadcast_ms".to_string(),
+        toml::Value::Integer(cfg.daemon_broadcast_ms as i64),
+    );
+    let daemon_client = daemon
+        .entry("client".to_string())
+        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+        .as_table_mut()
+        .unwrap();
+    if cfg.daemon_client_endpoint.trim().is_empty() {
+        daemon_client.remove("endpoint");
+    } else {
+        daemon_client.insert(
+            "endpoint".to_string(),
+            toml::Value::String(cfg.daemon_client_endpoint.clone()),
+        );
+    }
 
     let playback = section!("playback");
     if cfg.subtitle_mode.is_empty() {
@@ -867,6 +894,18 @@ audio_pipe_samplerate = 96000
         assert_eq!(cfg.audio_pipe_enabled, false);
         assert_eq!(cfg.audio_pipe_path, "/tmp/mbv-pipe");
         assert_eq!(cfg.audio_pipe_samplerate, 192_000);
+    }
+
+    #[test]
+    fn parse_daemon_client_endpoint() {
+        let toml = r#"
+[server]
+url = "http://localhost:8096"
+[daemon.client]
+endpoint = "unix:///tmp/mbv.sock"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert_eq!(cfg.daemon_client_endpoint, "unix:///tmp/mbv.sock");
     }
 
     #[test]

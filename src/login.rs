@@ -132,6 +132,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     config_version: base_config.config_version,
                     progress_interval_secs: base_config.progress_interval_secs,
                     daemon_broadcast_ms: base_config.daemon_broadcast_ms,
+                    daemon_client_endpoint: base_config.daemon_client_endpoint.clone(),
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {
