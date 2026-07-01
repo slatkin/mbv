@@ -128,8 +128,7 @@ fn parse(text: &str) -> Option<WsEvent> {
                         .as_str()
                         .and_then(|s| s.parse::<i64>().ok())
                         .or_else(|| v["Data"]["Arguments"]["Index"].as_i64())
-                        .unwrap_or(0)
-                        .max(0);
+                        .unwrap_or(-1);
                     Some(WsEvent::SetSub(idx))
                 }
                 other => {
@@ -405,7 +404,7 @@ mod tests {
     #[test]
     fn general_command_negative_subtitle_index_disables_subtitles() {
         let msg = r#"{"MessageType":"GeneralCommand","Data":{"Name":"SetSubtitleStreamIndex","Arguments":{"Index":-1}}}"#;
-        assert!(matches!(parse_msg(msg), Some(WsEvent::SetSub(0))));
+        assert!(matches!(parse_msg(msg), Some(WsEvent::SetSub(-1))));
     }
 
     #[test]

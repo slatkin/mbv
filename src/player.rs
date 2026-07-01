@@ -59,6 +59,8 @@ pub struct PlayerStatus {
     pub title: String,
     pub audio_tracks: Vec<(i64, String)>,     // (mpv id, label)
     pub sub_tracks: Vec<(i64, String, bool)>, // (mpv id, label, forced)
+    #[serde(default)]
+    pub sub_track_stream_indexes: Vec<(i64, i64)>, // (mpv id, Emby/ffmpeg stream index)
     pub audio_id: i64,                        // 0 = none/unknown
     pub audio_lang: String, // raw lang code of selected audio track, e.g. "en", "ru"
     pub sub_id: i64,        // 0 = off
@@ -69,6 +71,29 @@ pub struct PlayerStatus {
     pub audio_codec: String, // e.g. "flac", "mp3", "aac"
     #[serde(default)]
     pub video_is_image: bool, // true when the video track is cover art (not real video)
+}
+
+impl PlayerStatus {
+    pub fn subtitle_stream_index_to_mpv_id(&self, stream_index: i64) -> Option<i64> {
+        if stream_index < 0 {
+            return Some(0);
+        }
+        if let Some((id, _)) = self
+            .sub_track_stream_indexes
+            .iter()
+            .find(|(_, idx)| *idx == stream_index)
+        {
+            return Some(*id);
+        }
+        if self.sub_track_stream_indexes.is_empty() {
+            return self
+                .sub_tracks
+                .iter()
+                .find(|(id, _, _)| *id == stream_index)
+                .map(|(id, _, _)| *id);
+        }
+        None
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -302,6 +327,7 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
     };
     let mut audio: Vec<(i64, String)> = Vec::new();
     let mut subs: Vec<(i64, String, bool)> = Vec::new();
+    let mut sub_stream_indexes: Vec<(i64, i64)> = Vec::new();
     let mut audio_id: i64 = 0;
     let mut audio_lang: String = String::new();
     let mut sub_id: i64 = 0;
@@ -378,6 +404,13 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
                     base_label
                 };
                 subs.push((id, label, forced));
+                let stream_index: i64 = mpv
+                    .get_property(&format!("track-list/{i}/ff-index"))
+                    .or_else(|_| mpv.get_property(&format!("track-list/{i}/src-id")))
+                    .unwrap_or(-1);
+                if stream_index >= 0 {
+                    sub_stream_indexes.push((id, stream_index));
+                }
             }
             _ => {}
         }
@@ -386,6 +419,7 @@ fn refresh_tracks(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>) {
     let mut s = status.lock().unwrap();
     s.audio_tracks = audio;
     s.sub_tracks = subs;
+    s.sub_track_stream_indexes = sub_stream_indexes;
     s.audio_id = audio_id;
     s.audio_lang = audio_lang;
     s.sub_id = sub_id;
@@ -2306,6 +2340,7 @@ impl Player {
                 title: String::new(),
                 audio_tracks: Vec::new(),
                 sub_tracks: Vec::new(),
+                sub_track_stream_indexes: Vec::new(),
                 audio_id: 0,
                 audio_lang: String::new(),
                 sub_id: 0,
@@ -2960,6 +2995,36 @@ mod tests {
     fn near_end_requires_runtime_known() {
         // If runtime_ticks is 0 (unknown), near-end must never trigger.
         assert!(!is_near_end(false, false, 1_000_000_000, 0));
+    }
+
+    #[test]
+    fn subtitle_stream_index_maps_to_mpv_subtitle_id() {
+        let status = PlayerStatus {
+            position_ticks: 0,
+            last_valid_pos: 0,
+            runtime_ticks: 0,
+            paused: false,
+            volume: 100,
+            volume_max: 130,
+            current_idx: 0,
+            active: true,
+            title: String::new(),
+            audio_tracks: Vec::new(),
+            sub_tracks: vec![(1, "English".to_string(), false)],
+            sub_track_stream_indexes: vec![(1, 2)],
+            audio_id: 0,
+            audio_lang: String::new(),
+            sub_id: 0,
+            sub_lang: String::new(),
+            muted: false,
+            video_height: 1080,
+            audio_codec: String::new(),
+            video_is_image: false,
+        };
+
+        assert_eq!(status.subtitle_stream_index_to_mpv_id(2), Some(1));
+        assert_eq!(status.subtitle_stream_index_to_mpv_id(-1), Some(0));
+        assert_eq!(status.subtitle_stream_index_to_mpv_id(1), None);
     }
 
     // ── lang_code_to_name (sync with parse_audio_info in api.rs) ─────────────

@@ -587,7 +587,16 @@ fn handle_ws(
             player.send_command(PlayerCommand::SetAudio(index));
         }
         WsEvent::SetSub(index) => {
-            player.send_command(PlayerCommand::SetSub(index));
+            let sid = player
+                .status
+                .lock()
+                .unwrap()
+                .subtitle_stream_index_to_mpv_id(index);
+            if let Some(sid) = sid {
+                player.send_command(PlayerCommand::SetSub(sid));
+            } else {
+                log::warn!(target: "daemon", "subtitle stream index {index} did not match any mpv subtitle track");
+            }
         }
         WsEvent::UserDataChanged => {}
     }

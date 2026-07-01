@@ -3214,7 +3214,15 @@ impl App {
                 self.player.send_command(PlayerCommand::SetAudio(index));
             }
             WsEvent::SetSub(index) => {
-                self.player.send_command(PlayerCommand::SetSub(index));
+                let sid = self
+                    .player
+                    .status
+                    .lock()
+                    .unwrap()
+                    .subtitle_stream_index_to_mpv_id(index);
+                if let Some(sid) = sid {
+                    self.player.send_command(PlayerCommand::SetSub(sid));
+                }
             }
             WsEvent::UserDataChanged => {
                 let _ = self.fetch_home();

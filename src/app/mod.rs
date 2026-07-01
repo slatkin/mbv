@@ -1871,6 +1871,7 @@ mod tests {
             title: String::new(),
             audio_tracks: Vec::new(),
             sub_tracks: Vec::new(),
+            sub_track_stream_indexes: Vec::new(),
             audio_id: 0,
             audio_lang: String::new(),
             sub_id: 0,
