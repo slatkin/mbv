@@ -453,6 +453,7 @@ impl App {
                     SettingKey::UseMpvConfig     => c.config.use_mpv_config = !c.config.use_mpv_config,
                     SettingKey::NoScripts        => c.config.no_scripts = !c.config.no_scripts,
                     SettingKey::Autoload         => c.config.autoload = !c.config.autoload,
+                    SettingKey::AudioPipeEnabled => c.config.audio_pipe_enabled = !c.config.audio_pipe_enabled,
                     SettingKey::ShowSysTrayIcon  => c.config.show_systray_icon = !c.config.show_systray_icon,
                     _ => {}
                 }

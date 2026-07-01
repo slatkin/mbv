@@ -11,6 +11,9 @@ pub struct Config {
     pub hidden_latest: Vec<String>,
     pub show_audio_window: bool,
     pub use_mpv_config: bool,
+    pub audio_pipe_enabled: bool,
+    pub audio_pipe_path: String,
+    pub audio_pipe_samplerate: u32, // fixed output rate forced on the pipe (Hz); mpv resamples everything to this
     pub always_play_next: bool,
     pub consume_videos: bool,
     pub always_skip_intro: bool,
@@ -49,6 +52,9 @@ impl Default for Config {
             hidden_latest: vec![],
             show_audio_window: false,
             use_mpv_config: false,
+            audio_pipe_enabled: false,
+            audio_pipe_path: "/tmp/mbv-pipe".to_string(),
+            audio_pipe_samplerate: 192_000,
             always_play_next: false,
             consume_videos: false,
             always_skip_intro: false,
@@ -73,6 +79,19 @@ impl Default for Config {
             config_version: 0,
             progress_interval_secs: 10,
             daemon_broadcast_ms: 500,
+        }
+    }
+}
+
+impl Config {
+    /// The mpv audio-pipe FIFO path to write to, or `None` when the feature
+    /// is disabled. Centralizes the enabled/path pair so callers never need
+    /// to re-derive this themselves.
+    pub fn audio_pipe_target(&self) -> Option<String> {
+        if self.audio_pipe_enabled {
+            Some(self.audio_pipe_path.clone())
+        } else {
+            None
         }
     }
 }
@@ -358,6 +377,23 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let audio_pipe_enabled = misc
+        .and_then(|m| m.get("audio_pipe_enabled"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let audio_pipe_path = misc
+        .and_then(|m| m.get("audio_pipe_path"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("/tmp/mbv-pipe")
+        .to_string();
+
+    let audio_pipe_samplerate = misc
+        .and_then(|m| m.get("audio_pipe_samplerate"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v.max(1) as u32)
+        .unwrap_or(192_000);
+
     let always_play_next = queue
         .and_then(|q| q.get("always_play_next"))
         .and_then(|v| v.as_bool())
@@ -495,6 +531,9 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         hidden_latest,
         show_audio_window,
         use_mpv_config,
+        audio_pipe_enabled,
+        audio_pipe_path,
+        audio_pipe_samplerate,
         always_play_next,
         consume_videos,
         always_skip_intro,
@@ -584,6 +623,9 @@ pub fn save_config_settings(cfg: &Config) {
     mpv.insert("use_mpv_config".to_string(),    toml::Value::Boolean(cfg.use_mpv_config));
     mpv.insert("no_scripts".to_string(),        toml::Value::Boolean(cfg.no_scripts));
     mpv.insert("autoload".to_string(),          toml::Value::Boolean(cfg.autoload));
+    mpv.insert("audio_pipe_enabled".to_string(), toml::Value::Boolean(cfg.audio_pipe_enabled));
+    mpv.insert("audio_pipe_path".to_string(),    toml::Value::String(cfg.audio_pipe_path.clone()));
+    mpv.insert("audio_pipe_samplerate".to_string(), toml::Value::Integer(cfg.audio_pipe_samplerate as i64));
 
     let daemon = section!("daemon");
     daemon.insert("show_systray_icon".to_string(), toml::Value::Boolean(cfg.show_systray_icon));
@@ -647,6 +689,30 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
     fn parse_empty_string_returns_default() {
         let cfg = parse_config("").unwrap();
         assert_eq!(cfg.server_url, "");
+    }
+
+    #[test]
+    fn parse_audio_pipe_settings() {
+        let toml = r#"
+[server]
+url = "http://localhost:8096"
+[mpv]
+audio_pipe_enabled = true
+audio_pipe_path = "/tmp/custom-pipe"
+audio_pipe_samplerate = 96000
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert_eq!(cfg.audio_pipe_enabled, true);
+        assert_eq!(cfg.audio_pipe_path, "/tmp/custom-pipe");
+        assert_eq!(cfg.audio_pipe_samplerate, 96000);
+    }
+
+    #[test]
+    fn parse_audio_pipe_defaults() {
+        let cfg = parse_config("").unwrap();
+        assert_eq!(cfg.audio_pipe_enabled, false);
+        assert_eq!(cfg.audio_pipe_path, "/tmp/mbv-pipe");
+        assert_eq!(cfg.audio_pipe_samplerate, 192_000);
     }
 
     #[test]

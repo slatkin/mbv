@@ -484,6 +484,7 @@ enum SettingKey {
     UseMpvConfig,
     NoScripts,
     Autoload,
+    AudioPipeEnabled,
     ShowSysTrayIcon,
     SystemNotifications,
     MyLanguages,
@@ -499,7 +500,7 @@ enum SettingKey {
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest, SettingKey::FeedViewLibraries]),
     ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::SavePlaylistOnConsume]),
-    ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload]),
+    ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload, SettingKey::AudioPipeEnabled]),
     ("[playback]",  &[SettingKey::MyLanguages, SettingKey::SubtitleMode, SettingKey::SubtitleLanguage, SettingKey::AudioLanguage]),
     ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
     ("[actions]",   &[SettingKey::LogOut]),

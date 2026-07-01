@@ -308,6 +308,27 @@ struct MpvSessionConfig {
     use_mpv_config:    bool,
     no_scripts:        bool,
     always_skip_intro: bool,
+    audio_pipe_path:       Option<String>,
+    audio_pipe_samplerate: u32,
+}
+
+// Ensures `path` exists as a FIFO, creating it via mkfifo(3) if it doesn't
+// already exist. Refuses to touch a path that exists but isn't a FIFO.
+fn ensure_pipe(path: &str) -> Result<(), String> {
+    use std::os::unix::fs::FileTypeExt;
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.file_type().is_fifo() => Ok(()),
+        Ok(_) => Err(format!("audio pipe path '{path}' exists and is not a FIFO")),
+        Err(_) => {
+            let cpath = std::ffi::CString::new(path).map_err(|e| e.to_string())?;
+            let rc = unsafe { libc::mkfifo(cpath.as_ptr(), 0o644) };
+            if rc != 0 {
+                Err(format!("mkfifo({path}) failed: {}", std::io::Error::last_os_error()))
+            } else {
+                Ok(())
+            }
+        }
+    }
 }
 
 // Shared between the event loop thread and the progress reporter thread.
@@ -468,6 +489,33 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
     if config.headless {
         let _ = mpv.set_property("vo", "null");
         let _ = mpv.set_property("force-window", "no");
+    }
+    if let Some(path) = &config.audio_pipe_path {
+        match ensure_pipe(path) {
+            Ok(()) => {
+                let rate = config.audio_pipe_samplerate.to_string();
+                let mut failed = Vec::new();
+                if let Err(e) = mpv.set_property("ao", "pcm") { failed.push(format!("ao: {}", mpv_err_str(&e))); }
+                if let Err(e) = mpv.set_property("ao-pcm-file", path.as_str()) { failed.push(format!("ao-pcm-file: {}", mpv_err_str(&e))); }
+                if let Err(e) = mpv.set_property("ao-pcm-waveheader", "no") { failed.push(format!("ao-pcm-waveheader: {}", mpv_err_str(&e))); }
+                // Force a fixed 32-bit/stereo/<rate> PCM format so the byte
+                // stream always matches a single Snapcast `sampleformat`
+                // declaration, no matter the source file's native format.
+                // 32-bit gives full headroom for 24-bit hi-res FLACs with no
+                // truncation, and soxr (vs. mpv's default swr) keeps
+                // resampling of lower-rate sources audibly transparent.
+                if let Err(e) = mpv.set_property("audio-format", "s32") { failed.push(format!("audio-format: {}", mpv_err_str(&e))); }
+                if let Err(e) = mpv.set_property("audio-channels", "stereo") { failed.push(format!("audio-channels: {}", mpv_err_str(&e))); }
+                if let Err(e) = mpv.set_property("audio-samplerate", rate.as_str()) { failed.push(format!("audio-samplerate: {}", mpv_err_str(&e))); }
+                if let Err(e) = mpv.set_property("audio-swresample-o", "resampler=soxr,precision=28") { failed.push(format!("audio-swresample-o: {}", mpv_err_str(&e))); }
+                if failed.is_empty() {
+                    log::info!(target: "player", "audio pipe: writing {rate}Hz/32-bit/stereo PCM to {path} (blocks until a reader attaches)");
+                } else {
+                    log::warn!(target: "player", "audio pipe: failed to configure pcm output for {path}: {}", failed.join(", "));
+                }
+            }
+            Err(e) => log::warn!(target: "player", "audio pipe disabled for this session: {e}"),
+        }
     }
 
     Ok(mpv)
@@ -1885,11 +1933,19 @@ impl Player {
         }
     }
 
+    // Pipe mode always forces headless (no video window), regardless of item
+    // type. Reads `audio_pipe_enabled` from `client.config` (rather than a
+    // field cached on `Player`) so a setting toggled mid-session takes effect
+    // on the very next play() call instead of requiring an app restart.
+    fn headless_for(&self, client: &EmbyClient, is_audio: bool) -> bool {
+        client.config.audio_pipe_enabled || (!self.show_audio_window && is_audio)
+    }
+
     pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
         // Reuse the existing mpv window only when the headless state matches:
         // video→video and audio→audio reuse; video→audio and audio→video always
         // spawn a new process so the window visibility is correct.
-        let new_is_headless = !self.show_audio_window && item.is_audio();
+        let new_is_headless = self.headless_for(&client, item.is_audio());
         if self.status.lock().unwrap().active
             && (self.current_is_headless.load(Ordering::Relaxed) == new_is_headless)
         {
@@ -1920,7 +1976,7 @@ impl Player {
 
         let item      = item.clone();
         let is_audio  = item.is_audio();
-        let headless  = !self.show_audio_window && is_audio;
+        let headless  = new_is_headless;
         let item_pos  = if is_audio { 0 } else { item.playback_position_ticks };
         let start_pos = if is_audio || !item.should_resume() { 0.0 } else { item.resume_seconds() };
         let ep        = if is_audio { "Audio" } else { "Videos" };
@@ -1932,6 +1988,8 @@ impl Player {
             use_mpv_config:    self.use_mpv_config,
             no_scripts:        self.no_scripts,
             always_skip_intro: self.always_skip_intro,
+            audio_pipe_path:       client.config.audio_pipe_target(),
+            audio_pipe_samplerate: client.config.audio_pipe_samplerate,
         };
         let status           = self.status.clone();
         let event_tx         = self.event_tx.clone();
@@ -1991,8 +2049,8 @@ impl Player {
     pub fn play_playlist(&self, items: Vec<MediaItem>, start_idx: usize, client: Arc<EmbyClient>, initial_volume: u8) {
         if items.is_empty() { return; }
 
-        let new_is_headless = !self.show_audio_window
-            && items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
+        let all_audio = items.iter().all(|i| i.media_type == "Audio" || i.item_type == "Audio");
+        let new_is_headless = self.headless_for(&client, all_audio);
 
         // If playlist loop already running and headless state matches, replace in
         // place (no window close). Mismatched state (e.g. video→audio-only or
@@ -2025,6 +2083,8 @@ impl Player {
             use_mpv_config:    self.use_mpv_config,
             no_scripts:        self.no_scripts,
             always_skip_intro: self.always_skip_intro,
+            audio_pipe_path:       client.config.audio_pipe_target(),
+            audio_pipe_samplerate: client.config.audio_pipe_samplerate,
         };
         let status           = self.status.clone();
         let event_tx         = self.event_tx.clone();

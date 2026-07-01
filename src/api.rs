@@ -810,13 +810,21 @@ impl EmbyClient {
     }
 
     pub fn register_capabilities(&self) {
+        let audio_only = self.config.audio_pipe_enabled;
+        let media_types: &[&str] = if audio_only { &["Audio"] } else { &["Audio", "Video"] };
+        let mut commands: Vec<&str> = vec![
+            "Play","Stop","Pause","Unpause","NextTrack","PreviousTrack",
+            "Seek","SetVolume","VolumeUp","VolumeDown","Mute","Unmute","ToggleMute",
+            "SetAudioStreamIndex","SetSubtitleStreamIndex","DisplayMessage","GoHome"
+        ];
+        if audio_only {
+            // No video window ever opens in audio-pipe mode, so subtitles can
+            // never be displayed — don't advertise a command that can't work.
+            commands.retain(|c| *c != "SetSubtitleStreamIndex");
+        }
         let body = ureq::json!({
-            "PlayableMediaTypes": ["Audio", "Video"],
-            "SupportedCommands": [
-                "Play","Stop","Pause","Unpause","NextTrack","PreviousTrack",
-                "Seek","SetVolume","VolumeUp","VolumeDown","Mute","Unmute","ToggleMute",
-                "SetAudioStreamIndex","SetSubtitleStreamIndex","DisplayMessage","GoHome"
-            ],
+            "PlayableMediaTypes": media_types,
+            "SupportedCommands": commands,
             "SupportsMediaControl": true,
             "SupportsSync": false
         });

@@ -6,8 +6,11 @@ hidden_libraries = ["live tv", "podcasts"]
 show_log_tab = false
 
 [mpv]
-use_mpv_config    = false
-show_audio_window = false
+use_mpv_config     = false
+show_audio_window  = false
+audio_pipe_enabled    = false
+audio_pipe_path       = "/tmp/mbv-pipe"
+audio_pipe_samplerate = 192000
 
 [daemon]
 show_systray_icon = true
