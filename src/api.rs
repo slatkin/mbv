@@ -636,29 +636,47 @@ impl EmbyClient {
         if token.is_empty() {
             return Err("missing Emby auth token".to_string());
         }
-        let resp: serde_json::Value = self
+
+        let auth_header = format!(
+            "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"{}\"",
+            self.device_name,
+            self.device_id,
+            env!("CARGO_PKG_VERSION"),
+            token
+        );
+
+        let me_resp = self
             .agent
             .get(&self.url("/Users/Me"))
-            .set(
-                "Authorization",
-                &format!(
-                    "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"{}\"",
-                    self.device_name,
-                    self.device_id,
-                    env!("CARGO_PKG_VERSION"),
-                    token
-                ),
-            )
+            .set("Authorization", &auth_header)
             .set("X-Emby-Token", token)
-            .call()
-            .map_err(|e| format!("presented Emby token rejected: {e}"))?
-            .into_json()
-            .map_err(|e| format!("presented Emby token validation parse failed: {e}"))?;
-        let user_id = resp["Id"].as_str().unwrap_or("").trim();
-        if user_id.is_empty() {
-            return Err("presented Emby token validation returned no user id".to_string());
+            .call();
+        if let Ok(resp) = me_resp {
+            let resp: serde_json::Value = resp
+                .into_json()
+                .map_err(|e| format!("presented Emby token validation parse failed: {e}"))?;
+            let user_id = resp["Id"].as_str().unwrap_or("").trim();
+            if !user_id.is_empty() {
+                return Ok(user_id.to_string());
+            }
         }
-        Ok(user_id.to_string())
+
+        let users_resp = self
+            .agent
+            .get(&self.url("/Users"))
+            .query("api_key", token)
+            .call()
+            .map_err(|e| format!("presented Emby token rejected: {e}"))?;
+        let users: serde_json::Value = users_resp
+            .into_json()
+            .map_err(|e| format!("presented Emby token API-key validation parse failed: {e}"))?;
+        let users = users
+            .as_array()
+            .ok_or("presented Emby token API-key validation expected user array")?;
+        if users.is_empty() {
+            return Err("presented Emby token API-key validation returned no users".to_string());
+        }
+        Ok(users[0]["Id"].as_str().unwrap_or("").to_string())
     }
 
     // ── Browse / fetch ───────────────────────────────────────────────────────
