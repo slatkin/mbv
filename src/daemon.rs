@@ -1,6 +1,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixListener;
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use ksni::blocking::TrayMethods;
 
@@ -100,6 +101,7 @@ pub fn run(client: EmbyClient) -> ! {
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx) = mpsc::channel();
     let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan);
+    client.register_capabilities();
     let subtitle_prefs = if client.config.subtitle_mode.is_empty()
         && client.config.subtitle_lang.is_empty()
         && client.config.audio_lang.is_empty()
@@ -122,7 +124,7 @@ pub fn run(client: EmbyClient) -> ! {
         client.config.always_skip_intro,
         subtitle_prefs,
         player_tx,
-        Some(ws_send_tx),
+        Some(ws_send_tx.clone()),
     );
 
     let player_status = player.status.clone();
@@ -296,8 +298,28 @@ pub fn run(client: EmbyClient) -> ! {
     let client = Arc::new(Mutex::new(client));
     let mut items: Vec<MediaItem> = Vec::new();
     let mut cursor: usize = 0;
+    let mut last_keepalive = Instant::now();
+    let mut last_capabilities = Instant::now();
 
-    for ev in merged_rx {
+    loop {
+        if last_keepalive.elapsed() >= Duration::from_secs(30) {
+            let _ = ws_send_tx.send("{\"MessageType\":\"KeepAlive\"}".to_string());
+            last_keepalive = Instant::now();
+        }
+        if last_capabilities.elapsed() >= Duration::from_secs(600) {
+            let client = client.lock().unwrap().clone();
+            std::thread::spawn(move || client.register_capabilities());
+            last_capabilities = Instant::now();
+        }
+
+        let ev = match merged_rx.recv_timeout(Duration::from_millis(250)) {
+            Ok(ev) => ev,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                unreachable!("daemon event channel closed")
+            }
+        };
+
         match ev {
             DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => {
                 cursor = idx;
@@ -379,7 +401,6 @@ pub fn run(client: EmbyClient) -> ! {
             }
         }
     }
-    unreachable!("daemon event channel closed")
 }
 
 fn handle_ctrl(
