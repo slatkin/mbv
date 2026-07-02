@@ -1,6 +1,6 @@
 ## Releasing
 
-1. Follow CHECKIN.md steps (test, clippy, CI green)
+1. Follow CHECKIN.md steps (test, clippy)
 2. Re-index jCodemunch: call `index_folder` on the repo root via the jCodemunch MCP tool
 3. Bump `version` in `Cargo.toml`
 4. `cargo build` to update `Cargo.lock`
