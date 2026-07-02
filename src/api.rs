@@ -363,7 +363,7 @@ fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
         .filter(|s| s["Type"].as_str() == Some("Audio"))
         .filter_map(|s| {
             let index = s["Index"].as_i64().unwrap_or(0);
-            if index <= 0 {
+            if s.get("Index").is_none() {
                 return None;
             }
             let language = s["Language"].as_str().unwrap_or("").to_string();
@@ -2274,11 +2274,13 @@ mod tests {
     #[test]
     fn parse_session_media_info_handles_audio_only_sessions() {
         let streams = json!([
-            {"Type": "Audio", "Index": 1, "Language": "eng", "Codec": "flac", "ChannelLayout": "stereo"}
+            {"Type": "Audio", "Index": 0, "Language": "eng", "Codec": "flac", "ChannelLayout": "stereo"}
         ]);
         let media = parse_session_media_info(streams.as_array().unwrap());
         assert!(media.audio_only);
         assert_eq!(media.video_label, "English FLAC Stereo");
+        assert_eq!(media.audio_streams.len(), 1);
+        assert_eq!(media.audio_streams[0].index, 0);
     }
 
     // ── is_audio / is_video ──────────────────────────────────────────────────
