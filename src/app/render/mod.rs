@@ -509,16 +509,64 @@ impl App {
     pub(super) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
         let pst = self.player.status.lock().unwrap();
         if !pst.active {
-            // Show placeholder indicators when monitoring a remote session.
-            if self.connected_session_id.is_some() {
+            if let Some(ref remote) = self.connected_session_state {
                 drop(pst);
+                let audio_label = remote
+                    .media_info
+                    .audio_streams
+                    .iter()
+                    .find(|stream| stream.index == remote.audio_index)
+                    .map(|stream| {
+                        if !stream.language.is_empty() {
+                            stream.language.to_lowercase().chars().take(2).collect()
+                        } else {
+                            stream.label.to_lowercase().chars().take(2).collect()
+                        }
+                    })
+                    .unwrap_or_else(|| "---".to_string());
+                let sub_label = if remote.sub_index < 0 {
+                    "off".to_string()
+                } else {
+                    remote
+                        .media_info
+                        .subtitle_streams
+                        .iter()
+                        .find(|stream| stream.index == remote.sub_index)
+                        .map(|stream| {
+                            if !stream.language.is_empty() {
+                                stream.language.to_lowercase().chars().take(3).collect()
+                            } else {
+                                stream.label.to_lowercase().chars().take(3).collect()
+                            }
+                        })
+                        .unwrap_or_else(|| "CC".to_string())
+                };
+                let res_label = if remote.media_info.video_label.is_empty() {
+                    "---".to_string()
+                } else if remote.media_info.audio_only {
+                    remote
+                        .media_info
+                        .video_label
+                        .split("  |  ")
+                        .next()
+                        .unwrap_or(&remote.media_info.video_label)
+                        .to_string()
+                } else {
+                    remote
+                        .media_info
+                        .video_label
+                        .split_whitespace()
+                        .next()
+                        .unwrap_or(&remote.media_info.video_label)
+                        .to_string()
+                };
                 let data = indicators::IndicatorData {
-                    res_label: "---".to_string(),
-                    res_dim: true,
-                    audio_label: "---".to_string(),
-                    audio_dim: true,
-                    audio_only: false,
-                    sub_label: "---".to_string(),
+                    res_label: res_label.clone(),
+                    res_dim: res_label == "---",
+                    audio_label: audio_label.clone(),
+                    audio_dim: audio_label == "---",
+                    audio_only: remote.media_info.audio_only,
+                    sub_label,
                 };
                 return Some(indicators::indicator_spans(
                     self.indicator_style,

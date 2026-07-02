@@ -1,8 +1,7 @@
 use std::io::ErrorKind;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    mpsc,
-    Arc,
+    mpsc, Arc,
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -296,7 +295,10 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
             backoff_secs = (backoff_secs * 2).min(60);
         }
     });
-    WsSender { tx: out_tx, connected }
+    WsSender {
+        tx: out_tx,
+        connected,
+    }
 }
 
 #[cfg(test)]

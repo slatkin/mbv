@@ -14,6 +14,34 @@ use std::time::{Duration, Instant};
 type BrowseRefresh = (usize, String, Option<String>, bool, String, String, usize);
 
 impl App {
+    fn remote_audio_indexes(&self) -> Vec<i64> {
+        self.connected_session_state
+            .as_ref()
+            .map(|state| {
+                state
+                    .media_info
+                    .audio_streams
+                    .iter()
+                    .map(|stream| stream.index)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn remote_subtitle_indexes(&self) -> Vec<i64> {
+        self.connected_session_state
+            .as_ref()
+            .map(|state| {
+                state
+                    .media_info
+                    .subtitle_streams
+                    .iter()
+                    .map(|stream| stream.index)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub(super) fn lib_page_size(&self) -> usize {
         // In power view the library list is rendered into the right panel, and the
         // normal-view per-row height map (`layout_lib_row_heights`) is never populated,
@@ -634,12 +662,25 @@ impl App {
 
     pub(super) fn cycle_audio(&mut self) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let remote_indexes = self.remote_audio_indexes();
             let cur = self
                 .connected_session_state
                 .as_ref()
                 .map(|s| s.audio_index)
                 .unwrap_or(1);
-            let next = if cur <= 1 { 2 } else { 1 };
+            let next = if remote_indexes.is_empty() {
+                if cur <= 1 {
+                    2
+                } else {
+                    1
+                }
+            } else {
+                let cur_pos = remote_indexes
+                    .iter()
+                    .position(|&idx| idx == cur)
+                    .unwrap_or(0);
+                remote_indexes[(cur_pos + 1) % remote_indexes.len()]
+            };
             let id = conn_id.clone();
             if let Some(ref mut state) = self.connected_session_state {
                 state.audio_index = next;
@@ -698,12 +739,17 @@ impl App {
 
     pub(super) fn toggle_sub(&mut self) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
+            let remote_indexes = self.remote_subtitle_indexes();
             let idx = self
                 .connected_session_state
                 .as_ref()
                 .map(|s| s.sub_index)
                 .unwrap_or(-1);
-            let next = if idx == -1 { 1i64 } else { -1i64 };
+            let next = if idx == -1 {
+                remote_indexes.first().copied().unwrap_or(1)
+            } else {
+                -1
+            };
             let id = conn_id.clone();
             if let Some(ref mut state) = self.connected_session_state {
                 state.sub_index = next;
@@ -733,8 +779,27 @@ impl App {
     }
 
     pub(super) fn cycle_sub(&mut self) {
-        if let Some(ref _conn_id) = self.connected_session_id.clone() {
-            self.toggle_sub();
+        if self.connected_session_id.is_some() {
+            let remote_indexes = self.remote_subtitle_indexes();
+            if remote_indexes.is_empty() {
+                self.toggle_sub();
+                return;
+            }
+            let current = self
+                .connected_session_state
+                .as_ref()
+                .map(|s| s.sub_index)
+                .unwrap_or(-1);
+            let mut entries = Vec::with_capacity(remote_indexes.len() + 1);
+            entries.push(-1);
+            entries.extend(remote_indexes);
+            let cur_pos = entries.iter().position(|&idx| idx == current).unwrap_or(0);
+            let next = entries[(cur_pos + 1) % entries.len()];
+            let id = self.connected_session_id.clone().unwrap();
+            if let Some(ref mut state) = self.connected_session_state {
+                state.sub_index = next;
+            }
+            self.do_session_command(move |c| c.session_set_subtitle_index(&id, next));
             return;
         }
         let (tracks, current_id) = {
@@ -2736,6 +2801,98 @@ impl App {
         }
         let cur = self.home.power_home_cursor.min(total - 1) as i64;
         self.home.power_home_cursor = (cur + delta).clamp(0, total as i64 - 1) as usize;
+    }
+
+    /// Section (index into `power_home_layout`) currently holding the flat cursor.
+    fn power_home_cur_section(&self) -> Option<usize> {
+        let cursor = self.home.power_home_cursor;
+        self.power_home_layout
+            .iter()
+            .position(|m| m.len > 0 && cursor >= m.flat_start && cursor < m.flat_start + m.len)
+    }
+
+    /// Select the first item of the first non-empty section.
+    fn power_home_select_first(&mut self) {
+        if let Some(m) = self.power_home_layout.iter().find(|x| x.len > 0) {
+            self.home.power_home_cursor = m.flat_start;
+        }
+    }
+
+    /// Grid-aware down: within the current card, else the top of the next non-empty
+    /// card in the same column.
+    pub(super) fn power_home_move_down(&mut self) {
+        if self.power_home_layout.is_empty() {
+            self.power_home_move_cursor(1);
+            return;
+        }
+        let Some(si) = self.power_home_cur_section() else {
+            self.power_home_select_first();
+            return;
+        };
+        let m = self.power_home_layout[si].clone();
+        let within = self.home.power_home_cursor - m.flat_start;
+        if within + 1 < m.len {
+            self.home.power_home_cursor += 1;
+            return;
+        }
+        if let Some(next) = self
+            .power_home_layout
+            .iter()
+            .filter(|x| x.col == m.col && x.row > m.row && x.len > 0)
+            .min_by_key(|x| x.row)
+        {
+            self.home.power_home_cursor = next.flat_start;
+        }
+    }
+
+    /// Grid-aware up: within the current card, else the bottom of the previous
+    /// non-empty card in the same column.
+    pub(super) fn power_home_move_up(&mut self) {
+        if self.power_home_layout.is_empty() {
+            self.power_home_move_cursor(-1);
+            return;
+        }
+        let Some(si) = self.power_home_cur_section() else {
+            self.power_home_select_first();
+            return;
+        };
+        let m = self.power_home_layout[si].clone();
+        let within = self.home.power_home_cursor - m.flat_start;
+        if within > 0 {
+            self.home.power_home_cursor -= 1;
+            return;
+        }
+        if let Some(prev) = self
+            .power_home_layout
+            .iter()
+            .filter(|x| x.col == m.col && x.row < m.row && x.len > 0)
+            .max_by_key(|x| x.row)
+        {
+            self.home.power_home_cursor = prev.flat_start + prev.len - 1;
+        }
+    }
+
+    /// Move the cursor to the adjacent column (`dir` = -1 left, +1 right) at the same
+    /// grid row, preserving the relative item index where possible.
+    pub(super) fn power_home_move_column(&mut self, dir: i64) {
+        let Some(si) = self.power_home_cur_section() else {
+            self.power_home_select_first();
+            return;
+        };
+        let m = self.power_home_layout[si].clone();
+        let within = self.home.power_home_cursor - m.flat_start;
+        let target_col = m.col as i64 + dir;
+        if target_col < 0 {
+            return;
+        }
+        let target_col = target_col as usize;
+        if let Some(t) = self
+            .power_home_layout
+            .iter()
+            .find(|x| x.col == target_col && x.row == m.row && x.len > 0)
+        {
+            self.home.power_home_cursor = t.flat_start + within.min(t.len - 1);
+        }
     }
 
     /// Play the item under the flat power-home cursor.

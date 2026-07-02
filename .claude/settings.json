@@ -1,33 +1,6 @@
 {
   "permissions": {
-    "allow": [
-      "WebFetch(domain:ossgit.org)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(x['path'], x.get\\('textMatches',''\\)\\) for x in d]\")",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); [print\\(x['path']\\) for x in d]\")",
-      "Bash(python3 -c \"import json,sys; [print\\(x['path']\\) for x in json.load\\(sys.stdin\\)]\")",
-      "Bash(python3 -c ' *)",
-      "Skill(loop)",
-      "Skill(loop:*)",
-      "Bash(coredumpctl list *)",
-      "Bash(coredumpctl debug *)",
-      "Bash(addr2line -e /home/slatkin/Dev/mbv/target/debug/mbv -f 0x0000556c1d54a5be)",
-      "Read(//proc/sys/kernel/**)",
-      "Bash(ulimit -c)",
-      "Bash(journalctl -t systemd-coredump --since \"10 minutes ago\")",
-      "mcp__serena__search_for_pattern",
-      "mcp__serena__find_symbol",
-      "Bash(rustup which *)",
-      "Bash(mkdir -p ~/.local/bin)",
-      "Bash(ln -sf /usr/bin/rust-analyzer ~/.local/bin/rust-analyzer)",
-      "mcp__serena__get_current_config",
-      "Bash(rust-analyzer --version)",
-      "mcp__serena__get_symbols_overview",
-      "mcp__serena__replace_content",
-      "Skill(update-config)",
-      "Skill(update-config:*)",
-      "Bash(command -v serena-hooks)",
-      "Bash(python3 -c \"import json; d=json.load\\(open\\('/home/slatkin/.claude.json'\\)\\); p=d.get\\('projects',{}\\).get\\('/home/slatkin/Dev/mbv'\\); print\\('project entry exists:', p is not None\\); print\\('hasTrustDialogAccepted:', p.get\\('hasTrustDialogAccepted'\\) if p else 'N/A'\\); print\\('keys:', list\\(p.keys\\(\\)\\) if p else 'N/A'\\)\")"
-    ],
+    "allow": [ ],
     "additionalDirectories": [
       "/home/slatkin/.claude"
     ]

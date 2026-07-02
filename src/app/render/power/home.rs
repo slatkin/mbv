@@ -9,6 +9,27 @@ use ratatui::Frame;
 use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
+/// Clamp the panel scroll offset (in terminal rows, content-space) so the grid row
+/// spanning `[cur_top, cur_bot)` is fully visible within a viewport of `view_h` rows,
+/// and never scrolls past the end of `total_h` rows of content.
+fn power_home_panel_scroll(
+    current: u16,
+    cur_top: u16,
+    cur_bot: u16,
+    total_h: u16,
+    view_h: u16,
+) -> u16 {
+    let max_scroll = total_h.saturating_sub(view_h);
+    let mut s = current.min(max_scroll);
+    if cur_top < s {
+        s = cur_top;
+    }
+    if cur_bot > s + view_h {
+        s = cur_bot.saturating_sub(view_h);
+    }
+    s
+}
+
 impl App {
     pub(super) fn render_power_home_video_list(
         &mut self,
@@ -278,167 +299,255 @@ impl App {
     }
 
     pub(super) fn render_power_home_list(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        if area.height == 0 {
+        if area.height == 0 || area.width == 0 {
             return;
         }
+        self.power_left_area = area;
 
-        // Build flat item list and display rows.
-        // DisplayRow::Header → yellow bold section label (not selectable).
-        // DisplayRow::Item(flat_idx) → item row, selected when flat_idx == power_home_cursor.
-        enum HomeRow {
-            Spacer,
-            Header(String),
-            Item(usize),
+        // --- Build sections from the home data (clone to avoid borrow conflicts). ---
+        struct Section {
+            title: String,
+            color: Color,
+            flat_start: usize,
+            items: Vec<crate::api::MediaItem>,
         }
 
         let continue_items = self.home.continue_items.clone();
         let latest = self.home.latest.clone();
 
-        let total: usize = continue_items.len()
-            + latest
-                .iter()
-                .map(|(_, _, items, _)| items.len())
-                .sum::<usize>();
-
-        if total == 0 {
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    "(nothing)",
-                    Style::default().fg(palette::MUTED),
-                )),
-                area,
-            );
-            return;
-        }
-
-        let cursor = self.home.power_home_cursor.min(total - 1);
-
-        let mut display_rows: Vec<HomeRow> = Vec::new();
-        let mut flat_idx = 0usize;
-        let mut first_group = true;
-
-        // Continue Watching group.
-        if !continue_items.is_empty() {
-            display_rows.push(HomeRow::Header("Keep Watching".to_string()));
-            for _ in &continue_items {
-                display_rows.push(HomeRow::Item(flat_idx));
-                flat_idx += 1;
-            }
-            first_group = false;
-        }
-
-        // Per-library latest groups — blank spacer before each header except the very first.
-        for (title, _, items, _) in &latest {
+        let mut sections: Vec<Section> = Vec::new();
+        let mut flat = 0usize;
+        // Keep Watching is always section 0, even when empty.
+        sections.push(Section {
+            title: "Keep Watching".to_string(),
+            color: palette::section_color(0),
+            flat_start: flat,
+            items: continue_items,
+        });
+        flat += sections[0].items.len();
+        let mut color_idx = 1usize;
+        for (title, _lib, items, _cur) in &latest {
             if items.is_empty() {
                 continue;
             }
-            if !first_group {
-                display_rows.push(HomeRow::Spacer);
-            }
-            display_rows.push(HomeRow::Header(title.clone()));
-            for _ in items {
-                display_rows.push(HomeRow::Item(flat_idx));
-                flat_idx += 1;
-            }
-            first_group = false;
-        }
-
-        // Build a combined flat items vec for rendering.
-        let mut flat_items: Vec<crate::api::MediaItem> = Vec::with_capacity(total);
-        flat_items.extend(continue_items.iter().cloned());
-        for (_, _, items, _) in &latest {
-            flat_items.extend(items.iter().cloned());
-        }
-
-        // Locate the display row for the current cursor.
-        let display_cursor = display_rows
-            .iter()
-            .position(|r| matches!(r, HomeRow::Item(i) if *i == cursor))
-            .unwrap_or(0);
-
-        let visible = area.height as usize;
-        let offset = self.home.power_home_scroll.clamp(
-            display_cursor.saturating_sub(visible.saturating_sub(1)),
-            display_cursor,
-        );
-        self.home.power_home_scroll = offset;
-
-        // Build row map for mouse click handling.
-        self.power_left_row_map.clear();
-        for row in display_rows.iter().skip(offset).take(visible) {
-            self.power_left_row_map.push(match row {
-                HomeRow::Spacer | HomeRow::Header(_) => None,
-                HomeRow::Item(idx) => Some(*idx),
+            sections.push(Section {
+                title: title.clone(),
+                color: palette::section_color(color_idx),
+                flat_start: flat,
+                items: items.clone(),
             });
+            flat += items.len();
+            color_idx += 1;
+        }
+        let total = flat;
+        let cursor = if total == 0 {
+            0
+        } else {
+            self.home.power_home_cursor.min(total - 1)
+        };
+        self.home.power_home_cursor = cursor;
+
+        // --- Grid geometry (heights are width-independent). ---
+        const GAP: u16 = 2; // gutter between the two columns
+        const ROW_GAP: u16 = 1; // blank row between grid rows
+        const CARD_ITEM_CAP: usize = 6; // visible item rows per card before internal scroll
+
+        let cols: usize = if area.width >= 50 { 2 } else { 1 };
+        let n_sections = sections.len();
+        let n_rows = n_sections.div_ceil(cols);
+
+        let card_vis = |s: &Section| -> usize {
+            if s.items.is_empty() {
+                1 // the "(empty)" placeholder row
+            } else {
+                s.items.len().min(CARD_ITEM_CAP)
+            }
+        };
+        let card_h = |s: &Section| -> u16 { 2 + card_vis(s) as u16 };
+
+        let mut row_heights = vec![0u16; n_rows];
+        for (i, s) in sections.iter().enumerate() {
+            let r = i / cols;
+            row_heights[r] = row_heights[r].max(card_h(s));
+        }
+        let mut row_top = vec![0u16; n_rows];
+        let mut acc = 0u16;
+        for r in 0..n_rows {
+            row_top[r] = acc;
+            acc += row_heights[r] + ROW_GAP;
+        }
+        let total_h = acc.saturating_sub(ROW_GAP); // drop trailing gap
+        let needs_scrollbar = total_h > area.height;
+
+        let grid_w = area
+            .width
+            .saturating_sub(if needs_scrollbar { 1 } else { 0 });
+        let col_w = if cols == 2 {
+            grid_w.saturating_sub(GAP) / 2
+        } else {
+            grid_w
+        };
+
+        // --- Panel scroll: keep the cursor's grid row visible. ---
+        let cursor_section = sections.iter().position(|s| {
+            !s.items.is_empty() && cursor >= s.flat_start && cursor < s.flat_start + s.items.len()
+        });
+        let cursor_row = cursor_section.map(|i| i / cols).unwrap_or(0);
+        let scroll_y = power_home_panel_scroll(
+            self.home.power_home_scroll as u16,
+            row_top[cursor_row],
+            row_top[cursor_row] + row_heights[cursor_row],
+            total_h,
+            area.height,
+        );
+        self.home.power_home_scroll = scroll_y as usize;
+
+        // content_y (in the virtual grid) → on-screen y, or None if clipped out.
+        let screen_y = |content_y: u16| -> Option<u16> {
+            let sy = area.y as i32 + content_y as i32 - scroll_y as i32;
+            if sy < area.y as i32 || sy >= (area.y + area.height) as i32 {
+                None
+            } else {
+                Some(sy as u16)
+            }
+        };
+
+        let mut hitmap: Vec<(Rect, usize)> = Vec::new();
+        let mut layout: Vec<crate::app::PowerHomeSectionMeta> = Vec::with_capacity(n_sections);
+
+        for (i, s) in sections.iter().enumerate() {
+            let r = i / cols;
+            let c = i % cols;
+            layout.push(crate::app::PowerHomeSectionMeta {
+                flat_start: s.flat_start,
+                len: s.items.len(),
+                row: r,
+                col: c,
+            });
+
+            let card_x = area.x + c as u16 * (col_w + GAP);
+            let base = row_top[r]; // content-space top of this card
+
+            // Top rounded border (top edge only): ╭────╮ in the section colour.
+            if col_w >= 2 {
+                let mid = "\u{2500}".repeat((col_w as usize).saturating_sub(2));
+                let border = format!("\u{256d}{}\u{256e}", mid);
+                if let Some(sy) = screen_y(base) {
+                    f.render_widget(
+                        Paragraph::new(Span::styled(border, Style::default().fg(s.color))),
+                        Rect {
+                            x: card_x,
+                            y: sy,
+                            width: col_w,
+                            height: 1,
+                        },
+                    );
+                }
+            }
+
+            // Header row: section title in the accent colour, bold.
+            if let Some(sy) = screen_y(base + 1) {
+                let label = trunc_str(&s.title, (col_w as usize).saturating_sub(1));
+                f.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(
+                            label,
+                            Style::default().fg(s.color).add_modifier(Modifier::BOLD),
+                        ),
+                    ])),
+                    Rect {
+                        x: card_x,
+                        y: sy,
+                        width: col_w,
+                        height: 1,
+                    },
+                );
+            }
+
+            // Item rows (with internal scroll when this card holds the cursor).
+            let vis = card_vis(s);
+            let item_off = if s.items.len() > CARD_ITEM_CAP && cursor_section == Some(i) {
+                let within = cursor - s.flat_start;
+                within
+                    .saturating_sub(CARD_ITEM_CAP - 1)
+                    .min(s.items.len() - CARD_ITEM_CAP)
+            } else {
+                0
+            };
+
+            for k in 0..vis {
+                let content_y = base + 2 + k as u16;
+                let Some(sy) = screen_y(content_y) else {
+                    continue;
+                };
+                let row_rect = Rect {
+                    x: card_x,
+                    y: sy,
+                    width: col_w,
+                    height: 1,
+                };
+
+                if s.items.is_empty() {
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled("(empty)", Style::default().fg(palette::MUTED)),
+                        ])),
+                        row_rect,
+                    );
+                    continue;
+                }
+
+                let item_idx = item_off + k;
+                let item = &s.items[item_idx];
+                let flat_idx = s.flat_start + item_idx;
+                let selected = flat_idx == cursor;
+
+                let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
+                    let mins = (item.runtime_ticks / TICKS_PER_SECOND / 60).max(1);
+                    format!("{}m", mins)
+                } else {
+                    String::new()
+                };
+                let avail = (col_w as usize).saturating_sub(1); // minus 1-col marker
+                let name_w = avail.saturating_sub(dur_str.width());
+                let title = trunc_str(&item.display_name(), name_w);
+                let pad = name_w.saturating_sub(title.width());
+
+                let fg = if focused {
+                    palette::WHITE
+                } else {
+                    palette::SUBTLE
+                };
+                let mut spans: Vec<Span> = if selected && focused {
+                    vec![
+                        Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                        Span::styled(
+                            title,
+                            Style::default()
+                                .fg(palette::IRIS)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ]
+                } else {
+                    vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                };
+                if !dur_str.is_empty() {
+                    spans.push(Span::raw(" ".repeat(pad)));
+                    spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+                }
+                f.render_widget(Paragraph::new(Line::from(spans)), row_rect);
+                hitmap.push((row_rect, flat_idx));
+            }
         }
 
-        let avail = (area.width as usize).saturating_sub(2);
-        let list_items: Vec<ListItem> = display_rows
-            .iter()
-            .skip(offset)
-            .take(visible)
-            .map(|row| match row {
-                HomeRow::Spacer => ListItem::new(Line::default()),
-                HomeRow::Header(label) => ListItem::new(Line::from(vec![
-                    Span::raw(" "),
-                    Span::styled(
-                        trunc_str(label, avail).to_string(),
-                        Style::default()
-                            .fg(palette::YELLOW)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ])),
-                HomeRow::Item(idx) => {
-                    let item = &flat_items[*idx];
-                    let selected = *idx == cursor;
-                    let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
-                        format!(
-                            " {}",
-                            fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-                        )
-                    } else {
-                        String::new()
-                    };
-                    let name_w = avail.saturating_sub(dur_str.width());
-                    let title = trunc_str(&item.display_name(), name_w);
-                    let fg = if focused {
-                        palette::WHITE
-                    } else {
-                        palette::SUBTLE
-                    };
-                    let mut spans: Vec<Span> = if selected && focused {
-                        vec![
-                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                            Span::styled(
-                                title,
-                                Style::default()
-                                    .fg(palette::IRIS)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ]
-                    } else {
-                        vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
-                    };
-                    if !dur_str.is_empty() {
-                        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
-                    }
-                    ListItem::new(Line::from(spans))
-                }
-            })
-            .collect();
+        self.power_home_hitmap = hitmap;
+        self.power_home_layout = layout;
 
-        let mut state = ListState::default();
-        state.select(Some(display_cursor.saturating_sub(offset)));
-        f.render_stateful_widget(
-            List::new(list_items).highlight_style(Style::default()),
-            area,
-            &mut state,
-        );
-
-        let display_n = display_rows.len();
-        if focused && display_n > visible {
-            let max_off = display_n.saturating_sub(visible);
-            let mut sb = ScrollbarState::new(max_off + 1).position(offset);
+        // Panel scrollbar on the far right.
+        if needs_scrollbar && focused {
+            let mut sb = ScrollbarState::new(total_h as usize).position(scroll_y as usize);
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .thumb_symbol("\u{2590}")
@@ -450,5 +559,112 @@ impl App {
                 &mut sb,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::power_home_panel_scroll;
+    use crate::api::TICKS_PER_SECOND;
+    use crate::app::tests::{make_app_stub, make_items};
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
+
+    fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn renders_two_column_card_grid() {
+        let mut app = make_app_stub();
+
+        let mut cont = make_items(3);
+        for (i, it) in cont.iter_mut().enumerate() {
+            it.name = ["Taskmaster", "QI XL", "8 Diagram Pole Fighter"][i].to_string();
+            it.runtime_ticks = (2820 + i as i64 * 600) * TICKS_PER_SECOND;
+        }
+        app.home.continue_items = cont;
+
+        let music = {
+            let mut v = make_items(3);
+            for (i, it) in v.iter_mut().enumerate() {
+                it.name = ["King Of America", "Either/Or", "Too-Rye-Ay"][i].to_string();
+            }
+            v
+        };
+        let youtube = {
+            let mut v = make_items(2);
+            for (i, it) in v.iter_mut().enumerate() {
+                it.name = ["NXL Not-E3 Showcase", "Comedians Taking Over"][i].to_string();
+            }
+            v
+        };
+        app.home.latest = vec![
+            ("New Music".into(), "l1".into(), music, 0),
+            ("YouTube".into(), "l2".into(), youtube, 0),
+        ];
+
+        let backend = TestBackend::new(80, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            let area = Rect::new(0, 0, 80, 20);
+            app.render_power_home_list(f, area, true);
+        })
+        .unwrap();
+
+        let out = buffer_to_string(&term);
+        println!("\n{out}");
+
+        // Two columns: New Music header must appear to the right of Keep Watching.
+        let kw_line = out.lines().find(|l| l.contains("Keep Watching")).unwrap();
+        assert!(
+            kw_line.contains("New Music"),
+            "expected 2 columns on header row"
+        );
+        // Rounded top border with corners is drawn.
+        assert!(out.contains('\u{256d}') && out.contains('\u{256e}'));
+        // Durations render as minutes only, never hours (67m for 4020s, not 1h07m).
+        assert!(out.contains("47m"));
+        assert!(out.contains("67m"));
+        assert!(!out.contains("1h"));
+        // Section titles present.
+        assert!(out.contains("YouTube"));
+        // Grid geometry + hitmap were recorded.
+        assert_eq!(app.power_home_layout.len(), 3);
+        assert!(!app.power_home_hitmap.is_empty());
+    }
+
+    #[test]
+    fn keeps_current_offset_when_row_already_visible() {
+        // Row [2,6) fits inside viewport [0,10); offset unchanged.
+        assert_eq!(power_home_panel_scroll(0, 2, 6, 20, 10), 0);
+    }
+
+    #[test]
+    fn scrolls_down_to_reveal_row_below_viewport() {
+        // Row [14,20) is below viewport [0,10); scroll so its bottom is visible.
+        assert_eq!(power_home_panel_scroll(0, 14, 20, 30, 10), 10);
+    }
+
+    #[test]
+    fn scrolls_up_to_reveal_row_above_viewport() {
+        // Row [2,6) is above current offset 8; snap up to its top.
+        assert_eq!(power_home_panel_scroll(8, 2, 6, 30, 10), 2);
+    }
+
+    #[test]
+    fn never_scrolls_past_end() {
+        // Cursor is the last row [11,15); offset clamped to total_h - view_h = 5.
+        assert_eq!(power_home_panel_scroll(99, 11, 15, 15, 10), 5);
     }
 }

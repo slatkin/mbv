@@ -225,7 +225,31 @@ pub struct SessionInfo {
     pub is_paused: bool,
     pub volume: i64,
     pub sub_index: i64,   // -1 = disabled
-    pub audio_index: i64, // 1-based; 0 = unknown
+    pub audio_index: i64, // stream index; 0 = unknown
+    pub media_info: SessionMediaInfo,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct SessionMediaInfo {
+    pub video_label: String,
+    pub audio_only: bool,
+    pub audio_streams: Vec<SessionAudioStream>,
+    pub subtitle_streams: Vec<SessionSubtitleStream>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionAudioStream {
+    pub index: i64,
+    pub label: String,
+    pub language: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionSubtitleStream {
+    pub index: i64,
+    pub label: String,
+    pub language: String,
+    pub forced: bool,
 }
 
 pub const MBV_DIRECT_TCP_PORT_PREFIX: &str = "mbv-direct-tcp-port:";
@@ -266,6 +290,31 @@ fn parse_video_info(streams: &[Value]) -> String {
     }
 }
 
+fn audio_language_name(lang: &str) -> &'static str {
+    match lang.to_lowercase().as_str() {
+        "en" | "eng" => "English",
+        "fr" | "fre" | "fra" => "French",
+        "de" | "ger" | "deu" => "German",
+        "es" | "spa" => "Spanish",
+        "it" | "ita" => "Italian",
+        "pt" | "por" => "Portuguese",
+        "ja" | "jpn" => "Japanese",
+        "ko" | "kor" => "Korean",
+        "zh" | "chi" | "zho" => "Chinese",
+        "ru" | "rus" => "Russian",
+        "ar" | "ara" => "Arabic",
+        "nl" | "nld" | "dut" => "Dutch",
+        "sv" | "swe" => "Swedish",
+        "no" | "nor" => "Norwegian",
+        "da" | "dan" => "Danish",
+        "fi" | "fin" => "Finnish",
+        "pl" | "pol" => "Polish",
+        "cs" | "cze" | "ces" => "Czech",
+        "tr" | "tur" => "Turkish",
+        _ => "",
+    }
+}
+
 fn parse_audio_info(streams: &[Value]) -> String {
     let mut parts: Vec<String> = Vec::new();
     for s in streams
@@ -273,28 +322,7 @@ fn parse_audio_info(streams: &[Value]) -> String {
         .filter(|s| s["Type"].as_str() == Some("Audio"))
     {
         let lang = s["Language"].as_str().unwrap_or("");
-        let lang_name = match lang.to_lowercase().as_str() {
-            "en" | "eng" => "English",
-            "fr" | "fre" | "fra" => "French",
-            "de" | "ger" | "deu" => "German",
-            "es" | "spa" => "Spanish",
-            "it" | "ita" => "Italian",
-            "pt" | "por" => "Portuguese",
-            "ja" | "jpn" => "Japanese",
-            "ko" | "kor" => "Korean",
-            "zh" | "chi" | "zho" => "Chinese",
-            "ru" | "rus" => "Russian",
-            "ar" | "ara" => "Arabic",
-            "nl" | "nld" | "dut" => "Dutch",
-            "sv" | "swe" => "Swedish",
-            "no" | "nor" => "Norwegian",
-            "da" | "dan" => "Danish",
-            "fi" | "fin" => "Finnish",
-            "pl" | "pol" => "Polish",
-            "cs" | "cze" | "ces" => "Czech",
-            "tr" | "tur" => "Turkish",
-            _ => "",
-        };
+        let lang_name = audio_language_name(lang);
         let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
         let layout = s["ChannelLayout"].as_str().unwrap_or("");
         let layout_str = match layout {
@@ -315,6 +343,113 @@ fn parse_audio_info(streams: &[Value]) -> String {
         }
     }
     parts.join("  |  ")
+}
+
+fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
+    let video = streams.iter().find(|s| s["Type"].as_str() == Some("Video"));
+    let audio_only = video.is_none();
+    let video_label = if audio_only {
+        parse_audio_info(streams)
+            .split("  |  ")
+            .next()
+            .unwrap_or("")
+            .to_string()
+    } else {
+        parse_video_info(streams)
+    };
+
+    let audio_streams = streams
+        .iter()
+        .filter(|s| s["Type"].as_str() == Some("Audio"))
+        .filter_map(|s| {
+            let index = s["Index"].as_i64().unwrap_or(0);
+            if index <= 0 {
+                return None;
+            }
+            let language = s["Language"].as_str().unwrap_or("").to_string();
+            let label = {
+                let lang_name = audio_language_name(&language);
+                let codec = s["Codec"].as_str().unwrap_or("").to_uppercase();
+                let layout = s["ChannelLayout"].as_str().unwrap_or("");
+                let layout_str = match layout {
+                    "mono" => "Mono",
+                    "stereo" => "Stereo",
+                    "5.1" => "5.1",
+                    "7.1" => "7.1",
+                    other if !other.is_empty() => other,
+                    _ => "",
+                };
+                let title = s["DisplayTitle"]
+                    .as_str()
+                    .or_else(|| s["Title"].as_str())
+                    .unwrap_or("");
+                let pieces: Vec<&str> = [lang_name, &codec, layout_str]
+                    .iter()
+                    .filter(|part| !part.is_empty())
+                    .copied()
+                    .collect();
+                if !pieces.is_empty() {
+                    pieces.join(" ")
+                } else if !title.is_empty() {
+                    title.to_string()
+                } else if !language.is_empty() {
+                    language.to_uppercase()
+                } else {
+                    format!("#{index}")
+                }
+            };
+            Some(SessionAudioStream {
+                index,
+                label,
+                language,
+            })
+        })
+        .collect();
+
+    let subtitle_streams = streams
+        .iter()
+        .filter(|s| s["Type"].as_str() == Some("Subtitle"))
+        .filter_map(|s| {
+            let index = s["Index"].as_i64().unwrap_or(-1);
+            if index < 0 {
+                return None;
+            }
+            let language = s["Language"].as_str().unwrap_or("").to_string();
+            let forced = s["IsForced"].as_bool().unwrap_or(false);
+            let title = s["DisplayTitle"]
+                .as_str()
+                .or_else(|| s["Title"].as_str())
+                .unwrap_or("");
+            let lang_name = audio_language_name(&language);
+            let base = if !title.is_empty() {
+                title.to_string()
+            } else if !lang_name.is_empty() {
+                lang_name.to_string()
+            } else if !language.is_empty() {
+                language.to_uppercase()
+            } else {
+                format!("#{index}")
+            };
+            let label = if forced {
+                format!("{base} (Forced)")
+            } else {
+                base
+            };
+            Some(SessionSubtitleStream {
+                index,
+                label,
+                language,
+                forced,
+            })
+        })
+        .collect();
+
+    SessionMediaInfo {
+        video_label,
+        audio_only,
+        audio_streams,
+        subtitle_streams,
+    }
 }
 
 fn parse_item(raw: &Value) -> MediaItem {
@@ -1482,6 +1617,10 @@ impl EmbyClient {
                         }
                         let ps = &v["PlayState"];
                         let npi = &v["NowPlayingItem"];
+                        let media_info = npi["MediaStreams"]
+                            .as_array()
+                            .map(|streams| parse_session_media_info(streams))
+                            .unwrap_or_default();
                         let raw_host = v["RemoteEndPoint"].as_str().unwrap_or("");
                         let host = raw_host.rsplit(':').nth(1).unwrap_or(raw_host).to_string();
                         Some(SessionInfo {
@@ -1507,6 +1646,7 @@ impl EmbyClient {
                             volume: ps["VolumeLevel"].as_i64().unwrap_or(100),
                             sub_index: ps["SubtitleStreamIndex"].as_i64().unwrap_or(-1),
                             audio_index: ps["AudioStreamIndex"].as_i64().unwrap_or(0),
+                            media_info,
                         })
                     })
                     .collect()
@@ -2108,6 +2248,37 @@ mod tests {
                 code, expected, result
             );
         }
+    }
+
+    #[test]
+    fn parse_session_media_info_extracts_remote_stream_options() {
+        let streams = json!([
+            {"Type": "Video", "Width": 1920, "Height": 1080, "Codec": "h264"},
+            {"Type": "Audio", "Index": 1, "Language": "eng", "Codec": "ac3", "ChannelLayout": "5.1"},
+            {"Type": "Audio", "Index": 2, "Language": "jpn", "Codec": "aac", "ChannelLayout": "stereo"},
+            {"Type": "Subtitle", "Index": 3, "Language": "eng", "IsForced": false},
+            {"Type": "Subtitle", "Index": 4, "Language": "eng", "IsForced": true}
+        ]);
+        let media = parse_session_media_info(streams.as_array().unwrap());
+        assert_eq!(media.video_label, "1080p H264");
+        assert!(!media.audio_only);
+        assert_eq!(media.audio_streams.len(), 2);
+        assert_eq!(media.audio_streams[0].index, 1);
+        assert_eq!(media.audio_streams[0].label, "English AC3 5.1");
+        assert_eq!(media.audio_streams[1].label, "Japanese AAC Stereo");
+        assert_eq!(media.subtitle_streams.len(), 2);
+        assert_eq!(media.subtitle_streams[0].label, "English");
+        assert_eq!(media.subtitle_streams[1].label, "English (Forced)");
+    }
+
+    #[test]
+    fn parse_session_media_info_handles_audio_only_sessions() {
+        let streams = json!([
+            {"Type": "Audio", "Index": 1, "Language": "eng", "Codec": "flac", "ChannelLayout": "stereo"}
+        ]);
+        let media = parse_session_media_info(streams.as_array().unwrap());
+        assert!(media.audio_only);
+        assert_eq!(media.video_label, "English FLAC Stereo");
     }
 
     // ── is_audio / is_video ──────────────────────────────────────────────────

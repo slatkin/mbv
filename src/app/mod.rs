@@ -303,6 +303,16 @@ enum QueueScope {
     Remote,
 }
 
+/// Geometry of one power-home section card in the two-column grid, computed at render
+/// time and reused by keyboard navigation (column jumps).
+#[derive(Clone, Default)]
+pub(crate) struct PowerHomeSectionMeta {
+    pub flat_start: usize, // first flat item index in this section
+    pub len: usize,        // number of items (0 for the empty Keep Watching card)
+    pub row: usize,        // grid row
+    pub col: usize,        // grid column
+}
+
 struct HomePane {
     continue_items: Vec<MediaItem>,
     continue_cursor: usize,
@@ -403,6 +413,8 @@ pub struct App {
     power_queue_scroll: usize,
     power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
     power_left_row_map: Vec<Option<usize>>,  // visual row → item index for library letter groups
+    power_home_hitmap: Vec<(Rect, usize)>,   // home-tab grid: item row rect → flat index (mouse)
+    power_home_layout: Vec<PowerHomeSectionMeta>, // home-tab grid: per-section geometry (nav)
     power_left_sorted_indices: Vec<usize>,   // full sorted display order when letter-groups active
     power_detail_max_scroll: usize,          // max valid scroll (set each render frame)
     power_detail_page_h: usize,              // visible overview line count (set each render frame)
@@ -738,6 +750,8 @@ impl App {
             power_queue_scroll: 0,
             power_queue_row_map: Vec::new(),
             power_left_row_map: Vec::new(),
+            power_home_hitmap: Vec::new(),
+            power_home_layout: Vec::new(),
             power_left_sorted_indices: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
@@ -2041,12 +2055,12 @@ fn restore_terminal(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::ui_util::{fmt_duration, item_text_and_style};
     use super::*;
     use crate::api::TICKS_PER_SECOND;
 
-    fn make_item(name: &str, item_type: &str) -> MediaItem {
+    pub(crate) fn make_item(name: &str, item_type: &str) -> MediaItem {
         MediaItem {
             id: "id".into(),
             name: name.into(),
@@ -2098,6 +2112,7 @@ mod tests {
             volume: 100,
             sub_index: -1,
             audio_index: 1,
+            media_info: crate::api::SessionMediaInfo::default(),
         }
     }
 
@@ -2207,7 +2222,7 @@ mod tests {
 
     // ── test helpers ─────────────────────────────────────────────────────────
 
-    fn make_items(n: usize) -> Vec<MediaItem> {
+    pub(crate) fn make_items(n: usize) -> Vec<MediaItem> {
         (0..n)
             .map(|i| {
                 let mut item = make_item(&format!("Item {i}"), "Movie");
@@ -2218,7 +2233,7 @@ mod tests {
     }
 
     /// Minimal App stub for logic-only tests.
-    fn make_app_stub() -> App {
+    pub(crate) fn make_app_stub() -> App {
         use crate::player::{PlayerProxy, PlayerStatus};
         use std::sync::{Arc, Mutex};
 
@@ -2342,6 +2357,8 @@ mod tests {
             power_queue_scroll: 0,
             power_queue_row_map: Vec::new(),
             power_left_row_map: Vec::new(),
+            power_home_hitmap: Vec::new(),
+            power_home_layout: Vec::new(),
             power_left_sorted_indices: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,

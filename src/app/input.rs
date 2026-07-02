@@ -1158,11 +1158,19 @@ impl App {
         let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         match key.code {
             KeyCode::Up => {
-                self.power_home_move_cursor(-1);
+                self.power_home_move_up();
                 true
             }
             KeyCode::Down => {
-                self.power_home_move_cursor(1);
+                self.power_home_move_down();
+                true
+            }
+            KeyCode::Left => {
+                self.power_home_move_column(-1);
+                true
+            }
+            KeyCode::Right => {
+                self.power_home_move_column(1);
                 true
             }
             KeyCode::PageUp => {
@@ -2339,10 +2347,14 @@ impl App {
                 }
                 self.power_focus = PowerFocus::Left;
                 if self.power_left_tab == 0 {
-                    // Row map is populated by render_power_home_list: None = header, Some(i) = flat item.
-                    let click_y = (row - la.y) as usize;
-                    if let Some(Some(flat_idx)) = self.power_left_row_map.get(click_y).copied() {
-                        self.home.power_home_cursor = flat_idx;
+                    // Home tab: rectangle hit-test the two-column card grid.
+                    let pos = (col, row).into();
+                    if let Some((_, flat_idx)) = self
+                        .power_home_hitmap
+                        .iter()
+                        .find(|(rect, _)| rect.contains(pos))
+                    {
+                        self.home.power_home_cursor = *flat_idx;
                     }
                 } else {
                     let lib_idx = self.power_left_tab - 1;
