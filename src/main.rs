@@ -127,25 +127,16 @@ fn install_signal_handlers() {
 }
 
 extern "C" fn signal_handler(sig: libc::c_int) {
-    let name = match sig {
-        libc::SIGSEGV => "SIGSEGV",
-        libc::SIGILL => "SIGILL",
-        libc::SIGBUS => "SIGBUS",
-        libc::SIGFPE => "SIGFPE",
-        _ => "UNKNOWN",
+    let msg: &[u8] = match sig {
+        libc::SIGSEGV => b"CRASH: signal SIGSEGV\n",
+        libc::SIGILL => b"CRASH: signal SIGILL\n",
+        libc::SIGBUS => b"CRASH: signal SIGBUS\n",
+        libc::SIGFPE => b"CRASH: signal SIGFPE\n",
+        _ => b"CRASH: fatal signal\n",
     };
-    // Only async-signal-safe ops here: write directly to the log file.
-    let msg = format!("CRASH: signal {name} ({sig})");
-    if let Ok(mut f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(crash_log_path())
-    {
-        use std::io::Write;
-        let _ = writeln!(f, "{msg}");
-    }
-    // Re-raise with default handler so the process actually terminates and core dumps work.
+
     unsafe {
+        libc::write(libc::STDERR_FILENO, msg.as_ptr().cast(), msg.len());
         libc::signal(sig, libc::SIG_DFL);
         libc::raise(sig);
     }
