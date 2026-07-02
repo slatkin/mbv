@@ -479,7 +479,7 @@ fn ensure_pipe(path: &str) -> Result<(), String> {
 #[derive(Clone)]
 struct SessionReporter {
     client: Arc<EmbyClient>,
-    ws_tx: Option<mpsc::Sender<String>>,
+    ws_tx: Option<crate::ws::WsSender>,
     // (item_id, msid, sid) in a single lock so progress and event-loop threads never
     // observe a torn triple during item transitions.
     ids: Arc<Mutex<(String, String, String)>>,
@@ -491,7 +491,7 @@ struct SessionReporter {
 impl SessionReporter {
     fn new(
         client: Arc<EmbyClient>,
-        ws_tx: Option<mpsc::Sender<String>>,
+        ws_tx: Option<crate::ws::WsSender>,
         item_id: String,
         msid: String,
         sid: String,
@@ -507,9 +507,9 @@ impl SessionReporter {
         }
     }
 
-    // Selects ws or http automatically; reads pos/paused from status.
-    // Recovers from poisoned mutexes so the progress thread never panics
-    // while holding a lock.
+    // Sends progress via websocket when connected, otherwise falls back to HTTP.
+    // Recovers from poisoned mutexes so the progress thread never panics while
+    // holding a lock.
     fn report_progress(&self, event_name: &str) {
         let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let (pos, runtime, paused) = {
@@ -517,12 +517,14 @@ impl SessionReporter {
             (s.position_ticks, s.runtime_ticks, s.paused)
         };
         if let Some(ref tx) = self.ws_tx {
-            self.client
-                .report_progress_ws(&id, &msid, pos, runtime, paused, &sid, event_name, tx);
-        } else {
-            self.client
-                .report_progress_http(&id, &msid, pos, paused, &sid, event_name);
+            if tx.is_connected() {
+                self.client
+                    .report_progress_ws(&id, &msid, pos, runtime, paused, &sid, event_name, tx);
+                return;
+            }
         }
+        self.client
+            .report_progress_http(&id, &msid, pos, paused, &sid, event_name);
     }
 
     // Zeroes position for audio items so Emby doesn't resume audio from mid-track.
@@ -535,6 +537,11 @@ impl SessionReporter {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .runtime_ticks;
+        if let Some(ref tx) = self.ws_tx {
+            if tx.is_connected() {
+                let _ = tx.flush(Duration::from_secs(1));
+            }
+        }
         log::info!(target: "player", "report_stopped: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s",
             last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
         self.client
@@ -734,12 +741,8 @@ fn spawn_progress_reporter(reporter: SessionReporter) -> ProgressGuard {
         match stop_rx.recv_timeout(interval) {
             Ok(_) | Err(mpsc::RecvTimeoutError::Disconnected) => break,
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                if reporter.is_audio.load(Ordering::Relaxed) {
-                    reporter.report_ping();
-                } else {
-                    reporter.report_progress("TimeUpdate");
-                    reporter.report_ping();
-                }
+                reporter.report_progress("TimeUpdate");
+                reporter.report_ping();
             }
         }
     });
@@ -2303,7 +2306,7 @@ pub struct Player {
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
     pub status: Arc<Mutex<PlayerStatus>>,
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
-    ws_tx: Option<mpsc::Sender<String>>,
+    ws_tx: Option<crate::ws::WsSender>,
 }
 
 impl Player {
@@ -2317,7 +2320,7 @@ impl Player {
         always_skip_intro: bool,
         subtitle_prefs: SubtitlePrefs,
         event_tx: mpsc::Sender<PlayerEvent>,
-        ws_tx: Option<mpsc::Sender<String>>,
+        ws_tx: Option<crate::ws::WsSender>,
     ) -> Self {
         Player {
             server_url,

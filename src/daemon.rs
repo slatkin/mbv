@@ -403,7 +403,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
 
     loop {
         if last_keepalive.elapsed() >= Duration::from_secs(30) {
-            let _ = ws_send_tx.send("{\"MessageType\":\"KeepAlive\"}".to_string());
+            let _ = ws_send_tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
             last_keepalive = Instant::now();
         }
         if last_capabilities.elapsed() >= Duration::from_secs(600) {

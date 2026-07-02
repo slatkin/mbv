@@ -326,7 +326,7 @@ struct SuspendedLocalSession {
     player: PlayerProxy,
     player_rx: mpsc::Receiver<PlayerEvent>,
     ws_rx: mpsc::Receiver<WsEvent>,
-    ws_send_tx: Option<mpsc::Sender<String>>,
+    ws_send_tx: Option<crate::ws::WsSender>,
 }
 
 pub struct App {
@@ -472,7 +472,7 @@ pub struct App {
     use_nerd_fonts: bool,
     indicator_style: render::indicators::IndicatorStyle,
     panel_mode: crate::config::PanelMode,
-    ws_send_tx: Option<mpsc::Sender<String>>,
+    ws_send_tx: Option<crate::ws::WsSender>,
     last_keepalive: Instant,
     last_capabilities: Instant,
     sessions_tx: mpsc::Sender<SessionEvent>,
@@ -508,7 +508,7 @@ struct AppInit {
     player: crate::player::PlayerProxy,
     player_rx: std::sync::mpsc::Receiver<crate::player::PlayerEvent>,
     ws_rx: std::sync::mpsc::Receiver<WsEvent>,
-    ws_send_tx: Option<std::sync::mpsc::Sender<String>>,
+    ws_send_tx: Option<crate::ws::WsSender>,
     player_tab: PlayerTab,
     remote_player_tab: Option<PlayerTab>,
     show_log_tab: bool,
@@ -1565,7 +1565,7 @@ impl App {
             // Keep this session visible to other Emby clients
             if let Some(ref tx) = self.ws_send_tx {
                 if self.last_keepalive.elapsed() >= Duration::from_secs(30) {
-                    let _ = tx.send("{\"MessageType\":\"KeepAlive\"}".to_string());
+                    let _ = tx.send_text("{\"MessageType\":\"KeepAlive\"}".to_string());
                     self.last_keepalive = Instant::now();
                 }
             }

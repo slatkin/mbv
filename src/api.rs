@@ -1,5 +1,3 @@
-use std::sync::mpsc;
-
 use serde_json::Value;
 
 use crate::config::Config;
@@ -966,7 +964,7 @@ impl EmbyClient {
         is_paused: bool,
         session_id: &str,
         event_name: &str,
-        ws_tx: &mpsc::Sender<String>,
+        ws_tx: &crate::ws::WsSender,
     ) {
         let data = serde_json::json!({
             "UserId": self.user_id,
@@ -989,7 +987,7 @@ impl EmbyClient {
         let pos_s = position_ticks / TICKS_PER_SECOND;
         let run_s = runtime_ticks / TICKS_PER_SECOND;
         log::info!(target: "api", "outbound: ws Progress pos={pos_s}s/{run_s}s paused={is_paused} event={event_name}");
-        if ws_tx.send(msg).is_err() {
+        if ws_tx.send_text(msg).is_err() {
             log::warn!(target: "api", "ws channel disconnected, falling back to HTTP");
             self.report_progress_http(
                 item_id,

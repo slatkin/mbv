@@ -1,5 +1,9 @@
 use std::io::ErrorKind;
-use std::sync::mpsc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    mpsc,
+    Arc,
+};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -7,6 +11,43 @@ use rand::RngExt;
 
 use serde_json::Value;
 use tungstenite::Message;
+
+pub enum OutboundMessage {
+    Text(String),
+    Flush(mpsc::Sender<()>),
+}
+
+#[derive(Clone)]
+pub struct WsSender {
+    tx: mpsc::Sender<OutboundMessage>,
+    connected: Arc<AtomicBool>,
+}
+
+impl WsSender {
+    pub fn send_text(&self, msg: String) -> Result<(), mpsc::SendError<OutboundMessage>> {
+        self.tx.send(OutboundMessage::Text(msg))
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self.connected.load(Ordering::Relaxed)
+    }
+
+    pub fn flush(&self, timeout: Duration) -> bool {
+        let (tx, rx) = mpsc::channel();
+        if self.tx.send(OutboundMessage::Flush(tx)).is_err() {
+            return false;
+        }
+        rx.recv_timeout(timeout).is_ok()
+    }
+}
+
+fn drop_stale_outbound(out_rx: &mpsc::Receiver<OutboundMessage>) {
+    while let Ok(msg) = out_rx.try_recv() {
+        if let OutboundMessage::Flush(tx) = msg {
+            let _ = tx.send(());
+        }
+    }
+}
 
 pub enum WsEvent {
     Play {
@@ -142,11 +183,14 @@ fn parse(text: &str) -> Option<WsEvent> {
     }
 }
 
-pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<String> {
-    let (out_tx, out_rx) = mpsc::channel::<String>();
+pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
+    let (out_tx, out_rx) = mpsc::channel::<OutboundMessage>();
+    let connected = Arc::new(AtomicBool::new(false));
+    let connected_bg = connected.clone();
     thread::spawn(move || {
         let mut backoff_secs: u64 = 1;
         loop {
+            connected_bg.store(false, Ordering::Relaxed);
             log::info!(target: "ws", "connecting…");
             match tungstenite::connect(&ws_url) {
                 Ok((mut socket, _)) => {
@@ -166,6 +210,11 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
                     }
                     log::info!(target: "ws", "connected");
 
+                    // Drop any stale outbound text messages buffered while disconnected so
+                    // an old progress update is never replayed after reconnect.
+                    drop_stale_outbound(&out_rx);
+                    connected_bg.store(true, Ordering::Relaxed);
+
                     let mut last_activity = Instant::now();
                     let mut last_ping = Instant::now();
                     const PING_INTERVAL: Duration = Duration::from_secs(20);
@@ -174,9 +223,16 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
                     'conn: loop {
                         // Send outbound messages.
                         while let Ok(msg) = out_rx.try_recv() {
-                            if socket.send(Message::Text(msg)).is_err() {
-                                log::warn!(target: "ws", "send error, reconnecting");
-                                break 'conn;
+                            match msg {
+                                OutboundMessage::Text(msg) => {
+                                    if socket.send(Message::Text(msg)).is_err() {
+                                        log::warn!(target: "ws", "send error, reconnecting");
+                                        break 'conn;
+                                    }
+                                }
+                                OutboundMessage::Flush(tx) => {
+                                    let _ = tx.send(());
+                                }
                             }
                         }
 
@@ -226,6 +282,7 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
                             _ => {}
                         }
                     }
+                    connected_bg.store(false, Ordering::Relaxed);
                 }
                 Err(e) => {
                     log::warn!(target: "ws", "connect failed: {e}");
@@ -239,12 +296,14 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
             backoff_secs = (backoff_secs * 2).min(60);
         }
     });
-    out_tx
+    WsSender { tx: out_tx, connected }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::AtomicBool;
+    use std::time::Duration;
 
     fn parse_msg(text: &str) -> Option<WsEvent> {
         parse(text)
@@ -429,5 +488,33 @@ mod tests {
     #[test]
     fn missing_message_type_returns_none() {
         assert!(parse_msg(r#"{"Data":{}}"#).is_none());
+    }
+
+    #[test]
+    fn flush_acknowledges_without_a_connection() {
+        let (tx, rx) = mpsc::channel();
+        let sender = WsSender {
+            tx,
+            connected: Arc::new(AtomicBool::new(false)),
+        };
+        std::thread::spawn(move || {
+            if let Ok(OutboundMessage::Flush(done)) = rx.recv() {
+                let _ = done.send(());
+            }
+        });
+        assert!(sender.flush(Duration::from_millis(100)));
+    }
+
+    #[test]
+    fn drop_stale_outbound_discards_text_but_preserves_flush() {
+        let (tx, rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        tx.send(OutboundMessage::Text("stale".into())).unwrap();
+        tx.send(OutboundMessage::Flush(done_tx)).unwrap();
+
+        drop_stale_outbound(&rx);
+
+        assert!(done_rx.recv_timeout(Duration::from_millis(100)).is_ok());
+        assert!(rx.try_recv().is_err());
     }
 }
