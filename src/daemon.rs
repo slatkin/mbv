@@ -73,6 +73,7 @@ fn spawn_ctrl_client<R, W>(
     writer_stream: W,
     merged_tx: mpsc::Sender<DaemonEvent>,
     ctrl_clients: ClientList,
+    client: Arc<Mutex<EmbyClient>>,
     player_status: Arc<Mutex<crate::player::PlayerStatus>>,
     shared_items: Arc<Mutex<Vec<MediaItem>>>,
     shared_cursor: Arc<Mutex<usize>>,
@@ -105,6 +106,18 @@ fn spawn_ctrl_client<R, W>(
             Ok(CtrlCmd::Hello(info)) => {
                 if let Err(e) = info.validate_peer() {
                     log::warn!(target: "daemon", "rejecting ctrl client: {e}");
+                    return;
+                }
+                let Some(auth_token) = info.auth_token.as_deref() else {
+                    log::warn!(target: "daemon", "rejecting ctrl client: missing Emby auth token");
+                    return;
+                };
+                let validate_client = client.lock().unwrap().clone();
+                if let Err(e) = validate_client.validate_presented_token(auth_token) {
+                    log::warn!(
+                        target: "daemon",
+                        "rejecting ctrl client: presented Emby token validation failed: {e}"
+                    );
                     return;
                 }
             }
@@ -169,14 +182,22 @@ pub fn run(client: EmbyClient) -> ! {
         });
     }
 
+    let client = Arc::new(Mutex::new(client));
+
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx) = mpsc::channel();
-    let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan);
+    let ws_send_tx = crate::ws::start(client.lock().unwrap().ws_url(), ws_tx_chan);
     let mut direct_commands = Vec::new();
-    let tcp_listener = if client.config.daemon_server_tcp_listen.trim().is_empty() {
+    let daemon_tcp_listen = client
+        .lock()
+        .unwrap()
+        .config
+        .daemon_server_tcp_listen
+        .clone();
+    let tcp_listener = if daemon_tcp_listen.trim().is_empty() {
         None
     } else {
-        match TcpListener::bind(client.config.daemon_server_tcp_listen.trim()) {
+        match TcpListener::bind(daemon_tcp_listen.trim()) {
             Ok(listener) => {
                 let port = listener.local_addr().map(|addr| addr.port()).unwrap_or(0);
                 if port > 0 {
@@ -187,7 +208,7 @@ pub fn run(client: EmbyClient) -> ! {
                         listener
                             .local_addr()
                             .map(|addr| addr.to_string())
-                            .unwrap_or_else(|_| client.config.daemon_server_tcp_listen.clone())
+                            .unwrap_or_else(|_| daemon_tcp_listen.clone())
                     );
                 }
                 Some(listener)
@@ -196,33 +217,41 @@ pub fn run(client: EmbyClient) -> ! {
                 log::warn!(
                     target: "daemon",
                     "daemon tcp control bind failed for {}: {e}",
-                    client.config.daemon_server_tcp_listen
+                    daemon_tcp_listen
                 );
                 None
             }
         }
     };
-    client.register_capabilities_with_extra_commands(&direct_commands);
-    let subtitle_prefs = if client.config.subtitle_mode.is_empty()
-        && client.config.subtitle_lang.is_empty()
-        && client.config.audio_lang.is_empty()
+    client
+        .lock()
+        .unwrap()
+        .register_capabilities_with_extra_commands(&direct_commands);
+    let subtitle_prefs = if client.lock().unwrap().config.subtitle_mode.is_empty()
+        && client.lock().unwrap().config.subtitle_lang.is_empty()
+        && client.lock().unwrap().config.audio_lang.is_empty()
     {
-        client.get_user_subtitle_prefs().unwrap_or_default()
+        client
+            .lock()
+            .unwrap()
+            .get_user_subtitle_prefs()
+            .unwrap_or_default()
     } else {
         crate::player::SubtitlePrefs {
-            mode: client.config.subtitle_mode.clone(),
-            subtitle_lang: client.config.subtitle_lang.clone(),
-            audio_lang: client.config.audio_lang.clone(),
+            mode: client.lock().unwrap().config.subtitle_mode.clone(),
+            subtitle_lang: client.lock().unwrap().config.subtitle_lang.clone(),
+            audio_lang: client.lock().unwrap().config.audio_lang.clone(),
         }
     };
+    let client_locked = client.lock().unwrap().clone();
     let player = Player::new(
-        client.config.server_url.clone(),
-        client.token.clone(),
-        client.config.show_audio_window,
-        client.config.use_mpv_config,
-        client.config.no_scripts,
-        client.config.always_play_next,
-        client.config.always_skip_intro,
+        client_locked.config.server_url.clone(),
+        client_locked.token.clone(),
+        client_locked.config.show_audio_window,
+        client_locked.config.use_mpv_config,
+        client_locked.config.no_scripts,
+        client_locked.config.always_play_next,
+        client_locked.config.always_skip_intro,
         subtitle_prefs,
         player_tx,
         Some(ws_send_tx.clone()),
@@ -236,7 +265,8 @@ pub fn run(client: EmbyClient) -> ! {
         }
     });
 
-    let _tray = if client.config.show_systray_icon {
+    let show_systray_icon = client.lock().unwrap().config.show_systray_icon;
+    let _tray = if show_systray_icon {
         MbyTray {
             shutdown_tx: shutdown_signal_tx,
         }
@@ -279,6 +309,7 @@ pub fn run(client: EmbyClient) -> ! {
     {
         let ctrl_clients = ctrl_clients.clone();
         let merged_tx2 = merged_tx.clone();
+        let client2 = client.clone();
         let player_status = player.status.clone();
         let shared_items = shared_items.clone();
         let shared_cursor = shared_cursor.clone();
@@ -312,6 +343,7 @@ pub fn run(client: EmbyClient) -> ! {
                     stream_w,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
+                    client2.clone(),
                     player_status.clone(),
                     shared_items.clone(),
                     shared_cursor.clone(),
@@ -323,6 +355,7 @@ pub fn run(client: EmbyClient) -> ! {
     if let Some(listener) = tcp_listener {
         let ctrl_clients = ctrl_clients.clone();
         let merged_tx2 = merged_tx.clone();
+        let client2 = client.clone();
         let player_status = player.status.clone();
         let shared_items = shared_items.clone();
         let shared_cursor = shared_cursor.clone();
@@ -337,6 +370,7 @@ pub fn run(client: EmbyClient) -> ! {
                     stream_w,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
+                    client2.clone(),
                     player_status.clone(),
                     shared_items.clone(),
                     shared_cursor.clone(),
@@ -349,7 +383,7 @@ pub fn run(client: EmbyClient) -> ! {
     // seekbar and toggle state stay in sync without sending the full queue.
     {
         let broadcast_interval =
-            std::time::Duration::from_millis(client.config.daemon_broadcast_ms);
+            std::time::Duration::from_millis(client.lock().unwrap().config.daemon_broadcast_ms);
         let player_status = player.status.clone();
         let ctrl_clients = ctrl_clients.clone();
         std::thread::spawn(move || loop {
@@ -362,7 +396,6 @@ pub fn run(client: EmbyClient) -> ! {
         });
     }
 
-    let client = Arc::new(Mutex::new(client));
     let mut items: Vec<MediaItem> = Vec::new();
     let mut cursor: usize = 0;
     let mut last_keepalive = Instant::now();

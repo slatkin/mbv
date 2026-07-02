@@ -631,6 +631,36 @@ impl EmbyClient {
         })
     }
 
+    pub fn validate_presented_token(&self, token: &str) -> Result<String, String> {
+        let token = token.trim();
+        if token.is_empty() {
+            return Err("missing Emby auth token".to_string());
+        }
+        let resp: serde_json::Value = self
+            .agent
+            .get(&self.url("/Users/Me"))
+            .set(
+                "Authorization",
+                &format!(
+                    "Emby Client=\"mbv\", Device=\"{}\", DeviceId=\"{}\", Version=\"{}\", Token=\"{}\"",
+                    self.device_name,
+                    self.device_id,
+                    env!("CARGO_PKG_VERSION"),
+                    token
+                ),
+            )
+            .set("X-Emby-Token", token)
+            .call()
+            .map_err(|e| format!("presented Emby token rejected: {e}"))?
+            .into_json()
+            .map_err(|e| format!("presented Emby token validation parse failed: {e}"))?;
+        let user_id = resp["Id"].as_str().unwrap_or("").trim();
+        if user_id.is_empty() {
+            return Err("presented Emby token validation returned no user id".to_string());
+        }
+        Ok(user_id.to_string())
+    }
+
     // ── Browse / fetch ───────────────────────────────────────────────────────
 
     fn fetch_items(&self, path: &str, queries: &[(&str, &str)]) -> Result<Vec<MediaItem>, String> {

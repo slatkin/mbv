@@ -13,6 +13,7 @@ pub struct CtrlHello {
     pub protocol_version: u32,
     pub app_version: String,
     pub capabilities: Vec<String>,
+    pub auth_token: Option<String>,
 }
 
 impl CtrlHello {
@@ -25,7 +26,14 @@ impl CtrlHello {
                 CTRL_CAP_START_INDEX.to_string(),
                 CTRL_CAP_STATUS_ONLY.to_string(),
             ],
+            auth_token: None,
         }
+    }
+
+    pub fn current_client(auth_token: String) -> Self {
+        let mut hello = Self::current();
+        hello.auth_token = Some(auth_token);
+        hello
     }
 
     pub fn validate_peer(&self) -> Result<(), String> {
@@ -122,5 +130,11 @@ mod tests {
         let mut hello = CtrlHello::current();
         hello.capabilities.retain(|cap| cap != CTRL_CAP_START_INDEX);
         assert!(hello.validate_peer().is_err());
+    }
+
+    #[test]
+    fn current_client_hello_carries_auth_token() {
+        let hello = CtrlHello::current_client("token-123".into());
+        assert_eq!(hello.auth_token.as_deref(), Some("token-123"));
     }
 }

@@ -1065,14 +1065,14 @@ impl App {
             return None;
         }
         if let Some(port) = parse_mbv_direct_tcp_port(&sess.supported_commands) {
-            if let Ok(ip) = sess.host.parse::<std::net::IpAddr>() {
+            if let Ok(ip) = sess.host.parse::<std::net::Ipv4Addr>() {
                 return Some(crate::remote_player::DaemonEndpoint::Tcp(
-                    std::net::SocketAddr::new(ip, port),
+                    std::net::SocketAddr::from((ip, port)),
                 ));
             }
             log::warn!(
                 target: "sessions",
-                "mbv session {:?} advertised direct tcp port {} but host {:?} was not an IP address",
+                "mbv session {:?} advertised direct tcp port {} but host {:?} was not an IPv4 address",
                 sess.device_name,
                 port,
                 sess.host
@@ -1157,7 +1157,8 @@ impl App {
     fn connect_to_session(&mut self, sess: &crate::api::SessionInfo) {
         if !self.player.is_remote() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
-                match crate::remote_player::RemotePlayer::connect_endpoint(&endpoint) {
+                let auth_token = self.client.lock().unwrap().token.clone();
+                match crate::remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_direct_remote(sess, remote, remote_rx);
                         return;

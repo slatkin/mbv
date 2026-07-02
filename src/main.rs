@@ -292,7 +292,8 @@ fn main() {
 
     if let Some(endpoint) = explicit_daemon_endpoint {
         log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
-        match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
+        let auth_token = client.token.clone();
+        match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon endpoint connected");
                 if let Err(e) = App::new_remote(client, remote, player_rx).run() {
@@ -312,7 +313,8 @@ fn main() {
     let daemon_existed = daemon_running();
     if daemon_existed {
         log::info!(target: "startup", "daemon detected; connecting to control socket");
-        match remote_player::RemotePlayer::connect() {
+        let auth_token = client.token.clone();
+        match remote_player::RemotePlayer::connect(&auth_token) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon socket connected");
                 if let Err(e) = App::new_remote(client, remote, player_rx).run() {

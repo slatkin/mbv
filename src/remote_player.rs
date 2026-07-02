@@ -1,13 +1,16 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, TcpStream};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 use crate::api::{EmbyClient, MediaItem};
 use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
+
+const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 
 pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
@@ -53,36 +56,22 @@ impl DaemonEndpoint {
             return Err("daemon endpoint tcp:// requires a host and port".to_string());
         }
 
-        let (host, port) = if let Some(value) = value.strip_prefix('[') {
-            let Some((host, rest)) = value.split_once(']') else {
-                return Err(format!(
-                    "daemon endpoint tcp:// has an invalid IPv6 host: {value}"
-                ));
-            };
-            let Some(port) = rest.strip_prefix(':') else {
-                return Err(format!(
-                    "daemon endpoint tcp:// requires host:port: {value}"
-                ));
-            };
-            (host, port)
-        } else {
-            value
-                .rsplit_once(':')
-                .ok_or_else(|| format!("daemon endpoint tcp:// requires host:port: {value}"))?
-        };
+        let (host, port) = value
+            .rsplit_once(':')
+            .ok_or_else(|| format!("daemon endpoint tcp:// requires host:port: {value}"))?;
 
         let port: u16 = port
             .parse()
             .map_err(|_| format!("daemon endpoint tcp:// requires a numeric port: {value}"))?;
 
-        let ip = if host == "localhost" {
-            IpAddr::V4(Ipv4Addr::LOCALHOST)
+        let ip = if host.eq_ignore_ascii_case("localhost") {
+            Ipv4Addr::LOCALHOST
         } else {
             host.parse()
-                .map_err(|_| format!("daemon endpoint tcp:// requires an IP host: {value}"))?
+                .map_err(|_| format!("daemon endpoint tcp:// requires an IPv4 host: {value}"))?
         };
 
-        Ok(Self::Tcp(SocketAddr::new(ip, port)))
+        Ok(Self::Tcp(SocketAddr::from((ip, port))))
     }
 
     fn connect_stream(&self) -> Result<ControlStream, String> {
@@ -96,7 +85,7 @@ impl DaemonEndpoint {
             Self::Unix(path) => UnixStream::connect(path)
                 .map(ControlStream::Unix)
                 .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
-            Self::Tcp(addr) => TcpStream::connect(addr)
+            Self::Tcp(addr) => TcpStream::connect_timeout(addr, DAEMON_TCP_CONNECT_TIMEOUT)
                 .map(ControlStream::Tcp)
                 .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
         }
@@ -194,12 +183,13 @@ fn apply_ctrl_event(
 }
 
 impl RemotePlayer {
-    pub fn connect() -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
-        Self::connect_endpoint(&DaemonEndpoint::Local)
+    pub fn connect(auth_token: &str) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
+        Self::connect_endpoint(&DaemonEndpoint::Local, auth_token)
     }
 
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
+        auth_token: &str,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
         let mut stream = endpoint.connect_stream()?;
         log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
@@ -259,8 +249,10 @@ impl RemotePlayer {
                 return Err("daemon did not send protocol hello".to_string());
             }
         }
-        let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::current()))
-            .map_err(|e| e.to_string())?;
+        let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::current_client(
+            auth_token.into(),
+        )))
+        .map_err(|e| e.to_string())?;
         writeln!(stream, "{client_hello}")
             .map_err(|e| format!("failed to send daemon protocol hello: {e}"))?;
 
@@ -420,10 +412,6 @@ mod tests {
             DaemonEndpoint::parse("tcp://127.0.0.2:1234").unwrap(),
             DaemonEndpoint::Tcp(SocketAddr::from(([127, 0, 0, 2], 1234)))
         );
-        assert_eq!(
-            DaemonEndpoint::parse("tcp://[::1]:4321").unwrap(),
-            DaemonEndpoint::Tcp(SocketAddr::from(([0, 0, 0, 0, 0, 0, 0, 1], 4321)))
-        );
     }
 
     #[test]
@@ -432,6 +420,7 @@ mod tests {
             DaemonEndpoint::parse("tcp://10.0.0.1:1234").unwrap(),
             DaemonEndpoint::Tcp(SocketAddr::from(([10, 0, 0, 1], 1234)))
         );
+        assert!(DaemonEndpoint::parse("tcp://[::1]:4321").is_err());
         assert!(DaemonEndpoint::parse("unix://").is_err());
         assert!(DaemonEndpoint::parse("http://localhost:1234").is_err());
     }
