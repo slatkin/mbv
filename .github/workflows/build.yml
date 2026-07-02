@@ -37,6 +37,8 @@ jobs:
 
       - name: Set version from tag
         run: |
+          # On tag pushes, build the tagged release version.
+          # On main pushes, use the current PKGBUILD version and skip release publishing.
           PKGVER=${GITHUB_REF_NAME#v}
           if [[ "$PKGVER" == "main" || "$PKGVER" == "$GITHUB_REF_NAME" ]]; then
             PKGVER=$(grep '^pkgver=' PKGBUILD | cut -d= -f2)
