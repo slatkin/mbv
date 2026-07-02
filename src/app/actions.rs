@@ -883,7 +883,7 @@ impl App {
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
         self.on_queue_replace_silent();
-        self.set_queue_scope(QueueScope::Local);
+        self.set_queue_scope(self.playback_queue_scope());
         // Keep library focus when playing from the power-view library panel.
         if !(self.playlist_view == PLAYLIST_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left))
@@ -939,19 +939,19 @@ impl App {
             if episodes.len() > 1 {
                 let c = Arc::new(self.client.lock().unwrap().clone());
                 self.on_queue_replace_silent();
-                self.player_tab.items = episodes.clone();
-                self.player_tab.playlist_cursor = 0;
+                self.replace_playback_queue(episodes.clone(), 0);
                 self.player.play_playlist(episodes, 0, c, self.ui_volume);
                 self.player
                     .send_command(PlayerCommand::SetMute(self.mute_on));
-                self.queue_source = crate::config::QueueSource::Series;
-                self.save_queue_state();
+                if !self.has_direct_remote_queue() {
+                    self.queue_source = crate::config::QueueSource::Series;
+                    self.save_queue_state();
+                }
                 return;
             }
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
-        self.player_tab.items = vec![item.clone()];
-        self.player_tab.playlist_cursor = 0;
+        self.replace_playback_queue(vec![item.clone()], 0);
         self.player.play(&item, c, self.ui_volume);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
@@ -1154,11 +1154,12 @@ impl App {
                     level_items.into_iter().filter(is_playable).collect();
                 sort_audio_tracks(&mut tracks);
                 if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
-                    self.player_tab.items = tracks.clone();
-                    self.player_tab.playlist_cursor = start_idx;
+                    self.replace_playback_queue(tracks.clone(), start_idx);
                     self.play_items_routed(tracks, start_idx);
-                    self.queue_source = crate::config::QueueSource::Album;
-                    self.save_queue_state();
+                    if !self.has_direct_remote_queue() {
+                        self.queue_source = crate::config::QueueSource::Album;
+                        self.save_queue_state();
+                    }
                     return;
                 }
             }
@@ -1178,13 +1179,14 @@ impl App {
                             {
                                 let ct = self.libs[lib_idx].library.collection_type.clone();
                                 drop(client);
-                                self.player_tab.items = siblings.clone();
-                                self.player_tab.playlist_cursor = start_idx;
+                                self.replace_playback_queue(siblings.clone(), start_idx);
                                 self.play_items_routed(siblings, start_idx);
-                                self.queue_source = crate::config::QueueSource::Collection {
-                                    collection_type: ct,
-                                };
-                                self.save_queue_state();
+                                if !self.has_direct_remote_queue() {
+                                    self.queue_source = crate::config::QueueSource::Collection {
+                                        collection_type: ct,
+                                    };
+                                    self.save_queue_state();
+                                }
                                 return;
                             }
                             drop(client);
@@ -1563,13 +1565,14 @@ impl App {
                 items.shuffle(&mut rand::rng());
                 let count = items.len();
                 drop(client);
-                self.player_tab.items = items.clone();
-                self.player_tab.playlist_cursor = 0;
+                self.replace_playback_queue(items.clone(), 0);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
                 self.play_items_routed(items, 0);
-                self.queue_source = crate::config::QueueSource::Shuffle;
-                self.save_queue_state();
+                if !self.has_direct_remote_queue() {
+                    self.queue_source = crate::config::QueueSource::Shuffle;
+                    self.save_queue_state();
+                }
             }
             Err(e) => {
                 let msg = format!("Error: {e}");
@@ -1592,8 +1595,7 @@ impl App {
                 }
                 let count = items.len();
                 drop(client);
-                self.player_tab.items = items.clone();
-                self.player_tab.playlist_cursor = 0;
+                self.replace_playback_queue(items.clone(), 0);
                 self.tab_idx = 1;
                 self.flash_status(format!("Playing {count} items"));
                 self.play_items_routed(items, 0);
@@ -1618,13 +1620,14 @@ impl App {
                 items.shuffle(&mut rand::rng());
                 let count = items.len();
                 drop(client);
-                self.player_tab.items = items.clone();
-                self.player_tab.playlist_cursor = 0;
+                self.replace_playback_queue(items.clone(), 0);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
                 self.play_items_routed(items, 0);
-                self.queue_source = crate::config::QueueSource::Shuffle;
-                self.save_queue_state();
+                if !self.has_direct_remote_queue() {
+                    self.queue_source = crate::config::QueueSource::Shuffle;
+                    self.save_queue_state();
+                }
             }
             Err(e) => {
                 drop(client);
@@ -2523,11 +2526,13 @@ impl App {
                 start_idx,
                 source,
             } => {
-                self.queue_source = source;
-                self.queue_restored = false;
-                self.player_tab.items = items.clone();
-                self.player_tab.playlist_cursor = start_idx;
-                self.set_queue_scope(QueueScope::Local);
+                let direct_remote = self.has_direct_remote_queue();
+                if !direct_remote {
+                    self.queue_source = source;
+                    self.queue_restored = false;
+                }
+                self.replace_playback_queue(items.clone(), start_idx);
+                self.set_queue_scope(self.playback_queue_scope());
                 if let Some(ref conn_id) = self.connected_session_id.clone() {
                     self.clear_playback_overlays();
                     let id = conn_id.clone();
@@ -2550,7 +2555,9 @@ impl App {
                     self.player
                         .send_command(PlayerCommand::SetMute(self.mute_on));
                 }
-                self.save_queue_state();
+                if !direct_remote {
+                    self.save_queue_state();
+                }
             }
             PendingQueueAction::ClearQueue => {
                 self.queue_source = crate::config::QueueSource::Unknown;

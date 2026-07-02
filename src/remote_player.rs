@@ -353,6 +353,47 @@ impl RemotePlayer {
     pub fn join(&self) {
         // No thread to join; daemon keeps running when TUI exits.
     }
+
+    #[cfg(test)]
+    pub fn stub(items: Vec<MediaItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
+        let status = Arc::new(Mutex::new(PlayerStatus {
+            position_ticks: 0,
+            last_valid_pos: 0,
+            runtime_ticks: 0,
+            paused: false,
+            volume: 100,
+            volume_max: 130,
+            current_idx,
+            active: true,
+            title: String::new(),
+            audio_tracks: Vec::new(),
+            sub_tracks: Vec::new(),
+            sub_track_stream_indexes: Vec::new(),
+            audio_id: 0,
+            audio_lang: String::new(),
+            sub_id: 0,
+            sub_lang: String::new(),
+            muted: false,
+            video_height: 0,
+            audio_codec: String::new(),
+            video_is_image: false,
+        }));
+        let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
+        let items = Arc::new(Mutex::new(items));
+        let disconnected = Arc::new(AtomicBool::new(false));
+        let (cmd_tx, _cmd_rx) = mpsc::channel::<CtrlCmd>();
+        let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
+        (
+            RemotePlayer {
+                status,
+                subtitle_prefs,
+                items,
+                cmd_tx,
+                disconnected,
+            },
+            event_rx,
+        )
+    }
 }
 
 #[cfg(test)]

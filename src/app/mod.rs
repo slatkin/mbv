@@ -1002,6 +1002,32 @@ impl App {
         self.player.is_remote() && self.has_remote_queue()
     }
 
+    fn playback_queue_scope(&self) -> QueueScope {
+        if self.has_direct_remote_queue() {
+            QueueScope::Remote
+        } else {
+            QueueScope::Local
+        }
+    }
+
+    fn replace_playback_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
+        let cursor = cursor.min(items.len().saturating_sub(1));
+        match self.playback_queue_scope() {
+            QueueScope::Local => {
+                self.player_tab.items = items;
+                self.player_tab.playlist_cursor = cursor;
+            }
+            QueueScope::Remote => {
+                let queue = self
+                    .remote_player_tab
+                    .as_mut()
+                    .expect("direct remote playback queue requires remote queue");
+                queue.items = items;
+                queue.playlist_cursor = cursor;
+            }
+        }
+    }
+
     fn displayed_queue_scope(&self) -> QueueScope {
         if self.has_direct_remote_queue() && self.queue_scope == QueueScope::Remote {
             QueueScope::Remote
@@ -1672,7 +1698,7 @@ impl App {
                 )
             };
             log::info!(target: "player", "quit: was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos}");
-            if was_playing {
+            if was_playing && !self.has_direct_remote_queue() {
                 if let Some(item) = self.player_tab.items.get_mut(current_idx) {
                     if position_ticks > 0 && !item.is_audio() {
                         item.playback_position_ticks = position_ticks;
@@ -1703,7 +1729,7 @@ impl App {
         // that carries this update is never processed after we break out of the event loop.
         // Use last_valid_pos (never zeroed during track transitions) rather than
         // position_ticks (transiently 0 when PlaylistSession advances to the next track).
-        if was_playing {
+        if was_playing && !self.has_direct_remote_queue() {
             if let Some(item) = self.player_tab.items.get_mut(current_idx) {
                 if last_valid_pos > 0 && !item.is_audio() {
                     item.playback_position_ticks = last_valid_pos;
@@ -1764,6 +1790,7 @@ impl App {
                     return true;
                 }
                 let is_delete = self.pending_delete_idx.take() == Some(idx);
+                let preserve_local_state = !self.has_direct_remote_queue();
                 if let Some(item) = self.playback_queue_mut().items.get_mut(idx) {
                     if !is_delete {
                         if played {
@@ -1777,8 +1804,10 @@ impl App {
                             log::info!(target: "player", "Stopped: position not saved (position_ticks={} is_audio={})", position_ticks, item.is_audio());
                         }
                     }
-                    self.last_played_item_id = Some(item.id.clone());
-                    self.last_played_completed = played;
+                    if preserve_local_state {
+                        self.last_played_item_id = Some(item.id.clone());
+                        self.last_played_completed = played;
+                    }
                 }
                 self.next_up_item = None;
                 self.skip_intro_end_ticks = None;
@@ -1819,7 +1848,9 @@ impl App {
                     }
                 }
                 self.refresh_after_stop();
-                self.save_queue_state();
+                if !self.has_direct_remote_queue() {
+                    self.save_queue_state();
+                }
             }
             PlayerEvent::TrackCompleted {
                 idx,
@@ -1866,10 +1897,14 @@ impl App {
                     idx
                 };
                 self.playback_queue_mut().playlist_cursor = adjusted;
-                if let Some(item) = self.playback_queue().items.get(adjusted) {
-                    self.last_played_item_id = Some(item.id.clone());
+                if !self.has_direct_remote_queue() {
+                    if let Some(item) = self.playback_queue().items.get(adjusted) {
+                        self.last_played_item_id = Some(item.id.clone());
+                    }
                 }
-                self.save_queue_state();
+                if !self.has_direct_remote_queue() {
+                    self.save_queue_state();
+                }
             }
             PlayerEvent::PlaylistNextUp { next_idx } => {
                 if let Some(item) = self.playback_queue().items.get(next_idx).cloned() {
@@ -2398,6 +2433,17 @@ mod tests {
         }
     }
 
+    fn make_remote_app_stub(local_items: Vec<MediaItem>, remote_items: Vec<MediaItem>) -> App {
+        use crate::api::EmbyClient;
+        use crate::config::Config;
+
+        let (remote, player_rx) = crate::remote_player::RemotePlayer::stub(remote_items, 0);
+        let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx);
+        app.player_tab.items = local_items;
+        app.player_tab.playlist_cursor = 0;
+        app
+    }
+
     #[test]
     fn session_direct_endpoint_prefers_advertised_tcp_port() {
         let app = make_app_stub();
@@ -2444,6 +2490,70 @@ mod tests {
         app.set_queue_scope(QueueScope::Remote);
         assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
         assert_eq!(app.queue_scope, QueueScope::Local);
+    }
+
+    #[test]
+    fn direct_remote_play_items_keeps_local_queue_intact() {
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let replacement = make_items(4);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items);
+        app.queue_source = crate::config::QueueSource::Album;
+
+        app.execute_pending_queue_action(PendingQueueAction::PlayItems {
+            items: replacement.clone(),
+            start_idx: 2,
+            source: crate::config::QueueSource::Shuffle,
+        });
+
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            local_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(app.player_tab.playlist_cursor, 0);
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            replacement
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().playlist_cursor, 2);
+        assert!(matches!(
+            app.queue_source,
+            crate::config::QueueSource::Album
+        ));
+        assert_eq!(app.displayed_queue_scope(), QueueScope::Remote);
+    }
+
+    #[test]
+    fn direct_remote_track_changes_do_not_clobber_local_last_played() {
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items);
+        app.last_played_item_id = Some(local_items[1].id.clone());
+        app.last_played_completed = true;
+
+        app.handle_player_event(PlayerEvent::TrackChanged(2));
+
+        assert_eq!(
+            app.last_played_item_id.as_deref(),
+            Some(local_items[1].id.as_str())
+        );
+        assert!(app.last_played_completed);
     }
 
     // ── home_section_len_cur ─────────────────────────────────────────────────
