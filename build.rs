@@ -9,7 +9,11 @@ fn main() {
     let tree = resvg::usvg::Tree::from_str(&svg_colored, &opt).expect("failed to parse icon.svg");
 
     let mut pixmap = resvg::tiny_skia::Pixmap::new(24, 24).expect("pixmap alloc failed");
-    resvg::render(&tree, resvg::tiny_skia::Transform::default(), &mut pixmap.as_mut());
+    resvg::render(
+        &tree,
+        resvg::tiny_skia::Transform::default(),
+        &mut pixmap.as_mut(),
+    );
 
     // StatusNotifierItem spec requires ARGB32 in network byte order (big-endian)
     let mut argb = Vec::with_capacity(24 * 24 * 4);

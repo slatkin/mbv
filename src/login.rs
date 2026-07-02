@@ -1,22 +1,22 @@
 use crossterm::event::{self, Event, KeyCode, KeyEventKind, KeyModifiers};
 use ratatui::{
-    Terminal,
     backend::CrosstermBackend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, Paragraph},
+    Terminal,
 };
 
 use crate::api::EmbyClient;
 use crate::config::Config;
 
-const BASE:    Color = Color::Rgb(26,  26,  26);
-const OVERLAY: Color = Color::Rgb(63,  63,  63);
-const MUTED:   Color = Color::Rgb(108, 108, 108);
-const TEXT:    Color = Color::Rgb(230, 230, 230);
-const IRIS:    Color = Color::Rgb(82,  181, 75);
-const LOVE:    Color = Color::Rgb(220, 60,  60);
+const BASE: Color = Color::Rgb(26, 26, 26);
+const OVERLAY: Color = Color::Rgb(63, 63, 63);
+const MUTED: Color = Color::Rgb(108, 108, 108);
+const TEXT: Color = Color::Rgb(230, 230, 230);
+const IRIS: Color = Color::Rgb(82, 181, 75);
+const LOVE: Color = Color::Rgb(220, 60, 60);
 
 struct LoginForm {
     fields: [String; 3], // [server_url, username, password]
@@ -29,7 +29,13 @@ impl LoginForm {
     fn new(url: &str, username: &str) -> Self {
         LoginForm {
             fields: [url.to_string(), username.to_string(), String::new()],
-            focus: if url.is_empty() { 0 } else if username.is_empty() { 1 } else { 2 },
+            focus: if url.is_empty() {
+                0
+            } else if username.is_empty() {
+                1
+            } else {
+                2
+            },
             error: String::new(),
             busy: false,
         }
@@ -50,8 +56,12 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
     while done.is_none() {
         terminal.draw(|f| render(f, &form))?;
 
-        let Event::Key(key) = event::read()? else { continue };
-        if key.kind != KeyEventKind::Press { continue; }
+        let Event::Key(key) = event::read()? else {
+            continue;
+        };
+        if key.kind != KeyEventKind::Press {
+            continue;
+        }
 
         match key.code {
             KeyCode::Esc => {
@@ -122,6 +132,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     config_version: base_config.config_version,
                     progress_interval_secs: base_config.progress_interval_secs,
                     daemon_broadcast_ms: base_config.daemon_broadcast_ms,
+                    daemon_client_endpoint: base_config.daemon_client_endpoint.clone(),
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {
@@ -140,8 +151,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                 form.error.clear();
             }
             KeyCode::Char(c)
-                if key.modifiers == KeyModifiers::NONE
-                    || key.modifiers == KeyModifiers::SHIFT =>
+                if key.modifiers == KeyModifiers::NONE || key.modifiers == KeyModifiers::SHIFT =>
             {
                 form.fields[form.focus].push(c);
                 form.error.clear();
@@ -151,7 +161,10 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
     }
 
     crossterm::terminal::disable_raw_mode()?;
-    crossterm::execute!(terminal.backend_mut(), crossterm::terminal::LeaveAlternateScreen)?;
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::terminal::LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
 
     done.unwrap()
@@ -167,10 +180,7 @@ fn centered_rect(w: u16, h: u16, area: Rect) -> Rect {
 }
 
 fn render(f: &mut ratatui::Frame, form: &LoginForm) {
-    f.render_widget(
-        Block::default().style(Style::default().bg(BASE)),
-        f.area(),
-    );
+    f.render_widget(Block::default().style(Style::default().bg(BASE)), f.area());
 
     let box_w = 52u16.min(f.area().width.saturating_sub(2));
     let box_h = 15u16.min(f.area().height);
@@ -226,20 +236,30 @@ fn render(f: &mut ratatui::Frame, form: &LoginForm) {
         } else {
             Style::default().fg(MUTED)
         };
-        f.render_widget(Paragraph::new(labels[i]).style(label_style), chunks[label_rows[i]]);
+        f.render_widget(
+            Paragraph::new(labels[i]).style(label_style),
+            chunks[label_rows[i]],
+        );
 
         let text = if i == 2 {
             "\u{25cf}".repeat(form.fields[i].chars().count())
         } else {
             form.fields[i].clone()
         };
-        let display = if focused { format!("{text}\u{258f}") } else { text };
+        let display = if focused {
+            format!("{text}\u{258f}")
+        } else {
+            text
+        };
         let field_style = if focused {
             Style::default().fg(TEXT).bg(OVERLAY)
         } else {
             Style::default().fg(MUTED).bg(OVERLAY)
         };
-        f.render_widget(Paragraph::new(display).style(field_style), chunks[input_rows[i]]);
+        f.render_widget(
+            Paragraph::new(display).style(field_style),
+            chunks[input_rows[i]],
+        );
     }
 
     let hint = Line::from(vec![

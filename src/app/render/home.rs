@@ -1,27 +1,43 @@
-use ratatui::Frame;
+use super::super::palette;
+use super::super::ui_util::{
+    fmt_item_continue, fmt_item_wrapped, highlight_style, highlight_style_continue,
+};
+use super::super::App;
+use super::super::HOME_MIN_SECTION_H;
+use crate::api::MediaItem;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{
+    List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+};
+use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
-use crate::api::MediaItem;
-use super::super::App;
-use super::super::palette;
-use super::super::ui_util::{fmt_item_continue, fmt_item_wrapped, highlight_style, highlight_style_continue};
-use super::super::HOME_MIN_SECTION_H;
 
 impl App {
     pub(super) fn render_home_cards(&mut self, f: &mut Frame, area: Rect) {
         let n_sections = 1 + self.home.latest.len();
-        if n_sections == 0 { return; }
+        if n_sections == 0 {
+            return;
+        }
 
-        if self.home.section >= n_sections { self.home.section = 0; }
+        if self.home.section >= n_sections {
+            self.home.section = 0;
+        }
 
         let compact = self.terminal_height < 28;
-        let max_h_full = if area.height < 12 { area.height }
-                         else { ((area.height as u32 * 24 / 25) as u16).min(24) }.max(4);
-        let side_h_full  = ((max_h_full as u32 * 4 / 5) as u16).max(3);
-        let center_h_full = if compact { side_h_full } else { side_h_full + 2 };
+        let max_h_full = if area.height < 12 {
+            area.height
+        } else {
+            ((area.height as u32 * 24 / 25) as u16).min(24)
+        }
+        .max(4);
+        let side_h_full = ((max_h_full as u32 * 4 / 5) as u16).max(3);
+        let center_h_full = if compact {
+            side_h_full
+        } else {
+            side_h_full + 2
+        };
         let visible = (area.height / center_h_full).max(1).min(n_sections as u16) as usize;
 
         let sec = self.home.section;
@@ -39,12 +55,14 @@ impl App {
         let arrow_top = offset > 0;
         let arrow_bot = offset + visible < n_sections;
 
-        let constraints: Vec<ratatui::layout::Constraint> =
-            (0..visible).map(|_| ratatui::layout::Constraint::Ratio(1, visible as u32)).collect();
+        let constraints: Vec<ratatui::layout::Constraint> = (0..visible)
+            .map(|_| ratatui::layout::Constraint::Ratio(1, visible as u32))
+            .collect();
         let content_rect = area;
         let strips = ratatui::layout::Layout::vertical(constraints).split(content_rect);
 
-        let mut section_data: Vec<(String, Vec<crate::api::MediaItem>, usize)> = Vec::with_capacity(visible);
+        let mut section_data: Vec<(String, Vec<crate::api::MediaItem>, usize)> =
+            Vec::with_capacity(visible);
         for i in 0..visible {
             let s = offset + i;
             let (title, items, cursor) = if s == 0 {
@@ -84,34 +102,66 @@ impl App {
 
         let ud_arrow_style = Style::default().fg(palette::IRIS);
         if arrow_top {
-            let r = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+            let r = Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            };
             self.layout_carousel_up_arrow = Some(r);
-            f.render_widget(Paragraph::new("▲").style(ud_arrow_style).alignment(Alignment::Center), r);
+            f.render_widget(
+                Paragraph::new("▲")
+                    .style(ud_arrow_style)
+                    .alignment(Alignment::Center),
+                r,
+            );
         }
         if arrow_bot {
-            let r = Rect { x: area.x, y: area.bottom().saturating_sub(1), width: area.width, height: 1 };
+            let r = Rect {
+                x: area.x,
+                y: area.bottom().saturating_sub(1),
+                width: area.width,
+                height: 1,
+            };
             self.layout_carousel_down_arrow = Some(r);
-            f.render_widget(Paragraph::new("▼").style(ud_arrow_style).alignment(Alignment::Center), r);
+            f.render_widget(
+                Paragraph::new("▼")
+                    .style(ud_arrow_style)
+                    .alignment(Alignment::Center),
+                r,
+            );
         }
     }
 
     pub(super) fn render_home_cards_section(
-        &mut self, f: &mut Frame, area: Rect,
-        sec_title: &str, items: &[crate::api::MediaItem], cursor: usize, is_active: bool,
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        sec_title: &str,
+        items: &[crate::api::MediaItem],
+        cursor: usize,
+        is_active: bool,
     ) -> [(Option<usize>, Rect); 3] {
         let n = items.len();
-        if n == 0 { return [(None, Rect::default()); 3]; }
+        if n == 0 {
+            return [(None, Rect::default()); 3];
+        }
         let cursor = cursor.min(n - 1);
 
         let cards_area = area;
-        let cards_h    = cards_area.height;
+        let cards_h = cards_area.height;
 
-        let compact      = self.terminal_height < 28;
-        let max_h        = if cards_h < 12 { cards_h } else { ((cards_h as u32 * 24 / 25) as u16).min(24) }.max(4);
-        let side_h       = ((max_h as u32 * 4 / 5) as u16).max(3);
-        let center_h     = if compact { side_h } else { side_h + 2 };
+        let compact = self.terminal_height < 28;
+        let max_h = if cards_h < 12 {
+            cards_h
+        } else {
+            ((cards_h as u32 * 24 / 25) as u16).min(24)
+        }
+        .max(4);
+        let side_h = ((max_h as u32 * 4 / 5) as u16).max(3);
+        let center_h = if compact { side_h } else { side_h + 2 };
         let center_v_pad = (cards_h.saturating_sub(center_h)) / 2;
-        let side_v_pad   = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
+        let side_v_pad = center_v_pad + (center_h.saturating_sub(side_h)) / 2;
 
         const SIDE_HIDE_W: u16 = 60;
         let show_sides = cards_area.width >= SIDE_HIDE_W;
@@ -132,38 +182,71 @@ impl App {
 
         let slots: [(Option<usize>, Rect, bool); 3] = [
             (
-                if show_sides && cursor > 0 { Some(cursor - 1) } else { None },
-                Rect { x: x_left + 2, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(3), height: side_h },
+                if show_sides && cursor > 0 {
+                    Some(cursor - 1)
+                } else {
+                    None
+                },
+                Rect {
+                    x: x_left + 2,
+                    y: cards_area.y + side_v_pad,
+                    width: side_w.saturating_sub(3),
+                    height: side_h,
+                },
                 false,
             ),
             (
                 Some(cursor),
-                Rect { x: x_center, y: cards_area.y + center_v_pad, width: center_w, height: center_h },
+                Rect {
+                    x: x_center,
+                    y: cards_area.y + center_v_pad,
+                    width: center_w,
+                    height: center_h,
+                },
                 true,
             ),
             (
-                if show_sides && cursor + 1 < n { Some(cursor + 1) } else { None },
-                Rect { x: x_right + 1, y: cards_area.y + side_v_pad, width: side_w.saturating_sub(3), height: side_h },
+                if show_sides && cursor + 1 < n {
+                    Some(cursor + 1)
+                } else {
+                    None
+                },
+                Rect {
+                    x: x_right + 1,
+                    y: cards_area.y + side_v_pad,
+                    width: side_w.saturating_sub(3),
+                    height: side_h,
+                },
                 false,
             ),
         ];
 
         if self.images_enabled() {
             let prefetch_start = cursor.saturating_sub(3);
-            let prefetch_end   = (cursor + 3).min(n.saturating_sub(1));
-            for (pi, item) in items.iter().enumerate().take(prefetch_end + 1).skip(prefetch_start) {
+            let prefetch_end = (cursor + 3).min(n.saturating_sub(1));
+            for (pi, item) in items
+                .iter()
+                .enumerate()
+                .take(prefetch_end + 1)
+                .skip(prefetch_start)
+            {
                 let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
                 let types_a: &[&str] = match item.item_type.as_str() {
                     "MusicAlbum" => &["AudioChild"],
-                    "Audio"      => &["Primary"],
-                    "Movie"      => &["Backdrop", "Primary", "Logo"],
-                    _            => &["Primary", "Backdrop", "Logo"],
+                    "Audio" => &["Primary"],
+                    "Movie" => &["Backdrop", "Primary", "Logo"],
+                    _ => &["Primary", "Backdrop", "Logo"],
                 };
-                self.fetch_card_image(format!("{}:A", item_id.clone()), item_id.clone(), series_id.clone(), types_a);
+                self.fetch_card_image(
+                    format!("{}:A", item_id.clone()),
+                    item_id.clone(),
+                    series_id.clone(),
+                    types_a,
+                );
                 if pi != cursor {
                     let types_s: &[&str] = match item.item_type.as_str() {
                         "MusicAlbum" => &["AudioChild"],
-                        "Audio"      => &["Primary"],
+                        "Audio" => &["Primary"],
                         _ => &["Logo", "Primary", "Backdrop"],
                     };
                     self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, types_s);
@@ -172,34 +255,43 @@ impl App {
         }
 
         for (maybe_idx, card_rect, is_center) in &slots {
-            let i = match maybe_idx { None => continue, Some(i) => *i };
-            if card_rect.width < 3 { continue; }
+            let i = match maybe_idx {
+                None => continue,
+                Some(i) => *i,
+            };
+            if card_rect.width < 3 {
+                continue;
+            }
 
             let item = &items[i];
             let is_ep = item.item_type == "Episode" && item.parent_index_number > 0;
-            let ep_tag = if is_ep { format!("S{:02}E{:02}", item.parent_index_number, item.index_number) } else { String::new() };
-            let name      = item.name.clone();
-            let series    = item.series_name.clone();
-            let runtime   = item.runtime_ticks;
+            let ep_tag = if is_ep {
+                format!("S{:02}E{:02}", item.parent_index_number, item.index_number)
+            } else {
+                String::new()
+            };
+            let name = item.name.clone();
+            let series = item.series_name.clone();
+            let runtime = item.runtime_ticks;
             let pos_ticks = item.playback_position_ticks;
-            let rt_ticks  = item.runtime_ticks;
-            let played    = item.played;
-            let item_id   = item.id.clone();
+            let rt_ticks = item.runtime_ticks;
+            let played = item.played;
+            let item_id = item.id.clone();
             let series_id = item.series_id.clone();
-            let selected  = i == cursor && is_active;
+            let selected = i == cursor && is_active;
 
             let (cache_key, img_types): (String, &[&str]) = if *is_center {
                 let types: &[&str] = match item.item_type.as_str() {
                     "MusicAlbum" => &["AudioChild"],
-                    "Audio"      => &["Primary"],
-                    "Movie"      => &["Backdrop", "Primary", "Logo"],
-                    _            => &["Primary", "Backdrop", "Logo"],
+                    "Audio" => &["Primary"],
+                    "Movie" => &["Backdrop", "Primary", "Logo"],
+                    _ => &["Primary", "Backdrop", "Logo"],
                 };
                 (format!("{}:A", item_id), types)
             } else {
                 let types: &[&str] = match item.item_type.as_str() {
                     "MusicAlbum" => &["AudioChild"],
-                    "Audio"      => &["Primary"],
+                    "Audio" => &["Primary"],
                     _ => &["Logo", "Primary", "Backdrop"],
                 };
                 (format!("{}:S", item_id), types)
@@ -208,29 +300,65 @@ impl App {
                 self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
             }
 
-            let count_label     = if *is_center { Some(format!("{}/{}", cursor + 1, n)) } else { None };
+            let count_label = if *is_center {
+                Some(format!("{}/{}", cursor + 1, n))
+            } else {
+                None
+            };
             let sec_title_label = if *is_center { Some(sec_title) } else { None };
-            self.render_card_slot(f, *card_rect, *is_center, selected, false, false, false, false,
-                &cache_key, &name, &series, &ep_tag, runtime, pos_ticks, rt_ticks, played,
-                count_label.as_deref(), sec_title_label, false);
+            self.render_card_slot(
+                f,
+                *card_rect,
+                *is_center,
+                selected,
+                false,
+                false,
+                false,
+                false,
+                &cache_key,
+                &name,
+                &series,
+                &ep_tag,
+                runtime,
+                pos_ticks,
+                rt_ticks,
+                played,
+                count_label.as_deref(),
+                sec_title_label,
+                false,
+            );
         }
 
         if is_active {
             let lr_arrow_style = Style::default().fg(palette::WHITE);
             let y_mid = cards_area.y + center_v_pad + center_h / 2;
             if show_sides && cursor > 0 {
-                let r = Rect { x: x_left, y: y_mid, width: 1, height: 1 };
+                let r = Rect {
+                    x: x_left,
+                    y: y_mid,
+                    width: 1,
+                    height: 1,
+                };
                 self.layout_carousel_left_arrow = Some(r);
                 f.render_widget(Paragraph::new("◀").style(lr_arrow_style), r);
             }
             if show_sides && cursor + 1 < n {
-                let r = Rect { x: x_right + side_w - 1, y: y_mid, width: 1, height: 1 };
+                let r = Rect {
+                    x: x_right + side_w - 1,
+                    y: y_mid,
+                    width: 1,
+                    height: 1,
+                };
                 self.layout_carousel_right_arrow = Some(r);
                 f.render_widget(Paragraph::new("▶").style(lr_arrow_style), r);
             }
         }
 
-        [(slots[0].0, slots[0].1), (slots[1].0, slots[1].1), (slots[2].0, slots[2].1)]
+        [
+            (slots[0].0, slots[0].1),
+            (slots[1].0, slots[1].1),
+            (slots[2].0, slots[2].1),
+        ]
     }
 
     pub(super) fn render_home_panel(&mut self, f: &mut Frame, area: Rect) {
@@ -254,27 +382,36 @@ impl App {
 
         let scrollable = n_rows > visible_rows;
         let layout_area = if scrollable && area.width > 2 {
-            Rect { width: area.width - 2, ..area }
+            Rect {
+                width: area.width - 2,
+                ..area
+            }
         } else {
             area
         };
 
         let continue_items = self.home.continue_items.len();
-        let constraints: Vec<Constraint> = (0..render_row_count).map(|row_pos| {
-            let logical_row = row_offset + row_pos;
-            if logical_row == 0 {
-                // Size Continue Watching to its content: header + 2 rows per item, capped at half height
-                let content_h = (1 + continue_items as u16).min(area.height / 2).max(HOME_MIN_SECTION_H);
-                Constraint::Length(content_h)
-            } else {
-                Constraint::Min(HOME_MIN_SECTION_H)
-            }
-        }).collect();
+        let constraints: Vec<Constraint> = (0..render_row_count)
+            .map(|row_pos| {
+                let logical_row = row_offset + row_pos;
+                if logical_row == 0 {
+                    // Size Continue Watching to its content: header + 2 rows per item, capped at half height
+                    let content_h = (1 + continue_items as u16)
+                        .min(area.height / 2)
+                        .max(HOME_MIN_SECTION_H);
+                    Constraint::Length(content_h)
+                } else {
+                    Constraint::Min(HOME_MIN_SECTION_H)
+                }
+            })
+            .collect();
         let row_areas = Layout::vertical(constraints).spacing(1).split(layout_area);
 
         let mut areas: Vec<Rect> = vec![Rect::default(); n_sections];
 
-        let latest_data: Vec<(String, Vec<MediaItem>, usize)> = self.home.latest
+        let latest_data: Vec<(String, Vec<MediaItem>, usize)> = self
+            .home
+            .latest
             .iter()
             .map(|(t, _, items, c)| (t.clone(), items.clone(), *c))
             .collect();
@@ -289,18 +426,23 @@ impl App {
                 areas[0] = row_area;
                 let cont_focused = home_focused && self.home.section == 0;
                 scrolls[0] = self.render_home_section(
-                    f, row_area, "Continue",
-                    &self.home.continue_items, self.home.continue_cursor, cont_focused, true,
+                    f,
+                    row_area,
+                    "Continue",
+                    &self.home.continue_items,
+                    self.home.continue_cursor,
+                    cont_focused,
+                    true,
                 );
             } else {
                 let latest_row_idx = logical_row - 1;
                 let left_sec = 1 + latest_row_idx * 2;
                 let right_sec = left_sec + 1;
 
-                let [left_area, right_area] = Layout::horizontal([
-                    Constraint::Percentage(50),
-                    Constraint::Percentage(50),
-                ]).spacing(2).areas(row_area);
+                let [left_area, right_area] =
+                    Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                        .spacing(2)
+                        .areas(row_area);
 
                 let is_last_odd = right_sec >= n_sections;
                 let render_left_area = if is_last_odd {
@@ -308,7 +450,8 @@ impl App {
                         Constraint::Percentage(25),
                         Constraint::Percentage(50),
                         Constraint::Percentage(25),
-                    ]).areas::<3>(row_area)[1]
+                    ])
+                    .areas::<3>(row_area)[1]
                 } else {
                     left_area
                 };
@@ -317,7 +460,13 @@ impl App {
                     areas[left_sec] = render_left_area;
                     let focused = home_focused && self.home.section == left_sec;
                     scrolls[left_sec] = self.render_home_section(
-                        f, render_left_area, title, items, *cursor, focused, false,
+                        f,
+                        render_left_area,
+                        title,
+                        items,
+                        *cursor,
+                        focused,
+                        false,
                     );
                 }
                 if right_sec < n_sections {
@@ -336,7 +485,12 @@ impl App {
         self.layout_home_scrolls = scrolls;
 
         if scrollable {
-            let sb_rect = Rect { x: area.x + area.width.saturating_sub(1), y: area.y, width: 1, height: area.height };
+            let sb_rect = Rect {
+                x: area.x + area.width.saturating_sub(1),
+                y: area.y,
+                width: 1,
+                height: area.height,
+            };
             self.layout_home_scrollbar = sb_rect;
             let mut sb_state = ScrollbarState::new(max_offset + 1).position(row_offset);
             f.render_stateful_widget(
@@ -355,16 +509,27 @@ impl App {
     }
 
     pub(super) fn render_home_section(
-        &self, f: &mut Frame, area: Rect,
-        title: &str, items: &[MediaItem], cursor: usize, focused: bool,
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        title: &str,
+        items: &[MediaItem],
+        cursor: usize,
+        focused: bool,
         continue_style: bool,
     ) -> usize {
-        if area.height < 2 { return 0; }
+        if area.height < 2 {
+            return 0;
+        }
 
         let title_style = if focused {
-            Style::default().fg(palette::IRIS).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(palette::IRIS)
+                .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(palette::YELLOW)
+                .add_modifier(Modifier::BOLD)
         };
         let rule_style = Style::default().fg(palette::MUTED);
 
@@ -376,7 +541,12 @@ impl App {
             Span::styled(title.to_string(), title_style),
             Span::styled(format!(" {rule}"), rule_style),
         ]);
-        let header_rect = Rect { x: area.x, y: area.y, width: area.width, height: 1 };
+        let header_rect = Rect {
+            x: area.x,
+            y: area.y,
+            width: area.width,
+            height: 1,
+        };
         f.render_widget(Paragraph::new(header), header_rect);
 
         let list_rect = Rect {
@@ -387,38 +557,55 @@ impl App {
         };
 
         if items.is_empty() {
-            f.render_widget(Paragraph::new("(empty)").style(Style::default().fg(palette::MUTED)), list_rect);
+            f.render_widget(
+                Paragraph::new("(empty)").style(Style::default().fg(palette::MUTED)),
+                list_rect,
+            );
             return 0;
         }
 
-        let list_items: Vec<ListItem> = items.iter().enumerate().map(|(i, item)| {
-            let sel = focused && i == cursor;
-            let li = if continue_style {
-                ListItem::new(fmt_item_continue(item, list_rect.width as usize, sel))
-            } else {
-                ListItem::new(fmt_item_wrapped(item, list_rect.width as usize, sel))
-            };
-            if sel {
-                li.style(if continue_style { highlight_style_continue(item) } else { highlight_style(item) })
-            } else {
-                li
-            }
-        }).collect();
+        let list_items: Vec<ListItem> = items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| {
+                let sel = focused && i == cursor;
+                let li = if continue_style {
+                    ListItem::new(fmt_item_continue(item, list_rect.width as usize, sel))
+                } else {
+                    ListItem::new(fmt_item_wrapped(item, list_rect.width as usize, sel))
+                };
+                if sel {
+                    li.style(if continue_style {
+                        highlight_style_continue(item)
+                    } else {
+                        highlight_style(item)
+                    })
+                } else {
+                    li
+                }
+            })
+            .collect();
 
         let mut state = ListState::default();
-        if focused { state.select(Some(cursor)); }
+        if focused {
+            state.select(Some(cursor));
+        }
         f.render_stateful_widget(List::new(list_items), list_rect, &mut state);
         state.offset()
     }
 
     pub(super) fn render_home_search(&mut self, f: &mut Frame, area: Rect) {
-        use ratatui::widgets::{Block, Borders, BorderType, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
-        use ratatui::text::{Line, Span};
-        use ratatui::style::{Modifier, Style};
-        use ratatui::layout::{Constraint, Layout};
         use super::super::palette;
+        use ratatui::layout::{Constraint, Layout};
+        use ratatui::style::{Modifier, Style};
+        use ratatui::text::{Line, Span};
+        use ratatui::widgets::{
+            Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        };
 
-        if self.home_search.is_none() { return; }
+        if self.home_search.is_none() {
+            return;
+        }
 
         // Compute layout parameters from an immutable borrow, then drop it
         let (show_filter, filter_height, filtered_total) = {
@@ -433,7 +620,8 @@ impl App {
             Constraint::Length(3),
             Constraint::Length(filter_height),
             Constraint::Min(0),
-        ]).split(area);
+        ])
+        .split(area);
         let input_area = chunks[0];
         let filter_area = chunks[1];
         let results_area = chunks[2];
@@ -459,21 +647,27 @@ impl App {
         // Search input bar
         let loading_suffix = if hs.loading { " [searching...]" } else { "" };
         let input_text = format!("{}{}", hs.query, loading_suffix);
-        let border_color = if input_focused { palette::IRIS } else { palette::MUTED };
+        let border_color = if input_focused {
+            palette::IRIS
+        } else {
+            palette::MUTED
+        };
         let hint_style = Style::default().fg(palette::MUTED);
         f.render_widget(
             Paragraph::new(input_text)
                 .style(Style::default().fg(palette::FOAM))
-                .block(Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded)
-                    .border_style(Style::default().fg(border_color))
-                    .title(" Search ")
-                    .title_style(Style::default().fg(palette::YELLOW))
-                    .title_bottom(Line::from(vec![
-                        Span::styled(" ESC: back", hint_style),
-                        Span::styled("  Tab: toggle input ", hint_style),
-                    ]))),
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_type(BorderType::Rounded)
+                        .border_style(Style::default().fg(border_color))
+                        .title(" Search ")
+                        .title_style(Style::default().fg(palette::YELLOW))
+                        .title_bottom(Line::from(vec![
+                            Span::styled(" ESC: back", hint_style),
+                            Span::styled("  Tab: toggle input ", hint_style),
+                        ])),
+                ),
             input_area,
         );
         if input_focused {
@@ -486,23 +680,27 @@ impl App {
             let mut spans: Vec<Span> = Vec::new();
             let active = hs.type_filter;
             let all_style = if active == 0 {
-                Style::default().fg(palette::FOAM).add_modifier(Modifier::REVERSED)
+                Style::default()
+                    .fg(palette::FOAM)
+                    .add_modifier(Modifier::REVERSED)
             } else {
                 Style::default().fg(palette::MUTED)
             };
             spans.push(Span::styled(" All ", all_style));
             for (i, t) in types.iter().enumerate() {
                 let label = match *t {
-                    "Movie"       => " Movie ",
-                    "Series"      => " Series ",
-                    "Episode"     => " Ep ",
-                    "Audio"       => " Audio ",
-                    "MusicAlbum"  => " Album ",
+                    "Movie" => " Movie ",
+                    "Series" => " Series ",
+                    "Episode" => " Ep ",
+                    "Audio" => " Audio ",
+                    "MusicAlbum" => " Album ",
                     "MusicArtist" => " Artist ",
-                    _             => " Item ",
+                    _ => " Item ",
                 };
                 let style = if active == i + 1 {
-                    Style::default().fg(palette::FOAM).add_modifier(Modifier::REVERSED)
+                    Style::default()
+                        .fg(palette::FOAM)
+                        .add_modifier(Modifier::REVERSED)
                 } else {
                     Style::default().fg(palette::MUTED)
                 };
@@ -519,7 +717,12 @@ impl App {
             };
             f.render_widget(
                 Paragraph::new(hint).style(Style::default().fg(palette::MUTED)),
-                Rect { x: results_area.x + 1, y: results_area.y + 1, width: results_area.width.saturating_sub(2), height: 1 },
+                Rect {
+                    x: results_area.x + 1,
+                    y: results_area.y + 1,
+                    width: results_area.width.saturating_sub(2),
+                    height: 1,
+                },
             );
             return;
         }
@@ -528,29 +731,35 @@ impl App {
         let scroll = hs.scroll;
         let filtered = hs.filtered_results();
 
-        let items: Vec<ListItem> = filtered.iter().enumerate().skip(scroll).take(visible).map(|(i, item)| {
-            let type_label = match item.item_type.as_str() {
-                "Movie"       => "[Movie]  ",
-                "Series"      => "[Series] ",
-                "Episode"     => "[Ep]     ",
-                "Audio"       => "[Audio]  ",
-                "MusicAlbum"  => "[Album]  ",
-                "MusicArtist" => "[Artist] ",
-                _             => "[Item]   ",
-            };
-            let year = if item.production_year > 0 {
-                format!("  ({})", item.production_year)
-            } else {
-                String::new()
-            };
-            let name = format!("{}{}{}", type_label, item.display_name(), year);
-            let style = if i == cursor {
-                Style::default().add_modifier(Modifier::REVERSED)
-            } else {
-                Style::default()
-            };
-            ListItem::new(Line::from(vec![Span::styled(name, style)]))
-        }).collect();
+        let items: Vec<ListItem> = filtered
+            .iter()
+            .enumerate()
+            .skip(scroll)
+            .take(visible)
+            .map(|(i, item)| {
+                let type_label = match item.item_type.as_str() {
+                    "Movie" => "[Movie]  ",
+                    "Series" => "[Series] ",
+                    "Episode" => "[Ep]     ",
+                    "Audio" => "[Audio]  ",
+                    "MusicAlbum" => "[Album]  ",
+                    "MusicArtist" => "[Artist] ",
+                    _ => "[Item]   ",
+                };
+                let year = if item.production_year > 0 {
+                    format!("  ({})", item.production_year)
+                } else {
+                    String::new()
+                };
+                let name = format!("{}{}{}", type_label, item.display_name(), year);
+                let style = if i == cursor {
+                    Style::default().add_modifier(Modifier::REVERSED)
+                } else {
+                    Style::default()
+                };
+                ListItem::new(Line::from(vec![Span::styled(name, style)]))
+            })
+            .collect();
 
         use ratatui::widgets::{List, ListState};
         let mut state = ListState::default();

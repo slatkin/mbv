@@ -4,14 +4,29 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub enum Level { Debug, Info, Warn, Error }
+pub enum Level {
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
 
 impl Level {
     pub fn label(self) -> &'static str {
-        match self { Level::Error => "E", Level::Warn => "W", Level::Info => "I", Level::Debug => "D" }
+        match self {
+            Level::Error => "E",
+            Level::Warn => "W",
+            Level::Info => "I",
+            Level::Debug => "D",
+        }
     }
     pub fn logfmt(self) -> &'static str {
-        match self { Level::Error => "error", Level::Warn => "warn", Level::Info => "info", Level::Debug => "debug" }
+        match self {
+            Level::Error => "error",
+            Level::Warn => "warn",
+            Level::Info => "info",
+            Level::Debug => "debug",
+        }
     }
 }
 
@@ -19,8 +34,8 @@ impl From<log::Level> for Level {
     fn from(l: log::Level) -> Self {
         match l {
             log::Level::Error => Level::Error,
-            log::Level::Warn  => Level::Warn,
-            log::Level::Info  => Level::Info,
+            log::Level::Warn => Level::Warn,
+            log::Level::Info => Level::Info,
             log::Level::Debug | log::Level::Trace => Level::Debug,
         }
     }
@@ -36,9 +51,14 @@ pub struct LogEntry {
 
 fn now_ts() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs() as libc::time_t;
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as libc::time_t;
     let mut tm: libc::tm = unsafe { std::mem::zeroed() };
-    unsafe { libc::localtime_r(&secs, &mut tm); }
+    unsafe {
+        libc::localtime_r(&secs, &mut tm);
+    }
     format!("{:02}:{:02}:{:02}", tm.tm_hour, tm.tm_min, tm.tm_sec)
 }
 
@@ -62,7 +82,11 @@ impl AppLog {
                 old.set_extension("log.old");
                 let _ = std::fs::rename(&path, &old);
             }
-            std::fs::OpenOptions::new().create(true).append(true).open(&path).ok()
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .ok()
         });
         AppLog {
             buf: Arc::new(Mutex::new(VecDeque::new())),
@@ -74,9 +98,13 @@ impl AppLog {
 
     fn push_entry(&self, mut entry: LogEntry) {
         entry.ts = now_ts();
-        let line = format!("ts={} level={} source={} msg=\"{}\"",
-            entry.ts, entry.level.logfmt(), entry.source,
-            entry.msg.replace('\\', "\\\\").replace('"', "\\\""));
+        let line = format!(
+            "ts={} level={} source={} msg=\"{}\"",
+            entry.ts,
+            entry.level.logfmt(),
+            entry.source,
+            entry.msg.replace('\\', "\\\\").replace('"', "\\\"")
+        );
         if self.stderr {
             eprintln!("{line}");
         }
@@ -85,9 +113,13 @@ impl AppLog {
                 let _ = writeln!(f, "{line}");
             }
         }
-        if self.capacity == 0 { return; }
+        if self.capacity == 0 {
+            return;
+        }
         let mut g = self.buf.lock().unwrap();
-        if g.len() >= self.capacity { g.drain(..(self.capacity / 10).max(1)); }
+        if g.len() >= self.capacity {
+            g.drain(..(self.capacity / 10).max(1));
+        }
         g.push_back(entry);
     }
 
@@ -102,7 +134,9 @@ static LOGGER: GlobalLogger = GlobalLogger;
 struct GlobalLogger;
 
 impl log::Log for GlobalLogger {
-    fn enabled(&self, _: &log::Metadata) -> bool { true }
+    fn enabled(&self, _: &log::Metadata) -> bool {
+        true
+    }
 
     fn log(&self, record: &log::Record) {
         // mbv targets are bare words ("api", "ws", "img", etc.) with no "::".
@@ -125,7 +159,9 @@ impl log::Log for GlobalLogger {
 }
 
 pub fn init(capacity: usize, stderr: bool, log_path: Option<PathBuf>) {
-    if GLOBAL.get().is_some() { return; }
+    if GLOBAL.get().is_some() {
+        return;
+    }
     let applog = AppLog::new(capacity, stderr, log_path);
     GLOBAL.get_or_init(|| applog);
     let _ = log::set_logger(&LOGGER);
@@ -146,7 +182,12 @@ mod tests {
     }
 
     fn entry(level: Level, source: &str, msg: &str) -> LogEntry {
-        LogEntry { level, ts: String::new(), source: source.into(), msg: msg.into() }
+        LogEntry {
+            level,
+            ts: String::new(),
+            source: source.into(),
+            msg: msg.into(),
+        }
     }
 
     #[test]
@@ -202,8 +243,16 @@ mod tests {
         let before = crate::applog::global().unwrap().snapshot().len();
         log::info!(target: "test", "ring buffer routing test");
         let after = crate::applog::global().unwrap().snapshot().len();
-        assert!(after > before, "log macro should have added an entry to the ring buffer");
-        let last = crate::applog::global().unwrap().snapshot().into_iter().last().unwrap();
+        assert!(
+            after > before,
+            "log macro should have added an entry to the ring buffer"
+        );
+        let last = crate::applog::global()
+            .unwrap()
+            .snapshot()
+            .into_iter()
+            .last()
+            .unwrap();
         assert_eq!(last.source, "test");
         assert_eq!(last.msg, "ring buffer routing test");
         assert_eq!(last.level, Level::Info);

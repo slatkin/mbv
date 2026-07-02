@@ -1,30 +1,31 @@
-pub(crate) mod palette;
-pub(crate) mod ui_util;
-pub(crate) mod images;
-mod settings;
-mod input;
 mod actions;
+pub(crate) mod images;
+mod input;
+pub(crate) mod palette;
 pub mod render;
+mod settings;
+pub(crate) mod ui_util;
 
-use std::sync::{Arc, Mutex, mpsc};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
-static QUIT_REQUESTED:  AtomicBool = AtomicBool::new(false);
+static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 // Set only by SIGHUP or stdin POLLHUP (terminal vanished). Never set by q/SIGTERM.
 // The watchdog's forced exit arms only on this flag so clean q-quits are never raced.
-static TERMINAL_GONE:   AtomicBool = AtomicBool::new(false);
+static TERMINAL_GONE: AtomicBool = AtomicBool::new(false);
 
-pub(super) const PLAYLIST_VIEW_POWER: u8  = 1;
-pub(super) const PLAYLIST_VIEW_COUNT: u8  = 2;
+pub(super) const PLAYLIST_VIEW_POWER: u8 = 1;
+pub(super) const PLAYLIST_VIEW_COUNT: u8 = 2;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
-pub(super) const TABBAR_RIGHT_RESERVE: u16      = 17;
+pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
 /// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
-pub(super) const TABBAR_LEFT_RESERVE: u16       = 10;
+pub(super) const TABBAR_LEFT_RESERVE: u16 = 10;
 
 extern "C" fn handle_quit_signal(signum: i32) {
     QUIT_REQUESTED.store(true, Ordering::Relaxed);
-    if signum == 1 { // SIGHUP — terminal closed
+    if signum == 1 {
+        // SIGHUP — terminal closed
         TERMINAL_GONE.store(true, Ordering::Relaxed);
     }
 }
@@ -34,14 +35,18 @@ fn install_signal_handlers() {
         fn signal(signum: i32, handler: unsafe extern "C" fn(i32)) -> usize;
     }
     unsafe {
-        signal(1,  handle_quit_signal); // SIGHUP — terminal closed
+        signal(1, handle_quit_signal); // SIGHUP — terminal closed
         signal(15, handle_quit_signal); // SIGTERM — process termination
     }
 }
 
 // Returns true if stdin (fd 0) has POLLHUP — the PTY master was closed.
 fn stdin_has_hup() -> bool {
-    let mut pfd = libc::pollfd { fd: 0, events: 0, revents: 0 };
+    let mut pfd = libc::pollfd {
+        fd: 0,
+        events: 0,
+        revents: 0,
+    };
     unsafe { libc::poll(&mut pfd, 1, 0) > 0 && (pfd.revents & libc::POLLHUP as libc::c_short) != 0 }
 }
 
@@ -80,11 +85,7 @@ fn start_quit_watchdog(quit_handle: Option<crate::player::QuitHandle>) {
 }
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use ratatui::{
-    Terminal,
-    backend::CrosstermBackend,
-    layout::Rect,
-};
+use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
 
 use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
@@ -94,7 +95,10 @@ use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use crate::ws::WsEvent;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum LogPane { Sources, Log }
+enum LogPane {
+    Sources,
+    Log,
+}
 
 #[derive(Clone)]
 enum ContextAction {
@@ -111,7 +115,12 @@ enum ContextAction {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(crate) enum MultiSelectKind { HiddenLibraries, HiddenLatest, MyLanguages, FeedViewLibraries }
+pub(crate) enum MultiSelectKind {
+    HiddenLibraries,
+    HiddenLatest,
+    MyLanguages,
+    FeedViewLibraries,
+}
 
 struct MultiSelectPopup {
     kind: MultiSelectKind,
@@ -130,42 +139,48 @@ struct ContextMenu {
 struct LibSearch {
     query: String,
     items: Vec<crate::api::MediaItem>,
-    results: Vec<usize>,               // indices into items, sorted by score desc
-    cursor: usize,                     // position within results
-    scroll: usize,                     // viewport scroll offset for the results list
-    loading: bool,                     // true while full-library fetch is in flight
+    results: Vec<usize>, // indices into items, sorted by score desc
+    cursor: usize,       // position within results
+    scroll: usize,       // viewport scroll offset for the results list
+    loading: bool,       // true while full-library fetch is in flight
 }
 
 struct HomeSearch {
     query: String,
-    last_query: String,                // query string that produced current results
+    last_query: String, // query string that produced current results
     results: Vec<crate::api::MediaItem>,
     cursor: usize,
     loading: bool,
     scroll: usize,
-    type_filter: usize,                // 0 = All; 1..N index into sorted type list
-    input_focused: bool,               // true = typing into box; false = browsing results
+    type_filter: usize,  // 0 = All; 1..N index into sorted type list
+    input_focused: bool, // true = typing into box; false = browsing results
 }
 
 impl HomeSearch {
     fn type_sort_key(t: &str) -> u8 {
         match t {
-            "Movie"       => 0,
-            "Series"      => 1,
-            "Episode"     => 2,
-            "Audio"       => 3,
-            "MusicAlbum"  => 4,
+            "Movie" => 0,
+            "Series" => 1,
+            "Episode" => 2,
+            "Audio" => 3,
+            "MusicAlbum" => 4,
             "MusicArtist" => 5,
-            _             => 6,
+            _ => 6,
         }
     }
 
     pub(super) fn available_types(&self) -> Vec<&str> {
         let mut seen = std::collections::HashSet::new();
-        let mut types: Vec<&str> = self.results.iter()
+        let mut types: Vec<&str> = self
+            .results
+            .iter()
             .filter_map(|r| {
                 let t = r.item_type.as_str();
-                if seen.insert(t) { Some(t) } else { None }
+                if seen.insert(t) {
+                    Some(t)
+                } else {
+                    None
+                }
             })
             .collect();
         types.sort_by_key(|t| Self::type_sort_key(t));
@@ -174,8 +189,15 @@ impl HomeSearch {
 
     pub(super) fn filtered_results(&self) -> Vec<&crate::api::MediaItem> {
         let types = self.available_types();
-        let filter = if self.type_filter == 0 { None } else { types.get(self.type_filter - 1).copied() };
-        self.results.iter().filter(|r| filter.is_none_or(|t| r.item_type == t)).collect()
+        let filter = if self.type_filter == 0 {
+            None
+        } else {
+            types.get(self.type_filter - 1).copied()
+        };
+        self.results
+            .iter()
+            .filter(|r| filter.is_none_or(|t| r.item_type == t))
+            .collect()
     }
 
     pub(super) fn filtered_count(&self) -> usize {
@@ -189,7 +211,7 @@ struct BrowseLevel {
     items: Vec<MediaItem>,
     total_count: usize,
     cursor: usize,
-    scroll: usize,                     // viewport scroll offset for the list
+    scroll: usize, // viewport scroll offset for the list
     item_types: Option<String>,
     unplayed_only: bool,
     sort_by: String,
@@ -212,18 +234,55 @@ const PAGE_SIZE: usize = 100;
 const PREFETCH_AHEAD: usize = 25;
 
 enum LibEvent {
-    Loaded { lib_idx: usize, parent_id: String, level: BrowseLevel },
-    PageAppended { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
-    Refreshed { lib_idx: usize, parent_id: String, items: Vec<MediaItem>, total_count: usize },
-    SearchItemsLoaded { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
-    AllItemsPrefetched { lib_idx: usize, parent_id: String, items: Vec<MediaItem> },
-    AlbumYearFetched { album_id: String, year: u32 },
+    Loaded {
+        lib_idx: usize,
+        parent_id: String,
+        level: BrowseLevel,
+    },
+    PageAppended {
+        lib_idx: usize,
+        parent_id: String,
+        items: Vec<MediaItem>,
+        total_count: usize,
+    },
+    Refreshed {
+        lib_idx: usize,
+        parent_id: String,
+        items: Vec<MediaItem>,
+        total_count: usize,
+    },
+    SearchItemsLoaded {
+        lib_idx: usize,
+        parent_id: String,
+        items: Vec<MediaItem>,
+    },
+    AllItemsPrefetched {
+        lib_idx: usize,
+        parent_id: String,
+        items: Vec<MediaItem>,
+    },
+    AlbumYearFetched {
+        album_id: String,
+        year: u32,
+    },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate nav_stack, stay on current tab).
-    NavigateTo { lib_idx: usize, nav_stack: Vec<BrowseLevel>, switch_tab: bool },
+    NavigateTo {
+        lib_idx: usize,
+        nav_stack: Vec<BrowseLevel>,
+        switch_tab: bool,
+    },
     PlaylistsLoaded(Vec<MediaItem>),
-    PlaylistItemsLoaded { playlist_id: String, items: Vec<MediaItem> },
-    QueueRestored { items: Vec<MediaItem>, source: crate::config::QueueSource, last_played_item_id: Option<String>, last_played_completed: bool },
+    PlaylistItemsLoaded {
+        playlist_id: String,
+        items: Vec<MediaItem>,
+    },
+    QueueRestored {
+        items: Vec<MediaItem>,
+        source: crate::config::QueueSource,
+        last_played_item_id: Option<String>,
+        last_played_completed: bool,
+    },
     Error(String),
 }
 
@@ -242,7 +301,7 @@ struct HomePane {
     continue_items: Vec<MediaItem>,
     continue_cursor: usize,
     latest: Vec<(String, String, Vec<MediaItem>, usize)>, // (title, lib_id, items, cursor)
-    section: usize, // 0=continue, 1..=latest
+    section: usize,                                       // 0=continue, 1..=latest
     /// Flat cursor for the power-view home list (spans continue_items then all latest sections).
     power_home_cursor: usize,
     /// Viewport scroll offset for the power-view home list.
@@ -305,31 +364,32 @@ pub struct App {
     layout_vol_area: Rect,
     layout_sub_area: Rect,
     layout_audio_area: Rect,
-    layout_ind_au:  Rect,
+    layout_ind_au: Rect,
     layout_ind_sub: Rect,
-    layout_ind_rc:  Rect,
-    layout_ind_mu:  Rect,
-    layout_ind_pb:  Rect,
-    confirm_remove_idx: Option<usize>,     // playlist index pending removal confirmation
-    pending_delete_idx: Option<usize>,     // deferred removal of now-playing item after Stopped event
-    pending_queue_removal: Option<usize>,  // deferred removal after TrackChanged index-shifts
+    layout_ind_rc: Rect,
+    layout_ind_mu: Rect,
+    layout_ind_pb: Rect,
+    confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
+    pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
+    pending_queue_removal: Option<usize>, // deferred removal after TrackChanged index-shifts
     confirm_clear_playlist: bool,
     playlist_undo_stack: Vec<(usize, MediaItem)>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
-    playlist_group: bool,                    // list view: group audio by album / episodes by series
-    playlist_row_map: Vec<Option<usize>>,    // list view visual row → item index (None = header/spacer)
+    playlist_group: bool, // list view: group audio by album / episodes by series
+    playlist_row_map: Vec<Option<usize>>, // list view visual row → item index (None = header/spacer)
     power_focus: PowerFocus,
-    power_left_tab: usize,          // 0 = Home/CW, 1..=libs.len() = library index
-    power_left_tab_pending: usize,  // restored from prefs; applied once libs have loaded
-    power_left_area: Rect,   // rendered area of the left panel (for mouse click / page calc)
+    power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
+    power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
+    power_left_area: Rect, // rendered area of the left panel (for mouse click / page calc)
     power_queue_area: Rect,
+    power_queue_scroll: usize,
     power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
     power_left_row_map: Vec<Option<usize>>,  // visual row → item index for library letter groups
     power_left_sorted_indices: Vec<usize>,   // full sorted display order when letter-groups active
-    power_detail_max_scroll: usize,  // max valid scroll (set each render frame)
-    power_detail_page_h: usize,      // visible overview line count (set each render frame)
+    power_detail_max_scroll: usize,          // max valid scroll (set each render frame)
+    power_detail_page_h: usize,              // visible overview line count (set each render frame)
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
@@ -379,7 +439,7 @@ pub struct App {
     playlists_scroll: usize,
     playlists_loading: bool,
     show_playlists: bool,
-    playlists_open: Option<MediaItem>,         // playlist currently being browsed
+    playlists_open: Option<MediaItem>, // playlist currently being browsed
     playlists_open_items: Vec<MediaItem>,
     playlists_open_cursor: usize,
     playlists_open_scroll: usize,
@@ -405,10 +465,10 @@ pub struct App {
     connected_session_state: Option<crate::api::SessionInfo>,
     last_session_poll: Instant,
     session_miss_count: u8, // consecutive polls that didn't find the connected session
-    remote_pos_s: i64,               // monotonic position estimate for the connected remote
-    remote_pos_at: Instant,          // when remote_pos_s was last anchored
+    remote_pos_s: i64,      // monotonic position estimate for the connected remote
+    remote_pos_at: Instant, // when remote_pos_s was last anchored
     remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
-    remote_seek_pending_until: Instant,  // suppress poll pos-reconcile after a seek
+    remote_seek_pending_until: Instant, // suppress poll pos-reconcile after a seek
     runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
     force_clear: bool,
     tab_scroll: usize,
@@ -455,7 +515,11 @@ struct AppInit {
 }
 
 enum PendingQueueAction {
-    PlayItems { items: Vec<MediaItem>, start_idx: usize, source: crate::config::QueueSource },
+    PlayItems {
+        items: Vec<MediaItem>,
+        start_idx: usize,
+        source: crate::config::QueueSource,
+    },
     ClearQueue,
     Quit,
 }
@@ -463,10 +527,9 @@ enum PendingQueueAction {
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub(super) enum PowerFocus {
     #[default]
-    Queue,          // left panel (queue list below the card)
-    Left,           // right panel (library browser); driven by power_left_tab
+    Queue, // left panel (queue list below the card)
+    Left, // right panel (library browser); driven by power_left_tab
 }
-
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingKey {
@@ -498,17 +561,54 @@ enum SettingKey {
 // Sections rendered as YELLOW blocks in a 2×2 grid.
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
-    ("[general]", &[SettingKey::DaemonModeOnExit, SettingKey::AlwaysSkipIntro, SettingKey::ShowLogTab, SettingKey::SystemNotifications, SettingKey::ImageProtocol, SettingKey::HiddenLibraries, SettingKey::HiddenLatest, SettingKey::FeedViewLibraries]),
-    ("[queue]",   &[SettingKey::StartOnQueue, SettingKey::AlwaysPlayNext, SettingKey::ConsumeVideos, SettingKey::SavePlaylistOnConsume]),
-    ("[mpv]",       &[SettingKey::ShowAudioWindow, SettingKey::UseMpvConfig, SettingKey::NoScripts, SettingKey::Autoload, SettingKey::AudioPipeEnabled]),
-    ("[playback]",  &[SettingKey::MyLanguages, SettingKey::SubtitleMode, SettingKey::SubtitleLanguage, SettingKey::AudioLanguage]),
-    ("[daemon]",    &[SettingKey::ShowSysTrayIcon]),
-    ("[actions]",   &[SettingKey::LogOut]),
+    (
+        "[general]",
+        &[
+            SettingKey::DaemonModeOnExit,
+            SettingKey::AlwaysSkipIntro,
+            SettingKey::ShowLogTab,
+            SettingKey::SystemNotifications,
+            SettingKey::ImageProtocol,
+            SettingKey::HiddenLibraries,
+            SettingKey::HiddenLatest,
+            SettingKey::FeedViewLibraries,
+        ],
+    ),
+    (
+        "[queue]",
+        &[
+            SettingKey::StartOnQueue,
+            SettingKey::AlwaysPlayNext,
+            SettingKey::ConsumeVideos,
+            SettingKey::SavePlaylistOnConsume,
+        ],
+    ),
+    (
+        "[mpv]",
+        &[
+            SettingKey::ShowAudioWindow,
+            SettingKey::UseMpvConfig,
+            SettingKey::NoScripts,
+            SettingKey::Autoload,
+            SettingKey::AudioPipeEnabled,
+        ],
+    ),
+    (
+        "[playback]",
+        &[
+            SettingKey::MyLanguages,
+            SettingKey::SubtitleMode,
+            SettingKey::SubtitleLanguage,
+            SettingKey::AudioLanguage,
+        ],
+    ),
+    ("[daemon]", &[SettingKey::ShowSysTrayIcon]),
+    ("[actions]", &[SettingKey::LogOut]),
 ];
 
-const SESSIONS_PANEL_W:  u16 = 40;
-const HELP_PANEL_W:      u16 = 40;
-const SETTINGS_PANEL_W:  u16 = 40;
+const SESSIONS_PANEL_W: u16 = 40;
+const HELP_PANEL_W: u16 = 40;
+const SETTINGS_PANEL_W: u16 = 40;
 const PLAYLISTS_PANEL_W: u16 = 40;
 const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
@@ -530,7 +630,11 @@ impl App {
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
-            tab_idx: if init.start_on_queue { 1 } else { prefs["tab_idx"].as_u64().unwrap_or(0) as usize },
+            tab_idx: if init.start_on_queue {
+                1
+            } else {
+                prefs["tab_idx"].as_u64().unwrap_or(0) as usize
+            },
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
             home_search: None,
@@ -542,7 +646,14 @@ impl App {
             card_image_rx: init.card_image_rx,
             notif_action_tx: init.notif_action_tx,
             notif_action_rx: init.notif_action_rx,
-            home: HomePane { continue_items: Vec::new(), continue_cursor: 0, latest: Vec::new(), section: 0, power_home_cursor: 0, power_home_scroll: 0 },
+            home: HomePane {
+                continue_items: Vec::new(),
+                continue_cursor: 0,
+                latest: Vec::new(),
+                section: 0,
+                power_home_cursor: 0,
+                power_home_scroll: 0,
+            },
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
@@ -579,11 +690,11 @@ impl App {
             layout_vol_area: Rect::default(),
             layout_sub_area: Rect::default(),
             layout_audio_area: Rect::default(),
-            layout_ind_au:  Rect::default(),
+            layout_ind_au: Rect::default(),
             layout_ind_sub: Rect::default(),
-            layout_ind_rc:  Rect::default(),
-            layout_ind_mu:  Rect::default(),
-            layout_ind_pb:  Rect::default(),
+            layout_ind_rc: Rect::default(),
+            layout_ind_mu: Rect::default(),
+            layout_ind_pb: Rect::default(),
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
@@ -599,6 +710,7 @@ impl App {
             power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
+            power_queue_scroll: 0,
             power_queue_row_map: Vec::new(),
             power_left_row_map: Vec::new(),
             power_left_sorted_indices: Vec::new(),
@@ -684,7 +796,8 @@ impl App {
         let (ws_tx, ws_rx) = mpsc::channel();
         let (lib_tx, lib_rx) = mpsc::channel();
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
-        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<image::DynamicImage>)>();
+        let (card_image_tx, card_image_rx) =
+            mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
         let server_url = client.config.server_url.clone();
@@ -697,7 +810,8 @@ impl App {
         let image_protocol_enabled = client.config.image_protocol.is_some();
         let image_cache_size = client.config.image_cache_size;
         let use_nerd_fonts = client.config.use_nerd_fonts;
-        let indicator_style: render::indicators::IndicatorStyle = client.config.indicator_style.parse().unwrap_or_default();
+        let indicator_style: render::indicators::IndicatorStyle =
+            client.config.indicator_style.parse().unwrap_or_default();
         let start_on_queue = client.config.start_on_queue;
         let always_play_next = client.config.always_play_next;
         let always_skip_intro = client.config.always_skip_intro;
@@ -718,7 +832,18 @@ impl App {
                 audio_lang: client.config.audio_lang.clone(),
             }
         };
-        let raw_player = Player::new(server_url, token, client.config.show_audio_window, client.config.use_mpv_config, client.config.no_scripts, always_play_next, always_skip_intro, subtitle_prefs, player_tx, Some(ws_send_tx));
+        let raw_player = Player::new(
+            server_url,
+            token,
+            client.config.show_audio_window,
+            client.config.use_mpv_config,
+            client.config.no_scripts,
+            always_play_next,
+            always_skip_intro,
+            subtitle_prefs,
+            player_tx,
+            Some(ws_send_tx),
+        );
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();
         crate::mpris::start(player_status, move |cmd| {
@@ -742,7 +867,10 @@ impl App {
             player_rx,
             ws_rx,
             ws_send_tx: Some(ws_send_tx_app),
-            player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
+            player_tab: PlayerTab {
+                items: Vec::new(),
+                playlist_cursor: 0,
+            },
             show_log_tab,
             system_notifications,
             image_protocol_enabled,
@@ -753,11 +881,16 @@ impl App {
             indicator_style,
             image_cache_size,
             start_on_queue,
-            lib_tx, lib_rx,
-            sessions_tx, sessions_rx,
-            card_image_tx, card_image_rx,
-            notif_action_tx, notif_action_rx,
-            search_tx, search_rx,
+            lib_tx,
+            lib_rx,
+            sessions_tx,
+            sessions_rx,
+            card_image_tx,
+            card_image_rx,
+            notif_action_tx,
+            notif_action_rx,
+            search_tx,
+            search_rx,
         })
     }
 
@@ -769,7 +902,8 @@ impl App {
         let (_, ws_rx) = mpsc::channel::<crate::ws::WsEvent>();
         let (lib_tx, lib_rx) = mpsc::channel();
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
-        let (card_image_tx, card_image_rx) = mpsc::channel::<(String, Option<image::DynamicImage>)>();
+        let (card_image_tx, card_image_rx) =
+            mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
         let hidden_libraries = client.config.hidden_libraries.clone();
@@ -780,7 +914,8 @@ impl App {
         let image_protocol_enabled = client.config.image_protocol.is_some();
         let image_cache_size = client.config.image_cache_size;
         let use_nerd_fonts = client.config.use_nerd_fonts;
-        let indicator_style: render::indicators::IndicatorStyle = client.config.indicator_style.parse().unwrap_or_default();
+        let indicator_style: render::indicators::IndicatorStyle =
+            client.config.indicator_style.parse().unwrap_or_default();
         crate::config::evict_old_image_cache();
         let client_arc = Arc::new(Mutex::new(client));
         {
@@ -800,7 +935,10 @@ impl App {
             player_rx,
             ws_rx,
             ws_send_tx: None,
-            player_tab: PlayerTab { items: initial_items, playlist_cursor: initial_cursor },
+            player_tab: PlayerTab {
+                items: initial_items,
+                playlist_cursor: initial_cursor,
+            },
             show_log_tab: false,
             system_notifications: false,
             image_protocol_enabled,
@@ -811,11 +949,16 @@ impl App {
             indicator_style,
             image_cache_size,
             start_on_queue,
-            lib_tx, lib_rx,
-            sessions_tx, sessions_rx,
-            card_image_tx, card_image_rx,
-            notif_action_tx, notif_action_rx,
-            search_tx, search_rx,
+            lib_tx,
+            lib_rx,
+            sessions_tx,
+            sessions_rx,
+            card_image_tx,
+            card_image_rx,
+            notif_action_tx,
+            notif_action_rx,
+            search_tx,
+            search_rx,
         })
     }
 
@@ -827,13 +970,14 @@ impl App {
         use ratatui_image::picker::ProtocolType;
         let protocol_override = self.client.lock().unwrap().config.image_protocol.clone();
         let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
-        let proto = protocol_override.as_deref()
+        let proto = protocol_override
+            .as_deref()
             .and_then(|s| match s.to_lowercase().as_str() {
-                "sixel"      => Some(ProtocolType::Sixel),
-                "kitty"      => Some(ProtocolType::Kitty),
-                "iterm2"     => Some(ProtocolType::Iterm2),
+                "sixel" => Some(ProtocolType::Sixel),
+                "kitty" => Some(ProtocolType::Kitty),
+                "iterm2" => Some(ProtocolType::Iterm2),
                 "halfblocks" => Some(ProtocolType::Halfblocks),
-                _            => None, // "auto" or unknown: use picker's detected protocol
+                _ => None, // "auto" or unknown: use picker's detected protocol
             });
         if let Some(proto) = proto {
             picker.set_protocol_type(proto);
@@ -862,10 +1006,14 @@ impl App {
 
         'outer: loop {
             let mut had_events = false;
-            if QUIT_REQUESTED.load(Ordering::Relaxed) { break; }
+            if QUIT_REQUESTED.load(Ordering::Relaxed) {
+                break;
+            }
             if let Ok(ev) = self.player_rx.try_recv() {
                 had_events = true;
-                if self.handle_player_event(ev) { continue 'outer; }
+                if self.handle_player_event(ev) {
+                    continue 'outer;
+                }
             }
 
             while let Ok(action) = self.notif_action_rx.try_recv() {
@@ -881,7 +1029,9 @@ impl App {
                     }
                     "next_up:play" => {
                         if let Some(item) = self.next_up_item.take() {
-                            if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
+                            if let Some(idx) =
+                                self.player_tab.items.iter().position(|i| i.id == item.id)
+                            {
                                 let label = item.playback_label();
                                 self.player.send_command(PlayerCommand::JumpTo(idx));
                                 self.player_tab.playlist_cursor = idx;
@@ -901,7 +1051,9 @@ impl App {
                             self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
                         }
                     }
-                    "__notif_failed__" => { self.notif_failed = true; }
+                    "__notif_failed__" => {
+                        self.notif_failed = true;
+                    }
                     _ => {} // dismissed, "ignore", "cancel", or empty: leave TUI prompt untouched
                 }
             }
@@ -919,7 +1071,9 @@ impl App {
                     hs.scroll = 0;
                     hs.type_filter = 0;
                     match result {
-                        Ok(items) => { hs.results = items; }
+                        Ok(items) => {
+                            hs.results = items;
+                        }
                         Err(e) => {
                             hs.results = Vec::new();
                             self.flash_status_high(format!("Search error: {e}"));
@@ -932,7 +1086,10 @@ impl App {
                 had_events = true;
                 match ev {
                     SessionEvent::Loaded(sessions) => {
-                        let old_id = self.sessions.get(self.sessions_cursor).map(|s| s.id.clone());
+                        let old_id = self
+                            .sessions
+                            .get(self.sessions_cursor)
+                            .map(|s| s.id.clone());
                         self.sessions = sessions;
                         self.sessions_loading = false;
                         self.last_session_poll = Instant::now();
@@ -940,7 +1097,9 @@ impl App {
                             if let Some(pos) = self.sessions.iter().position(|s| s.id == id) {
                                 self.sessions_cursor = pos;
                             } else {
-                                self.sessions_cursor = self.sessions_cursor.min(self.sessions.len().saturating_sub(1));
+                                self.sessions_cursor = self
+                                    .sessions_cursor
+                                    .min(self.sessions.len().saturating_sub(1));
                                 if !self.sessions.is_empty() {
                                     log::warn!(target: "sessions", "selected session gone; cursor clamped");
                                 }
@@ -956,21 +1115,30 @@ impl App {
                                 // different name, which would spuriously reset the position anchor
                                 // every poll and prevent smooth interpolation.
                                 let now = Instant::now();
-                                let prev_item_id = self.connected_session_state
-                                    .as_ref().and_then(|p| p.now_playing_item_id.as_deref());
+                                let prev_item_id = self
+                                    .connected_session_state
+                                    .as_ref()
+                                    .and_then(|p| p.now_playing_item_id.as_deref());
                                 let item_changed = s.now_playing_item_id.as_deref() != prev_item_id;
                                 if item_changed {
                                     // Refresh the previous item so played/progress reflects
                                     // what the remote client reported to the server.
-                                    if let Some(prev_id) = self.connected_session_state
-                                        .as_ref().and_then(|p| p.now_playing_item_id.clone())
+                                    if let Some(prev_id) = self
+                                        .connected_session_state
+                                        .as_ref()
+                                        .and_then(|p| p.now_playing_item_id.clone())
                                     {
                                         let client = self.client.lock().unwrap().clone();
                                         let tx = self.sessions_tx.clone();
                                         std::thread::spawn(move || {
-                                            if let Ok(mut items) = client.get_items_by_ids(std::slice::from_ref(&prev_id)) {
+                                            if let Ok(mut items) = client
+                                                .get_items_by_ids(std::slice::from_ref(&prev_id))
+                                            {
                                                 if let Some(fresh) = items.pop() {
-                                                    let _ = tx.send(SessionEvent::ItemRefreshed(prev_id, Box::new(fresh)));
+                                                    let _ = tx.send(SessionEvent::ItemRefreshed(
+                                                        prev_id,
+                                                        Box::new(fresh),
+                                                    ));
                                                 }
                                             }
                                         });
@@ -979,14 +1147,17 @@ impl App {
                                 // Detect playback via API position advancing, not IsPaused.
                                 // Some Emby clients always report IsPaused=true even while playing;
                                 // the only reliable signal is that PositionTicks keeps moving.
-                                let prev_api_pos = self.connected_session_state
-                                    .as_ref().map_or(0, |p| p.position_s);
+                                let prev_api_pos = self
+                                    .connected_session_state
+                                    .as_ref()
+                                    .map_or(0, |p| p.position_s);
                                 if s.position_s > prev_api_pos {
                                     self.remote_api_pos_advanced_at = now;
                                 }
                                 // Extrapolate if API advanced recently (within 2× the ~11s report
                                 // interval). After that window lapses we treat it as paused/stopped.
-                                let api_active = self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
+                                let api_active =
+                                    self.remote_api_pos_advanced_at.elapsed().as_secs() < 22;
                                 let seek_pending = now < self.remote_seek_pending_until;
                                 if seek_pending && !item_changed {
                                     // A seek was just dispatched; hold the optimistic position until
@@ -1020,8 +1191,10 @@ impl App {
                                     self.remote_pos_at = now;
                                 }
                                 if item_changed {
-                                    if let Some(new_idx) = s.now_playing_item_id.as_ref()
-                                        .and_then(|id| self.player_tab.items.iter().position(|it| &it.id == id))
+                                    if let Some(new_idx) =
+                                        s.now_playing_item_id.as_ref().and_then(|id| {
+                                            self.player_tab.items.iter().position(|it| &it.id == id)
+                                        })
                                     {
                                         self.player_tab.playlist_cursor = new_idx;
                                     }
@@ -1033,10 +1206,11 @@ impl App {
                                 // Cap fast-poll at 30 s: if runtime stays 0 that long the
                                 // remote client likely won't report it and we stop hammering.
                                 if s.runtime_s == 0 {
-                                    let since = self.runtime_zero_since
-                                        .get_or_insert_with(Instant::now);
+                                    let since =
+                                        self.runtime_zero_since.get_or_insert_with(Instant::now);
                                     if since.elapsed() < Duration::from_secs(30) {
-                                        self.last_session_poll = Instant::now() - Duration::from_millis(500);
+                                        self.last_session_poll =
+                                            Instant::now() - Duration::from_millis(500);
                                     }
                                 } else {
                                     self.runtime_zero_since = None;
@@ -1045,7 +1219,9 @@ impl App {
                                 self.session_miss_count += 1;
                                 if self.session_miss_count >= 3 {
                                     log::warn!(target: "sessions", "connected session gone; disconnecting");
-                                    self.flash_status_high("Remote session ended; disconnected".to_string());
+                                    self.flash_status_high(
+                                        "Remote session ended; disconnected".to_string(),
+                                    );
                                     self.connected_session_id = None;
                                     self.connected_session_state = None;
                                     self.session_miss_count = 0;
@@ -1057,7 +1233,9 @@ impl App {
                         }
                     }
                     SessionEvent::ItemRefreshed(item_id, fresh) => {
-                        if let Some(slot) = self.player_tab.items.iter_mut().find(|i| i.id == item_id) {
+                        if let Some(slot) =
+                            self.player_tab.items.iter_mut().find(|i| i.id == item_id)
+                        {
                             *slot = *fresh;
                         }
                     }
@@ -1075,10 +1253,11 @@ impl App {
                 // count is balanced here; free the slot and start any queued fetch.
                 self.image_fetches_active = self.image_fetches_active.saturating_sub(1);
                 // Image was decoded off-thread; just build the render protocol.
-                let state: Option<StatefulProtocol> = img_opt
-                    .and_then(|dyn_img| {
-                        self.image_picker.as_ref().map(|p| p.new_resize_protocol(dyn_img))
-                    });
+                let state: Option<StatefulProtocol> = img_opt.and_then(|dyn_img| {
+                    self.image_picker
+                        .as_ref()
+                        .map(|p| p.new_resize_protocol(dyn_img))
+                });
                 if state.is_some() {
                     self.image_lru.retain(|k| k != &item_id);
                     self.image_lru.push_back(item_id.clone());
@@ -1144,20 +1323,26 @@ impl App {
                 let is_home_card_nav = self.home_card_view && self.tab_idx == 0;
                 match ev {
                     Event::Key(key) => {
-                        if key.kind != KeyEventKind::Press { continue; }
-                        let nav_code = is_home_card_nav
-                            && matches!(key.code, KeyCode::Left | KeyCode::Right);
-                        if self.handle_key(key) { break; }
+                        if key.kind != KeyEventKind::Press {
+                            continue;
+                        }
+                        let nav_code =
+                            is_home_card_nav && matches!(key.code, KeyCode::Left | KeyCode::Right);
+                        if self.handle_key(key) {
+                            break;
+                        }
                         // Drain queued duplicate nav keys to prevent scroll backlog.
                         if nav_code {
                             while event::poll(Duration::ZERO).unwrap_or(false) {
                                 match event::read() {
-                                    Ok(Event::Key(k)) if k.kind == KeyEventKind::Press
-                                        && k.code == key.code => {}
+                                    Ok(Event::Key(k))
+                                        if k.kind == KeyEventKind::Press && k.code == key.code => {}
                                     Ok(other) => {
                                         match other {
                                             Event::Key(k) if k.kind == KeyEventKind::Press => {
-                                                if self.handle_key(k) { break 'outer; }
+                                                if self.handle_key(k) {
+                                                    break 'outer;
+                                                }
                                             }
                                             Event::Mouse(m) => self.handle_mouse(m),
                                             _ => {}
@@ -1171,22 +1356,29 @@ impl App {
                     }
                     Event::Mouse(mouse) => {
                         let nav_scroll = is_home_card_nav
-                            && matches!(mouse.kind,
-                                crossterm::event::MouseEventKind::ScrollUp |
-                                crossterm::event::MouseEventKind::ScrollDown)
+                            && matches!(
+                                mouse.kind,
+                                crossterm::event::MouseEventKind::ScrollUp
+                                    | crossterm::event::MouseEventKind::ScrollDown
+                            )
                             && self.home_rect.contains((mouse.column, mouse.row).into());
                         self.handle_mouse(mouse);
                         // Drain queued scroll events to prevent scroll backlog.
                         if nav_scroll {
                             while event::poll(Duration::ZERO).unwrap_or(false) {
                                 match event::read() {
-                                    Ok(Event::Mouse(m)) if matches!(m.kind,
-                                        crossterm::event::MouseEventKind::ScrollUp |
-                                        crossterm::event::MouseEventKind::ScrollDown) => {}
+                                    Ok(Event::Mouse(m))
+                                        if matches!(
+                                            m.kind,
+                                            crossterm::event::MouseEventKind::ScrollUp
+                                                | crossterm::event::MouseEventKind::ScrollDown
+                                        ) => {}
                                     Ok(other) => {
                                         match other {
                                             Event::Key(k) if k.kind == KeyEventKind::Press => {
-                                                if self.handle_key(k) { break 'outer; }
+                                                if self.handle_key(k) {
+                                                    break 'outer;
+                                                }
                                             }
                                             Event::Mouse(m) => self.handle_mouse(m),
                                             _ => {}
@@ -1210,7 +1402,11 @@ impl App {
             // (where the local player is idle) still animates smoothly.
             let render_interval = {
                 let (active, ..) = self.effective_playback_state();
-                if active { Duration::from_millis(150) } else { Duration::from_secs(1) }
+                if active {
+                    Duration::from_millis(150)
+                } else {
+                    Duration::from_secs(1)
+                }
             };
             if had_events || self.force_clear || last_render.elapsed() >= render_interval {
                 if self.force_clear {
@@ -1231,7 +1427,12 @@ impl App {
         if QUIT_REQUESTED.load(Ordering::Relaxed) {
             let (was_playing, current_idx, position_ticks, last_valid_pos) = {
                 let st = self.player.status.lock().unwrap();
-                (st.active, st.current_idx, st.position_ticks, st.last_valid_pos)
+                (
+                    st.active,
+                    st.current_idx,
+                    st.position_ticks,
+                    st.last_valid_pos,
+                )
             };
             log::info!(target: "player", "quit: was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos}");
             if was_playing {
@@ -1284,11 +1485,19 @@ impl App {
     /// (the remote owns its volume) and while temporarily muted (so a mute
     /// doesn't clobber the saved level with 0).
     fn sync_volume_from_player(&mut self) {
-        if self.connected_session_id.is_some() { return; }
-        if self.pre_mute_volume.is_some() { return; }
+        if self.connected_session_id.is_some() {
+            return;
+        }
+        if self.pre_mute_volume.is_some() {
+            return;
+        }
         let player_vol = {
             let s = self.player.status.lock().unwrap();
-            if s.active { Some(s.volume.clamp(0, 200) as u8) } else { None }
+            if s.active {
+                Some(s.volume.clamp(0, 200) as u8)
+            } else {
+                None
+            }
         };
         if let Some(v) = player_vol {
             if v != self.ui_volume {
@@ -1302,7 +1511,12 @@ impl App {
     /// Returns true if the caller's event loop should `continue` (skip render for this tick).
     fn handle_player_event(&mut self, ev: PlayerEvent) -> bool {
         match ev {
-            PlayerEvent::Stopped { idx, position_ticks, played, error } => {
+            PlayerEvent::Stopped {
+                idx,
+                position_ticks,
+                played,
+                error,
+            } => {
                 log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played} error={error:?}",
                     position_ticks / crate::api::TICKS_PER_SECOND);
                 if self.player.is_remote_disconnected() {
@@ -1335,21 +1549,30 @@ impl App {
                 if is_delete {
                     let item = self.player_tab.items.remove(idx);
                     self.playlist_undo_stack.push((idx, item));
-                    self.player_tab.playlist_cursor =
-                        if self.player_tab.items.is_empty() { 0 }
-                        else { idx.min(self.player_tab.items.len() - 1) };
+                    self.player_tab.playlist_cursor = if self.player_tab.items.is_empty() {
+                        0
+                    } else {
+                        idx.min(self.player_tab.items.len() - 1)
+                    };
                 } else {
                     let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
                     if played && is_video && self.client.lock().unwrap().config.consume_videos {
                         self.consume_item(idx);
-                        self.player_tab.playlist_cursor = self.player_tab.playlist_cursor
+                        self.player_tab.playlist_cursor = self
+                            .player_tab
+                            .playlist_cursor
                             .min(self.player_tab.items.len().saturating_sub(1));
                     }
                 }
                 self.refresh_after_stop();
                 self.save_queue_state();
             }
-            PlayerEvent::TrackCompleted { idx, position_ticks, played, consume } => {
+            PlayerEvent::TrackCompleted {
+                idx,
+                position_ticks,
+                played,
+                consume,
+            } => {
                 if let Some(item) = self.player_tab.items.get_mut(idx) {
                     if played {
                         item.playback_position_ticks = 0;
@@ -1373,7 +1596,11 @@ impl App {
                 }
                 let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
                     self.consume_item(remove_idx);
-                    if remove_idx < idx { idx - 1 } else { idx }
+                    if remove_idx < idx {
+                        idx - 1
+                    } else {
+                        idx
+                    }
                 } else {
                     idx
                 };
@@ -1385,19 +1612,28 @@ impl App {
             }
             PlayerEvent::PlaylistNextUp { next_idx } => {
                 if let Some(item) = self.player_tab.items.get(next_idx) {
-                    let item_id    = item.id.clone();
+                    let item_id = item.id.clone();
                     let show_title = item.series_name.clone();
-                    let ep_title   = item.name.clone();
-                    let artist     = item.artist.clone();
+                    let ep_title = item.name.clone();
+                    let artist = item.artist.clone();
                     let label = item.playback_label();
                     self.next_up_item = Some(item.clone());
                     let next_up_msg = format!("Next up: {} (Y/n)", label);
-                    self.notify_with_actions(&item.name, "Next up?", &[("next_up:play", "Play Now"), ("next_up:skip", "Skip")]);
+                    self.notify_with_actions(
+                        &item.name,
+                        "Next up?",
+                        &[("next_up:play", "Play Now"), ("next_up:skip", "Skip")],
+                    );
                     self.status = next_up_msg;
                     self.status_expires = None;
                     // Daemon sends NextUpShow to mpv directly; only send from local player.
                     if !self.player.is_remote() {
-                        self.player.send_command(PlayerCommand::NextUpShow { item_id, show_title, ep_title, artist });
+                        self.player.send_command(PlayerCommand::NextUpShow {
+                            item_id,
+                            show_title,
+                            ep_title,
+                            artist,
+                        });
                     }
                 }
             }
@@ -1426,11 +1662,17 @@ impl App {
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 self.skip_intro_end_ticks = Some(intro_end_ticks);
-                let playing_title = self.player_tab.items
+                let playing_title = self
+                    .player_tab
+                    .items
                     .get(self.player_tab.playlist_cursor)
                     .map(|i| i.name.clone())
                     .unwrap_or_else(|| "mbv".into());
-                self.notify_with_actions(&playing_title, "Skip intro?", &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")]);
+                self.notify_with_actions(
+                    &playing_title,
+                    "Skip intro?",
+                    &[("skip_intro:skip", "Skip"), ("skip_intro:ignore", "Ignore")],
+                );
                 self.status = "Skip intro? (Y/n)".into();
                 self.status_expires = None;
             }
@@ -1456,22 +1698,41 @@ impl App {
 
 #[cfg(test)]
 mod tests {
+    use super::ui_util::{fmt_duration, item_text_and_style};
     use super::*;
     use crate::api::TICKS_PER_SECOND;
-    use super::ui_util::{fmt_duration, item_text_and_style};
 
     fn make_item(name: &str, item_type: &str) -> MediaItem {
         MediaItem {
-            id: "id".into(), name: name.into(), item_type: item_type.into(),
-            is_folder: false, media_type: "Video".into(), collection_type: String::new(),
-            runtime_ticks: 0, played: false, playback_position_ticks: 0,
-            series_id: String::new(), series_name: String::new(), album_id: String::new(),
-            album: String::new(), index_number: 0, parent_index_number: 0,
+            id: "id".into(),
+            name: name.into(),
+            item_type: item_type.into(),
+            is_folder: false,
+            media_type: "Video".into(),
+            collection_type: String::new(),
+            runtime_ticks: 0,
+            played: false,
+            playback_position_ticks: 0,
+            series_id: String::new(),
+            series_name: String::new(),
+            album_id: String::new(),
+            album: String::new(),
+            index_number: 0,
+            parent_index_number: 0,
             unplayed_item_count: 0,
-            path: String::new(), artist: String::new(), sort_name: String::new(),
-            production_year: 0, end_year: 0, overview: String::new(),
-            premiere_date: String::new(), date_added: String::new(), total_count: 0, container: String::new(),
-            director: String::new(), video_info: String::new(), audio_info: String::new(),
+            path: String::new(),
+            artist: String::new(),
+            sort_name: String::new(),
+            production_year: 0,
+            end_year: 0,
+            overview: String::new(),
+            premiere_date: String::new(),
+            date_added: String::new(),
+            total_count: 0,
+            container: String::new(),
+            director: String::new(),
+            video_info: String::new(),
+            audio_info: String::new(),
             genre: String::new(),
             playlist_item_id: String::new(),
         }
@@ -1527,7 +1788,10 @@ mod tests {
         item.playback_position_ticks = TICKS_PER_SECOND * 3600; // 1 hour in → 50%
         let (text, style) = item_text_and_style(&item, false);
         assert!(text.contains("2h00m"), "expected duration in: {text}");
-        assert!(!text.contains("50%"), "pct should be in span, not text: {text}");
+        assert!(
+            !text.contains("50%"),
+            "pct should be in span, not text: {text}"
+        );
         assert_eq!(style.fg, Some(palette::WHITE));
     }
 
@@ -1539,7 +1803,10 @@ mod tests {
         item.played = true;
         let (text, _) = item_text_and_style(&item, false);
         assert!(text.contains("2h00m"), "expected duration in: {text}");
-        assert!(!text.contains("50%"), "pct should be in span, not text: {text}");
+        assert!(
+            !text.contains("50%"),
+            "pct should be in span, not text: {text}"
+        );
     }
 
     #[test]
@@ -1578,28 +1845,45 @@ mod tests {
     // ── test helpers ─────────────────────────────────────────────────────────
 
     fn make_items(n: usize) -> Vec<MediaItem> {
-        (0..n).map(|i| {
-            let mut item = make_item(&format!("Item {i}"), "Movie");
-            item.id = format!("id{i}");
-            item
-        }).collect()
+        (0..n)
+            .map(|i| {
+                let mut item = make_item(&format!("Item {i}"), "Movie");
+                item.id = format!("id{i}");
+                item
+            })
+            .collect()
     }
 
     /// Minimal App stub for logic-only tests.
     fn make_app_stub() -> App {
-        use std::sync::{Arc, Mutex};
         use crate::player::{PlayerProxy, PlayerStatus};
+        use std::sync::{Arc, Mutex};
 
         let status = Arc::new(Mutex::new(PlayerStatus {
-            position_ticks: 0, last_valid_pos: 0, runtime_ticks: 0, paused: false,
-            volume: 100, volume_max: 100, current_idx: 0, active: false,
-            title: String::new(), audio_tracks: Vec::new(), sub_tracks: Vec::new(),
-            audio_id: 0, audio_lang: String::new(), sub_id: 0, sub_lang: String::new(), muted: false, video_height: 0,
-            audio_codec: String::new(), video_is_image: false,
+            position_ticks: 0,
+            last_valid_pos: 0,
+            runtime_ticks: 0,
+            paused: false,
+            volume: 100,
+            volume_max: 100,
+            current_idx: 0,
+            active: false,
+            title: String::new(),
+            audio_tracks: Vec::new(),
+            sub_tracks: Vec::new(),
+            sub_track_stream_indexes: Vec::new(),
+            audio_id: 0,
+            audio_lang: String::new(),
+            sub_id: 0,
+            sub_lang: String::new(),
+            muted: false,
+            video_height: 0,
+            audio_codec: String::new(),
+            video_is_image: false,
         }));
 
         let (_, player_rx) = std::sync::mpsc::channel();
-        let (_, ws_rx)     = std::sync::mpsc::channel();
+        let (_, ws_rx) = std::sync::mpsc::channel();
         let (lib_tx, lib_rx) = std::sync::mpsc::channel();
         let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
         let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
@@ -1621,7 +1905,10 @@ mod tests {
             hidden_libraries: Vec::new(),
             hidden_latest: Vec::new(),
             music_levels: Vec::new(),
-            player_tab: PlayerTab { items: Vec::new(), playlist_cursor: 0 },
+            player_tab: PlayerTab {
+                items: Vec::new(),
+                playlist_cursor: 0,
+            },
             home: HomePane {
                 continue_items: Vec::new(),
                 continue_cursor: 0,
@@ -1666,11 +1953,11 @@ mod tests {
             layout_vol_area: ratatui::layout::Rect::default(),
             layout_sub_area: ratatui::layout::Rect::default(),
             layout_audio_area: ratatui::layout::Rect::default(),
-            layout_ind_au:  Rect::default(),
+            layout_ind_au: Rect::default(),
             layout_ind_sub: Rect::default(),
-            layout_ind_rc:  Rect::default(),
-            layout_ind_mu:  Rect::default(),
-            layout_ind_pb:  Rect::default(),
+            layout_ind_rc: Rect::default(),
+            layout_ind_mu: Rect::default(),
+            layout_ind_pb: Rect::default(),
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
@@ -1686,6 +1973,7 @@ mod tests {
             power_left_tab_pending: 0,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
+            power_queue_scroll: 0,
             power_queue_row_map: Vec::new(),
             power_left_row_map: Vec::new(),
             power_left_sorted_indices: Vec::new(),
@@ -1797,9 +2085,7 @@ mod tests {
     #[test]
     fn home_section_len_cur_section_one_uses_latest() {
         let mut app = make_app_stub();
-        app.home.latest = vec![
-            ("Latest Movies".into(), "lib1".into(), make_items(7), 2),
-        ];
+        app.home.latest = vec![("Latest Movies".into(), "lib1".into(), make_items(7), 2)];
         assert_eq!(app.home_section_len_cur(1), (7, 2));
     }
 
@@ -1887,7 +2173,9 @@ mod tests {
     // ── ensure_home_section_visible ──────────────────────────────────────────
 
     fn sections(n: usize) -> Vec<(String, String, Vec<MediaItem>, usize)> {
-        (0..n).map(|i| (format!("Sec {i}"), format!("lib{i}"), make_items(3), 0)).collect()
+        (0..n)
+            .map(|i| (format!("Sec {i}"), format!("lib{i}"), make_items(3), 0))
+            .collect()
     }
 
     #[test]
@@ -1946,37 +2234,56 @@ mod tests {
     fn home_refresh_preserves_cursor_by_lib_id() {
         // Simulate what init_home does: old_cursors keyed by lib_id.
         let old_latest: Vec<(String, String, Vec<MediaItem>, usize)> = vec![
-            ("Latest Movies".into(), "lib-movies".into(), make_items(10), 7),
-            ("Latest TV".into(),     "lib-tv".into(),     make_items(5),  3),
+            (
+                "Latest Movies".into(),
+                "lib-movies".into(),
+                make_items(10),
+                7,
+            ),
+            ("Latest TV".into(), "lib-tv".into(), make_items(5), 3),
         ];
-        let old_cursors: std::collections::HashMap<String, usize> = old_latest.iter()
+        let old_cursors: std::collections::HashMap<String, usize> = old_latest
+            .iter()
             .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
             .collect();
 
         // New fetch returns same libs but with fresh items.
         let new_items_movies = make_items(12);
-        let new_items_tv     = make_items(4);
+        let new_items_tv = make_items(4);
 
-        let cursor_movies = old_cursors.get("lib-movies").copied().unwrap_or(0)
+        let cursor_movies = old_cursors
+            .get("lib-movies")
+            .copied()
+            .unwrap_or(0)
             .min(new_items_movies.len().saturating_sub(1));
-        let cursor_tv = old_cursors.get("lib-tv").copied().unwrap_or(0)
+        let cursor_tv = old_cursors
+            .get("lib-tv")
+            .copied()
+            .unwrap_or(0)
             .min(new_items_tv.len().saturating_sub(1));
 
         assert_eq!(cursor_movies, 7, "cursor preserved when within bounds");
-        assert_eq!(cursor_tv, 3,     "cursor preserved when within bounds");
+        assert_eq!(cursor_tv, 3, "cursor preserved when within bounds");
     }
 
     #[test]
     fn home_refresh_clamps_cursor_when_new_list_is_shorter() {
-        let old_latest: Vec<(String, String, Vec<MediaItem>, usize)> = vec![
-            ("Latest Movies".into(), "lib-movies".into(), make_items(10), 9),
-        ];
-        let old_cursors: std::collections::HashMap<String, usize> = old_latest.iter()
+        let old_latest: Vec<(String, String, Vec<MediaItem>, usize)> = vec![(
+            "Latest Movies".into(),
+            "lib-movies".into(),
+            make_items(10),
+            9,
+        )];
+        let old_cursors: std::collections::HashMap<String, usize> = old_latest
+            .iter()
             .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
             .collect();
 
         let new_items = make_items(5); // shorter than before
-        let cursor = old_cursors.get("lib-movies").copied().unwrap_or(0)
+        let cursor = old_cursors
+            .get("lib-movies")
+            .copied()
+            .unwrap_or(0)
             .min(new_items.len().saturating_sub(1));
 
         assert_eq!(cursor, 4, "cursor clamped to new last index");
@@ -1984,9 +2291,13 @@ mod tests {
 
     #[test]
     fn home_refresh_cursor_defaults_zero_for_new_library() {
-        let old_cursors: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        let old_cursors: std::collections::HashMap<String, usize> =
+            std::collections::HashMap::new();
         let new_items = make_items(8);
-        let cursor = old_cursors.get("brand-new-lib").copied().unwrap_or(0)
+        let cursor = old_cursors
+            .get("brand-new-lib")
+            .copied()
+            .unwrap_or(0)
             .min(new_items.len().saturating_sub(1));
         assert_eq!(cursor, 0);
     }
@@ -2005,9 +2316,9 @@ mod tests {
         }
         assert_eq!(app.home.section, 1);
     }
-
 }
-fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>> {
+fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dyn std::error::Error>>
+{
     crossterm::terminal::enable_raw_mode()?;
     let mut stdout = std::io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
@@ -2020,11 +2331,22 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dy
     );
     Ok(Terminal::new(CrosstermBackend::new(stdout))?)
 }
-fn restore_terminal(mut terminal: Terminal<CrosstermBackend<std::io::Stdout>>) -> Result<(), Box<dyn std::error::Error>> {
+fn restore_terminal(
+    mut terminal: Terminal<CrosstermBackend<std::io::Stdout>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     crossterm::terminal::disable_raw_mode()?;
-    let _ = crossterm::execute!(terminal.backend_mut(), crossterm::event::PopKeyboardEnhancementFlags);
-    crossterm::execute!(terminal.backend_mut(), crossterm::event::DisableMouseCapture)?;
-    crossterm::execute!(terminal.backend_mut(), crossterm::terminal::LeaveAlternateScreen)?;
+    let _ = crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::event::PopKeyboardEnhancementFlags
+    );
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::event::DisableMouseCapture
+    )?;
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::terminal::LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
     Ok(())
 }

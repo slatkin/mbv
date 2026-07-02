@@ -1,7 +1,7 @@
+use std::io::ErrorKind;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use std::io::ErrorKind;
 
 use rand::RngExt;
 
@@ -23,11 +23,15 @@ pub enum WsEvent {
     TogglePause,
     NextTrack,
     PreviousTrack,
-    Seek(i64),       // absolute, ticks
+    Seek(i64),         // absolute, ticks
     SeekRelative(f64), // relative, seconds
     SetVolume(i64),
     VolumeUp,
     VolumeDown,
+    SetMute(bool),
+    ToggleMute,
+    SetAudio(i64),
+    SetSub(i64),
     UserDataChanged,
 }
 
@@ -40,17 +44,23 @@ fn parse(text: &str) -> Option<WsEvent> {
         "Play" => {
             let data = &v["Data"];
             // Case-insensitive key search ("ItemIds", "itemIds", etc.)
-            let ids_value = data.as_object()
-                .and_then(|obj| obj.iter()
+            let ids_value = data.as_object().and_then(|obj| {
+                obj.iter()
                     .find(|(k, _)| k.eq_ignore_ascii_case("itemids"))
-                    .map(|(_, v)| v));
+                    .map(|(_, v)| v)
+            });
             let item_ids: Vec<String> = ids_value
                 .and_then(|v| v.as_array())
-                .map(|a| a.iter().filter_map(|v| {
-                    v.as_str().map(str::to_string)
-                        .or_else(|| v.as_i64().map(|n| n.to_string()))
-                        .or_else(|| v.as_u64().map(|n| n.to_string()))
-                }).collect())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| {
+                            v.as_str()
+                                .map(str::to_string)
+                                .or_else(|| v.as_i64().map(|n| n.to_string()))
+                                .or_else(|| v.as_u64().map(|n| n.to_string()))
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
             if item_ids.is_empty() {
                 log::warn!(target: "ws", "Play: no ItemIds — raw data: {data}");
@@ -59,22 +69,32 @@ fn parse(text: &str) -> Option<WsEvent> {
             let play_now = data["PlayCommand"].as_str().unwrap_or("PlayNow") == "PlayNow";
             let start_position_ticks = data["StartPositionTicks"].as_i64().unwrap_or(0);
             let start_index = data["StartIndex"].as_u64().unwrap_or(0) as usize;
-            Some(WsEvent::Play { item_ids, play_now, start_position_ticks, start_index })
+            Some(WsEvent::Play {
+                item_ids,
+                play_now,
+                start_position_ticks,
+                start_index,
+            })
         }
         "Playstate" => {
             let cmd = v["Data"]["Command"].as_str().unwrap_or("");
             log::debug!(target: "ws", "Playstate cmd={cmd}");
             match cmd {
-                "Stop"          => Some(WsEvent::Stop),
-                "Pause"         => Some(WsEvent::Pause),
-                "Unpause"       => Some(WsEvent::Unpause),
-                "PlayPause"     => Some(WsEvent::TogglePause),
-                "NextTrack"     => Some(WsEvent::NextTrack),
+                "Stop" => Some(WsEvent::Stop),
+                "Pause" => Some(WsEvent::Pause),
+                "Unpause" => Some(WsEvent::Unpause),
+                "PlayPause" => Some(WsEvent::TogglePause),
+                "NextTrack" => Some(WsEvent::NextTrack),
                 "PreviousTrack" => Some(WsEvent::PreviousTrack),
-                "Seek"          => Some(WsEvent::Seek(v["Data"]["SeekPositionTicks"].as_i64().unwrap_or(0))),
-                "Rewind"        => Some(WsEvent::SeekRelative(-10.0)),
-                "FastForward"   => Some(WsEvent::SeekRelative(10.0)),
-                other           => { log::warn!(target: "ws", "Playstate: unhandled cmd={other}"); None }
+                "Seek" => Some(WsEvent::Seek(
+                    v["Data"]["SeekPositionTicks"].as_i64().unwrap_or(0),
+                )),
+                "Rewind" => Some(WsEvent::SeekRelative(-10.0)),
+                "FastForward" => Some(WsEvent::SeekRelative(10.0)),
+                other => {
+                    log::warn!(target: "ws", "Playstate: unhandled cmd={other}");
+                    None
+                }
             }
         }
         "GeneralCommand" => {
@@ -90,9 +110,31 @@ fn parse(text: &str) -> Option<WsEvent> {
                         .unwrap_or(50);
                     Some(WsEvent::SetVolume(vol))
                 }
-                "VolumeUp"   => Some(WsEvent::VolumeUp),
+                "VolumeUp" => Some(WsEvent::VolumeUp),
                 "VolumeDown" => Some(WsEvent::VolumeDown),
-                other        => { log::warn!(target: "ws", "GeneralCommand: unhandled name={other}"); None }
+                "Mute" => Some(WsEvent::SetMute(true)),
+                "Unmute" => Some(WsEvent::SetMute(false)),
+                "ToggleMute" => Some(WsEvent::ToggleMute),
+                "SetAudioStreamIndex" => {
+                    let idx = v["Data"]["Arguments"]["Index"]
+                        .as_str()
+                        .and_then(|s| s.parse::<i64>().ok())
+                        .or_else(|| v["Data"]["Arguments"]["Index"].as_i64())
+                        .unwrap_or(0);
+                    Some(WsEvent::SetAudio(idx))
+                }
+                "SetSubtitleStreamIndex" => {
+                    let idx = v["Data"]["Arguments"]["Index"]
+                        .as_str()
+                        .and_then(|s| s.parse::<i64>().ok())
+                        .or_else(|| v["Data"]["Arguments"]["Index"].as_i64())
+                        .unwrap_or(-1);
+                    Some(WsEvent::SetSub(idx))
+                }
+                other => {
+                    log::warn!(target: "ws", "GeneralCommand: unhandled name={other}");
+                    None
+                }
             }
         }
         "UserDataChanged" => Some(WsEvent::UserDataChanged),
@@ -114,8 +156,12 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
                     // Short read timeout so we can drain outbound messages between reads.
                     let timeout = Some(Duration::from_millis(100));
                     match socket.get_ref() {
-                        tungstenite::stream::MaybeTlsStream::Plain(tcp) => { let _ = tcp.set_read_timeout(timeout); }
-                        tungstenite::stream::MaybeTlsStream::NativeTls(tls) => { let _ = tls.get_ref().set_read_timeout(timeout); }
+                        tungstenite::stream::MaybeTlsStream::Plain(tcp) => {
+                            let _ = tcp.set_read_timeout(timeout);
+                        }
+                        tungstenite::stream::MaybeTlsStream::NativeTls(tls) => {
+                            let _ = tls.get_ref().set_read_timeout(timeout);
+                        }
                         _ => {}
                     }
                     log::info!(target: "ws", "connected");
@@ -172,7 +218,7 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> mpsc::Sender<St
                             }
                             Err(tungstenite::Error::Io(e))
                                 if e.kind() == ErrorKind::WouldBlock
-                                || e.kind() == ErrorKind::TimedOut => {}
+                                    || e.kind() == ErrorKind::TimedOut => {}
                             Err(e) => {
                                 log::warn!(target: "ws", "error: {e}, reconnecting");
                                 break 'conn;
@@ -210,12 +256,20 @@ mod tests {
     fn play_parses_item_ids_and_play_now() {
         let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["a","b"],"PlayCommand":"PlayNow","StartPositionTicks":0}}"#;
         let ev = parse_msg(msg).unwrap();
-        if let WsEvent::Play { item_ids, play_now, start_position_ticks, start_index } = ev {
+        if let WsEvent::Play {
+            item_ids,
+            play_now,
+            start_position_ticks,
+            start_index,
+        } = ev
+        {
             assert_eq!(item_ids, vec!["a", "b"]);
             assert!(play_now);
             assert_eq!(start_position_ticks, 0);
             assert_eq!(start_index, 0);
-        } else { panic!("wrong variant"); }
+        } else {
+            panic!("wrong variant");
+        }
     }
 
     #[test]
@@ -223,15 +277,24 @@ mod tests {
         let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["x"],"PlayCommand":"PlayNext"}}"#;
         if let WsEvent::Play { play_now, .. } = parse_msg(msg).unwrap() {
             assert!(!play_now);
-        } else { panic!(); }
+        } else {
+            panic!();
+        }
     }
 
     #[test]
     fn play_start_position_ticks() {
-        let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["x"],"StartPositionTicks":50000000}}"#;
-        if let WsEvent::Play { start_position_ticks, .. } = parse_msg(msg).unwrap() {
+        let msg =
+            r#"{"MessageType":"Play","Data":{"ItemIds":["x"],"StartPositionTicks":50000000}}"#;
+        if let WsEvent::Play {
+            start_position_ticks,
+            ..
+        } = parse_msg(msg).unwrap()
+        {
             assert_eq!(start_position_ticks, 50000000);
-        } else { panic!(); }
+        } else {
+            panic!();
+        }
     }
 
     #[test]
@@ -239,7 +302,9 @@ mod tests {
         let msg = r#"{"MessageType":"Play","Data":{"ItemIds":["a","b","c"],"StartIndex":2}}"#;
         if let WsEvent::Play { start_index, .. } = parse_msg(msg).unwrap() {
             assert_eq!(start_index, 2);
-        } else { panic!(); }
+        } else {
+            panic!();
+        }
     }
 
     #[test]
@@ -253,7 +318,9 @@ mod tests {
         let msg = r#"{"MessageType":"Play","Data":{"itemIds":["z"]}}"#;
         if let Some(WsEvent::Play { item_ids, .. }) = parse_msg(msg) {
             assert_eq!(item_ids, vec!["z"]);
-        } else { panic!(); }
+        } else {
+            panic!();
+        }
     }
 
     // ── Playstate ────────────────────────────────────────────────────────────
@@ -269,7 +336,9 @@ mod tests {
         let msg = r#"{"MessageType":"Playstate","Data":{"Command":"Rewind"}}"#;
         if let Some(WsEvent::SeekRelative(s)) = parse_msg(msg) {
             assert_eq!(s, -10.0);
-        } else { panic!(); }
+        } else {
+            panic!();
+        }
     }
 
     #[test]
@@ -277,7 +346,9 @@ mod tests {
         let msg = r#"{"MessageType":"Playstate","Data":{"Command":"FastForward"}}"#;
         if let Some(WsEvent::SeekRelative(s)) = parse_msg(msg) {
             assert_eq!(s, 10.0);
-        } else { panic!(); }
+        } else {
+            panic!();
+        }
     }
 
     #[test]
@@ -310,6 +381,30 @@ mod tests {
     fn general_command_volume_down() {
         let msg = r#"{"MessageType":"GeneralCommand","Data":{"Name":"VolumeDown"}}"#;
         assert!(matches!(parse_msg(msg), Some(WsEvent::VolumeDown)));
+    }
+
+    #[test]
+    fn general_command_mute_controls() {
+        let mute = r#"{"MessageType":"GeneralCommand","Data":{"Name":"Mute"}}"#;
+        let unmute = r#"{"MessageType":"GeneralCommand","Data":{"Name":"Unmute"}}"#;
+        let toggle = r#"{"MessageType":"GeneralCommand","Data":{"Name":"ToggleMute"}}"#;
+        assert!(matches!(parse_msg(mute), Some(WsEvent::SetMute(true))));
+        assert!(matches!(parse_msg(unmute), Some(WsEvent::SetMute(false))));
+        assert!(matches!(parse_msg(toggle), Some(WsEvent::ToggleMute)));
+    }
+
+    #[test]
+    fn general_command_stream_indices() {
+        let audio = r#"{"MessageType":"GeneralCommand","Data":{"Name":"SetAudioStreamIndex","Arguments":{"Index":"2"}}}"#;
+        let sub = r#"{"MessageType":"GeneralCommand","Data":{"Name":"SetSubtitleStreamIndex","Arguments":{"Index":3}}}"#;
+        assert!(matches!(parse_msg(audio), Some(WsEvent::SetAudio(2))));
+        assert!(matches!(parse_msg(sub), Some(WsEvent::SetSub(3))));
+    }
+
+    #[test]
+    fn general_command_negative_subtitle_index_disables_subtitles() {
+        let msg = r#"{"MessageType":"GeneralCommand","Data":{"Name":"SetSubtitleStreamIndex","Arguments":{"Index":-1}}}"#;
+        assert!(matches!(parse_msg(msg), Some(WsEvent::SetSub(-1))));
     }
 
     #[test]

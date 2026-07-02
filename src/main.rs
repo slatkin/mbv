@@ -24,18 +24,22 @@ fn prompt_line(label: &str) -> String {
 }
 
 fn prompt_password(label: &str) -> String {
-    use std::io::Write;
     use crossterm::event::{Event, KeyCode, KeyEventKind};
+    use std::io::Write;
     print!("{label}");
     let _ = std::io::stdout().flush();
     let _ = crossterm::terminal::enable_raw_mode();
     let mut pass = String::new();
     loop {
         if let Ok(Event::Key(key)) = crossterm::event::read() {
-            if key.kind != KeyEventKind::Press { continue; }
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
             match key.code {
                 KeyCode::Enter => break,
-                KeyCode::Backspace => { pass.pop(); }
+                KeyCode::Backspace => {
+                    pass.pop();
+                }
                 KeyCode::Char(c) => pass.push(c),
                 _ => {}
             }
@@ -47,10 +51,30 @@ fn prompt_password(label: &str) -> String {
 }
 
 fn daemon_running() -> bool {
-    let Ok(s) = std::fs::read_to_string(daemon::pid_file()) else { return false };
-    let Ok(pid) = s.trim().parse::<u32>() else { return false };
+    let Ok(s) = std::fs::read_to_string(daemon::pid_file()) else {
+        return false;
+    };
+    let Ok(pid) = s.trim().parse::<u32>() else {
+        return false;
+    };
     // Check if the process is alive via /proc (Linux-specific, no extra deps)
     std::path::Path::new(&format!("/proc/{pid}")).exists()
+}
+
+fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, String> {
+    let mut endpoint: Option<String> = None;
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        if let Some(value) = arg.strip_prefix("--connect-daemon=") {
+            endpoint = Some(value.to_string());
+        } else if arg == "--connect-daemon" {
+            let Some(value) = iter.next() else {
+                return Err("mbv: --connect-daemon requires an endpoint".to_string());
+            };
+            endpoint = Some(value.to_string());
+        }
+    }
+    Ok(endpoint)
 }
 
 fn crash_log_path() -> std::path::PathBuf {
@@ -58,7 +82,8 @@ fn crash_log_path() -> std::path::PathBuf {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| {
             std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                .join(".local").join("state")
+                .join(".local")
+                .join("state")
         })
         .join("mbv")
         .join("mbv.log")
@@ -72,7 +97,11 @@ fn write_crash_log(msg: &str) {
     let _ = std::io::stderr().write_all(msg.as_bytes());
     let _ = std::io::stderr().write_all(b"\n");
     log::error!(target: "crash", "{msg}");
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(crash_log_path()) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(crash_log_path())
+    {
         let _ = writeln!(f, "{msg}");
     }
 }
@@ -89,7 +118,10 @@ fn install_signal_handlers() {
     // Write a crash log entry for fatal signals before the process dies.
     unsafe {
         for &sig in &[libc::SIGSEGV, libc::SIGILL, libc::SIGBUS, libc::SIGFPE] {
-            libc::signal(sig, signal_handler as extern "C" fn(libc::c_int) as libc::sighandler_t);
+            libc::signal(
+                sig,
+                signal_handler as extern "C" fn(libc::c_int) as libc::sighandler_t,
+            );
         }
     }
 }
@@ -97,14 +129,18 @@ fn install_signal_handlers() {
 extern "C" fn signal_handler(sig: libc::c_int) {
     let name = match sig {
         libc::SIGSEGV => "SIGSEGV",
-        libc::SIGILL  => "SIGILL",
-        libc::SIGBUS  => "SIGBUS",
-        libc::SIGFPE  => "SIGFPE",
-        _             => "UNKNOWN",
+        libc::SIGILL => "SIGILL",
+        libc::SIGBUS => "SIGBUS",
+        libc::SIGFPE => "SIGFPE",
+        _ => "UNKNOWN",
     };
     // Only async-signal-safe ops here: write directly to the log file.
     let msg = format!("CRASH: signal {name} ({sig})");
-    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(crash_log_path()) {
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(crash_log_path())
+    {
         use std::io::Write;
         let _ = writeln!(f, "{msg}");
     }
@@ -120,6 +156,13 @@ fn main() {
     install_signal_handlers();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
+    let cli_daemon_endpoint = match connect_daemon_arg(&args) {
+        Ok(endpoint) => endpoint,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
 
     if args.contains(&"--version".to_string()) || args.contains(&"-V".to_string()) {
         println!("mbv {}", env!("CARGO_PKG_VERSION"));
@@ -145,29 +188,57 @@ fn main() {
                     std::process::exit(1);
                 }
             }
-            Err(_) => { eprintln!("mbv: no daemon running"); std::process::exit(1); }
+            Err(_) => {
+                eprintln!("mbv: no daemon running");
+                std::process::exit(1);
+            }
         }
         return;
     }
 
-    let daemon_mode  = args.contains(&"-d".to_string());
+    let daemon_mode = args.contains(&"-d".to_string());
     let daemon_inner = args.contains(&"--daemon-inner".to_string());
 
     let config = match load_config() {
         Ok(c) => c,
-        Err(e) => { eprintln!("{e}"); std::process::exit(1); }
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
     };
 
-    let log_capacity = if daemon_inner || config::is_system_instance() { 0 }
-                      else if config.show_log_tab { 5000 }
-                      else { 0 };
+    let explicit_daemon_endpoint = cli_daemon_endpoint
+        .or_else(|| {
+            let endpoint = config.daemon_client_endpoint.trim();
+            (!endpoint.is_empty()).then(|| endpoint.to_string())
+        })
+        .map(|endpoint| {
+            remote_player::DaemonEndpoint::parse(&endpoint).unwrap_or_else(|e| {
+                eprintln!("mbv: invalid daemon endpoint {endpoint:?}: {e}");
+                std::process::exit(1);
+            })
+        });
+
+    if daemon_mode && explicit_daemon_endpoint.is_some() {
+        eprintln!("mbv: daemon client endpoint cannot be used with -d");
+        std::process::exit(1);
+    }
+
+    let log_capacity = if daemon_inner || config::is_system_instance() {
+        0
+    } else if config.show_log_tab {
+        5000
+    } else {
+        0
+    };
     let log_stderr = config::is_system_instance();
     let log_path = {
         let state_dir = std::env::var("XDG_STATE_HOME")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| {
                 std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                    .join(".local").join("state")
+                    .join(".local")
+                    .join("state")
             })
             .join("mbv");
         Some(state_dir.join("mbv.log"))
@@ -228,7 +299,25 @@ fn main() {
         daemon::run(client); // never returns
     }
 
-    // If a daemon is running, try to connect to it instead of standalone mode.
+    if let Some(endpoint) = explicit_daemon_endpoint {
+        log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
+        match remote_player::RemotePlayer::connect_endpoint(&endpoint) {
+            Ok((remote, player_rx)) => {
+                log::info!(target: "startup", "daemon endpoint connected");
+                if let Err(e) = App::new_remote(client, remote, player_rx).run() {
+                    eprintln!("Error: {e}");
+                    std::process::exit(1);
+                }
+                return;
+            }
+            Err(e) => {
+                eprintln!("mbv: failed to connect to daemon endpoint {endpoint}: {e}");
+                std::process::exit(1);
+            }
+        }
+    }
+
+    // If a local daemon is running, try to connect to it instead of standalone mode.
     let daemon_existed = daemon_running();
     if daemon_existed {
         log::info!(target: "startup", "daemon detected; connecting to control socket");
@@ -242,7 +331,9 @@ fn main() {
                 return;
             }
             Err(e) => {
-                eprintln!("mbv: daemon found but control socket unavailable ({e}), starting standalone");
+                eprintln!(
+                    "mbv: daemon found but control socket unavailable ({e}), starting standalone"
+                );
             }
         }
     }
@@ -265,5 +356,27 @@ fn main() {
                 .spawn();
             println!("mbv: daemon started");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn connect_daemon_arg_accepts_split_and_equals_forms() {
+        assert_eq!(
+            connect_daemon_arg(&["--connect-daemon".into(), "local".into()]).unwrap(),
+            Some("local".to_string())
+        );
+        assert_eq!(
+            connect_daemon_arg(&["--connect-daemon=unix:///tmp/mbv.sock".into()]).unwrap(),
+            Some("unix:///tmp/mbv.sock".to_string())
+        );
+    }
+
+    #[test]
+    fn connect_daemon_arg_requires_value() {
+        assert!(connect_daemon_arg(&["--connect-daemon".into()]).is_err());
     }
 }

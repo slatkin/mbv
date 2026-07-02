@@ -154,6 +154,13 @@ The Queue tab has three display modes, cycled with `v`:
 - The mpv IPC socket lives at `$XDG_RUNTIME_DIR/mbv-mpv.sock`, separate from the default mpv socket.
 - Gapless audio playback is enabled by default.
 
+### Remote daemon control
+
+Use `--connect-daemon` or `[daemon.client].endpoint` to connect to a daemon explicitly.
+Supported values are `local`, a Unix socket path, or a loopback TCP endpoint such as `tcp://127.0.0.1:8890` or `tcp://[::1]:8890`.
+
+mbv rejects non-loopback TCP endpoints. For cross-host access, forward the daemon socket or a local loopback port over SSH and point mbv at the tunnel endpoint.
+
 ### Audio and subtitle track selection
 
 mbv applies opinionated defaults every time a new item starts playing:
