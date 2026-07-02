@@ -439,6 +439,159 @@ impl App {
         lib.library.collection_type == "homevideos"
     }
 
+    pub(super) fn is_feed_home_video_group_view(&self, lib_idx: usize) -> bool {
+        let lib = &self.libs[lib_idx];
+        if lib.power_detail_item.is_some() || lib.search.is_some() {
+            return false;
+        }
+        if lib.library.collection_type != "homevideos" {
+            return false;
+        }
+        let client = self.client.lock().unwrap();
+        client
+            .config
+            .feed_view_libraries
+            .contains(&lib.library.name.to_lowercase())
+            && lib.nav_stack.first().is_some_and(|lvl| {
+                lvl.loading
+                    || lvl
+                        .items
+                        .first()
+                        .map(|item| item.is_folder)
+                        .unwrap_or(false)
+            })
+    }
+
+    pub(super) fn ensure_feed_home_video_root_loaded(&mut self, lib_idx: usize) {
+        if !self.is_feed_home_video_library(lib_idx) {
+            return;
+        }
+        let needs_reload = self
+            .libs
+            .get(lib_idx)
+            .map(|lib| {
+                lib.nav_stack.is_empty()
+                    || (!lib.nav_stack[0].loading
+                        && lib.nav_stack[0]
+                            .items
+                            .first()
+                            .map(|item| !item.is_folder)
+                            .unwrap_or(true))
+            })
+            .unwrap_or(false);
+        if !needs_reload {
+            return;
+        }
+        let lib_id = self.libs[lib_idx].library.id.clone();
+        let lib_name = self.libs[lib_idx].library.name.clone();
+        self.libs[lib_idx].nav_stack.clear();
+        self.libs[lib_idx].search = None;
+        self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            parent_id: lib_id.clone(),
+            title: lib_name.clone(),
+            items: vec![],
+            total_count: 0,
+            cursor: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: true,
+            scroll: 0,
+            all_items: None,
+        });
+        self.spawn_browse(
+            lib_idx,
+            lib_id,
+            lib_name,
+            None,
+            false,
+            "SortName".into(),
+            "Ascending".into(),
+        );
+    }
+
+    fn is_feed_home_video_library(&self, lib_idx: usize) -> bool {
+        let lib = &self.libs[lib_idx];
+        if lib.library.collection_type != "homevideos" {
+            return false;
+        }
+        let client = self.client.lock().unwrap();
+        client
+            .config
+            .feed_view_libraries
+            .contains(&lib.library.name.to_lowercase())
+    }
+
+    pub(super) fn select_feed_folder_group(&mut self, lib_idx: usize, group_idx: usize) {
+        let stack_len = self.libs[lib_idx].nav_stack.len();
+        if stack_len < 1 {
+            return;
+        }
+        let n = self.libs[lib_idx].nav_stack[0].items.len();
+        if group_idx >= n {
+            return;
+        }
+        while self.libs[lib_idx].nav_stack.len() > 1 {
+            self.libs[lib_idx].nav_stack.pop();
+        }
+        if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+            group_lvl.cursor = group_idx;
+        }
+        let (folder_id, folder_name) = self.libs[lib_idx]
+            .nav_stack
+            .first()
+            .and_then(|lvl| lvl.items.get(group_idx))
+            .map(|folder| (folder.id.clone(), folder.name.clone()))
+            .unwrap_or_default();
+        if folder_id.is_empty() {
+            return;
+        }
+        self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            parent_id: folder_id.clone(),
+            title: folder_name.clone(),
+            items: vec![],
+            total_count: 0,
+            cursor: 0,
+            item_types: Some("Video".into()),
+            unplayed_only: true,
+            sort_by: "DateCreated".into(),
+            sort_order: "Ascending".into(),
+            loading: true,
+            scroll: 0,
+            all_items: None,
+        });
+        self.spawn_browse(
+            lib_idx,
+            folder_id,
+            folder_name,
+            Some("Video".into()),
+            true,
+            "DateCreated".into(),
+            "Ascending".into(),
+        );
+    }
+
+    pub(super) fn switch_feed_folder_group(&mut self, lib_idx: usize, delta: i64) {
+        let n = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.first())
+            .map(|lvl| lvl.items.len())
+            .unwrap_or(0);
+        if n == 0 {
+            return;
+        }
+        let cur = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.nav_stack.first())
+            .map(|lvl| lvl.cursor)
+            .unwrap_or(0);
+        let next = (cur as i64 + delta).rem_euclid(n as i64) as usize;
+        self.select_feed_folder_group(lib_idx, next);
+    }
+
     /// Switch to the previous (`delta == -1`) or next (`delta == 1`) season
     /// while in the combined series view. Pops the current episode level,
     /// adjusts the season cursor, then kicks off a fetch for the new season.
@@ -560,6 +713,53 @@ impl App {
         }
 
         // Push a loading placeholder so the Loaded handler can fill it in.
+        self.libs[lib_idx].nav_stack.push(BrowseLevel {
+            parent_id: group_id.clone(),
+            title: group_name.clone(),
+            items: vec![],
+            total_count: 0,
+            cursor: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: true,
+            scroll: 0,
+            all_items: None,
+        });
+        self.spawn_browse(
+            lib_idx,
+            group_id,
+            group_name,
+            None,
+            false,
+            "SortName".into(),
+            "Ascending".into(),
+        );
+    }
+
+    pub(super) fn select_music_group(&mut self, lib_idx: usize, group_cursor: usize) {
+        let stack_len = self.libs[lib_idx].nav_stack.len();
+        if stack_len < 2 {
+            return;
+        }
+        let n = self.libs[lib_idx].nav_stack[stack_len - 2].items.len();
+        if group_cursor >= n {
+            return;
+        }
+        self.libs[lib_idx].nav_stack.pop();
+        if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+            group_lvl.cursor = group_cursor;
+        }
+        let (group_id, group_name) = self.libs[lib_idx]
+            .nav_stack
+            .last()
+            .and_then(|l| l.items.get(group_cursor))
+            .map(|g| (g.id.clone(), g.name.clone()))
+            .unwrap_or_default();
+        if group_id.is_empty() {
+            return;
+        }
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
             parent_id: group_id.clone(),
             title: group_name.clone(),
@@ -1727,6 +1927,13 @@ impl App {
         if idx >= self.libs.len() {
             return;
         }
+        if self.playlist_view == PLAYLIST_VIEW_POWER
+            && self.power_left_tab == idx + 1
+            && self.is_feed_home_video_library(idx)
+        {
+            self.ensure_feed_home_video_root_loaded(idx);
+            return;
+        }
         if self.libs[idx].nav_stack.is_empty() {
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();
@@ -2379,6 +2586,26 @@ impl App {
                             "Ascending".into(),
                         );
                     }
+                }
+
+                let should_auto_push_feed = self.playlist_view == PLAYLIST_VIEW_POWER
+                    && self.power_left_tab == lib_idx + 1
+                    && self.is_feed_home_video_library(lib_idx)
+                    && self
+                        .libs
+                        .get(lib_idx)
+                        .map(|lib| {
+                            lib.nav_stack.len() == 1
+                                && lib.nav_stack[0]
+                                    .items
+                                    .first()
+                                    .map(|item| item.is_folder)
+                                    .unwrap_or(false)
+                        })
+                        .unwrap_or(false);
+                if should_auto_push_feed {
+                    let cursor = self.libs[lib_idx].nav_stack[0].cursor;
+                    self.select_feed_folder_group(lib_idx, cursor);
                 }
 
                 self.maybe_fetch_next_page(lib_idx);

@@ -1369,6 +1369,16 @@ impl App {
                         self.switch_music_group(lib_idx, 1);
                         return false;
                     }
+                    if key.code == KeyCode::Char('[') && self.is_feed_home_video_group_view(lib_idx)
+                    {
+                        self.switch_feed_folder_group(lib_idx, -1);
+                        return false;
+                    }
+                    if key.code == KeyCode::Char(']') && self.is_feed_home_video_group_view(lib_idx)
+                    {
+                        self.switch_feed_folder_group(lib_idx, 1);
+                        return false;
+                    }
                 }
 
                 let is_power_nav = matches!(
@@ -2358,6 +2368,20 @@ impl App {
                     }
                 } else {
                     let lib_idx = self.power_left_tab - 1;
+                    if self.is_music_group_view(lib_idx)
+                        || self.is_feed_home_video_group_view(lib_idx)
+                    {
+                        for (rect, target) in self.layout_power_selector_tabs.clone() {
+                            if rect.contains((col, row).into()) {
+                                if self.is_music_group_view(lib_idx) {
+                                    self.select_music_group(lib_idx, target);
+                                } else {
+                                    self.select_feed_folder_group(lib_idx, target);
+                                }
+                                return true;
+                            }
+                        }
+                    }
                     let click_y = (row - la.y) as usize;
                     // Read the row map before taking a mutable borrow on libs (borrow checker).
                     let use_row_map = !self.power_left_row_map.is_empty();
@@ -2964,6 +2988,22 @@ impl App {
                     && self.last_click_pos == (col, row);
                 self.last_click_time = now;
                 self.last_click_pos = (col, row);
+
+                if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+                    for (rect, target) in self.layout_power_selector_tabs.clone() {
+                        if rect.contains((col, row).into()) {
+                            if self.power_left_tab > 0 {
+                                let lib_idx = self.power_left_tab - 1;
+                                if self.is_music_group_view(lib_idx) {
+                                    self.select_music_group(lib_idx, target);
+                                } else if self.is_feed_home_video_group_view(lib_idx) {
+                                    self.select_feed_folder_group(lib_idx, target);
+                                }
+                            }
+                            return;
+                        }
+                    }
+                }
 
                 if is_double {
                     if self.layout_seekbar_area.contains((col, row).into()) {

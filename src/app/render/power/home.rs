@@ -30,6 +30,175 @@ fn power_home_panel_scroll(
     s
 }
 
+fn feed_added_date(date_added: &str) -> String {
+    const MONTHS: [&str; 12] = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+    ];
+
+    date_added
+        .splitn(3, '-')
+        .collect::<Vec<_>>()
+        .as_slice()
+        .windows(3)
+        .next()
+        .and_then(|p| {
+            let y = p[0];
+            let d: u32 = p[2].parse().ok()?;
+            let m: usize = p[1].parse::<usize>().ok()?.checked_sub(1)?;
+            Some(format!("Added {} {}, {}", d, MONTHS.get(m)?, y))
+        })
+        .unwrap_or_else(|| date_added.to_string())
+}
+
+fn home_video_item_height(item: &crate::api::MediaItem) -> u16 {
+    if item.overview.is_empty() {
+        3
+    } else {
+        4
+    }
+}
+
+fn render_home_video_item(
+    f: &mut Frame,
+    item: &crate::api::MediaItem,
+    row_y: u16,
+    item_h: u16,
+    content_area: Rect,
+    text_w: usize,
+    selected: bool,
+    focused: bool,
+    is_feed_lib: bool,
+) {
+    let marker = if selected && focused {
+        Span::styled("\u{258c}", Style::default().fg(palette::PINE))
+    } else {
+        Span::raw(" ")
+    };
+    f.render_widget(
+        Paragraph::new(marker),
+        Rect {
+            x: content_area.x,
+            y: row_y,
+            width: 1,
+            height: 1,
+        },
+    );
+
+    let tx = content_area.x + 1;
+    let tw = (text_w.saturating_sub(1)) as u16;
+    let title_color = if selected && focused {
+        palette::IRIS
+    } else {
+        palette::TEXT
+    };
+    let title_style = if selected && focused {
+        Style::default()
+            .fg(title_color)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(title_color)
+    };
+    let title_trunc = trunc_str(&item.display_name(), tw as usize);
+    f.render_widget(
+        Paragraph::new(Span::styled(title_trunc, title_style)),
+        Rect {
+            x: tx,
+            y: row_y,
+            width: tw,
+            height: 1,
+        },
+    );
+
+    if row_y + 1 < content_area.y + content_area.height {
+        let mut meta_spans: Vec<Span> = Vec::new();
+        if item.played {
+            meta_spans.push(Span::styled(
+                "\u{2713} ",
+                Style::default().fg(palette::PINE),
+            ));
+        }
+        let mut parts: Vec<String> = Vec::new();
+        if is_feed_lib && !item.date_added.is_empty() {
+            parts.push(feed_added_date(&item.date_added));
+        }
+        let dur_s = item.runtime_ticks / TICKS_PER_SECOND;
+        if dur_s > 0 {
+            parts.push(fmt_duration_approx(dur_s));
+        }
+        if !parts.is_empty() {
+            meta_spans.push(Span::styled(
+                parts.join("  "),
+                Style::default().fg(palette::SUBTLE),
+            ));
+        }
+        if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
+            let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+            meta_spans.push(Span::styled(
+                format!("  {}%", pct),
+                Style::default().fg(palette::YELLOW),
+            ));
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(meta_spans)),
+            Rect {
+                x: tx,
+                y: row_y + 1,
+                width: tw,
+                height: 1,
+            },
+        );
+    }
+
+    if !item.overview.is_empty() && item_h >= 4 && row_y + 2 < content_area.y + content_area.height
+    {
+        let ov_text = trunc_overview(&item.overview);
+        let ov_first = wrap(&ov_text, (tw as usize).max(1))
+            .into_iter()
+            .next()
+            .map(|s| s.into_owned())
+            .unwrap_or_default();
+        let ov_color = if selected && focused {
+            palette::WHITE
+        } else {
+            palette::MUTED
+        };
+        f.render_widget(
+            Paragraph::new(Span::styled(ov_first, Style::default().fg(ov_color))),
+            Rect {
+                x: tx,
+                y: row_y + 2,
+                width: tw,
+                height: 1,
+            },
+        );
+    }
+
+    let sep_y = row_y + item_h - 1;
+    if sep_y < content_area.y + content_area.height {
+        let sep_str = "\u{2500}".repeat(text_w);
+        f.render_widget(
+            Paragraph::new(Span::styled(sep_str, Style::default().fg(palette::MUTED))),
+            Rect {
+                x: content_area.x,
+                y: sep_y,
+                width: text_w as u16,
+                height: 1,
+            },
+        );
+    }
+}
+
 impl App {
     pub(super) fn render_power_home_video_list(
         &mut self,
@@ -42,6 +211,7 @@ impl App {
             return;
         }
         self.ensure_lib_loaded_for(lib_idx);
+        self.power_left_row_map.clear();
 
         let mut content_area = area;
         self.power_left_area = content_area;
@@ -87,34 +257,13 @@ impl App {
                 .contains(&self.libs[lib_idx].library.name.to_lowercase())
         };
 
-        const MONTHS: [&str; 12] = [
-            "January",
-            "February",
-            "March",
-            "April",
-            "May",
-            "June",
-            "July",
-            "August",
-            "September",
-            "October",
-            "November",
-            "December",
-        ];
-
-        // Each item: title row + meta row + separator = 3 rows; +1 if it has an overview.
-        let item_heights: Vec<u16> = items
-            .iter()
-            .map(|item| if item.overview.is_empty() { 3 } else { 4 })
-            .collect();
-
+        let item_heights: Vec<u16> = items.iter().map(home_video_item_height).collect();
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > content_area.height;
         let text_w =
             (content_area.width as usize).saturating_sub(if needs_scrollbar { 1 } else { 0 });
 
-        // Scroll so the cursor item is always visible.
-        let scroll = {
+        let mut scroll = {
             let mut s = 0usize;
             while s < cursor {
                 let visible_h: u16 = item_heights[s..=cursor].iter().sum();
@@ -125,8 +274,12 @@ impl App {
             }
             s
         };
+        if scroll > cursor {
+            scroll = cursor;
+        }
 
         let mut row_y = content_area.y;
+        let mut row_map: Vec<Option<usize>> = Vec::with_capacity(content_area.height as usize);
 
         for (i, item) in items.iter().enumerate().skip(scroll) {
             if row_y >= content_area.y + content_area.height {
@@ -134,152 +287,27 @@ impl App {
             }
             let item_h = item_heights[i];
             let selected = i == cursor;
-
-            // Cursor marker
-            let marker = if selected && focused {
-                Span::styled("\u{258c}", Style::default().fg(palette::PINE))
-            } else {
-                Span::raw(" ")
-            };
-            f.render_widget(
-                Paragraph::new(marker),
-                Rect {
-                    x: content_area.x,
-                    y: row_y,
-                    width: 1,
-                    height: 1,
-                },
+            render_home_video_item(
+                f,
+                item,
+                row_y,
+                item_h,
+                content_area,
+                text_w,
+                selected,
+                focused,
+                is_feed_lib,
             );
-
-            let tx = content_area.x + 1;
-            let tw = (text_w.saturating_sub(1)) as u16;
-
-            // — Title —
-            let title_color = if selected && focused {
-                palette::IRIS
-            } else {
-                palette::TEXT
-            };
-            let title_style = if selected && focused {
-                Style::default()
-                    .fg(title_color)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(title_color)
-            };
-            let title_trunc = trunc_str(&item.display_name(), tw as usize);
-            f.render_widget(
-                Paragraph::new(Span::styled(title_trunc, title_style)),
-                Rect {
-                    x: tx,
-                    y: row_y,
-                    width: tw,
-                    height: 1,
-                },
-            );
-
-            // — Meta line: date added / duration / playback % —
-            if row_y + 1 < content_area.y + content_area.height {
-                let mut meta_spans: Vec<Span> = Vec::new();
-                if item.played {
-                    meta_spans.push(Span::styled(
-                        "\u{2713} ",
-                        Style::default().fg(palette::PINE),
-                    ));
-                }
-                let mut parts: Vec<String> = Vec::new();
-                if is_feed_lib && !item.date_added.is_empty() {
-                    let formatted = item
-                        .date_added
-                        .splitn(3, '-')
-                        .collect::<Vec<_>>()
-                        .as_slice()
-                        .windows(3)
-                        .next()
-                        .and_then(|p| {
-                            let y = p[0];
-                            let d: u32 = p[2].parse().ok()?;
-                            let m: usize = p[1].parse::<usize>().ok()?.checked_sub(1)?;
-                            Some(format!("Added {} {}, {}", d, MONTHS.get(m)?, y))
-                        })
-                        .unwrap_or_else(|| item.date_added.clone());
-                    parts.push(formatted);
-                }
-                let dur_s = item.runtime_ticks / crate::api::TICKS_PER_SECOND;
-                if dur_s > 0 {
-                    parts.push(fmt_duration_approx(dur_s));
-                }
-                if !parts.is_empty() {
-                    meta_spans.push(Span::styled(
-                        parts.join("  "),
-                        Style::default().fg(palette::SUBTLE),
-                    ));
-                }
-                if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
-                    let pct =
-                        (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-                    meta_spans.push(Span::styled(
-                        format!("  {}%", pct),
-                        Style::default().fg(palette::YELLOW),
-                    ));
-                }
-                f.render_widget(
-                    Paragraph::new(Line::from(meta_spans)),
-                    Rect {
-                        x: tx,
-                        y: row_y + 1,
-                        width: tw,
-                        height: 1,
-                    },
-                );
+            let visible_rows = (content_area.y + content_area.height)
+                .saturating_sub(row_y)
+                .min(item_h);
+            for _ in 0..visible_rows {
+                row_map.push(Some(i));
             }
-
-            // — Overview (first wrapped line) —
-            if !item.overview.is_empty()
-                && item_h >= 4
-                && row_y + 2 < content_area.y + content_area.height
-            {
-                {
-                    let ov_text = trunc_overview(&item.overview);
-                    let ov_first = wrap(&ov_text, (tw as usize).max(1))
-                        .into_iter()
-                        .next()
-                        .map(|s| s.into_owned())
-                        .unwrap_or_default();
-                    let ov_color = if selected && focused {
-                        palette::WHITE
-                    } else {
-                        palette::MUTED
-                    };
-                    f.render_widget(
-                        Paragraph::new(Span::styled(ov_first, Style::default().fg(ov_color))),
-                        Rect {
-                            x: tx,
-                            y: row_y + 2,
-                            width: tw,
-                            height: 1,
-                        },
-                    );
-                }
-            }
-
-            // — Separator —
-            let sep_y = row_y + item_h - 1;
-            if sep_y < content_area.y + content_area.height {
-                let sep_str = "\u{2500}".repeat(text_w);
-                f.render_widget(
-                    Paragraph::new(Span::styled(sep_str, Style::default().fg(palette::MUTED))),
-                    Rect {
-                        x: content_area.x,
-                        y: sep_y,
-                        width: text_w as u16,
-                        height: 1,
-                    },
-                );
-            }
-
             row_y += item_h;
         }
+        row_map.resize(content_area.height as usize, None);
+        self.power_left_row_map = row_map;
 
         // Scrollbar (hidden when unfocused, consistent with queue panel).
         if needs_scrollbar && focused {
@@ -293,6 +321,266 @@ impl App {
                     .end_symbol(None)
                     .style(Style::default().fg(palette::SUBTLE)),
                 content_area,
+                &mut sb,
+            );
+        }
+    }
+
+    pub(super) fn render_power_feed_home_video_group_view(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        focused: bool,
+    ) {
+        if area.height == 0 {
+            return;
+        }
+        self.ensure_lib_loaded_for(lib_idx);
+        self.power_left_row_map.clear();
+
+        let Some(root_level) = self.libs[lib_idx].nav_stack.first() else {
+            return;
+        };
+        let groups = root_level.items.clone();
+        let selected_group = root_level.cursor.min(groups.len().saturating_sub(1));
+        let (items, cursor, stored_scroll, loading) = if self.libs[lib_idx].nav_stack.len() > 1 {
+            let level = self.libs[lib_idx].nav_stack.last().unwrap();
+            (
+                level.items.clone(),
+                level.cursor,
+                level.scroll,
+                level.loading,
+            )
+        } else {
+            (Vec::new(), 0, 0, root_level.loading)
+        };
+
+        let max_y = area.y + area.height;
+        let mut row = area.y;
+        let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
+
+        if row < max_y {
+            row += 1;
+        }
+        if row < max_y && !groups.is_empty() {
+            const MAX_LABEL: usize = 12;
+            let tab_labels: Vec<String> = groups
+                .iter()
+                .map(|g| trunc_str(&g.name, MAX_LABEL).to_string())
+                .collect();
+            let n_tabs = tab_labels.len();
+            let pill_widths: Vec<usize> = tab_labels.iter().map(|l| l.width() + 2).collect();
+            let bar_w = area.width as usize;
+
+            let count_fitting = |start: usize, avail: usize| -> usize {
+                let mut used = 0usize;
+                let mut count = 0usize;
+                for width in pill_widths.iter().take(n_tabs).skip(start) {
+                    let need = if count == 0 { *width } else { 1 + *width };
+                    if used + need > avail {
+                        break;
+                    }
+                    used += need;
+                    count += 1;
+                }
+                count
+            };
+
+            let mut scroll_start = 0usize;
+            loop {
+                let avail = bar_w
+                    .saturating_sub(if scroll_start > 0 { 2 } else { 0 })
+                    .saturating_sub(2);
+                let cnt = count_fitting(scroll_start, avail);
+                if cnt == 0 || scroll_start + cnt > selected_group {
+                    break;
+                }
+                scroll_start += 1;
+            }
+
+            let has_left = scroll_start > 0;
+            let avail_pills = bar_w
+                .saturating_sub(if has_left { 2 } else { 0 })
+                .saturating_sub(2);
+            let cnt = count_fitting(scroll_start, avail_pills);
+            let scroll_end = (scroll_start + cnt).min(n_tabs);
+            let has_right = scroll_end < n_tabs;
+
+            let mut spans: Vec<Span> = Vec::new();
+            let mut x_cursor = area.x;
+            if has_left {
+                let chunk = "\u{2039} ";
+                spans.push(Span::styled(chunk, Style::default().fg(palette::FOAM)));
+                x_cursor += chunk.width() as u16;
+            }
+            for (idx, label) in tab_labels[scroll_start..scroll_end].iter().enumerate() {
+                if idx > 0 {
+                    spans.push(Span::raw(" "));
+                    x_cursor += 1;
+                }
+                let abs_idx = scroll_start + idx;
+                let selected = abs_idx == selected_group;
+                let style = if selected {
+                    Style::default()
+                        .fg(palette::YELLOW)
+                        .bg(palette::FOAM)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(palette::BASE).bg(palette::FOAM)
+                };
+                let pill = format!(" {} ", label);
+                let pill_rect = Rect {
+                    x: x_cursor,
+                    y: row,
+                    width: pill.width() as u16,
+                    height: 1,
+                };
+                selector_tabs.push((pill_rect, abs_idx));
+                spans.push(Span::styled(pill.clone(), style));
+                x_cursor += pill.width() as u16;
+            }
+            if has_right {
+                spans.push(Span::styled(
+                    " \u{203a}",
+                    Style::default().fg(palette::FOAM),
+                ));
+            }
+            f.render_widget(
+                Paragraph::new(Line::from(spans)),
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+        }
+        if row < max_y {
+            row += 1;
+        }
+        if row < max_y {
+            row += 1;
+        }
+        self.layout_power_selector_tabs = selector_tabs;
+
+        if groups.is_empty() {
+            if row < max_y {
+                let msg = if loading {
+                    " Loading\u{2026}"
+                } else {
+                    " (empty)"
+                };
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        msg,
+                        Style::default().fg(palette::MUTED),
+                    ))),
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+            }
+            self.power_left_area = Rect {
+                x: area.x,
+                y: row,
+                width: area.width,
+                height: max_y.saturating_sub(row),
+            };
+            return;
+        }
+
+        let list_area = Rect {
+            x: area.x,
+            y: row,
+            width: area.width,
+            height: max_y.saturating_sub(row),
+        };
+        self.power_left_area = list_area;
+        if list_area.height == 0 {
+            return;
+        }
+
+        if items.is_empty() {
+            if row < max_y {
+                let msg = if loading {
+                    " Loading\u{2026}"
+                } else {
+                    " (empty)"
+                };
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        msg,
+                        Style::default().fg(palette::MUTED),
+                    ))),
+                    Rect {
+                        x: list_area.x,
+                        y: list_area.y,
+                        width: list_area.width,
+                        height: 1,
+                    },
+                );
+            }
+            return;
+        }
+
+        let current_pos = cursor.min(items.len().saturating_sub(1));
+        let item_heights: Vec<u16> = items.iter().map(home_video_item_height).collect();
+        let total_h: u16 = item_heights.iter().sum();
+        let needs_scrollbar = total_h > list_area.height;
+        let text_w = (list_area.width as usize).saturating_sub(if needs_scrollbar { 1 } else { 0 });
+
+        let mut scroll = stored_scroll.min(items.len().saturating_sub(1));
+        if current_pos < scroll {
+            scroll = current_pos;
+        }
+        while scroll < current_pos {
+            let visible_h: u16 = item_heights[scroll..=current_pos].iter().sum();
+            if visible_h <= list_area.height {
+                break;
+            }
+            scroll += 1;
+        }
+        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            level.scroll = scroll;
+        }
+
+        let mut row_map: Vec<Option<usize>> = Vec::with_capacity(list_area.height as usize);
+        let mut row_y = list_area.y;
+        for (item_idx, item) in items.iter().enumerate().skip(scroll) {
+            if row_y >= list_area.y + list_area.height {
+                break;
+            }
+            let item_h = item_heights[item_idx];
+            let selected = item_idx == current_pos;
+            render_home_video_item(
+                f, item, row_y, item_h, list_area, text_w, selected, focused, true,
+            );
+            let visible_rows = (list_area.y + list_area.height)
+                .saturating_sub(row_y)
+                .min(item_h);
+            for _ in 0..visible_rows {
+                row_map.push(Some(item_idx));
+            }
+            row_y += item_h;
+        }
+        row_map.resize(list_area.height as usize, None);
+        self.power_left_row_map = row_map;
+
+        if needs_scrollbar && focused {
+            let max_off = items.len().saturating_sub(1);
+            let mut sb = ScrollbarState::new(max_off + 1).position(scroll);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("\u{2590}")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                list_area,
                 &mut sb,
             );
         }

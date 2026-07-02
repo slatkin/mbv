@@ -377,6 +377,7 @@ pub struct App {
     layout_lib_table_area: Vec<Rect>,
     layout_breadcrumbs: Vec<(u16, u16, u16, usize)>, // (x_start, x_end, row, target nav_stack len)
     layout_power_breadcrumbs: Vec<(u16, u16, u16, usize)>, // same format, for power-view header crumbs
+    layout_power_selector_tabs: Vec<(Rect, usize)>,        // selector pill rect → target index
     mouse_col: u16,
     mouse_row: u16,
     last_click_time: Instant,
@@ -714,6 +715,7 @@ impl App {
             layout_lib_table_area: Vec::new(),
             layout_breadcrumbs: Vec::new(),
             layout_power_breadcrumbs: Vec::new(),
+            layout_power_selector_tabs: Vec::new(),
             mouse_col: 0,
             mouse_row: 0,
             last_click_time: Instant::now(),
@@ -2321,6 +2323,7 @@ pub(crate) mod tests {
             layout_lib_table_area: Vec::new(),
             layout_breadcrumbs: Vec::new(),
             layout_power_breadcrumbs: Vec::new(),
+            layout_power_selector_tabs: Vec::new(),
             mouse_col: 0,
             mouse_row: 0,
             last_click_time: std::time::Instant::now(),
@@ -2510,6 +2513,92 @@ pub(crate) mod tests {
             App::extrapolated_remote_position(10, Duration::from_secs(2)),
             12
         );
+    }
+
+    #[test]
+    fn feed_home_video_group_view_requires_homevideos_and_feed_config() {
+        let mut app = make_app_stub();
+        let mut library = make_item("YouTube", "CollectionFolder");
+        library.id = "lib-youtube".into();
+        library.collection_type = "homevideos".into();
+        library.is_folder = true;
+        let mut folder = make_item("Channel A", "Folder");
+        folder.id = "folder-a".into();
+        folder.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-youtube".into(),
+                title: "YouTube".into(),
+                items: vec![folder],
+                total_count: 1,
+                cursor: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                scroll: 0,
+                all_items: None,
+            }],
+            search: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+        assert!(!app.is_feed_home_video_group_view(0));
+
+        app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+        assert!(app.is_feed_home_video_group_view(0));
+    }
+
+    #[test]
+    fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
+        let mut app = make_app_stub();
+        let mut library = make_item("YouTube", "CollectionFolder");
+        library.id = "lib-youtube".into();
+        library.collection_type = "homevideos".into();
+        library.is_folder = true;
+
+        let mut first = make_item("Channel A", "Folder");
+        first.id = "folder-a".into();
+        first.is_folder = true;
+        let mut second = make_item("Channel B", "Folder");
+        second.id = "folder-b".into();
+        second.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-youtube".into(),
+                title: "YouTube".into(),
+                items: vec![first, second],
+                total_count: 2,
+                cursor: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                scroll: 0,
+                all_items: None,
+            }],
+            search: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app.select_feed_folder_group(0, 1);
+        assert_eq!(app.libs[0].nav_stack.len(), 2);
+        assert_eq!(app.libs[0].nav_stack[0].cursor, 1);
+        let level = app.libs[0].nav_stack.last().unwrap();
+        assert_eq!(level.parent_id, "folder-b");
+        assert_eq!(level.title, "Channel B");
+        assert_eq!(level.item_types.as_deref(), Some("Video"));
+        assert!(level.unplayed_only);
+        assert_eq!(level.sort_by, "DateCreated");
+        assert_eq!(level.sort_order, "Ascending");
+        assert!(level.loading);
     }
 
     #[test]

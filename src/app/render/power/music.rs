@@ -61,6 +61,7 @@ impl App {
                 .map(|g| trunc_str(&g.name, MAX_LABEL).to_string())
                 .collect();
             let n_tabs = tab_labels.len();
+            let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
 
             // Actual display width of each pill: " label " = label_w + 2.
             // Gap between consecutive pills = 1 char.
@@ -105,15 +106,16 @@ impl App {
             let has_right = scroll_end < n_tabs;
 
             let mut spans: Vec<Span> = Vec::new();
+            let mut x_cursor = area.x;
             if has_left {
-                spans.push(Span::styled(
-                    "\u{2039} ",
-                    Style::default().fg(palette::FOAM),
-                ));
+                let chunk = "\u{2039} ";
+                spans.push(Span::styled(chunk, Style::default().fg(palette::FOAM)));
+                x_cursor += chunk.width() as u16;
             }
             for (idx, label) in tab_labels[scroll_start..scroll_end].iter().enumerate() {
                 if idx > 0 {
                     spans.push(Span::raw(" "));
+                    x_cursor += 1;
                 }
                 let abs_idx = scroll_start + idx;
                 let selected = abs_idx == group_cursor;
@@ -125,7 +127,18 @@ impl App {
                 } else {
                     Style::default().fg(palette::BASE).bg(palette::FOAM)
                 };
-                spans.push(Span::styled(format!(" {} ", label), style));
+                let pill = format!(" {} ", label);
+                selector_tabs.push((
+                    Rect {
+                        x: x_cursor,
+                        y: row,
+                        width: pill.width() as u16,
+                        height: 1,
+                    },
+                    abs_idx,
+                ));
+                spans.push(Span::styled(pill.clone(), style));
+                x_cursor += pill.width() as u16;
             }
             if has_right {
                 spans.push(Span::styled(
@@ -142,6 +155,7 @@ impl App {
                     height: 1,
                 },
             );
+            self.layout_power_selector_tabs = selector_tabs;
         }
         if row < max_y {
             row += 1;

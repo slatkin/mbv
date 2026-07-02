@@ -315,6 +315,7 @@ impl App {
     }
 
     fn render_power_library(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        self.layout_power_selector_tabs.clear();
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
         if self.power_left_tab > 0 {
@@ -329,6 +330,8 @@ impl App {
         let has_detail = self.power_left_tab > 0 && self.libs[lib_idx].power_detail_item.is_some();
         if has_detail {
             self.render_power_detail(f, area, lib_idx, focused);
+        } else if self.power_left_tab > 0 && self.is_feed_home_video_group_view(lib_idx) {
+            self.render_power_feed_home_video_group_view(f, area, lib_idx, focused);
         } else if self.power_left_tab > 0 && self.is_music_group_view(lib_idx) {
             self.render_power_music_group_view(f, area, lib_idx, focused);
         } else if self.power_left_tab > 0 && self.is_album_level(lib_idx) {
