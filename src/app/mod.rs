@@ -1629,13 +1629,13 @@ impl App {
 
             self.sync_volume_from_player();
 
-            // Animate the now-playing spinner at ~150 ms whenever something is
-            // playing — locally or on a connected remote session; fall back to 1 s
-            // when idle. Use effective_playback_state so a remote-controlled session
-            // (where the local player is idle) still animates smoothly.
+            // Animate the now-playing spinner at ~150 ms whenever a local player
+            // is active or a remote session is connected; fall back to 1 s when
+            // fully idle. Remote queue views need the fast cadence even if the
+            // active item match is temporarily unavailable.
             let render_interval = {
                 let (active, ..) = self.effective_playback_state();
-                if active {
+                if active || self.connected_session_state.is_some() {
                     Duration::from_millis(150)
                 } else {
                     Duration::from_secs(1)
