@@ -78,17 +78,8 @@ impl DaemonEndpoint {
         let ip = if host == "localhost" {
             IpAddr::V4(Ipv4Addr::LOCALHOST)
         } else {
-            let ip: IpAddr = host.parse().map_err(|_| {
-                format!(
-                    "daemon endpoint tcp:// only supports localhost or loopback addresses: {value}"
-                )
-            })?;
-            if !ip.is_loopback() {
-                return Err(format!(
-                    "daemon endpoint tcp:// only supports localhost or loopback addresses: {value}"
-                ));
-            }
-            ip
+            host.parse()
+                .map_err(|_| format!("daemon endpoint tcp:// requires an IP host: {value}"))?
         };
 
         Ok(Self::Tcp(SocketAddr::new(ip, port)))
@@ -437,7 +428,10 @@ mod tests {
 
     #[test]
     fn daemon_endpoint_rejects_unsupported_schemes() {
-        assert!(DaemonEndpoint::parse("tcp://10.0.0.1:1234").is_err());
+        assert_eq!(
+            DaemonEndpoint::parse("tcp://10.0.0.1:1234").unwrap(),
+            DaemonEndpoint::Tcp(SocketAddr::from(([10, 0, 0, 1], 1234)))
+        );
         assert!(DaemonEndpoint::parse("unix://").is_err());
         assert!(DaemonEndpoint::parse("http://localhost:1234").is_err());
     }

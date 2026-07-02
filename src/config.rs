@@ -40,7 +40,10 @@ pub struct Config {
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
     pub daemon_client_endpoint: String, // [daemon.client] endpoint; empty = auto-detect local daemon
+    pub daemon_server_tcp_listen: String, // [daemon.server] tcp_listen; empty = unix-only unless system instance default applies
 }
+
+pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
 
 impl Default for Config {
     fn default() -> Self {
@@ -81,6 +84,7 @@ impl Default for Config {
             progress_interval_secs: 10,
             daemon_broadcast_ms: 500,
             daemon_client_endpoint: String::new(),
+            daemon_server_tcp_listen: String::new(),
         }
     }
 }
@@ -100,6 +104,14 @@ impl Config {
 
 pub fn is_system_instance() -> bool {
     env::var("MBV_SYSTEM").ok().as_deref() == Some("1")
+}
+
+pub fn default_daemon_server_tcp_listen() -> String {
+    if is_system_instance() {
+        DEFAULT_SYSTEM_DAEMON_TCP_LISTEN.to_string()
+    } else {
+        String::new()
+    }
 }
 
 fn config_dir() -> PathBuf {
@@ -576,6 +588,14 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let daemon_server_tcp_listen = daemon
+        .and_then(|d| d.get("server"))
+        .and_then(|s| s.get("tcp_listen"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(default_daemon_server_tcp_listen);
 
     let feed_view_libraries: Vec<String> = general
         .and_then(|m| m.get("feed_view_libraries"))
@@ -625,6 +645,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         progress_interval_secs,
         daemon_broadcast_ms,
         daemon_client_endpoint,
+        daemon_server_tcp_listen,
     })
 }
 
@@ -795,6 +816,19 @@ pub fn save_config_settings(cfg: &Config) {
             toml::Value::String(cfg.daemon_client_endpoint.clone()),
         );
     }
+    let daemon_server = daemon
+        .entry("server".to_string())
+        .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+        .as_table_mut()
+        .unwrap();
+    if cfg.daemon_server_tcp_listen.trim().is_empty() {
+        daemon_server.remove("tcp_listen");
+    } else {
+        daemon_server.insert(
+            "tcp_listen".to_string(),
+            toml::Value::String(cfg.daemon_server_tcp_listen.clone()),
+        );
+    }
 
     let playback = section!("playback");
     if cfg.subtitle_mode.is_empty() {
@@ -906,6 +940,18 @@ endpoint = "unix:///tmp/mbv.sock"
 "#;
         let cfg = parse_config(toml).unwrap();
         assert_eq!(cfg.daemon_client_endpoint, "unix:///tmp/mbv.sock");
+    }
+
+    #[test]
+    fn parse_daemon_server_tcp_listen() {
+        let toml = r#"
+[server]
+url = "http://localhost:8096"
+[daemon.server]
+tcp_listen = "0.0.0.0:8890"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert_eq!(cfg.daemon_server_tcp_listen, "0.0.0.0:8890");
     }
 
     #[test]
@@ -1094,6 +1140,18 @@ hidden_latest = ["Movies", "TV SHOWS"]
         let path = control_socket_path();
         std::env::remove_var("MBV_SYSTEM");
         assert_eq!(path, "/run/mbv/mbv-ctrl.sock");
+    }
+
+    #[test]
+    fn daemon_server_tcp_listen_defaults_for_system_instance() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::set_var("MBV_SYSTEM", "1");
+        let cfg = parse_config("[server]\nurl = \"http://host\"").unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        assert_eq!(
+            cfg.daemon_server_tcp_listen,
+            DEFAULT_SYSTEM_DAEMON_TCP_LISTEN
+        );
     }
 
     #[test]

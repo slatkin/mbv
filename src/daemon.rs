@@ -1,14 +1,14 @@
 use std::io::{BufRead, BufReader, Write};
+use std::net::TcpListener;
 use std::os::unix::net::UnixListener;
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use ksni::blocking::TrayMethods;
-
-use crate::api::{EmbyClient, MediaItem};
+use crate::api::{mbv_direct_tcp_port_command, EmbyClient, MediaItem};
 use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, CtrlState};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
+use ksni::blocking::TrayMethods;
 
 enum DaemonEvent {
     Player(PlayerEvent),
@@ -68,6 +68,77 @@ fn broadcast(clients: &ClientList, event: &CtrlEvent) {
     }
 }
 
+fn spawn_ctrl_client<R, W>(
+    reader_stream: R,
+    writer_stream: W,
+    merged_tx: mpsc::Sender<DaemonEvent>,
+    ctrl_clients: ClientList,
+    player_status: Arc<Mutex<crate::player::PlayerStatus>>,
+    shared_items: Arc<Mutex<Vec<MediaItem>>>,
+    shared_cursor: Arc<Mutex<usize>>,
+) where
+    R: std::io::Read + Send + 'static,
+    W: Write + Send + 'static,
+{
+    let (ev_tx, ev_rx) = mpsc::channel::<String>();
+
+    if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())) {
+        ev_tx.send(hello_json).ok();
+    }
+
+    std::thread::spawn(move || {
+        let mut w = writer_stream;
+        for line in ev_rx {
+            if writeln!(w, "{line}").is_err() {
+                break;
+            }
+        }
+    });
+
+    std::thread::spawn(move || {
+        let reader = BufReader::new(reader_stream);
+        let mut lines = reader.lines();
+        let Some(Ok(line)) = lines.next() else {
+            return;
+        };
+        match serde_json::from_str::<CtrlCmd>(&line) {
+            Ok(CtrlCmd::Hello(info)) => {
+                if let Err(e) = info.validate_peer() {
+                    log::warn!(target: "daemon", "rejecting ctrl client: {e}");
+                    return;
+                }
+            }
+            Ok(_) => {
+                log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
+                return;
+            }
+            Err(e) => {
+                log::warn!(target: "daemon", "rejecting ctrl client: invalid protocol hello: {e}");
+                return;
+            }
+        }
+
+        if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
+            status: player_status.lock().unwrap().clone(),
+            items: shared_items.lock().unwrap().clone(),
+            cursor: *shared_cursor.lock().unwrap(),
+        })) {
+            ev_tx.send(init_json).ok();
+        }
+        ctrl_clients.lock().unwrap().push(ev_tx);
+
+        for line in lines {
+            let Ok(line) = line else { break };
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
+                let _ = merged_tx.send(DaemonEvent::Ctrl(cmd));
+            }
+        }
+    });
+}
+
 pub fn run(client: EmbyClient) -> ! {
     std::fs::write(pid_file(), std::process::id().to_string())
         .expect("mbv daemon: failed to write PID file");
@@ -101,7 +172,37 @@ pub fn run(client: EmbyClient) -> ! {
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx) = mpsc::channel();
     let ws_send_tx = crate::ws::start(client.ws_url(), ws_tx_chan);
-    client.register_capabilities();
+    let mut direct_commands = Vec::new();
+    let tcp_listener = if client.config.daemon_server_tcp_listen.trim().is_empty() {
+        None
+    } else {
+        match TcpListener::bind(client.config.daemon_server_tcp_listen.trim()) {
+            Ok(listener) => {
+                let port = listener.local_addr().map(|addr| addr.port()).unwrap_or(0);
+                if port > 0 {
+                    direct_commands.push(mbv_direct_tcp_port_command(port));
+                    log::info!(
+                        target: "daemon",
+                        "daemon tcp control listening on {}",
+                        listener
+                            .local_addr()
+                            .map(|addr| addr.to_string())
+                            .unwrap_or_else(|_| client.config.daemon_server_tcp_listen.clone())
+                    );
+                }
+                Some(listener)
+            }
+            Err(e) => {
+                log::warn!(
+                    target: "daemon",
+                    "daemon tcp control bind failed for {}: {e}",
+                    client.config.daemon_server_tcp_listen
+                );
+                None
+            }
+        }
+    };
+    client.register_capabilities_with_extra_commands(&direct_commands);
     let subtitle_prefs = if client.config.subtitle_mode.is_empty()
         && client.config.subtitle_lang.is_empty()
         && client.config.audio_lang.is_empty()
@@ -174,10 +275,10 @@ pub fn run(client: EmbyClient) -> ! {
     let shared_cursor: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
     let ctrl_clients: ClientList = Arc::new(Mutex::new(Vec::new()));
 
-    // Spawn control socket listener
+    // Spawn control socket listener(s)
     {
         let ctrl_clients = ctrl_clients.clone();
-        let merged_tx2 = merged_tx;
+        let merged_tx2 = merged_tx.clone();
         let player_status = player.status.clone();
         let shared_items = shared_items.clone();
         let shared_cursor = shared_cursor.clone();
@@ -206,74 +307,40 @@ pub fn run(client: EmbyClient) -> ! {
                 let Ok(stream_w) = stream.try_clone() else {
                     continue;
                 };
+                spawn_ctrl_client(
+                    stream,
+                    stream_w,
+                    merged_tx2.clone(),
+                    ctrl_clients.clone(),
+                    player_status.clone(),
+                    shared_items.clone(),
+                    shared_cursor.clone(),
+                );
+            }
+        });
+    }
 
-                let (ev_tx, ev_rx) = mpsc::channel::<String>();
-
-                if let Ok(hello_json) =
-                    serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current()))
-                {
-                    ev_tx.send(hello_json).ok();
-                }
-
-                // Writer thread: drains ev_rx → socket
-                std::thread::spawn(move || {
-                    let mut w = stream_w;
-                    for line in ev_rx {
-                        if writeln!(w, "{line}").is_err() {
-                            break;
-                        }
-                    }
-                });
-
-                // Reader thread: socket → merged_tx as DaemonEvent::Ctrl
-                let ctrl_tx = merged_tx2.clone();
-                let ctrl_clients = ctrl_clients.clone();
-                let ev_tx_init = ev_tx.clone();
-                let player_status = player_status.clone();
-                let shared_items = shared_items.clone();
-                let shared_cursor = shared_cursor.clone();
-                std::thread::spawn(move || {
-                    let reader = BufReader::new(stream);
-                    let mut lines = reader.lines();
-                    let Some(Ok(line)) = lines.next() else {
-                        return;
-                    };
-                    match serde_json::from_str::<CtrlCmd>(&line) {
-                        Ok(CtrlCmd::Hello(info)) => {
-                            if let Err(e) = info.validate_peer() {
-                                log::warn!(target: "daemon", "rejecting ctrl client: {e}");
-                                return;
-                            }
-                        }
-                        Ok(_) => {
-                            log::warn!(target: "daemon", "rejecting ctrl client: missing protocol hello");
-                            return;
-                        }
-                        Err(e) => {
-                            log::warn!(target: "daemon", "rejecting ctrl client: invalid protocol hello: {e}");
-                            return;
-                        }
-                    }
-
-                    if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
-                        status: player_status.lock().unwrap().clone(),
-                        items: shared_items.lock().unwrap().clone(),
-                        cursor: *shared_cursor.lock().unwrap(),
-                    })) {
-                        ev_tx_init.send(init_json).ok();
-                    }
-                    ctrl_clients.lock().unwrap().push(ev_tx_init);
-
-                    for line in lines {
-                        let Ok(line) = line else { break };
-                        if line.is_empty() {
-                            continue;
-                        }
-                        if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
-                            let _ = ctrl_tx.send(DaemonEvent::Ctrl(cmd));
-                        }
-                    }
-                });
+    if let Some(listener) = tcp_listener {
+        let ctrl_clients = ctrl_clients.clone();
+        let merged_tx2 = merged_tx.clone();
+        let player_status = player.status.clone();
+        let shared_items = shared_items.clone();
+        let shared_cursor = shared_cursor.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(stream) = stream else { continue };
+                let Ok(stream_w) = stream.try_clone() else {
+                    continue;
+                };
+                spawn_ctrl_client(
+                    stream,
+                    stream_w,
+                    merged_tx2.clone(),
+                    ctrl_clients.clone(),
+                    player_status.clone(),
+                    shared_items.clone(),
+                    shared_cursor.clone(),
+                );
             }
         });
     }
@@ -308,7 +375,10 @@ pub fn run(client: EmbyClient) -> ! {
         }
         if last_capabilities.elapsed() >= Duration::from_secs(600) {
             let client = client.lock().unwrap().clone();
-            std::thread::spawn(move || client.register_capabilities());
+            let direct_commands = direct_commands.clone();
+            std::thread::spawn(move || {
+                client.register_capabilities_with_extra_commands(&direct_commands)
+            });
             last_capabilities = Instant::now();
         }
 

@@ -592,27 +592,21 @@ impl App {
             }
             KeyCode::Enter => {
                 if let Some(sess) = self.sessions.get(self.sessions_cursor) {
-                    let id = sess.id.clone();
-                    let name = sess.device_name.clone();
-                    log::info!(target: "sessions", "connect: device={name:?} pos={}s runtime={}s", sess.position_s, sess.runtime_s);
-                    self.connected_session_id = Some(id);
-                    self.connected_session_state = Some(sess.clone());
-                    self.session_miss_count = 0;
-                    self.remote_pos_s = sess.position_s;
-                    self.remote_pos_at = Instant::now();
-                    self.remote_api_pos_advanced_at = Instant::now();
-                    self.show_sessions = false;
-                    self.flash_status(format!("Connected to {name}"));
-                    self.spawn_sessions_load();
+                    let sess = sess.clone();
+                    self.connect_to_session(&sess);
                 }
             }
             KeyCode::Char('d') => {
-                self.connected_session_id = None;
-                self.connected_session_state = None;
-                self.session_miss_count = 0;
-                self.remote_pos_s = 0;
+                if self.player.is_remote() {
+                    self.restore_local_mode("Disconnected from direct remote session");
+                } else {
+                    self.connected_session_id = None;
+                    self.connected_session_state = None;
+                    self.session_miss_count = 0;
+                    self.remote_pos_s = 0;
+                    self.flash_status("Disconnected from remote session".to_string());
+                }
                 self.show_sessions = false;
-                self.flash_status("Disconnected from remote session".to_string());
             }
             _ => {}
         }
@@ -2609,18 +2603,8 @@ impl App {
                     if idx < self.sessions.len() {
                         if self.sessions_cursor == idx {
                             if let Some(sess) = self.sessions.get(idx) {
-                                let id = sess.id.clone();
-                                let name = sess.device_name.clone();
-                                log::info!(target: "sessions", "connect: device={name:?} pos={}s runtime={}s", sess.position_s, sess.runtime_s);
-                                self.connected_session_id = Some(id);
-                                self.connected_session_state = Some(sess.clone());
-                                self.session_miss_count = 0;
-                                self.remote_pos_s = sess.position_s;
-                                self.remote_pos_at = Instant::now();
-                                self.remote_api_pos_advanced_at = Instant::now();
-                                self.show_sessions = false;
-                                self.flash_status(format!("Connected to {name}"));
-                                self.spawn_sessions_load();
+                                let sess = sess.clone();
+                                self.connect_to_session(&sess);
                             }
                         } else {
                             self.sessions_cursor = idx;

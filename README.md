@@ -162,9 +162,11 @@ The Queue tab has three display modes, cycled with `v`:
 ### Remote daemon control
 
 Use `--connect-daemon` or `[daemon.client].endpoint` to connect to a daemon explicitly.
-Supported values are `local`, a Unix socket path, or a loopback TCP endpoint such as `tcp://127.0.0.1:8890` or `tcp://[::1]:8890`.
+Supported values are `local`, a Unix socket path, or a TCP endpoint such as `tcp://192.168.1.50:47788` or `tcp://[fd00::50]:47788`.
 
-mbv rejects non-loopback TCP endpoints. For cross-host access, forward the daemon socket or a local loopback port over SSH and point mbv at the tunnel endpoint.
+`F3` session discovery remains the main remote-control entry point. When the selected target is another `mbv` session that advertises a daemon TCP port, mbv now attempts to upgrade automatically into direct daemon mode and falls back to standard Emby session control if the direct attach fails.
+
+Daemon TCP listening is configured with `[daemon.server].tcp_listen`. System instances default to `0.0.0.0:47788`; non-system instances remain Unix-socket-only unless you opt in.
 
 ### Audio and subtitle track selection
 

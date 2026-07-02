@@ -219,6 +219,7 @@ pub struct SessionInfo {
     pub client: String,
     pub user_name: String,
     pub host: String,
+    pub supported_commands: Vec<String>,
     pub now_playing: Option<String>,
     pub now_playing_item_id: Option<String>,
     pub position_s: i64,
@@ -227,6 +228,20 @@ pub struct SessionInfo {
     pub volume: i64,
     pub sub_index: i64,   // -1 = disabled
     pub audio_index: i64, // 1-based; 0 = unknown
+}
+
+pub const MBV_DIRECT_TCP_PORT_PREFIX: &str = "mbv-direct-tcp-port:";
+
+pub fn mbv_direct_tcp_port_command(port: u16) -> String {
+    format!("{MBV_DIRECT_TCP_PORT_PREFIX}{port}")
+}
+
+pub fn parse_mbv_direct_tcp_port(commands: &[String]) -> Option<u16> {
+    commands.iter().find_map(|cmd| {
+        cmd.strip_prefix(MBV_DIRECT_TCP_PORT_PREFIX)
+            .and_then(|port| port.parse::<u16>().ok())
+            .filter(|port| *port > 0)
+    })
 }
 
 fn parse_video_info(streams: &[Value]) -> String {
@@ -1029,13 +1044,17 @@ impl EmbyClient {
     }
 
     pub fn register_capabilities(&self) {
+        self.register_capabilities_with_extra_commands(&[]);
+    }
+
+    pub fn register_capabilities_with_extra_commands(&self, extra_commands: &[String]) {
         let audio_only = self.config.audio_pipe_enabled;
         let media_types: &[&str] = if audio_only {
             &["Audio"]
         } else {
             &["Audio", "Video"]
         };
-        let mut commands: Vec<&str> = vec![
+        let mut commands: Vec<String> = vec![
             "Play",
             "Stop",
             "Pause",
@@ -1051,12 +1070,16 @@ impl EmbyClient {
             "ToggleMute",
             "SetAudioStreamIndex",
             "SetSubtitleStreamIndex",
-        ];
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
         if audio_only {
             // No video window ever opens in audio-pipe mode, so subtitles can
             // never be displayed — don't advertise a command that can't work.
-            commands.retain(|c| *c != "SetSubtitleStreamIndex");
+            commands.retain(|c| c != "SetSubtitleStreamIndex");
         }
+        commands.extend(extra_commands.iter().cloned());
         let body = ureq::json!({
             "PlayableMediaTypes": media_types,
             "SupportedCommands": commands,
@@ -1418,6 +1441,14 @@ impl EmbyClient {
                             client: v["Client"].as_str().unwrap_or("").to_string(),
                             user_name: v["UserName"].as_str().unwrap_or("").to_string(),
                             host,
+                            supported_commands: v["SupportedCommands"]
+                                .as_array()
+                                .map(|arr| {
+                                    arr.iter()
+                                        .filter_map(|value| value.as_str().map(str::to_string))
+                                        .collect()
+                                })
+                                .unwrap_or_default(),
                             now_playing: npi["Name"].as_str().map(str::to_string),
                             now_playing_item_id: npi["Id"].as_str().map(str::to_string),
                             position_s: ps["PositionTicks"].as_i64().unwrap_or(0)
@@ -1769,6 +1800,16 @@ mod tests {
         c.device_id = "my-device-id".into();
         let url = c.ws_url();
         assert!(url.contains("deviceId=my-device-id"));
+    }
+
+    #[test]
+    fn parse_mbv_direct_tcp_port_command_extracts_port() {
+        let commands = vec![
+            "Play".to_string(),
+            mbv_direct_tcp_port_command(47788),
+            "Pause".to_string(),
+        ];
+        assert_eq!(parse_mbv_direct_tcp_port(&commands), Some(47788));
     }
 
     // ── auth_header ──────────────────────────────────────────────────────────

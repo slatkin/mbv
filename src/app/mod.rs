@@ -90,7 +90,7 @@ use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
 use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
 
-use crate::api::{EmbyClient, MediaItem};
+use crate::api::{parse_mbv_direct_tcp_port, EmbyClient, MediaItem};
 use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use crate::ws::WsEvent;
 
@@ -322,6 +322,13 @@ struct LibraryTab {
     power_detail_scroll: usize,           // scroll offset into the overview lines
 }
 
+struct SuspendedLocalSession {
+    player: PlayerProxy,
+    player_rx: mpsc::Receiver<PlayerEvent>,
+    ws_rx: mpsc::Receiver<WsEvent>,
+    ws_send_tx: Option<mpsc::Sender<String>>,
+}
+
 pub struct App {
     client: Arc<Mutex<EmbyClient>>,
     player: PlayerProxy,
@@ -479,6 +486,7 @@ pub struct App {
     remote_api_pos_advanced_at: Instant, // last time the API position actually moved forward
     remote_seek_pending_until: Instant, // suppress poll pos-reconcile after a seek
     runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
+    suspended_local: Option<SuspendedLocalSession>,
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -792,6 +800,7 @@ impl App {
             remote_api_pos_advanced_at: Instant::now() - Duration::from_secs(60),
             remote_seek_pending_until: Instant::now() - Duration::from_secs(1),
             runtime_zero_since: None,
+            suspended_local: None,
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -1046,6 +1055,142 @@ impl App {
             QueueScope::Local
         };
         self.power_queue_scroll = 0;
+    }
+
+    fn session_direct_endpoint(
+        &self,
+        sess: &crate::api::SessionInfo,
+    ) -> Option<crate::remote_player::DaemonEndpoint> {
+        if !sess.client.eq_ignore_ascii_case("mbv") {
+            return None;
+        }
+        if let Some(port) = parse_mbv_direct_tcp_port(&sess.supported_commands) {
+            if let Ok(ip) = sess.host.parse::<std::net::IpAddr>() {
+                return Some(crate::remote_player::DaemonEndpoint::Tcp(
+                    std::net::SocketAddr::new(ip, port),
+                ));
+            }
+            log::warn!(
+                target: "sessions",
+                "mbv session {:?} advertised direct tcp port {} but host {:?} was not an IP address",
+                sess.device_name,
+                port,
+                sess.host
+            );
+        }
+        let client = self.client.lock().unwrap();
+        sess.device_name
+            .eq_ignore_ascii_case(&client.device_name)
+            .then_some(crate::remote_player::DaemonEndpoint::Local)
+    }
+
+    fn switch_to_direct_remote(
+        &mut self,
+        sess: &crate::api::SessionInfo,
+        remote: crate::remote_player::RemotePlayer,
+        remote_rx: mpsc::Receiver<PlayerEvent>,
+    ) {
+        let initial_items = remote.items.lock().unwrap().clone();
+        let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let always_play_next = self.client.lock().unwrap().config.always_play_next;
+
+        if !self.player.is_remote() {
+            self.player.stop();
+            self.player.join_or_timeout(Duration::from_secs(5));
+            let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
+            let suspended = SuspendedLocalSession {
+                player: std::mem::replace(
+                    &mut self.player,
+                    PlayerProxy::remote(remote, always_play_next),
+                ),
+                player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
+                ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
+                ws_send_tx: self.ws_send_tx.take(),
+            };
+            self.suspended_local = Some(suspended);
+        } else {
+            self.player = PlayerProxy::remote(remote, always_play_next);
+            self.player_rx = remote_rx;
+        }
+
+        self.remote_player_tab = Some(PlayerTab {
+            items: initial_items,
+            playlist_cursor: initial_cursor,
+        });
+        self.connected_session_id = None;
+        self.connected_session_state = None;
+        self.session_miss_count = 0;
+        self.remote_pos_s = 0;
+        self.remote_pos_at = Instant::now();
+        self.remote_api_pos_advanced_at = Instant::now() - Duration::from_secs(60);
+        self.remote_seek_pending_until = Instant::now() - Duration::from_secs(1);
+        self.runtime_zero_since = None;
+        self.next_up_item = None;
+        self.skip_intro_end_ticks = None;
+        self.set_queue_scope(QueueScope::Remote);
+        self.show_sessions = false;
+        self.flash_status(format!("Connected directly to {}", sess.device_name));
+    }
+
+    fn restore_local_mode(&mut self, status: &str) {
+        if !self.player.is_remote() {
+            self.player.stop();
+        }
+        self.player.join();
+        if let Some(suspended) = self.suspended_local.take() {
+            self.player = suspended.player;
+            self.player_rx = suspended.player_rx;
+            self.ws_rx = suspended.ws_rx;
+            self.ws_send_tx = suspended.ws_send_tx;
+        }
+        self.remote_player_tab = None;
+        self.connected_session_id = None;
+        self.connected_session_state = None;
+        self.session_miss_count = 0;
+        self.remote_pos_s = 0;
+        self.next_up_item = None;
+        self.skip_intro_end_ticks = None;
+        self.set_queue_scope(QueueScope::Local);
+        self.flash_status_high(status.to_string());
+    }
+
+    fn connect_to_session(&mut self, sess: &crate::api::SessionInfo) {
+        if !self.player.is_remote() {
+            if let Some(endpoint) = self.session_direct_endpoint(sess) {
+                match crate::remote_player::RemotePlayer::connect_endpoint(&endpoint) {
+                    Ok((remote, remote_rx)) => {
+                        self.switch_to_direct_remote(sess, remote, remote_rx);
+                        return;
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            target: "sessions",
+                            "direct daemon upgrade failed for device={:?} endpoint={endpoint}: {}",
+                            sess.device_name,
+                            e
+                        );
+                    }
+                }
+            }
+        }
+
+        let id = sess.id.clone();
+        let name = sess.device_name.clone();
+        log::info!(
+            target: "sessions",
+            "connect: device={name:?} pos={}s runtime={}s",
+            sess.position_s,
+            sess.runtime_s
+        );
+        self.connected_session_id = Some(id);
+        self.connected_session_state = Some(sess.clone());
+        self.session_miss_count = 0;
+        self.remote_pos_s = sess.position_s;
+        self.remote_pos_at = Instant::now();
+        self.remote_api_pos_advanced_at = Instant::now();
+        self.show_sessions = false;
+        self.flash_status(format!("Connected to {name}"));
+        self.spawn_sessions_load();
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -1611,7 +1756,7 @@ impl App {
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;
                     self.skip_intro_end_ticks = None;
-                    self.flash_status_high("Daemon disconnected — playback stopped".into());
+                    self.restore_local_mode("Daemon disconnected — returned to local mode");
                     self.refresh_after_stop();
                     return true;
                 }
@@ -1854,6 +1999,25 @@ mod tests {
             audio_info: String::new(),
             genre: String::new(),
             playlist_item_id: String::new(),
+        }
+    }
+
+    fn make_session(device_name: &str, client: &str) -> crate::api::SessionInfo {
+        crate::api::SessionInfo {
+            id: "sess-1".into(),
+            device_name: device_name.into(),
+            client: client.into(),
+            user_name: "user".into(),
+            host: "127.0.0.1".into(),
+            supported_commands: Vec::new(),
+            now_playing: None,
+            now_playing_item_id: None,
+            position_s: 0,
+            runtime_s: 0,
+            is_paused: false,
+            volume: 100,
+            sub_index: -1,
+            audio_index: 1,
         }
     }
 
@@ -2180,6 +2344,7 @@ mod tests {
             remote_api_pos_advanced_at: std::time::Instant::now() - Duration::from_secs(60),
             remote_seek_pending_until: std::time::Instant::now() - Duration::from_secs(1),
             runtime_zero_since: None,
+            suspended_local: None,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
@@ -2193,6 +2358,38 @@ mod tests {
             confirm_rescan: false,
             queue_scope: QueueScope::Local,
         }
+    }
+
+    #[test]
+    fn session_direct_endpoint_prefers_advertised_tcp_port() {
+        let app = make_app_stub();
+        let mut sess = make_session("remote-host", "mbv");
+        sess.host = "192.168.1.20".into();
+        sess.supported_commands = vec![crate::api::mbv_direct_tcp_port_command(47788)];
+        assert_eq!(
+            app.session_direct_endpoint(&sess),
+            Some(crate::remote_player::DaemonEndpoint::Tcp(
+                "192.168.1.20:47788".parse().unwrap()
+            ))
+        );
+    }
+
+    #[test]
+    fn session_direct_endpoint_rejects_non_mbv_without_local_fallback() {
+        let app = make_app_stub();
+        let sess = make_session("other-host", "Emby");
+        assert_eq!(app.session_direct_endpoint(&sess), None);
+    }
+
+    #[test]
+    fn session_direct_endpoint_falls_back_to_local_socket_for_same_host_session() {
+        let app = make_app_stub();
+        let device_name = app.client.lock().unwrap().device_name.clone();
+        let sess = make_session(&device_name, "mbv");
+        assert_eq!(
+            app.session_direct_endpoint(&sess),
+            Some(crate::remote_player::DaemonEndpoint::Local)
+        );
     }
 
     // ── home_section_len_cur ─────────────────────────────────────────────────
