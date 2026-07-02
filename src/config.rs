@@ -913,11 +913,11 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
 url = "http://localhost:8096"
 [mpv]
 audio_pipe_enabled = true
-audio_pipe_path = "/tmp/custom-pipe"
+        audio_pipe_path = "/tmp/custom-pipe"
 audio_pipe_samplerate = 96000
 "#;
         let cfg = parse_config(toml).unwrap();
-        assert_eq!(cfg.audio_pipe_enabled, true);
+        assert!(cfg.audio_pipe_enabled);
         assert_eq!(cfg.audio_pipe_path, "/tmp/custom-pipe");
         assert_eq!(cfg.audio_pipe_samplerate, 96000);
     }
@@ -925,7 +925,7 @@ audio_pipe_samplerate = 96000
     #[test]
     fn parse_audio_pipe_defaults() {
         let cfg = parse_config("").unwrap();
-        assert_eq!(cfg.audio_pipe_enabled, false);
+        assert!(!cfg.audio_pipe_enabled);
         assert_eq!(cfg.audio_pipe_path, "/tmp/mbv-pipe");
         assert_eq!(cfg.audio_pipe_samplerate, 192_000);
     }

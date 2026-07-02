@@ -1804,8 +1804,10 @@ mod tests {
     // ── EmbyClient::ws_url ───────────────────────────────────────────────────
 
     fn client_with_url(url: &str) -> EmbyClient {
-        let mut cfg = crate::config::Config::default();
-        cfg.server_url = url.into();
+        let cfg = crate::config::Config {
+            server_url: url.into(),
+            ..crate::config::Config::default()
+        };
         let mut c = EmbyClient::new(cfg);
         c.token = "tok".into();
         c
