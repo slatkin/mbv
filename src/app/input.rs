@@ -2,8 +2,8 @@ use super::settings::settings_total_rows;
 use super::ui_util::item_text_and_style;
 use super::{
     App, ContextAction, ContextMenu, HomeSearch, LibSearch, LogPane, PendingQueueAction,
-    SavePlaylistDialog, SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
-    SESSIONS_PANEL_W, SETTINGS_PANEL_W,
+    QueueScope, SavePlaylistDialog, SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H,
+    PLAYLISTS_PANEL_W, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
 use super::{PowerFocus, PLAYLIST_VIEW_COUNT, PLAYLIST_VIEW_POWER};
 use crate::api::{MediaItem, TICKS_PER_SECOND};
@@ -269,10 +269,15 @@ impl App {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
             ) {
                 if let Some(item) = self.next_up_item.take() {
-                    if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
+                    if let Some(idx) = self
+                        .playback_queue()
+                        .items
+                        .iter()
+                        .position(|i| i.id == item.id)
+                    {
                         let label = item.playback_label();
                         self.player.send_command(PlayerCommand::JumpTo(idx));
-                        self.player_tab.playlist_cursor = idx;
+                        self.playback_queue_mut().playlist_cursor = idx;
                         self.flash_status(label);
                     }
                 }
@@ -288,6 +293,10 @@ impl App {
             && !key.modifiers.contains(KeyModifiers::ALT)
             && !in_lib_search
         {
+            if self.tab_idx == 1 && self.displayed_queue_scope() == QueueScope::Remote {
+                self.flash_status_high("Remote queue is controlled by the daemon".into());
+                return false;
+            }
             if self.player_tab.items.is_empty() {
                 return false;
             }
@@ -1410,17 +1419,33 @@ impl App {
         {
             let page = self.power_queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
+                KeyCode::Char('[')
+                    if self.has_remote_queue()
+                        && !key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    self.set_queue_scope(QueueScope::Local);
+                    return false;
+                }
+                KeyCode::Char(']')
+                    if self.has_remote_queue()
+                        && !key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    self.set_queue_scope(QueueScope::Remote);
+                    return false;
+                }
                 KeyCode::PageUp => {
                     self.last_nav_at = Instant::now();
-                    self.player_tab.playlist_cursor =
-                        self.player_tab.playlist_cursor.saturating_sub(page);
+                    let queue = self.displayed_queue_mut();
+                    queue.playlist_cursor = queue.playlist_cursor.saturating_sub(page);
                     return false;
                 }
                 KeyCode::PageDown => {
                     self.last_nav_at = Instant::now();
-                    let n = self.player_tab.items.len();
-                    self.player_tab.playlist_cursor =
-                        (self.player_tab.playlist_cursor + page).min(n.saturating_sub(1));
+                    let queue = self.displayed_queue_mut();
+                    let n = queue.items.len();
+                    queue.playlist_cursor = (queue.playlist_cursor + page).min(n.saturating_sub(1));
                     return false;
                 }
                 _ => {}
@@ -1448,42 +1473,47 @@ impl App {
                 }
             }
 
-            KeyCode::Up if self.player_tab.playlist_cursor > 0 => {
+            KeyCode::Up if self.displayed_queue().playlist_cursor > 0 => {
                 self.last_nav_at = Instant::now();
-                self.player_tab.playlist_cursor -= 1;
+                self.displayed_queue_mut().playlist_cursor -= 1;
             }
-            KeyCode::Down if self.player_tab.playlist_cursor + 1 < self.player_tab.items.len() => {
+            KeyCode::Down
+                if self.displayed_queue().playlist_cursor + 1
+                    < self.displayed_queue().items.len() =>
+            {
                 self.last_nav_at = Instant::now();
-                self.player_tab.playlist_cursor += 1;
+                self.displayed_queue_mut().playlist_cursor += 1;
             }
             KeyCode::PageUp => {
                 let p = self.playlist_page_size();
-                self.player_tab.playlist_cursor = self.player_tab.playlist_cursor.saturating_sub(p);
+                let queue = self.displayed_queue_mut();
+                queue.playlist_cursor = queue.playlist_cursor.saturating_sub(p);
             }
             KeyCode::PageDown => {
                 let p = self.playlist_page_size();
-                let n = self.player_tab.items.len();
-                self.player_tab.playlist_cursor =
-                    (self.player_tab.playlist_cursor + p).min(n.saturating_sub(1));
+                let queue = self.displayed_queue_mut();
+                let n = queue.items.len();
+                queue.playlist_cursor = (queue.playlist_cursor + p).min(n.saturating_sub(1));
             }
             KeyCode::Home => {
-                self.player_tab.playlist_cursor = 0;
+                self.displayed_queue_mut().playlist_cursor = 0;
             }
             KeyCode::End => {
-                let n = self.player_tab.items.len();
+                let n = self.displayed_queue().items.len();
                 if n > 0 {
-                    self.player_tab.playlist_cursor = n - 1;
+                    self.displayed_queue_mut().playlist_cursor = n - 1;
                 }
             }
             KeyCode::Enter => {
-                let t = self.player_tab.playlist_cursor;
-                let n = self.player_tab.items.len();
+                let queue = self.displayed_queue();
+                let t = queue.playlist_cursor;
+                let n = queue.items.len();
                 if t < n {
                     if let Some(ref conn_id) = self.connected_session_id.clone() {
-                        let item = self.player_tab.items[t].clone();
+                        let item = queue.items[t].clone();
                         let id = conn_id.clone();
                         let item_ids: Vec<String> =
-                            self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+                            queue.items.iter().map(|i| i.id.clone()).collect();
                         let start_ticks = item.playback_position_ticks;
                         let label = item.playback_label();
                         self.flash_status(format!("Playing on remote: {label}"));
@@ -1496,19 +1526,15 @@ impl App {
                         let current_idx = st.current_idx;
                         drop(st);
                         if active {
-                            let is_audio = self
-                                .player_tab
-                                .items
-                                .get(t)
-                                .map(|i| i.is_audio())
-                                .unwrap_or(false);
+                            let is_audio =
+                                queue.items.get(t).map(|i| i.is_audio()).unwrap_or(false);
                             if t == current_idx && is_audio {
                                 self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
                             } else if t != current_idx {
                                 self.player.send_command(PlayerCommand::JumpTo(t));
                             }
-                        } else if !self.player_tab.items.is_empty() {
-                            let items = self.player_tab.items.clone();
+                        } else if !queue.items.is_empty() {
+                            let items = queue.items.clone();
                             let c = Arc::new(self.client.lock().unwrap().clone());
                             self.player.play_playlist(items, t, c, self.ui_volume);
                         }
@@ -1516,9 +1542,11 @@ impl App {
                 }
             }
             KeyCode::Delete => {
-                let t = self.player_tab.playlist_cursor;
-                if t < self.player_tab.items.len() {
-                    self.remove_from_playlist(t);
+                if self.displayed_queue_scope() == QueueScope::Local {
+                    let t = self.player_tab.playlist_cursor;
+                    if t < self.player_tab.items.len() {
+                        self.remove_from_playlist(t);
+                    }
                 }
             }
             KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1528,6 +1556,7 @@ impl App {
                     self.player_tab.playlist_cursor = idx;
                     self.queue_dirty = true;
                     self.save_queue_state();
+                    self.set_queue_scope(QueueScope::Local);
                 }
             }
             KeyCode::Char(c @ '1'..='9') => {
@@ -1537,8 +1566,9 @@ impl App {
                 }
             }
             KeyCode::Char('i') => {
-                let cursor = self.player_tab.playlist_cursor;
-                if let Some(item) = self.player_tab.items.get(cursor) {
+                let queue = self.displayed_queue();
+                let cursor = queue.playlist_cursor;
+                if let Some(item) = queue.items.get(cursor) {
                     let item_id = item.id.clone();
                     let item_type = item.item_type.clone();
                     let libs: Vec<(usize, String, String)> = self
@@ -1587,11 +1617,16 @@ impl App {
                 self.playlist_group = !self.playlist_group;
             }
             KeyCode::Char('.') => {
-                let s = self.player.status.lock().unwrap();
-                if s.active {
-                    self.player_tab.playlist_cursor = s.current_idx;
+                let (active, current_idx) = {
+                    let s = self.player.status.lock().unwrap();
+                    (s.active, s.current_idx)
+                };
+                if active {
+                    self.playback_queue_mut().playlist_cursor = current_idx;
+                    if self.player.is_remote() {
+                        self.set_queue_scope(QueueScope::Remote);
+                    }
                 } else {
-                    drop(s);
                     self.flash_status_high("Nothing is playing".into());
                 }
             }
@@ -2013,7 +2048,7 @@ impl App {
             4 => {
                 self.player.send_command(PlayerCommand::Seek(5.0));
             }
-            5 if active && current_idx + 1 < self.player_tab.items.len() => {
+            5 if active && current_idx + 1 < self.playback_queue().items.len() => {
                 self.player
                     .send_command(PlayerCommand::JumpTo(current_idx + 1));
             }
@@ -2037,10 +2072,8 @@ impl App {
         } else if self.home_search.is_some() || self.tab_idx == 0 {
             self.current_home_item()
         } else if self.tab_idx == 1 {
-            self.player_tab
-                .items
-                .get(self.player_tab.playlist_cursor)
-                .cloned()
+            let queue = self.displayed_queue();
+            queue.items.get(queue.playlist_cursor).cloned()
         } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
             self.current_lib_item()
         } else {
@@ -2089,7 +2122,11 @@ impl App {
                     items.push("Remove from Continue Watching");
                     actions.push(ContextAction::RemoveFromContinueWatching);
                 }
-                if !cw_focused && self.home_search.is_none() && self.tab_idx == 1 {
+                if !cw_focused
+                    && self.home_search.is_none()
+                    && self.tab_idx == 1
+                    && self.displayed_queue_scope() == QueueScope::Local
+                {
                     items.push("Remove from Playlist");
                     actions.push(ContextAction::RemoveFromPlaylist(
                         self.player_tab.playlist_cursor,
@@ -2271,6 +2308,22 @@ impl App {
 
     fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
         if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+            if self.has_remote_queue() {
+                if self
+                    .power_queue_scope_local_area
+                    .contains((col, row).into())
+                {
+                    self.set_queue_scope(QueueScope::Local);
+                    return true;
+                }
+                if self
+                    .power_queue_scope_remote_area
+                    .contains((col, row).into())
+                {
+                    self.set_queue_scope(QueueScope::Remote);
+                    return true;
+                }
+            }
             // Click in queue area: focus queue and move cursor.
             let qa = self.power_queue_area;
             if qa.contains((col, row).into()) {
@@ -2280,7 +2333,7 @@ impl App {
                 self.power_focus = PowerFocus::Queue;
                 let content_y = (row - qa.y) as usize;
                 if let Some(&Some(item_idx)) = self.power_queue_row_map.get(content_y) {
-                    self.player_tab.playlist_cursor = item_idx;
+                    self.displayed_queue_mut().playlist_cursor = item_idx;
                 }
                 return true;
             }
@@ -2782,13 +2835,13 @@ impl App {
                     let queue_area = self.power_queue_area;
                     let left_area = self.power_left_area;
                     if queue_area.contains((col, row).into()) {
-                        let n = self.player_tab.items.len();
+                        let n = self.displayed_queue().items.len();
                         if n > 0 {
                             let delta = delta * 3;
-                            self.player_tab.playlist_cursor =
-                                (self.player_tab.playlist_cursor as i64 + delta)
-                                    .clamp(0, n as i64 - 1)
-                                    as usize;
+                            let queue = self.displayed_queue_mut();
+                            queue.playlist_cursor = (queue.playlist_cursor as i64 + delta)
+                                .clamp(0, n as i64 - 1)
+                                as usize;
                         }
                     } else if left_area.contains((col, row).into()) {
                         if self.power_left_tab == 0 {
@@ -2802,11 +2855,11 @@ impl App {
                         }
                     }
                 } else if self.tab_idx == 1 {
-                    let n = self.player_tab.items.len();
+                    let n = self.displayed_queue().items.len();
                     if n > 0 {
-                        self.player_tab.playlist_cursor =
-                            (self.player_tab.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1)
-                                as usize;
+                        let queue = self.displayed_queue_mut();
+                        queue.playlist_cursor =
+                            (queue.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                     }
                 } else if self.tab_idx == self.log_tab_idx() {
                     if delta > 0 {
@@ -2858,8 +2911,8 @@ impl App {
                         if self.tab_idx == 0 {
                             self.move_home_cursor(-1);
                         } else {
-                            if self.player_tab.playlist_cursor > 0 {
-                                self.player_tab.playlist_cursor -= 1;
+                            if self.displayed_queue().playlist_cursor > 0 {
+                                self.displayed_queue_mut().playlist_cursor -= 1;
                             }
                         }
                         return;
@@ -2870,9 +2923,9 @@ impl App {
                         if self.tab_idx == 0 {
                             self.move_home_cursor(1);
                         } else {
-                            let n = self.player_tab.items.len();
-                            if self.player_tab.playlist_cursor + 1 < n {
-                                self.player_tab.playlist_cursor += 1;
+                            let n = self.displayed_queue().items.len();
+                            if self.displayed_queue().playlist_cursor + 1 < n {
+                                self.displayed_queue_mut().playlist_cursor += 1;
                             }
                         }
                         return;
@@ -2926,15 +2979,16 @@ impl App {
                             self.select_home();
                         }
                     } else if self.tab_idx == 1 {
-                        let t = self.player_tab.playlist_cursor;
-                        if t < self.player_tab.items.len()
+                        let queue = self.displayed_queue();
+                        let t = queue.playlist_cursor;
+                        if t < queue.items.len()
                             && self.layout_playlist_inner.contains((col, row).into())
                         {
                             if let Some(ref conn_id) = self.connected_session_id.clone() {
-                                let item = self.player_tab.items[t].clone();
+                                let item = queue.items[t].clone();
                                 let id = conn_id.clone();
                                 let item_ids: Vec<String> =
-                                    self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+                                    queue.items.iter().map(|i| i.id.clone()).collect();
                                 let start_ticks = item.playback_position_ticks;
                                 let label = item.playback_label();
                                 self.flash_status(format!("Playing on remote: {label}"));

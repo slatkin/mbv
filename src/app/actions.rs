@@ -1,7 +1,7 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes};
 use super::{
-    App, BrowseLevel, ContextAction, LibEvent, PendingQueueAction, PowerFocus, SessionEvent,
-    PAGE_SIZE, PLAYLIST_VIEW_POWER, PREFETCH_AHEAD,
+    App, BrowseLevel, ContextAction, LibEvent, PendingQueueAction, PowerFocus, QueueScope,
+    SessionEvent, PAGE_SIZE, PLAYLIST_VIEW_POWER, PREFETCH_AHEAD,
 };
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 use crate::player::PlayerCommand;
@@ -883,6 +883,7 @@ impl App {
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
         self.on_queue_replace_silent();
+        self.set_queue_scope(QueueScope::Local);
         // Keep library focus when playing from the power-view library panel.
         if !(self.playlist_view == PLAYLIST_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left))
@@ -2526,6 +2527,7 @@ impl App {
                 self.queue_restored = false;
                 self.player_tab.items = items.clone();
                 self.player_tab.playlist_cursor = start_idx;
+                self.set_queue_scope(QueueScope::Local);
                 if let Some(ref conn_id) = self.connected_session_id.clone() {
                     self.clear_playback_overlays();
                     let id = conn_id.clone();
@@ -2556,6 +2558,7 @@ impl App {
                 self.player.stop();
                 self.player_tab.items.clear();
                 self.player_tab.playlist_cursor = 0;
+                self.set_queue_scope(QueueScope::Local);
                 self.playlist_undo_stack.clear();
                 self.save_queue_state();
                 self.flash_status("Queue cleared".into());
@@ -2606,47 +2609,6 @@ impl App {
                 log::error!(target: "playlist", "Failed to save playlist: {e}");
             }
         });
-    }
-
-    fn delete_playlist_on_emby(&mut self) {
-        let Some(playlist_id) = self.queue_playlist_id() else {
-            return;
-        };
-        let name = self.queue_playlist_name().to_string();
-        let client = self.client.lock().unwrap().clone();
-        let playlist_id = playlist_id.to_string();
-        log::info!(target: "playlist", "consume: deleting fully-consumed playlist id={playlist_id} name={name:?}");
-        self.queue_source = crate::config::QueueSource::Unknown;
-        std::thread::spawn(move || {
-            if let Err(e) = client.delete_playlist(&playlist_id) {
-                log::error!(target: "playlist", "Failed to delete playlist id={playlist_id}: {e}");
-            } else {
-                log::info!(target: "playlist", "Deleted playlist id={playlist_id} name={name:?}");
-            }
-        });
-    }
-
-    pub(super) fn consume_item(&mut self, idx: usize) {
-        let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
-        if idx < self.player_tab.items.len() {
-            self.player_tab.items.remove(idx);
-        }
-        self.player
-            .send_command(crate::player::PlayerCommand::PlaylistRemove(idx));
-        self.queue_dirty = true;
-
-        if is_video
-            && self.client.lock().unwrap().config.save_playlist_on_consume
-            && self.queue_is_saved_playlist()
-        {
-            if self.player_tab.items.is_empty() {
-                self.delete_playlist_on_emby();
-            } else {
-                log::info!(target: "playlist", "consume: saving playlist after removing idx={idx}");
-                self.save_playlist_to_emby();
-            }
-            self.queue_dirty = false;
-        }
     }
 
     /// Number of selectable left-panel tabs in power view: Home/CW + all libraries.

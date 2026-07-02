@@ -297,6 +297,12 @@ struct PlayerTab {
     playlist_cursor: usize,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum QueueScope {
+    Local,
+    Remote,
+}
+
 struct HomePane {
     continue_items: Vec<MediaItem>,
     continue_cursor: usize,
@@ -325,6 +331,7 @@ pub struct App {
     home: HomePane,
     libs: Vec<LibraryTab>,
     player_tab: PlayerTab,
+    remote_player_tab: Option<PlayerTab>,
     status: String,
     status_expires: Option<Instant>,
     hidden_libraries: Vec<String>,
@@ -384,6 +391,8 @@ pub struct App {
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
     power_left_area: Rect, // rendered area of the left panel (for mouse click / page calc)
     power_queue_area: Rect,
+    power_queue_scope_local_area: Rect,
+    power_queue_scope_remote_area: Rect,
     power_queue_scroll: usize,
     power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
     power_left_row_map: Vec<Option<usize>>,  // visual row → item index for library letter groups
@@ -483,6 +492,7 @@ pub struct App {
     save_playlist_dialog: Option<SavePlaylistDialog>,
     image_protocol_enabled: bool,
     confirm_rescan: bool,
+    queue_scope: QueueScope,
 }
 
 struct AppInit {
@@ -492,6 +502,7 @@ struct AppInit {
     ws_rx: std::sync::mpsc::Receiver<WsEvent>,
     ws_send_tx: Option<std::sync::mpsc::Sender<String>>,
     player_tab: PlayerTab,
+    remote_player_tab: Option<PlayerTab>,
     show_log_tab: bool,
     system_notifications: bool,
     image_protocol_enabled: bool,
@@ -614,6 +625,7 @@ const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line 
 impl App {
     fn build(init: AppInit) -> Self {
         let prefs = Self::load_prefs();
+        let has_remote_queue = init.remote_player_tab.is_some();
         App {
             client: init.client,
             player: init.player,
@@ -621,6 +633,7 @@ impl App {
             ws_rx: init.ws_rx,
             ws_send_tx: init.ws_send_tx,
             player_tab: init.player_tab,
+            remote_player_tab: init.remote_player_tab,
             show_log_tab: init.show_log_tab,
             system_notifications: init.system_notifications,
             image_protocol_enabled: init.image_protocol_enabled,
@@ -710,6 +723,8 @@ impl App {
             power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
+            power_queue_scope_local_area: Rect::default(),
+            power_queue_scope_remote_area: Rect::default(),
             power_queue_scroll: 0,
             power_queue_row_map: Vec::new(),
             power_left_row_map: Vec::new(),
@@ -788,6 +803,11 @@ impl App {
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             confirm_rescan: false,
+            queue_scope: if has_remote_queue {
+                QueueScope::Remote
+            } else {
+                QueueScope::Local
+            },
         }
     }
 
@@ -871,6 +891,7 @@ impl App {
                 items: Vec::new(),
                 playlist_cursor: 0,
             },
+            remote_player_tab: None,
             show_log_tab,
             system_notifications,
             image_protocol_enabled,
@@ -936,9 +957,13 @@ impl App {
             ws_rx,
             ws_send_tx: None,
             player_tab: PlayerTab {
+                items: Vec::new(),
+                playlist_cursor: 0,
+            },
+            remote_player_tab: Some(PlayerTab {
                 items: initial_items,
                 playlist_cursor: initial_cursor,
-            },
+            }),
             show_log_tab: false,
             system_notifications: false,
             image_protocol_enabled,
@@ -960,6 +985,67 @@ impl App {
             search_tx,
             search_rx,
         })
+    }
+
+    fn has_remote_queue(&self) -> bool {
+        self.remote_player_tab.is_some()
+    }
+
+    fn displayed_queue_scope(&self) -> QueueScope {
+        if self.has_remote_queue() && self.queue_scope == QueueScope::Remote {
+            QueueScope::Remote
+        } else {
+            QueueScope::Local
+        }
+    }
+
+    fn displayed_queue(&self) -> &PlayerTab {
+        match self.displayed_queue_scope() {
+            QueueScope::Local => &self.player_tab,
+            QueueScope::Remote => self
+                .remote_player_tab
+                .as_ref()
+                .expect("remote queue scope requires remote queue"),
+        }
+    }
+
+    fn displayed_queue_mut(&mut self) -> &mut PlayerTab {
+        match self.displayed_queue_scope() {
+            QueueScope::Local => &mut self.player_tab,
+            QueueScope::Remote => self
+                .remote_player_tab
+                .as_mut()
+                .expect("remote queue scope requires remote queue"),
+        }
+    }
+
+    fn playback_queue(&self) -> &PlayerTab {
+        if self.player.is_remote() {
+            self.remote_player_tab
+                .as_ref()
+                .expect("remote player requires remote queue")
+        } else {
+            &self.player_tab
+        }
+    }
+
+    fn playback_queue_mut(&mut self) -> &mut PlayerTab {
+        if self.player.is_remote() {
+            self.remote_player_tab
+                .as_mut()
+                .expect("remote player requires remote queue")
+        } else {
+            &mut self.player_tab
+        }
+    }
+
+    fn set_queue_scope(&mut self, scope: QueueScope) {
+        self.queue_scope = if scope == QueueScope::Remote && self.has_remote_queue() {
+            QueueScope::Remote
+        } else {
+            QueueScope::Local
+        };
+        self.power_queue_scroll = 0;
     }
 
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -1029,12 +1115,15 @@ impl App {
                     }
                     "next_up:play" => {
                         if let Some(item) = self.next_up_item.take() {
-                            if let Some(idx) =
-                                self.player_tab.items.iter().position(|i| i.id == item.id)
+                            if let Some(idx) = self
+                                .playback_queue()
+                                .items
+                                .iter()
+                                .position(|i| i.id == item.id)
                             {
                                 let label = item.playback_label();
                                 self.player.send_command(PlayerCommand::JumpTo(idx));
-                                self.player_tab.playlist_cursor = idx;
+                                self.playback_queue_mut().playlist_cursor = idx;
                                 self.flash_status(label);
                             }
                         }
@@ -1527,7 +1616,7 @@ impl App {
                     return true;
                 }
                 let is_delete = self.pending_delete_idx.take() == Some(idx);
-                if let Some(item) = self.player_tab.items.get_mut(idx) {
+                if let Some(item) = self.playback_queue_mut().items.get_mut(idx) {
                     if !is_delete {
                         if played {
                             item.playback_position_ticks = 0;
@@ -1547,21 +1636,38 @@ impl App {
                 self.skip_intro_end_ticks = None;
                 self.status.clear();
                 if is_delete {
-                    let item = self.player_tab.items.remove(idx);
-                    self.playlist_undo_stack.push((idx, item));
-                    self.player_tab.playlist_cursor = if self.player_tab.items.is_empty() {
-                        0
-                    } else {
-                        idx.min(self.player_tab.items.len() - 1)
+                    let allow_undo = !self.player.is_remote();
+                    let item = {
+                        let queue = self.playback_queue_mut();
+                        let item = queue.items.remove(idx);
+                        queue.playlist_cursor = if queue.items.is_empty() {
+                            0
+                        } else {
+                            idx.min(queue.items.len() - 1)
+                        };
+                        item
                     };
+                    if allow_undo {
+                        self.playlist_undo_stack.push((idx, item));
+                    }
                 } else {
-                    let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
+                    let is_video = self
+                        .playback_queue()
+                        .items
+                        .get(idx)
+                        .is_some_and(|i| i.is_video());
                     if played && is_video && self.client.lock().unwrap().config.consume_videos {
-                        self.consume_item(idx);
-                        self.player_tab.playlist_cursor = self
-                            .player_tab
-                            .playlist_cursor
-                            .min(self.player_tab.items.len().saturating_sub(1));
+                        let queue = self.playback_queue_mut();
+                        if idx < queue.items.len() {
+                            queue.items.remove(idx);
+                        }
+                        if queue.items.is_empty() {
+                            queue.playlist_cursor = 0;
+                        } else {
+                            queue.playlist_cursor = queue
+                                .playlist_cursor
+                                .min(queue.items.len().saturating_sub(1));
+                        }
                     }
                 }
                 self.refresh_after_stop();
@@ -1573,7 +1679,7 @@ impl App {
                 played,
                 consume,
             } => {
-                if let Some(item) = self.player_tab.items.get_mut(idx) {
+                if let Some(item) = self.playback_queue_mut().items.get_mut(idx) {
                     if played {
                         item.playback_position_ticks = 0;
                         item.played = true;
@@ -1583,7 +1689,11 @@ impl App {
                         item.playback_position_ticks = position_ticks;
                     }
                 }
-                let is_video = self.player_tab.items.get(idx).is_some_and(|i| i.is_video());
+                let is_video = self
+                    .playback_queue()
+                    .items
+                    .get(idx)
+                    .is_some_and(|i| i.is_video());
                 if consume && is_video && self.client.lock().unwrap().config.consume_videos {
                     self.pending_queue_removal = Some(idx);
                 }
@@ -1595,7 +1705,10 @@ impl App {
                     self.status.clear();
                 }
                 let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
-                    self.consume_item(remove_idx);
+                    let queue = self.playback_queue_mut();
+                    if remove_idx < queue.items.len() {
+                        queue.items.remove(remove_idx);
+                    }
                     if remove_idx < idx {
                         idx - 1
                     } else {
@@ -1604,14 +1717,14 @@ impl App {
                 } else {
                     idx
                 };
-                self.player_tab.playlist_cursor = adjusted;
-                if let Some(item) = self.player_tab.items.get(adjusted) {
+                self.playback_queue_mut().playlist_cursor = adjusted;
+                if let Some(item) = self.playback_queue().items.get(adjusted) {
                     self.last_played_item_id = Some(item.id.clone());
                 }
                 self.save_queue_state();
             }
             PlayerEvent::PlaylistNextUp { next_idx } => {
-                if let Some(item) = self.player_tab.items.get(next_idx) {
+                if let Some(item) = self.playback_queue().items.get(next_idx).cloned() {
                     let item_id = item.id.clone();
                     let show_title = item.series_name.clone();
                     let ep_title = item.name.clone();
@@ -1645,9 +1758,14 @@ impl App {
                 log::warn!(target: "app", "next-up: play triggered");
                 if let Some(item) = self.next_up_item.take() {
                     let label = item.playback_label();
-                    if let Some(idx) = self.player_tab.items.iter().position(|i| i.id == item.id) {
+                    if let Some(idx) = self
+                        .playback_queue()
+                        .items
+                        .iter()
+                        .position(|i| i.id == item.id)
+                    {
                         self.player.send_command(PlayerCommand::JumpTo(idx));
-                        self.player_tab.playlist_cursor = idx;
+                        self.playback_queue_mut().playlist_cursor = idx;
                         self.flash_status(label);
                     } else {
                         log::warn!(target: "app", "next-up: item not in queue, cannot jump");
@@ -1657,15 +1775,16 @@ impl App {
                 }
             }
             PlayerEvent::QueueUpdated { items, cursor } => {
-                self.player_tab.items = items;
-                self.player_tab.playlist_cursor = cursor;
+                let queue = self.playback_queue_mut();
+                queue.items = items;
+                queue.playlist_cursor = cursor;
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 self.skip_intro_end_ticks = Some(intro_end_ticks);
                 let playing_title = self
-                    .player_tab
+                    .playback_queue()
                     .items
-                    .get(self.player_tab.playlist_cursor)
+                    .get(self.playback_queue().playlist_cursor)
                     .map(|i| i.name.clone())
                     .unwrap_or_else(|| "mbv".into());
                 self.notify_with_actions(
@@ -1909,6 +2028,7 @@ mod tests {
                 items: Vec::new(),
                 playlist_cursor: 0,
             },
+            remote_player_tab: None,
             home: HomePane {
                 continue_items: Vec::new(),
                 continue_cursor: 0,
@@ -1973,6 +2093,8 @@ mod tests {
             power_left_tab_pending: 0,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
+            power_queue_scope_local_area: Rect::default(),
+            power_queue_scope_remote_area: Rect::default(),
             power_queue_scroll: 0,
             power_queue_row_map: Vec::new(),
             power_left_row_map: Vec::new(),
@@ -2069,6 +2191,7 @@ mod tests {
             image_cache_size: 50,
             image_protocol_enabled: false,
             confirm_rescan: false,
+            queue_scope: QueueScope::Local,
         }
     }
 

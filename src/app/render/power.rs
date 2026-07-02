@@ -2,7 +2,7 @@ use super::super::ui_util::{
     build_queue_rows, fmt_duration, fmt_duration_approx, natural_sort_key, trunc_overview,
     trunc_str, QueueRow,
 };
-use super::super::{palette, App, PowerFocus};
+use super::super::{palette, App, PowerFocus, QueueScope};
 use crate::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::{Modifier, Style};
@@ -348,6 +348,10 @@ impl App {
             return vec![];
         }
 
+        let show_remote_scope = self.has_remote_queue();
+        self.power_queue_scope_local_area = Rect::default();
+        self.power_queue_scope_remote_area = Rect::default();
+
         // Static "Queue" pill header at the top of the panel — pill on the right.
         {
             let pill = " Queue ";
@@ -366,34 +370,85 @@ impl App {
                 },
             );
         }
-        let area = Rect {
+        let mut area = Rect {
             y: area.y + 1,
             height: area.height.saturating_sub(1),
             ..area
         };
+        if show_remote_scope && area.height > 0 {
+            let local_selected = self.displayed_queue_scope() == QueueScope::Local;
+            let local_label = " Local ";
+            let remote_label = " Remote ";
+            let local_w = local_label.width() as u16;
+            let remote_w = remote_label.width() as u16;
+            let gap = 1u16;
+            let total_w = local_w + gap + remote_w;
+            let start_x = area.x + area.width.saturating_sub(total_w);
+            self.power_queue_scope_local_area = Rect {
+                x: start_x,
+                y: area.y,
+                width: local_w,
+                height: 1,
+            };
+            self.power_queue_scope_remote_area = Rect {
+                x: start_x + local_w + gap,
+                y: area.y,
+                width: remote_w,
+                height: 1,
+            };
+            let line_left = (area.width as usize).saturating_sub(total_w as usize);
+            let inactive = Style::default().fg(palette::MUTED).bg(palette::PILL_BG);
+            let active = Style::default().fg(palette::BASE).bg(palette::FOAM);
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled(" ".repeat(line_left), Style::default()),
+                    Span::styled(local_label, if local_selected { active } else { inactive }),
+                    Span::raw(" "),
+                    Span::styled(remote_label, if local_selected { inactive } else { active }),
+                ])),
+                Rect {
+                    x: area.x,
+                    y: area.y,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+            area.y += 1;
+            area.height = area.height.saturating_sub(1);
+        }
         // Store the content area (after header) so mouse clicks map to the right rows.
         self.power_queue_area = area;
 
-        let n = self.player_tab.items.len();
+        let (items, cursor) = {
+            let queue = self.displayed_queue();
+            (queue.items.clone(), queue.playlist_cursor)
+        };
+        let n = items.len();
         if n == 0 {
             self.power_queue_scroll = 0;
             self.power_queue_row_map.clear();
             f.render_widget(
-                Paragraph::new("  Add items with p from Home or library tabs")
-                    .style(Style::default().fg(palette::MUTED)),
+                Paragraph::new(if self.displayed_queue_scope() == QueueScope::Local {
+                    "  Add items with p from Home or library tabs"
+                } else {
+                    "  Remote queue is empty"
+                })
+                .style(Style::default().fg(palette::MUTED)),
                 area,
             );
             return vec![];
         }
 
         let (active, active_idx, live_pos, live_runtime, live_paused) =
-            self.effective_playback_state();
-        let cursor = self.player_tab.playlist_cursor;
-        let items = &self.player_tab.items;
+            if self.displayed_queue_scope() == QueueScope::Remote || !self.player.is_remote() {
+                self.effective_playback_state()
+            } else {
+                (false, 0, 0, 0, false)
+            };
 
         // Build display rows: audio grouped by album, episodes by series, the rest
         // flat. group_for_header[j] holds the label for the j-th Header.
-        let (display, group_for_header) = build_queue_rows(items, true);
+        let (display, group_for_header) = build_queue_rows(&items, true);
         let total = display.len();
         let visible = area.height as usize;
 

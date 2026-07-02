@@ -32,6 +32,10 @@ impl App {
         }
         let (active, current_idx, live_pos, live_runtime, live_paused) =
             self.effective_playback_state();
+        let (items, cursor) = {
+            let queue = self.displayed_queue();
+            (queue.items.clone(), queue.playlist_cursor)
+        };
 
         self.playlist_rect = area;
 
@@ -39,7 +43,7 @@ impl App {
         self.layout_playlist_inner = inner;
         self.playlist_row_map.clear();
 
-        if self.player_tab.items.is_empty() {
+        if items.is_empty() {
             f.render_widget(
                 Paragraph::new("Add items with p from Home or library tabs")
                     .style(Style::default().fg(palette::MUTED)),
@@ -47,8 +51,6 @@ impl App {
             );
             return;
         }
-
-        let cursor = self.player_tab.playlist_cursor;
 
         // List view occupies 90% of available width, centered.
         let list_w = (area.width as u32 * 9 / 10) as u16;
@@ -59,11 +61,7 @@ impl App {
             ..inner
         };
 
-        let show_ep_cols = self
-            .player_tab
-            .items
-            .iter()
-            .any(|it| it.item_type == "Episode");
+        let show_ep_cols = items.iter().any(|it| it.item_type == "Episode");
 
         // Fixed column widths + inter-column gaps of 1.
         let title_col_width =
@@ -81,8 +79,7 @@ impl App {
         };
 
         // Build display rows (grouped or flat) and window them to the visible height.
-        let (display, group_for_header) =
-            build_queue_rows(&self.player_tab.items, self.playlist_group);
+        let (display, group_for_header) = build_queue_rows(&items, self.playlist_group);
         let visible = table_area.height as usize;
         let cursor_row = display
             .iter()
@@ -104,7 +101,7 @@ impl App {
             .filter(|r| matches!(r, QueueRow::Header))
             .count();
 
-        let items = &self.player_tab.items;
+        let items = &items;
         let mut rows: Vec<Row> = Vec::new();
         // Header rows are rendered as full-width overlays after the table; collect their
         // positions and labels here.
