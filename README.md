@@ -1,6 +1,6 @@
 # mbv
 
-A terminal UI client for [Emby](https://emby.media) media servers that uses an embedded mpv instance as its media player.
+A terminal UI client for [Emby](https://emby.media) media servers that uses mpv (and controls/communicates it with via libmpv) as its media player.
 
 This was made because I use Niri and the beta client does not officially support that. The old official Linux client is increasingly problematic. The browser is a bit slow and problematic as well for me, and I find launching things directly in mpv to be much snappier and able to play more without error. In addition, I'm super old and my eyes are inconsistent, and so I often just watch videos on my monitor while I work because the TV is so far away and require a completely different set of glasses (old). This workflow works really well for me. I'm not crazy.
 
