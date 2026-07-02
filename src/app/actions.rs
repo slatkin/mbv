@@ -3099,27 +3099,31 @@ impl App {
         }
     }
 
-    /// Move the cursor to the adjacent column (`dir` = -1 left, +1 right) at the same
-    /// grid row, preserving the relative item index where possible.
-    pub(super) fn power_home_move_column(&mut self, dir: i64) {
-        let Some(si) = self.power_home_cur_section() else {
-            self.power_home_select_first();
-            return;
-        };
-        let m = self.power_home_layout[si].clone();
-        let within = self.home.power_home_cursor - m.flat_start;
-        let target_col = m.col as i64 + dir;
-        if target_col < 0 {
-            return;
-        }
-        let target_col = target_col as usize;
-        if let Some(t) = self
+    /// Cycle the flat cursor to the first item of the previous/next non-empty
+    /// section, wrapping at the ends. `dir` = -1 previous, +1 next.
+    pub(super) fn power_home_move_section(&mut self, dir: i64) {
+        let sections: Vec<usize> = self
             .power_home_layout
             .iter()
-            .find(|x| x.col == target_col && x.row == m.row && x.len > 0)
-        {
-            self.home.power_home_cursor = t.flat_start + within.min(t.len - 1);
+            .enumerate()
+            .filter(|(_, m)| m.len > 0)
+            .map(|(i, _)| i)
+            .collect();
+        if sections.is_empty() {
+            return;
         }
+        let pos = self
+            .power_home_cur_section()
+            .and_then(|si| sections.iter().position(|&s| s == si));
+        let next_pos = match pos {
+            Some(p) => {
+                let n = sections.len() as i64;
+                (((p as i64 + dir) % n + n) % n) as usize
+            }
+            None => 0,
+        };
+        let si = sections[next_pos];
+        self.home.power_home_cursor = self.power_home_layout[si].flat_start;
     }
 
     /// Play the item under the flat power-home cursor.

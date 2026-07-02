@@ -1165,12 +1165,12 @@ impl App {
                 self.power_home_move_down();
                 true
             }
-            KeyCode::Left => {
-                self.power_home_move_column(-1);
+            KeyCode::Char('[') if !ctrl => {
+                self.power_home_move_section(-1);
                 true
             }
-            KeyCode::Right => {
-                self.power_home_move_column(1);
+            KeyCode::Char(']') if !ctrl => {
+                self.power_home_move_section(1);
                 true
             }
             KeyCode::PageUp => {
