@@ -1414,7 +1414,7 @@ impl App {
             let page = self.power_queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
                 KeyCode::Char('[')
-                    if self.has_remote_queue()
+                    if self.has_direct_remote_queue()
                         && !key.modifiers.contains(KeyModifiers::CONTROL)
                         && !key.modifiers.contains(KeyModifiers::ALT) =>
                 {
@@ -1422,7 +1422,7 @@ impl App {
                     return false;
                 }
                 KeyCode::Char(']')
-                    if self.has_remote_queue()
+                    if self.has_direct_remote_queue()
                         && !key.modifiers.contains(KeyModifiers::CONTROL)
                         && !key.modifiers.contains(KeyModifiers::ALT) =>
                 {
@@ -2302,7 +2302,7 @@ impl App {
 
     fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
         if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
-            if self.has_remote_queue() {
+            if self.has_direct_remote_queue() {
                 if self
                     .power_queue_scope_local_area
                     .contains((col, row).into())

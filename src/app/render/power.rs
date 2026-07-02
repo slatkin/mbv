@@ -348,7 +348,7 @@ impl App {
             return vec![];
         }
 
-        let show_remote_scope = self.has_remote_queue();
+        let show_remote_scope = self.has_direct_remote_queue();
         self.power_queue_scope_local_area = Rect::default();
         self.power_queue_scope_remote_area = Rect::default();
 

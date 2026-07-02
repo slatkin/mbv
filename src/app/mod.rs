@@ -998,8 +998,12 @@ impl App {
         self.remote_player_tab.is_some()
     }
 
+    fn has_direct_remote_queue(&self) -> bool {
+        self.player.is_remote() && self.has_remote_queue()
+    }
+
     fn displayed_queue_scope(&self) -> QueueScope {
-        if self.has_remote_queue() && self.queue_scope == QueueScope::Remote {
+        if self.has_direct_remote_queue() && self.queue_scope == QueueScope::Remote {
             QueueScope::Remote
         } else {
             QueueScope::Local
@@ -1047,7 +1051,7 @@ impl App {
     }
 
     fn set_queue_scope(&mut self, scope: QueueScope) {
-        self.queue_scope = if scope == QueueScope::Remote && self.has_remote_queue() {
+        self.queue_scope = if scope == QueueScope::Remote && self.has_direct_remote_queue() {
             QueueScope::Remote
         } else {
             QueueScope::Local
@@ -2424,6 +2428,22 @@ mod tests {
             app.session_direct_endpoint(&sess),
             Some(crate::remote_player::DaemonEndpoint::Local)
         );
+    }
+
+    #[test]
+    fn stale_remote_queue_scope_falls_back_to_local_when_not_in_direct_remote_mode() {
+        let mut app = make_app_stub();
+        app.remote_player_tab = Some(PlayerTab {
+            items: make_items(2),
+            playlist_cursor: 1,
+        });
+        app.queue_scope = QueueScope::Remote;
+
+        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+
+        app.set_queue_scope(QueueScope::Remote);
+        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+        assert_eq!(app.queue_scope, QueueScope::Local);
     }
 
     // ── home_section_len_cur ─────────────────────────────────────────────────
