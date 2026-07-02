@@ -125,6 +125,7 @@ Most settings can also be toggled live in the settings panel (`F2`).
 - **mbv-to-mbv remote control** — mbv can connect directly to another mbv daemon over its own control protocol rather than only through standard Emby session control.
 - **Headless daemon mode** — run mbv as a background playback service with no terminal required, then drive it remotely.
 - **mpv-first playback model** — playback runs through embedded mpv, including headless audio playback and optional PCM pipe output.
+  Configure PCM pipe compatibility with `[mpv].audio_pipe_samplerate` and `[mpv].audio_pipe_bitdepth` (`16`, `24`, or `32`). Snapserver's `sampleformat` must match both values exactly.
 - **Opinionated playback defaults** — mbv prefers English audio, starts with subtitles off, and hides image-based subtitle tracks that do not work in headless mpv playback.
 - **Special music library handling** — mbv can understand folder-shaped music libraries via `[music].levels`, including grouped music browsing that standard Emby clients do not provide.
 - **Feed-library defaults** — selected libraries can behave like feed views with unplayed/date-sorted defaults, which is useful for YouTube/channel-style libraries.

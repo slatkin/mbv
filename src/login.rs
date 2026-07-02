@@ -108,6 +108,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     audio_pipe_enabled: base_config.audio_pipe_enabled,
                     audio_pipe_path: base_config.audio_pipe_path.clone(),
                     audio_pipe_samplerate: base_config.audio_pipe_samplerate,
+                    audio_pipe_bitdepth: base_config.audio_pipe_bitdepth,
                     always_play_next: base_config.always_play_next,
                     consume_videos: base_config.consume_videos,
                     always_skip_intro: base_config.always_skip_intro,

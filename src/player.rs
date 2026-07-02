@@ -449,6 +449,7 @@ struct MpvSessionConfig {
     always_skip_intro: bool,
     audio_pipe_path: Option<String>,
     audio_pipe_samplerate: u32,
+    audio_pipe_bitdepth: u8,
 }
 
 // Ensures `path` exists as a FIFO, creating it via mkfifo(3) if it doesn't
@@ -654,6 +655,11 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
         match ensure_pipe(path) {
             Ok(()) => {
                 let rate = config.audio_pipe_samplerate.to_string();
+                let (bitdepth, audio_format) = match config.audio_pipe_bitdepth {
+                    16 => (16u8, "s16"),
+                    24 => (24u8, "s24"),
+                    _ => (32u8, "s32"),
+                };
                 let mut failed = Vec::new();
                 if let Err(e) = mpv.set_property("ao", "pcm") {
                     failed.push(format!("ao: {}", mpv_err_str(&e)));
@@ -664,13 +670,12 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
                 if let Err(e) = mpv.set_property("ao-pcm-waveheader", "no") {
                     failed.push(format!("ao-pcm-waveheader: {}", mpv_err_str(&e)));
                 }
-                // Force a fixed 32-bit/stereo/<rate> PCM format so the byte
+                // Force a fixed <bitdepth>-bit/stereo/<rate> PCM format so the byte
                 // stream always matches a single Snapcast `sampleformat`
                 // declaration, no matter the source file's native format.
-                // 32-bit gives full headroom for 24-bit hi-res FLACs with no
-                // truncation, and soxr (vs. mpv's default swr) keeps
-                // resampling of lower-rate sources audibly transparent.
-                if let Err(e) = mpv.set_property("audio-format", "s32") {
+                // 32-bit remains the default for headroom, but narrower
+                // bit depths improve compatibility with some Snapclients.
+                if let Err(e) = mpv.set_property("audio-format", audio_format) {
                     failed.push(format!("audio-format: {}", mpv_err_str(&e)));
                 }
                 if let Err(e) = mpv.set_property("audio-channels", "stereo") {
@@ -685,7 +690,7 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
                     failed.push(format!("audio-swresample-o: {}", mpv_err_str(&e)));
                 }
                 if failed.is_empty() {
-                    log::info!(target: "player", "audio pipe: writing {rate}Hz/32-bit/stereo PCM to {path} (blocks until a reader attaches)");
+                    log::info!(target: "player", "audio pipe: writing {rate}Hz/{bitdepth}-bit/stereo PCM to {path} (blocks until a reader attaches)");
                 } else {
                     log::warn!(target: "player", "audio pipe: failed to configure pcm output for {path}: {}", failed.join(", "));
                 }
@@ -2457,6 +2462,7 @@ impl Player {
             always_skip_intro: self.always_skip_intro,
             audio_pipe_path: client.config.audio_pipe_target(),
             audio_pipe_samplerate: client.config.audio_pipe_samplerate,
+            audio_pipe_bitdepth: client.config.audio_pipe_bitdepth,
         };
         let status = self.status.clone();
         let event_tx = self.event_tx.clone();
@@ -2582,6 +2588,7 @@ impl Player {
             always_skip_intro: self.always_skip_intro,
             audio_pipe_path: client.config.audio_pipe_target(),
             audio_pipe_samplerate: client.config.audio_pipe_samplerate,
+            audio_pipe_bitdepth: client.config.audio_pipe_bitdepth,
         };
         let status = self.status.clone();
         let event_tx = self.event_tx.clone();

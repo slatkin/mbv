@@ -14,6 +14,7 @@ pub struct Config {
     pub audio_pipe_enabled: bool,
     pub audio_pipe_path: String,
     pub audio_pipe_samplerate: u32, // fixed output rate forced on the pipe (Hz); mpv resamples everything to this
+    pub audio_pipe_bitdepth: u8,    // fixed PCM bit depth for the pipe (16|24|32)
     pub always_play_next: bool,
     pub consume_videos: bool,
     pub always_skip_intro: bool,
@@ -59,6 +60,7 @@ impl Default for Config {
             audio_pipe_enabled: false,
             audio_pipe_path: "/tmp/mbv-pipe".to_string(),
             audio_pipe_samplerate: 192_000,
+            audio_pipe_bitdepth: 32,
             always_play_next: false,
             consume_videos: false,
             always_skip_intro: false,
@@ -440,6 +442,14 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_integer())
         .map(|v| v.max(1) as u32)
         .unwrap_or(192_000);
+    let audio_pipe_bitdepth = misc
+        .and_then(|m| m.get("audio_pipe_bitdepth"))
+        .and_then(|v| v.as_integer())
+        .map(|v| match v {
+            16 | 24 | 32 => v as u8,
+            _ => 32,
+        })
+        .unwrap_or(32);
 
     let always_play_next = queue
         .and_then(|q| q.get("always_play_next"))
@@ -620,6 +630,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         audio_pipe_enabled,
         audio_pipe_path,
         audio_pipe_samplerate,
+        audio_pipe_bitdepth,
         always_play_next,
         consume_videos,
         always_skip_intro,
@@ -793,6 +804,10 @@ pub fn save_config_settings(cfg: &Config) {
         "audio_pipe_samplerate".to_string(),
         toml::Value::Integer(cfg.audio_pipe_samplerate as i64),
     );
+    mpv.insert(
+        "audio_pipe_bitdepth".to_string(),
+        toml::Value::Integer(cfg.audio_pipe_bitdepth as i64),
+    );
 
     let daemon = section!("daemon");
     daemon.insert(
@@ -915,11 +930,13 @@ url = "http://localhost:8096"
 audio_pipe_enabled = true
         audio_pipe_path = "/tmp/custom-pipe"
 audio_pipe_samplerate = 96000
+audio_pipe_bitdepth = 16
 "#;
         let cfg = parse_config(toml).unwrap();
         assert!(cfg.audio_pipe_enabled);
         assert_eq!(cfg.audio_pipe_path, "/tmp/custom-pipe");
         assert_eq!(cfg.audio_pipe_samplerate, 96000);
+        assert_eq!(cfg.audio_pipe_bitdepth, 16);
     }
 
     #[test]
@@ -928,6 +945,7 @@ audio_pipe_samplerate = 96000
         assert!(!cfg.audio_pipe_enabled);
         assert_eq!(cfg.audio_pipe_path, "/tmp/mbv-pipe");
         assert_eq!(cfg.audio_pipe_samplerate, 192_000);
+        assert_eq!(cfg.audio_pipe_bitdepth, 32);
     }
 
     #[test]
