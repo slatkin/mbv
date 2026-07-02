@@ -1,5 +1,5 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -75,14 +75,20 @@ impl DaemonEndpoint {
             .parse()
             .map_err(|_| format!("daemon endpoint tcp:// requires a numeric port: {value}"))?;
 
-        let ip = match host {
-            "localhost" | "127.0.0.1" => IpAddr::V4(Ipv4Addr::LOCALHOST),
-            "::1" => IpAddr::V6(Ipv6Addr::LOCALHOST),
-            _ => {
+        let ip = if host == "localhost" {
+            IpAddr::V4(Ipv4Addr::LOCALHOST)
+        } else {
+            let ip: IpAddr = host.parse().map_err(|_| {
+                format!(
+                    "daemon endpoint tcp:// only supports localhost or loopback addresses: {value}"
+                )
+            })?;
+            if !ip.is_loopback() {
                 return Err(format!(
                     "daemon endpoint tcp:// only supports localhost or loopback addresses: {value}"
                 ));
             }
+            ip
         };
 
         Ok(Self::Tcp(SocketAddr::new(ip, port)))
@@ -418,6 +424,10 @@ mod tests {
         assert_eq!(
             DaemonEndpoint::parse("tcp://127.0.0.1:1234").unwrap(),
             DaemonEndpoint::Tcp(SocketAddr::from(([127, 0, 0, 1], 1234)))
+        );
+        assert_eq!(
+            DaemonEndpoint::parse("tcp://127.0.0.2:1234").unwrap(),
+            DaemonEndpoint::Tcp(SocketAddr::from(([127, 0, 0, 2], 1234)))
         );
         assert_eq!(
             DaemonEndpoint::parse("tcp://[::1]:4321").unwrap(),
