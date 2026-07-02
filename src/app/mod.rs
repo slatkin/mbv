@@ -566,7 +566,6 @@ enum SettingKey {
     UseMpvConfig,
     NoScripts,
     Autoload,
-    AudioPipeEnabled,
     ShowSysTrayIcon,
     SystemNotifications,
     MyLanguages,
@@ -609,7 +608,6 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::UseMpvConfig,
             SettingKey::NoScripts,
             SettingKey::Autoload,
-            SettingKey::AudioPipeEnabled,
         ],
     ),
     (

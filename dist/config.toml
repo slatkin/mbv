@@ -10,7 +10,8 @@ use_mpv_config     = false
 show_audio_window  = false
 audio_pipe_enabled    = false
 audio_pipe_path       = "/tmp/mbv-pipe"
-audio_pipe_samplerate = 192000
+audio_pipe_samplerate = 44100
+audio_pipe_bitdepth   = 16
 
 [daemon]
 show_systray_icon = true
