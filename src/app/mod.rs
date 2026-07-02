@@ -629,6 +629,10 @@ const SETTINGS_PANEL_W: u16 = 40;
 const PLAYLISTS_PANEL_W: u16 = 40;
 const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
+    fn extrapolated_remote_position(remote_pos_s: i64, elapsed: Duration) -> i64 {
+        remote_pos_s + elapsed.as_secs() as i64
+    }
+
     fn build(init: AppInit) -> Self {
         let prefs = Self::load_prefs();
         let has_remote_queue = init.remote_player_tab.is_some();
@@ -1438,7 +1442,10 @@ impl App {
                                     self.remote_seek_pending_until = now - Duration::from_secs(1);
                                 } else if api_active {
                                     let elapsed = self.remote_pos_at.elapsed().as_secs_f64();
-                                    let extrapolated = self.remote_pos_s + elapsed.round() as i64;
+                                    let extrapolated = Self::extrapolated_remote_position(
+                                        self.remote_pos_s,
+                                        self.remote_pos_at.elapsed(),
+                                    );
                                     let new_pos = s.position_s.max(extrapolated);
                                     log::debug!(target: "sessions",
                                         "pos extrap: api={}s paused={} elapsed={:.2}s → remote_pos_s {}s→{}s",
@@ -2473,6 +2480,18 @@ mod tests {
         assert_eq!(
             app.session_direct_endpoint(&sess),
             Some(crate::remote_player::DaemonEndpoint::Local)
+        );
+    }
+
+    #[test]
+    fn remote_position_extrapolation_does_not_round_up_partial_seconds() {
+        assert_eq!(
+            App::extrapolated_remote_position(10, Duration::from_millis(1600)),
+            11
+        );
+        assert_eq!(
+            App::extrapolated_remote_position(10, Duration::from_secs(2)),
+            12
         );
     }
 
