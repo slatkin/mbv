@@ -109,22 +109,27 @@ Most settings can also be toggled live in the settings panel (`F2`).
 
 ## Features
 
-### What you can do
+### Emby-Parity Features
 
-- **Browse your libraries** — navigate folders and series, jump to seasons and episodes, or fuzzy-search within any folder.
-- **Build a queue** — add individual items or entire folders to the Queue from any screen. Folders are expanded automatically. Play from any position; the rest follows in order.
-- **Pick up where you left off** — videos resume from their saved position. Watched status is synced back to the server automatically.
-- **Full playback controls** — seek, pause, adjust volume, cycle audio tracks, enable subtitles, all from the keyboard.
-- **Home screen** — see your Continue Watching items and what was recently added across your libraries.
-- **Remote control** — any Emby app on your phone or browser can control mbv in real time: play, pause, seek, skip, adjust volume, queue items.
-- **Control other sessions** — connect to another active Emby session and drive it from mbv's controls and keyboard. `F3` opens the session list.
-- **Daemon mode** — run mbv as a background service with no terminal required. Register it with your server and drive it entirely from remote apps.
-- **System media keys** — mbv exposes an MPRIS2 interface so desktop widgets, `playerctl`, and system media keys all work automatically.
-- **Save queue as playlist** — `Ctrl+S` saves the current queue to Emby as a playlist. The queue stays associated with the saved playlist; mbv prompts to save unsaved changes on quit or clear.
-- **Undo queue deletes** — `Ctrl+Z` restores the last item removed from the queue.
-- **Go to library** — press `i` on any queue item (or use the context menu) to jump straight to it in its library tab.
-- **Playlists panel** — `F4` opens a browsable side panel showing all Emby playlists; drill in to view and enqueue tracks.
-- **Desktop notifications** — with `system_notifications = true`, toasts and interactive prompts (Skip Intro, Next Up, Clear Playlist) are sent as desktop notifications with action buttons.
+- **Library browsing and search** — navigate folders and series, jump to seasons and episodes, and fuzzy-search within libraries.
+- **Resume and watched-state sync** — videos resume from saved position and watched status is reported back to Emby.
+- **Standard remote control compatibility** — any normal Emby remote app on your phone or browser can control mbv in real time.
+- **Session control from mbv** — connect to another active Emby session and drive it from mbv's controls and keyboard. `F3` opens the session list.
+- **Playlist integration** — browse Emby playlists, enqueue them, and save the current queue back to Emby with `Ctrl+S`.
+- **Normal playback controls** — seek, pause, adjust volume, cycle audio tracks, and enable subtitles from the keyboard.
+- **Home / continue-watching views** — see Continue Watching items and recent additions across libraries.
+
+### mbv-Only Features
+
+- **Dedicated persistent queue** — mbv keeps its own queue model instead of relying on Emby's simpler play-next/play-later behavior. It supports queue-source tracking, undo delete, direct jump-to-library from queue items, and queue-first workflows.
+- **mbv-to-mbv remote control** — mbv can connect directly to another mbv daemon over its own control protocol rather than only through standard Emby session control.
+- **Headless daemon mode** — run mbv as a background playback service with no terminal required, then drive it remotely.
+- **mpv-first playback model** — playback runs through embedded mpv, including headless audio playback and optional PCM pipe output.
+- **Opinionated playback defaults** — mbv prefers English audio, starts with subtitles off, and hides image-based subtitle tracks that do not work in headless mpv playback.
+- **Special music library handling** — mbv can understand folder-shaped music libraries via `[music].levels`, including grouped music browsing that standard Emby clients do not provide.
+- **Feed-library defaults** — selected libraries can behave like feed views with unplayed/date-sorted defaults, which is useful for YouTube/channel-style libraries.
+- **Extra local control surfaces** — MPRIS integration lets desktop widgets, `playerctl`, and media keys control mbv directly.
+- **Desktop-integrated prompts** — with `system_notifications = true`, Skip Intro, Next Up, and queue prompts can be surfaced as actionable desktop notifications.
 
 ### Panels and navigation
 
