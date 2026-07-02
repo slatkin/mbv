@@ -167,6 +167,8 @@ Supported values are `local`, a Unix socket path, or an IPv4 TCP endpoint such a
 
 `F3` session discovery remains the main remote-control entry point. When the selected target is another `mbv` session that advertises a daemon TCP port, mbv now attempts to upgrade automatically into direct daemon mode and falls back to standard Emby session control if the direct attach fails.
 
+Pass `--audio-only` when launching the daemon to advertise only audio playback capability to Emby and reject remote play requests that include video items. The bundled [contrib/mbv.service](/home/slatkin/Dev/mbv/contrib/mbv.service:27) uses this mode by default.
+
 Daemon TCP listening is configured with `[daemon.server].tcp_listen`. System instances default to `0.0.0.0:47788`; non-system instances remain Unix-socket-only unless you opt in.
 
 Direct daemon control is LAN-oriented, IPv4-only, and authenticated with the connecting client's Emby token. The daemon validates that presented token against Emby before accepting the control session.

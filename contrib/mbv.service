@@ -24,7 +24,7 @@ CacheDirectoryMode=0750
 ConfigurationDirectory=mbv
 ConfigurationDirectoryMode=0750
 
-ExecStart=/usr/bin/mbv --daemon-inner
+ExecStart=/usr/bin/mbv --daemon-inner --audio-only
 Restart=on-failure
 RestartSec=5
 

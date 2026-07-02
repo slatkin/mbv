@@ -77,6 +77,10 @@ fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, String> {
     Ok(endpoint)
 }
 
+fn has_flag(args: &[String], flag: &str) -> bool {
+    args.iter().any(|arg| arg == flag)
+}
+
 fn crash_log_path() -> std::path::PathBuf {
     std::env::var("XDG_STATE_HOME")
         .map(std::path::PathBuf::from)
@@ -155,13 +159,13 @@ fn main() {
         }
     };
 
-    if args.contains(&"--version".to_string()) || args.contains(&"-V".to_string()) {
+    if has_flag(&args, "--version") || has_flag(&args, "-V") {
         println!("mbv {}", env!("CARGO_PKG_VERSION"));
         return;
     }
 
     // Kill running daemon
-    if args.contains(&"-q".to_string()) {
+    if has_flag(&args, "-q") {
         let path = daemon::pid_file();
         match std::fs::read_to_string(&path) {
             Ok(s) => {
@@ -187,8 +191,9 @@ fn main() {
         return;
     }
 
-    let daemon_mode = args.contains(&"-d".to_string());
-    let daemon_inner = args.contains(&"--daemon-inner".to_string());
+    let daemon_mode = has_flag(&args, "-d");
+    let daemon_inner = has_flag(&args, "--daemon-inner");
+    let daemon_audio_only = has_flag(&args, "--audio-only");
 
     let config = match load_config() {
         Ok(c) => c,
@@ -212,6 +217,10 @@ fn main() {
 
     if daemon_mode && explicit_daemon_endpoint.is_some() {
         eprintln!("mbv: daemon client endpoint cannot be used with -d");
+        std::process::exit(1);
+    }
+    if daemon_audio_only && !daemon_mode && !daemon_inner {
+        eprintln!("mbv: --audio-only is only supported with -d or --daemon-inner");
         std::process::exit(1);
     }
 
@@ -276,6 +285,7 @@ fn main() {
         #[allow(clippy::zombie_processes)]
         let _child = std::process::Command::new(exe)
             .arg("--daemon-inner")
+            .args(daemon_audio_only.then_some("--audio-only"))
             .env_remove("MBV_SYSTEM")
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
@@ -287,7 +297,7 @@ fn main() {
     }
 
     if daemon_inner {
-        daemon::run(client); // never returns
+        daemon::run_with_options(client, daemon_audio_only); // never returns
     }
 
     if let Some(endpoint) = explicit_daemon_endpoint {
@@ -371,5 +381,17 @@ mod tests {
     #[test]
     fn connect_daemon_arg_requires_value() {
         assert!(connect_daemon_arg(&["--connect-daemon".into()]).is_err());
+    }
+
+    #[test]
+    fn has_flag_matches_exact_flag() {
+        assert!(has_flag(
+            &["-d".into(), "--audio-only".into()],
+            "--audio-only"
+        ));
+        assert!(!has_flag(
+            &["--audio-only=false".into(), "--audio".into()],
+            "--audio-only"
+        ));
     }
 }

@@ -152,7 +152,7 @@ fn spawn_ctrl_client<R, W>(
     });
 }
 
-pub fn run(client: EmbyClient) -> ! {
+pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
     std::fs::write(pid_file(), std::process::id().to_string())
         .expect("mbv daemon: failed to write PID file");
 
@@ -226,7 +226,7 @@ pub fn run(client: EmbyClient) -> ! {
     client
         .lock()
         .unwrap()
-        .register_capabilities_with_extra_commands(&direct_commands);
+        .register_capabilities_with_options(&direct_commands, audio_only);
     let subtitle_prefs = if client.lock().unwrap().config.subtitle_mode.is_empty()
         && client.lock().unwrap().config.subtitle_lang.is_empty()
         && client.lock().unwrap().config.audio_lang.is_empty()
@@ -410,7 +410,7 @@ pub fn run(client: EmbyClient) -> ! {
             let client = client.lock().unwrap().clone();
             let direct_commands = direct_commands.clone();
             std::thread::spawn(move || {
-                client.register_capabilities_with_extra_commands(&direct_commands)
+                client.register_capabilities_with_options(&direct_commands, audio_only)
             });
             last_capabilities = Instant::now();
         }
@@ -476,6 +476,7 @@ pub fn run(client: EmbyClient) -> ! {
                     ws_ev,
                     &client,
                     &player,
+                    audio_only,
                     &mut items,
                     &mut cursor,
                     &shared_items,
@@ -488,6 +489,7 @@ pub fn run(client: EmbyClient) -> ! {
                     cmd,
                     &client,
                     &player,
+                    audio_only,
                     &mut items,
                     &mut cursor,
                     &shared_items,
@@ -510,6 +512,7 @@ fn handle_ctrl(
     cmd: CtrlCmd,
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
+    audio_only: bool,
     items: &mut Vec<MediaItem>,
     cursor: &mut usize,
     shared_items: &Arc<Mutex<Vec<MediaItem>>>,
@@ -539,6 +542,13 @@ fn handle_ctrl(
                 }
             };
             if fetched.is_empty() {
+                return;
+            }
+            if audio_only && !all_audio(&fetched) {
+                log::warn!(
+                    target: "daemon",
+                    "rejecting ctrl play request in audio-only mode: non-audio items present"
+                );
                 return;
             }
             if fetched.len() == 1 {
@@ -616,6 +626,7 @@ fn handle_ws(
     ev: WsEvent,
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
+    audio_only: bool,
     items: &mut Vec<MediaItem>,
     cursor: &mut usize,
     shared_items: &Arc<Mutex<Vec<MediaItem>>>,
@@ -643,6 +654,13 @@ fn handle_ws(
                 }
             };
             if fetched.is_empty() {
+                return;
+            }
+            if audio_only && !all_audio(&fetched) {
+                log::warn!(
+                    target: "daemon",
+                    "rejecting websocket play request in audio-only mode: non-audio items present"
+                );
                 return;
             }
             // Clamp start_index in case the server sends an out-of-range value
@@ -755,5 +773,67 @@ fn handle_ws(
             }
         }
         WsEvent::UserDataChanged => {}
+    }
+}
+
+fn all_audio(items: &[MediaItem]) -> bool {
+    items.iter().all(MediaItem::is_audio)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::all_audio;
+    use crate::api::MediaItem;
+
+    fn item(name: &str, media_type: &str, item_type: &str) -> MediaItem {
+        MediaItem {
+            id: name.into(),
+            name: name.into(),
+            item_type: item_type.into(),
+            is_folder: false,
+            media_type: media_type.into(),
+            collection_type: String::new(),
+            runtime_ticks: 0,
+            played: false,
+            playback_position_ticks: 0,
+            series_id: String::new(),
+            series_name: String::new(),
+            album_id: String::new(),
+            album: String::new(),
+            index_number: 0,
+            parent_index_number: 0,
+            unplayed_item_count: 0,
+            path: String::new(),
+            artist: String::new(),
+            sort_name: String::new(),
+            production_year: 0,
+            end_year: 0,
+            overview: String::new(),
+            premiere_date: String::new(),
+            date_added: String::new(),
+            total_count: 0,
+            container: String::new(),
+            director: String::new(),
+            video_info: String::new(),
+            audio_info: String::new(),
+            genre: String::new(),
+            playlist_item_id: String::new(),
+        }
+    }
+
+    #[test]
+    fn all_audio_accepts_audio_items() {
+        assert!(all_audio(&[
+            item("song1", "Audio", "Audio"),
+            item("song2", "Audio", "Audio"),
+        ]));
+    }
+
+    #[test]
+    fn all_audio_rejects_video_items() {
+        assert!(!all_audio(&[
+            item("song", "Audio", "Audio"),
+            item("movie", "Video", "Movie"),
+        ]));
     }
 }
