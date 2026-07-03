@@ -118,6 +118,11 @@ impl App {
             let img_x = area.x + area.width.saturating_sub(img_actual_w);
             let img_end_row = img_start_row + img_height + 1;
             metadata_img_end_row = img_end_row;
+            self.power_inline_image_rect = if img_height > 0 {
+                Some(Rect { x: img_x, y: img_start_row, width: img_actual_w, height: img_height + 1 })
+            } else {
+                None
+            };
             let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
             let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
             let text_dims = |r: u16| -> (usize, u16) {
@@ -601,6 +606,7 @@ impl App {
         .column_spacing(1)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
+        self.power_cursor_screen_y = Some(table_area.y + (ep_cursor.saturating_sub(state.offset())) as u16);
 
         let visible_rows = table_area.height as usize;
         if n > visible_rows {

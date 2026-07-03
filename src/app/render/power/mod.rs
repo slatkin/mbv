@@ -328,6 +328,8 @@ impl App {
     }
 
     fn render_power_library(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+        self.power_cursor_screen_y = None;
+        self.power_inline_image_rect = None;
         self.layout_power_selector_tabs.clear();
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.

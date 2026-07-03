@@ -497,6 +497,9 @@ pub struct App {
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
     power_left_area: Rect, // rendered area of the left panel (for mouse click / page calc)
     power_queue_area: Rect,
+    power_cursor_screen_y: Option<u16>,      // screen Y of focused item in library panel (set by renderer)
+    power_queue_cursor_screen_y: Option<u16>, // screen Y of focused item in queue panel (set by renderer)
+    power_inline_image_rect: Option<Rect>,    // bounding rect of inline poster image in detail/episode views
     power_queue_scope_local_area: Rect,
     power_queue_scope_remote_area: Rect,
     power_queue_scroll: usize,
@@ -841,6 +844,9 @@ impl App {
             power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
+            power_cursor_screen_y: None,
+            power_queue_cursor_screen_y: None,
+            power_inline_image_rect: None,
             power_queue_scope_local_area: Rect::default(),
             power_queue_scope_remote_area: Rect::default(),
             power_queue_scroll: 0,
@@ -2450,6 +2456,9 @@ pub(crate) mod tests {
             power_left_tab_pending: 0,
             power_left_area: Rect::default(),
             power_queue_area: Rect::default(),
+            power_cursor_screen_y: None,
+            power_queue_cursor_screen_y: None,
+            power_inline_image_rect: None,
             power_queue_scope_local_area: Rect::default(),
             power_queue_scope_remote_area: Rect::default(),
             power_queue_scroll: 0,

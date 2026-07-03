@@ -302,6 +302,9 @@ impl App {
             }
             let item_h = item_heights[i];
             let selected = i == cursor;
+            if selected {
+                self.power_cursor_screen_y = Some(row_y);
+            }
             render_home_video_item(
                 f,
                 item,
@@ -554,6 +557,9 @@ impl App {
             }
             let item_h = item_heights[item_idx];
             let selected = item_idx == current_pos;
+            if selected {
+                self.power_cursor_screen_y = Some(row_y);
+            }
             render_home_video_item(
                 f, item, row_y, item_h, list_area, text_w, selected, focused, true,
             );
@@ -789,6 +795,9 @@ impl App {
                 let item = &s.items[item_idx];
                 let flat_idx = s.flat_start + item_idx;
                 let selected = flat_idx == cursor;
+                if selected {
+                    self.power_cursor_screen_y = Some(sy);
+                }
 
                 let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
                     let mins = (item.runtime_ticks / TICKS_PER_SECOND / 60).max(1);

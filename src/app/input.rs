@@ -2332,44 +2332,31 @@ impl App {
             let center = self.layout_carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
-        if self.tab_idx == 1
-            && self.playlist_view == PLAYLIST_VIEW_POWER
-            && matches!(self.power_focus, PowerFocus::Left)
-        {
-            let area = self.power_left_area;
-            if area.width > 0 {
-                if self.power_left_tab == 0 {
-                    let n = self.home.continue_items.len().max(1);
-                    let cursor = self.home.continue_cursor.min(n - 1);
-                    let visible = area.height as usize;
-                    let offset = if visible > 0 && cursor >= visible {
-                        cursor - visible + 1
-                    } else {
-                        0
-                    };
-                    let row = cursor.saturating_sub(offset) as u16;
-                    return (area.x + 2, area.y + row);
-                } else {
-                    let lib_idx = self.power_left_tab - 1;
-                    let cursor = self.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .map(|lvl| {
-                            self.libs[lib_idx]
-                                .search
-                                .as_ref()
-                                .and_then(|s| s.results.get(s.cursor).copied())
-                                .unwrap_or(lvl.cursor)
-                        })
-                        .unwrap_or(0);
-                    let visible = area.height as usize;
-                    let scroll = if visible > 0 && cursor >= visible {
-                        cursor - visible + 1
-                    } else {
-                        0
-                    };
-                    let row = cursor.saturating_sub(scroll) as u16;
-                    return (area.x + 2, area.y + row);
+        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+            match self.power_focus {
+                PowerFocus::Left => {
+                    let area = self.power_left_area;
+                    if area.width > 0 {
+                        let y = self.power_cursor_screen_y.unwrap_or(area.y);
+                        let x = area.x + 2;
+                        // Avoid inline image overlap (detail/episode poster).
+                        if let Some(img) = self.power_inline_image_rect {
+                            if y >= img.y && y < img.y + img.height {
+                                let below = img.y + img.height;
+                                if below < area.y + area.height {
+                                    return (x, below);
+                                }
+                            }
+                        }
+                        return (x, y);
+                    }
+                }
+                PowerFocus::Queue => {
+                    let area = self.power_queue_area;
+                    if area.width > 0 {
+                        let y = self.power_queue_cursor_screen_y.unwrap_or(area.y);
+                        return (area.x + 2, y);
+                    }
                 }
             }
         }
