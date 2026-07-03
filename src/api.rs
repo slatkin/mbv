@@ -362,10 +362,8 @@ fn parse_session_media_info(streams: &[Value]) -> SessionMediaInfo {
         .iter()
         .filter(|s| s["Type"].as_str() == Some("Audio"))
         .filter_map(|s| {
+            s.get("Index")?;
             let index = s["Index"].as_i64().unwrap_or(0);
-            if s.get("Index").is_none() {
-                return None;
-            }
             let language = s["Language"].as_str().unwrap_or("").to_string();
             let label = {
                 let lang_name = audio_language_name(&language);

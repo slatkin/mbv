@@ -342,8 +342,18 @@ impl App {
         let Some(root_level) = self.libs[lib_idx].nav_stack.first() else {
             return;
         };
-        let groups = root_level.items.clone();
-        let selected_group = root_level.cursor.min(groups.len().saturating_sub(1));
+        let groups = self.libs[lib_idx]
+            .feed_home_video
+            .as_ref()
+            .map(|state| {
+                state
+                    .groups
+                    .iter()
+                    .map(|group| group.folder.clone())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let selected_group = root_level.cursor.min(groups.len());
         let (items, cursor, stored_scroll, loading) = if self.libs[lib_idx].nav_stack.len() > 1 {
             let level = self.libs[lib_idx].nav_stack.last().unwrap();
             (
@@ -355,6 +365,12 @@ impl App {
         } else {
             (Vec::new(), 0, 0, root_level.loading)
         };
+        let loading = loading
+            || self.libs[lib_idx]
+                .feed_home_video
+                .as_ref()
+                .map(|state| state.loading)
+                .unwrap_or(false);
 
         let max_y = area.y + area.height;
         let mut row = area.y;
@@ -363,11 +379,14 @@ impl App {
         if row < max_y {
             row += 1;
         }
-        if row < max_y && !groups.is_empty() {
+        if row < max_y {
             const MAX_LABEL: usize = 12;
-            let tab_labels: Vec<String> = groups
-                .iter()
-                .map(|g| trunc_str(&g.name, MAX_LABEL).to_string())
+            let tab_labels: Vec<String> = std::iter::once("All".to_string())
+                .chain(
+                    groups
+                        .iter()
+                        .map(|g| trunc_str(&g.name, MAX_LABEL).to_string()),
+                )
                 .collect();
             let n_tabs = tab_labels.len();
             let pill_widths: Vec<usize> = tab_labels.iter().map(|l| l.width() + 2).collect();
@@ -463,35 +482,6 @@ impl App {
             row += 1;
         }
         self.layout_power_selector_tabs = selector_tabs;
-
-        if groups.is_empty() {
-            if row < max_y {
-                let msg = if loading {
-                    " Loading\u{2026}"
-                } else {
-                    " (empty)"
-                };
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        msg,
-                        Style::default().fg(palette::MUTED),
-                    ))),
-                    Rect {
-                        x: area.x,
-                        y: row,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-            }
-            self.power_left_area = Rect {
-                x: area.x,
-                y: row,
-                width: area.width,
-                height: max_y.saturating_sub(row),
-            };
-            return;
-        }
 
         let list_area = Rect {
             x: area.x,
