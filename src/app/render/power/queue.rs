@@ -158,7 +158,7 @@ impl App {
         }
         let offset = self.power_queue_scroll;
         self.power_queue_cursor_screen_y =
-            Some(area.y + 1 + (cursor_row.saturating_sub(self.power_queue_scroll)) as u16);
+            Some(area.y + (cursor_row.saturating_sub(self.power_queue_scroll)) as u16);
 
         // Count how many group headers appear before the scroll offset, so we
         // index group_for_header correctly for the visible window.
