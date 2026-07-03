@@ -12,9 +12,7 @@ use crate::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs,
-};
+use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
 use ratatui::Frame;
 use std::time::Instant;
 use unicode_width::UnicodeWidthStr;
@@ -454,14 +452,24 @@ impl App {
             },
         );
         f.render_widget(
-            Paragraph::new(Span::styled(
+            Paragraph::new(Line::from(vec![Span::styled(
                 trunc_str(hints, inner_w as usize),
-                Style::default().fg(palette::MUTED),
-            )),
+                Style::default().fg(palette::TEXT),
+            )]))
+            .style(Style::default().bg(palette::FOCUSED)),
             Rect {
                 x: ix,
                 y: footer_y + 1,
                 width: inner_w,
+                height: 1,
+            },
+        );
+        f.render_widget(
+            Paragraph::new(Span::raw(" ")).style(Style::default().bg(palette::FOCUSED)),
+            Rect {
+                x: sidebar.x + sidebar.width - 1,
+                y: footer_y + 1,
+                width: 1,
                 height: 1,
             },
         );
@@ -476,30 +484,41 @@ impl App {
     /// Overlay a thin scroll indicator on a sidebar's right border column when
     /// its content doesn't fit `content.height`. Reuses the existing border
     /// column instead of reserving a dedicated width for a scrollbar.
+    ///
+    /// The thumb position/length are computed directly (rather than via
+    /// ratatui's `Scrollbar` widget) because that widget's math assumes
+    /// `position` can reach `content_length - 1` (list-style scrolling to the
+    /// last item); our `scroll` is a paragraph offset clamped to
+    /// `total - visible`, which is smaller whenever `total > visible + 1` and
+    /// left the thumb short of the track's bottom.
     pub(super) fn render_sidebar_scrollbar(f: &mut Frame, content: Rect, total: usize, scroll: usize) {
-        let visible = content.height as usize;
-        if content.height == 0 || total <= visible {
+        let track_len = content.height as usize;
+        let visible = track_len;
+        if track_len == 0 || total <= visible {
             return;
         }
-        let track = Rect {
-            x: content.x + content.width,
-            y: content.y,
-            width: 1,
-            height: content.height,
-        };
         let max_offset = total - visible;
-        let mut state = ScrollbarState::new(total).position(scroll.min(max_offset));
-        f.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .thumb_symbol("\u{2590}")
-                .track_symbol(Some(" "))
-                .begin_symbol(None)
-                .end_symbol(None)
-                .style(Style::default().fg(palette::OVERLAY))
-                .thumb_style(Style::default().fg(palette::PINE)),
-            track,
-            &mut state,
-        );
+        let thumb_len = (track_len * visible / total).clamp(1, track_len);
+        let max_thumb_start = track_len - thumb_len;
+        let thumb_start = scroll.min(max_offset) * max_thumb_start / max_offset;
+        let x = content.x + content.width;
+        for row in 0..track_len {
+            let is_thumb = row >= thumb_start && row < thumb_start + thumb_len;
+            let (sym, style) = if is_thumb {
+                ("\u{2590}", Style::default().fg(palette::PINE))
+            } else {
+                ("\u{2502}", Style::default().fg(palette::OVERLAY))
+            };
+            f.render_widget(
+                Paragraph::new(Span::styled(sym, style)),
+                Rect {
+                    x,
+                    y: content.y + row as u16,
+                    width: 1,
+                    height: 1,
+                },
+            );
+        }
     }
 
     /// Render one row in a sidebar panel list.
