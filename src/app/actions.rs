@@ -104,7 +104,9 @@ impl App {
             .libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())?;
-        let idx = state.video_cursor.min(state.selected_len().saturating_sub(1));
+        let idx = state
+            .video_cursor
+            .min(state.selected_len().saturating_sub(1));
         let group = state.selected_group_index();
         if group == 0 {
             state.all_items.get(idx).cloned()
@@ -164,8 +166,7 @@ impl App {
             .feed_home_video
             .as_ref()
             .is_some_and(|state| !state.loading);
-        if !ready
-            || !(self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
+        if !ready || !(self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
         {
             return;
         }
@@ -249,8 +250,10 @@ impl App {
                 }
             }
 
-            let folder_ids: HashSet<String> =
-                candidate_folders.iter().map(|folder| folder.id.clone()).collect();
+            let folder_ids: HashSet<String> = candidate_folders
+                .iter()
+                .map(|folder| folder.id.clone())
+                .collect();
             let mut grouped: HashMap<String, Vec<MediaItem>> = HashMap::new();
             for video in &all_items {
                 if folder_ids.is_empty() {
@@ -263,7 +266,9 @@ impl App {
                         return;
                     }
                 };
-                if let Some(folder) = ancestors.iter().find(|ancestor| folder_ids.contains(&ancestor.id))
+                if let Some(folder) = ancestors
+                    .iter()
+                    .find(|ancestor| folder_ids.contains(&ancestor.id))
                 {
                     grouped
                         .entry(folder.id.clone())
@@ -765,7 +770,10 @@ impl App {
             .config
             .feed_view_libraries
             .contains(&lib.library.name.to_lowercase())
-            && lib.nav_stack.first().is_some_and(|lvl| lvl.item_types.is_none())
+            && lib
+                .nav_stack
+                .first()
+                .is_some_and(|lvl| lvl.item_types.is_none())
     }
 
     pub(super) fn ensure_feed_home_video_root_loaded(&mut self, lib_idx: usize) {
@@ -837,6 +845,8 @@ impl App {
     pub(crate) fn is_podcast_library(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         lib.library.item_type == "Channel"
+            || lib.library.collection_type == "podcasts"
+            || lib.library.name.to_lowercase().contains("podcast")
     }
 
     /// Whether the currently focused library tab is a podcast channel.
@@ -1787,7 +1797,8 @@ impl App {
                         .feed_home_video_selected_items(lib_idx)
                         .iter()
                         .position(|i| i.id == item.id);
-                    if let (Some(pos), Some(state)) = (pos, self.libs[lib_idx].feed_home_video.as_mut())
+                    if let (Some(pos), Some(state)) =
+                        (pos, self.libs[lib_idx].feed_home_video.as_mut())
                     {
                         state.video_cursor = pos;
                     }
@@ -3221,11 +3232,7 @@ impl App {
                             .feed_home_video
                             .as_ref()
                             .map(|state| {
-                                (
-                                    state.selected_group,
-                                    state.video_cursor,
-                                    state.video_scroll,
-                                )
+                                (state.selected_group, state.video_cursor, state.video_scroll)
                             })
                             .unwrap_or((0, 0, 0));
                         lib.feed_home_video = Some(FeedHomeVideoState {

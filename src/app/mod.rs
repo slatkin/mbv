@@ -3245,7 +3245,10 @@ pub(crate) mod tests {
         app.ensure_feed_home_video_group_level(0);
         assert_eq!(app.libs[0].nav_stack.len(), 1);
         assert_eq!(app.feed_home_video_selected_items(0).len(), 1);
-        assert_eq!(app.feed_home_video_selected_items(0)[0].path, "/videos/active/ep1.mp4");
+        assert_eq!(
+            app.feed_home_video_selected_items(0)[0].path,
+            "/videos/active/ep1.mp4"
+        );
     }
 
     #[test]
@@ -3363,13 +3366,185 @@ pub(crate) mod tests {
         app.refresh_lib();
 
         assert!(app.libs[0].nav_stack[0].loading);
-        assert!(
-            app.libs[0]
-                .feed_home_video
-                .as_ref()
-                .map(|state| state.loading)
-                .unwrap_or(false)
-        );
+        assert!(app.libs[0]
+            .feed_home_video
+            .as_ref()
+            .map(|state| state.loading)
+            .unwrap_or(false));
+    }
+
+    #[test]
+    fn podcast_library_detects_collection_type() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Podcasts", "CollectionFolder");
+        library.id = "lib-podcasts".into();
+        library.collection_type = "podcasts".into();
+        library.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        assert!(app.is_podcast_library(0));
+    }
+
+    #[test]
+    fn podcast_library_detects_name_when_collection_type_missing() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Podcasts", "CollectionFolder");
+        library.id = "lib-podcasts".into();
+        library.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        assert!(app.is_podcast_library(0));
+    }
+
+    #[test]
+    fn podcast_folder_context_menu_uses_play_labels_and_item_state() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Podcasts", "CollectionFolder");
+        library.id = "lib-podcasts".into();
+        library.collection_type = "podcasts".into();
+        library.is_folder = true;
+
+        let mut show = make_item("Show A", "Folder");
+        show.id = "show-a".into();
+        show.is_folder = true;
+        show.unplayed_item_count = 0;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-podcasts".into(),
+                title: "Podcasts".into(),
+                items: vec![show],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+        app.tab_idx = app.lib_tab_offset();
+
+        app.open_context_menu();
+
+        let menu = app.context_menu.as_ref().expect("context menu");
+        assert!(menu.items.contains(&"Mark Unplayed"));
+        assert!(!menu.items.contains(&"Mark Played"));
+        assert!(!menu.items.contains(&"Mark Watched"));
+        assert!(!menu.items.contains(&"Mark Unwatched"));
+    }
+
+    #[test]
+    fn podcast_folder_context_menu_shows_mark_played_when_unplayed_items_remain() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Podcasts", "CollectionFolder");
+        library.id = "lib-podcasts".into();
+        library.collection_type = "podcasts".into();
+        library.is_folder = true;
+
+        let mut show = make_item("Show A", "Folder");
+        show.id = "show-a".into();
+        show.is_folder = true;
+        show.unplayed_item_count = 3;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-podcasts".into(),
+                title: "Podcasts".into(),
+                items: vec![show],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+        app.tab_idx = app.lib_tab_offset();
+
+        app.open_context_menu();
+
+        let menu = app.context_menu.as_ref().expect("context menu");
+        assert!(menu.items.contains(&"Mark Played"));
+        assert!(!menu.items.contains(&"Mark Unplayed"));
+    }
+
+    #[test]
+    fn power_view_podcast_context_menu_uses_left_pane_library_context() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Podcasts", "CollectionFolder");
+        library.id = "lib-podcasts".into();
+        library.collection_type = "podcasts".into();
+        library.is_folder = true;
+
+        let mut show = make_item("Show A", "Folder");
+        show.id = "show-a".into();
+        show.is_folder = true;
+        show.unplayed_item_count = 0;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-podcasts".into(),
+                title: "Podcasts".into(),
+                items: vec![show],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+        app.tab_idx = 1;
+        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+
+        app.open_context_menu();
+
+        let menu = app.context_menu.as_ref().expect("context menu");
+        assert!(menu.items.contains(&"Mark Unplayed"));
+        assert!(!menu.items.contains(&"Mark Watched"));
+        assert!(!menu.items.contains(&"Mark Unwatched"));
     }
 
     #[test]

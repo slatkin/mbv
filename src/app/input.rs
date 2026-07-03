@@ -16,6 +16,26 @@ use std::time::{Duration, Instant};
 use textwrap::wrap;
 
 impl App {
+    fn context_menu_play_state(&self, item: &MediaItem) -> bool {
+        if item.is_folder {
+            item.unplayed_item_count == 0
+        } else {
+            item.played
+        }
+    }
+
+    fn context_menu_power_lib_idx(&self) -> Option<usize> {
+        if self.tab_idx == 1
+            && self.playlist_view == PLAYLIST_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab > 0
+        {
+            Some(self.power_left_tab - 1)
+        } else {
+            None
+        }
+    }
+
     pub(super) fn tab_count(&self) -> usize {
         2 + self.libs.len() + if self.show_log_tab { 1 } else { 0 }
     }
@@ -2077,12 +2097,21 @@ impl App {
         let cw_focused = self.playlist_view == PLAYLIST_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab == 0;
+        let power_lib_idx = self.context_menu_power_lib_idx();
+        let in_podcast = power_lib_idx.is_some_and(|idx| self.is_podcast_library(idx))
+            || self.is_in_podcast_library();
 
         let current_item = if cw_focused {
             self.home
                 .continue_items
                 .get(self.home.continue_cursor)
                 .cloned()
+        } else if let Some(lib_idx) = power_lib_idx {
+            let saved = self.tab_idx;
+            self.tab_idx = self.lib_tab_offset() + lib_idx;
+            let item = self.current_lib_item();
+            self.tab_idx = saved;
+            item
         } else if self.home_search.is_some() || self.tab_idx == 0 {
             self.current_home_item()
         } else if self.tab_idx == 1 {
@@ -2102,15 +2131,18 @@ impl App {
                 actions.push(ContextAction::ShuffleFolder(item.id.clone()));
                 items.push("Add to Queue");
                 actions.push(ContextAction::EnqueueFolder(Box::new(item.clone())));
-                let (played_label, unplayed_label) = if self.is_in_podcast_library() {
+                let (played_label, unplayed_label) = if in_podcast {
                     ("Mark Played", "Mark Unplayed")
                 } else {
                     ("Mark Watched", "Mark Unwatched")
                 };
-                items.push(played_label);
-                actions.push(ContextAction::MarkPlayed(item.id.clone()));
-                items.push(unplayed_label);
-                actions.push(ContextAction::MarkUnplayed(item.id.clone()));
+                if self.context_menu_play_state(item) {
+                    items.push(unplayed_label);
+                    actions.push(ContextAction::MarkUnplayed(item.id.clone()));
+                } else {
+                    items.push(played_label);
+                    actions.push(ContextAction::MarkPlayed(item.id.clone()));
+                }
                 if self.home_search.is_some() {
                     items.push("Go to Library");
                     actions.push(ContextAction::GoToLibrary(
@@ -2121,22 +2153,25 @@ impl App {
             } else {
                 items.push("Play");
                 actions.push(ContextAction::Play);
-                if cw_focused || self.home_search.is_some() || self.tab_idx != 1 {
+                if cw_focused
+                    || power_lib_idx.is_some()
+                    || self.home_search.is_some()
+                    || self.tab_idx != 1
+                {
                     items.push("Add to Queue");
                     actions.push(ContextAction::Enqueue);
                 }
                 // Audio items (music tracks) don't get mark-played, but podcast
                 // episodes (Audio inside a Channel library) do.
-                let in_podcast = self.is_in_podcast_library();
-                let is_music_audio = (item.media_type == "Audio" || item.item_type == "Audio")
-                    && !in_podcast;
+                let is_music_audio =
+                    (item.media_type == "Audio" || item.item_type == "Audio") && !in_podcast;
                 if !is_music_audio {
                     let (played_label, unplayed_label) = if in_podcast {
                         ("Mark Played", "Mark Unplayed")
                     } else {
                         ("Mark Watched", "Mark Unwatched")
                     };
-                    if item.played {
+                    if self.context_menu_play_state(item) {
                         items.push(unplayed_label);
                         actions.push(ContextAction::MarkUnplayed(item.id.clone()));
                     } else {
