@@ -12,7 +12,9 @@ use crate::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
+use ratatui::widgets::{
+    Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs,
+};
 use ratatui::Frame;
 use std::time::Instant;
 use unicode_width::UnicodeWidthStr;
@@ -469,6 +471,35 @@ impl App {
             width: inner_w,
             height: sidebar.height.saturating_sub(3),
         }
+    }
+
+    /// Overlay a thin scroll indicator on a sidebar's right border column when
+    /// its content doesn't fit `content.height`. Reuses the existing border
+    /// column instead of reserving a dedicated width for a scrollbar.
+    pub(super) fn render_sidebar_scrollbar(f: &mut Frame, content: Rect, total: usize, scroll: usize) {
+        let visible = content.height as usize;
+        if content.height == 0 || total <= visible {
+            return;
+        }
+        let track = Rect {
+            x: content.x + content.width,
+            y: content.y,
+            width: 1,
+            height: content.height,
+        };
+        let max_offset = total - visible;
+        let mut state = ScrollbarState::new(total).position(scroll.min(max_offset));
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .thumb_symbol("\u{2590}")
+                .track_symbol(Some(" "))
+                .begin_symbol(None)
+                .end_symbol(None)
+                .style(Style::default().fg(palette::OVERLAY))
+                .thumb_style(Style::default().fg(palette::PINE)),
+            track,
+            &mut state,
+        );
     }
 
     /// Render one row in a sidebar panel list.

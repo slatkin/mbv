@@ -111,6 +111,7 @@ impl App {
                 ],
             );
         }
+        Self::render_sidebar_scrollbar(f, content, self.playlists.len(), self.playlists_scroll);
     }
 
     fn render_open_playlist_panel(
@@ -229,6 +230,17 @@ impl App {
                 y += 1;
             }
         }
+
+        let total_lines: usize = self
+            .playlists_open_items
+            .iter()
+            .map(|i| item_lines(&i.display_name()))
+            .sum();
+        let lines_before_scroll: usize = self.playlists_open_items[..self.playlists_open_scroll]
+            .iter()
+            .map(|i| item_lines(&i.display_name()))
+            .sum();
+        Self::render_sidebar_scrollbar(f, content, total_lines, lines_before_scroll);
     }
 
     pub(in crate::app::render) fn render_save_playlist_dialog(&mut self, f: &mut Frame) {

@@ -237,5 +237,6 @@ impl App {
             Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)),
             content,
         );
+        Self::render_sidebar_scrollbar(f, content, total, self.settings_scroll);
     }
 }

@@ -169,5 +169,6 @@ impl App {
         let visible = content.height as usize;
         self.help_scroll = self.help_scroll.min(total.saturating_sub(visible) as u16);
         f.render_widget(Paragraph::new(lines).scroll((self.help_scroll, 0)), content);
+        Self::render_sidebar_scrollbar(f, content, total, self.help_scroll as usize);
     }
 }
