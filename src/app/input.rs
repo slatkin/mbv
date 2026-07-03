@@ -2155,6 +2155,16 @@ impl App {
         let context_lib_idx = self.context_menu_lib_idx();
         let in_podcast = power_lib_idx.is_some_and(|idx| self.is_podcast_library(idx))
             || self.is_in_podcast_library();
+        let podcast_bulk_ids = context_lib_idx.and_then(|lib_idx| {
+            if in_podcast && self.is_feed_home_video_group_view(lib_idx) {
+                Some((
+                    self.podcast_mark_all_ids(lib_idx),
+                    self.podcast_mark_all_unplayed_ids(lib_idx),
+                ))
+            } else {
+                None
+            }
+        });
 
         let current_item = if cw_focused {
             self.home
@@ -2253,29 +2263,6 @@ impl App {
                         );
                     }
                 }
-                if let Some(lib_idx) = context_lib_idx {
-                    if in_podcast && self.is_feed_home_video_group_view(lib_idx) {
-                        let played_ids = self.podcast_mark_all_ids(lib_idx);
-                        let unplayed_ids = self.podcast_mark_all_unplayed_ids(lib_idx);
-                        if !played_ids.is_empty() || !unplayed_ids.is_empty() {
-                            Self::push_context_separator(&mut entries);
-                        }
-                        if !played_ids.is_empty() {
-                            Self::push_context_action(
-                                &mut entries,
-                                "Mark All Played",
-                                ContextAction::MarkItemsPlayed(played_ids),
-                            );
-                        }
-                        if !unplayed_ids.is_empty() {
-                            Self::push_context_action(
-                                &mut entries,
-                                "Mark All Unplayed",
-                                ContextAction::MarkItemsUnplayed(unplayed_ids),
-                            );
-                        }
-                    }
-                }
                 if cw_focused
                     || (self.home_search.is_none() && self.tab_idx == 0 && self.home.section == 0)
                 {
@@ -2303,6 +2290,22 @@ impl App {
                         ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()),
                     );
                 }
+            }
+        }
+
+        if let Some((played_ids, unplayed_ids)) = podcast_bulk_ids {
+            if !played_ids.is_empty() || !unplayed_ids.is_empty() {
+                Self::push_context_separator(&mut entries);
+                Self::push_context_action(
+                    &mut entries,
+                    "Mark All Played",
+                    ContextAction::MarkItemsPlayed(played_ids),
+                );
+                Self::push_context_action(
+                    &mut entries,
+                    "Mark All Unplayed",
+                    ContextAction::MarkItemsUnplayed(unplayed_ids),
+                );
             }
         }
 

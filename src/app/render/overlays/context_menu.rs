@@ -4,6 +4,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::{Block, BorderType, Borders, Clear, List, ListItem};
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 impl App {
     pub(in crate::app::render) fn render_context_menu(&mut self, f: &mut Frame) {
@@ -14,7 +15,7 @@ impl App {
         let width = (menu
             .entries
             .iter()
-            .map(|entry| entry.label.len())
+            .map(|entry| UnicodeWidthStr::width(entry.label))
             .max()
             .unwrap_or(4)
             + 4) as u16;

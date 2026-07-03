@@ -497,9 +497,9 @@ pub struct App {
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
     power_left_area: Rect, // rendered area of the left panel (for mouse click / page calc)
     power_queue_area: Rect,
-    power_cursor_screen_y: Option<u16>,      // screen Y of focused item in library panel (set by renderer)
+    power_cursor_screen_y: Option<u16>, // screen Y of focused item in library panel (set by renderer)
     power_queue_cursor_screen_y: Option<u16>, // screen Y of focused item in queue panel (set by renderer)
-    power_inline_image_rect: Option<Rect>,    // bounding rect of inline poster image in detail/episode views
+    power_inline_image_rect: Option<Rect>, // bounding rect of inline poster image in detail/episode views
     power_queue_scope_local_area: Rect,
     power_queue_scope_remote_area: Rect,
     power_queue_scroll: usize,
@@ -3668,6 +3668,9 @@ pub(crate) mod tests {
             .unwrap();
         assert!(sep_idx < all_played_idx);
         assert!(all_played_idx < all_unplayed_idx);
+        assert_eq!(sep_idx, labels.len() - 3);
+        assert_eq!(all_played_idx, labels.len() - 2);
+        assert_eq!(all_unplayed_idx, labels.len() - 1);
         assert!(menu.entries.iter().any(|entry| {
             matches!(
                 entry.action.as_ref(),
@@ -3748,11 +3751,21 @@ pub(crate) mod tests {
         app.open_context_menu();
 
         let menu = app.context_menu.as_ref().expect("context menu");
+        let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+        assert_eq!(labels[labels.len() - 3], "────────");
+        assert_eq!(labels[labels.len() - 2], "Mark All Played");
+        assert_eq!(labels[labels.len() - 1], "Mark All Unplayed");
         assert!(menu.entries.iter().any(|entry| {
             matches!(
                 entry.action.as_ref(),
                 Some(ContextAction::MarkItemsPlayed(ids))
                     if ids == &vec!["ep-1".to_string(), "ep-2".to_string()]
+            )
+        }));
+        assert!(menu.entries.iter().any(|entry| {
+            matches!(
+                entry.action.as_ref(),
+                Some(ContextAction::MarkItemsUnplayed(ids)) if ids.is_empty()
             )
         }));
     }
