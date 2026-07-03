@@ -804,7 +804,6 @@ impl App {
 
     fn handle_lib_key(&mut self, key: KeyEvent) -> bool {
         let lib_idx = self.tab_idx - self.lib_tab_offset();
-        let alt = key.modifiers.contains(KeyModifiers::ALT);
 
         match key.code {
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -875,8 +874,7 @@ impl App {
                 self.confirm_rescan = true;
             }
             KeyCode::Char('r') => self.refresh_lib(),
-            KeyCode::Char('o') if alt => self.open_context_menu(),
-            KeyCode::Char('o') if !alt => self.open_context_menu(),
+            KeyCode::Char('.') => self.open_context_menu(),
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);
                 if idx < self.tab_count() {
@@ -960,7 +958,7 @@ impl App {
                 }
                 return false;
             }
-            KeyCode::Char('o') => {
+            KeyCode::Char('.') => {
                 self.open_context_menu();
                 return false;
             }
@@ -1218,7 +1216,7 @@ impl App {
                 self.power_cw_toggle_watched();
                 true
             }
-            KeyCode::Char('o') => {
+            KeyCode::Char('.') => {
                 self.open_context_menu();
                 true
             }
@@ -1404,7 +1402,7 @@ impl App {
                         | KeyCode::Backspace => true,
                         KeyCode::Char('/') => true,
                         KeyCode::Char('q') => true,
-                        KeyCode::Char('o') => true,
+                        KeyCode::Char('.') => true,
                         KeyCode::Char('r') => true,
                         KeyCode::Char('1'..='9') => true,
                         KeyCode::Char(_)
@@ -1602,7 +1600,7 @@ impl App {
                     self.spawn_navigate_to_item(item_id, item_type, libs);
                 }
             }
-            KeyCode::Char('o') => {
+            KeyCode::Char('.') => {
                 self.open_context_menu();
             }
             KeyCode::Char('/') => {
@@ -1632,7 +1630,7 @@ impl App {
             {
                 self.playlist_group = !self.playlist_group;
             }
-            KeyCode::Char('.') => {
+            KeyCode::Char('p') => {
                 let (active, current_idx) = {
                     let s = self.player.status.lock().unwrap();
                     (s.active, s.current_idx)
@@ -2104,9 +2102,14 @@ impl App {
                 actions.push(ContextAction::ShuffleFolder(item.id.clone()));
                 items.push("Add to Queue");
                 actions.push(ContextAction::EnqueueFolder(Box::new(item.clone())));
-                items.push("Mark Watched");
+                let (played_label, unplayed_label) = if self.is_in_podcast_library() {
+                    ("Mark Played", "Mark Unplayed")
+                } else {
+                    ("Mark Watched", "Mark Unwatched")
+                };
+                items.push(played_label);
                 actions.push(ContextAction::MarkPlayed(item.id.clone()));
-                items.push("Mark Unwatched");
+                items.push(unplayed_label);
                 actions.push(ContextAction::MarkUnplayed(item.id.clone()));
                 if self.home_search.is_some() {
                     items.push("Go to Library");
@@ -2122,13 +2125,22 @@ impl App {
                     items.push("Add to Queue");
                     actions.push(ContextAction::Enqueue);
                 }
-                let is_audio = item.media_type == "Audio" || item.item_type == "Audio";
-                if !is_audio {
+                // Audio items (music tracks) don't get mark-played, but podcast
+                // episodes (Audio inside a Channel library) do.
+                let in_podcast = self.is_in_podcast_library();
+                let is_music_audio = (item.media_type == "Audio" || item.item_type == "Audio")
+                    && !in_podcast;
+                if !is_music_audio {
+                    let (played_label, unplayed_label) = if in_podcast {
+                        ("Mark Played", "Mark Unplayed")
+                    } else {
+                        ("Mark Watched", "Mark Unwatched")
+                    };
                     if item.played {
-                        items.push("Mark Unwatched");
+                        items.push(unplayed_label);
                         actions.push(ContextAction::MarkUnplayed(item.id.clone()));
                     } else {
-                        items.push("Mark Watched");
+                        items.push(played_label);
                         actions.push(ContextAction::MarkPlayed(item.id.clone()));
                     }
                 }

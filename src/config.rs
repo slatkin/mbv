@@ -53,7 +53,7 @@ impl Default for Config {
             username: String::new(),
             password: String::new(),
             api_key: String::new(),
-            hidden_libraries: vec!["live tv".into(), "podcasts".into()],
+            hidden_libraries: vec!["live tv".into()],
             hidden_latest: vec![],
             show_audio_window: false,
             use_mpv_config: false,
@@ -403,7 +403,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
                 .map(|s| s.to_lowercase())
                 .collect()
         })
-        .unwrap_or_else(|| vec!["live tv".into(), "podcasts".into()]);
+        .unwrap_or_else(|| vec!["live tv".into()]);
 
     let hidden_latest: Vec<String> = general
         .and_then(|m| m.get("hidden_latest"))
@@ -912,7 +912,7 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
     fn parse_missing_server_section_returns_default() {
         let cfg = parse_config("[mpv]\nshow_audio_window = false").unwrap();
         assert_eq!(cfg.server_url, "");
-        assert_eq!(cfg.hidden_libraries, vec!["live tv", "podcasts"]);
+        assert_eq!(cfg.hidden_libraries, vec!["live tv"]);
     }
 
     #[test]
@@ -988,7 +988,7 @@ hidden_libraries = ["Live TV", "MOVIES"]
     fn parse_default_hidden_libraries_when_absent() {
         let toml = "[server]\nurl = \"http://host\"";
         let cfg = parse_config(toml).unwrap();
-        assert_eq!(cfg.hidden_libraries, vec!["live tv", "podcasts"]);
+        assert_eq!(cfg.hidden_libraries, vec!["live tv"]);
     }
 
     #[test]

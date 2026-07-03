@@ -57,7 +57,7 @@ impl App {
             mk("PgUp / PgDn", "Page scroll"),
             mk("Home / End", "First/last item"),
             mk("Enter", "Select/Play/Open"),
-            mk("o", "Context menu"),
+            mk(".", "Context menu"),
             mk("c", "Clear Queue"),
             mk("q", "Quit"),
             blank(),
@@ -76,7 +76,7 @@ impl App {
         ];
         let sec_queue = vec![
             section("[queue]"),
-            mk(".", "Jump to playing item"),
+            mk("p", "Jump to playing item"),
             mk("i", "Go to item in library"),
             mk("Del", "Remove from Queue"),
             mk("Ctrl+Z", "Undo removal"),

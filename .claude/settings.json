@@ -1,8 +1,5 @@
 {
   "permissions": {
-    "allow": [ ],
-    "additionalDirectories": [
-      "/home/slatkin/.claude"
-    ]
+    "allow": [ ]
   }
 }

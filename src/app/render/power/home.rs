@@ -61,16 +61,13 @@ fn feed_added_date(date_added: &str) -> String {
         .unwrap_or_else(|| date_added.to_string())
 }
 
-/// Maximum number of overview (description) lines shown per item.
-const MAX_OVERVIEW_LINES: u16 = 3;
-
 fn home_video_item_height(item: &crate::api::MediaItem, text_w: usize) -> u16 {
     if item.overview.is_empty() || text_w == 0 {
         3 // title + meta + separator
     } else {
         let ov_text = trunc_overview(&item.overview);
         let lines = wrap(&ov_text, text_w).len() as u16;
-        3 + lines.min(MAX_OVERVIEW_LINES) // title + meta + overview lines + separator
+        3 + lines // title + meta + overview lines + separator
     }
 }
 
@@ -175,7 +172,7 @@ fn render_home_video_item(
             palette::MUTED
         };
         let ov_style = Style::default().fg(ov_color);
-        for (li, line) in wrapped.iter().enumerate().take(MAX_OVERVIEW_LINES as usize) {
+        for (li, line) in wrapped.iter().enumerate() {
             let ly = row_y + 2 + li as u16;
             if ly >= content_area.y + content_area.height {
                 break;
