@@ -110,9 +110,15 @@ enum ContextAction {
     MarkPlayed(String),
     MarkItemsPlayed(Vec<String>),
     MarkUnplayed(String),
+    MarkItemsUnplayed(Vec<String>),
     RemoveFromContinueWatching,
     RemoveFromPlaylist(usize),
     GoToLibrary(String, String), // (item_id, item_type)
+}
+
+struct ContextMenuEntry {
+    label: &'static str,
+    action: Option<ContextAction>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -132,9 +138,35 @@ struct MultiSelectPopup {
 struct ContextMenu {
     x: u16,
     y: u16,
-    items: Vec<&'static str>,
-    actions: Vec<ContextAction>,
+    entries: Vec<ContextMenuEntry>,
     cursor: usize,
+}
+
+impl ContextMenu {
+    fn first_selectable(entries: &[ContextMenuEntry]) -> usize {
+        entries
+            .iter()
+            .position(|entry| entry.action.is_some())
+            .unwrap_or(0)
+    }
+
+    fn move_cursor(&mut self, delta: i64) {
+        if self.entries.is_empty() {
+            return;
+        }
+        let mut idx = self.cursor as i64;
+        loop {
+            let next = idx + delta;
+            if next < 0 || next >= self.entries.len() as i64 {
+                return;
+            }
+            idx = next;
+            if self.entries[idx as usize].action.is_some() {
+                self.cursor = idx as usize;
+                return;
+            }
+        }
+    }
 }
 
 struct LibSearch {
@@ -3452,10 +3484,11 @@ pub(crate) mod tests {
         app.open_context_menu();
 
         let menu = app.context_menu.as_ref().expect("context menu");
-        assert!(menu.items.contains(&"Mark Unplayed"));
-        assert!(!menu.items.contains(&"Mark Played"));
-        assert!(!menu.items.contains(&"Mark Watched"));
-        assert!(!menu.items.contains(&"Mark Unwatched"));
+        let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+        assert!(labels.contains(&"Mark Unplayed"));
+        assert!(!labels.contains(&"Mark Played"));
+        assert!(!labels.contains(&"Mark Watched"));
+        assert!(!labels.contains(&"Mark Unwatched"));
     }
 
     #[test]
@@ -3497,8 +3530,9 @@ pub(crate) mod tests {
         app.open_context_menu();
 
         let menu = app.context_menu.as_ref().expect("context menu");
-        assert!(menu.items.contains(&"Mark Played"));
-        assert!(!menu.items.contains(&"Mark Unplayed"));
+        let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+        assert!(labels.contains(&"Mark Played"));
+        assert!(!labels.contains(&"Mark Unplayed"));
     }
 
     #[test]
@@ -3543,9 +3577,10 @@ pub(crate) mod tests {
         app.open_context_menu();
 
         let menu = app.context_menu.as_ref().expect("context menu");
-        assert!(menu.items.contains(&"Mark Unplayed"));
-        assert!(!menu.items.contains(&"Mark Watched"));
-        assert!(!menu.items.contains(&"Mark Unwatched"));
+        let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+        assert!(labels.contains(&"Mark Unplayed"));
+        assert!(!labels.contains(&"Mark Watched"));
+        assert!(!labels.contains(&"Mark Unwatched"));
     }
 
     #[test]
@@ -3606,9 +3641,35 @@ pub(crate) mod tests {
         app.open_context_menu();
 
         let menu = app.context_menu.as_ref().expect("context menu");
-        assert!(menu.items.contains(&"Mark All Played"));
-        assert!(menu.actions.iter().any(|action| {
-            matches!(action, ContextAction::MarkItemsPlayed(ids) if ids == &vec!["ep-1".to_string()])
+        let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+        assert!(labels.contains(&"────────"));
+        assert!(labels.contains(&"Mark All Played"));
+        assert!(labels.contains(&"Mark All Unplayed"));
+        let sep_idx = labels
+            .iter()
+            .position(|label| *label == "────────")
+            .unwrap();
+        let all_played_idx = labels
+            .iter()
+            .position(|label| *label == "Mark All Played")
+            .unwrap();
+        let all_unplayed_idx = labels
+            .iter()
+            .position(|label| *label == "Mark All Unplayed")
+            .unwrap();
+        assert!(sep_idx < all_played_idx);
+        assert!(all_played_idx < all_unplayed_idx);
+        assert!(menu.entries.iter().any(|entry| {
+            matches!(
+                entry.action.as_ref(),
+                Some(ContextAction::MarkItemsPlayed(ids)) if ids == &vec!["ep-1".to_string()]
+            )
+        }));
+        assert!(menu.entries.iter().any(|entry| {
+            matches!(
+                entry.action.as_ref(),
+                Some(ContextAction::MarkItemsUnplayed(ids)) if ids == &vec!["ep-2".to_string()]
+            )
         }));
     }
 
@@ -3678,8 +3739,12 @@ pub(crate) mod tests {
         app.open_context_menu();
 
         let menu = app.context_menu.as_ref().expect("context menu");
-        assert!(menu.actions.iter().any(|action| {
-            matches!(action, ContextAction::MarkItemsPlayed(ids) if ids == &vec!["ep-1".to_string(), "ep-2".to_string()])
+        assert!(menu.entries.iter().any(|entry| {
+            matches!(
+                entry.action.as_ref(),
+                Some(ContextAction::MarkItemsPlayed(ids))
+                    if ids == &vec!["ep-1".to_string(), "ep-2".to_string()]
+            )
         }));
     }
 

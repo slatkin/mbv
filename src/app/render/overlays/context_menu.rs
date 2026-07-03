@@ -11,8 +11,14 @@ impl App {
             self.context_menu_rect = None;
             return;
         };
-        let width = (menu.items.iter().map(|s| s.len()).max().unwrap_or(4) + 4) as u16;
-        let height = menu.items.len() as u16 + 2;
+        let width = (menu
+            .entries
+            .iter()
+            .map(|entry| entry.label.len())
+            .max()
+            .unwrap_or(4)
+            + 4) as u16;
+        let height = menu.entries.len() as u16 + 2;
         let full = f.area();
         let x = menu.x.min(full.width.saturating_sub(width));
         let y = menu.y.min(full.height.saturating_sub(height));
@@ -32,16 +38,18 @@ impl App {
             rect,
         );
         let list_items: Vec<ListItem> = menu
-            .items
+            .entries
             .iter()
             .enumerate()
-            .map(|(i, &label)| {
-                let style = if i == menu.cursor {
+            .map(|(i, entry)| {
+                let style = if entry.action.is_none() {
+                    Style::default().fg(palette::SUBTLE)
+                } else if i == menu.cursor {
                     Style::default().fg(palette::BASE).bg(palette::IRIS)
                 } else {
                     Style::default().fg(palette::TEXT)
                 };
-                ListItem::new(format!(" {label} ")).style(style)
+                ListItem::new(format!(" {} ", entry.label)).style(style)
             })
             .collect();
         let inner = Rect {

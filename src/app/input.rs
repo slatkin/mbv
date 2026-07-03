@@ -60,6 +60,38 @@ impl App {
         ids
     }
 
+    fn podcast_mark_all_unplayed_ids(&self, lib_idx: usize) -> Vec<String> {
+        let mut ids = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for item in self.feed_home_video_selected_items(lib_idx) {
+            if item.is_folder || !item.played {
+                continue;
+            }
+            if seen.insert(item.id.clone()) {
+                ids.push(item.id);
+            }
+        }
+        ids
+    }
+
+    fn push_context_action(
+        entries: &mut Vec<super::ContextMenuEntry>,
+        label: &'static str,
+        action: ContextAction,
+    ) {
+        entries.push(super::ContextMenuEntry {
+            label,
+            action: Some(action),
+        });
+    }
+
+    fn push_context_separator(entries: &mut Vec<super::ContextMenuEntry>) {
+        entries.push(super::ContextMenuEntry {
+            label: "────────",
+            action: None,
+        });
+    }
+
     pub(super) fn tab_count(&self) -> usize {
         2 + self.libs.len() + if self.show_log_tab { 1 } else { 0 }
     }
@@ -822,22 +854,21 @@ impl App {
             }
             KeyCode::Up => {
                 if let Some(m) = &mut self.context_menu {
-                    if m.cursor > 0 {
-                        m.cursor -= 1;
-                    }
+                    m.move_cursor(-1);
                 }
             }
             KeyCode::Down => {
                 if let Some(m) = &mut self.context_menu {
-                    if m.cursor + 1 < m.items.len() {
-                        m.cursor += 1;
-                    }
+                    m.move_cursor(1);
                 }
             }
             KeyCode::Enter => {
                 if let Some(m) = self.context_menu.take() {
                     self.force_clear = true;
-                    let action = m.actions.get(m.cursor).cloned();
+                    let action = m
+                        .entries
+                        .get(m.cursor)
+                        .and_then(|entry| entry.action.clone());
                     self.execute_context_action(action);
                 }
             }
@@ -2115,8 +2146,7 @@ impl App {
     }
 
     pub(super) fn open_context_menu(&mut self) {
-        let mut items: Vec<&'static str> = vec![];
-        let mut actions: Vec<ContextAction> = vec![];
+        let mut entries: Vec<super::ContextMenuEntry> = vec![];
 
         let cw_focused = self.playlist_view == PLAYLIST_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left)
@@ -2150,41 +2180,54 @@ impl App {
 
         if let Some(ref item) = current_item {
             if item.is_folder {
-                items.push("Play All");
-                actions.push(ContextAction::PlayFolder(item.id.clone()));
-                items.push("Shuffle");
-                actions.push(ContextAction::ShuffleFolder(item.id.clone()));
-                items.push("Add to Queue");
-                actions.push(ContextAction::EnqueueFolder(Box::new(item.clone())));
+                Self::push_context_action(
+                    &mut entries,
+                    "Play All",
+                    ContextAction::PlayFolder(item.id.clone()),
+                );
+                Self::push_context_action(
+                    &mut entries,
+                    "Shuffle",
+                    ContextAction::ShuffleFolder(item.id.clone()),
+                );
+                Self::push_context_action(
+                    &mut entries,
+                    "Add to Queue",
+                    ContextAction::EnqueueFolder(Box::new(item.clone())),
+                );
                 let (played_label, unplayed_label) = if in_podcast {
                     ("Mark Played", "Mark Unplayed")
                 } else {
                     ("Mark Watched", "Mark Unwatched")
                 };
                 if self.context_menu_play_state(item) {
-                    items.push(unplayed_label);
-                    actions.push(ContextAction::MarkUnplayed(item.id.clone()));
+                    Self::push_context_action(
+                        &mut entries,
+                        unplayed_label,
+                        ContextAction::MarkUnplayed(item.id.clone()),
+                    );
                 } else {
-                    items.push(played_label);
-                    actions.push(ContextAction::MarkPlayed(item.id.clone()));
+                    Self::push_context_action(
+                        &mut entries,
+                        played_label,
+                        ContextAction::MarkPlayed(item.id.clone()),
+                    );
                 }
                 if self.home_search.is_some() {
-                    items.push("Go to Library");
-                    actions.push(ContextAction::GoToLibrary(
-                        item.id.clone(),
-                        item.item_type.clone(),
-                    ));
+                    Self::push_context_action(
+                        &mut entries,
+                        "Go to Library",
+                        ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()),
+                    );
                 }
             } else {
-                items.push("Play");
-                actions.push(ContextAction::Play);
+                Self::push_context_action(&mut entries, "Play", ContextAction::Play);
                 if cw_focused
                     || power_lib_idx.is_some()
                     || self.home_search.is_some()
                     || self.tab_idx != 1
                 {
-                    items.push("Add to Queue");
-                    actions.push(ContextAction::Enqueue);
+                    Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
                 }
                 // Audio items (music tracks) don't get mark-played, but podcast
                 // episodes (Audio inside a Channel library) do.
@@ -2197,49 +2240,73 @@ impl App {
                         ("Mark Watched", "Mark Unwatched")
                     };
                     if self.context_menu_play_state(item) {
-                        items.push(unplayed_label);
-                        actions.push(ContextAction::MarkUnplayed(item.id.clone()));
+                        Self::push_context_action(
+                            &mut entries,
+                            unplayed_label,
+                            ContextAction::MarkUnplayed(item.id.clone()),
+                        );
                     } else {
-                        items.push(played_label);
-                        actions.push(ContextAction::MarkPlayed(item.id.clone()));
+                        Self::push_context_action(
+                            &mut entries,
+                            played_label,
+                            ContextAction::MarkPlayed(item.id.clone()),
+                        );
                     }
                 }
                 if let Some(lib_idx) = context_lib_idx {
                     if in_podcast && self.is_feed_home_video_group_view(lib_idx) {
-                        let item_ids = self.podcast_mark_all_ids(lib_idx);
-                        if !item_ids.is_empty() {
-                            items.push("Mark All Played");
-                            actions.push(ContextAction::MarkItemsPlayed(item_ids));
+                        let played_ids = self.podcast_mark_all_ids(lib_idx);
+                        let unplayed_ids = self.podcast_mark_all_unplayed_ids(lib_idx);
+                        if !played_ids.is_empty() || !unplayed_ids.is_empty() {
+                            Self::push_context_separator(&mut entries);
+                        }
+                        if !played_ids.is_empty() {
+                            Self::push_context_action(
+                                &mut entries,
+                                "Mark All Played",
+                                ContextAction::MarkItemsPlayed(played_ids),
+                            );
+                        }
+                        if !unplayed_ids.is_empty() {
+                            Self::push_context_action(
+                                &mut entries,
+                                "Mark All Unplayed",
+                                ContextAction::MarkItemsUnplayed(unplayed_ids),
+                            );
                         }
                     }
                 }
                 if cw_focused
                     || (self.home_search.is_none() && self.tab_idx == 0 && self.home.section == 0)
                 {
-                    items.push("Remove from Continue Watching");
-                    actions.push(ContextAction::RemoveFromContinueWatching);
+                    Self::push_context_action(
+                        &mut entries,
+                        "Remove from Continue Watching",
+                        ContextAction::RemoveFromContinueWatching,
+                    );
                 }
                 if !cw_focused
                     && self.home_search.is_none()
                     && self.tab_idx == 1
                     && self.displayed_queue_scope() == QueueScope::Local
                 {
-                    items.push("Remove from Playlist");
-                    actions.push(ContextAction::RemoveFromPlaylist(
-                        self.player_tab.playlist_cursor,
-                    ));
+                    Self::push_context_action(
+                        &mut entries,
+                        "Remove from Playlist",
+                        ContextAction::RemoveFromPlaylist(self.player_tab.playlist_cursor),
+                    );
                 }
                 if self.home_search.is_some() || self.tab_idx == 1 {
-                    items.push("Go to Library");
-                    actions.push(ContextAction::GoToLibrary(
-                        item.id.clone(),
-                        item.item_type.clone(),
-                    ));
+                    Self::push_context_action(
+                        &mut entries,
+                        "Go to Library",
+                        ContextAction::GoToLibrary(item.id.clone(), item.item_type.clone()),
+                    );
                 }
             }
         }
 
-        if items.is_empty() {
+        if entries.iter().all(|entry| entry.action.is_none()) {
             return;
         }
 
@@ -2247,9 +2314,8 @@ impl App {
         self.context_menu = Some(ContextMenu {
             x,
             y,
-            items,
-            actions,
-            cursor: 0,
+            cursor: ContextMenu::first_selectable(&entries),
+            entries,
         });
     }
 
@@ -3006,20 +3072,22 @@ impl App {
                             let inner_y = rect.y + 1;
                             if row >= inner_y
                                 && (row - inner_y)
-                                    < self.context_menu.as_ref().unwrap().items.len() as u16
+                                    < self.context_menu.as_ref().unwrap().entries.len() as u16
                             {
                                 let idx = (row - inner_y) as usize;
                                 let action = self
                                     .context_menu
                                     .as_ref()
                                     .unwrap()
-                                    .actions
+                                    .entries
                                     .get(idx)
-                                    .cloned();
-                                self.context_menu = None;
-                                self.context_menu_rect = None;
-                                self.force_clear = true;
-                                self.execute_context_action(action);
+                                    .and_then(|entry| entry.action.clone());
+                                if action.is_some() {
+                                    self.context_menu = None;
+                                    self.context_menu_rect = None;
+                                    self.force_clear = true;
+                                    self.execute_context_action(action);
+                                }
                             } else {
                                 self.context_menu = None;
                                 self.force_clear = true;
@@ -3298,7 +3366,7 @@ impl App {
                     let inner_y = rect.y + 1;
                     if rect.contains((col, row).into()) && row >= inner_y {
                         let idx = (row - inner_y) as usize;
-                        if idx < menu.items.len() {
+                        if idx < menu.entries.len() && menu.entries[idx].action.is_some() {
                             menu.cursor = idx;
                         }
                     }

@@ -2024,6 +2024,7 @@ impl App {
             Some(ContextAction::MarkPlayed(id)) => self.context_set_played(&id, true),
             Some(ContextAction::MarkItemsPlayed(ids)) => self.context_set_many_played(&ids),
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
+            Some(ContextAction::MarkItemsUnplayed(ids)) => self.context_set_many_unplayed(&ids),
             Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
             Some(ContextAction::RemoveFromPlaylist(pos)) => self.remove_from_playlist(pos),
             Some(ContextAction::GoToLibrary(item_id, item_type)) => {
@@ -2050,6 +2051,18 @@ impl App {
         let result = item_ids
             .iter()
             .try_for_each(|item_id| client.mark_played(item_id));
+        drop(client);
+        match result {
+            Ok(()) => self.refresh_lib(),
+            Err(e) => self.flash_status_high(format!("Error: {e}")),
+        }
+    }
+
+    fn context_set_many_unplayed(&mut self, item_ids: &[String]) {
+        let client = self.client.lock().unwrap();
+        let result = item_ids
+            .iter()
+            .try_for_each(|item_id| client.mark_unplayed(item_id));
         drop(client);
         match result {
             Ok(()) => self.refresh_lib(),
