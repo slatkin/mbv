@@ -216,19 +216,23 @@ impl App {
         let mut content_area = area;
         self.power_left_area = content_area;
 
-        let (items, cursor) = {
+        let (items, cursor, total_count) = {
             let lib = &self.libs[lib_idx];
             match lib.nav_stack.last() {
-                Some(lvl) => (lvl.items.clone(), lvl.cursor),
+                // `total_count` is Emby's TotalRecordCount, not `items.len()` --
+                // with lazy pagination `items` may only hold a subset of the
+                // library until the user scrolls further.
+                Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.total_count),
                 None => return,
             }
         };
 
         let n = items.len();
 
-        // Item count label (matches render_power_list style).
+        // Item count label (matches render_power_list style). Uses the
+        // server-reported total, not `n`, for the reason above.
         if focused && content_area.height > 0 {
-            let count_label = format!(" {} items", n);
+            let count_label = format!(" {} items", total_count);
             f.render_widget(
                 Paragraph::new(Span::styled(
                     count_label,

@@ -27,28 +27,37 @@ impl App {
         // Store for click / page-size calculations.
         self.power_left_area = content_area;
 
-        // Gather items, cursor, and stored scroll offset from the appropriate source.
-        let (items, cursor, stored_scroll) = if self.power_left_tab == 0 {
+        // Gather items, cursor, stored scroll offset, and the *true* library total
+        // (not just how many pages have been fetched so far) from the appropriate
+        // source.
+        let (items, cursor, stored_scroll, total_count) = if self.power_left_tab == 0 {
             let items = self.home.continue_items.clone();
             let cursor = self.home.continue_cursor.min(items.len().saturating_sub(1));
-            (items, cursor, 0usize)
+            let total = items.len();
+            (items, cursor, 0usize, total)
         } else {
             let lib_idx = self.power_left_tab - 1;
             let lib = &self.libs[lib_idx];
-            let (items, cur, scroll) = if let Some(s) = &lib.search {
+            let (items, cur, scroll, total) = if let Some(s) = &lib.search {
                 let items: Vec<crate::api::MediaItem> = s
                     .results
                     .iter()
                     .filter_map(|&i| s.items.get(i).cloned())
                     .collect();
-                (items, s.cursor, s.scroll)
+                // Search results are already the full locally-filtered match set,
+                // not paginated, so their length is already the true total.
+                let total = items.len();
+                (items, s.cursor, s.scroll, total)
             } else {
                 match lib.nav_stack.last() {
-                    Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll),
-                    None => (vec![], 0, 0),
+                    // `total_count` comes from Emby's TotalRecordCount, not
+                    // `items.len()` -- with lazy pagination `items` may only hold
+                    // a subset of the library until the user scrolls further.
+                    Some(lvl) => (lvl.items.clone(), lvl.cursor, lvl.scroll, lvl.total_count),
+                    None => (vec![], 0, 0, 0),
                 }
             };
-            (items, cur, scroll)
+            (items, cur, scroll, total)
         };
 
         // When at the album level of a music library, group albums under artist headers.
@@ -61,7 +70,10 @@ impl App {
         let n = items.len();
 
         // Letter grouping: applies to non-music library lists with 50+ items (not during search).
-        let use_letter_groups = !show_grouped && self.power_left_tab > 0 && n >= 50 && {
+        // Gated on the true library total, not the fetched-so-far count, so the
+        // grouping style (ranges vs. individual letters) doesn't change out from
+        // under the user as more pages lazily load in.
+        let use_letter_groups = !show_grouped && self.power_left_tab > 0 && total_count >= 50 && {
             let lib_idx = self.power_left_tab - 1;
             self.libs[lib_idx].library.collection_type != "music"
                 && self.libs[lib_idx].search.is_none()
@@ -103,7 +115,7 @@ impl App {
                     search_area,
                 );
             } else if !has_search {
-                let count_label = format!(" {} items", n);
+                let count_label = format!(" {} items", total_count);
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         count_label,
@@ -324,7 +336,7 @@ impl App {
             let mut last_bucket = String::new();
             for &idx in &sorted_indices {
                 let item = &items[idx];
-                let bucket = letter_bucket(item, n);
+                let bucket = letter_bucket(item, total_count);
                 if bucket != last_bucket {
                     if !last_bucket.is_empty() {
                         display_rows.push(DisplayRow::Spacer);
