@@ -389,9 +389,9 @@ impl App {
     ) -> Rect {
         let sidebar = Rect {
             x: full.x,
-            y: full.y,
+            y: full.y + 2,
             width: width.min(full.width),
-            height: full.height,
+            height: full.height.saturating_sub(2),
         };
         f.render_widget(Clear, sidebar);
         f.render_widget(
