@@ -9,4 +9,4 @@ Relevant information about the project is in .serena/memories. If you have acces
 - Any live Emby API calls (curl, item lookups, endpoint research) must be done inside an `emby-research` subagent, not in the main thread.
 - When a bug fix does not resolve the issue, do NOT suspect user error. Assume the fix is wrong or incomplete and investigate the code further.
 - See docs/CHECKIN.md for pre-commit steps.
-- See docs/RELEASE.md for the full release checklist.
+- For releases, run `scripts/release.sh X.Y.Z "one-line summary"` instead of reading a separate release checklist.
