@@ -2022,6 +2022,7 @@ impl App {
             }
             Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),
             Some(ContextAction::MarkPlayed(id)) => self.context_set_played(&id, true),
+            Some(ContextAction::MarkItemsPlayed(ids)) => self.context_set_many_played(&ids),
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
             Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
             Some(ContextAction::RemoveFromPlaylist(pos)) => self.remove_from_playlist(pos),
@@ -2041,6 +2042,18 @@ impl App {
                 self.spawn_navigate_to_item(item_id, item_type, libs);
             }
             None => {}
+        }
+    }
+
+    fn context_set_many_played(&mut self, item_ids: &[String]) {
+        let client = self.client.lock().unwrap();
+        let result = item_ids
+            .iter()
+            .try_for_each(|item_id| client.mark_played(item_id));
+        drop(client);
+        match result {
+            Ok(()) => self.refresh_lib(),
+            Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
     }
 

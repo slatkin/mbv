@@ -108,6 +108,7 @@ enum ContextAction {
     Enqueue,
     EnqueueFolder(Box<MediaItem>),
     MarkPlayed(String),
+    MarkItemsPlayed(Vec<String>),
     MarkUnplayed(String),
     RemoveFromContinueWatching,
     RemoveFromPlaylist(usize),
@@ -3545,6 +3546,141 @@ pub(crate) mod tests {
         assert!(menu.items.contains(&"Mark Unplayed"));
         assert!(!menu.items.contains(&"Mark Watched"));
         assert!(!menu.items.contains(&"Mark Unwatched"));
+    }
+
+    #[test]
+    fn power_view_podcast_context_menu_offers_mark_all_played_for_selected_show() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Podcasts", "CollectionFolder");
+        library.id = "lib-podcasts".into();
+        library.collection_type = "podcasts".into();
+        library.is_folder = true;
+
+        let mut show = make_item("Show A", "Folder");
+        show.id = "show-a".into();
+        show.is_folder = true;
+
+        let mut first = make_item("Episode 1", "Audio");
+        first.id = "ep-1".into();
+        first.media_type = "Audio".into();
+        let mut second = make_item("Episode 2", "Audio");
+        second.id = "ep-2".into();
+        second.media_type = "Audio".into();
+        second.played = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-podcasts".into(),
+                title: "Podcasts".into(),
+                items: vec![show.clone()],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: Some(FeedHomeVideoState {
+                all_items: vec![first.clone(), second.clone()],
+                groups: vec![FeedHomeVideoGroup {
+                    folder: show,
+                    items: vec![first.clone(), second],
+                }],
+                loading: false,
+                selected_group: 1,
+                ..FeedHomeVideoState::default()
+            }),
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+        app.tab_idx = 1;
+        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+
+        app.open_context_menu();
+
+        let menu = app.context_menu.as_ref().expect("context menu");
+        assert!(menu.items.contains(&"Mark All Played"));
+        assert!(menu.actions.iter().any(|action| {
+            matches!(action, ContextAction::MarkItemsPlayed(ids) if ids == &vec!["ep-1".to_string()])
+        }));
+    }
+
+    #[test]
+    fn power_view_podcast_context_menu_mark_all_played_uses_all_pill_selection() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Podcasts", "CollectionFolder");
+        library.id = "lib-podcasts".into();
+        library.collection_type = "podcasts".into();
+        library.is_folder = true;
+
+        let mut first_show = make_item("Show A", "Folder");
+        first_show.id = "show-a".into();
+        first_show.is_folder = true;
+        let mut second_show = make_item("Show B", "Folder");
+        second_show.id = "show-b".into();
+        second_show.is_folder = true;
+
+        let mut first = make_item("Episode 1", "Audio");
+        first.id = "ep-1".into();
+        first.media_type = "Audio".into();
+        let mut second = make_item("Episode 2", "Audio");
+        second.id = "ep-2".into();
+        second.media_type = "Audio".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-podcasts".into(),
+                title: "Podcasts".into(),
+                items: vec![first_show.clone(), second_show.clone()],
+                total_count: 2,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: Some(FeedHomeVideoState {
+                all_items: vec![first.clone(), second.clone()],
+                groups: vec![
+                    FeedHomeVideoGroup {
+                        folder: first_show,
+                        items: vec![first.clone()],
+                    },
+                    FeedHomeVideoGroup {
+                        folder: second_show,
+                        items: vec![second.clone()],
+                    },
+                ],
+                loading: false,
+                selected_group: 0,
+                ..FeedHomeVideoState::default()
+            }),
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+        app.tab_idx = 1;
+        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+
+        app.open_context_menu();
+
+        let menu = app.context_menu.as_ref().expect("context menu");
+        assert!(menu.actions.iter().any(|action| {
+            matches!(action, ContextAction::MarkItemsPlayed(ids) if ids == &vec!["ep-1".to_string(), "ep-2".to_string()])
+        }));
     }
 
     #[test]

@@ -36,6 +36,30 @@ impl App {
         }
     }
 
+    fn context_menu_lib_idx(&self) -> Option<usize> {
+        if let Some(lib_idx) = self.context_menu_power_lib_idx() {
+            Some(lib_idx)
+        } else if self.tab_idx >= self.lib_tab_offset() && self.tab_idx != self.log_tab_idx() {
+            Some(self.tab_idx - self.lib_tab_offset())
+        } else {
+            None
+        }
+    }
+
+    fn podcast_mark_all_ids(&self, lib_idx: usize) -> Vec<String> {
+        let mut ids = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        for item in self.feed_home_video_selected_items(lib_idx) {
+            if item.is_folder || item.played {
+                continue;
+            }
+            if seen.insert(item.id.clone()) {
+                ids.push(item.id);
+            }
+        }
+        ids
+    }
+
     pub(super) fn tab_count(&self) -> usize {
         2 + self.libs.len() + if self.show_log_tab { 1 } else { 0 }
     }
@@ -2098,6 +2122,7 @@ impl App {
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab == 0;
         let power_lib_idx = self.context_menu_power_lib_idx();
+        let context_lib_idx = self.context_menu_lib_idx();
         let in_podcast = power_lib_idx.is_some_and(|idx| self.is_podcast_library(idx))
             || self.is_in_podcast_library();
 
@@ -2177,6 +2202,15 @@ impl App {
                     } else {
                         items.push(played_label);
                         actions.push(ContextAction::MarkPlayed(item.id.clone()));
+                    }
+                }
+                if let Some(lib_idx) = context_lib_idx {
+                    if in_podcast && self.is_feed_home_video_group_view(lib_idx) {
+                        let item_ids = self.podcast_mark_all_ids(lib_idx);
+                        if !item_ids.is_empty() {
+                            items.push("Mark All Played");
+                            actions.push(ContextAction::MarkItemsPlayed(item_ids));
+                        }
                     }
                 }
                 if cw_focused
