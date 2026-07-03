@@ -884,15 +884,19 @@ impl App {
                 }
             }
             KeyCode::Char('/') => {
-                let (items, needs_full_load) = self.libs[lib_idx]
-                    .nav_stack
-                    .last()
-                    .map(|l| {
-                        let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
-                        let needs = l.all_items.is_none() && l.items.len() < l.total_count;
-                        (all, needs)
-                    })
-                    .unwrap_or_default();
+                let (items, needs_full_load) = if self.is_feed_home_video_group_view(lib_idx) {
+                    (self.feed_home_video_selected_items(lib_idx), false)
+                } else {
+                    self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .map(|l| {
+                            let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
+                            let needs = l.all_items.is_none() && l.items.len() < l.total_count;
+                            (all, needs)
+                        })
+                        .unwrap_or_default()
+                };
                 let n = items.len();
                 self.libs[lib_idx].search = Some(LibSearch {
                     query: String::new(),
@@ -2390,6 +2394,7 @@ impl App {
                     } else {
                         None
                     };
+                    let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
                     let lib = &mut self.libs[lib_idx];
                     if let Some(s) = &mut lib.search {
                         let visible = la.height as usize;
@@ -2401,6 +2406,45 @@ impl App {
                         let clicked = offset + click_y;
                         if clicked < s.results.len() {
                             s.cursor = clicked;
+                        }
+                    } else if is_feed_group {
+                        let visible = la.height as usize;
+                        if let Some(state) = lib.feed_home_video.as_mut() {
+                            if use_row_map {
+                                if let Some(Some(item_idx)) = row_map_item {
+                                    let items_len = if state.selected_group == 0 {
+                                        state.all_items.len()
+                                    } else {
+                                        state
+                                            .groups
+                                            .get(state.selected_group - 1)
+                                            .map(|group| group.items.len())
+                                            .unwrap_or(0)
+                                    };
+                                    if item_idx < items_len {
+                                        state.video_cursor = item_idx;
+                                    }
+                                }
+                            } else {
+                                let offset = if state.video_cursor >= visible {
+                                    state.video_cursor - visible + 1
+                                } else {
+                                    0
+                                };
+                                let clicked = offset + click_y;
+                                let items_len = if state.selected_group == 0 {
+                                    state.all_items.len()
+                                } else {
+                                    state
+                                        .groups
+                                        .get(state.selected_group - 1)
+                                        .map(|group| group.items.len())
+                                        .unwrap_or(0)
+                                };
+                                if clicked < items_len {
+                                    state.video_cursor = clicked;
+                                }
+                            }
                         }
                     } else if let Some(lvl) = lib.nav_stack.last_mut() {
                         if use_row_map {

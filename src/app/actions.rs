@@ -15,6 +15,35 @@ use std::time::{Duration, Instant};
 type BrowseRefresh = (usize, String, Option<String>, bool, String, String, usize);
 
 impl App {
+    fn log_feed_home_video_state(&self, lib_idx: usize, context: &str) {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            log::debug!(target: "feedhv", "{context}: lib_idx={lib_idx} missing");
+            return;
+        };
+        let root = lib.nav_stack.first();
+        let feed = lib.feed_home_video.as_ref();
+        log::debug!(
+            target: "feedhv",
+            "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} root_cursor={} search={} detail={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
+            lib.library.name,
+            lib.nav_stack.len(),
+            root.map(|lvl| lvl.parent_id.as_str()).unwrap_or(""),
+            root.map(|lvl| lvl.items.len()).unwrap_or(0),
+            root.map(|lvl| lvl.loading).unwrap_or(false),
+            root.map(|lvl| lvl.cursor).unwrap_or(0),
+            lib.search.is_some(),
+            lib.power_detail_item.is_some(),
+            feed.is_some(),
+            feed.map(|state| state.loading).unwrap_or(false),
+            feed.map(|state| state.selected_group).unwrap_or(0),
+            feed.map(|state| state.groups.len()).unwrap_or(0),
+            feed.map(|state| state.all_items.len()).unwrap_or(0),
+            feed.map(|state| state.video_cursor).unwrap_or(0),
+            feed.map(|state| state.video_scroll).unwrap_or(0),
+            self.is_feed_home_video_group_view(lib_idx),
+        );
+    }
+
     fn feed_home_video_visible_group_count(&self, lib_idx: usize) -> usize {
         self.libs
             .get(lib_idx)
@@ -23,84 +52,95 @@ impl App {
             .unwrap_or(0)
     }
 
-    fn push_feed_home_video_level_from_cache(&mut self, lib_idx: usize, group_idx: usize) -> bool {
-        let Some(lib) = self.libs.get(lib_idx) else {
-            return false;
-        };
-        let Some(root) = lib.nav_stack.first() else {
-            return false;
-        };
-        let Some(state) = lib.feed_home_video.as_ref() else {
-            return false;
-        };
-        let (parent_id, title, items) = if group_idx == 0 {
-            (
-                root.parent_id.clone(),
-                root.title.clone(),
-                state.all_items.clone(),
-            )
-        } else {
-            let Some(group) = state.groups.get(group_idx - 1) else {
-                return false;
-            };
-            (
-                group.folder.id.clone(),
-                group.folder.name.clone(),
-                group.items.clone(),
-            )
-        };
-        let level = BrowseLevel {
-            parent_id,
-            title,
-            total_count: items.len(),
-            cursor: 0,
-            scroll: 0,
-            items: items.clone(),
-            item_types: Some("Video".into()),
-            unplayed_only: true,
-            sort_by: "DateCreated".into(),
-            sort_order: "Ascending".into(),
-            loading: false,
-            all_items: Some(items),
-        };
-        if let Some(lib) = self.libs.get_mut(lib_idx) {
-            lib.nav_stack.truncate(1);
-            lib.nav_stack.push(level);
-            return true;
-        }
-        false
+    fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
+        self.libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+            .map(|state| state.selected_group.min(state.groups.len()))
+            .unwrap_or(0)
     }
 
-    fn push_feed_home_video_loading_level(&mut self, lib_idx: usize) {
-        let Some(lib) = self.libs.get_mut(lib_idx) else {
+    pub(super) fn feed_home_video_selected_items(&self, lib_idx: usize) -> Vec<MediaItem> {
+        let Some(state) = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())
+        else {
+            return Vec::new();
+        };
+        let selected_group = state.selected_group.min(state.groups.len());
+        if selected_group == 0 {
+            state.all_items.clone()
+        } else {
+            state
+                .groups
+                .get(selected_group - 1)
+                .map(|group| group.items.clone())
+                .unwrap_or_default()
+        }
+    }
+
+    fn feed_home_video_selected_parent_id(&self, lib_idx: usize) -> Option<String> {
+        let lib = self.libs.get(lib_idx)?;
+        let root = lib.nav_stack.first()?;
+        let state = lib.feed_home_video.as_ref()?;
+        let selected_group = state.selected_group.min(state.groups.len());
+        if selected_group == 0 {
+            Some(root.parent_id.clone())
+        } else {
+            state
+                .groups
+                .get(selected_group - 1)
+                .map(|group| group.folder.id.clone())
+        }
+    }
+
+    pub(super) fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<MediaItem> {
+        let state = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_ref())?;
+        let items = self.feed_home_video_selected_items(lib_idx);
+        items.get(state.video_cursor.min(items.len().saturating_sub(1)))
+            .cloned()
+    }
+
+    fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
+        let items_len = self.feed_home_video_selected_items(lib_idx).len();
+        if let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        {
+            state.selected_group = state.selected_group.min(state.groups.len());
+            if items_len == 0 {
+                state.video_cursor = 0;
+                state.video_scroll = 0;
+            } else {
+                state.video_cursor = state.video_cursor.min(items_len.saturating_sub(1));
+                state.video_scroll = state.video_scroll.min(state.video_cursor);
+            }
+        }
+    }
+
+    fn remove_item_from_feed_home_video_cache(&mut self, lib_idx: usize, item_id: &str) {
+        let Some(state) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.feed_home_video.as_mut())
+        else {
             return;
         };
-        let Some(root) = lib.nav_stack.first() else {
-            return;
-        };
-        let level = BrowseLevel {
-            parent_id: root.parent_id.clone(),
-            title: root.title.clone(),
-            items: vec![],
-            total_count: 0,
-            cursor: 0,
-            item_types: Some("Video".into()),
-            unplayed_only: true,
-            sort_by: "DateCreated".into(),
-            sort_order: "Ascending".into(),
-            loading: true,
-            scroll: 0,
-            all_items: None,
-        };
-        lib.nav_stack.truncate(1);
-        lib.nav_stack.push(level);
+        state.all_items.retain(|item| item.id != item_id);
+        for group in &mut state.groups {
+            group.items.retain(|item| item.id != item_id);
+        }
+        state.groups.retain(|group| !group.items.is_empty());
+        self.clamp_feed_home_video_state(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "remove_from_cache");
     }
 
     pub(super) fn ensure_feed_home_video_group_level(&mut self, lib_idx: usize) {
-        // Cheap checks first: this runs every render frame, so avoid the
-        // mutex-locking `is_feed_home_video_library` check (and any further
-        // work) once the group level is already pushed (nav_stack.len() != 1
-        // covers the common steady-state case).
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
@@ -110,19 +150,12 @@ impl App {
         let ready = lib
             .feed_home_video
             .as_ref()
-            .is_some_and(|state| !state.loading && !state.all_items.is_empty());
+            .is_some_and(|state| !state.loading);
         if !ready || !self.is_feed_home_video_library(lib_idx) {
             return;
         }
-        // `cur` doubles as the selected group index (0 = "all", 1..=n = per-folder
-        // groups; see select_feed_folder_group). Clamp it to the freshly
-        // aggregated group count so a stale cursor from a previous aggregation
-        // run (which may have had more groups) can't make the cache lookup
-        // fail and leave the view stuck showing the raw folder list forever.
-        let n = self.feed_home_video_visible_group_count(lib_idx);
-        let cur = self.libs[lib_idx].nav_stack[0].cursor.min(n);
-        self.libs[lib_idx].nav_stack[0].cursor = cur;
-        self.push_feed_home_video_level_from_cache(lib_idx, cur);
+        self.clamp_feed_home_video_state(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "ensure_group_level");
     }
 
     /// Common guard for kicking off `spawn_feed_home_video_aggregate` once a
@@ -304,6 +337,17 @@ impl App {
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
 
+        if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
+            let n = self.feed_home_video_selected_items(lib_idx).len();
+            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                if n > 0 {
+                    state.video_cursor =
+                        (state.video_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                }
+            }
+            return;
+        }
+
         // In power view with letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
         if self.playlist_view == PLAYLIST_VIEW_POWER && !self.power_left_sorted_indices.is_empty() {
@@ -351,6 +395,16 @@ impl App {
     pub(super) fn jump_lib_cursor(&mut self, to_end: bool) {
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
+
+        if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
+            let n = self.feed_home_video_selected_items(lib_idx).len();
+            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                if n > 0 {
+                    state.video_cursor = if to_end { n - 1 } else { 0 };
+                }
+            }
+            return;
+        }
 
         // In power view with letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
@@ -529,6 +583,9 @@ impl App {
             if let Some(s) = &lib.search {
                 let idx = *s.results.get(s.cursor)?;
                 return s.items.get(idx).cloned();
+            }
+            if self.is_feed_home_video_group_view(self.tab_idx - self.lib_tab_offset()) {
+                return self.selected_feed_home_video_item(self.tab_idx - self.lib_tab_offset());
             }
             let lvl = lib.nav_stack.last()?;
             lvl.items.get(lvl.cursor).cloned()
@@ -739,9 +796,10 @@ impl App {
             "SortName".into(),
             "Ascending".into(),
         );
+        self.log_feed_home_video_state(lib_idx, "root_reload");
     }
 
-    fn is_feed_home_video_library(&self, lib_idx: usize) -> bool {
+    pub(crate) fn is_feed_home_video_library(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
         if lib.library.collection_type != "homevideos" {
             return false;
@@ -754,21 +812,20 @@ impl App {
     }
 
     pub(super) fn select_feed_folder_group(&mut self, lib_idx: usize, group_idx: usize) {
-        let stack_len = self.libs[lib_idx].nav_stack.len();
-        if stack_len < 1 {
+        if self.libs[lib_idx].nav_stack.is_empty() {
             return;
         }
         let n = self.feed_home_video_visible_group_count(lib_idx);
         if group_idx > n {
             return;
         }
-        if let Some(root_lvl) = self.libs[lib_idx].nav_stack.first_mut() {
-            root_lvl.cursor = group_idx;
+        if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+            state.selected_group = group_idx;
+            state.video_cursor = 0;
+            state.video_scroll = 0;
         }
-        if self.push_feed_home_video_level_from_cache(lib_idx, group_idx) {
-            return;
-        }
-        self.push_feed_home_video_loading_level(lib_idx);
+        self.clamp_feed_home_video_state(lib_idx);
+        self.log_feed_home_video_state(lib_idx, "select_group");
     }
 
     pub(super) fn switch_feed_folder_group(&mut self, lib_idx: usize, delta: i64) {
@@ -776,12 +833,7 @@ impl App {
         if n == 0 {
             return;
         }
-        let cur = self
-            .libs
-            .get(lib_idx)
-            .and_then(|lib| lib.nav_stack.first())
-            .map(|lvl| lvl.cursor)
-            .unwrap_or(0);
+        let cur = self.feed_home_video_selected_group_index(lib_idx);
         let next = (cur as i64 + delta).rem_euclid(n as i64) as usize;
         self.select_feed_folder_group(lib_idx, next);
     }
@@ -1581,7 +1633,16 @@ impl App {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
             if self.libs[lib_idx].search.is_some() {
                 self.libs[lib_idx].search = None;
-                if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                if self.is_feed_home_video_group_view(lib_idx) {
+                    let pos = self
+                        .feed_home_video_selected_items(lib_idx)
+                        .iter()
+                        .position(|i| i.id == item.id);
+                    if let (Some(pos), Some(state)) = (pos, self.libs[lib_idx].feed_home_video.as_mut())
+                    {
+                        state.video_cursor = pos;
+                    }
+                } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
                         lvl.cursor = pos;
                     }
@@ -1624,11 +1685,15 @@ impl App {
             }
             let autoload = self.client.lock().unwrap().config.autoload;
             if autoload {
-                if let Some(parent_id) = self.libs[lib_idx]
-                    .nav_stack
-                    .last()
-                    .map(|l| l.parent_id.clone())
-                {
+                let parent_id = if self.is_feed_home_video_group_view(lib_idx) {
+                    self.feed_home_video_selected_parent_id(lib_idx)
+                } else {
+                    self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .map(|l| l.parent_id.clone())
+                };
+                if let Some(parent_id) = parent_id {
                     let client = self.client.lock().unwrap();
                     match client.get_direct_playable(&parent_id) {
                         Ok(mut siblings) => {
@@ -1841,7 +1906,17 @@ impl App {
                         None
                     };
                     if let Some(lib_idx) = lib_idx_opt {
-                        if let Some(lvl) = self
+                        if self.is_feed_home_video_group_view(lib_idx) {
+                            if let Some(state) = self
+                                .libs
+                                .get_mut(lib_idx)
+                                .and_then(|lib| lib.feed_home_video.as_mut())
+                            {
+                                state.loading = true;
+                            }
+                            self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
+                            self.log_feed_home_video_state(lib_idx, "context_set_played_feed");
+                        } else if let Some(lvl) = self
                             .libs
                             .get_mut(lib_idx)
                             .and_then(|l| l.nav_stack.last_mut())
@@ -1925,7 +2000,13 @@ impl App {
             Ok(()) => {
                 if !item.played {
                     let lib_idx = self.tab_idx - self.lib_tab_offset();
-                    if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
+                    if self.is_feed_home_video_group_view(lib_idx) {
+                        if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                            state.loading = true;
+                        }
+                        self.remove_item_from_feed_home_video_cache(lib_idx, &item.id);
+                        self.log_feed_home_video_state(lib_idx, "toggle_watched_feed");
+                    } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                         if lvl.unplayed_only {
                             lvl.items.remove(lvl.cursor);
                             lvl.total_count = lvl.total_count.saturating_sub(1);
@@ -1940,10 +2021,22 @@ impl App {
     }
 
     pub(super) fn refresh_lib(&mut self) {
-        if self.tab_idx <= 1 || self.tab_idx == self.log_tab_idx() {
+        let lib_idx = if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
+            self.tab_idx - self.lib_tab_offset()
+        } else if self.playlist_view == PLAYLIST_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab > 0
+        {
+            self.power_left_tab - 1
+        } else {
             return;
+        };
+        if self.is_feed_home_video_group_view(lib_idx) {
+            if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                state.loading = true;
+            }
         }
-        let lib_idx = self.tab_idx - self.lib_tab_offset();
+        self.log_feed_home_video_state(lib_idx, "refresh_lib_before_spawn");
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             lvl.loading = true;
             let parent_id = lvl.parent_id.clone();
@@ -2175,6 +2268,21 @@ impl App {
 
     pub(super) fn refresh_after_stop(&mut self) {
         let _ = self.fetch_home();
+        if self.last_played_completed {
+            if let Some(ref item_id) = self.last_played_item_id.clone() {
+                for lib_idx in 0..self.libs.len() {
+                    if self.is_feed_home_video_group_view(lib_idx)
+                        || self.is_feed_home_video_library(lib_idx)
+                    {
+                        self.remove_item_from_feed_home_video_cache(lib_idx, item_id);
+                        if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                            state.loading = true;
+                        }
+                        self.log_feed_home_video_state(lib_idx, "refresh_after_stop_completed");
+                    }
+                }
+            }
+        }
         let fetches: Vec<BrowseRefresh> = self
             .libs
             .iter()
@@ -2505,6 +2613,8 @@ impl App {
                     let _ = tx.send(LibEvent::Refreshed {
                         lib_idx,
                         parent_id,
+                        item_types,
+                        unplayed_only,
                         items,
                         total_count,
                     });
@@ -2797,6 +2907,7 @@ impl App {
                     root.item_types.is_none() && !root.unplayed_only
                 });
                 if should_aggregate_feed {
+                    self.log_feed_home_video_state(lib_idx, "loaded_before_aggregate");
                     self.spawn_feed_home_video_aggregate(lib_idx);
                 }
 
@@ -2837,6 +2948,7 @@ impl App {
                 let should_aggregate_feed =
                     self.should_aggregate_feed(lib_idx, |root| root.parent_id == parent_id);
                 if should_aggregate_feed {
+                    self.log_feed_home_video_state(lib_idx, "page_appended_before_aggregate");
                     self.spawn_feed_home_video_aggregate(lib_idx);
                 }
                 self.maybe_fetch_next_page(lib_idx);
@@ -2844,13 +2956,18 @@ impl App {
             LibEvent::Refreshed {
                 lib_idx,
                 parent_id,
+                item_types,
+                unplayed_only,
                 items,
                 total_count,
             } => {
                 let is_album = self.is_album_level(lib_idx);
+                let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
+                    && item_types.as_deref() == Some("Video")
+                    && unplayed_only;
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if let Some(last) = lib.nav_stack.last_mut() {
-                        if last.parent_id == parent_id {
+                        if last.parent_id == parent_id && !is_feed_video_refresh {
                             last.items = items;
                             last.total_count = total_count;
                             last.loading = false;
@@ -2871,6 +2988,30 @@ impl App {
                             sort_episodes(&mut last.items);
                         }
                     }
+                }
+                let should_refresh_feed_groups = self
+                    .libs
+                    .get(lib_idx)
+                    .map(|lib| {
+                        self.playlist_view == PLAYLIST_VIEW_POWER
+                            && self.power_left_tab == lib_idx + 1
+                            && self.is_feed_home_video_library(lib_idx)
+                            && lib
+                                .nav_stack
+                                .first()
+                                .is_some_and(BrowseLevel::is_fully_loaded)
+                    })
+                    .unwrap_or(false);
+                if should_refresh_feed_groups {
+                    if let Some(state) = self
+                        .libs
+                        .get_mut(lib_idx)
+                        .and_then(|lib| lib.feed_home_video.as_mut())
+                    {
+                        state.loading = true;
+                    }
+                    self.log_feed_home_video_state(lib_idx, "refreshed_before_aggregate");
+                    self.spawn_feed_home_video_aggregate(lib_idx);
                 }
                 self.spawn_all_items_prefetch(lib_idx);
             }
@@ -2916,50 +3057,29 @@ impl App {
                         .map(|root| root.parent_id == parent_id)
                         .unwrap_or(false)
                     {
+                        let (selected_group, video_cursor, video_scroll) = lib
+                            .feed_home_video
+                            .as_ref()
+                            .map(|state| {
+                                (
+                                    state.selected_group,
+                                    state.video_cursor,
+                                    state.video_scroll,
+                                )
+                            })
+                            .unwrap_or((0, 0, 0));
                         lib.feed_home_video = Some(FeedHomeVideoState {
                             all_items,
                             groups,
                             loading: false,
+                            selected_group,
+                            video_cursor,
+                            video_scroll,
                         });
                     }
                 }
-                let selected_group = self
-                    .libs
-                    .get(lib_idx)
-                    .map(|lib| {
-                        let max_cursor = lib
-                            .feed_home_video
-                            .as_ref()
-                            .map(|state| state.groups.len())
-                            .unwrap_or(0);
-                        lib.nav_stack
-                            .first()
-                            .map(|root| root.cursor.min(max_cursor))
-                            .unwrap_or(0)
-                    })
-                    .unwrap_or(0);
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if let Some(root) = lib.nav_stack.first_mut() {
-                        root.cursor = selected_group;
-                    }
-                }
-                let is_feed_selection = self
-                    .libs
-                    .get(lib_idx)
-                    .map(|lib| {
-                        lib.nav_stack.len() > 1
-                            && lib
-                                .nav_stack
-                                .last()
-                                .map(|last| {
-                                    last.item_types.as_deref() == Some("Video") && last.unplayed_only
-                                })
-                                .unwrap_or(false)
-                    })
-                    .unwrap_or(false);
-                if is_feed_selection {
-                    let _ = self.push_feed_home_video_level_from_cache(lib_idx, selected_group);
-                }
+                self.clamp_feed_home_video_state(lib_idx);
+                self.log_feed_home_video_state(lib_idx, "aggregated");
             }
             LibEvent::AlbumYearFetched { album_id, year } => {
                 self.album_year_loading.remove(&album_id);
@@ -3588,17 +3708,13 @@ impl App {
         }
     }
 
-    pub(super) fn fetch_home(&mut self) -> Result<(), String> {
-        let client = self.client.lock().unwrap();
-
-        self.home.continue_items = client.get_continue_watching(10).unwrap_or_default();
-
-        let all_views = client.get_views()?;
+    pub(super) fn rebuild_library_tabs_from_views(&mut self, all_views: &[MediaItem]) {
         // Drain existing libs, preserving nav stacks, the pinned detail item, and scroll pos
         // so that a UserDataChanged websocket refresh (fired when playback starts) doesn't
         // silently dismiss the movie detail panel.
         struct SavedLibState {
             nav_stack: Vec<BrowseLevel>,
+            feed_home_video: Option<FeedHomeVideoState>,
             detail_item: Option<crate::api::MediaItem>,
             detail_scroll: usize,
         }
@@ -3610,6 +3726,7 @@ impl App {
                     l.library.id.clone(),
                     SavedLibState {
                         nav_stack: std::mem::take(&mut l.nav_stack),
+                        feed_home_video: l.feed_home_video,
                         detail_item: l.power_detail_item,
                         detail_scroll: l.power_detail_scroll,
                     },
@@ -3643,13 +3760,14 @@ impl App {
                         .collect()
                 })
                 .unwrap_or_default();
+            let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
             let detail_item = saved.and_then(|s| s.detail_item.clone());
             let detail_scroll = saved.map(|s| s.detail_scroll).unwrap_or(0);
             self.libs.push(super::LibraryTab {
                 library: view.clone(),
                 nav_stack: stack,
                 search: None,
-                feed_home_video: None,
+                feed_home_video,
                 power_detail_item: detail_item,
                 power_detail_scroll: detail_scroll,
             });
@@ -3659,6 +3777,20 @@ impl App {
         self.layout_lib_row_heights.resize_with(n, Vec::new);
         self.layout_lib_table_area
             .resize(n, ratatui::layout::Rect::default());
+    }
+
+    pub(super) fn fetch_home(&mut self) -> Result<(), String> {
+        let (continue_items, all_views, user_views) = {
+            let client = self.client.lock().unwrap();
+            (
+                client.get_continue_watching(10).unwrap_or_default(),
+                client.get_views()?,
+                client.get_user_views().unwrap_or_default(),
+            )
+        };
+
+        self.home.continue_items = continue_items;
+        self.rebuild_library_tabs_from_views(&all_views);
 
         let old_cursors: HashMap<String, usize> = self
             .home
@@ -3667,8 +3799,8 @@ impl App {
             .map(|(_, lib_id, _, cur)| (lib_id.clone(), *cur))
             .collect();
 
-        let user_views = client.get_user_views().unwrap_or_default();
         let mut latest: Vec<(String, String, Vec<MediaItem>, usize)> = Vec::new();
+        let client = self.client.lock().unwrap();
         for v in user_views.iter().filter(|v| {
             let lower = v.name.to_lowercase();
             v.collection_type != "playlists"

@@ -329,17 +329,44 @@ impl App {
         }
         let lib_idx = self.power_left_tab.saturating_sub(1);
         let has_detail = self.power_left_tab > 0 && self.libs[lib_idx].power_detail_item.is_some();
+        let is_feed_library = self.power_left_tab > 0 && self.is_feed_home_video_library(lib_idx);
+        let is_feed_group = self.power_left_tab > 0 && self.is_feed_home_video_group_view(lib_idx);
+        let is_music_group = self.power_left_tab > 0 && self.is_music_group_view(lib_idx);
+        let is_album = self.power_left_tab > 0 && self.is_album_level(lib_idx);
+        let is_series = self.power_left_tab > 0 && self.is_series_view(lib_idx);
+        let is_home_video = self.power_left_tab > 0 && self.is_home_video_view(lib_idx);
+        if is_feed_library && !has_detail && !is_feed_group {
+            let lib = &self.libs[lib_idx];
+            let feed = lib.feed_home_video.as_ref();
+            log::debug!(
+                target: "feedhv",
+                "render_branch_non_feed: lib_idx={lib_idx} nav_len={} search={} detail={} feed_present={} feed_loading={} groups={} all_items={} selected_group={} video_cursor={} music_group={} album={} series={} home_video={}",
+                lib.nav_stack.len(),
+                lib.search.is_some(),
+                lib.power_detail_item.is_some(),
+                feed.is_some(),
+                feed.map(|state| state.loading).unwrap_or(false),
+                feed.map(|state| state.groups.len()).unwrap_or(0),
+                feed.map(|state| state.all_items.len()).unwrap_or(0),
+                feed.map(|state| state.selected_group).unwrap_or(0),
+                feed.map(|state| state.video_cursor).unwrap_or(0),
+                is_music_group,
+                is_album,
+                is_series,
+                is_home_video,
+            );
+        }
         if has_detail {
             self.render_power_detail(f, area, lib_idx, focused);
-        } else if self.power_left_tab > 0 && self.is_feed_home_video_group_view(lib_idx) {
+        } else if is_feed_group {
             self.render_power_feed_home_video_group_view(f, area, lib_idx, focused);
-        } else if self.power_left_tab > 0 && self.is_music_group_view(lib_idx) {
+        } else if is_music_group {
             self.render_power_music_group_view(f, area, lib_idx, focused);
-        } else if self.power_left_tab > 0 && self.is_album_level(lib_idx) {
+        } else if is_album {
             self.render_power_album_detail(f, area, lib_idx, focused);
-        } else if self.power_left_tab > 0 && self.is_series_view(lib_idx) {
+        } else if is_series {
             self.render_power_episode_detail(f, area, lib_idx, focused);
-        } else if self.power_left_tab > 0 && self.is_home_video_view(lib_idx) {
+        } else if is_home_video {
             self.render_power_home_video_list(f, area, lib_idx, focused);
         } else {
             self.render_power_list(f, area, focused);

@@ -159,17 +159,20 @@ impl App {
         {
             // Home video / feed library: show the selected item's thumbnail.
             let lib_idx = self.power_left_tab - 1;
-            let (item_id, series_id) = {
+            let item = if self.is_feed_home_video_group_view(lib_idx) {
+                self.selected_feed_home_video_item(lib_idx)
+            } else {
                 let lib = &self.libs[lib_idx];
                 let lvl = match lib.nav_stack.last() {
                     Some(l) => l,
                     None => return (0, false),
                 };
-                match lvl.items.get(lvl.cursor) {
-                    Some(item) => (item.id.clone(), item.series_id.clone()),
-                    None => return (0, false),
-                }
+                lvl.items.get(lvl.cursor).cloned()
             };
+            let Some(item) = item else {
+                return (0, false);
+            };
+            let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
             let cache_key = format!("{}:pwr_hv", item_id);
             self.fetch_card_image(
                 cache_key.clone(),

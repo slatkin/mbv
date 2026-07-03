@@ -353,24 +353,18 @@ impl App {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let selected_group = root_level.cursor.min(groups.len());
-        let (items, cursor, stored_scroll, loading) = if self.libs[lib_idx].nav_stack.len() > 1 {
-            let level = self.libs[lib_idx].nav_stack.last().unwrap();
-            (
-                level.items.clone(),
-                level.cursor,
-                level.scroll,
-                level.loading,
-            )
-        } else {
-            (Vec::new(), 0, 0, root_level.loading)
-        };
-        let loading = loading
-            || self.libs[lib_idx]
-                .feed_home_video
-                .as_ref()
-                .map(|state| state.loading)
-                .unwrap_or(false);
+        let selected_group = self
+            .libs[lib_idx]
+            .feed_home_video
+            .as_ref()
+            .map(|state| state.selected_group.min(groups.len()))
+            .unwrap_or(0);
+        let items = self.feed_home_video_selected_items(lib_idx);
+        let (cursor, stored_scroll, loading) = self.libs[lib_idx]
+            .feed_home_video
+            .as_ref()
+            .map(|state| (state.video_cursor, state.video_scroll, state.loading))
+            .unwrap_or((0, 0, root_level.loading));
 
         let max_y = area.y + area.height;
         let mut row = area.y;
@@ -534,8 +528,8 @@ impl App {
             }
             scroll += 1;
         }
-        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-            level.scroll = scroll;
+        if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+            state.video_scroll = scroll;
         }
 
         let mut row_map: Vec<Option<usize>> = Vec::with_capacity(list_area.height as usize);
