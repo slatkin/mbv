@@ -96,6 +96,60 @@ impl App {
         lib.nav_stack.push(level);
     }
 
+    pub(super) fn ensure_feed_home_video_group_level(&mut self, lib_idx: usize) {
+        // Cheap checks first: this runs every render frame, so avoid the
+        // mutex-locking `is_feed_home_video_library` check (and any further
+        // work) once the group level is already pushed (nav_stack.len() != 1
+        // covers the common steady-state case).
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return;
+        };
+        if lib.nav_stack.len() != 1 || lib.search.is_some() || lib.power_detail_item.is_some() {
+            return;
+        }
+        let ready = lib
+            .feed_home_video
+            .as_ref()
+            .is_some_and(|state| !state.loading && !state.all_items.is_empty());
+        if !ready || !self.is_feed_home_video_library(lib_idx) {
+            return;
+        }
+        // `cur` doubles as the selected group index (0 = "all", 1..=n = per-folder
+        // groups; see select_feed_folder_group). Clamp it to the freshly
+        // aggregated group count so a stale cursor from a previous aggregation
+        // run (which may have had more groups) can't make the cache lookup
+        // fail and leave the view stuck showing the raw folder list forever.
+        let n = self.feed_home_video_visible_group_count(lib_idx);
+        let cur = self.libs[lib_idx].nav_stack[0].cursor.min(n);
+        self.libs[lib_idx].nav_stack[0].cursor = cur;
+        self.push_feed_home_video_level_from_cache(lib_idx, cur);
+    }
+
+    /// Common guard for kicking off `spawn_feed_home_video_aggregate` once a
+    /// feed-home-video library's root folder listing has fully paginated:
+    /// power view is showing this library's tab, it's a feed-home-video
+    /// library, and its root nav level has loaded every item. `extra_ok`
+    /// carries the caller-specific condition (e.g. which event/level this
+    /// check is reacting to).
+    fn should_aggregate_feed(
+        &self,
+        lib_idx: usize,
+        extra_ok: impl FnOnce(&BrowseLevel) -> bool,
+    ) -> bool {
+        self.playlist_view == PLAYLIST_VIEW_POWER
+            && self.power_left_tab == lib_idx + 1
+            && self.is_feed_home_video_library(lib_idx)
+            && self
+                .libs
+                .get(lib_idx)
+                .map(|lib| {
+                    lib.nav_stack.len() == 1
+                        && lib.nav_stack[0].is_fully_loaded()
+                        && extra_ok(&lib.nav_stack[0])
+                })
+                .unwrap_or(false)
+    }
+
     fn spawn_feed_home_video_aggregate(&self, lib_idx: usize) {
         if !self.is_feed_home_video_library(lib_idx) {
             return;
@@ -1611,15 +1665,17 @@ impl App {
             let lib_off = self.lib_tab_offset();
             let lib_idx = self.tab_idx - lib_off;
 
-            // Guard: don't pop when already at the root of the music group view
-            // (nav_stack[0]=groups, nav_stack[1]=albums; there is no list above to
-            // go back to). Search-clearing still falls through because this guard
-            // only fires when search is None.
+            // Guard: don't pop when already at the root of a synthetic "group" view
+            // (music groups: nav_stack[0]=groups, nav_stack[1]=albums; feed home
+            // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is
+            // no list above to go back to. Search-clearing still falls through
+            // because this guard only fires when search is None.
             if self.playlist_view == PLAYLIST_VIEW_POWER
                 && self.power_left_tab == lib_idx + 1
                 && self.libs[lib_idx].search.is_none()
-                && self.is_music_group_view(lib_idx)
                 && self.libs[lib_idx].nav_stack.len() == 2
+                && (self.is_music_group_view(lib_idx)
+                    || self.is_feed_home_video_group_view(lib_idx))
             {
                 return;
             }
@@ -2356,7 +2412,7 @@ impl App {
             Some(l) => l,
             None => return,
         };
-        if lvl.items.len() >= lvl.total_count {
+        if lvl.is_fully_loaded() {
             return;
         }
         let parent_id = lvl.parent_id.clone();
@@ -2472,10 +2528,19 @@ impl App {
         if lvl.loading {
             return;
         }
-        if lvl.items.len() >= lvl.total_count {
+        if lvl.is_fully_loaded() {
             return;
         }
-        if lvl.cursor + PREFETCH_AHEAD < lvl.items.len() {
+        // The root folder listing of a feed-home-video library isn't scrolled by
+        // the user directly -- it's aggregated in the background into grouped
+        // sections, and that aggregation can't start until every page has
+        // loaded. Waiting for the cursor to approach the loaded edge (as normal
+        // browse levels do) would stall pagination forever for libraries with
+        // more folders than PAGE_SIZE + PREFETCH_AHEAD, since nothing moves the
+        // cursor on that hidden level. Paginate it to completion unconditionally.
+        let is_feed_home_video_root =
+            lib.nav_stack.len() == 1 && self.is_feed_home_video_library(lib_idx);
+        if !is_feed_home_video_root && lvl.cursor + PREFETCH_AHEAD < lvl.items.len() {
             return;
         }
         let start_index = lvl.items.len();
@@ -2728,21 +2793,10 @@ impl App {
                     }
                 }
 
-                let should_auto_push_feed = self.playlist_view == PLAYLIST_VIEW_POWER
-                    && self.power_left_tab == lib_idx + 1
-                    && self.is_feed_home_video_library(lib_idx)
-                    && self
-                        .libs
-                        .get(lib_idx)
-                        .map(|lib| {
-                            lib.nav_stack.len() == 1
-                                && lib.nav_stack[0].item_types.is_none()
-                                && !lib.nav_stack[0].unplayed_only
-                        })
-                        .unwrap_or(false);
-                if should_auto_push_feed {
-                    let cursor = self.libs[lib_idx].nav_stack[0].cursor;
-                    self.select_feed_folder_group(lib_idx, cursor);
+                let should_aggregate_feed = self.should_aggregate_feed(lib_idx, |root| {
+                    root.item_types.is_none() && !root.unplayed_only
+                });
+                if should_aggregate_feed {
                     self.spawn_feed_home_video_aggregate(lib_idx);
                 }
 
@@ -2779,6 +2833,11 @@ impl App {
                             sort_episodes(&mut last.items);
                         }
                     }
+                }
+                let should_aggregate_feed =
+                    self.should_aggregate_feed(lib_idx, |root| root.parent_id == parent_id);
+                if should_aggregate_feed {
+                    self.spawn_feed_home_video_aggregate(lib_idx);
                 }
                 self.maybe_fetch_next_page(lib_idx);
             }

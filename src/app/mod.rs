@@ -220,6 +220,14 @@ struct BrowseLevel {
     all_items: Option<Vec<MediaItem>>, // prefetched full list for instant search
 }
 
+impl BrowseLevel {
+    /// Whether every item reported by the server for this level has been
+    /// fetched into `items` (i.e. pagination is complete).
+    fn is_fully_loaded(&self) -> bool {
+        self.items.len() >= self.total_count
+    }
+}
+
 #[derive(Clone)]
 struct FeedHomeVideoGroup {
     folder: MediaItem,
@@ -2639,6 +2647,83 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() {
+        let mut app = make_app_stub();
+        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.power_left_tab = 1;
+        app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+
+        let mut library = make_item("YouTube", "CollectionFolder");
+        library.id = "lib-youtube".into();
+        library.collection_type = "homevideos".into();
+        library.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-youtube".into(),
+                title: "YouTube".into(),
+                items: vec![],
+                total_count: 0,
+                cursor: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: true,
+                scroll: 0,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: Some(FeedHomeVideoState {
+                loading: true,
+                ..FeedHomeVideoState::default()
+            }),
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        let mut folders = Vec::new();
+        for idx in 0..100 {
+            let mut folder = make_item(&format!("Channel {idx}"), "Folder");
+            folder.id = format!("folder-{idx}");
+            folder.is_folder = true;
+            folders.push(folder);
+        }
+
+        app.handle_lib_event(LibEvent::Loaded {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            level: BrowseLevel {
+                parent_id: "lib-youtube".into(),
+                title: "YouTube".into(),
+                items: folders,
+                total_count: 101,
+                cursor: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                scroll: 0,
+                all_items: None,
+            },
+        });
+
+        assert_eq!(app.libs[0].nav_stack.len(), 1);
+        assert_eq!(app.libs[0].nav_stack[0].items.len(), 100);
+        assert_eq!(app.libs[0].nav_stack[0].total_count, 101);
+        // Pagination must keep going even though the root cursor (0) is nowhere
+        // near the loaded edge -- the feed-home-video root isn't scrolled by the
+        // user, so it has to paginate to completion on its own or aggregation
+        // (and therefore the grouped view) would never be able to start.
+        assert!(
+            app.libs[0].nav_stack[0].loading,
+            "expected the next folder page to be fetched automatically"
+        );
+    }
+
+    #[test]
     fn select_feed_folder_group_pushes_video_level_for_selected_folder() {
         let mut app = make_app_stub();
         let mut library = make_item("YouTube", "CollectionFolder");
@@ -2905,6 +2990,75 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn go_back_keeps_feed_home_video_group_view_intact() {
+        let mut app = make_app_stub();
+        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.tab_idx = 2;
+        app.power_left_tab = 1;
+        app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+
+        let mut library = make_item("YouTube", "CollectionFolder");
+        library.id = "lib-youtube".into();
+        library.collection_type = "homevideos".into();
+        library.is_folder = true;
+        let mut folder = make_item("Channel A", "Folder");
+        folder.id = "folder-a".into();
+        folder.is_folder = true;
+        let mut video = make_item("A1", "Movie");
+        video.id = "video-a1".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![
+                BrowseLevel {
+                    parent_id: "lib-youtube".into(),
+                    title: "YouTube".into(),
+                    items: vec![folder.clone()],
+                    total_count: 1,
+                    cursor: 1,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    scroll: 0,
+                    all_items: None,
+                },
+                BrowseLevel {
+                    parent_id: "folder-a".into(),
+                    title: "Channel A".into(),
+                    items: vec![video.clone()],
+                    total_count: 1,
+                    cursor: 0,
+                    item_types: Some("Video".into()),
+                    unplayed_only: true,
+                    sort_by: "DateCreated".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    scroll: 0,
+                    all_items: Some(vec![video.clone()]),
+                },
+            ],
+            search: None,
+            feed_home_video: Some(FeedHomeVideoState {
+                all_items: vec![video.clone()],
+                groups: vec![FeedHomeVideoGroup {
+                    folder,
+                    items: vec![video],
+                }],
+                loading: false,
+            }),
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app.go_back();
+        assert_eq!(app.libs[0].nav_stack.len(), 2);
+        assert_eq!(app.libs[0].nav_stack[0].cursor, 1);
+        assert_eq!(app.libs[0].nav_stack[1].parent_id, "folder-a");
+    }
+
+    #[test]
     fn feed_home_video_root_filters_groups_from_all_video_paths() {
         let mut app = make_app_stub();
         app.playlist_view = PLAYLIST_VIEW_POWER;
@@ -2970,11 +3124,7 @@ pub(crate) mod tests {
             },
         });
 
-        assert_eq!(app.libs[0].nav_stack.len(), 2);
-        let level = app.libs[0].nav_stack.last().unwrap();
-        assert_eq!(level.parent_id, "lib-youtube");
-        assert_eq!(level.item_types.as_deref(), Some("Video"));
-        assert!(level.unplayed_only);
+        assert_eq!(app.libs[0].nav_stack.len(), 1);
 
         let mut video = make_item("Episode 1", "Movie");
         video.path = "/videos/active/ep1.mp4".into();
@@ -3011,7 +3161,71 @@ pub(crate) mod tests {
                 .map(|state| state.all_items.len()),
             Some(1)
         );
+        assert_eq!(app.libs[0].nav_stack.len(), 1);
+        app.ensure_feed_home_video_group_level(0);
+        assert_eq!(app.libs[0].nav_stack.len(), 2);
+        let level = app.libs[0].nav_stack.last().unwrap();
+        assert_eq!(level.parent_id, "lib-youtube");
+        assert_eq!(level.item_types.as_deref(), Some("Video"));
+        assert!(level.unplayed_only);
         assert_eq!(app.libs[0].nav_stack[0].cursor, 0);
+    }
+
+    #[test]
+    fn ensure_feed_home_video_group_level_clamps_stale_cursor_to_available_groups() {
+        // A stale root cursor (left over from a prior aggregation run with more
+        // groups, or from cycling sections before this run finished) must not
+        // permanently prevent the group level from being pushed.
+        let mut app = make_app_stub();
+        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.power_left_tab = 1;
+        app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+
+        let mut library = make_item("YouTube", "CollectionFolder");
+        library.id = "lib-youtube".into();
+        library.collection_type = "homevideos".into();
+        library.is_folder = true;
+
+        let mut folder = make_item("Channel A", "Folder");
+        folder.id = "folder-a".into();
+        folder.is_folder = true;
+        let video = make_item("A1", "Movie");
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-youtube".into(),
+                title: "YouTube".into(),
+                items: vec![folder.clone()],
+                total_count: 1,
+                // Stale: points past the single group that actually exists now.
+                cursor: 5,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                scroll: 0,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: Some(FeedHomeVideoState {
+                all_items: vec![video.clone()],
+                groups: vec![FeedHomeVideoGroup {
+                    folder,
+                    items: vec![video],
+                }],
+                loading: false,
+            }),
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app.ensure_feed_home_video_group_level(0);
+
+        assert_eq!(app.libs[0].nav_stack.len(), 2);
+        assert_eq!(app.libs[0].nav_stack[0].cursor, 1);
+        assert_eq!(app.libs[0].nav_stack[1].parent_id, "folder-a");
     }
 
     #[test]

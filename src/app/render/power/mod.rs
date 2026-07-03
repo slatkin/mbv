@@ -320,6 +320,7 @@ impl App {
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
         if self.power_left_tab > 0 {
             self.ensure_music_group_album_level(self.power_left_tab - 1);
+            self.ensure_feed_home_video_group_level(self.power_left_tab - 1);
         }
 
         if self.power_left_tab == 0 {
