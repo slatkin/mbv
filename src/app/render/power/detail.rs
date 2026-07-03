@@ -87,7 +87,12 @@ impl App {
         // img_end_row is exclusive: image rows + 1 blank padding row below.
         let img_end_row = img_start_row + img_height + 1;
         self.power_inline_image_rect = if img_height > 0 {
-            Some(Rect { x: img_x, y: img_start_row, width: img_actual_w, height: img_height + 1 })
+            Some(Rect {
+                x: img_x,
+                y: img_start_row,
+                width: img_actual_w,
+                height: img_height + 1,
+            })
         } else {
             None
         };

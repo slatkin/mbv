@@ -294,7 +294,8 @@ impl App {
 
             let mut state = ListState::default();
             state.select(Some(display_cursor.saturating_sub(offset)));
-            self.power_cursor_screen_y = Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
+            self.power_cursor_screen_y =
+                Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
             f.render_stateful_widget(
                 List::new(list_items).highlight_style(Style::default()),
                 content_area,
@@ -438,7 +439,8 @@ impl App {
 
             let mut state = ListState::default();
             state.select(Some(display_cursor.saturating_sub(offset)));
-            self.power_cursor_screen_y = Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
+            self.power_cursor_screen_y =
+                Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
             f.render_stateful_widget(
                 List::new(list_items).highlight_style(Style::default()),
                 content_area,
@@ -529,7 +531,8 @@ impl App {
 
             let mut state = ListState::default();
             state.select(Some(cursor.saturating_sub(offset)));
-            self.power_cursor_screen_y = Some(content_area.y + (cursor.saturating_sub(offset)) as u16);
+            self.power_cursor_screen_y =
+                Some(content_area.y + (cursor.saturating_sub(offset)) as u16);
             f.render_stateful_widget(
                 List::new(list_items).highlight_style(Style::default()),
                 content_area,

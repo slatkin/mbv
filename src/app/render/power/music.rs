@@ -346,7 +346,8 @@ impl App {
             list_area,
             &mut state,
         );
-        self.power_cursor_screen_y = Some(list_area.y + (display_cursor.saturating_sub(offset)) as u16);
+        self.power_cursor_screen_y =
+            Some(list_area.y + (display_cursor.saturating_sub(offset)) as u16);
 
         let display_n = display_rows.len();
         if focused && display_n > visible {
