@@ -52,11 +52,11 @@ impl App {
             .unwrap_or(0)
     }
 
-    fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
+    pub(super) fn feed_home_video_selected_group_index(&self, lib_idx: usize) -> usize {
         self.libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())
-            .map(|state| state.selected_group.min(state.groups.len()))
+            .map(|state| state.selected_group_index())
             .unwrap_or(0)
     }
 
@@ -68,7 +68,7 @@ impl App {
         else {
             return Vec::new();
         };
-        let selected_group = state.selected_group.min(state.groups.len());
+        let selected_group = state.selected_group_index();
         if selected_group == 0 {
             state.all_items.clone()
         } else {
@@ -84,7 +84,7 @@ impl App {
         let lib = self.libs.get(lib_idx)?;
         let root = lib.nav_stack.first()?;
         let state = lib.feed_home_video.as_ref()?;
-        let selected_group = state.selected_group.min(state.groups.len());
+        let selected_group = state.selected_group_index();
         if selected_group == 0 {
             Some(root.parent_id.clone())
         } else {
@@ -95,31 +95,44 @@ impl App {
         }
     }
 
+    /// Returns the item currently under the cursor without cloning the whole
+    /// selected-group item list (see `feed_home_video_selected_items`, which
+    /// does clone the full list and remains the right choice for callers that
+    /// actually need it).
     pub(super) fn selected_feed_home_video_item(&self, lib_idx: usize) -> Option<MediaItem> {
         let state = self
             .libs
             .get(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_ref())?;
-        let items = self.feed_home_video_selected_items(lib_idx);
-        items.get(state.video_cursor.min(items.len().saturating_sub(1)))
-            .cloned()
+        let idx = state.video_cursor.min(state.selected_len().saturating_sub(1));
+        let group = state.selected_group_index();
+        if group == 0 {
+            state.all_items.get(idx).cloned()
+        } else {
+            state
+                .groups
+                .get(group - 1)
+                .and_then(|g| g.items.get(idx))
+                .cloned()
+        }
     }
 
     fn clamp_feed_home_video_state(&mut self, lib_idx: usize) {
-        let items_len = self.feed_home_video_selected_items(lib_idx).len();
-        if let Some(state) = self
+        let Some(state) = self
             .libs
             .get_mut(lib_idx)
             .and_then(|lib| lib.feed_home_video.as_mut())
-        {
-            state.selected_group = state.selected_group.min(state.groups.len());
-            if items_len == 0 {
-                state.video_cursor = 0;
-                state.video_scroll = 0;
-            } else {
-                state.video_cursor = state.video_cursor.min(items_len.saturating_sub(1));
-                state.video_scroll = state.video_scroll.min(state.video_cursor);
-            }
+        else {
+            return;
+        };
+        state.selected_group = state.selected_group_index();
+        let items_len = state.selected_len();
+        if items_len == 0 {
+            state.video_cursor = 0;
+            state.video_scroll = 0;
+        } else {
+            state.video_cursor = state.video_cursor.min(items_len.saturating_sub(1));
+            state.video_scroll = state.video_scroll.min(state.video_cursor);
         }
     }
 
@@ -338,8 +351,8 @@ impl App {
         let lib_idx = self.tab_idx - lib_off;
 
         if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
-            let n = self.feed_home_video_selected_items(lib_idx).len();
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                let n = state.selected_len();
                 if n > 0 {
                     state.video_cursor =
                         (state.video_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
@@ -397,8 +410,8 @@ impl App {
         let lib_idx = self.tab_idx - lib_off;
 
         if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
-            let n = self.feed_home_video_selected_items(lib_idx).len();
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
+                let n = state.selected_len();
                 if n > 0 {
                     state.video_cursor = if to_end { n - 1 } else { 0 };
                 }

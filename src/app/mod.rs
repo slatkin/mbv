@@ -244,6 +244,28 @@ struct FeedHomeVideoState {
     video_scroll: usize,
 }
 
+impl FeedHomeVideoState {
+    /// Clamped selected-group index: 0 means "all items", 1-based otherwise.
+    /// Centralizes the `selected_group.min(groups.len())` clamp so it can't
+    /// drift between the several call sites that need it.
+    fn selected_group_index(&self) -> usize {
+        self.selected_group.min(self.groups.len())
+    }
+
+    /// Length of the currently selected item list, without cloning it.
+    fn selected_len(&self) -> usize {
+        let group = self.selected_group_index();
+        if group == 0 {
+            self.all_items.len()
+        } else {
+            self.groups
+                .get(group - 1)
+                .map(|g| g.items.len())
+                .unwrap_or(0)
+        }
+    }
+}
+
 enum SavePlaylistStage {
     EnterName,
     ConfirmOverwrite { existing_id: String },

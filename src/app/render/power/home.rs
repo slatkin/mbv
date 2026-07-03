@@ -357,12 +357,7 @@ impl App {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let selected_group = self
-            .libs[lib_idx]
-            .feed_home_video
-            .as_ref()
-            .map(|state| state.selected_group.min(groups.len()))
-            .unwrap_or(0);
+        let selected_group = self.feed_home_video_selected_group_index(lib_idx);
         let items = self.feed_home_video_selected_items(lib_idx);
         let (cursor, stored_scroll, loading) = self.libs[lib_idx]
             .feed_home_video

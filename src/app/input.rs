@@ -2410,17 +2410,9 @@ impl App {
                     } else if is_feed_group {
                         let visible = la.height as usize;
                         if let Some(state) = lib.feed_home_video.as_mut() {
+                            let items_len = state.selected_len();
                             if use_row_map {
                                 if let Some(Some(item_idx)) = row_map_item {
-                                    let items_len = if state.selected_group == 0 {
-                                        state.all_items.len()
-                                    } else {
-                                        state
-                                            .groups
-                                            .get(state.selected_group - 1)
-                                            .map(|group| group.items.len())
-                                            .unwrap_or(0)
-                                    };
                                     if item_idx < items_len {
                                         state.video_cursor = item_idx;
                                     }
@@ -2432,15 +2424,6 @@ impl App {
                                     0
                                 };
                                 let clicked = offset + click_y;
-                                let items_len = if state.selected_group == 0 {
-                                    state.all_items.len()
-                                } else {
-                                    state
-                                        .groups
-                                        .get(state.selected_group - 1)
-                                        .map(|group| group.items.len())
-                                        .unwrap_or(0)
-                                };
                                 if clicked < items_len {
                                     state.video_cursor = clicked;
                                 }
