@@ -713,12 +713,16 @@ impl App {
             &self.queue_source,
             crate::config::QueueSource::Playlist { .. }
         );
-        let icon = |on: bool, on_color: Color| {
+        let icon = |on: bool, on_color: Color, bold: bool| {
             // OFF: no explicit foreground (terminal default bleeds through).
-            Style::default()
+            let style = Style::default()
                 .bg(bg)
-                .fg(if on { on_color } else { Color::Reset })
-                .add_modifier(Modifier::BOLD)
+                .fg(if on { on_color } else { Color::Reset });
+            if bold {
+                style.add_modifier(Modifier::BOLD)
+            } else {
+                style
+            }
         };
         let pad = Style::default().bg(bg);
         let (x, y) = (tabs_area.x, tabs_area.y);
@@ -737,11 +741,11 @@ impl App {
         };
         let spans = vec![
             Span::styled("  ", pad),
-            Span::styled("m", icon(mute_on, palette::RED)),
+            Span::styled("m", icon(mute_on, palette::RED, true)),
             Span::styled(" ", pad),
-            Span::styled("\u{21CC}", icon(connected, palette::YELLOW)),
+            Span::styled("\u{21CC}", icon(connected, palette::YELLOW, connected)),
             Span::styled(" ", pad),
-            Span::styled("\u{2261}", icon(is_playlist, palette::FOAM)),
+            Span::styled("\u{2261}", icon(is_playlist, palette::FOAM, true)),
             Span::styled("  ", pad),
         ];
         f.render_widget(

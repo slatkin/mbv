@@ -720,33 +720,26 @@ impl App {
             let card_x = area.x + c as u16 * (col_w + GAP);
             let base = row_top[r]; // content-space top of this card
 
-            // Top rounded border (top edge only): ╭────╮ in the section colour.
-            if col_w >= 2 {
-                let mid = "\u{2500}".repeat((col_w as usize).saturating_sub(2));
-                let border = format!("\u{256d}{}\u{256e}", mid);
-                if let Some(sy) = screen_y(base) {
-                    f.render_widget(
-                        Paragraph::new(Span::styled(border, Style::default().fg(s.color))),
-                        Rect {
-                            x: card_x,
-                            y: sy,
-                            width: col_w,
-                            height: 1,
-                        },
-                    );
-                }
-            }
-
-            // Header row: section title in the accent colour, bold.
+            // Header row: section title as a pill (accent-coloured background,
+            // bold contrasting text) followed by a rule — the same "\u{2500}" line
+            // style used for rules elsewhere in the app — in the accent colour,
+            // filling the rest of the row.
             if let Some(sy) = screen_y(base + 1) {
-                let label = trunc_str(&s.title, (col_w as usize).saturating_sub(1));
+                let label = trunc_str(&s.title, (col_w as usize).saturating_sub(2));
+                let pill_text = format!(" {label} ");
+                let pill_w = (pill_text.width() as u16).min(col_w);
+                let rule_len = col_w.saturating_sub(pill_w);
+                let rule = "\u{2500}".repeat(rule_len as usize);
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
-                        Span::raw(" "),
                         Span::styled(
-                            label,
-                            Style::default().fg(s.color).add_modifier(Modifier::BOLD),
+                            pill_text,
+                            Style::default()
+                                .fg(palette::BASE)
+                                .bg(s.color)
+                                .add_modifier(Modifier::BOLD),
                         ),
+                        Span::styled(rule, Style::default().fg(s.color)),
                     ])),
                     Rect {
                         x: card_x,
@@ -926,8 +919,9 @@ mod tests {
             kw_line.contains("New Music"),
             "expected 2 columns on header row"
         );
-        // Rounded top border with corners is drawn.
-        assert!(out.contains('\u{256d}') && out.contains('\u{256e}'));
+        // Section headers render as pills (background colour, not representable
+        // via plain-text `contains` here) with the title text present.
+        assert!(kw_line.contains("Keep Watching"));
         // Durations render as minutes only, never hours (67m for 4020s, not 1h07m).
         assert!(out.contains("47m"));
         assert!(out.contains("67m"));
