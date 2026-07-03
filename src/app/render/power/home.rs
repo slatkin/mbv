@@ -61,11 +61,16 @@ fn feed_added_date(date_added: &str) -> String {
         .unwrap_or_else(|| date_added.to_string())
 }
 
-fn home_video_item_height(item: &crate::api::MediaItem) -> u16 {
-    if item.overview.is_empty() {
-        3
+/// Maximum number of overview (description) lines shown per item.
+const MAX_OVERVIEW_LINES: u16 = 3;
+
+fn home_video_item_height(item: &crate::api::MediaItem, text_w: usize) -> u16 {
+    if item.overview.is_empty() || text_w == 0 {
+        3 // title + meta + separator
     } else {
-        4
+        let ov_text = trunc_overview(&item.overview);
+        let lines = wrap(&ov_text, text_w).len() as u16;
+        3 + lines.min(MAX_OVERVIEW_LINES) // title + meta + overview lines + separator
     }
 }
 
@@ -163,25 +168,28 @@ fn render_home_video_item(
     if !item.overview.is_empty() && item_h >= 4 && row_y + 2 < content_area.y + content_area.height
     {
         let ov_text = trunc_overview(&item.overview);
-        let ov_first = wrap(&ov_text, (tw as usize).max(1))
-            .into_iter()
-            .next()
-            .map(|s| s.into_owned())
-            .unwrap_or_default();
+        let wrapped = wrap(&ov_text, (tw as usize).max(1));
         let ov_color = if selected && focused {
             palette::WHITE
         } else {
             palette::MUTED
         };
-        f.render_widget(
-            Paragraph::new(Span::styled(ov_first, Style::default().fg(ov_color))),
-            Rect {
-                x: tx,
-                y: row_y + 2,
-                width: tw,
-                height: 1,
-            },
-        );
+        let ov_style = Style::default().fg(ov_color);
+        for (li, line) in wrapped.iter().enumerate().take(MAX_OVERVIEW_LINES as usize) {
+            let ly = row_y + 2 + li as u16;
+            if ly >= content_area.y + content_area.height {
+                break;
+            }
+            f.render_widget(
+                Paragraph::new(Span::styled(line.to_string(), ov_style)),
+                Rect {
+                    x: tx,
+                    y: ly,
+                    width: tw,
+                    height: 1,
+                },
+            );
+        }
     }
 
     let sep_y = row_y + item_h - 1;
@@ -261,7 +269,13 @@ impl App {
                 .contains(&self.libs[lib_idx].library.name.to_lowercase())
         };
 
-        let item_heights: Vec<u16> = items.iter().map(home_video_item_height).collect();
+        // Conservatively assume scrollbar present to get text_w for height
+        // calculations, then recheck once we know the real total height.
+        let text_w_with_sb = (content_area.width as usize).saturating_sub(1);
+        let item_heights: Vec<u16> = items
+            .iter()
+            .map(|it| home_video_item_height(it, text_w_with_sb))
+            .collect();
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > content_area.height;
         let text_w =
@@ -511,7 +525,11 @@ impl App {
         }
 
         let current_pos = cursor.min(items.len().saturating_sub(1));
-        let item_heights: Vec<u16> = items.iter().map(home_video_item_height).collect();
+        let text_w_with_sb = (list_area.width as usize).saturating_sub(1);
+        let item_heights: Vec<u16> = items
+            .iter()
+            .map(|it| home_video_item_height(it, text_w_with_sb))
+            .collect();
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > list_area.height;
         let text_w = (list_area.width as usize).saturating_sub(if needs_scrollbar { 1 } else { 0 });

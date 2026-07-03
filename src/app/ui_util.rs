@@ -92,7 +92,7 @@ pub fn fmt_duration_approx(s: i64) -> String {
 
 pub fn trunc_overview(s: &str) -> String {
     let stripped = regex_strip_urls(s);
-    trunc_str(stripped.trim(), 300)
+    trunc_str(stripped.trim(), 400)
 }
 
 pub fn regex_strip_urls(s: &str) -> String {
