@@ -452,6 +452,12 @@ pub struct App {
     power_left_sorted_indices: Vec<usize>,   // full sorted display order when letter-groups active
     power_detail_max_scroll: usize,          // max valid scroll (set each render frame)
     power_detail_page_h: usize,              // visible overview line count (set each render frame)
+    // Whether the power-view queue is currently relocated to the bottom of the
+    // right column (low-height layout). Sticky with hysteresis so a small,
+    // transient change in the card image's rendered height (e.g. switching
+    // from a season poster to an episode thumbnail while browsing seasons)
+    // doesn't flip the whole right-panel layout and cause a visible reflow.
+    power_queue_relocated: bool,
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
@@ -790,6 +796,7 @@ impl App {
             power_left_sorted_indices: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
+            power_queue_relocated: false,
             home_card_view: false,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
@@ -2398,6 +2405,7 @@ pub(crate) mod tests {
             power_left_sorted_indices: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
+            power_queue_relocated: false,
             home_card_view: false,
             last_played_item_id: None,
             last_played_completed: false,

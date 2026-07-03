@@ -278,7 +278,20 @@ impl App {
         let left_remaining = left_area.height.saturating_sub(card_h);
 
         const MIN_LIST_ROWS: u16 = 6;
-        let (lib_area, queue_area) = if left_remaining < MIN_LIST_ROWS {
+        // Hysteresis band: the card's rendered height can shift by a handful of
+        // rows from one frame to the next purely because a different image just
+        // finished loading (e.g. a season poster vs. an episode thumbnail have
+        // very different aspect ratios). Without a dead zone, that alone could
+        // flip the relocation decision and reflow the entire right-panel text,
+        // making it look like the whole screen redraws in time with the image.
+        const HYSTERESIS_ROWS: u16 = 4;
+        let relocate_threshold = if self.power_queue_relocated {
+            MIN_LIST_ROWS + HYSTERESIS_ROWS
+        } else {
+            MIN_LIST_ROWS
+        };
+        self.power_queue_relocated = left_remaining < relocate_threshold;
+        let (lib_area, queue_area) = if self.power_queue_relocated {
             // Not enough room for the queue in the left column -- split the right column:
             // library on top, relocated queue at the bottom.
             let h = right_area.height;
