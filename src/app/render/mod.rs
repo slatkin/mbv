@@ -79,11 +79,8 @@ impl App {
             self.layout.playback.seekbar_area = Rect::default();
         }
         // Indicator-bar click regions are never set anymore; clear them every frame.
-        self.layout.playback.ind_pb = Rect::default();
         self.layout.playback.ind_mu = Rect::default();
         self.layout.playback.ind_rc = Rect::default();
-        self.layout.playback.ind_sub = Rect::default();
-        self.layout.playback.ind_au = Rect::default();
 
         {
             // Control pill (m ⇌ ≡) on the far left of the tab bar.
@@ -286,13 +283,6 @@ impl App {
             // The one-row now-playing header: "▶ Title │ time … badges".
             self.render_title_row(f, title_area, title, color);
         }
-        // These control regions no longer exist (expanded view removed).
-        self.layout.playback.tracks_area = Rect::default();
-        self.layout.playback.vol_area = Rect::default();
-        self.layout.playback.sub_area = Rect::default();
-        self.layout.playback.audio_area = Rect::default();
-        self.layout.playback.button_area = Rect::default();
-
         if self.tab_idx == 0 {
             self.render_combined(f, main_area);
         } else if self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER {

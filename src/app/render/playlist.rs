@@ -10,12 +10,13 @@ use unicode_width::UnicodeWidthStr;
 
 impl App {
     pub(super) fn render_combined(&mut self, f: &mut Frame, area: Rect) {
-        self.layout.home.home_rect = area;
-        self.layout.home.carousel_left_arrow = None;
-        self.layout.home.carousel_right_arrow = None;
-        self.layout.home.carousel_up_arrow = None;
-        self.layout.home.carousel_down_arrow = None;
-        self.layout.home.home_card_strips.clear();
+        let home = &mut self.layout.home;
+        home.home_rect = area;
+        home.carousel_left_arrow = None;
+        home.carousel_right_arrow = None;
+        home.carousel_up_arrow = None;
+        home.carousel_down_arrow = None;
+        home.home_card_strips.clear();
         if self.home_search.is_some() {
             self.render_home_search(f, area);
         } else if self.home_card_view {

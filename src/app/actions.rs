@@ -3683,19 +3683,20 @@ impl App {
         self.home.power_home_cursor = (cur + delta).clamp(0, total as i64 - 1) as usize;
     }
 
-    /// Section (index into `layout.power.home_layout`) currently holding the flat cursor.
+    /// Section (index into `layout.power.home.layout`) currently holding the flat cursor.
     fn power_home_cur_section(&self) -> Option<usize> {
         let cursor = self.home.power_home_cursor;
         self.layout
             .power
-            .home_layout
+            .home
+            .layout
             .iter()
             .position(|m| m.len > 0 && cursor >= m.flat_start && cursor < m.flat_start + m.len)
     }
 
     /// Select the first item of the first non-empty section.
     fn power_home_select_first(&mut self) {
-        if let Some(m) = self.layout.power.home_layout.iter().find(|x| x.len > 0) {
+        if let Some(m) = self.layout.power.home.layout.iter().find(|x| x.len > 0) {
             self.home.power_home_cursor = m.flat_start;
         }
     }
@@ -3703,7 +3704,7 @@ impl App {
     /// Grid-aware down: within the current card, else the top of the next non-empty
     /// card in the same column.
     pub(super) fn power_home_move_down(&mut self) {
-        if self.layout.power.home_layout.is_empty() {
+        if self.layout.power.home.layout.is_empty() {
             self.power_home_move_cursor(1);
             return;
         }
@@ -3711,7 +3712,7 @@ impl App {
             self.power_home_select_first();
             return;
         };
-        let m = self.layout.power.home_layout[si].clone();
+        let m = self.layout.power.home.layout[si].clone();
         let within = self.home.power_home_cursor - m.flat_start;
         if within + 1 < m.len {
             self.home.power_home_cursor += 1;
@@ -3720,7 +3721,8 @@ impl App {
         if let Some(next) = self
             .layout
             .power
-            .home_layout
+            .home
+            .layout
             .iter()
             .filter(|x| x.col == m.col && x.row > m.row && x.len > 0)
             .min_by_key(|x| x.row)
@@ -3732,7 +3734,7 @@ impl App {
     /// Grid-aware up: within the current card, else the bottom of the previous
     /// non-empty card in the same column.
     pub(super) fn power_home_move_up(&mut self) {
-        if self.layout.power.home_layout.is_empty() {
+        if self.layout.power.home.layout.is_empty() {
             self.power_home_move_cursor(-1);
             return;
         }
@@ -3740,7 +3742,7 @@ impl App {
             self.power_home_select_first();
             return;
         };
-        let m = self.layout.power.home_layout[si].clone();
+        let m = self.layout.power.home.layout[si].clone();
         let within = self.home.power_home_cursor - m.flat_start;
         if within > 0 {
             self.home.power_home_cursor -= 1;
@@ -3749,7 +3751,8 @@ impl App {
         if let Some(prev) = self
             .layout
             .power
-            .home_layout
+            .home
+            .layout
             .iter()
             .filter(|x| x.col == m.col && x.row < m.row && x.len > 0)
             .max_by_key(|x| x.row)
@@ -3764,7 +3767,8 @@ impl App {
         let sections: Vec<usize> = self
             .layout
             .power
-            .home_layout
+            .home
+            .layout
             .iter()
             .enumerate()
             .filter(|(_, m)| m.len > 0)
@@ -3784,7 +3788,7 @@ impl App {
             None => 0,
         };
         let si = sections[next_pos];
-        self.home.power_home_cursor = self.layout.power.home_layout[si].flat_start;
+        self.home.power_home_cursor = self.layout.power.home.layout[si].flat_start;
     }
 
     /// Play the item under the flat power-home cursor.
@@ -4254,7 +4258,7 @@ impl App {
 
     pub(super) fn settings_scroll_follow(&mut self) {
         let cursor = self.settings_cursor;
-        let Some(&cursor_line) = self.settings_line_of_cursor.get(cursor) else {
+        let Some(&cursor_line) = self.layout.settings_line_of_cursor.get(cursor) else {
             return;
         };
         let visible = self.terminal_height.saturating_sub(4) as usize;

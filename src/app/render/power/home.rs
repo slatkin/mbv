@@ -831,8 +831,8 @@ impl App {
             }
         }
 
-        self.layout.power.home_hitmap = hitmap;
-        self.layout.power.home_layout = layout;
+        self.layout.power.home.hitmap = hitmap;
+        self.layout.power.home.layout = layout;
 
         // Panel scrollbar on the far right.
         if needs_scrollbar && focused {
@@ -945,8 +945,8 @@ mod tests {
         // Section titles present.
         assert!(out.contains("YouTube"));
         // Grid geometry + hitmap were recorded.
-        assert_eq!(app.layout.power.home_layout.len(), 3);
-        assert!(!app.layout.power.home_hitmap.is_empty());
+        assert_eq!(app.layout.power.home.layout.len(), 3);
+        assert!(!app.layout.power.home.hitmap.is_empty());
     }
 
     #[test]

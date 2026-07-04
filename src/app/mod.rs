@@ -87,7 +87,7 @@ fn start_quit_watchdog(quit_handle: Option<crate::player::QuitHandle>) {
 }
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use ratatui::{backend::CrosstermBackend, layout::Rect, Terminal};
+use ratatui::{backend::CrosstermBackend, Terminal};
 
 use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
@@ -494,7 +494,6 @@ pub struct App {
     card_image_rx: mpsc::Receiver<(String, Option<image::DynamicImage>)>,
     image_picker: Option<Picker>,
     context_menu: Option<ContextMenu>,
-    context_menu_rect: Option<Rect>,
     show_help: bool,
     show_settings: bool,
     settings_cursor: usize,
@@ -502,7 +501,6 @@ pub struct App {
     settings_save_at: Option<Instant>,
     confirm_logout: bool,
     multiselect_popup: Option<MultiSelectPopup>,
-    settings_line_of_cursor: Vec<usize>,
     help_scroll: u16,
     show_log_tab: bool,
     system_notifications: bool,
@@ -851,11 +849,9 @@ impl App {
             settings_save_at: None,
             confirm_logout: false,
             multiselect_popup: None,
-            settings_line_of_cursor: Vec::new(),
             help_scroll: 0,
             notif_failed: false,
             context_menu: None,
-            context_menu_rect: None,
             sessions: Vec::new(),
             sessions_cursor: 0,
             sessions_scroll: 0,
@@ -2511,7 +2507,6 @@ pub(crate) mod tests {
             settings_save_at: None,
             confirm_logout: false,
             multiselect_popup: None,
-            settings_line_of_cursor: Vec::new(),
             help_scroll: 0,
             show_log_tab: false,
             system_notifications: false,
@@ -2519,7 +2514,6 @@ pub(crate) mod tests {
             notif_action_tx,
             notif_action_rx,
             context_menu: None,
-            context_menu_rect: None,
             lib_tx,
             lib_rx,
             home_search: None,

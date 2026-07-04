@@ -231,7 +231,7 @@ impl App {
         }
         let total = lines.len();
         self.settings_scroll = self.settings_scroll.min(total.saturating_sub(visible));
-        self.settings_line_of_cursor = line_of_cursor;
+        self.layout.settings_line_of_cursor = line_of_cursor;
 
         f.render_widget(
             Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)),

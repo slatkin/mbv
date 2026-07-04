@@ -9,7 +9,7 @@ use unicode_width::UnicodeWidthStr;
 impl App {
     pub(in crate::app::render) fn render_context_menu(&mut self, f: &mut Frame) {
         let Some(ref menu) = self.context_menu else {
-            self.context_menu_rect = None;
+            self.layout.context_menu_rect = None;
             return;
         };
         let width = (menu
@@ -29,7 +29,7 @@ impl App {
             width,
             height,
         };
-        self.context_menu_rect = Some(rect);
+        self.layout.context_menu_rect = Some(rect);
         f.render_widget(Clear, rect);
         f.render_widget(
             Block::default()

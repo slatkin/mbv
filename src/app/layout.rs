@@ -19,21 +19,15 @@ pub(crate) struct PowerHomeSectionMeta {
     pub col: usize,        // grid column
 }
 
-/// Seekbar/button/track/volume/subtitle/audio rects and their divider
-/// status-indicator rects, shared across playback views.
+/// Seekbar rect and the two divider status indicators that still have a
+/// click target (remote-session and mute). The button/track/volume/
+/// subtitle/audio rects this used to hold were removed with the expanded
+/// playback view; see the "Tab bar restyle" commit that zeroed them out.
 #[derive(Default)]
 pub(crate) struct LayoutPlayback {
     pub seekbar_area: Rect,
-    pub button_area: Rect,
-    pub tracks_area: Rect,
-    pub vol_area: Rect,
-    pub sub_area: Rect,
-    pub audio_area: Rect,
-    pub ind_au: Rect,
-    pub ind_sub: Rect,
     pub ind_rc: Rect,
     pub ind_mu: Rect,
-    pub ind_pb: Rect,
 }
 
 /// Home-tab section/carousel geometry.
@@ -59,14 +53,23 @@ pub(crate) struct LayoutPlaylist {
     pub inner: Rect,
 }
 
+/// Geometry for the power-view's own Home sub-tab (the two-column card grid),
+/// separate from `LayoutHome` which belongs to the regular Home tab.
+#[derive(Default)]
+pub(crate) struct LayoutPowerHome {
+    pub hitmap: Vec<(Rect, usize)>,
+    pub layout: Vec<PowerHomeSectionMeta>,
+}
+
 /// Power-view left panel, queue panel, and home-grid geometry.
 #[derive(Default)]
 pub(crate) struct LayoutPower {
     pub left_row_map: Vec<Option<usize>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
-    pub home_hitmap: Vec<(Rect, usize)>,
-    pub home_layout: Vec<PowerHomeSectionMeta>,
+    /// Geometry for the power-view's own Home sub-tab grid. Distinct from
+    /// `AppLayout::home` (`LayoutHome`), which is the regular Home-tab.
+    pub home: LayoutPowerHome,
     pub queue_row_map: Vec<Option<usize>>,
     pub queue_area: Rect,
     pub queue_scope_local_area: Rect,
@@ -104,4 +107,8 @@ pub(crate) struct AppLayout {
     pub tabs_area: Rect,
     pub tabbar_vol_area: Rect,
     pub settings_area: Rect,
+    /// Mouse-row -> settings-line mapping, set each time the settings panel renders.
+    pub settings_line_of_cursor: Vec<usize>,
+    /// Bounding rect of the open context menu, if any, for click-outside dismissal.
+    pub context_menu_rect: Option<Rect>,
 }

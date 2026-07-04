@@ -1994,62 +1994,6 @@ impl App {
         None
     }
 
-    pub(super) fn handle_button_click(&mut self, btn: usize) {
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let pos_s = self
-                .connected_session_state
-                .as_ref()
-                .map(|s| s.position_s)
-                .unwrap_or(0);
-            let id = conn_id.clone();
-            match btn {
-                0 => {
-                    self.session_jump_track(&id, -1, "PreviousTrack");
-                }
-                1 => {
-                    let t = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND;
-                    self.do_session_command(move |c| c.session_seek(&id, t));
-                }
-                2 => {
-                    self.do_session_command(move |c| c.session_transport(&id, "PlayPause"));
-                }
-                3 => {
-                    self.do_session_command(move |c| c.session_transport(&id, "Stop"));
-                }
-                4 => {
-                    let t = (pos_s + 5) * crate::api::TICKS_PER_SECOND;
-                    self.do_session_command(move |c| c.session_seek(&id, t));
-                }
-                5 => {
-                    self.session_jump_track(&id, 1, "NextTrack");
-                }
-                _ => {}
-            }
-            return;
-        }
-        match btn {
-            0 => {
-                self.player.previous();
-            }
-            1 => {
-                self.player.send_command(PlayerCommand::Seek(-5.0));
-            }
-            2 => {
-                self.player.send_command(PlayerCommand::TogglePause);
-            }
-            3 => {
-                self.player.stop();
-            }
-            4 => {
-                self.player.send_command(PlayerCommand::Seek(5.0));
-            }
-            5 => {
-                self.player.next();
-            }
-            _ => {}
-        }
-    }
-
     pub(super) fn open_context_menu(&mut self) {
         let mut entries: Vec<super::ContextMenuEntry> = vec![];
 
@@ -2420,7 +2364,8 @@ impl App {
                     if let Some((_, flat_idx)) = self
                         .layout
                         .power
-                        .home_hitmap
+                        .home
+                        .hitmap
                         .iter()
                         .find(|(rect, _)| rect.contains(pos))
                     {
@@ -2585,28 +2530,15 @@ impl App {
             }
         } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
-            let tbl = self
-                .layout
-                .library
-                .lib_table_area
-                .get(lib_idx)
-                .copied()
-                .unwrap_or_default();
+            let lib = &self.layout.library;
+            let tbl = lib.lib_table_area.get(lib_idx).copied().unwrap_or_default();
             if tbl.contains((col, row).into()) {
                 let click_y = row - tbl.y;
-                let scroll = self
-                    .layout
-                    .library
-                    .lib_scroll
-                    .get(lib_idx)
-                    .copied()
-                    .unwrap_or(0);
+                let scroll = lib.lib_scroll.get(lib_idx).copied().unwrap_or(0);
                 let display_pos = {
                     let mut y = 0u16;
                     let mut found = scroll;
-                    for (vi, &h) in self
-                        .layout
-                        .library
+                    for (vi, &h) in lib
                         .lib_row_heights
                         .get(lib_idx)
                         .map(|v| v.as_slice())
@@ -2702,6 +2634,7 @@ impl App {
                 {
                     let lines_idx = (row - content_top) as usize + self.settings_scroll;
                     if let Some(cur) = self
+                        .layout
                         .settings_line_of_cursor
                         .iter()
                         .position(|&l| l == lines_idx)
@@ -2911,9 +2844,7 @@ impl App {
                 } else {
                     -1
                 };
-                if self.layout.tabbar_vol_area.contains((col, row).into())
-                    || self.layout.playback.vol_area.contains((col, row).into())
-                {
+                if self.layout.tabbar_vol_area.contains((col, row).into()) {
                     self.adjust_volume(-delta * 5);
                     return;
                 }
@@ -2987,7 +2918,7 @@ impl App {
             }
             MouseEventKind::Down(MouseButton::Left) => {
                 if self.context_menu.is_some() {
-                    if let Some(rect) = self.context_menu_rect {
+                    if let Some(rect) = self.layout.context_menu_rect {
                         if rect.contains((col, row).into()) {
                             let inner_y = rect.y + 1;
                             if row >= inner_y
@@ -3004,7 +2935,7 @@ impl App {
                                     .and_then(|entry| entry.action.clone());
                                 if action.is_some() {
                                     self.context_menu = None;
-                                    self.context_menu_rect = None;
+                                    self.layout.context_menu_rect = None;
                                     self.force_clear = true;
                                     self.execute_context_action(action);
                                 }
@@ -3161,26 +3092,6 @@ impl App {
                     return;
                 }
 
-                if self.layout.playback.button_area.contains((col, row).into()) {
-                    let btn = (col.saturating_sub(self.layout.playback.button_area.x) / 5) as usize;
-                    if btn < 6 {
-                        self.handle_button_click(btn);
-                    }
-                    return;
-                }
-
-                if self.layout.playback.ind_au.width > 0
-                    && self.layout.playback.ind_au.contains((col, row).into())
-                {
-                    self.cycle_audio();
-                    return;
-                }
-                if self.layout.playback.ind_sub.width > 0
-                    && self.layout.playback.ind_sub.contains((col, row).into())
-                {
-                    self.toggle_sub();
-                    return;
-                }
                 if self.layout.playback.ind_rc.contains((col, row).into()) {
                     self.show_sessions = !self.show_sessions;
                     if self.show_sessions {
@@ -3192,27 +3103,6 @@ impl App {
                     self.toggle_mute();
                     return;
                 }
-                if self.layout.playback.ind_pb.contains((col, row).into()) {
-                    self.handle_button_click(2); // play/pause
-                    return;
-                }
-                if self.layout.playback.sub_area.contains((col, row).into()) {
-                    self.toggle_sub();
-                    return;
-                }
-                if self.layout.playback.audio_area.contains((col, row).into()) {
-                    if self.is_audio_item() {
-                        self.toggle_mute();
-                    } else {
-                        self.cycle_audio();
-                    }
-                    return;
-                }
-                if self.layout.playback.vol_area.contains((col, row).into()) {
-                    self.adjust_volume(-5);
-                    return;
-                }
-
                 if self.tab_idx == 0 {
                     let sb = self.layout.home.home_scrollbar;
                     if sb.width > 0 && sb.contains((col, row).into()) {
@@ -3262,10 +3152,6 @@ impl App {
                 }
             }
             MouseEventKind::Down(MouseButton::Right) => {
-                if self.layout.playback.vol_area.contains((col, row).into()) {
-                    self.adjust_volume(5);
-                    return;
-                }
                 if self.tab_idx == 0 && self.home_card_view {
                     let slots = self.layout.home.carousel_slots;
                     for (maybe_item_idx, card_rect) in slots.iter() {
@@ -3307,7 +3193,7 @@ impl App {
             }
             MouseEventKind::Moved | MouseEventKind::Drag(MouseButton::Right) => {
                 if let (Some(ref mut menu), Some(rect)) =
-                    (&mut self.context_menu, self.context_menu_rect)
+                    (&mut self.context_menu, self.layout.context_menu_rect)
                 {
                     let inner_y = rect.y + 1;
                     if rect.contains((col, row).into()) && row >= inner_y {
