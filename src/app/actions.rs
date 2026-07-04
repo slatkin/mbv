@@ -3415,7 +3415,10 @@ impl App {
     }
 
     pub(super) fn replace_queue_or_prompt(&mut self, action: PendingQueueAction) {
-        if self.action_touches_local_queue(&action) && self.queue_dirty && self.queue_is_saved_playlist() {
+        if self.action_touches_local_queue(&action)
+            && self.queue_dirty
+            && self.queue_is_saved_playlist()
+        {
             self.pending_queue_action = Some(action);
             self.show_save_playlist_modal = true;
         } else {

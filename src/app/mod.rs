@@ -1267,10 +1267,11 @@ impl App {
 
     fn replace_direct_remote_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
         let cursor = cursor.min(items.len().saturating_sub(1));
-        self.player.send_command(crate::player::PlayerCommand::ReplacePlaylist {
-            items: items.clone(),
-            start_idx: cursor,
-        });
+        self.player
+            .send_command(crate::player::PlayerCommand::ReplacePlaylist {
+                items: items.clone(),
+                start_idx: cursor,
+            });
         if let Some(queue) = self.remote_player_tab.as_mut() {
             queue.items = items;
             queue.playlist_cursor = cursor;
@@ -4138,7 +4139,10 @@ pub(crate) mod tests {
                 .map(|i| i.id.as_str())
                 .collect::<Vec<_>>()
         );
-        assert!(matches!(app.queue_source, crate::config::QueueSource::Unknown));
+        assert!(matches!(
+            app.queue_source,
+            crate::config::QueueSource::Unknown
+        ));
         assert!(!app.queue_dirty);
     }
 

@@ -876,9 +876,7 @@ impl App {
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.enqueue_selected()
             }
-            KeyCode::Char('q') if key.modifiers == KeyModifiers::ALT => {
-                self.enqueue_selected()
-            }
+            KeyCode::Char('q') if key.modifiers == KeyModifiers::ALT => self.enqueue_selected(),
             KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return self.try_quit();
             }
@@ -1485,7 +1483,7 @@ impl App {
                             key.modifiers.is_empty()
                                 || key.modifiers == KeyModifiers::CONTROL
                                 || key.modifiers == KeyModifiers::ALT
-                        },
+                        }
                         KeyCode::Char('.') => true,
                         KeyCode::Char('r') => true,
                         KeyCode::Char('1'..='9') => true,
@@ -1498,7 +1496,8 @@ impl App {
                         _ => false,
                     };
                 if is_lib_key {
-                    let is_quit_key = matches!(key.code, KeyCode::Char('q') if key.modifiers.is_empty());
+                    let is_quit_key =
+                        matches!(key.code, KeyCode::Char('q') if key.modifiers.is_empty());
                     let saved = self.tab_idx;
                     self.tab_idx = self.lib_tab_offset() + lib_idx;
                     let result = self.handle_lib_key(key);

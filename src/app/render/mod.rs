@@ -257,7 +257,10 @@ impl App {
 
         let now_playing: Option<String> = if active {
             let idx = self.player.status.lock().unwrap().current_idx;
-            self.playback_queue().items.get(idx).map(|i| i.playback_label())
+            self.playback_queue()
+                .items
+                .get(idx)
+                .map(|i| i.playback_label())
         } else {
             None
         };
@@ -802,9 +805,7 @@ impl App {
         };
         let (remote_glyph, remote_on, remote_color, remote_bold) = match remote_state {
             super::RemoteSlotState::Off => ("\u{21CC}", false, Color::Reset, false),
-            super::RemoteSlotState::AttachedSession => {
-                ("\u{21CC}", true, palette::YELLOW, true)
-            }
+            super::RemoteSlotState::AttachedSession => ("\u{21CC}", true, palette::YELLOW, true),
             super::RemoteSlotState::DirectRemote => ("\u{21CC}", true, palette::PINE, true),
             super::RemoteSlotState::LocalDaemon => ("\u{25CF}", true, palette::PINE, false),
         };
@@ -812,10 +813,7 @@ impl App {
             Span::styled("  ", pad),
             Span::styled("m", icon(mute_on, palette::RED, true)),
             Span::styled(" ", pad),
-            Span::styled(
-                remote_glyph,
-                icon(remote_on, remote_color, remote_bold),
-            ),
+            Span::styled(remote_glyph, icon(remote_on, remote_color, remote_bold)),
             Span::styled(" ", pad),
             Span::styled("\u{2261}", icon(is_playlist, palette::FOAM, true)),
             Span::styled("  ", pad),
