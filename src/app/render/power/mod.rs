@@ -8,7 +8,7 @@ mod music;
 mod queue;
 
 use super::super::layout::AppLayout;
-use super::super::ui_util::trunc_str;
+use super::super::ui_util::{natural_sort_key, trunc_str};
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::Rect;
 use ratatui::style::Style;
@@ -47,11 +47,37 @@ pub(super) fn parse_album_folder_name(name: &str) -> Option<(String, u32, String
 /// Returns a slice of the original string starting after the article.
 fn strip_article(s: &str) -> &str {
     for prefix in &["the ", "a ", "an "] {
-        if s.len() > prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix) {
-            return &s[prefix.len()..];
+        // `s.get(..prefix.len())` returns `None` (rather than panicking, as a
+        // byte-index slice would) when `prefix.len()` doesn't land on a UTF-8
+        // char boundary — e.g. an accented artist name where the boundary
+        // falls inside a multi-byte character.
+        if let Some(head) = s.get(..prefix.len()) {
+            if head.eq_ignore_ascii_case(prefix) {
+                return &s[prefix.len()..];
+            }
         }
     }
     s
+}
+
+/// Best-effort natural sort key for an album's display artist, computed
+/// synchronously (Emby tag or folder-name heuristic only — no network fetch,
+/// no cache lookup). Used to pick a sane initial cursor position when a
+/// music-group album level first loads (see `handle_lib_event`'s
+/// `LibEvent::Loaded` arm in `actions.rs`), before
+/// `App::resolve_group_album_artist`'s async fetch has had a chance to run.
+/// Mirrors that method's synchronous fallback chain (Emby tag →
+/// folder-name-parsed artist → literal "Unknown Artist"), minus the
+/// cache/fetch steps, since nothing is cached yet at initial load.
+pub(crate) fn initial_group_artist_sort_key(item: &crate::api::MediaItem) -> String {
+    let artist = if !item.artist.is_empty() {
+        item.artist.clone()
+    } else if let Some((artist, _, _)) = parse_album_folder_name(&item.name) {
+        artist
+    } else {
+        "Unknown Artist".to_string()
+    };
+    natural_sort_key(strip_article(&artist))
 }
 
 /// Returns the effective sort key for an item: `sort_name` when Emby provides it,
@@ -372,5 +398,31 @@ impl App {
         } else {
             self.render_power_list(f, area, focused, layout);
         }
+    }
+
+    /// Resolves the display artist for an album item in the grouped power
+    /// music views. Priority order:
+    /// 1. `item.artist` (Emby's Album-entity metadata) if non-empty.
+    /// 2. `album_artist_cache` entry if non-empty (fetched from the album's
+    ///    first few tracks — see `fetch_album_artist` in `images.rs`).
+    /// 3. `parse_album_folder_name` heuristic as an interim guess — and if
+    ///    the cache has neither a value nor an empty-tombstone yet, and no
+    ///    fetch is already in flight, triggers `fetch_album_artist`.
+    /// 4. Literal "Unknown Artist".
+    pub(super) fn resolve_group_album_artist(&mut self, item: &crate::api::MediaItem) -> String {
+        if !item.artist.is_empty() {
+            return item.artist.clone();
+        }
+        if let Some(cached) = self.album_artist_cache.get(&item.id) {
+            if !cached.is_empty() {
+                return cached.clone();
+            }
+        } else if !self.album_artist_loading.contains(&item.id) {
+            self.fetch_album_artist(item.id.clone());
+        }
+        if let Some((artist, _, _)) = parse_album_folder_name(&item.name) {
+            return artist;
+        }
+        "Unknown Artist".to_string()
     }
 }

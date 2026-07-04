@@ -10,6 +10,7 @@ use std::io::Read as IoRead;
 use textwrap::wrap;
 
 const MAX_IMAGE_FETCHES: usize = 6;
+const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
 /// A pending card-image fetch, queued when the in-flight limit is reached.
 pub(super) struct ImageFetchReq {
@@ -47,6 +48,89 @@ impl App {
                 })
                 .unwrap_or(0) as u32;
             let _ = tx.send(LibEvent::AlbumYearFetched { album_id, year });
+        });
+    }
+
+    pub(super) fn fetch_album_artist(&mut self, album_id: String) {
+        if self.album_artist_loading.contains(&album_id)
+            || self.album_artist_cache.contains_key(&album_id)
+        {
+            return;
+        }
+        self.album_artist_loading.insert(album_id.clone());
+        if self.album_artist_fetches_active >= MAX_ALBUM_ARTIST_FETCHES {
+            // Queue instead of dropping: a slot will pick it up on completion.
+            self.pending_album_artist_fetches.push_back(album_id);
+            return;
+        }
+        self.spawn_album_artist_fetch(album_id);
+    }
+
+    /// Spawn queued album-artist fetches until the in-flight limit is reached.
+    /// Called whenever an in-flight fetch completes and frees a slot (see the
+    /// `LibEvent::AlbumArtistFetched` handler in `actions.rs`).
+    pub(super) fn drain_album_artist_fetches(&mut self) {
+        while self.album_artist_fetches_active < MAX_ALBUM_ARTIST_FETCHES {
+            let Some(album_id) = self.pending_album_artist_fetches.pop_front() else {
+                break;
+            };
+            self.spawn_album_artist_fetch(album_id);
+        }
+    }
+
+    fn spawn_album_artist_fetch(&mut self, album_id: String) {
+        self.album_artist_fetches_active += 1;
+        let (server_url, token) = {
+            let c = self.client.lock().unwrap();
+            (c.config.server_url.clone(), c.token.clone())
+        };
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let url = format!(
+                "{}/Items?ParentId={}&IncludeItemTypes=Audio&Limit=5&SortBy=ParentIndexNumber,IndexNumber&SortOrder=Ascending&Fields=AlbumArtist,Artists&api_key={}",
+                server_url, album_id, token
+            );
+            let items: Vec<serde_json::Value> = ureq::get(&url)
+                .call()
+                .ok()
+                .and_then(|r| r.into_json::<serde_json::Value>().ok())
+                .and_then(|v| v["Items"].as_array().cloned())
+                .unwrap_or_default();
+
+            // Majority vote over up to 5 tracks' AlbumArtist (falling back to
+            // Artists[0] per-track), so one outlier/mistagged track can't poison
+            // the whole album's displayed artist.
+            let mut counts: Vec<(String, usize)> = Vec::new();
+            for item in &items {
+                let candidate = item["AlbumArtist"]
+                    .as_str()
+                    .map(|s| s.to_string())
+                    .or_else(|| {
+                        item["Artists"]
+                            .get(0)
+                            .and_then(|a| a.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_default();
+                if candidate.is_empty() {
+                    continue;
+                }
+                match counts.iter_mut().find(|(c, _)| c == &candidate) {
+                    Some(entry) => entry.1 += 1,
+                    None => counts.push((candidate, 1)),
+                }
+            }
+            // `max_by_key` breaks ties by keeping the *last* max; we want the
+            // *first*-seen artist to win ties, since it corresponds to the
+            // earliest track in the sample (closest to "read the first track").
+            let artist = counts
+                .into_iter()
+                .enumerate()
+                .max_by_key(|(i, (_, n))| (*n, std::cmp::Reverse(*i)))
+                .map(|(_, (c, _))| c)
+                .unwrap_or_default();
+
+            let _ = tx.send(LibEvent::AlbumArtistFetched { album_id, artist });
         });
     }
 

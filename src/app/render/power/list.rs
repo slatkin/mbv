@@ -1,5 +1,5 @@
 use super::super::super::ui_util::*;
-use super::{effective_sort_str, letter_bucket, parse_album_folder_name};
+use super::{effective_sort_str, letter_bucket, parse_album_folder_name, strip_article};
 use crate::api::TICKS_PER_SECOND;
 use crate::app::layout::AppLayout;
 use crate::app::{palette, App};
@@ -176,40 +176,52 @@ impl App {
             }
 
             // Precompute (artist, row_prefix, album_name) for each item.
-            // When proper Emby metadata is available (item.artist non-empty), use it directly.
-            // Otherwise fall back to parsing "Artist (YYYY) Album" from the folder name.
+            // Artist resolution (Emby tag → fetched-from-first-tracks cache →
+            // folder-name guess → "Unknown Artist") is centralized in
+            // `resolve_group_album_artist` since it may need to kick off an
+            // async fetch, hence the explicit loop instead of a pure `.map()`.
             // (artist, year_str, album_name) — year_str is empty if no year.
-            let album_info: Vec<(String, String, String)> = items
-                .iter()
-                .map(|item| {
-                    if !item.artist.is_empty() {
-                        let year_str = if item.production_year > 0 {
-                            item.production_year.to_string()
-                        } else {
-                            String::new()
-                        };
-                        (item.artist.clone(), year_str, item.display_name())
-                    } else if let Some((artist, year, album)) = parse_album_folder_name(&item.name)
-                    {
-                        let year_str = if year > 0 {
-                            year.to_string()
-                        } else {
-                            String::new()
-                        };
-                        (artist, year_str, album)
+            let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(items.len());
+            for item in &items {
+                let artist = self.resolve_group_album_artist(item);
+                let (year_str, album_name) = if !item.artist.is_empty() {
+                    let year_str = if item.production_year > 0 {
+                        item.production_year.to_string()
                     } else {
-                        (
-                            "Unknown Artist".to_string(),
-                            String::new(),
-                            item.display_name(),
-                        )
-                    }
-                })
-                .collect();
+                        String::new()
+                    };
+                    (year_str, item.display_name())
+                } else if let Some((_, year, album)) = parse_album_folder_name(&item.name) {
+                    let year_str = if year > 0 {
+                        year.to_string()
+                    } else {
+                        String::new()
+                    };
+                    (year_str, album)
+                } else {
+                    (String::new(), item.display_name())
+                };
+                album_info.push((artist, year_str, album_name));
+            }
+
+            // Albums arrive sorted by album name (SortName), not by artist, so a
+            // stable sort by artist is needed first — otherwise the same artist
+            // (e.g. "Unknown Artist" for tag-less compilations) resurfaces as a
+            // new header every time it's interrupted by a different album name.
+            let mut order: Vec<usize> = (0..album_info.len()).collect();
+            order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
+
+            // Publish the sorted order so keyboard cursor movement (PageUp/Down,
+            // Home/End — see `move_lib_cursor`/`jump_lib_cursor` in actions.rs)
+            // follows display order rather than the raw (SortName-by-album-title)
+            // order `items` arrived in — otherwise arrow keys jump the cursor to
+            // an unrelated album whenever the artist-sort permutes the list.
+            layout.power.left_sorted_indices = order.clone();
 
             let mut display_rows: Vec<DisplayRow> = Vec::new();
             let mut last_artist = String::new();
-            for (idx, (artist, _, _)) in album_info.iter().enumerate() {
+            for &idx in &order {
+                let artist = &album_info[idx].0;
                 if artist != &last_artist {
                     display_rows.push(DisplayRow::ArtistHeader(artist.clone()));
                     last_artist = artist.clone();
@@ -309,7 +321,17 @@ impl App {
                 &mut state,
             );
 
-            layout.power.left_row_map.clear();
+            // Row map so mouse clicks translate a visual row back to the correct
+            // (sorted-order) album index; header rows map to None.
+            layout.power.left_row_map = display_rows
+                .iter()
+                .skip(offset)
+                .take(visible)
+                .map(|dr| match dr {
+                    DisplayRow::ArtistHeader(_) => None,
+                    DisplayRow::Album(idx) => Some(*idx),
+                })
+                .collect();
             let display_n = display_rows.len();
             if focused && display_n > visible {
                 let max_off = display_n.saturating_sub(visible);

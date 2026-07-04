@@ -1,5 +1,5 @@
 use super::super::super::ui_util::*;
-use super::parse_album_folder_name;
+use super::{parse_album_folder_name, strip_article};
 use crate::app::layout::AppLayout;
 use crate::app::{palette, App};
 use ratatui::layout::*;
@@ -221,38 +221,53 @@ impl App {
             Album(usize),
         }
 
-        // Extract (artist, year, album_name) for each album item.
-        let album_info: Vec<(String, String, String)> = albums
-            .iter()
-            .map(|item| {
-                if !item.artist.is_empty() {
-                    let year_str = if item.production_year > 0 {
-                        item.production_year.to_string()
-                    } else {
-                        String::new()
-                    };
-                    (item.artist.clone(), year_str, item.display_name())
-                } else if let Some((artist, year, album)) = parse_album_folder_name(&item.name) {
-                    let year_str = if year > 0 {
-                        year.to_string()
-                    } else {
-                        String::new()
-                    };
-                    (artist, year_str, album)
+        // Extract (artist, year, album_name) for each album item. Artist
+        // resolution (Emby tag → fetched-from-first-tracks cache → folder-name
+        // guess → "Unknown Artist") is centralized in
+        // `resolve_group_album_artist` since it may need to kick off an async
+        // fetch, hence the explicit loop instead of a pure `.map()`.
+        let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
+        for item in &albums {
+            let artist = self.resolve_group_album_artist(item);
+            let (year_str, album_name) = if !item.artist.is_empty() {
+                let year_str = if item.production_year > 0 {
+                    item.production_year.to_string()
                 } else {
-                    (
-                        "Unknown Artist".to_string(),
-                        String::new(),
-                        item.display_name(),
-                    )
-                }
-            })
-            .collect();
+                    String::new()
+                };
+                (year_str, item.display_name())
+            } else if let Some((_, year, album)) = parse_album_folder_name(&item.name) {
+                let year_str = if year > 0 {
+                    year.to_string()
+                } else {
+                    String::new()
+                };
+                (year_str, album)
+            } else {
+                (String::new(), item.display_name())
+            };
+            album_info.push((artist, year_str, album_name));
+        }
 
         // Build display rows: inject artist header at each artist boundary.
+        // Albums arrive sorted by album name (SortName), not by artist, so a
+        // stable sort by artist is needed first — otherwise the same artist
+        // (e.g. "Unknown Artist" for tag-less compilations) resurfaces as a
+        // new header every time it's interrupted by a different album name.
+        let mut order: Vec<usize> = (0..album_info.len()).collect();
+        order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
+
+        // Publish the sorted order so keyboard cursor movement (PageUp/Down,
+        // Home/End — see `move_lib_cursor`/`jump_lib_cursor` in actions.rs)
+        // follows display order rather than the raw (SortName-by-album-title)
+        // order `albums` arrived in — otherwise arrow keys jump the cursor to
+        // an unrelated album whenever the artist-sort permutes the list.
+        layout.power.left_sorted_indices = order.clone();
+
         let mut display_rows: Vec<DisplayRow> = Vec::new();
         let mut last_artist = String::new();
-        for (idx, (artist, _, _)) in album_info.iter().enumerate() {
+        for &idx in &order {
+            let artist = &album_info[idx].0;
             if artist != &last_artist {
                 display_rows.push(DisplayRow::ArtistHeader(artist.clone()));
                 last_artist = artist.clone();
@@ -281,6 +296,18 @@ impl App {
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             lvl.scroll = offset;
         }
+
+        // Row map so mouse clicks translate a visual row back to the correct
+        // (sorted-order) album index; header rows map to None.
+        layout.power.left_row_map = display_rows
+            .iter()
+            .skip(offset)
+            .take(visible)
+            .map(|dr| match dr {
+                DisplayRow::ArtistHeader(_) => None,
+                DisplayRow::Album(idx) => Some(*idx),
+            })
+            .collect();
 
         let list_items: Vec<ListItem> = display_rows
             .iter()

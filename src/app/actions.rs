@@ -3022,6 +3022,7 @@ impl App {
                 level,
             } => {
                 let is_album = self.is_album_level(lib_idx);
+                let is_grouped_albums = self.is_viewing_album_folders(lib_idx);
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if let Some(last) = lib.nav_stack.last_mut() {
                         if last.parent_id == parent_id && last.loading {
@@ -3037,6 +3038,27 @@ impl App {
                         log::debug!(target: "app", "album: entered «{title}»");
                         if let Some(last) = lib.nav_stack.last_mut() {
                             sort_audio_tracks(&mut last.items);
+                        }
+                    }
+                    // The grouped-by-artist album views (music.rs/list.rs) display
+                    // albums sorted by artist, not in the raw SortName-by-album-title
+                    // order the API returns them in — so the freshly-loaded default
+                    // cursor (index 0 in raw order) can land on an arbitrary album
+                    // instead of the first one the user actually sees on screen. Snap
+                    // it to the first album in (a synchronous best-effort guess at)
+                    // display order. Mirrors `App::resolve_group_album_artist`'s
+                    // fallback chain via `initial_group_artist_sort_key`.
+                    if is_grouped_albums {
+                        if let Some(last) = lib.nav_stack.last_mut() {
+                            if !last.items.is_empty() {
+                                let mut order: Vec<usize> = (0..last.items.len()).collect();
+                                order.sort_by_key(|&i| {
+                                    super::render::power::initial_group_artist_sort_key(
+                                        &last.items[i],
+                                    )
+                                });
+                                last.cursor = order[0];
+                            }
                         }
                     }
                     if let Some(last) = lib.nav_stack.last_mut() {
@@ -3348,6 +3370,13 @@ impl App {
             LibEvent::AlbumYearFetched { album_id, year } => {
                 self.album_year_loading.remove(&album_id);
                 self.album_year_cache.insert(album_id, year);
+            }
+            LibEvent::AlbumArtistFetched { album_id, artist } => {
+                self.album_artist_loading.remove(&album_id);
+                self.album_artist_cache.insert(album_id, artist);
+                self.album_artist_fetches_active =
+                    self.album_artist_fetches_active.saturating_sub(1);
+                self.drain_album_artist_fetches();
             }
             LibEvent::NavigateTo {
                 lib_idx,

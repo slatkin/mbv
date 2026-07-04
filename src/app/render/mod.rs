@@ -4,7 +4,7 @@ mod library;
 mod log;
 mod overlays;
 mod playlist;
-mod power;
+pub(crate) mod power;
 
 use super::ui_util::{fmt_duration, take_chars, trunc_str};
 use super::{layout::AppLayout, palette, App};
