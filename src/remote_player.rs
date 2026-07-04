@@ -431,7 +431,47 @@ mod tests {
     use super::*;
     use crate::ctrl::CtrlState;
 
+    fn make_media_item(id: &str) -> MediaItem {
+        MediaItem {
+            id: id.into(),
+            name: "Test Item".into(),
+            item_type: "Episode".into(),
+            is_folder: false,
+            media_type: "Video".into(),
+            collection_type: String::new(),
+            runtime_ticks: 0,
+            played: false,
+            playback_position_ticks: 0,
+            series_id: String::new(),
+            series_name: String::new(),
+            album_id: String::new(),
+            album: String::new(),
+            index_number: 0,
+            parent_index_number: 0,
+            unplayed_item_count: 0,
+            path: String::new(),
+            artist: String::new(),
+            sort_name: String::new(),
+            production_year: 0,
+            end_year: 0,
+            overview: String::new(),
+            premiere_date: String::new(),
+            date_added: String::new(),
+            total_count: 0,
+            container: String::new(),
+            director: String::new(),
+            video_info: String::new(),
+            audio_info: String::new(),
+            genre: String::new(),
+            playlist_item_id: String::new(),
+        }
+    }
+
     fn status_with_idx(current_idx: usize) -> PlayerStatus {
+        status_with_idx_and_len(current_idx, 0)
+    }
+
+    fn status_with_idx_and_len(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             position_ticks: 0,
             last_valid_pos: 0,
@@ -440,6 +480,7 @@ mod tests {
             volume: 100,
             volume_max: 130,
             current_idx,
+            queue_len,
             active: true,
             title: String::new(),
             audio_tracks: Vec::new(),
@@ -534,5 +575,64 @@ mod tests {
             rx.recv().unwrap(),
             PlayerEvent::QueueUpdated { cursor: 3, .. }
         ));
+    }
+
+    #[test]
+    fn status_only_preserves_current_idx_and_queue_len() {
+        let status = Arc::new(Mutex::new(status_with_idx_and_len(3, 7)));
+        let items = Arc::new(Mutex::new(Vec::new()));
+        let (tx, _rx) = mpsc::channel();
+
+        apply_ctrl_event(
+            CtrlEvent::StatusOnly(status_with_idx_and_len(5, 2)),
+            &status,
+            &items,
+            &tx,
+        );
+
+        let s = status.lock().unwrap();
+        assert_eq!(s.current_idx, 3);
+        assert_eq!(s.queue_len, 7);
+    }
+
+    #[test]
+    fn state_derives_queue_len_from_items_not_status() {
+        let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
+        let items = Arc::new(Mutex::new(Vec::new()));
+        let (tx, _rx) = mpsc::channel();
+
+        // s.status.queue_len (99) is stale relative to s.items.len() (2) — the
+        // daemon broadcasts CtrlState before calling play_playlist(...), so
+        // items/cursor are authoritative over status at broadcast time.
+        apply_ctrl_event(
+            CtrlEvent::State(CtrlState {
+                status: status_with_idx_and_len(5, 99),
+                items: vec![make_media_item("a"), make_media_item("b")],
+                cursor: 1,
+            }),
+            &status,
+            &items,
+            &tx,
+        );
+
+        assert_eq!(status.lock().unwrap().queue_len, 2);
+    }
+
+    #[test]
+    fn track_changed_updates_current_idx_but_not_queue_len() {
+        let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 5)));
+        let items = Arc::new(Mutex::new(Vec::new()));
+        let (tx, _rx) = mpsc::channel();
+
+        apply_ctrl_event(
+            CtrlEvent::Player(PlayerEvent::TrackChanged(2)),
+            &status,
+            &items,
+            &tx,
+        );
+
+        let s = status.lock().unwrap();
+        assert_eq!(s.current_idx, 2);
+        assert_eq!(s.queue_len, 5);
     }
 }

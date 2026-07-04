@@ -96,6 +96,25 @@ impl PlayerStatus {
         }
         None
     }
+
+    pub fn next_idx(&self) -> Option<usize> {
+        if !self.active {
+            return None;
+        }
+        let n = self.current_idx + 1;
+        (n < self.queue_len).then_some(n)
+    }
+
+    pub fn previous_idx(&self) -> Option<usize> {
+        if !self.active || self.current_idx == 0 {
+            return None;
+        }
+        Some(self.current_idx - 1)
+    }
+
+    pub fn toggle_to_reach(&self, paused: bool) -> Option<PlayerCommand> {
+        (self.paused != paused).then_some(PlayerCommand::TogglePause)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -2422,6 +2441,27 @@ impl Player {
         }
     }
 
+    pub fn next(&self) -> bool {
+        match self.status.lock().unwrap().next_idx() {
+            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
+            None => false,
+        }
+    }
+
+    pub fn previous(&self) -> bool {
+        match self.status.lock().unwrap().previous_idx() {
+            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
+            None => false,
+        }
+    }
+
+    pub fn set_paused(&self, paused: bool) -> bool {
+        match self.status.lock().unwrap().toggle_to_reach(paused) {
+            Some(cmd) => self.send_command(cmd),
+            None => false,
+        }
+    }
+
     // Pipe mode always forces headless (no video window), regardless of item
     // type. Reads `audio_pipe_enabled` from `client.config` (rather than a
     // field cached on `Player`) so a setting toggled mid-session takes effect
@@ -2836,6 +2876,27 @@ impl PlayerProxy {
         }
     }
 
+    pub fn next(&self) -> bool {
+        match self.status.lock().unwrap().next_idx() {
+            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
+            None => false,
+        }
+    }
+
+    pub fn previous(&self) -> bool {
+        match self.status.lock().unwrap().previous_idx() {
+            Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),
+            None => false,
+        }
+    }
+
+    pub fn set_paused(&self, paused: bool) -> bool {
+        match self.status.lock().unwrap().toggle_to_reach(paused) {
+            Some(cmd) => self.send_command(cmd),
+            None => false,
+        }
+    }
+
     pub fn is_remote(&self) -> bool {
         matches!(self.inner, PlayerProxyInner::Remote(_))
     }
@@ -3069,6 +3130,94 @@ mod tests {
         assert_eq!(status.subtitle_stream_index_to_mpv_id(2), Some(1));
         assert_eq!(status.subtitle_stream_index_to_mpv_id(-1), Some(0));
         assert_eq!(status.subtitle_stream_index_to_mpv_id(1), None);
+    }
+
+    // ── PlayerStatus::next_idx / previous_idx / toggle_to_reach ──────────────
+    // (issue #80: single source of truth for next/previous/toggle-play bounds
+    // and paused-state logic, replacing four near-identical copies.)
+
+    fn make_status(
+        current_idx: usize,
+        queue_len: usize,
+        active: bool,
+        paused: bool,
+    ) -> PlayerStatus {
+        PlayerStatus {
+            position_ticks: 0,
+            last_valid_pos: 0,
+            runtime_ticks: 0,
+            paused,
+            volume: 100,
+            volume_max: 130,
+            current_idx,
+            queue_len,
+            active,
+            title: String::new(),
+            audio_tracks: Vec::new(),
+            sub_tracks: Vec::new(),
+            sub_track_stream_indexes: Vec::new(),
+            audio_id: 0,
+            audio_lang: String::new(),
+            sub_id: 0,
+            sub_lang: String::new(),
+            muted: false,
+            video_height: 0,
+            audio_codec: String::new(),
+            video_is_image: false,
+        }
+    }
+
+    #[test]
+    fn next_idx_advances_when_room() {
+        let status = make_status(1, 3, true, false);
+        assert_eq!(status.next_idx(), Some(2));
+    }
+
+    #[test]
+    fn next_idx_none_at_end_of_queue() {
+        // Regression test for the mpris.rs bug: next() had no upper-bound check
+        // and would jump past the end of the queue.
+        let status = make_status(2, 3, true, false);
+        assert_eq!(status.next_idx(), None);
+    }
+
+    #[test]
+    fn next_idx_none_when_inactive() {
+        let status = make_status(0, 3, false, false);
+        assert_eq!(status.next_idx(), None);
+    }
+
+    #[test]
+    fn previous_idx_none_at_start() {
+        let status = make_status(0, 3, true, false);
+        assert_eq!(status.previous_idx(), None);
+    }
+
+    #[test]
+    fn previous_idx_steps_back() {
+        let status = make_status(2, 3, true, false);
+        assert_eq!(status.previous_idx(), Some(1));
+    }
+
+    #[test]
+    fn previous_idx_none_when_inactive() {
+        let status = make_status(2, 3, false, false);
+        assert_eq!(status.previous_idx(), None);
+    }
+
+    #[test]
+    fn toggle_to_reach_noop_when_already_in_state() {
+        let status = make_status(0, 1, true, true);
+        assert!(status.toggle_to_reach(true).is_none());
+    }
+
+    #[test]
+    fn toggle_to_reach_emits_toggle_when_state_differs() {
+        let status = make_status(0, 1, true, false);
+        assert!(matches!(
+            status.toggle_to_reach(true),
+            Some(PlayerCommand::TogglePause)
+        ));
     }
 
     // ── lang_code_to_name (sync with parse_audio_info in api.rs) ─────────────
