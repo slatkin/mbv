@@ -473,12 +473,6 @@ struct MpvSessionConfig {
     audio_pipe_bitdepth: u8,
 }
 
-impl MpvSessionConfig {
-    fn start_paused_for_audio_pipe(&self) -> bool {
-        self.audio_pipe_path.is_some()
-    }
-}
-
 // Ensures `path` exists as a FIFO, creating it via mkfifo(3) if it doesn't
 // already exist. Refuses to touch a path that exists but isn't a FIFO.
 fn ensure_pipe(path: &str) -> Result<(), String> {
@@ -614,7 +608,7 @@ impl SessionReporter {
     }
 }
 
-fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
+fn init_mpv(config: &MpvSessionConfig) -> Result<(Mpv, bool), String> {
     let ipc_path = crate::config::mpv_ipc_path();
     let ipc_existed = std::path::Path::new(&ipc_path).exists();
     if ipc_existed {
@@ -685,6 +679,7 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
         let _ = mpv.set_property("vo", "null");
         let _ = mpv.set_property("force-window", "no");
     }
+    let mut startup_pause_armed = false;
     if let Some(path) = &config.audio_pipe_path {
         match ensure_pipe(path) {
             Ok(()) => {
@@ -724,6 +719,7 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
                     failed.push(format!("audio-swresample-o: {}", mpv_err_str(&e)));
                 }
                 if failed.is_empty() {
+                    startup_pause_armed = true;
                     log::info!(target: "player", "audio pipe: writing {rate}Hz/{bitdepth}-bit/stereo PCM to {path} (blocks until a reader attaches)");
                 } else {
                     log::warn!(target: "player", "audio pipe: failed to configure pcm output for {path}: {}", failed.join(", "));
@@ -732,17 +728,18 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
             Err(e) => log::warn!(target: "player", "audio pipe disabled for this session: {e}"),
         }
     }
-    if config.start_paused_for_audio_pipe() {
+    if startup_pause_armed {
         if let Err(e) = mpv.set_property("pause", true) {
             log::warn!(
                 target: "player",
                 "audio pipe: failed to pre-pause startup: {}",
                 mpv_err_str(&e)
             );
+            startup_pause_armed = false;
         }
     }
 
-    Ok(mpv)
+    Ok((mpv, startup_pause_armed))
 }
 
 fn init_volume(mpv: &Mpv, status: &Arc<Mutex<PlayerStatus>>, initial_volume: u8) {
@@ -873,6 +870,7 @@ impl SingleSession {
         item: &MediaItem,
         reporter: SessionReporter,
         config: MpvSessionConfig,
+        startup_pause_for_pipe: bool,
         status: Arc<Mutex<PlayerStatus>>,
         event_tx: mpsc::Sender<PlayerEvent>,
         subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
@@ -886,7 +884,6 @@ impl SingleSession {
         };
         let (intro_start, intro_end) = load_intro_times(&reporter.client, &item.id);
         let past = intro_end > 0 && last_valid_pos >= intro_end;
-        let startup_pause_for_pipe = config.start_paused_for_audio_pipe();
         SingleSession {
             osd_title: item.display_name(),
             series_id: if item.item_type == "Episode" {
@@ -1520,6 +1517,7 @@ impl PlaylistSession {
         start_idx: usize,
         reporter: SessionReporter,
         config: MpvSessionConfig,
+        startup_pause_for_pipe: bool,
         status: Arc<Mutex<PlayerStatus>>,
         event_tx: mpsc::Sender<PlayerEvent>,
         subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
@@ -1540,7 +1538,6 @@ impl PlaylistSession {
         log::info!(target: "player", "playlist init idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
             initial_pos / crate::api::TICKS_PER_SECOND);
         let osd_title = items[start_idx].display_name();
-        let startup_pause_for_pipe = config.start_paused_for_audio_pipe();
         PlaylistSession {
             config,
             reporter,
@@ -1927,14 +1924,6 @@ impl PlaylistSession {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
-        if self.startup_pause_release_pending {
-            self.startup_pause_release_pending = false;
-            log::info!(
-                target: "player",
-                "audio pipe: startup gate cleared on PlaybackRestart (playlist)"
-            );
-            let _ = mpv.set_property("pause", false);
-        }
         {
             let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
             let is_img: bool = mpv
@@ -1954,6 +1943,14 @@ impl PlaylistSession {
             let _ = mpv.set_property("playlist-pos", self.current_idx as i64);
             // Skip normal handling; wait for the next PlaybackRestart (for start_idx item).
             return;
+        }
+        if self.startup_pause_release_pending {
+            self.startup_pause_release_pending = false;
+            log::info!(
+                target: "player",
+                "audio pipe: startup gate cleared on PlaybackRestart (playlist)"
+            );
+            let _ = mpv.set_property("pause", false);
         }
         if !self.tracks_initialized {
             let prefs = self.subtitle_prefs.lock().unwrap().clone();
@@ -2620,8 +2617,8 @@ impl Player {
         let handle = thread::spawn(move || {
             is_playlist_mode.store(false, Ordering::Relaxed);
 
-            let mpv = match init_mpv(&config) {
-                Ok(m) => m,
+            let (mpv, startup_pause_for_pipe) = match init_mpv(&config) {
+                Ok(v) => v,
                 Err(e) => {
                     log::error!(target: "player", "{}", e);
                     return;
@@ -2660,6 +2657,7 @@ impl Player {
                 &item,
                 reporter,
                 config,
+                startup_pause_for_pipe,
                 status,
                 event_tx,
                 subtitle_prefs,
@@ -2750,8 +2748,8 @@ impl Player {
         let handle = thread::spawn(move || {
             is_playlist_mode.store(true, Ordering::Relaxed);
 
-            let mpv = match init_mpv(&config) {
-                Ok(m) => m,
+            let (mpv, startup_pause_for_pipe) = match init_mpv(&config) {
+                Ok(v) => v,
                 Err(e) => {
                     log::error!(target: "player", "{}", e);
                     return;
@@ -2800,6 +2798,7 @@ impl Player {
                 start_idx,
                 reporter,
                 config,
+                startup_pause_for_pipe,
                 status,
                 event_tx,
                 subtitle_prefs,
