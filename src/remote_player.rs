@@ -110,6 +110,14 @@ impl DaemonEndpoint {
                 .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}")),
         }
     }
+
+    /// Whether this endpoint is the same-machine daemon. Callers use this to
+    /// decide connection behavior (e.g. `App::new_remote`'s `is_local_daemon`)
+    /// so that distinction is derived from the endpoint itself rather than
+    /// tracked separately and passed around as a disconnected bool.
+    pub fn is_local(&self) -> bool {
+        matches!(self, Self::Local)
+    }
 }
 
 impl std::fmt::Display for DaemonEndpoint {
@@ -203,10 +211,6 @@ fn apply_ctrl_event(
 }
 
 impl RemotePlayer {
-    pub fn connect(auth_token: &str) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
-        Self::connect_endpoint(&DaemonEndpoint::Local, auth_token)
-    }
-
     pub fn connect_endpoint(
         endpoint: &DaemonEndpoint,
         auth_token: &str,

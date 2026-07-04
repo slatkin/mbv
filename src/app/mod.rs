@@ -1090,19 +1090,15 @@ impl App {
                 c.lock().unwrap().chapter_api_available = probe.chapter_api_available;
             });
         }
-        let initial_items = remote.items.lock().unwrap().clone();
-        let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let initial_tab = PlayerTab {
+            items: remote.items.lock().unwrap().clone(),
+            playlist_cursor: remote.status.lock().unwrap().current_idx,
+        };
         let player = PlayerProxy::remote(remote, always_play_next);
         let (player_tab, remote_player_tab) = if is_local_daemon {
             // Local daemon: one unified queue, exactly like plain local
             // playback — no separate remote_player_tab, no scope pill.
-            (
-                PlayerTab {
-                    items: initial_items,
-                    playlist_cursor: initial_cursor,
-                },
-                None,
-            )
+            (initial_tab, None)
         } else {
             // Remote/network daemon: keep a separate remote queue so the
             // user can browse locally while the daemon plays elsewhere.
@@ -1111,10 +1107,7 @@ impl App {
                     items: Vec::new(),
                     playlist_cursor: 0,
                 },
-                Some(PlayerTab {
-                    items: initial_items,
-                    playlist_cursor: initial_cursor,
-                }),
+                Some(initial_tab),
             )
         };
         Self::build(AppInit {

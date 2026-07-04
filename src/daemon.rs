@@ -10,6 +10,16 @@ use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 use ksni::blocking::TrayMethods;
 
+/// Shared by the startup registration and the periodic 10-minute
+/// re-registration in the main loop below — both just need to take the
+/// lock and forward to `EmbyClient::register_capabilities_with_options`.
+fn register_capabilities(client: &Arc<Mutex<EmbyClient>>, direct_commands: &[String], audio_only: bool) {
+    client
+        .lock()
+        .unwrap()
+        .register_capabilities_with_options(direct_commands, audio_only);
+}
+
 enum DaemonEvent {
     Player(PlayerEvent),
     Ws(WsEvent),
@@ -245,7 +255,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
             })
         }
     };
-    let subtitle_prefs = subtitle_prefs_from_config.clone().unwrap_or_default();
+    let has_config_subtitle_prefs = subtitle_prefs_from_config.is_some();
+    let subtitle_prefs = subtitle_prefs_from_config.unwrap_or_default();
     let client_locked = client.lock().unwrap().clone();
     let player = Player::new(
         client_locked.config.server_url.clone(),
@@ -390,11 +401,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
         let direct_commands = direct_commands.clone();
         let player_cmd_tx = player.cmd_tx.clone();
         std::thread::spawn(move || {
-            client
-                .lock()
-                .unwrap()
-                .register_capabilities_with_options(&direct_commands, audio_only);
-            if subtitle_prefs_from_config.is_none() {
+            register_capabilities(&client, &direct_commands, audio_only);
+            if !has_config_subtitle_prefs {
                 if let Ok(prefs) = client.lock().unwrap().get_user_subtitle_prefs() {
                     if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
                         let _ = tx.send(PlayerCommand::SetSubtitlePrefs {
@@ -463,11 +471,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
             last_keepalive = Instant::now();
         }
         if last_capabilities.elapsed() >= Duration::from_secs(600) {
-            let client = client.lock().unwrap().clone();
+            let client = client.clone();
             let direct_commands = direct_commands.clone();
-            std::thread::spawn(move || {
-                client.register_capabilities_with_options(&direct_commands, audio_only)
-            });
+            std::thread::spawn(move || register_capabilities(&client, &direct_commands, audio_only));
             last_capabilities = Instant::now();
         }
 
