@@ -1169,6 +1169,14 @@ impl App {
                     self.cycle_sub();
                     return Some(false);
                 }
+                KeyCode::Char('N') => {
+                    self.session_jump_track(&id, 1, "NextTrack");
+                    return Some(false);
+                }
+                KeyCode::Char('P') => {
+                    self.session_jump_track(&id, -1, "PreviousTrack");
+                    return Some(false);
+                }
                 _ => {}
             }
         }
@@ -1187,6 +1195,14 @@ impl App {
             }
             KeyCode::Char('>') if active => {
                 self.player.send_command(PlayerCommand::Seek(5.0));
+                return Some(false);
+            }
+            KeyCode::Char('N') if active => {
+                self.player.next();
+                return Some(false);
+            }
+            KeyCode::Char('P') if active => {
+                self.player.previous();
                 return Some(false);
             }
             KeyCode::Char('z') if !key.modifiers.contains(KeyModifiers::CONTROL) => {

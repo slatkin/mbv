@@ -67,6 +67,7 @@ impl App {
             mk("Space", "Pause/Resume"),
             mk("Alt+Enter", "Stop"),
             mk("< / >", "Seek ±5 seconds"),
+            mk("Shift+N / P", "Next / Previous track"),
             mk("- / +", "Volume down / up"),
             mk("m", "Mute"),
             mk("a", "Cycle audio track"),
