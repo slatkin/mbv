@@ -6,7 +6,7 @@ mod overlays;
 mod playlist;
 mod power;
 
-use super::ui_util::{fmt_duration, trunc_str};
+use super::ui_util::{fmt_duration, take_chars, trunc_str};
 use super::{palette, App};
 use crate::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -574,9 +574,9 @@ impl App {
                     .find(|stream| stream.index == remote.audio_index)
                     .map(|stream| {
                         if !stream.language.is_empty() {
-                            stream.language.to_lowercase().chars().take(2).collect()
+                            take_chars(&stream.language.to_lowercase(), 2)
                         } else {
-                            stream.label.to_lowercase().chars().take(2).collect()
+                            take_chars(&stream.label.to_lowercase(), 2)
                         }
                     })
                     .unwrap_or_else(|| "---".to_string());
@@ -590,9 +590,9 @@ impl App {
                         .find(|stream| stream.index == remote.sub_index)
                         .map(|stream| {
                             if !stream.language.is_empty() {
-                                stream.language.to_lowercase().chars().take(3).collect()
+                                take_chars(&stream.language.to_lowercase(), 3)
                             } else {
-                                stream.label.to_lowercase().chars().take(3).collect()
+                                take_chars(&stream.label.to_lowercase(), 3)
                             }
                         })
                         .unwrap_or_else(|| "CC".to_string())
@@ -649,7 +649,7 @@ impl App {
         let (au_text, audio_dim): (String, bool) = if raw_lang.is_empty() {
             ("x".into(), true)
         } else {
-            (raw_lang.chars().take(2).collect(), false)
+            (take_chars(&raw_lang, 2), false)
         };
         let sub_id = pst.sub_id;
         let raw_sub_lang = pst.sub_lang.to_lowercase();
@@ -657,7 +657,7 @@ impl App {
         let sub_label: String = if sub_id == 0 {
             "off".into()
         } else if !raw_sub_lang.is_empty() {
-            raw_sub_lang.chars().take(3).collect()
+            take_chars(&raw_sub_lang, 3)
         } else {
             "CC".into()
         };

@@ -5,6 +5,24 @@ use crate::api::{MediaItem, TICKS_PER_SECOND};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 
+/// Formats runtime as "Xh0Ym" or "Ym" for the library-row meta line, or
+/// `None` for zero/unknown runtime (in which case callers omit it from the
+/// meta parts entirely — unlike `ui_util::fmt_duration_approx`, which has a
+/// distinct "<1m" case for sub-minute runtimes that isn't wanted here).
+fn library_duration_part(runtime_ticks: i64) -> Option<String> {
+    let dur_s = runtime_ticks / TICKS_PER_SECOND;
+    if dur_s <= 0 {
+        return None;
+    }
+    let h = dur_s / 3600;
+    let m = (dur_s % 3600) / 60;
+    Some(if h > 0 {
+        format!("{h}h{m:02}m")
+    } else {
+        format!("{m}m")
+    })
+}
+
 pub(super) fn library_folder_count(item: &MediaItem) -> Option<u32> {
     if item.is_folder && item.item_type == "Folder" && item.total_count > 0 {
         Some(item.total_count)
@@ -180,15 +198,8 @@ fn episode_meta_line(item: &MediaItem, is_feed_lib: bool) -> Line<'static> {
             .unwrap_or_else(|| item.date_added.clone());
         parts.push(formatted);
     }
-    let dur_s = item.runtime_ticks / TICKS_PER_SECOND;
-    if dur_s > 0 {
-        let h = dur_s / 3600;
-        let m = (dur_s % 3600) / 60;
-        parts.push(if h > 0 {
-            format!("{h}h{m:02}m")
-        } else {
-            format!("{m}m")
-        });
+    if let Some(dur) = library_duration_part(item.runtime_ticks) {
+        parts.push(dur);
     }
     if !parts.is_empty() {
         spans.push(Span::styled(
@@ -215,15 +226,8 @@ fn default_meta_line(item: &MediaItem, is_audio: bool) -> Line<'static> {
     if item.production_year > 0 {
         parts.push(format!("{}", item.production_year));
     }
-    let dur_s = item.runtime_ticks / TICKS_PER_SECOND;
-    if dur_s > 0 {
-        let h = dur_s / 3600;
-        let m = (dur_s % 3600) / 60;
-        parts.push(if h > 0 {
-            format!("{h}h{m:02}m")
-        } else {
-            format!("{m}m")
-        });
+    if let Some(dur) = library_duration_part(item.runtime_ticks) {
+        parts.push(dur);
     }
     if is_audio && !item.container.is_empty() {
         parts.push(item.container.to_uppercase());

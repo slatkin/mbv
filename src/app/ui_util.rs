@@ -159,6 +159,13 @@ pub fn regex_strip_urls(s: &str) -> String {
     result
 }
 
+/// First `n` chars of `s`, with no ellipsis — for fixed-width abbreviations
+/// like language codes ("en", "eng"), not for display truncation of
+/// arbitrary text (see `trunc_str` for that).
+pub fn take_chars(s: &str, n: usize) -> String {
+    s.chars().take(n).collect()
+}
+
 pub fn trunc_str(s: &str, max: usize) -> String {
     if s.width() <= max {
         s.to_string()
