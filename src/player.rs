@@ -1760,6 +1760,7 @@ impl PlaylistSession {
         self.n = new_items.len();
         self.current_idx = start_idx;
         self.items = new_items;
+        self.sync_status_position();
     }
 
     fn cmd_load_new(
