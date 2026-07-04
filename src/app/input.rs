@@ -589,45 +589,17 @@ impl App {
         Some(false)
     }
 
+    // Thin adapter over the `Action` seam (issue #78, 2nd increment): translate
+    // the key into an `Action` via the pure `help_action_for_key`, then hand it
+    // to `dispatch`. Unlike `handle_playback_key`, an unrecognized key here is
+    // still swallowed (`Some(false)`), not left to fall through (`None`) — the
+    // help overlay consumes every key while open.
     fn handle_key_help(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_help {
             return None;
         }
-        match key.code {
-            KeyCode::Char('q') if key.modifiers.is_empty() => {
-                return Some(self.try_quit());
-            }
-            KeyCode::Esc | KeyCode::F(1) => {
-                self.show_help = false;
-            }
-            KeyCode::F(2) => {
-                self.show_help = false;
-                self.show_settings = true;
-            }
-            KeyCode::F(3) => {
-                self.show_help = false;
-                self.show_sessions = true;
-            }
-            KeyCode::F(4) => {
-                self.show_help = false;
-                self.open_playlists_panel();
-            }
-            KeyCode::Up => {
-                self.help_scroll = self.help_scroll.saturating_sub(1);
-            }
-            KeyCode::Down => {
-                self.help_scroll += 1;
-            }
-            KeyCode::PageUp => {
-                self.help_scroll = self.help_scroll.saturating_sub(10);
-            }
-            KeyCode::PageDown => {
-                self.help_scroll += 10;
-            }
-            KeyCode::Home => {
-                self.help_scroll = 0;
-            }
-            _ => {}
+        if let Some(action) = super::action::help_action_for_key(key) {
+            return Some(self.dispatch(action));
         }
         Some(false)
     }

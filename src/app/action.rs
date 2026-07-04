@@ -6,9 +6,10 @@
 //! intercepted and *what* it means, without touching `App` at all. `dispatch`
 //! then owns the state transitions for each `Action` variant.
 //!
-//! This is a pilot slice covering only `handle_playback_key`
-//! (see `src/app/input.rs`). Other modal handlers still speak directly to
-//! `App` and are expected to migrate to this same `Action` enum over time.
+//! Converted so far: `handle_playback_key` (the issue #78 pilot) and
+//! `handle_key_help` (see `src/app/input.rs`). Other modal handlers still
+//! speak directly to `App` and are expected to migrate to this same `Action`
+//! enum over time, one handler at a time.
 
 use super::App;
 use crate::api::TICKS_PER_SECOND;
@@ -29,6 +30,23 @@ pub(super) enum Action {
     ToggleMute,
     /// `dispatch` replicates the `is_audio_item()` branch.
     AudioKey,
+
+    // ── handle_key_help variants ────────────────────────────────────────
+    /// `q` while the help overlay is open.
+    Quit,
+    /// Esc or F1: dismiss the help overlay.
+    CloseHelp,
+    /// F2: dismiss help, open settings.
+    ShowSettings,
+    /// F3: dismiss help, open sessions.
+    ShowSessions,
+    /// F4: dismiss help, open the playlists panel.
+    ShowPlaylists,
+    ScrollUp,
+    ScrollDown,
+    ScrollPageUp,
+    ScrollPageDown,
+    ScrollHome,
 }
 
 /// Translate a key event into a playback `Action`, or `None` if this handler
@@ -69,6 +87,32 @@ pub(super) fn playback_action_for_key(
     }
 }
 
+/// Translate a key event into a help-overlay `Action`, or `None` if this key
+/// isn't bound. Pure function; no `App` access.
+///
+/// Unlike `playback_action_for_key`, gating is not per-key here: the caller
+/// (`handle_key_help`) only calls this after confirming `self.show_help`, so
+/// this function does no gating of its own. Also note: unlike the playback
+/// seam, `None` from this function does NOT mean "let the key fall through to
+/// other handlers" — the thin adapter in `input.rs` still swallows the key
+/// (`Some(false)`), matching the old code's `_ => {}` arm followed by an
+/// unconditional `Some(false)`.
+pub(super) fn help_action_for_key(key: KeyEvent) -> Option<Action> {
+    match key.code {
+        KeyCode::Char('q') if key.modifiers.is_empty() => Some(Action::Quit),
+        KeyCode::Esc | KeyCode::F(1) => Some(Action::CloseHelp),
+        KeyCode::F(2) => Some(Action::ShowSettings),
+        KeyCode::F(3) => Some(Action::ShowSessions),
+        KeyCode::F(4) => Some(Action::ShowPlaylists),
+        KeyCode::Up => Some(Action::ScrollUp),
+        KeyCode::Down => Some(Action::ScrollDown),
+        KeyCode::PageUp => Some(Action::ScrollPageUp),
+        KeyCode::PageDown => Some(Action::ScrollPageDown),
+        KeyCode::Home => Some(Action::ScrollHome),
+        _ => None,
+    }
+}
+
 /// Compute the absolute tick position for a remote-session seek, given the
 /// current position in seconds and a relative delta in seconds.
 ///
@@ -82,12 +126,18 @@ fn remote_seek_ticks(pos_s: i64, delta: f64) -> i64 {
 }
 
 impl App {
-    /// Own the state transitions for a playback `Action`: for most variants
-    /// this means picking a remote-session command vs. a local `Player`
-    /// command, matching the divergent behavior `handle_playback_key` had
-    /// inline (including its known bugs — see issue #78 follow-up).
-    pub(super) fn dispatch(&mut self, action: Action) {
+    /// Own the state transitions for an `Action`. Returns whether the app
+    /// should quit (`true` only for `Action::Quit`'s non-prompting path;
+    /// `false` for every other variant).
+    ///
+    /// For most playback variants this means picking a remote-session
+    /// command vs. a local `Player` command, matching the divergent behavior
+    /// `handle_playback_key` had inline (including its known bugs — see issue
+    /// #78 follow-up).
+    pub(super) fn dispatch(&mut self, action: Action) -> bool {
         match action {
+            Action::Quit => return self.try_quit(),
+
             Action::TogglePlayPause => {
                 if let Some(id) = self.connected_session_id.clone() {
                     self.do_session_command(move |c| c.session_transport(&id, "PlayPause"));
@@ -153,7 +203,39 @@ impl App {
                     self.cycle_audio();
                 }
             }
+
+            Action::CloseHelp => {
+                self.show_help = false;
+            }
+            Action::ShowSettings => {
+                self.show_help = false;
+                self.show_settings = true;
+            }
+            Action::ShowSessions => {
+                self.show_help = false;
+                self.show_sessions = true;
+            }
+            Action::ShowPlaylists => {
+                self.show_help = false;
+                self.open_playlists_panel();
+            }
+            Action::ScrollUp => {
+                self.help_scroll = self.help_scroll.saturating_sub(1);
+            }
+            Action::ScrollDown => {
+                self.help_scroll += 1;
+            }
+            Action::ScrollPageUp => {
+                self.help_scroll = self.help_scroll.saturating_sub(10);
+            }
+            Action::ScrollPageDown => {
+                self.help_scroll += 10;
+            }
+            Action::ScrollHome => {
+                self.help_scroll = 0;
+            }
         }
+        false
     }
 }
 
@@ -356,6 +438,106 @@ mod tests {
         );
     }
 
+    // ── help_action_for_key: no gating (caller already checked show_help) ───
+
+    #[test]
+    fn help_q_fires_quit() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::Char('q'))),
+            Some(Action::Quit)
+        );
+    }
+
+    #[test]
+    fn help_ctrl_q_does_not_fire() {
+        assert_eq!(help_action_for_key(key_ctrl(KeyCode::Char('q'))), None);
+    }
+
+    #[test]
+    fn help_esc_fires_close_help() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::Esc)),
+            Some(Action::CloseHelp)
+        );
+    }
+
+    #[test]
+    fn help_f1_fires_close_help() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::F(1))),
+            Some(Action::CloseHelp)
+        );
+    }
+
+    #[test]
+    fn help_f2_fires_show_settings() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::F(2))),
+            Some(Action::ShowSettings)
+        );
+    }
+
+    #[test]
+    fn help_f3_fires_show_sessions() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::F(3))),
+            Some(Action::ShowSessions)
+        );
+    }
+
+    #[test]
+    fn help_f4_fires_show_playlists() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::F(4))),
+            Some(Action::ShowPlaylists)
+        );
+    }
+
+    #[test]
+    fn help_up_fires_scroll_up() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::Up)),
+            Some(Action::ScrollUp)
+        );
+    }
+
+    #[test]
+    fn help_down_fires_scroll_down() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::Down)),
+            Some(Action::ScrollDown)
+        );
+    }
+
+    #[test]
+    fn help_page_up_fires_scroll_page_up() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::PageUp)),
+            Some(Action::ScrollPageUp)
+        );
+    }
+
+    #[test]
+    fn help_page_down_fires_scroll_page_down() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::PageDown)),
+            Some(Action::ScrollPageDown)
+        );
+    }
+
+    #[test]
+    fn help_home_fires_scroll_home() {
+        assert_eq!(
+            help_action_for_key(key(KeyCode::Home)),
+            Some(Action::ScrollHome)
+        );
+    }
+
+    #[test]
+    fn help_unrelated_key_does_not_fire() {
+        assert_eq!(help_action_for_key(key(KeyCode::Char('x'))), None);
+    }
+
     // ── dispatch: state-mutating variants ────────────────────────────────────
 
     // `XDG_STATE_HOME` is a process-global env var (like `MBV_SYSTEM` in
@@ -404,6 +586,103 @@ mod tests {
 
         app.dispatch(Action::ToggleMute);
         assert!(!app.mute_on);
+    }
+
+    // ── dispatch: handle_key_help variants ───────────────────────────────────
+
+    #[test]
+    fn dispatch_close_help_clears_show_help() {
+        let mut app = make_app_stub();
+        app.show_help = true;
+        assert!(!app.dispatch(Action::CloseHelp));
+        assert!(!app.show_help);
+    }
+
+    #[test]
+    fn dispatch_show_settings_switches_panels() {
+        let mut app = make_app_stub();
+        app.show_help = true;
+        assert!(!app.dispatch(Action::ShowSettings));
+        assert!(!app.show_help);
+        assert!(app.show_settings);
+    }
+
+    #[test]
+    fn dispatch_show_sessions_switches_panels() {
+        let mut app = make_app_stub();
+        app.show_help = true;
+        assert!(!app.dispatch(Action::ShowSessions));
+        assert!(!app.show_help);
+        assert!(app.show_sessions);
+    }
+
+    #[test]
+    fn dispatch_show_playlists_switches_panels() {
+        let mut app = make_app_stub();
+        app.show_help = true;
+        // Pre-populate `playlists` so `open_playlists_panel`'s
+        // `playlists.is_empty() && !playlists_loading` guard is false and it
+        // never spawns the background network-loading thread.
+        app.playlists = vec![crate::app::tests::make_item("Playlist", "Playlist")];
+        assert!(!app.dispatch(Action::ShowPlaylists));
+        assert!(!app.show_help);
+        assert!(app.show_playlists);
+    }
+
+    #[test]
+    fn dispatch_scroll_home_resets_to_zero() {
+        let mut app = make_app_stub();
+        app.help_scroll = 7;
+        assert!(!app.dispatch(Action::ScrollHome));
+        assert_eq!(app.help_scroll, 0);
+    }
+
+    #[test]
+    fn dispatch_scroll_up_saturates_at_zero() {
+        let mut app = make_app_stub();
+        app.help_scroll = 0;
+        app.dispatch(Action::ScrollUp);
+        assert_eq!(app.help_scroll, 0);
+    }
+
+    #[test]
+    fn dispatch_scroll_page_up_saturates_at_zero() {
+        let mut app = make_app_stub();
+        app.help_scroll = 3;
+        app.dispatch(Action::ScrollPageUp);
+        assert_eq!(app.help_scroll, 0);
+    }
+
+    #[test]
+    fn dispatch_scroll_down_increments_by_one() {
+        let mut app = make_app_stub();
+        app.help_scroll = 5;
+        app.dispatch(Action::ScrollDown);
+        assert_eq!(app.help_scroll, 6);
+    }
+
+    #[test]
+    fn dispatch_scroll_page_down_increments_by_ten() {
+        let mut app = make_app_stub();
+        app.help_scroll = 5;
+        app.dispatch(Action::ScrollPageDown);
+        assert_eq!(app.help_scroll, 15);
+    }
+
+    #[test]
+    fn dispatch_quit_when_queue_not_dirty_returns_true_and_persists() {
+        let _g = XDG_STATE_HOME_LOCK.lock().unwrap();
+        let _xdg = XdgStateHomeGuard::new();
+
+        let mut app = make_app_stub();
+        assert!(!app.queue_dirty);
+        assert!(app.dispatch(Action::Quit));
+
+        let prefs_path = crate::config::prefs_path();
+        assert!(
+            std::fs::read_to_string(&prefs_path).is_ok(),
+            "try_quit's non-dirty path should have called save_prefs()"
+        );
     }
 
     // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
