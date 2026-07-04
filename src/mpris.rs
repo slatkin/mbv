@@ -74,14 +74,14 @@ fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> 
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
 impl MediaPlayer2Player {
     fn play(&self) {
-        if self.status.lock().unwrap().paused {
-            (self.cmd_tx)(PlayerCommand::TogglePause);
+        if let Some(cmd) = self.status.lock().unwrap().toggle_to_reach(false) {
+            (self.cmd_tx)(cmd);
         }
     }
 
     fn pause(&self) {
-        if !self.status.lock().unwrap().paused {
-            (self.cmd_tx)(PlayerCommand::TogglePause);
+        if let Some(cmd) = self.status.lock().unwrap().toggle_to_reach(true) {
+            (self.cmd_tx)(cmd);
         }
     }
 
@@ -94,14 +94,14 @@ impl MediaPlayer2Player {
     }
 
     fn next(&self) {
-        let idx = self.status.lock().unwrap().current_idx;
-        (self.cmd_tx)(PlayerCommand::JumpTo(idx + 1));
+        if let Some(idx) = self.status.lock().unwrap().next_idx() {
+            (self.cmd_tx)(PlayerCommand::JumpTo(idx));
+        }
     }
 
     fn previous(&self) {
-        let idx = self.status.lock().unwrap().current_idx;
-        if idx > 0 {
-            (self.cmd_tx)(PlayerCommand::JumpTo(idx - 1));
+        if let Some(idx) = self.status.lock().unwrap().previous_idx() {
+            (self.cmd_tx)(PlayerCommand::JumpTo(idx));
         }
     }
 
