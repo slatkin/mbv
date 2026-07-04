@@ -705,12 +705,13 @@ impl App {
         };
 
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
-        let mut layout: Vec<crate::app::PowerHomeSectionMeta> = Vec::with_capacity(n_sections);
+        let mut layout: Vec<crate::app::layout::PowerHomeSectionMeta> =
+            Vec::with_capacity(n_sections);
 
         for (i, s) in sections.iter().enumerate() {
             let r = i / cols;
             let c = i % cols;
-            layout.push(crate::app::PowerHomeSectionMeta {
+            layout.push(crate::app::layout::PowerHomeSectionMeta {
                 flat_start: s.flat_start,
                 len: s.items.len(),
                 row: r,

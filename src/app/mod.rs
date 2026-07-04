@@ -401,16 +401,6 @@ enum RemoteSlotState {
     LocalDaemon,
 }
 
-/// Geometry of one power-home section card in the two-column grid, computed at render
-/// time and reused by keyboard navigation (column jumps).
-#[derive(Clone, Default)]
-pub(crate) struct PowerHomeSectionMeta {
-    pub flat_start: usize, // first flat item index in this section
-    pub len: usize,        // number of items (0 for the empty Keep Watching card)
-    pub row: usize,        // grid row
-    pub col: usize,        // grid column
-}
-
 struct HomePane {
     continue_items: Vec<MediaItem>,
     continue_cursor: usize,
@@ -484,8 +474,6 @@ pub struct App {
     power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
     power_queue_scroll: usize,
-    power_detail_max_scroll: usize, // max valid scroll (set each render frame)
-    power_detail_page_h: usize,     // visible overview line count (set each render frame)
     // Whether the power-view queue is currently relocated to the bottom of the
     // right column (low-height layout). Sticky with hysteresis so a small,
     // transient change in the card image's rendered height (e.g. switching
@@ -814,7 +802,13 @@ impl App {
             log_pane: LogPane::Log,
             log_source_cursor: 0,
             log_disabled_sources: std::collections::HashSet::new(),
-            layout: layout::AppLayout::default(),
+            layout: layout::AppLayout {
+                power: layout::LayoutPower {
+                    detail_page_h: 5,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
             terminal_width: 80,
             terminal_height: 24,
 
@@ -839,8 +833,6 @@ impl App {
             power_left_tab: 0,
             power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
             power_queue_scroll: 0,
-            power_detail_max_scroll: 0,
-            power_detail_page_h: 5,
             power_queue_relocated: false,
             home_card_view: false,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
@@ -2471,7 +2463,13 @@ pub(crate) mod tests {
             log_pane: LogPane::Log,
             log_source_cursor: 0,
             log_disabled_sources: std::collections::HashSet::new(),
-            layout: layout::AppLayout::default(),
+            layout: layout::AppLayout {
+                power: layout::LayoutPower {
+                    detail_page_h: 5,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
             terminal_width: 80,
             terminal_height: 24,
 
@@ -2496,8 +2494,6 @@ pub(crate) mod tests {
             power_left_tab: 0,
             power_left_tab_pending: 0,
             power_queue_scroll: 0,
-            power_detail_max_scroll: 0,
-            power_detail_page_h: 5,
             power_queue_relocated: false,
             home_card_view: false,
             last_played_item_id: None,

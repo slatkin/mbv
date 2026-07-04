@@ -328,9 +328,10 @@ impl App {
     }
 
     fn render_power_library(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        self.layout.power.cursor_screen_y = None;
-        self.layout.power.inline_image_rect = None;
-        self.layout.power.selector_tabs.clear();
+        let power = &mut self.layout.power;
+        power.cursor_screen_y = None;
+        power.inline_image_rect = None;
+        power.selector_tabs.clear();
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
         if self.power_left_tab > 0 {

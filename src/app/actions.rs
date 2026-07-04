@@ -4059,11 +4059,10 @@ impl App {
             });
         }
         let n = self.libs.len();
-        self.layout.library.lib_scroll.resize(n, 0);
-        self.layout.library.lib_row_heights.resize_with(n, Vec::new);
-        self.layout
-            .library
-            .lib_table_area
+        let lib = &mut self.layout.library;
+        lib.lib_scroll.resize(n, 0);
+        lib.lib_row_heights.resize_with(n, Vec::new);
+        lib.lib_table_area
             .resize(n, ratatui::layout::Rect::default());
     }
 

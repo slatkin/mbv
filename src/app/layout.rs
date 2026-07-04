@@ -9,7 +9,15 @@
 
 use ratatui::layout::Rect;
 
-use super::PowerHomeSectionMeta;
+/// Geometry of one power-home section card in the two-column grid, computed at render
+/// time and reused by keyboard navigation (column jumps).
+#[derive(Clone, Default)]
+pub(crate) struct PowerHomeSectionMeta {
+    pub flat_start: usize, // first flat item index in this section
+    pub len: usize,        // number of items (0 for the empty Keep Watching card)
+    pub row: usize,        // grid row
+    pub col: usize,        // grid column
+}
 
 /// Seekbar/button/track/volume/subtitle/audio rects and their divider
 /// status-indicator rects, shared across playback views.
@@ -68,6 +76,10 @@ pub(crate) struct LayoutPower {
     pub queue_cursor_screen_y: Option<u16>,
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
+    /// Max valid scroll for the detail-view overview text, set each render frame.
+    pub detail_max_scroll: usize,
+    /// Visible overview line count for the detail view, set each render frame.
+    pub detail_page_h: usize,
 }
 
 /// Library table/breadcrumb geometry.

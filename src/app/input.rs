@@ -1273,19 +1273,20 @@ impl App {
                         KeyCode::Down => {
                             self.libs[lib_idx].power_detail_scroll =
                                 (self.libs[lib_idx].power_detail_scroll + 1)
-                                    .min(self.power_detail_max_scroll);
+                                    .min(self.layout.power.detail_max_scroll);
                             return false;
                         }
                         KeyCode::PageUp => {
                             self.libs[lib_idx].power_detail_scroll = self.libs[lib_idx]
                                 .power_detail_scroll
-                                .saturating_sub(self.power_detail_page_h);
+                                .saturating_sub(self.layout.power.detail_page_h);
                             return false;
                         }
                         KeyCode::PageDown => {
-                            self.libs[lib_idx].power_detail_scroll =
-                                (self.libs[lib_idx].power_detail_scroll + self.power_detail_page_h)
-                                    .min(self.power_detail_max_scroll);
+                            self.libs[lib_idx].power_detail_scroll = (self.libs[lib_idx]
+                                .power_detail_scroll
+                                + self.layout.power.detail_page_h)
+                                .min(self.layout.power.detail_max_scroll);
                             return false;
                         }
                         // Left/Right/Home/End: swallow to block underlying list nav.

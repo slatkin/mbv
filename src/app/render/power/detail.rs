@@ -306,8 +306,8 @@ impl App {
             let max_scroll = total.saturating_sub(avail);
             let scroll = self.libs[lib_idx].power_detail_scroll.min(max_scroll);
             self.libs[lib_idx].power_detail_scroll = scroll;
-            self.power_detail_max_scroll = max_scroll;
-            self.power_detail_page_h = avail.max(1);
+            self.layout.power.detail_max_scroll = max_scroll;
+            self.layout.power.detail_page_h = avail.max(1);
 
             if avail > 0 {
                 for (disp_idx, line_text) in all_lines.iter().skip(scroll).take(avail).enumerate() {
