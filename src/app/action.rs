@@ -12,7 +12,6 @@
 //! enum over time, one handler at a time.
 
 use super::App;
-use crate::api::TICKS_PER_SECOND;
 use crate::player::PlayerCommand;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
@@ -27,9 +26,18 @@ pub(super) enum Action {
     /// `dispatch` picks `cycle_sub()` (remote session) vs `toggle_sub()` (local).
     CycleOrToggleSubtitle,
     AdjustVolume(i64),
+    /// The `m` key: flips `mute_on` and sends `PlayerCommand::SetMute`.
+    /// **Not** the same mechanism as `ToggleMuteOrCycleAudio`'s mute path
+    /// below, which instead flips `ui_volume`/`pre_mute_volume` via
+    /// `SetVolume` — these are two separate, pre-existing "mute" code paths
+    /// with no cross-reference in the original code; not unified here since
+    /// that would be a behavior change (see issue #78 follow-up, #84).
     ToggleMute,
-    /// `dispatch` replicates the `is_audio_item()` branch.
-    AudioKey,
+    /// The `a` key: `dispatch` replicates the `is_audio_item()` branch,
+    /// calling `toggle_mute()` (the `ui_volume`/`pre_mute_volume`/`SetVolume`
+    /// mechanism, *not* `Action::ToggleMute`'s `mute_on`/`SetMute`) if the
+    /// current item is audio-only, otherwise `cycle_audio()`.
+    ToggleMuteOrCycleAudio,
 
     // ── handle_key_help variants ────────────────────────────────────────
     /// `q` while the help overlay is open.
@@ -42,10 +50,10 @@ pub(super) enum Action {
     ShowSessions,
     /// F4: dismiss help, open the playlists panel.
     ShowPlaylists,
-    ScrollUp,
-    ScrollDown,
-    ScrollPageUp,
-    ScrollPageDown,
+    /// Scroll `help_scroll` by a signed delta: negative clamps at zero
+    /// (`Up`/`PageUp`), positive does not (`Down`/`PageDown`, preserving the
+    /// pre-existing unclamped-scroll-down quirk — see `dispatch`).
+    ScrollBy(i64),
     ScrollHome,
 }
 
@@ -82,7 +90,7 @@ pub(super) fn playback_action_for_key(
         KeyCode::Char('m') => Some(Action::ToggleMute),
         KeyCode::Char('-') => Some(Action::AdjustVolume(-5)),
         KeyCode::Char('+') | KeyCode::Char('=') => Some(Action::AdjustVolume(5)),
-        KeyCode::Char('a') if active => Some(Action::AudioKey),
+        KeyCode::Char('a') if active => Some(Action::ToggleMuteOrCycleAudio),
         _ => None,
     }
 }
@@ -104,25 +112,13 @@ pub(super) fn help_action_for_key(key: KeyEvent) -> Option<Action> {
         KeyCode::F(2) => Some(Action::ShowSettings),
         KeyCode::F(3) => Some(Action::ShowSessions),
         KeyCode::F(4) => Some(Action::ShowPlaylists),
-        KeyCode::Up => Some(Action::ScrollUp),
-        KeyCode::Down => Some(Action::ScrollDown),
-        KeyCode::PageUp => Some(Action::ScrollPageUp),
-        KeyCode::PageDown => Some(Action::ScrollPageDown),
+        KeyCode::Up => Some(Action::ScrollBy(-1)),
+        KeyCode::Down => Some(Action::ScrollBy(1)),
+        KeyCode::PageUp => Some(Action::ScrollBy(-10)),
+        KeyCode::PageDown => Some(Action::ScrollBy(10)),
         KeyCode::Home => Some(Action::ScrollHome),
         _ => None,
     }
-}
-
-/// Compute the absolute tick position for a remote-session seek, given the
-/// current position in seconds and a relative delta in seconds.
-///
-/// This reconstructs the asymmetric math the old inline remote-session `<`/`>`
-/// handlers had: rewinding (`delta < 0`) clamps at zero, fast-forwarding does
-/// not (matching `input.rs`'s prior `(pos_s - 5).max(0)` vs. `(pos_s + 5)`).
-fn remote_seek_ticks(pos_s: i64, delta: f64) -> i64 {
-    let moved = pos_s + delta as i64;
-    let target = if delta < 0.0 { moved.max(0) } else { moved };
-    target * TICKS_PER_SECOND
 }
 
 impl App {
@@ -159,7 +155,7 @@ impl App {
                         .as_ref()
                         .map(|s| s.position_s)
                         .unwrap_or(0);
-                    let t = remote_seek_ticks(pos_s, delta);
+                    let t = Self::remote_seek_ticks(pos_s, delta);
                     self.do_session_command(move |c| c.session_seek(&id, t));
                 } else {
                     self.player.send_command(PlayerCommand::Seek(delta));
@@ -196,7 +192,7 @@ impl App {
                     .send_command(PlayerCommand::SetMute(self.mute_on));
                 self.save_prefs();
             }
-            Action::AudioKey => {
+            Action::ToggleMuteOrCycleAudio => {
                 if self.is_audio_item() {
                     self.toggle_mute();
                 } else {
@@ -207,29 +203,24 @@ impl App {
             Action::CloseHelp => {
                 self.show_help = false;
             }
-            Action::ShowSettings => {
+            Action::ShowSettings | Action::ShowSessions | Action::ShowPlaylists => {
                 self.show_help = false;
-                self.show_settings = true;
+                match action {
+                    Action::ShowSettings => self.show_settings = true,
+                    Action::ShowSessions => self.show_sessions = true,
+                    Action::ShowPlaylists => self.open_playlists_panel(),
+                    _ => unreachable!(),
+                }
             }
-            Action::ShowSessions => {
-                self.show_help = false;
-                self.show_sessions = true;
-            }
-            Action::ShowPlaylists => {
-                self.show_help = false;
-                self.open_playlists_panel();
-            }
-            Action::ScrollUp => {
-                self.help_scroll = self.help_scroll.saturating_sub(1);
-            }
-            Action::ScrollDown => {
-                self.help_scroll += 1;
-            }
-            Action::ScrollPageUp => {
-                self.help_scroll = self.help_scroll.saturating_sub(10);
-            }
-            Action::ScrollPageDown => {
-                self.help_scroll += 10;
+            Action::ScrollBy(delta) => {
+                if delta < 0 {
+                    self.help_scroll = self.help_scroll.saturating_sub((-delta) as u16);
+                } else {
+                    // No upper clamp here, matching the pre-existing quirk in
+                    // the original inline handler (presumably clamped at
+                    // render time instead).
+                    self.help_scroll += delta as u16;
+                }
             }
             Action::ScrollHome => {
                 self.help_scroll = 0;
@@ -410,11 +401,11 @@ mod tests {
     fn a_fires_only_when_active() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), true, false),
-            Some(Action::AudioKey)
+            Some(Action::ToggleMuteOrCycleAudio)
         );
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), true, true),
-            Some(Action::AudioKey)
+            Some(Action::ToggleMuteOrCycleAudio)
         );
     }
 
@@ -494,34 +485,34 @@ mod tests {
     }
 
     #[test]
-    fn help_up_fires_scroll_up() {
+    fn help_up_fires_scroll_by_negative_one() {
         assert_eq!(
             help_action_for_key(key(KeyCode::Up)),
-            Some(Action::ScrollUp)
+            Some(Action::ScrollBy(-1))
         );
     }
 
     #[test]
-    fn help_down_fires_scroll_down() {
+    fn help_down_fires_scroll_by_one() {
         assert_eq!(
             help_action_for_key(key(KeyCode::Down)),
-            Some(Action::ScrollDown)
+            Some(Action::ScrollBy(1))
         );
     }
 
     #[test]
-    fn help_page_up_fires_scroll_page_up() {
+    fn help_page_up_fires_scroll_by_negative_ten() {
         assert_eq!(
             help_action_for_key(key(KeyCode::PageUp)),
-            Some(Action::ScrollPageUp)
+            Some(Action::ScrollBy(-10))
         );
     }
 
     #[test]
-    fn help_page_down_fires_scroll_page_down() {
+    fn help_page_down_fires_scroll_by_ten() {
         assert_eq!(
             help_action_for_key(key(KeyCode::PageDown)),
-            Some(Action::ScrollPageDown)
+            Some(Action::ScrollBy(10))
         );
     }
 
@@ -638,34 +629,34 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_scroll_up_saturates_at_zero() {
+    fn dispatch_scroll_by_negative_one_saturates_at_zero() {
         let mut app = make_app_stub();
         app.help_scroll = 0;
-        app.dispatch(Action::ScrollUp);
+        app.dispatch(Action::ScrollBy(-1));
         assert_eq!(app.help_scroll, 0);
     }
 
     #[test]
-    fn dispatch_scroll_page_up_saturates_at_zero() {
+    fn dispatch_scroll_by_negative_ten_saturates_at_zero() {
         let mut app = make_app_stub();
         app.help_scroll = 3;
-        app.dispatch(Action::ScrollPageUp);
+        app.dispatch(Action::ScrollBy(-10));
         assert_eq!(app.help_scroll, 0);
     }
 
     #[test]
-    fn dispatch_scroll_down_increments_by_one() {
+    fn dispatch_scroll_by_one_increments() {
         let mut app = make_app_stub();
         app.help_scroll = 5;
-        app.dispatch(Action::ScrollDown);
+        app.dispatch(Action::ScrollBy(1));
         assert_eq!(app.help_scroll, 6);
     }
 
     #[test]
-    fn dispatch_scroll_page_down_increments_by_ten() {
+    fn dispatch_scroll_by_ten_increments() {
         let mut app = make_app_stub();
         app.help_scroll = 5;
-        app.dispatch(Action::ScrollPageDown);
+        app.dispatch(Action::ScrollBy(10));
         assert_eq!(app.help_scroll, 15);
     }
 
@@ -683,27 +674,6 @@ mod tests {
             std::fs::read_to_string(&prefs_path).is_ok(),
             "try_quit's non-dirty path should have called save_prefs()"
         );
-    }
-
-    // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
-
-    #[test]
-    fn remote_seek_rewind_clamps_at_zero() {
-        // 3s in, rewind 5s: would go negative, must clamp to 0.
-        assert_eq!(remote_seek_ticks(3, -5.0), 0);
-    }
-
-    #[test]
-    fn remote_seek_rewind_does_not_clamp_when_unnecessary() {
-        assert_eq!(remote_seek_ticks(20, -5.0), 15 * TICKS_PER_SECOND);
-    }
-
-    #[test]
-    fn remote_seek_forward_has_no_clamp() {
-        // Fast-forward has no lower-bound clamp in the original code; a small
-        // pos_s plus a large forward delta simply goes wherever the math
-        // says, same as rewind's clamp being absent here.
-        assert_eq!(remote_seek_ticks(3, 5.0), 8 * TICKS_PER_SECOND);
     }
 
     // Same unique-tempdir convention as api.rs's test-only `make_temp_data_dir`

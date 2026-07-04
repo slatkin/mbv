@@ -1111,8 +1111,12 @@ impl App {
         let active = self.player.status.lock().unwrap().active;
         let has_remote_session = self.connected_session_id.is_some();
         let action = super::action::playback_action_for_key(key, active, has_remote_session)?;
-        self.dispatch(action);
-        Some(false)
+        // Propagate dispatch's should-quit bool rather than hardcoding
+        // `Some(false)`: no playback action currently resolves to
+        // `Action::Quit`, but this way that invariant doesn't need to be
+        // relied on silently — if it's ever violated, the quit signal still
+        // reaches the caller correctly instead of being swallowed here.
+        Some(self.dispatch(action))
     }
 
     /// Handle a key for the focused power-view home list (all groups: CW + library latest).

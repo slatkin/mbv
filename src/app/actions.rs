@@ -2960,6 +2960,23 @@ impl App {
         }
     }
 
+    /// Compute the absolute tick position for a remote-session seek, given
+    /// the current position in seconds and a relative delta in seconds.
+    ///
+    /// This reconstructs the asymmetric math the old inline remote-session
+    /// `<`/`>` handlers in `input.rs` had: rewinding (`delta < 0`) clamps at
+    /// zero, fast-forwarding does not (matching the prior
+    /// `(pos_s - 5).max(0)` vs. `(pos_s + 5)`). Used by `action::dispatch`'s
+    /// `Action::SeekRelative` arm; kept here alongside its sibling
+    /// session-math helpers (`session_jump_track`, `do_session_command`)
+    /// rather than in `action.rs`, since it's pure session-position math with
+    /// no dependency on the `Action` seam itself.
+    pub(super) fn remote_seek_ticks(pos_s: i64, delta: f64) -> i64 {
+        let moved = pos_s + delta as i64;
+        let target = if delta < 0.0 { moved.max(0) } else { moved };
+        target * TICKS_PER_SECOND
+    }
+
     pub(super) fn clear_playback_overlays(&mut self) {
         self.skip_intro_end_ticks = None;
         self.next_up_item = None;
@@ -4274,5 +4291,31 @@ impl App {
             s.results = results;
             s.cursor = 0;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
+
+    #[test]
+    fn remote_seek_rewind_clamps_at_zero() {
+        // 3s in, rewind 5s: would go negative, must clamp to 0.
+        assert_eq!(App::remote_seek_ticks(3, -5.0), 0);
+    }
+
+    #[test]
+    fn remote_seek_rewind_does_not_clamp_when_unnecessary() {
+        assert_eq!(App::remote_seek_ticks(20, -5.0), 15 * TICKS_PER_SECOND);
+    }
+
+    #[test]
+    fn remote_seek_forward_has_no_clamp() {
+        // Fast-forward has no lower-bound clamp in the original code; a small
+        // pos_s plus a large forward delta simply goes wherever the math
+        // says, same as rewind's clamp being absent here.
+        assert_eq!(App::remote_seek_ticks(3, 5.0), 8 * TICKS_PER_SECOND);
     }
 }
