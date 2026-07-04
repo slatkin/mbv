@@ -76,12 +76,8 @@ pub(super) fn playback_action_for_key(
 /// handlers had: rewinding (`delta < 0`) clamps at zero, fast-forwarding does
 /// not (matching `input.rs`'s prior `(pos_s - 5).max(0)` vs. `(pos_s + 5)`).
 fn remote_seek_ticks(pos_s: i64, delta: f64) -> i64 {
-    let secs = delta.abs() as i64;
-    let target = if delta < 0.0 {
-        (pos_s - secs).max(0)
-    } else {
-        pos_s + secs
-    };
+    let moved = pos_s + delta as i64;
+    let target = if delta < 0.0 { moved.max(0) } else { moved };
     target * TICKS_PER_SECOND
 }
 
@@ -93,45 +89,42 @@ impl App {
     pub(super) fn dispatch(&mut self, action: Action) {
         match action {
             Action::TogglePlayPause => {
-                if let Some(ref conn_id) = self.connected_session_id.clone() {
-                    let id = conn_id.clone();
+                if let Some(id) = self.connected_session_id.clone() {
                     self.do_session_command(move |c| c.session_transport(&id, "PlayPause"));
                 } else {
                     self.player.send_command(PlayerCommand::TogglePause);
                 }
             }
             Action::Stop => {
-                if let Some(ref conn_id) = self.connected_session_id.clone() {
-                    let id = conn_id.clone();
+                if let Some(id) = self.connected_session_id.clone() {
                     self.do_session_command(move |c| c.session_transport(&id, "Stop"));
                 } else {
                     self.player.stop();
                 }
             }
             Action::SeekRelative(delta) => {
-                if let Some(ref conn_id) = self.connected_session_id.clone() {
+                if let Some(id) = self.connected_session_id.clone() {
                     let pos_s = self
                         .connected_session_state
                         .as_ref()
                         .map(|s| s.position_s)
                         .unwrap_or(0);
                     let t = remote_seek_ticks(pos_s, delta);
-                    let id = conn_id.clone();
                     self.do_session_command(move |c| c.session_seek(&id, t));
                 } else {
                     self.player.send_command(PlayerCommand::Seek(delta));
                 }
             }
             Action::NextTrack => {
-                if let Some(ref conn_id) = self.connected_session_id.clone() {
-                    self.session_jump_track(conn_id, 1, "NextTrack");
+                if let Some(id) = self.connected_session_id.clone() {
+                    self.session_jump_track(&id, 1, "NextTrack");
                 } else {
                     self.player.next();
                 }
             }
             Action::PreviousTrack => {
-                if let Some(ref conn_id) = self.connected_session_id.clone() {
-                    self.session_jump_track(conn_id, -1, "PreviousTrack");
+                if let Some(id) = self.connected_session_id.clone() {
+                    self.session_jump_track(&id, -1, "PreviousTrack");
                 } else {
                     self.player.previous();
                 }
@@ -284,19 +277,25 @@ mod tests {
         );
     }
 
+    /// Assert that `code` produces `expected` for every (active, has_remote_session)
+    /// combination — i.e. it fires unconditionally, with no gating at all.
+    fn assert_fires_unconditionally(code: KeyCode, expected: Action) {
+        for active in [false, true] {
+            for remote in [false, true] {
+                assert_eq!(
+                    playback_action_for_key(key(code), active, remote),
+                    Some(expected.clone()),
+                    "code={code:?} active={active} remote={remote}"
+                );
+            }
+        }
+    }
+
     // ── `z`: unconditional, no `active` gate in either branch ───────────────
 
     #[test]
     fn z_fires_unconditionally() {
-        for active in [false, true] {
-            for remote in [false, true] {
-                assert_eq!(
-                    playback_action_for_key(key(KeyCode::Char('z')), active, remote),
-                    Some(Action::CycleOrToggleSubtitle),
-                    "active={active} remote={remote}"
-                );
-            }
-        }
+        assert_fires_unconditionally(KeyCode::Char('z'), Action::CycleOrToggleSubtitle);
     }
 
     #[test]
@@ -311,40 +310,16 @@ mod tests {
 
     #[test]
     fn m_fires_unconditionally() {
-        for active in [false, true] {
-            for remote in [false, true] {
-                assert_eq!(
-                    playback_action_for_key(key(KeyCode::Char('m')), active, remote),
-                    Some(Action::ToggleMute),
-                    "active={active} remote={remote}"
-                );
-            }
-        }
+        assert_fires_unconditionally(KeyCode::Char('m'), Action::ToggleMute);
     }
 
     // ── `-`/`+`: unconditional volume ────────────────────────────────────────
 
     #[test]
     fn volume_keys_fire_unconditionally() {
-        for active in [false, true] {
-            for remote in [false, true] {
-                assert_eq!(
-                    playback_action_for_key(key(KeyCode::Char('-')), active, remote),
-                    Some(Action::AdjustVolume(-5)),
-                    "active={active} remote={remote}"
-                );
-                assert_eq!(
-                    playback_action_for_key(key(KeyCode::Char('+')), active, remote),
-                    Some(Action::AdjustVolume(5)),
-                    "active={active} remote={remote}"
-                );
-                assert_eq!(
-                    playback_action_for_key(key(KeyCode::Char('=')), active, remote),
-                    Some(Action::AdjustVolume(5)),
-                    "active={active} remote={remote}"
-                );
-            }
-        }
+        assert_fires_unconditionally(KeyCode::Char('-'), Action::AdjustVolume(-5));
+        assert_fires_unconditionally(KeyCode::Char('+'), Action::AdjustVolume(5));
+        assert_fires_unconditionally(KeyCode::Char('='), Action::AdjustVolume(5));
     }
 
     // ── `a`: only if `active`; no remote path exists for it ─────────────────
@@ -452,16 +427,10 @@ mod tests {
         assert_eq!(remote_seek_ticks(3, 5.0), 8 * TICKS_PER_SECOND);
     }
 
+    // Same unique-tempdir convention as api.rs's test-only `make_temp_data_dir`
+    // (uuid-suffixed, under the OS tempdir).
     fn tempfile_dir() -> std::path::PathBuf {
-        let mut dir = std::env::temp_dir();
-        dir.push(format!(
-            "mbv-action-test-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
+        let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         dir
     }
