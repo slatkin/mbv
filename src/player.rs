@@ -473,6 +473,12 @@ struct MpvSessionConfig {
     audio_pipe_bitdepth: u8,
 }
 
+impl MpvSessionConfig {
+    fn start_paused_for_audio_pipe(&self) -> bool {
+        self.audio_pipe_path.is_some()
+    }
+}
+
 // Ensures `path` exists as a FIFO, creating it via mkfifo(3) if it doesn't
 // already exist. Refuses to touch a path that exists but isn't a FIFO.
 fn ensure_pipe(path: &str) -> Result<(), String> {
@@ -726,6 +732,15 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<Mpv, String> {
             Err(e) => log::warn!(target: "player", "audio pipe disabled for this session: {e}"),
         }
     }
+    if config.start_paused_for_audio_pipe() {
+        if let Err(e) = mpv.set_property("pause", true) {
+            log::warn!(
+                target: "player",
+                "audio pipe: failed to pre-pause startup: {}",
+                mpv_err_str(&e)
+            );
+        }
+    }
 
     Ok(mpv)
 }
@@ -844,6 +859,8 @@ struct SingleSession {
     episode: i64,
     next_up_fired: bool,
     next_up_armed: bool,
+    startup_pause_release_pending: bool,
+    startup_pause_events_to_skip: u8,
     // intro
     intro_start: i64,
     intro_end: i64,
@@ -869,6 +886,7 @@ impl SingleSession {
         };
         let (intro_start, intro_end) = load_intro_times(&reporter.client, &item.id);
         let past = intro_end > 0 && last_valid_pos >= intro_end;
+        let startup_pause_for_pipe = config.start_paused_for_audio_pipe();
         SingleSession {
             osd_title: item.display_name(),
             series_id: if item.item_type == "Episode" {
@@ -900,6 +918,12 @@ impl SingleSession {
             last_mouse_osd: None,
             next_up_fired: false,
             next_up_armed: false,
+            startup_pause_release_pending: startup_pause_for_pipe,
+            startup_pause_events_to_skip: if startup_pause_for_pipe {
+                2
+            } else {
+                0
+            },
         }
     }
 
@@ -1107,6 +1131,14 @@ impl SingleSession {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        if self.startup_pause_release_pending {
+            self.startup_pause_release_pending = false;
+            log::info!(
+                target: "player",
+                "audio pipe: startup gate cleared on PlaybackRestart"
+            );
+            let _ = mpv.set_property("pause", false);
+        }
         {
             let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
             let is_img: bool = mpv
@@ -1306,6 +1338,10 @@ impl SingleSession {
                         ..
                     })) => {
                         self.status.lock().unwrap().paused = paused;
+                        if self.startup_pause_events_to_skip > 0 {
+                            self.startup_pause_events_to_skip -= 1;
+                            continue;
+                        }
                         if self.quit_at.is_none() {
                             let event_name = if paused { "Pause" } else { "Unpause" };
                             self.reporter.report_progress(event_name);
@@ -1463,6 +1499,8 @@ struct PlaylistSession {
     playlist_next_up_armed: bool,
     next_up_jump: bool,
     stopped_near_end: bool,
+    startup_pause_release_pending: bool,
+    startup_pause_events_to_skip: u8,
     // intro
     intro_start: i64,
     intro_end: i64,
@@ -1502,6 +1540,7 @@ impl PlaylistSession {
         log::info!(target: "player", "playlist init idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
             initial_pos / crate::api::TICKS_PER_SECOND);
         let osd_title = items[start_idx].display_name();
+        let startup_pause_for_pipe = config.start_paused_for_audio_pipe();
         PlaylistSession {
             config,
             reporter,
@@ -1527,6 +1566,12 @@ impl PlaylistSession {
             playlist_next_up_armed: false,
             next_up_jump: false,
             stopped_near_end: false,
+            startup_pause_release_pending: startup_pause_for_pipe,
+            startup_pause_events_to_skip: if startup_pause_for_pipe {
+                2
+            } else {
+                0
+            },
             intro_start,
             intro_end,
             intro_show: past,
@@ -1882,6 +1927,14 @@ impl PlaylistSession {
     }
 
     fn on_playback_restart(&mut self, mpv: &Mpv) {
+        if self.startup_pause_release_pending {
+            self.startup_pause_release_pending = false;
+            log::info!(
+                target: "player",
+                "audio pipe: startup gate cleared on PlaybackRestart (playlist)"
+            );
+            let _ = mpv.set_property("pause", false);
+        }
         {
             let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
             let is_img: bool = mpv
@@ -2180,6 +2233,10 @@ impl PlaylistSession {
                         ..
                     })) => {
                         self.status.lock().unwrap().paused = paused;
+                        if self.startup_pause_events_to_skip > 0 {
+                            self.startup_pause_events_to_skip -= 1;
+                            continue;
+                        }
                         if self.quit_at.is_none() {
                             let event_name = if paused { "Pause" } else { "Unpause" };
                             self.reporter.report_progress(event_name);
