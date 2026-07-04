@@ -182,12 +182,15 @@ fn apply_ctrl_event(
         CtrlEvent::StatusOnly(s) => {
             let mut current = status.lock().unwrap();
             let current_idx = current.current_idx;
+            let queue_len = current.queue_len;
             *current = s;
             current.current_idx = current_idx;
+            current.queue_len = queue_len;
         }
         CtrlEvent::State(s) => {
             let mut next_status = s.status;
             next_status.current_idx = s.cursor;
+            next_status.queue_len = s.items.len();
             *status.lock().unwrap() = next_status;
             *items.lock().unwrap() = s.items.clone();
             let _ = event_tx.send(PlayerEvent::QueueUpdated {
@@ -226,6 +229,7 @@ impl RemotePlayer {
             volume: 100,
             volume_max: 130,
             current_idx: 0,
+            queue_len: 0,
             active: false,
             title: String::new(),
             audio_tracks: Vec::new(),
@@ -380,6 +384,7 @@ impl RemotePlayer {
 
     #[cfg(test)]
     pub fn stub(items: Vec<MediaItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
+        let queue_len = items.len();
         let status = Arc::new(Mutex::new(PlayerStatus {
             position_ticks: 0,
             last_valid_pos: 0,
@@ -388,6 +393,7 @@ impl RemotePlayer {
             volume: 100,
             volume_max: 130,
             current_idx,
+            queue_len,
             active: true,
             title: String::new(),
             audio_tracks: Vec::new(),

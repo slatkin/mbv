@@ -55,6 +55,8 @@ pub struct PlayerStatus {
     pub volume: i64,
     pub volume_max: i64,
     pub current_idx: usize,
+    #[serde(default)]
+    pub queue_len: usize,
     pub active: bool,
     pub title: String,
     pub audio_tracks: Vec<(i64, String)>,     // (mpv id, label)
@@ -1450,6 +1452,12 @@ struct PlaylistSession {
 }
 
 impl PlaylistSession {
+    fn sync_status_position(&self) {
+        let mut s = self.status.lock().unwrap();
+        s.current_idx = self.current_idx;
+        s.queue_len = self.items.len();
+    }
+
     fn new(
         items: Vec<MediaItem>,
         start_idx: usize,
@@ -1560,8 +1568,8 @@ impl PlaylistSession {
                     self.n -= 1;
                     if idx < self.current_idx {
                         self.current_idx -= 1;
-                        self.status.lock().unwrap().current_idx = self.current_idx;
                     }
+                    self.sync_status_position();
                     if let Some(fi) = self.forced_idx {
                         self.forced_idx = if idx == fi {
                             None
@@ -1671,7 +1679,7 @@ impl PlaylistSession {
             self.items.clear();
             self.n = 0;
             self.current_idx = 0;
-            self.status.lock().unwrap().current_idx = 0;
+            self.sync_status_position();
             self.last_valid_pos = 0;
             self.pending_initial_jump = false;
             self.pending_load = 0;
@@ -2023,6 +2031,7 @@ impl PlaylistSession {
             s.position_ticks = 0;
             s.runtime_ticks = self.items[self.current_idx].runtime_ticks;
             s.current_idx = self.current_idx;
+            s.queue_len = self.items.len();
             s.title = self.items[self.current_idx].display_name();
         }
 
@@ -2362,6 +2371,7 @@ impl Player {
                 volume: 100,
                 volume_max: 130,
                 current_idx: 0,
+                queue_len: 0,
                 active: false,
                 title: String::new(),
                 audio_tracks: Vec::new(),
@@ -2443,6 +2453,7 @@ impl Player {
                 st.runtime_ticks = item.runtime_ticks;
                 st.paused = false;
                 st.current_idx = 0;
+                st.queue_len = 1;
                 st.title = item.display_name();
             }
             self.send_command(PlayerCommand::LoadNew {
@@ -2498,6 +2509,7 @@ impl Player {
             st.runtime_ticks = item.runtime_ticks;
             st.paused = false;
             st.current_idx = 0;
+            st.queue_len = 1;
             st.active = true;
             st.title = title.clone();
         }
@@ -2590,6 +2602,7 @@ impl Player {
                 st.runtime_ticks = items[start_idx].runtime_ticks;
                 st.paused = false;
                 st.current_idx = start_idx;
+                st.queue_len = items.len();
                 st.title = items[start_idx].display_name();
             }
             self.send_command(PlayerCommand::ReplacePlaylist { items, start_idx });
@@ -2626,6 +2639,7 @@ impl Player {
             st.runtime_ticks = items[start_idx].runtime_ticks;
             st.paused = false;
             st.current_idx = start_idx;
+            st.queue_len = items.len();
             st.active = true;
             st.title = items[start_idx].display_name();
         }
@@ -3035,6 +3049,7 @@ mod tests {
             volume: 100,
             volume_max: 130,
             current_idx: 0,
+            queue_len: 0,
             active: true,
             title: String::new(),
             audio_tracks: Vec::new(),

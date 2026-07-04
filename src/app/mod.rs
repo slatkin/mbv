@@ -2493,6 +2493,7 @@ pub(crate) mod tests {
             volume: 100,
             volume_max: 100,
             current_idx: 0,
+            queue_len: 0,
             active: false,
             title: String::new(),
             audio_tracks: Vec::new(),
