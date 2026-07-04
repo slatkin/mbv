@@ -394,6 +394,12 @@ impl App {
             height: full.height.saturating_sub(2),
         };
         f.render_widget(Clear, sidebar);
+        // Too short to fit a title row, a content row, and the 2-row footer;
+        // bail out rather than let `footer_y = sidebar.y + sidebar.height - 2`
+        // underflow below.
+        if sidebar.height < 4 || sidebar.width == 0 {
+            return sidebar;
+        }
         f.render_widget(
             Block::default().style(Style::default().bg(palette::PANEL_BG)),
             sidebar,

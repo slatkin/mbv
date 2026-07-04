@@ -655,7 +655,7 @@ impl App {
                 s.items.len().min(CARD_ITEM_CAP)
             }
         };
-        let card_h = |s: &Section| -> u16 { 2 + card_vis(s) as u16 };
+        let card_h = |s: &Section| -> u16 { 1 + card_vis(s) as u16 };
 
         let mut row_heights = vec![0u16; n_rows];
         for (i, s) in sections.iter().enumerate() {
@@ -724,7 +724,7 @@ impl App {
             // bold contrasting text) followed by a rule — the same "\u{2500}" line
             // style used for rules elsewhere in the app — in the accent colour,
             // filling the rest of the row.
-            if let Some(sy) = screen_y(base + 1) {
+            if let Some(sy) = screen_y(base) {
                 let label = trunc_str(&s.title, (col_w as usize).saturating_sub(2));
                 let pill_text = format!(" {label} ");
                 let pill_w = (pill_text.width() as u16).min(col_w);
@@ -762,7 +762,7 @@ impl App {
             };
 
             for k in 0..vis {
-                let content_y = base + 2 + k as u16;
+                let content_y = base + 1 + k as u16;
                 let Some(sy) = screen_y(content_y) else {
                     continue;
                 };
@@ -854,6 +854,7 @@ impl App {
 mod tests {
     use super::power_home_panel_scroll;
     use crate::api::TICKS_PER_SECOND;
+    use crate::app::palette;
     use crate::app::tests::{make_app_stub, make_items};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
@@ -919,9 +920,20 @@ mod tests {
             kw_line.contains("New Music"),
             "expected 2 columns on header row"
         );
-        // Section headers render as pills (background colour, not representable
-        // via plain-text `contains` here) with the title text present.
-        assert!(kw_line.contains("Keep Watching"));
+        // Section header renders as a pill: the title sits on an accent-coloured
+        // background, followed by a "─" rule filling the rest of the row.
+        assert!(
+            kw_line.contains('\u{2500}'),
+            "expected a rule after the header pill"
+        );
+        let kw_row = out.lines().position(|l| l.contains("Keep Watching")).unwrap();
+        let kw_x = kw_line.find("Keep Watching").unwrap() as u16;
+        let buf = term.backend().buffer();
+        assert_eq!(
+            buf[(kw_x, kw_row as u16)].bg,
+            palette::section_color(0),
+            "expected the header pill's background to use the section's accent colour"
+        );
         // Durations render as minutes only, never hours (67m for 4020s, not 1h07m).
         assert!(out.contains("47m"));
         assert!(out.contains("67m"));

@@ -143,6 +143,14 @@ impl App {
             return;
         }
 
+        // Clamp against the current item count: a background reload (e.g.
+        // LibEvent::PlaylistItemsLoaded) can replace playlists_open_items with a
+        // shorter list while the cursor/scroll are still positioned in the old,
+        // longer one, which would otherwise panic the slices below.
+        let max_idx = self.playlists_open_items.len() - 1;
+        self.playlists_open_cursor = self.playlists_open_cursor.min(max_idx);
+        self.playlists_open_scroll = self.playlists_open_scroll.min(max_idx);
+
         let item_lines = |label: &str| -> usize {
             let text_w = iw.saturating_sub(6);
             if label.len() <= text_w {

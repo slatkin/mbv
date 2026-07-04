@@ -9,7 +9,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 
 impl App {
-    pub(in crate::app::render) fn render_sessions_overlay(&self, f: &mut Frame) {
+    pub(in crate::app::render) fn render_sessions_overlay(&mut self, f: &mut Frame) {
         let content = Self::render_panel_shell(
             f,
             f.area(),
@@ -47,9 +47,24 @@ impl App {
         const CARD_H: u16 = 3;
         const DIV_H: u16 = 1;
         let entry_h = CARD_H + DIV_H;
+        let visible_entries = ((list_h + DIV_H) / entry_h).max(1) as usize;
+        self.sessions_cursor = self.sessions_cursor.min(self.sessions.len() - 1);
+        if self.sessions_cursor < self.sessions_scroll {
+            self.sessions_scroll = self.sessions_cursor;
+        } else if self.sessions_cursor >= self.sessions_scroll + visible_entries {
+            self.sessions_scroll = self.sessions_cursor + 1 - visible_entries;
+        }
+        self.sessions_scroll = self
+            .sessions_scroll
+            .min(self.sessions.len().saturating_sub(visible_entries));
 
-        for (i, s) in self.sessions.iter().enumerate() {
-            let entry_y = list_y + i as u16 * entry_h;
+        for (i, s) in self
+            .sessions
+            .iter()
+            .enumerate()
+            .skip(self.sessions_scroll)
+        {
+            let entry_y = list_y + (i - self.sessions_scroll) as u16 * entry_h;
             if entry_y + CARD_H > list_y + list_h {
                 break;
             }
@@ -148,5 +163,13 @@ impl App {
                 },
             );
         }
+        // render_sidebar_scrollbar expects total/scroll in the same row units as
+        // content.height, so convert from "entries" to rows (entry_h rows each).
+        Self::render_sidebar_scrollbar(
+            f,
+            content,
+            self.sessions.len() * entry_h as usize,
+            self.sessions_scroll * entry_h as usize,
+        );
     }
 }
