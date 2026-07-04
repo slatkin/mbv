@@ -1664,6 +1664,24 @@ impl PlaylistSession {
         progress: &mut ProgressGuard,
     ) {
         if new_items.is_empty() {
+            self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_reported = true;
+            let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
+            let _ = mpv.command("playlist-clear", &[]);
+            self.items.clear();
+            self.n = 0;
+            self.current_idx = 0;
+            self.status.lock().unwrap().current_idx = 0;
+            self.last_valid_pos = 0;
+            self.pending_initial_jump = false;
+            self.pending_load = 0;
+            self.tracks_initialized = false;
+            self.playlist_cancelled = true;
+            self.forced_idx = None;
+            self.playlist_next_up_fired = false;
+            self.playlist_next_up_armed = false;
+            self.next_up_jump = false;
+            self.osd_title.clear();
             return;
         }
         // report_stopped for current item; is_audio zeroing handled inside.

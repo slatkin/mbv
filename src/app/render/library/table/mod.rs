@@ -85,7 +85,8 @@ impl App {
             // Use the server-reported total, not `display_items.len()`, so the
             // thumb reflects the real list size instead of shrinking to just
             // whatever page(s) have been lazily fetched so far.
-            let mut sb_state = ScrollbarState::new(total_count.max(display_items.len())).position(scroll);
+            let mut sb_state =
+                ScrollbarState::new(total_count.max(display_items.len())).position(scroll);
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .thumb_symbol("▐")

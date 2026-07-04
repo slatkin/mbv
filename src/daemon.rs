@@ -576,7 +576,34 @@ fn handle_ctrl(
             log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
         }
         CtrlCmd::PlayerCmd(pc) => {
-            player.send_command(pc);
+            match pc {
+                PlayerCommand::ReplacePlaylist { items: new_items, start_idx } => {
+                    let next_cursor = if new_items.is_empty() {
+                        0
+                    } else {
+                        start_idx.min(new_items.len().saturating_sub(1))
+                    };
+                    *items = new_items.clone();
+                    *cursor = next_cursor;
+                    *shared_items.lock().unwrap() = new_items.clone();
+                    *shared_cursor.lock().unwrap() = next_cursor;
+                    broadcast(
+                        ctrl_clients,
+                        &CtrlEvent::State(CtrlState {
+                            status: player.status.lock().unwrap().clone(),
+                            items: new_items.clone(),
+                            cursor: next_cursor,
+                        }),
+                    );
+                    player.send_command(PlayerCommand::ReplacePlaylist {
+                        items: new_items,
+                        start_idx,
+                    });
+                }
+                other => {
+                    player.send_command(other);
+                }
+            }
         }
         CtrlCmd::PlayItems {
             item_ids,

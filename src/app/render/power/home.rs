@@ -926,7 +926,10 @@ mod tests {
             kw_line.contains('\u{2500}'),
             "expected a rule after the header pill"
         );
-        let kw_row = out.lines().position(|l| l.contains("Keep Watching")).unwrap();
+        let kw_row = out
+            .lines()
+            .position(|l| l.contains("Keep Watching"))
+            .unwrap();
         let kw_x = kw_line.find("Keep Watching").unwrap() as u16;
         let buf = term.backend().buffer();
         assert_eq!(

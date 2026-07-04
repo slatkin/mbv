@@ -1424,33 +1424,39 @@ impl App {
     }
 
     pub(super) fn remove_from_playlist(&mut self, pos: usize) {
+        let scope = self.displayed_queue_scope();
+        let controls_playback_queue = self.queue_scope_is_playback(scope);
         let (active, current_idx) = {
             let s = self.player.status.lock().unwrap();
             (s.active, s.current_idx)
         };
-        if active && current_idx == pos {
+        if scope == QueueScope::Remote && !active {
+            self.flash_status_high("Remote queue can only be edited while active".into());
+            return;
+        }
+        if controls_playback_queue && active && current_idx == pos {
             self.confirm_remove_idx = Some(pos);
             self.status = "Remove now-playing item and stop playback? (y/N)".into();
             self.status_expires = None;
             return;
         }
-        let item = self.player_tab.items.remove(pos);
-        self.queue_dirty = true;
-        self.playlist_undo_stack.push((pos, item));
-        self.save_queue_state();
-        if active {
+        let item = self.queue_for_scope_mut(scope).items.remove(pos);
+        if self.queue_scope_has_local_metadata(scope) {
+            self.queue_dirty = true;
+        }
+        self.undo_stack_for_scope_mut(scope).push((pos, item));
+        self.persist_local_queue_state_if_needed(scope);
+        if controls_playback_queue && active {
             self.player.send_command(PlayerCommand::PlaylistRemove(pos));
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
             // and can cause index mismatches during rapid removals.
         }
-        if !self.player_tab.items.is_empty() {
-            self.player_tab.playlist_cursor = self
-                .player_tab
-                .playlist_cursor
-                .min(self.player_tab.items.len() - 1);
+        let queue = self.queue_for_scope_mut(scope);
+        if !queue.items.is_empty() {
+            queue.playlist_cursor = queue.playlist_cursor.min(queue.items.len() - 1);
         } else {
-            self.player_tab.playlist_cursor = 0;
+            queue.playlist_cursor = 0;
         }
     }
 
@@ -1640,10 +1646,17 @@ impl App {
                 return;
             }
             let name = item.display_name();
-            self.player_tab.items.push(item);
-            self.queue_dirty = true;
+            let scope = self.displayed_queue_scope();
+            if scope == QueueScope::Remote {
+                self.flash_status_high("Appending to remote queue is not supported yet".into());
+                return;
+            }
+            self.queue_for_scope_mut(scope).items.push(item);
+            if self.queue_scope_has_local_metadata(scope) {
+                self.queue_dirty = true;
+            }
             self.flash_status(format!("Added: {name}"));
-            self.save_queue_state();
+            self.persist_local_queue_state_if_needed(scope);
         } else if self.tab_idx >= 2 && self.tab_idx != self.log_tab_idx() {
             let Some(item) = self.current_lib_item() else {
                 return;
@@ -1656,10 +1669,17 @@ impl App {
                 return;
             }
             let name = item.display_name();
-            self.player_tab.items.push(item);
-            self.queue_dirty = true;
+            let scope = self.displayed_queue_scope();
+            if scope == QueueScope::Remote {
+                self.flash_status_high("Appending to remote queue is not supported yet".into());
+                return;
+            }
+            self.queue_for_scope_mut(scope).items.push(item);
+            if self.queue_scope_has_local_metadata(scope) {
+                self.queue_dirty = true;
+            }
             self.flash_status(format!("Added: {name}"));
-            self.save_queue_state();
+            self.persist_local_queue_state_if_needed(scope);
         }
     }
 
@@ -1675,15 +1695,22 @@ impl App {
                     self.flash_status_high("Nothing to enqueue".into());
                     return;
                 }
-                for i in items {
-                    self.player_tab.items.push(i);
+                let scope = self.displayed_queue_scope();
+                if scope == QueueScope::Remote {
+                    self.flash_status_high("Appending to remote queue is not supported yet".into());
+                    return;
                 }
-                self.queue_dirty = true;
+                for i in items {
+                    self.queue_for_scope_mut(scope).items.push(i);
+                }
+                if self.queue_scope_has_local_metadata(scope) {
+                    self.queue_dirty = true;
+                }
                 self.flash_status(format!(
                     "Enqueued {count} items from {}",
                     item.display_name()
                 ));
-                self.save_queue_state();
+                self.persist_local_queue_state_if_needed(scope);
             }
             Err(e) => {
                 drop(client);
@@ -1971,13 +1998,15 @@ impl App {
                 } else if self.tab_idx == 0 {
                     self.select_home();
                 } else if self.tab_idx == 1 {
-                    let t = self.player_tab.playlist_cursor;
-                    if t < self.player_tab.items.len() {
+                    let scope = self.displayed_queue_scope();
+                    let queue = self.displayed_queue();
+                    let t = queue.playlist_cursor;
+                    if t < queue.items.len() {
                         if let Some(ref conn_id) = self.connected_session_id.clone() {
-                            let item = self.player_tab.items[t].clone();
+                            let item = queue.items[t].clone();
                             let id = conn_id.clone();
                             let item_ids: Vec<String> =
-                                self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+                                queue.items.iter().map(|i| i.id.clone()).collect();
                             let start_ticks = item.playback_position_ticks;
                             let label = item.playback_label();
                             self.flash_status(format!("Playing on remote: {label}"));
@@ -1985,7 +2014,20 @@ impl App {
                                 c.session_play_items(&id, &item_ids, t, start_ticks)
                             });
                         } else {
-                            self.player.send_command(PlayerCommand::JumpTo(t));
+                            let st = self.player.status.lock().unwrap();
+                            let active = st.active;
+                            let current_idx = st.current_idx;
+                            drop(st);
+                            if active && self.queue_scope_is_playback(scope) {
+                                if t != current_idx {
+                                    self.player.send_command(PlayerCommand::JumpTo(t));
+                                }
+                            } else {
+                                let items = queue.items.clone();
+                                let c = Arc::new(self.client.lock().unwrap().clone());
+                                self.replace_playback_queue(items.clone(), t);
+                                self.player.play_playlist(items, t, c, self.ui_volume);
+                            }
                         }
                     }
                 } else {
@@ -2244,15 +2286,22 @@ impl App {
     }
 
     fn refresh_queue(&mut self) {
-        if self.player_tab.items.is_empty() {
+        let scope = self.displayed_queue_scope();
+        if self.queue_for_scope(scope).items.is_empty() {
             return;
         }
-        let ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
+        let ids: Vec<String> = self
+            .queue_for_scope(scope)
+            .items
+            .iter()
+            .map(|i| i.id.clone())
+            .collect();
         let client = self.client.lock().unwrap();
         if let Ok(fetched) = client.get_items_by_ids(&ids) {
             let mut map: HashMap<String, crate::api::MediaItem> =
                 fetched.into_iter().map(|i| (i.id.clone(), i)).collect();
-            for item in &mut self.player_tab.items {
+            drop(client);
+            for item in &mut self.queue_for_scope_mut(scope).items {
                 if let Some(fresh) = map.remove(&item.id) {
                     *item = fresh;
                 }
@@ -3370,7 +3419,7 @@ impl App {
     }
 
     pub(super) fn replace_queue_or_prompt(&mut self, action: PendingQueueAction) {
-        if self.queue_dirty && self.queue_is_saved_playlist() {
+        if self.action_touches_local_queue(&action) && self.queue_dirty && self.queue_is_saved_playlist() {
             self.pending_queue_action = Some(action);
             self.show_save_playlist_modal = true;
         } else {
@@ -3379,7 +3428,9 @@ impl App {
     }
 
     pub(super) fn execute_pending_queue_action(&mut self, action: PendingQueueAction) {
-        self.queue_dirty = false;
+        if self.action_touches_local_queue(&action) {
+            self.queue_dirty = false;
+        }
         match action {
             PendingQueueAction::PlayItems {
                 items,
@@ -3387,7 +3438,7 @@ impl App {
                 source,
             } => {
                 let direct_remote = self.has_direct_remote_queue();
-                if !direct_remote {
+                if self.queue_scope_has_local_metadata(self.playback_queue_scope()) {
                     self.queue_source = source;
                     self.queue_restored = false;
                 }
@@ -3420,14 +3471,23 @@ impl App {
                 }
             }
             PendingQueueAction::ClearQueue => {
-                self.queue_source = crate::config::QueueSource::Unknown;
-                self.queue_restored = false;
-                self.player.stop();
-                self.player_tab.items.clear();
-                self.player_tab.playlist_cursor = 0;
-                self.set_queue_scope(QueueScope::Local);
-                self.playlist_undo_stack.clear();
-                self.save_queue_state();
+                let scope = self.displayed_queue_scope();
+                if self.queue_scope_has_local_metadata(scope) {
+                    self.clear_local_queue_metadata();
+                } else {
+                    self.remote_playlist_undo_stack.clear();
+                }
+                if scope == QueueScope::Remote {
+                    self.replace_direct_remote_queue(Vec::new(), 0);
+                } else if self.queue_scope_is_playback(scope) {
+                    self.player.stop();
+                }
+                if scope != QueueScope::Remote {
+                    let queue = self.queue_for_scope_mut(scope);
+                    queue.items.clear();
+                    queue.playlist_cursor = 0;
+                }
+                self.persist_local_queue_state_if_needed(scope);
                 self.flash_status("Queue cleared".into());
             }
             PendingQueueAction::Quit => {

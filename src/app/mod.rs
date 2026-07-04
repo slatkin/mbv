@@ -496,6 +496,7 @@ pub struct App {
     pending_queue_removal: Option<usize>, // deferred removal after TrackChanged index-shifts
     confirm_clear_playlist: bool,
     playlist_undo_stack: Vec<(usize, MediaItem)>,
+    remote_playlist_undo_stack: Vec<(usize, MediaItem)>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
@@ -894,6 +895,7 @@ impl App {
             pending_queue_removal: None,
             confirm_clear_playlist: false,
             playlist_undo_stack: Vec::new(),
+            remote_playlist_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
@@ -1202,6 +1204,79 @@ impl App {
         self.player.is_remote() && self.has_remote_queue()
     }
 
+    fn queue_for_scope(&self, scope: QueueScope) -> &PlayerTab {
+        match scope {
+            QueueScope::Local => &self.player_tab,
+            QueueScope::Remote => self
+                .remote_player_tab
+                .as_ref()
+                .expect("remote queue scope requires remote queue"),
+        }
+    }
+
+    fn queue_for_scope_mut(&mut self, scope: QueueScope) -> &mut PlayerTab {
+        match scope {
+            QueueScope::Local => &mut self.player_tab,
+            QueueScope::Remote => self
+                .remote_player_tab
+                .as_mut()
+                .expect("remote queue scope requires remote queue"),
+        }
+    }
+
+    fn undo_stack_for_scope_mut(&mut self, scope: QueueScope) -> &mut Vec<(usize, MediaItem)> {
+        match scope {
+            QueueScope::Local => &mut self.playlist_undo_stack,
+            QueueScope::Remote => &mut self.remote_playlist_undo_stack,
+        }
+    }
+
+    fn queue_scope_has_local_metadata(&self, scope: QueueScope) -> bool {
+        scope == QueueScope::Local || !self.has_direct_remote_queue()
+    }
+
+    fn queue_scope_is_playback(&self, scope: QueueScope) -> bool {
+        scope == self.playback_queue_scope()
+    }
+
+    fn action_queue_scope(&self, action: &PendingQueueAction) -> QueueScope {
+        match action {
+            PendingQueueAction::PlayItems { .. } => self.playback_queue_scope(),
+            PendingQueueAction::ClearQueue => self.displayed_queue_scope(),
+            PendingQueueAction::Quit => QueueScope::Local,
+        }
+    }
+
+    fn action_touches_local_queue(&self, action: &PendingQueueAction) -> bool {
+        matches!(action, PendingQueueAction::Quit)
+            || self.queue_scope_has_local_metadata(self.action_queue_scope(action))
+    }
+
+    fn clear_local_queue_metadata(&mut self) {
+        self.queue_source = crate::config::QueueSource::Unknown;
+        self.queue_restored = false;
+        self.queue_dirty = false;
+        self.playlist_undo_stack.clear();
+    }
+
+    fn persist_local_queue_state_if_needed(&self, scope: QueueScope) {
+        if self.queue_scope_has_local_metadata(scope) {
+            self.save_queue_state();
+        }
+    }
+
+    fn replace_direct_remote_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
+        let cursor = cursor.min(items.len().saturating_sub(1));
+        self.player.send_command(crate::player::PlayerCommand::ReplacePlaylist {
+            items: items.clone(),
+            start_idx: cursor,
+        });
+        if let Some(queue) = self.remote_player_tab.as_mut() {
+            queue.items = items;
+            queue.playlist_cursor = cursor;
+        }
+    }
+
     fn playback_queue_scope(&self) -> QueueScope {
         if self.has_direct_remote_queue() {
             QueueScope::Remote
@@ -1237,43 +1312,19 @@ impl App {
     }
 
     fn displayed_queue(&self) -> &PlayerTab {
-        match self.displayed_queue_scope() {
-            QueueScope::Local => &self.player_tab,
-            QueueScope::Remote => self
-                .remote_player_tab
-                .as_ref()
-                .expect("remote queue scope requires remote queue"),
-        }
+        self.queue_for_scope(self.displayed_queue_scope())
     }
 
     fn displayed_queue_mut(&mut self) -> &mut PlayerTab {
-        match self.displayed_queue_scope() {
-            QueueScope::Local => &mut self.player_tab,
-            QueueScope::Remote => self
-                .remote_player_tab
-                .as_mut()
-                .expect("remote queue scope requires remote queue"),
-        }
+        self.queue_for_scope_mut(self.displayed_queue_scope())
     }
 
     fn playback_queue(&self) -> &PlayerTab {
-        if self.has_remote_queue() {
-            self.remote_player_tab
-                .as_ref()
-                .expect("remote player requires remote queue")
-        } else {
-            &self.player_tab
-        }
+        self.queue_for_scope(self.playback_queue_scope())
     }
 
     fn playback_queue_mut(&mut self) -> &mut PlayerTab {
-        if self.has_remote_queue() {
-            self.remote_player_tab
-                .as_mut()
-                .expect("remote player requires remote queue")
-        } else {
-            &mut self.player_tab
-        }
+        self.queue_for_scope_mut(self.playback_queue_scope())
     }
 
     fn set_queue_scope(&mut self, scope: QueueScope) {
@@ -2525,6 +2576,7 @@ pub(crate) mod tests {
             pending_queue_removal: None,
             confirm_clear_playlist: false,
             playlist_undo_stack: Vec::new(),
+            remote_playlist_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
             playlist_view: 0,
@@ -3999,6 +4051,180 @@ pub(crate) mod tests {
             Some(local_items[1].id.as_str())
         );
         assert!(app.last_played_completed);
+    }
+
+    #[test]
+    fn clearing_local_queue_in_direct_remote_mode_leaves_remote_queue_intact() {
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items, remote_items.clone());
+        app.set_queue_scope(QueueScope::Local);
+        app.queue_source = crate::config::QueueSource::Album;
+        app.queue_dirty = true;
+
+        app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
+
+        assert!(app.player_tab.items.is_empty());
+        assert_eq!(app.player_tab.playlist_cursor, 0);
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            remote_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(matches!(app.queue_source, crate::config::QueueSource::Unknown));
+        assert!(!app.queue_dirty);
+    }
+
+    #[test]
+    fn clearing_remote_queue_in_direct_remote_mode_leaves_local_queue_metadata_intact() {
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items);
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("playlist-1".into()),
+            name: "Saved".into(),
+        };
+        app.queue_dirty = true;
+
+        app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
+
+        assert!(app.remote_player_tab.as_ref().unwrap().items.is_empty());
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            local_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(matches!(
+            app.queue_source,
+            crate::config::QueueSource::Playlist { .. }
+        ));
+        assert!(app.queue_dirty);
+    }
+
+    #[test]
+    fn removing_from_local_queue_in_direct_remote_mode_does_not_touch_remote_queue() {
+        let local_items = make_items(3);
+        let remote_items = make_items(2);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
+        app.set_queue_scope(QueueScope::Local);
+
+        app.remove_from_playlist(1);
+
+        assert_eq!(app.player_tab.items.len(), 2);
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![local_items[0].id.as_str(), local_items[2].id.as_str()]
+        );
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            remote_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(app.queue_dirty);
+        assert_eq!(app.remote_playlist_undo_stack.len(), 0);
+    }
+
+    #[test]
+    fn removing_from_remote_queue_in_direct_remote_mode_does_not_touch_local_queue() {
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
+
+        app.remove_from_playlist(1);
+
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().items.len(), 2);
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![remote_items[0].id.as_str(), remote_items[2].id.as_str()]
+        );
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            local_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(!app.queue_dirty);
+        assert_eq!(app.playlist_undo_stack.len(), 0);
+        assert_eq!(app.remote_playlist_undo_stack.len(), 1);
+    }
+
+    #[test]
+    fn clearing_remote_queue_does_not_prompt_to_save_local_playlist() {
+        let mut app = make_remote_app_stub(make_items(2), make_items(3));
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("playlist-1".into()),
+            name: "Saved".into(),
+        };
+        app.queue_dirty = true;
+
+        app.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+
+        assert!(!app.show_save_playlist_modal);
+        assert!(app.pending_queue_action.is_none());
+        assert!(app.remote_player_tab.as_ref().unwrap().items.is_empty());
+        assert!(app.queue_dirty);
+    }
+
+    #[test]
+    fn removing_from_inactive_remote_queue_is_rejected() {
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items, remote_items.clone());
+        app.player.status.lock().unwrap().active = false;
+
+        app.remove_from_playlist(1);
+
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            remote_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(app.status, "Remote queue can only be edited while active");
     }
 
     #[test]

@@ -241,7 +241,7 @@ impl App {
                         self.select_home();
                     }
                 }
-                KeyCode::Char('q') if !input_focused => {
+                KeyCode::Char('q') if !input_focused && key.modifiers.is_empty() => {
                     return self.try_quit();
                 }
                 KeyCode::Char(c) => {
@@ -545,7 +545,7 @@ impl App {
             return Some(false);
         }
         match key.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return Some(self.try_quit());
             }
             KeyCode::Esc => {
@@ -594,7 +594,7 @@ impl App {
             return None;
         }
         match key.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return Some(self.try_quit());
             }
             KeyCode::Esc | KeyCode::F(1) => {
@@ -637,7 +637,7 @@ impl App {
             return None;
         }
         match key.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return Some(self.try_quit());
             }
             KeyCode::Esc | KeyCode::F(3) => {
@@ -686,7 +686,7 @@ impl App {
             return None;
         }
         match key.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return Some(self.try_quit());
             }
             KeyCode::Esc | KeyCode::F(4) => {
@@ -876,7 +876,7 @@ impl App {
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.enqueue_selected()
             }
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return self.try_quit();
             }
             KeyCode::Tab => {
@@ -985,7 +985,7 @@ impl App {
 
     fn handle_combined_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return self.try_quit();
             }
             KeyCode::Tab => {
@@ -1316,7 +1316,9 @@ impl App {
                 // (which would have its playback_position_ticks corrupted otherwise).
                 self.pending_delete_idx = Some(t);
                 self.player.stop();
-                self.queue_dirty = true;
+                if self.queue_scope_has_local_metadata(self.displayed_queue_scope()) {
+                    self.queue_dirty = true;
+                }
             }
             return false;
         }
@@ -1468,7 +1470,7 @@ impl App {
                         | KeyCode::Esc
                         | KeyCode::Backspace => true,
                         KeyCode::Char('/') => true,
-                        KeyCode::Char('q') => true,
+                        KeyCode::Char('q') => key.modifiers.is_empty() || key.modifiers == KeyModifiers::CONTROL,
                         KeyCode::Char('.') => true,
                         KeyCode::Char('r') => true,
                         KeyCode::Char('1'..='9') => true,
@@ -1481,7 +1483,7 @@ impl App {
                         _ => false,
                     };
                 if is_lib_key {
-                    let is_quit_key = matches!(key.code, KeyCode::Char('q') if !key.modifiers.contains(KeyModifiers::CONTROL));
+                    let is_quit_key = matches!(key.code, KeyCode::Char('q') if key.modifiers.is_empty());
                     let saved = self.tab_idx;
                     self.tab_idx = self.lib_tab_offset() + lib_idx;
                     let result = self.handle_lib_key(key);
@@ -1534,7 +1536,7 @@ impl App {
         }
 
         match key.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return self.try_quit();
             }
             KeyCode::Tab => {
@@ -1586,6 +1588,7 @@ impl App {
                 }
             }
             KeyCode::Enter => {
+                let scope = self.displayed_queue_scope();
                 let queue = self.displayed_queue();
                 let t = queue.playlist_cursor;
                 let n = queue.items.len();
@@ -1606,7 +1609,7 @@ impl App {
                         let active = st.active;
                         let current_idx = st.current_idx;
                         drop(st);
-                        if active {
+                        if active && self.queue_scope_is_playback(scope) {
                             let is_audio =
                                 queue.items.get(t).map(|i| i.is_audio()).unwrap_or(false);
                             if t == current_idx && is_audio {
@@ -1617,27 +1620,35 @@ impl App {
                         } else if !queue.items.is_empty() {
                             let items = queue.items.clone();
                             let c = Arc::new(self.client.lock().unwrap().clone());
+                            self.replace_playback_queue(items.clone(), t);
                             self.player.play_playlist(items, t, c, self.ui_volume);
                         }
                     }
                 }
             }
             KeyCode::Delete => {
-                if self.displayed_queue_scope() == QueueScope::Local {
-                    let t = self.player_tab.playlist_cursor;
-                    if t < self.player_tab.items.len() {
-                        self.remove_from_playlist(t);
-                    }
+                let queue = self.displayed_queue();
+                let t = queue.playlist_cursor;
+                if t < queue.items.len() {
+                    self.remove_from_playlist(t);
                 }
             }
             KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                if let Some((idx, item)) = self.playlist_undo_stack.pop() {
-                    let idx = idx.min(self.player_tab.items.len());
-                    self.player_tab.items.insert(idx, item);
-                    self.player_tab.playlist_cursor = idx;
-                    self.queue_dirty = true;
-                    self.save_queue_state();
-                    self.set_queue_scope(QueueScope::Local);
+                let scope = self.displayed_queue_scope();
+                if scope == QueueScope::Remote {
+                    self.flash_status_high("Undo is not supported for remote queue edits".into());
+                    return false;
+                }
+                if let Some((idx, item)) = self.undo_stack_for_scope_mut(scope).pop() {
+                    let queue = self.queue_for_scope_mut(scope);
+                    let idx = idx.min(queue.items.len());
+                    queue.items.insert(idx, item);
+                    queue.playlist_cursor = idx;
+                    if self.queue_scope_has_local_metadata(scope) {
+                        self.queue_dirty = true;
+                    }
+                    self.persist_local_queue_state_if_needed(scope);
+                    self.set_queue_scope(scope);
                 }
             }
             KeyCode::Char(c @ '1'..='9') => {
@@ -1849,7 +1860,7 @@ impl App {
 
     fn handle_log_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
-            KeyCode::Char('q') => {
+            KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return self.try_quit();
             }
             KeyCode::Tab | KeyCode::BackTab => {
@@ -3178,6 +3189,7 @@ impl App {
                         if t < queue.items.len()
                             && self.layout_playlist_inner.contains((col, row).into())
                         {
+                            let scope = self.displayed_queue_scope();
                             if let Some(ref conn_id) = self.connected_session_id.clone() {
                                 let item = queue.items[t].clone();
                                 let id = conn_id.clone();
@@ -3190,7 +3202,20 @@ impl App {
                                     c.session_play_items(&id, &item_ids, t, start_ticks)
                                 });
                             } else {
-                                self.player.send_command(PlayerCommand::JumpTo(t));
+                                let st = self.player.status.lock().unwrap();
+                                let active = st.active;
+                                let current_idx = st.current_idx;
+                                drop(st);
+                                if active && self.queue_scope_is_playback(scope) {
+                                    if t != current_idx {
+                                        self.player.send_command(PlayerCommand::JumpTo(t));
+                                    }
+                                } else {
+                                    let items = queue.items.clone();
+                                    let c = Arc::new(self.client.lock().unwrap().clone());
+                                    self.replace_playback_queue(items.clone(), t);
+                                    self.player.play_playlist(items, t, c, self.ui_volume);
+                                }
                             }
                         }
                     } else if self.tab_idx != self.log_tab_idx()
