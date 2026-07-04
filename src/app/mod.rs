@@ -1277,6 +1277,19 @@ impl App {
         }
     }
 
+    fn sync_direct_remote_queue_after_edit(&mut self, scope: QueueScope) {
+        if scope == QueueScope::Remote && self.has_direct_remote_queue() {
+            let (items, cursor) = {
+                let queue = self
+                    .remote_player_tab
+                    .as_ref()
+                    .expect("direct remote queue requires remote queue");
+                (queue.items.clone(), queue.playlist_cursor)
+            };
+            self.replace_direct_remote_queue(items, cursor);
+        }
+    }
+
     fn playback_queue_scope(&self) -> QueueScope {
         if self.has_direct_remote_queue() {
             QueueScope::Remote
@@ -2292,6 +2305,7 @@ pub(crate) mod tests {
     use super::ui_util::{fmt_duration, item_text_and_style};
     use super::*;
     use crate::api::TICKS_PER_SECOND;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     pub(crate) fn make_item(name: &str, item_type: &str) -> MediaItem {
         MediaItem {
@@ -4051,6 +4065,51 @@ pub(crate) mod tests {
             Some(local_items[1].id.as_str())
         );
         assert!(app.last_played_completed);
+    }
+
+    #[test]
+    fn alt_q_enqueues_from_home_view() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.home.section = 0;
+        app.home.continue_items = make_items(1);
+        app.home.continue_cursor = 0;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+
+        assert!(!handled);
+        assert_eq!(app.player_tab.items.len(), 1);
+        assert_eq!(app.player_tab.items[0].id, "id0");
+    }
+
+    #[test]
+    fn alt_q_appends_to_direct_remote_queue() {
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items, remote_items.clone());
+        app.tab_idx = 0;
+        app.queue_scope = QueueScope::Remote;
+        app.home.section = 0;
+        app.home.continue_items = make_items(1);
+        app.home.continue_cursor = 0;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+
+        assert!(!handled);
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            remote_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .chain(std::iter::once("id0"))
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

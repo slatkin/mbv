@@ -1647,16 +1647,15 @@ impl App {
             }
             let name = item.display_name();
             let scope = self.displayed_queue_scope();
-            if scope == QueueScope::Remote {
-                self.flash_status_high("Appending to remote queue is not supported yet".into());
-                return;
+            {
+                self.queue_for_scope_mut(scope).items.push(item);
             }
-            self.queue_for_scope_mut(scope).items.push(item);
             if self.queue_scope_has_local_metadata(scope) {
                 self.queue_dirty = true;
             }
             self.flash_status(format!("Added: {name}"));
             self.persist_local_queue_state_if_needed(scope);
+            self.sync_direct_remote_queue_after_edit(scope);
         } else if self.tab_idx >= 2 && self.tab_idx != self.log_tab_idx() {
             let Some(item) = self.current_lib_item() else {
                 return;
@@ -1670,16 +1669,15 @@ impl App {
             }
             let name = item.display_name();
             let scope = self.displayed_queue_scope();
-            if scope == QueueScope::Remote {
-                self.flash_status_high("Appending to remote queue is not supported yet".into());
-                return;
+            {
+                self.queue_for_scope_mut(scope).items.push(item);
             }
-            self.queue_for_scope_mut(scope).items.push(item);
             if self.queue_scope_has_local_metadata(scope) {
                 self.queue_dirty = true;
             }
             self.flash_status(format!("Added: {name}"));
             self.persist_local_queue_state_if_needed(scope);
+            self.sync_direct_remote_queue_after_edit(scope);
         }
     }
 
@@ -1696,12 +1694,9 @@ impl App {
                     return;
                 }
                 let scope = self.displayed_queue_scope();
-                if scope == QueueScope::Remote {
-                    self.flash_status_high("Appending to remote queue is not supported yet".into());
-                    return;
-                }
-                for i in items {
-                    self.queue_for_scope_mut(scope).items.push(i);
+                {
+                    let queue = self.queue_for_scope_mut(scope);
+                    queue.items.extend(items);
                 }
                 if self.queue_scope_has_local_metadata(scope) {
                     self.queue_dirty = true;
@@ -1711,6 +1706,7 @@ impl App {
                     item.display_name()
                 ));
                 self.persist_local_queue_state_if_needed(scope);
+                self.sync_direct_remote_queue_after_edit(scope);
             }
             Err(e) => {
                 drop(client);

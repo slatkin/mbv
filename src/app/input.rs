@@ -876,6 +876,9 @@ impl App {
             KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.enqueue_selected()
             }
+            KeyCode::Char('q') if key.modifiers == KeyModifiers::ALT => {
+                self.enqueue_selected()
+            }
             KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return self.try_quit();
             }
@@ -985,6 +988,10 @@ impl App {
 
     fn handle_combined_key(&mut self, key: KeyEvent) -> bool {
         match key.code {
+            KeyCode::Char('q') if key.modifiers == KeyModifiers::ALT => {
+                self.enqueue_selected();
+                return false;
+            }
             KeyCode::Char('q') if key.modifiers.is_empty() => {
                 return self.try_quit();
             }
@@ -1279,6 +1286,10 @@ impl App {
                 self.power_home_enqueue();
                 true
             }
+            KeyCode::Char('q') if key.modifiers == KeyModifiers::ALT => {
+                self.power_home_enqueue();
+                true
+            }
             KeyCode::Char('w') if ctrl => {
                 self.power_cw_toggle_watched();
                 true
@@ -1470,7 +1481,11 @@ impl App {
                         | KeyCode::Esc
                         | KeyCode::Backspace => true,
                         KeyCode::Char('/') => true,
-                        KeyCode::Char('q') => key.modifiers.is_empty() || key.modifiers == KeyModifiers::CONTROL,
+                        KeyCode::Char('q') => {
+                            key.modifiers.is_empty()
+                                || key.modifiers == KeyModifiers::CONTROL
+                                || key.modifiers == KeyModifiers::ALT
+                        },
                         KeyCode::Char('.') => true,
                         KeyCode::Char('r') => true,
                         KeyCode::Char('1'..='9') => true,
