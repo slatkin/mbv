@@ -12,6 +12,15 @@ use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 
+// A local daemon that was *just* launched (`mbv -d`) may have written its
+// PID file (which is what makes it "detected") slightly before its ctrl
+// socket is bound. Retry briefly rather than immediately falling back to
+// standalone. Explicit remote endpoints (`Unix(path)` / `Tcp`) are not
+// retried this way — they represent an already-running, user-specified
+// target, not a same-machine process that might still be starting up.
+const LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT: Duration = Duration::from_secs(1);
+const LOCAL_DAEMON_CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
+
 pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
@@ -78,9 +87,20 @@ impl DaemonEndpoint {
         match self {
             Self::Local => {
                 let path = PathBuf::from(crate::config::control_socket_path());
-                UnixStream::connect(&path)
-                    .map(ControlStream::Unix)
-                    .map_err(|e| format!("cannot connect to daemon endpoint {self}: {e}"))
+                let start = std::time::Instant::now();
+                loop {
+                    match UnixStream::connect(&path) {
+                        Ok(stream) => return Ok(ControlStream::Unix(stream)),
+                        Err(e) => {
+                            if start.elapsed() >= LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT {
+                                return Err(format!(
+                                    "cannot connect to daemon endpoint {self}: {e}"
+                                ));
+                            }
+                            std::thread::sleep(LOCAL_DAEMON_CONNECT_RETRY_INTERVAL);
+                        }
+                    }
+                }
             }
             Self::Unix(path) => UnixStream::connect(path)
                 .map(ControlStream::Unix)

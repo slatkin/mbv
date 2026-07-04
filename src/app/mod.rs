@@ -1045,10 +1045,23 @@ impl App {
         })
     }
 
+    /// `is_local_daemon` distinguishes the two daemon-connection modes:
+    /// - `true`: this is the same-machine `mbv -d` daemon, auto-detected at
+    ///   startup (`DaemonEndpoint::Local`). This should behave exactly like
+    ///   a plain local session — one unified queue, normal queue-state
+    ///   persistence — the only difference is that the daemon owns mpv
+    ///   instead of an in-process `Player`. No Local/Remote split, no pill.
+    /// - `false`: a genuinely remote/network daemon (explicit
+    ///   `--daemon-endpoint`/`daemon_client_endpoint`). Here a separate
+    ///   `remote_player_tab` is kept so the user can browse locally while a
+    ///   daemon elsewhere plays something else, with the Local/Remote scope
+    ///   pill to switch between them (mirroring `switch_to_direct_remote`'s
+    ///   mid-session upgrade case).
     pub fn new_remote(
         client: EmbyClient,
         remote: crate::remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
+        is_local_daemon: bool,
     ) -> Self {
         let (_, ws_rx) = mpsc::channel::<crate::ws::WsEvent>();
         let (lib_tx, lib_rx) = mpsc::channel();
@@ -1080,20 +1093,38 @@ impl App {
         let initial_items = remote.items.lock().unwrap().clone();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let player = PlayerProxy::remote(remote, always_play_next);
+        let (player_tab, remote_player_tab) = if is_local_daemon {
+            // Local daemon: one unified queue, exactly like plain local
+            // playback — no separate remote_player_tab, no scope pill.
+            (
+                PlayerTab {
+                    items: initial_items,
+                    playlist_cursor: initial_cursor,
+                },
+                None,
+            )
+        } else {
+            // Remote/network daemon: keep a separate remote queue so the
+            // user can browse locally while the daemon plays elsewhere.
+            (
+                PlayerTab {
+                    items: Vec::new(),
+                    playlist_cursor: 0,
+                },
+                Some(PlayerTab {
+                    items: initial_items,
+                    playlist_cursor: initial_cursor,
+                }),
+            )
+        };
         Self::build(AppInit {
             client: client_arc,
             player,
             player_rx,
             ws_rx,
             ws_send_tx: None,
-            player_tab: PlayerTab {
-                items: Vec::new(),
-                playlist_cursor: 0,
-            },
-            remote_player_tab: Some(PlayerTab {
-                items: initial_items,
-                playlist_cursor: initial_cursor,
-            }),
+            player_tab,
+            remote_player_tab,
             show_log_tab: false,
             system_notifications: false,
             image_protocol_enabled,
@@ -1180,7 +1211,7 @@ impl App {
     }
 
     fn playback_queue(&self) -> &PlayerTab {
-        if self.player.is_remote() {
+        if self.has_remote_queue() {
             self.remote_player_tab
                 .as_ref()
                 .expect("remote player requires remote queue")
@@ -1190,7 +1221,7 @@ impl App {
     }
 
     fn playback_queue_mut(&mut self) -> &mut PlayerTab {
-        if self.player.is_remote() {
+        if self.has_remote_queue() {
             self.remote_player_tab
                 .as_mut()
                 .expect("remote player requires remote queue")
@@ -2573,7 +2604,12 @@ pub(crate) mod tests {
         use crate::config::Config;
 
         let (remote, player_rx) = crate::remote_player::RemotePlayer::stub(remote_items, 0);
-        let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx);
+        let mut app = App::new_remote(
+            EmbyClient::new(Config::default()),
+            remote,
+            player_rx,
+            false,
+        );
         app.player_tab.items = local_items;
         app.player_tab.playlist_cursor = 0;
         app

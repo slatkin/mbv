@@ -184,65 +184,68 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
 
     let client = Arc::new(Mutex::new(client));
 
-    let (player_tx, player_rx) = mpsc::channel();
-    let (ws_tx_chan, ws_rx) = mpsc::channel();
-    let ws_send_tx = crate::ws::start(client.lock().unwrap().ws_url(), ws_tx_chan);
-    let mut direct_commands = Vec::new();
-    let daemon_tcp_listen = client
-        .lock()
-        .unwrap()
-        .config
-        .daemon_server_tcp_listen
-        .clone();
-    let tcp_listener = if daemon_tcp_listen.trim().is_empty() {
-        None
-    } else {
-        match TcpListener::bind(daemon_tcp_listen.trim()) {
-            Ok(listener) => {
-                let port = listener.local_addr().map(|addr| addr.port()).unwrap_or(0);
-                if port > 0 {
-                    direct_commands.push(mbv_direct_tcp_port_command(port));
-                    log::info!(
-                        target: "daemon",
-                        "daemon tcp control listening on {}",
-                        listener
-                            .local_addr()
-                            .map(|addr| addr.to_string())
-                            .unwrap_or_else(|_| daemon_tcp_listen.clone())
-                    );
+    // Bind the local mbv-to-mbv control socket as early as possible, before
+    // any Emby-network setup below (websocket connect, capability
+    // registration, subtitle-prefs fetch, mpris, tray). Local control is a
+    // different concern than the network/Emby-session machinery and must
+    // not wait on it — a client launched right after `mbv -d` relies on
+    // this socket existing promptly. Actually accepting connections is
+    // wired up further down once player/shared state exists; the bind
+    // itself (and thus the socket file client code connects to) happens
+    // here so the race window is effectively closed.
+    let ctrl_listener = {
+        let path = crate::config::control_socket_path();
+        let _ = std::fs::remove_file(&path);
+        match UnixListener::bind(&path) {
+            Ok(l) => {
+                // Restrict socket permissions to owner-only (prevents other
+                // users on multi-user systems from controlling playback).
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let _ =
+                        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
                 }
-                Some(listener)
+                Some(l)
             }
             Err(e) => {
-                log::warn!(
+                log::error!(
                     target: "daemon",
-                    "daemon tcp control bind failed for {}: {e}",
-                    daemon_tcp_listen
+                    "ctrl socket bind failed ({e}), remote TUI unavailable"
                 );
                 None
             }
         }
     };
-    client
-        .lock()
-        .unwrap()
-        .register_capabilities_with_options(&direct_commands, audio_only);
-    let subtitle_prefs = if client.lock().unwrap().config.subtitle_mode.is_empty()
-        && client.lock().unwrap().config.subtitle_lang.is_empty()
-        && client.lock().unwrap().config.audio_lang.is_empty()
-    {
-        client
-            .lock()
-            .unwrap()
-            .get_user_subtitle_prefs()
-            .unwrap_or_default()
-    } else {
-        crate::player::SubtitlePrefs {
-            mode: client.lock().unwrap().config.subtitle_mode.clone(),
-            subtitle_lang: client.lock().unwrap().config.subtitle_lang.clone(),
-            audio_lang: client.lock().unwrap().config.audio_lang.clone(),
+
+    let (player_tx, player_rx) = mpsc::channel();
+    let (ws_tx_chan, ws_rx) = mpsc::channel();
+    // ws::start() only spawns a background reconnect-loop thread and returns
+    // immediately — it does not block on the connection actually completing
+    // — so it's cheap enough to keep here, ahead of Player/mpris/tray.
+    let ws_send_tx = crate::ws::start(client.lock().unwrap().ws_url(), ws_tx_chan);
+
+    // Use client-config-only subtitle/audio-lang prefs (no network call) for
+    // the player's initial state, so startup never blocks on an Emby round
+    // trip. If the config doesn't pin these, the live user prefs are fetched
+    // from Emby in the background further down and applied to the
+    // already-running player once available.
+    let subtitle_prefs_from_config = {
+        let client = client.lock().unwrap();
+        if client.config.subtitle_mode.is_empty()
+            && client.config.subtitle_lang.is_empty()
+            && client.config.audio_lang.is_empty()
+        {
+            None
+        } else {
+            Some(crate::player::SubtitlePrefs {
+                mode: client.config.subtitle_mode.clone(),
+                subtitle_lang: client.config.subtitle_lang.clone(),
+                audio_lang: client.config.audio_lang.clone(),
+            })
         }
     };
+    let subtitle_prefs = subtitle_prefs_from_config.clone().unwrap_or_default();
     let client_locked = client.lock().unwrap().clone();
     let player = Player::new(
         client_locked.config.server_url.clone(),
@@ -305,8 +308,11 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
     let shared_cursor: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
     let ctrl_clients: ClientList = Arc::new(Mutex::new(Vec::new()));
 
-    // Spawn control socket listener(s)
-    {
+    // Spawn control socket listener(s). The socket was already bound above
+    // (see `ctrl_listener`) so it's been reachable since well before the
+    // Emby-network setup ran; this just starts serving it now that
+    // player/shared state exists.
+    if let Some(listener) = ctrl_listener {
         let ctrl_clients = ctrl_clients.clone();
         let merged_tx2 = merged_tx.clone();
         let client2 = client.clone();
@@ -315,24 +321,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
         let shared_cursor = shared_cursor.clone();
 
         std::thread::spawn(move || {
-            let path = crate::config::control_socket_path();
-            let _ = std::fs::remove_file(&path);
-            let listener = match UnixListener::bind(&path) {
-                Ok(l) => l,
-                Err(e) => {
-                    eprintln!("mbv daemon: ctrl socket bind failed ({e}), remote TUI unavailable");
-                    return;
-                }
-            };
-
-            // Restrict socket permissions to owner-only (prevents other users
-            // on multi-user systems from controlling playback).
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-            }
-
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
                 let Ok(stream_w) = stream.try_clone() else {
@@ -348,6 +336,74 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
                     shared_items.clone(),
                     shared_cursor.clone(),
                 );
+            }
+        });
+    }
+
+    // --- From here on: network/Emby-session-visibility setup (protocol
+    // negotiation metadata, capability registration, live subtitle-prefs
+    // fetch). Local control is already up and serving connections above;
+    // none of this may block or gate it. ---
+
+    let mut direct_commands = Vec::new();
+    let daemon_tcp_listen = client
+        .lock()
+        .unwrap()
+        .config
+        .daemon_server_tcp_listen
+        .clone();
+    let tcp_listener = if daemon_tcp_listen.trim().is_empty() {
+        None
+    } else {
+        match TcpListener::bind(daemon_tcp_listen.trim()) {
+            Ok(listener) => {
+                let port = listener.local_addr().map(|addr| addr.port()).unwrap_or(0);
+                if port > 0 {
+                    direct_commands.push(mbv_direct_tcp_port_command(port));
+                    log::info!(
+                        target: "daemon",
+                        "daemon tcp control listening on {}",
+                        listener
+                            .local_addr()
+                            .map(|addr| addr.to_string())
+                            .unwrap_or_else(|_| daemon_tcp_listen.clone())
+                    );
+                }
+                Some(listener)
+            }
+            Err(e) => {
+                log::warn!(
+                    target: "daemon",
+                    "daemon tcp control bind failed for {}: {e}",
+                    daemon_tcp_listen
+                );
+                None
+            }
+        }
+    };
+
+    // Register capabilities and, if the config didn't pin subtitle/audio
+    // prefs, fetch the live user prefs — both are Emby HTTP round trips, so
+    // do them off the startup path entirely.
+    {
+        let client = client.clone();
+        let direct_commands = direct_commands.clone();
+        let player_cmd_tx = player.cmd_tx.clone();
+        std::thread::spawn(move || {
+            client
+                .lock()
+                .unwrap()
+                .register_capabilities_with_options(&direct_commands, audio_only);
+            if subtitle_prefs_from_config.is_none() {
+                if let Ok(prefs) = client.lock().unwrap().get_user_subtitle_prefs() {
+                    if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
+                        let _ = tx.send(PlayerCommand::SetSubtitlePrefs {
+                            mode: prefs.mode,
+                            subtitle_lang: prefs.subtitle_lang,
+                            audio_lang: prefs.audio_lang,
+                        });
+                    }
+                }
             }
         });
     }

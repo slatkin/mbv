@@ -306,7 +306,8 @@ fn main() {
         match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon endpoint connected");
-                if let Err(e) = App::new_remote(client, remote, player_rx).run() {
+                let is_local_daemon = matches!(endpoint, remote_player::DaemonEndpoint::Local);
+                if let Err(e) = App::new_remote(client, remote, player_rx, is_local_daemon).run() {
                     eprintln!("Error: {e}");
                     std::process::exit(1);
                 }
@@ -327,7 +328,7 @@ fn main() {
         match remote_player::RemotePlayer::connect(&auth_token) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon socket connected");
-                if let Err(e) = App::new_remote(client, remote, player_rx).run() {
+                if let Err(e) = App::new_remote(client, remote, player_rx, true).run() {
                     eprintln!("Error: {e}");
                     std::process::exit(1);
                 }
