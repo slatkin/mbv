@@ -90,14 +90,14 @@ impl App {
                         .alignment(Alignment::Center),
                     strip,
                 );
-                self.layout_home_card_strips.push((s, strip));
+                self.layout.home.home_card_strips.push((s, strip));
                 continue;
             }
             let slots = self.render_home_cards_section(f, strip, title, items, cursor, is_active);
             if is_active {
-                self.layout_carousel_slots = slots;
+                self.layout.home.carousel_slots = slots;
             }
-            self.layout_home_card_strips.push((s, strip));
+            self.layout.home.home_card_strips.push((s, strip));
         }
 
         let ud_arrow_style = Style::default().fg(palette::IRIS);
@@ -108,7 +108,7 @@ impl App {
                 width: area.width,
                 height: 1,
             };
-            self.layout_carousel_up_arrow = Some(r);
+            self.layout.home.carousel_up_arrow = Some(r);
             f.render_widget(
                 Paragraph::new("▲")
                     .style(ud_arrow_style)
@@ -123,7 +123,7 @@ impl App {
                 width: area.width,
                 height: 1,
             };
-            self.layout_carousel_down_arrow = Some(r);
+            self.layout.home.carousel_down_arrow = Some(r);
             f.render_widget(
                 Paragraph::new("▼")
                     .style(ud_arrow_style)
@@ -339,7 +339,7 @@ impl App {
                     width: 1,
                     height: 1,
                 };
-                self.layout_carousel_left_arrow = Some(r);
+                self.layout.home.carousel_left_arrow = Some(r);
                 f.render_widget(Paragraph::new("◀").style(lr_arrow_style), r);
             }
             if show_sides && cursor + 1 < n {
@@ -349,7 +349,7 @@ impl App {
                     width: 1,
                     height: 1,
                 };
-                self.layout_carousel_right_arrow = Some(r);
+                self.layout.home.carousel_right_arrow = Some(r);
                 f.render_widget(Paragraph::new("▶").style(lr_arrow_style), r);
             }
         }
@@ -481,8 +481,8 @@ impl App {
             }
         }
 
-        self.layout_section_areas = areas;
-        self.layout_home_scrolls = scrolls;
+        self.layout.home.section_areas = areas;
+        self.layout.home.home_scrolls = scrolls;
 
         if scrollable {
             let sb_rect = Rect {
@@ -491,7 +491,7 @@ impl App {
                 width: 1,
                 height: area.height,
             };
-            self.layout_home_scrollbar = sb_rect;
+            self.layout.home.home_scrollbar = sb_rect;
             let mut sb_state = ScrollbarState::new(max_offset + 1).position(row_offset);
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -504,7 +504,7 @@ impl App {
                 &mut sb_state,
             );
         } else {
-            self.layout_home_scrollbar = Rect::default();
+            self.layout.home.home_scrollbar = Rect::default();
         }
     }
 

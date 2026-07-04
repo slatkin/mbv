@@ -36,7 +36,7 @@ impl App {
             self.render_season_grid(f, area, lib_idx);
             return;
         }
-        if let Some(v) = self.layout_lib_table_area.get_mut(lib_idx) {
+        if let Some(v) = self.layout.library.lib_table_area.get_mut(lib_idx) {
             *v = area;
         }
 
@@ -77,7 +77,7 @@ impl App {
             rendered_heights.push(row_h);
             row_y += row_h;
         }
-        if let Some(v) = self.layout_lib_row_heights.get_mut(lib_idx) {
+        if let Some(v) = self.layout.library.lib_row_heights.get_mut(lib_idx) {
             *v = rendered_heights;
         }
 

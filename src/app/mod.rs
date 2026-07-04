@@ -2,6 +2,7 @@ mod action;
 mod actions;
 pub(crate) mod images;
 mod input;
+pub(crate) mod layout;
 pub(crate) mod palette;
 pub mod render;
 mod settings;
@@ -456,42 +457,19 @@ pub struct App {
     log_pane: LogPane,        // which pane has focus
     log_source_cursor: usize, // selected row in sources pane
     log_disabled_sources: std::collections::HashSet<String>,
-    // Layout rects from last render, used for mouse hit-testing
-    playlist_rect: Rect,
-    home_rect: Rect,
-    layout_playlist_inner: Rect,
-    layout_section_areas: Vec<Rect>,
-    layout_tabs_area: Rect,
+    // Per-frame layout geometry from last render, used for mouse hit-testing.
+    // See src/app/layout.rs for the grouping rationale.
+    layout: layout::AppLayout,
     terminal_width: u16,
     terminal_height: u16,
-    layout_lib_scroll: Vec<usize>,
-    layout_lib_row_heights: Vec<Vec<u16>>, // per lib_idx: height of each visible row, from scroll
-    layout_home_scrolls: Vec<usize>,
-    layout_home_scrollbar: Rect,
 
     home_panel_section_offset: usize,
     home_cards_section_offset: usize,
-    layout_home_card_strips: Vec<(usize, Rect)>,
-    layout_lib_table_area: Vec<Rect>,
-    layout_breadcrumbs: Vec<(u16, u16, u16, usize)>, // (x_start, x_end, row, target nav_stack len)
-    layout_power_breadcrumbs: Vec<(u16, u16, u16, usize)>, // same format, for power-view header crumbs
-    layout_power_selector_tabs: Vec<(Rect, usize)>,        // selector pill rect → target index
     mouse_col: u16,
     mouse_row: u16,
     last_click_time: Instant,
     last_click_pos: (u16, u16),
     last_drag_seek: Instant,
-    layout_seekbar_area: Rect,
-    layout_button_area: Rect,
-    layout_tracks_area: Rect,
-    layout_vol_area: Rect,
-    layout_sub_area: Rect,
-    layout_audio_area: Rect,
-    layout_ind_au: Rect,
-    layout_ind_sub: Rect,
-    layout_ind_rc: Rect,
-    layout_ind_mu: Rect,
-    layout_ind_pb: Rect,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
     pending_queue_removal: Option<usize>, // deferred removal after TrackChanged index-shifts
@@ -502,25 +480,12 @@ pub struct App {
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
     playlist_group: bool, // list view: group audio by album / episodes by series
-    playlist_row_map: Vec<Option<usize>>, // list view visual row → item index (None = header/spacer)
     power_focus: PowerFocus,
     power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
-    power_left_area: Rect, // rendered area of the left panel (for mouse click / page calc)
-    power_queue_area: Rect,
-    power_cursor_screen_y: Option<u16>, // screen Y of focused item in library panel (set by renderer)
-    power_queue_cursor_screen_y: Option<u16>, // screen Y of focused item in queue panel (set by renderer)
-    power_inline_image_rect: Option<Rect>, // bounding rect of inline poster image in detail/episode views
-    power_queue_scope_local_area: Rect,
-    power_queue_scope_remote_area: Rect,
     power_queue_scroll: usize,
-    power_queue_row_map: Vec<Option<usize>>, // visual row → item index (None = album header)
-    power_left_row_map: Vec<Option<usize>>,  // visual row → item index for library letter groups
-    power_home_hitmap: Vec<(Rect, usize)>,   // home-tab grid: item row rect → flat index (mouse)
-    power_home_layout: Vec<PowerHomeSectionMeta>, // home-tab grid: per-section geometry (nav)
-    power_left_sorted_indices: Vec<usize>,   // full sorted display order when letter-groups active
-    power_detail_max_scroll: usize,          // max valid scroll (set each render frame)
-    power_detail_page_h: usize,              // visible overview line count (set each render frame)
+    power_detail_max_scroll: usize, // max valid scroll (set each render frame)
+    power_detail_page_h: usize,     // visible overview line count (set each render frame)
     // Whether the power-view queue is currently relocated to the bottom of the
     // right column (low-height layout). Sticky with hysteresis so a small,
     // transient change in the card image's rendered height (e.g. switching
@@ -530,11 +495,6 @@ pub struct App {
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
-    layout_carousel_slots: [(Option<usize>, Rect); 3],
-    layout_carousel_left_arrow: Option<Rect>,
-    layout_carousel_right_arrow: Option<Rect>,
-    layout_carousel_up_arrow: Option<Rect>,
-    layout_carousel_down_arrow: Option<Rect>,
     card_image_states: std::collections::HashMap<String, Option<StatefulProtocol>>,
     image_lru: std::collections::VecDeque<String>,
     image_cache_size: usize,
@@ -554,7 +514,6 @@ pub struct App {
     settings_save_at: Option<Instant>,
     confirm_logout: bool,
     multiselect_popup: Option<MultiSelectPopup>,
-    layout_settings_area: Rect,
     settings_line_of_cursor: Vec<usize>,
     help_scroll: u16,
     show_log_tab: bool,
@@ -614,7 +573,6 @@ pub struct App {
     ui_volume: u8,
     pre_mute_volume: Option<u8>,
     mute_on: bool,
-    layout_tabbar_vol_area: Rect,
     last_scroll_at: Instant,
     last_nav_at: Instant,
     album_year_cache: std::collections::HashMap<String, u32>,
@@ -856,41 +814,17 @@ impl App {
             log_pane: LogPane::Log,
             log_source_cursor: 0,
             log_disabled_sources: std::collections::HashSet::new(),
-            playlist_rect: Rect::default(),
-            home_rect: Rect::default(),
-            layout_playlist_inner: Rect::default(),
-            layout_section_areas: Vec::new(),
-            layout_tabs_area: Rect::default(),
+            layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,
-            layout_lib_scroll: Vec::new(),
-            layout_lib_row_heights: Vec::new(),
-            layout_home_scrolls: Vec::new(),
-            layout_home_scrollbar: Rect::default(),
 
             home_panel_section_offset: 0,
             home_cards_section_offset: 0,
-            layout_home_card_strips: Vec::new(),
-            layout_lib_table_area: Vec::new(),
-            layout_breadcrumbs: Vec::new(),
-            layout_power_breadcrumbs: Vec::new(),
-            layout_power_selector_tabs: Vec::new(),
             mouse_col: 0,
             mouse_row: 0,
             last_click_time: Instant::now(),
             last_drag_seek: Instant::now() - Duration::from_secs(1),
             last_click_pos: (u16::MAX, u16::MAX),
-            layout_seekbar_area: Rect::default(),
-            layout_button_area: Rect::default(),
-            layout_tracks_area: Rect::default(),
-            layout_vol_area: Rect::default(),
-            layout_sub_area: Rect::default(),
-            layout_audio_area: Rect::default(),
-            layout_ind_au: Rect::default(),
-            layout_ind_sub: Rect::default(),
-            layout_ind_rc: Rect::default(),
-            layout_ind_mu: Rect::default(),
-            layout_ind_pb: Rect::default(),
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
@@ -901,23 +835,10 @@ impl App {
             next_up_item: None,
             playlist_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
             playlist_group: true,
-            playlist_row_map: Vec::new(),
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
             power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
-            power_left_area: Rect::default(),
-            power_queue_area: Rect::default(),
-            power_cursor_screen_y: None,
-            power_queue_cursor_screen_y: None,
-            power_inline_image_rect: None,
-            power_queue_scope_local_area: Rect::default(),
-            power_queue_scope_remote_area: Rect::default(),
             power_queue_scroll: 0,
-            power_queue_row_map: Vec::new(),
-            power_left_row_map: Vec::new(),
-            power_home_hitmap: Vec::new(),
-            power_home_layout: Vec::new(),
-            power_left_sorted_indices: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
             power_queue_relocated: false,
@@ -925,14 +846,8 @@ impl App {
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
             mute_on: prefs["mute_on"].as_bool().unwrap_or(false),
-            layout_tabbar_vol_area: Rect::default(),
             last_played_item_id: None,
             last_played_completed: false,
-            layout_carousel_slots: [(None, Rect::default()); 3],
-            layout_carousel_left_arrow: None,
-            layout_carousel_right_arrow: None,
-            layout_carousel_up_arrow: None,
-            layout_carousel_down_arrow: None,
             card_image_states: std::collections::HashMap::new(),
             card_image_loading: std::collections::HashSet::new(),
             last_card_height: 0,
@@ -944,7 +859,6 @@ impl App {
             settings_save_at: None,
             confirm_logout: false,
             multiselect_popup: None,
-            layout_settings_area: Rect::default(),
             settings_line_of_cursor: Vec::new(),
             help_scroll: 0,
             notif_failed: false,
@@ -1893,7 +1807,11 @@ impl App {
                                 crossterm::event::MouseEventKind::ScrollUp
                                     | crossterm::event::MouseEventKind::ScrollDown
                             )
-                            && self.home_rect.contains((mouse.column, mouse.row).into());
+                            && self
+                                .layout
+                                .home
+                                .home_rect
+                                .contains((mouse.column, mouse.row).into());
                         self.handle_mouse(mouse);
                         // Drain queued scroll events to prevent scroll backlog.
                         if nav_scroll {
@@ -2553,41 +2471,17 @@ pub(crate) mod tests {
             log_pane: LogPane::Log,
             log_source_cursor: 0,
             log_disabled_sources: std::collections::HashSet::new(),
-            playlist_rect: ratatui::layout::Rect::default(),
-            home_rect: ratatui::layout::Rect::default(),
-            layout_playlist_inner: ratatui::layout::Rect::default(),
-            layout_section_areas: Vec::new(),
-            layout_tabs_area: ratatui::layout::Rect::default(),
+            layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,
-            layout_lib_scroll: Vec::new(),
-            layout_lib_row_heights: Vec::new(),
-            layout_home_scrolls: Vec::new(),
-            layout_home_scrollbar: Rect::default(),
 
             home_panel_section_offset: 0,
             home_cards_section_offset: 0,
-            layout_home_card_strips: Vec::new(),
-            layout_lib_table_area: Vec::new(),
-            layout_breadcrumbs: Vec::new(),
-            layout_power_breadcrumbs: Vec::new(),
-            layout_power_selector_tabs: Vec::new(),
             mouse_col: 0,
             mouse_row: 0,
             last_click_time: std::time::Instant::now(),
             last_drag_seek: std::time::Instant::now(),
             last_click_pos: (u16::MAX, u16::MAX),
-            layout_seekbar_area: ratatui::layout::Rect::default(),
-            layout_button_area: ratatui::layout::Rect::default(),
-            layout_tracks_area: ratatui::layout::Rect::default(),
-            layout_vol_area: ratatui::layout::Rect::default(),
-            layout_sub_area: ratatui::layout::Rect::default(),
-            layout_audio_area: ratatui::layout::Rect::default(),
-            layout_ind_au: Rect::default(),
-            layout_ind_sub: Rect::default(),
-            layout_ind_rc: Rect::default(),
-            layout_ind_mu: Rect::default(),
-            layout_ind_pb: Rect::default(),
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
@@ -2598,34 +2492,16 @@ pub(crate) mod tests {
             next_up_item: None,
             playlist_view: 0,
             playlist_group: true,
-            playlist_row_map: Vec::new(),
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
             power_left_tab_pending: 0,
-            power_left_area: Rect::default(),
-            power_queue_area: Rect::default(),
-            power_cursor_screen_y: None,
-            power_queue_cursor_screen_y: None,
-            power_inline_image_rect: None,
-            power_queue_scope_local_area: Rect::default(),
-            power_queue_scope_remote_area: Rect::default(),
             power_queue_scroll: 0,
-            power_queue_row_map: Vec::new(),
-            power_left_row_map: Vec::new(),
-            power_home_hitmap: Vec::new(),
-            power_home_layout: Vec::new(),
-            power_left_sorted_indices: Vec::new(),
             power_detail_max_scroll: 0,
             power_detail_page_h: 5,
             power_queue_relocated: false,
             home_card_view: false,
             last_played_item_id: None,
             last_played_completed: false,
-            layout_carousel_slots: [(None, ratatui::layout::Rect::default()); 3],
-            layout_carousel_left_arrow: None,
-            layout_carousel_right_arrow: None,
-            layout_carousel_up_arrow: None,
-            layout_carousel_down_arrow: None,
             card_image_states: std::collections::HashMap::new(),
             card_image_loading: std::collections::HashSet::new(),
             last_card_height: 0,
@@ -2639,7 +2515,6 @@ pub(crate) mod tests {
             settings_save_at: None,
             confirm_logout: false,
             multiselect_popup: None,
-            layout_settings_area: Rect::default(),
             settings_line_of_cursor: Vec::new(),
             help_scroll: 0,
             show_log_tab: false,
@@ -2659,7 +2534,6 @@ pub(crate) mod tests {
             ui_volume: 100,
             pre_mute_volume: None,
             mute_on: false,
-            layout_tabbar_vol_area: Rect::default(),
             sessions: Vec::new(),
             sessions_cursor: 0,
             sessions_scroll: 0,

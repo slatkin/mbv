@@ -57,11 +57,17 @@ impl App {
 
         let cursor_row = cursor / COLS;
         let scroll_row = {
-            let prev = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
+            let prev = self
+                .layout
+                .library
+                .lib_scroll
+                .get(lib_idx)
+                .copied()
+                .unwrap_or(0);
             let s = prev
                 .min(cursor_row)
                 .max(cursor_row.saturating_sub(n_visible_rows - 1));
-            if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) {
+            if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                 *v = s;
             }
             s

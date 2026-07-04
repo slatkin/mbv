@@ -1205,7 +1205,7 @@ impl App {
     }
 
     fn power_cw_page(&self) -> usize {
-        (self.power_left_area.height as usize).max(1)
+        (self.layout.power.left_area.height as usize).max(1)
     }
 
     fn handle_playlist_key(&mut self, key: KeyEvent) -> bool {
@@ -1407,7 +1407,7 @@ impl App {
         if self.playlist_view == PLAYLIST_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Queue)
         {
-            let page = self.power_queue_area.height.saturating_sub(1).max(1) as usize;
+            let page = self.layout.power.queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
                 KeyCode::Char('[')
                     if self.has_direct_remote_queue()
@@ -1933,7 +1933,7 @@ impl App {
     }
 
     fn tab_idx_at(&self, col: u16) -> Option<usize> {
-        let area = self.layout_tabs_area;
+        let area = self.layout.tabs_area;
         if col < area.x || col >= area.x + area.width {
             return None;
         }
@@ -1970,7 +1970,7 @@ impl App {
 
     /// Map a column click to a power-view left-panel tab index (0=Home, 1+=library).
     fn power_tab_idx_at(&self, col: u16) -> Option<usize> {
-        let area = self.layout_tabs_area;
+        let area = self.layout.tabs_area;
         if col < area.x || col >= area.x + area.width {
             return None;
         }
@@ -2236,18 +2236,18 @@ impl App {
 
     fn context_menu_spawn_point(&self) -> (u16, u16) {
         if self.tab_idx == 0 && self.home_card_view {
-            let center = self.layout_carousel_slots[1].1;
+            let center = self.layout.home.carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
         if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
             match self.power_focus {
                 PowerFocus::Left => {
-                    let area = self.power_left_area;
+                    let area = self.layout.power.left_area;
                     if area.width > 0 {
-                        let y = self.power_cursor_screen_y.unwrap_or(area.y);
+                        let y = self.layout.power.cursor_screen_y.unwrap_or(area.y);
                         let x = area.x + 2;
                         // Avoid inline image overlap (detail/episode poster).
-                        if let Some(img) = self.power_inline_image_rect {
+                        if let Some(img) = self.layout.power.inline_image_rect {
                             if y >= img.y && y < img.y + img.height {
                                 let below = img.y + img.height;
                                 if below < area.y + area.height {
@@ -2259,9 +2259,9 @@ impl App {
                     }
                 }
                 PowerFocus::Queue => {
-                    let area = self.power_queue_area;
+                    let area = self.layout.power.queue_area;
                     if area.width > 0 {
-                        let y = self.power_queue_cursor_screen_y.unwrap_or(area.y);
+                        let y = self.layout.power.queue_cursor_screen_y.unwrap_or(area.y);
                         return (area.x + 2, y);
                     }
                 }
@@ -2269,8 +2269,8 @@ impl App {
         }
         if self.tab_idx == 0 {
             let sec = self.home.section;
-            if let Some(area) = self.layout_section_areas.get(sec) {
-                let scroll = self.layout_home_scrolls.get(sec).copied().unwrap_or(0);
+            if let Some(area) = self.layout.home.section_areas.get(sec) {
+                let scroll = self.layout.home.home_scrolls.get(sec).copied().unwrap_or(0);
                 let cursor = match sec {
                     0 => self.home.continue_cursor,
                     n => self
@@ -2296,10 +2296,18 @@ impl App {
                         .unwrap_or(lvl.cursor)
                 })
                 .unwrap_or(0);
-            let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
+            let scroll = self
+                .layout
+                .library
+                .lib_scroll
+                .get(lib_idx)
+                .copied()
+                .unwrap_or(0);
             let row = cursor.saturating_sub(scroll) as u16;
             let tbl = self
-                .layout_lib_table_area
+                .layout
+                .library
+                .lib_table_area
                 .get(lib_idx)
                 .copied()
                 .unwrap_or_default();
@@ -2332,7 +2340,7 @@ impl App {
     }
 
     fn seek_to_col(&mut self, col: u16) {
-        let bar = self.layout_seekbar_area;
+        let bar = self.layout.playback.seekbar_area;
         if bar.width == 0 {
             return;
         }
@@ -2367,14 +2375,18 @@ impl App {
         if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
             if self.has_direct_remote_queue() {
                 if self
-                    .power_queue_scope_local_area
+                    .layout
+                    .power
+                    .queue_scope_local_area
                     .contains((col, row).into())
                 {
                     self.set_queue_scope(QueueScope::Local);
                     return true;
                 }
                 if self
-                    .power_queue_scope_remote_area
+                    .layout
+                    .power
+                    .queue_scope_remote_area
                     .contains((col, row).into())
                 {
                     self.set_queue_scope(QueueScope::Remote);
@@ -2382,20 +2394,20 @@ impl App {
                 }
             }
             // Click in queue area: focus queue and move cursor.
-            let qa = self.power_queue_area;
+            let qa = self.layout.power.queue_area;
             if qa.contains((col, row).into()) {
                 if !matches!(self.power_focus, PowerFocus::Queue) {
                     self.last_card_height = 0;
                 }
                 self.power_focus = PowerFocus::Queue;
                 let content_y = (row - qa.y) as usize;
-                if let Some(&Some(item_idx)) = self.power_queue_row_map.get(content_y) {
+                if let Some(&Some(item_idx)) = self.layout.power.queue_row_map.get(content_y) {
                     self.displayed_queue_mut().playlist_cursor = item_idx;
                 }
                 return true;
             }
             // Click in the left panel: focus it and set its cursor.
-            let la = self.power_left_area;
+            let la = self.layout.power.left_area;
             if la.contains((col, row).into()) {
                 if !matches!(self.power_focus, PowerFocus::Left) {
                     self.last_card_height = 0;
@@ -2405,7 +2417,9 @@ impl App {
                     // Home tab: rectangle hit-test the two-column card grid.
                     let pos = (col, row).into();
                     if let Some((_, flat_idx)) = self
-                        .power_home_hitmap
+                        .layout
+                        .power
+                        .home_hitmap
                         .iter()
                         .find(|(rect, _)| rect.contains(pos))
                     {
@@ -2416,7 +2430,7 @@ impl App {
                     if self.is_music_group_view(lib_idx)
                         || self.is_feed_home_video_group_view(lib_idx)
                     {
-                        for (rect, target) in self.layout_power_selector_tabs.clone() {
+                        for (rect, target) in self.layout.power.selector_tabs.clone() {
                             if rect.contains((col, row).into()) {
                                 if self.is_music_group_view(lib_idx) {
                                     self.select_music_group(lib_idx, target);
@@ -2429,9 +2443,9 @@ impl App {
                     }
                     let click_y = (row - la.y) as usize;
                     // Read the row map before taking a mutable borrow on libs (borrow checker).
-                    let use_row_map = !self.power_left_row_map.is_empty();
+                    let use_row_map = !self.layout.power.left_row_map.is_empty();
                     let row_map_item = if use_row_map {
-                        self.power_left_row_map.get(click_y).copied()
+                        self.layout.power.left_row_map.get(click_y).copied()
                     } else {
                         None
                     };
@@ -2495,20 +2509,20 @@ impl App {
                 return true;
             }
         } else if self.tab_idx == 1 {
-            let inner = self.layout_playlist_inner;
+            let inner = self.layout.playlist.inner;
             if inner.contains((col, row).into()) {
                 let click_y = (row - inner.y) as usize;
-                if let Some(&Some(idx)) = self.playlist_row_map.get(click_y) {
+                if let Some(&Some(idx)) = self.layout.playlist.row_map.get(click_y) {
                     self.player_tab.playlist_cursor = idx;
                     return true;
                 }
             }
         } else if self.tab_idx == 0 {
-            if self.home_rect.contains((col, row).into()) {
-                let n_secs = self.layout_section_areas.len();
+            if self.layout.home.home_rect.contains((col, row).into()) {
+                let n_secs = self.layout.home.section_areas.len();
                 let mut found_sec: Option<(usize, Rect)> = None;
                 for sec in 0..n_secs {
-                    let sect_area = self.layout_section_areas[sec];
+                    let sect_area = self.layout.home.section_areas[sec];
                     if sect_area.contains((col, row).into()) {
                         found_sec = Some((sec, sect_area));
                         break;
@@ -2522,7 +2536,8 @@ impl App {
                         .inner(sect_area);
                     if inner.contains((col, row).into()) {
                         let row_idx = (row - inner.y) as usize;
-                        let scroll_start = self.layout_home_scrolls.get(sec).copied().unwrap_or(0);
+                        let scroll_start =
+                            self.layout.home.home_scrolls.get(sec).copied().unwrap_or(0);
                         let inner_h = inner.height as usize;
                         let inner_w = inner.width.max(1) as usize;
                         let item_texts: Vec<String> = {
@@ -2570,18 +2585,28 @@ impl App {
         } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
             let tbl = self
-                .layout_lib_table_area
+                .layout
+                .library
+                .lib_table_area
                 .get(lib_idx)
                 .copied()
                 .unwrap_or_default();
             if tbl.contains((col, row).into()) {
                 let click_y = row - tbl.y;
-                let scroll = self.layout_lib_scroll.get(lib_idx).copied().unwrap_or(0);
+                let scroll = self
+                    .layout
+                    .library
+                    .lib_scroll
+                    .get(lib_idx)
+                    .copied()
+                    .unwrap_or(0);
                 let display_pos = {
                     let mut y = 0u16;
                     let mut found = scroll;
                     for (vi, &h) in self
-                        .layout_lib_row_heights
+                        .layout
+                        .library
+                        .lib_row_heights
                         .get(lib_idx)
                         .map(|v| v.as_slice())
                         .unwrap_or(&[])
@@ -2847,7 +2872,7 @@ impl App {
         }
 
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-            && self.layout_tabs_area.contains((col, row).into())
+            && self.layout.tabs_area.contains((col, row).into())
         {
             if self.playlist_view == PLAYLIST_VIEW_POWER {
                 // In power view, tab clicks change the left-panel selection, not the app tab.
@@ -2872,7 +2897,7 @@ impl App {
         }
 
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
-            && self.layout_settings_area.contains((col, row).into())
+            && self.layout.settings_area.contains((col, row).into())
         {
             self.show_settings = !self.show_settings;
             return;
@@ -2885,14 +2910,14 @@ impl App {
                 } else {
                     -1
                 };
-                if self.layout_tabbar_vol_area.contains((col, row).into())
-                    || self.layout_vol_area.contains((col, row).into())
+                if self.layout.tabbar_vol_area.contains((col, row).into())
+                    || self.layout.playback.vol_area.contains((col, row).into())
                 {
                     self.adjust_volume(-delta * 5);
                     return;
                 }
                 if self.tab_idx == 0 {
-                    let sb = self.layout_home_scrollbar;
+                    let sb = self.layout.home.home_scrollbar;
                     if sb.width > 0 && sb.contains((col, row).into()) {
                         let active = self.player.status.lock().unwrap().active;
                         let chrome: u16 = if active { 6 } else { 3 };
@@ -2905,7 +2930,7 @@ impl App {
                         self.home_panel_section_offset =
                             (self.home_panel_section_offset as i64 + delta)
                                 .clamp(0, max_offset as i64) as usize;
-                    } else if self.home_rect.contains((col, row).into()) {
+                    } else if self.layout.home.home_rect.contains((col, row).into()) {
                         if self.home_card_view {
                             let n = 1 + self.home.latest.len();
                             self.home.section =
@@ -2920,8 +2945,8 @@ impl App {
                     }
                 } else if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
                     // Scroll in whichever power-view panel the mouse is over.
-                    let queue_area = self.power_queue_area;
-                    let left_area = self.power_left_area;
+                    let queue_area = self.layout.power.queue_area;
+                    let left_area = self.layout.power.left_area;
                     if queue_area.contains((col, row).into()) {
                         let n = self.displayed_queue().items.len();
                         if n > 0 {
@@ -2996,7 +3021,7 @@ impl App {
 
                 let now = Instant::now();
 
-                if let Some(r) = self.layout_carousel_left_arrow {
+                if let Some(r) = self.layout.home.carousel_left_arrow {
                     if r.contains((col, row).into()) {
                         if self.tab_idx == 0 {
                             self.move_home_cursor(-1);
@@ -3008,7 +3033,7 @@ impl App {
                         return;
                     }
                 }
-                if let Some(r) = self.layout_carousel_right_arrow {
+                if let Some(r) = self.layout.home.carousel_right_arrow {
                     if r.contains((col, row).into()) {
                         if self.tab_idx == 0 {
                             self.move_home_cursor(1);
@@ -3022,7 +3047,7 @@ impl App {
                     }
                 }
                 if self.tab_idx == 0 && self.home_card_view {
-                    let strips = self.layout_home_card_strips.clone();
+                    let strips = self.layout.home.home_card_strips.clone();
                     for (sec_idx, strip_rect) in &strips {
                         if strip_rect.contains((col, row).into()) && *sec_idx != self.home.section {
                             self.home.section = *sec_idx;
@@ -3033,7 +3058,7 @@ impl App {
                         }
                     }
                 }
-                if let Some(r) = self.layout_carousel_up_arrow {
+                if let Some(r) = self.layout.home.carousel_up_arrow {
                     if r.contains((col, row).into()) {
                         if self.home.section > 0 {
                             self.home.section -= 1;
@@ -3042,7 +3067,7 @@ impl App {
                         return;
                     }
                 }
-                if let Some(r) = self.layout_carousel_down_arrow {
+                if let Some(r) = self.layout.home.carousel_down_arrow {
                     if r.contains((col, row).into()) {
                         let n_sections = 1 + self.home.latest.len();
                         if self.home.section + 1 < n_sections {
@@ -3060,7 +3085,7 @@ impl App {
                 self.last_click_pos = (col, row);
 
                 if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
-                    for (rect, target) in self.layout_power_selector_tabs.clone() {
+                    for (rect, target) in self.layout.power.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
                             if self.power_left_tab > 0 {
                                 let lib_idx = self.power_left_tab - 1;
@@ -3076,19 +3101,24 @@ impl App {
                 }
 
                 if is_double {
-                    if self.layout_seekbar_area.contains((col, row).into()) {
+                    if self
+                        .layout
+                        .playback
+                        .seekbar_area
+                        .contains((col, row).into())
+                    {
                         self.seek_to_col(col);
                         return;
                     }
                     if self.tab_idx == 0 {
-                        if self.home_rect.contains((col, row).into()) {
+                        if self.layout.home.home_rect.contains((col, row).into()) {
                             self.select_home();
                         }
                     } else if self.tab_idx == 1 {
                         let queue = self.displayed_queue();
                         let t = queue.playlist_cursor;
                         if t < queue.items.len()
-                            && self.layout_playlist_inner.contains((col, row).into())
+                            && self.layout.playlist.inner.contains((col, row).into())
                         {
                             let scope = self.displayed_queue_scope();
                             if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -3130,43 +3160,46 @@ impl App {
                     return;
                 }
 
-                if self.layout_button_area.contains((col, row).into()) {
-                    let btn = (col.saturating_sub(self.layout_button_area.x) / 5) as usize;
+                if self.layout.playback.button_area.contains((col, row).into()) {
+                    let btn = (col.saturating_sub(self.layout.playback.button_area.x) / 5) as usize;
                     if btn < 6 {
                         self.handle_button_click(btn);
                     }
                     return;
                 }
 
-                if self.layout_ind_au.width > 0 && self.layout_ind_au.contains((col, row).into()) {
+                if self.layout.playback.ind_au.width > 0
+                    && self.layout.playback.ind_au.contains((col, row).into())
+                {
                     self.cycle_audio();
                     return;
                 }
-                if self.layout_ind_sub.width > 0 && self.layout_ind_sub.contains((col, row).into())
+                if self.layout.playback.ind_sub.width > 0
+                    && self.layout.playback.ind_sub.contains((col, row).into())
                 {
                     self.toggle_sub();
                     return;
                 }
-                if self.layout_ind_rc.contains((col, row).into()) {
+                if self.layout.playback.ind_rc.contains((col, row).into()) {
                     self.show_sessions = !self.show_sessions;
                     if self.show_sessions {
                         self.spawn_sessions_load();
                     }
                     return;
                 }
-                if self.layout_ind_mu.contains((col, row).into()) {
+                if self.layout.playback.ind_mu.contains((col, row).into()) {
                     self.toggle_mute();
                     return;
                 }
-                if self.layout_ind_pb.contains((col, row).into()) {
+                if self.layout.playback.ind_pb.contains((col, row).into()) {
                     self.handle_button_click(2); // play/pause
                     return;
                 }
-                if self.layout_sub_area.contains((col, row).into()) {
+                if self.layout.playback.sub_area.contains((col, row).into()) {
                     self.toggle_sub();
                     return;
                 }
-                if self.layout_audio_area.contains((col, row).into()) {
+                if self.layout.playback.audio_area.contains((col, row).into()) {
                     if self.is_audio_item() {
                         self.toggle_mute();
                     } else {
@@ -3174,13 +3207,13 @@ impl App {
                     }
                     return;
                 }
-                if self.layout_vol_area.contains((col, row).into()) {
+                if self.layout.playback.vol_area.contains((col, row).into()) {
                     self.adjust_volume(-5);
                     return;
                 }
 
                 if self.tab_idx == 0 {
-                    let sb = self.layout_home_scrollbar;
+                    let sb = self.layout.home.home_scrollbar;
                     if sb.width > 0 && sb.contains((col, row).into()) {
                         self.home_scrollbar_seek(row);
                         return;
@@ -3192,7 +3225,7 @@ impl App {
                     && self.playlist_view == PLAYLIST_VIEW_POWER
                     && self.power_left_tab > 0
                 {
-                    let crumbs = self.layout_power_breadcrumbs.clone();
+                    let crumbs = self.layout.power.breadcrumbs.clone();
                     let lib_idx = self.power_left_tab - 1;
                     for (x_start, x_end, crumb_row, target_depth) in crumbs {
                         if row == crumb_row && col >= x_start && col < x_end {
@@ -3204,7 +3237,7 @@ impl App {
                 }
 
                 if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
-                    let crumbs = self.layout_breadcrumbs.clone();
+                    let crumbs = self.layout.library.breadcrumbs.clone();
                     let lib_off = self.lib_tab_offset();
                     for (x_start, x_end, crumb_row, target_depth) in crumbs {
                         if row == crumb_row && col >= x_start && col < x_end {
@@ -3228,12 +3261,12 @@ impl App {
                 }
             }
             MouseEventKind::Down(MouseButton::Right) => {
-                if self.layout_vol_area.contains((col, row).into()) {
+                if self.layout.playback.vol_area.contains((col, row).into()) {
                     self.adjust_volume(5);
                     return;
                 }
                 if self.tab_idx == 0 && self.home_card_view {
-                    let slots = self.layout_carousel_slots;
+                    let slots = self.layout.home.carousel_slots;
                     for (maybe_item_idx, card_rect) in slots.iter() {
                         if card_rect.contains((col, row).into()) {
                             if let Some(item_idx) = maybe_item_idx {
@@ -3254,14 +3287,18 @@ impl App {
             }
             MouseEventKind::Drag(MouseButton::Left)
                 if self.tab_idx == 0 && {
-                    let sb = self.layout_home_scrollbar;
+                    let sb = self.layout.home.home_scrollbar;
                     sb.width > 0 && sb.contains((col, row).into())
                 } =>
             {
                 self.home_scrollbar_seek(row);
             }
             MouseEventKind::Drag(MouseButton::Left)
-                if self.layout_seekbar_area.contains((col, row).into())
+                if self
+                    .layout
+                    .playback
+                    .seekbar_area
+                    .contains((col, row).into())
                     && self.last_drag_seek.elapsed() >= Duration::from_millis(150) =>
             {
                 self.last_drag_seek = Instant::now();

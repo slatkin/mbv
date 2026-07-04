@@ -117,7 +117,7 @@ impl App {
                 x += sep.len() as u16;
             }
         }
-        self.layout_breadcrumbs = if is_deep { new_breadcrumbs } else { Vec::new() };
+        self.layout.library.breadcrumbs = if is_deep { new_breadcrumbs } else { Vec::new() };
 
         // Build the search/crumb label and render it — either onto crumb_area
         // (panel visible) or as a block title on the top border (panel hidden).

@@ -327,11 +327,11 @@ impl App {
 
     pub(super) fn lib_page_size(&self) -> usize {
         // In power view the library list is rendered into the right panel, and the
-        // normal-view per-row height map (`layout_lib_row_heights`) is never populated,
+        // normal-view per-row height map (`layout.library.lib_row_heights`) is never populated,
         // so it would fall back to 1. Use the panel height directly (rows are single-line;
         // subtract 1 for the count/search header line).
         if self.playlist_view == PLAYLIST_VIEW_POWER {
-            return (self.power_left_area.height as usize)
+            return (self.layout.power.left_area.height as usize)
                 .saturating_sub(1)
                 .max(1);
         }
@@ -340,14 +340,16 @@ impl App {
         } else {
             0
         };
-        self.layout_lib_row_heights
+        self.layout
+            .library
+            .lib_row_heights
             .get(lib_idx)
             .map(|v| v.len().saturating_sub(1).max(1))
             .unwrap_or(1)
     }
 
     pub(super) fn playlist_page_size(&self) -> usize {
-        self.layout_playlist_inner.height.saturating_sub(2).max(1) as usize
+        self.layout.playlist.inner.height.saturating_sub(2).max(1) as usize
     }
 
     pub(super) fn move_lib_cursor(&mut self, delta: i64) {
@@ -370,19 +372,23 @@ impl App {
 
         // In power view with letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
-        if self.playlist_view == PLAYLIST_VIEW_POWER && !self.power_left_sorted_indices.is_empty() {
+        if self.playlist_view == PLAYLIST_VIEW_POWER
+            && !self.layout.power.left_sorted_indices.is_empty()
+        {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.last().is_some();
             if needs_sorted {
                 let current = self.libs[lib_idx].nav_stack.last().unwrap().cursor;
-                let sorted_n = self.power_left_sorted_indices.len();
+                let sorted_n = self.layout.power.left_sorted_indices.len();
                 let pos = self
-                    .power_left_sorted_indices
+                    .layout
+                    .power
+                    .left_sorted_indices
                     .iter()
                     .position(|&i| i == current)
                     .unwrap_or(0);
                 let new_pos = (pos as i64 + delta).clamp(0, sorted_n as i64 - 1) as usize;
-                let new_cursor = self.power_left_sorted_indices[new_pos];
+                let new_cursor = self.layout.power.left_sorted_indices[new_pos];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
@@ -428,12 +434,15 @@ impl App {
 
         // In power view with letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
-        if self.playlist_view == PLAYLIST_VIEW_POWER && !self.power_left_sorted_indices.is_empty() {
-            let needs_sorted =
-                self.libs[lib_idx].search.is_none() && !self.power_left_sorted_indices.is_empty();
+        if self.playlist_view == PLAYLIST_VIEW_POWER
+            && !self.layout.power.left_sorted_indices.is_empty()
+        {
+            let needs_sorted = self.libs[lib_idx].search.is_none()
+                && !self.layout.power.left_sorted_indices.is_empty();
             if needs_sorted {
-                let n = self.power_left_sorted_indices.len();
-                let new_cursor = self.power_left_sorted_indices[if to_end { n - 1 } else { 0 }];
+                let n = self.layout.power.left_sorted_indices.len();
+                let new_cursor =
+                    self.layout.power.left_sorted_indices[if to_end { n - 1 } else { 0 }];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
@@ -530,7 +539,7 @@ impl App {
     }
 
     pub(super) fn home_scrollbar_seek(&mut self, row: u16) {
-        let sb = self.layout_home_scrollbar;
+        let sb = self.layout.home.home_scrollbar;
         if sb.height == 0 {
             return;
         }
@@ -1799,7 +1808,7 @@ impl App {
                 scroll: 0,
                 all_items: None,
             });
-            if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) {
+            if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                 *v = 0;
             }
             self.spawn_browse(
@@ -1830,7 +1839,7 @@ impl App {
                         lvl.cursor = pos;
                     }
                 }
-                if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) {
+                if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                     *v = 0;
                 }
             }
@@ -1948,7 +1957,7 @@ impl App {
             };
 
             if did_pop {
-                if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) {
+                if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                     *v = 0;
                 }
 
@@ -3674,17 +3683,19 @@ impl App {
         self.home.power_home_cursor = (cur + delta).clamp(0, total as i64 - 1) as usize;
     }
 
-    /// Section (index into `power_home_layout`) currently holding the flat cursor.
+    /// Section (index into `layout.power.home_layout`) currently holding the flat cursor.
     fn power_home_cur_section(&self) -> Option<usize> {
         let cursor = self.home.power_home_cursor;
-        self.power_home_layout
+        self.layout
+            .power
+            .home_layout
             .iter()
             .position(|m| m.len > 0 && cursor >= m.flat_start && cursor < m.flat_start + m.len)
     }
 
     /// Select the first item of the first non-empty section.
     fn power_home_select_first(&mut self) {
-        if let Some(m) = self.power_home_layout.iter().find(|x| x.len > 0) {
+        if let Some(m) = self.layout.power.home_layout.iter().find(|x| x.len > 0) {
             self.home.power_home_cursor = m.flat_start;
         }
     }
@@ -3692,7 +3703,7 @@ impl App {
     /// Grid-aware down: within the current card, else the top of the next non-empty
     /// card in the same column.
     pub(super) fn power_home_move_down(&mut self) {
-        if self.power_home_layout.is_empty() {
+        if self.layout.power.home_layout.is_empty() {
             self.power_home_move_cursor(1);
             return;
         }
@@ -3700,14 +3711,16 @@ impl App {
             self.power_home_select_first();
             return;
         };
-        let m = self.power_home_layout[si].clone();
+        let m = self.layout.power.home_layout[si].clone();
         let within = self.home.power_home_cursor - m.flat_start;
         if within + 1 < m.len {
             self.home.power_home_cursor += 1;
             return;
         }
         if let Some(next) = self
-            .power_home_layout
+            .layout
+            .power
+            .home_layout
             .iter()
             .filter(|x| x.col == m.col && x.row > m.row && x.len > 0)
             .min_by_key(|x| x.row)
@@ -3719,7 +3732,7 @@ impl App {
     /// Grid-aware up: within the current card, else the bottom of the previous
     /// non-empty card in the same column.
     pub(super) fn power_home_move_up(&mut self) {
-        if self.power_home_layout.is_empty() {
+        if self.layout.power.home_layout.is_empty() {
             self.power_home_move_cursor(-1);
             return;
         }
@@ -3727,14 +3740,16 @@ impl App {
             self.power_home_select_first();
             return;
         };
-        let m = self.power_home_layout[si].clone();
+        let m = self.layout.power.home_layout[si].clone();
         let within = self.home.power_home_cursor - m.flat_start;
         if within > 0 {
             self.home.power_home_cursor -= 1;
             return;
         }
         if let Some(prev) = self
-            .power_home_layout
+            .layout
+            .power
+            .home_layout
             .iter()
             .filter(|x| x.col == m.col && x.row < m.row && x.len > 0)
             .max_by_key(|x| x.row)
@@ -3747,7 +3762,9 @@ impl App {
     /// section, wrapping at the ends. `dir` = -1 previous, +1 next.
     pub(super) fn power_home_move_section(&mut self, dir: i64) {
         let sections: Vec<usize> = self
-            .power_home_layout
+            .layout
+            .power
+            .home_layout
             .iter()
             .enumerate()
             .filter(|(_, m)| m.len > 0)
@@ -3767,7 +3784,7 @@ impl App {
             None => 0,
         };
         let si = sections[next_pos];
-        self.home.power_home_cursor = self.power_home_layout[si].flat_start;
+        self.home.power_home_cursor = self.layout.power.home_layout[si].flat_start;
     }
 
     /// Play the item under the flat power-home cursor.
@@ -4042,9 +4059,11 @@ impl App {
             });
         }
         let n = self.libs.len();
-        self.layout_lib_scroll.resize(n, 0);
-        self.layout_lib_row_heights.resize_with(n, Vec::new);
-        self.layout_lib_table_area
+        self.layout.library.lib_scroll.resize(n, 0);
+        self.layout.library.lib_row_heights.resize_with(n, Vec::new);
+        self.layout
+            .library
+            .lib_table_area
             .resize(n, ratatui::layout::Rect::default());
     }
 

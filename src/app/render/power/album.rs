@@ -194,7 +194,7 @@ impl App {
         .column_spacing(1)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
-        self.power_cursor_screen_y =
+        self.layout.power.cursor_screen_y =
             Some(table_area.y + (cursor.saturating_sub(state.offset())) as u16);
 
         let visible_rows = table_area.height as usize;

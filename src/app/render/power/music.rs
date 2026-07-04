@@ -155,7 +155,7 @@ impl App {
                     height: 1,
                 },
             );
-            self.layout_power_selector_tabs = selector_tabs;
+            self.layout.power.selector_tabs = selector_tabs;
         }
         if row < max_y {
             row += 1;
@@ -207,9 +207,9 @@ impl App {
         }
 
         // Store for click/page-size calculations (used by mouse handler and PageUp/Down).
-        self.power_left_area = list_area;
-        self.power_left_sorted_indices.clear();
-        self.power_left_row_map.clear();
+        self.layout.power.left_area = list_area;
+        self.layout.power.left_sorted_indices.clear();
+        self.layout.power.left_row_map.clear();
 
         let visible = list_area.height as usize;
         let avail_chars = (list_area.width as usize).saturating_sub(2);
@@ -346,7 +346,7 @@ impl App {
             list_area,
             &mut state,
         );
-        self.power_cursor_screen_y =
+        self.layout.power.cursor_screen_y =
             Some(list_area.y + (display_cursor.saturating_sub(offset)) as u16);
 
         let display_n = display_rows.len();

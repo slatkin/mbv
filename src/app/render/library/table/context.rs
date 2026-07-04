@@ -207,7 +207,9 @@ impl App {
     ) -> usize {
         let scroll = if self.libs[lib_idx].search.is_some() {
             let mut s = self
-                .layout_lib_scroll
+                .layout
+                .library
+                .lib_scroll
                 .get(lib_idx)
                 .copied()
                 .unwrap_or(0)
@@ -223,7 +225,7 @@ impl App {
         } else {
             cursor
         };
-        if let Some(v) = self.layout_lib_scroll.get_mut(lib_idx) {
+        if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
             *v = scroll;
         }
         scroll

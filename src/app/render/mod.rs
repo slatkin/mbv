@@ -68,7 +68,7 @@ impl App {
             if show_controls {
                 self.render_seekbar(f, seek_area);
             } else {
-                self.layout_seekbar_area = Rect::default();
+                self.layout.playback.seekbar_area = Rect::default();
                 let bar = "\u{2500}".repeat(seek_area.width as usize);
                 f.render_widget(
                     Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
@@ -76,14 +76,14 @@ impl App {
                 );
             }
         } else {
-            self.layout_seekbar_area = Rect::default();
+            self.layout.playback.seekbar_area = Rect::default();
         }
         // Indicator-bar click regions are never set anymore; clear them every frame.
-        self.layout_ind_pb = Rect::default();
-        self.layout_ind_mu = Rect::default();
-        self.layout_ind_rc = Rect::default();
-        self.layout_ind_sub = Rect::default();
-        self.layout_ind_au = Rect::default();
+        self.layout.playback.ind_pb = Rect::default();
+        self.layout.playback.ind_mu = Rect::default();
+        self.layout.playback.ind_rc = Rect::default();
+        self.layout.playback.ind_sub = Rect::default();
+        self.layout.playback.ind_au = Rect::default();
 
         {
             // Control pill (m ⇌ ≡) on the far left of the tab bar.
@@ -94,7 +94,7 @@ impl App {
             let tabs_w = tabs_area
                 .width
                 .saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
-            self.layout_tabs_area = Rect {
+            self.layout.tabs_area = Rect {
                 x: tabs_x,
                 width: tabs_w,
                 ..tabs_area
@@ -137,7 +137,7 @@ impl App {
                 width: vol_w,
                 height: 1,
             };
-            self.layout_tabbar_vol_area = vol_rect;
+            self.layout.tabbar_vol_area = vol_rect;
             f.render_widget(Paragraph::new(Line::from(vol_spans)), vol_rect);
 
             let (vis_start, vis_end) = self.visible_tab_range(tabs_w);
@@ -287,11 +287,11 @@ impl App {
             self.render_title_row(f, title_area, title, color);
         }
         // These control regions no longer exist (expanded view removed).
-        self.layout_tracks_area = Rect::default();
-        self.layout_vol_area = Rect::default();
-        self.layout_sub_area = Rect::default();
-        self.layout_audio_area = Rect::default();
-        self.layout_button_area = Rect::default();
+        self.layout.playback.tracks_area = Rect::default();
+        self.layout.playback.vol_area = Rect::default();
+        self.layout.playback.sub_area = Rect::default();
+        self.layout.playback.audio_area = Rect::default();
+        self.layout.playback.button_area = Rect::default();
 
         if self.tab_idx == 0 {
             self.render_combined(f, main_area);
@@ -791,13 +791,13 @@ impl App {
         let pad = Style::default().bg(bg);
         let (x, y) = (tabs_area.x, tabs_area.y);
         // Layout: "  m ⇌ ≡  " — m at x+2, ⇌ at x+4, ≡ at x+6.
-        self.layout_ind_mu = Rect {
+        self.layout.playback.ind_mu = Rect {
             x: x + 2,
             y,
             width: 1,
             height: 1,
         };
-        self.layout_ind_rc = Rect {
+        self.layout.playback.ind_rc = Rect {
             x: x + 4,
             y,
             width: 1,
@@ -833,7 +833,7 @@ impl App {
     /// No knob — the green/gray boundary marks the position. Records the click region.
     fn render_seekbar(&mut self, f: &mut Frame, area: Rect) {
         if area.height == 0 || area.width == 0 {
-            self.layout_seekbar_area = Rect::default();
+            self.layout.playback.seekbar_area = Rect::default();
             return;
         }
         let (pos_ticks, rt_ticks, _paused) = self.playback_progress();
@@ -842,7 +842,7 @@ impl App {
         } else {
             0.0
         };
-        self.layout_seekbar_area = area;
+        self.layout.playback.seekbar_area = area;
         let w = area.width as usize;
         let green_len = ((ratio * w as f64).round() as usize).min(w);
         let gray_len = w - green_len;

@@ -19,11 +19,11 @@ impl App {
             return vec![];
         }
 
-        self.power_queue_cursor_screen_y = None;
+        self.layout.power.queue_cursor_screen_y = None;
 
         let show_remote_scope = self.has_direct_remote_queue();
-        self.power_queue_scope_local_area = Rect::default();
-        self.power_queue_scope_remote_area = Rect::default();
+        self.layout.power.queue_scope_local_area = Rect::default();
+        self.layout.power.queue_scope_remote_area = Rect::default();
 
         // Queue header row: default FOAM rule when there is only one scope,
         // or scope pills plus Queue pill when both Local/Remote scopes exist.
@@ -39,13 +39,13 @@ impl App {
                 let local_w = local_label.width() as u16;
                 let remote_w = remote_label.width() as u16;
                 let gap = 1u16;
-                self.power_queue_scope_local_area = Rect {
+                self.layout.power.queue_scope_local_area = Rect {
                     x: area.x,
                     y: area.y,
                     width: local_w,
                     height: 1,
                 };
-                self.power_queue_scope_remote_area = Rect {
+                self.layout.power.queue_scope_remote_area = Rect {
                     x: area.x + local_w + gap,
                     y: area.y,
                     width: remote_w,
@@ -103,7 +103,7 @@ impl App {
             ..area
         };
         // Store the content area (after header) so mouse clicks map to the right rows.
-        self.power_queue_area = area;
+        self.layout.power.queue_area = area;
 
         let (items, cursor) = {
             let queue = self.displayed_queue();
@@ -112,7 +112,7 @@ impl App {
         let n = items.len();
         if n == 0 {
             self.power_queue_scroll = 0;
-            self.power_queue_row_map.clear();
+            self.layout.power.queue_row_map.clear();
             f.render_widget(
                 Paragraph::new(if self.displayed_queue_scope() == QueueScope::Local {
                     "  Add items with p from Home or library tabs"
@@ -157,7 +157,7 @@ impl App {
             self.power_queue_scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
         }
         let offset = self.power_queue_scroll;
-        self.power_queue_cursor_screen_y =
+        self.layout.power.queue_cursor_screen_y =
             Some(area.y + (cursor_row.saturating_sub(self.power_queue_scroll)) as u16);
 
         // Count how many group headers appear before the scroll offset, so we
@@ -186,7 +186,7 @@ impl App {
         };
 
         // Build visible ListItems and the row map simultaneously.
-        self.power_queue_row_map.clear();
+        self.layout.power.queue_row_map.clear();
         let mut list_items: Vec<ListItem> = Vec::new();
         let mut header_ys: Vec<u16> = Vec::new();
 
@@ -206,11 +206,11 @@ impl App {
                             .fg(palette::YELLOW)
                             .add_modifier(Modifier::BOLD),
                     ))));
-                    self.power_queue_row_map.push(None);
+                    self.layout.power.queue_row_map.push(None);
                 }
                 QueueRow::Spacer => {
                     list_items.push(ListItem::new(Line::raw("")));
-                    self.power_queue_row_map.push(None);
+                    self.layout.power.queue_row_map.push(None);
                 }
                 QueueRow::Track { idx, in_group: _ } => {
                     let i = *idx;
@@ -343,7 +343,7 @@ impl App {
                     }
 
                     list_items.push(ListItem::new(Line::from(spans)).style(row_style));
-                    self.power_queue_row_map.push(Some(i));
+                    self.layout.power.queue_row_map.push(Some(i));
                 }
             }
         }
