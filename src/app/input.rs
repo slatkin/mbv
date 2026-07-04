@@ -1131,115 +1131,16 @@ impl App {
         self.save_prefs();
     }
 
+    // Thin adapter over the `Action` seam (issue #78 pilot): translate the key
+    // into an `Action` via the pure `playback_action_for_key`, then hand it to
+    // `dispatch`, which owns the session-vs-local branching. See
+    // `src/app/action.rs` for the translation table and state transitions.
     fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
         let active = self.player.status.lock().unwrap().active;
-        let alt = key.modifiers.contains(KeyModifiers::ALT);
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let id = conn_id.clone();
-            match key.code {
-                KeyCode::Char(' ') => {
-                    self.do_session_command(move |c| c.session_transport(&id, "PlayPause"));
-                    return Some(false);
-                }
-                KeyCode::Enter if alt => {
-                    self.do_session_command(move |c| c.session_transport(&id, "Stop"));
-                    return Some(false);
-                }
-                KeyCode::Char('<') => {
-                    let pos_s = self
-                        .connected_session_state
-                        .as_ref()
-                        .map(|s| s.position_s)
-                        .unwrap_or(0);
-                    let t = (pos_s - 5).max(0) * crate::api::TICKS_PER_SECOND;
-                    self.do_session_command(move |c| c.session_seek(&id, t));
-                    return Some(false);
-                }
-                KeyCode::Char('>') => {
-                    let pos_s = self
-                        .connected_session_state
-                        .as_ref()
-                        .map(|s| s.position_s)
-                        .unwrap_or(0);
-                    let t = (pos_s + 5) * crate::api::TICKS_PER_SECOND;
-                    self.do_session_command(move |c| c.session_seek(&id, t));
-                    return Some(false);
-                }
-                KeyCode::Char('z') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    self.cycle_sub();
-                    return Some(false);
-                }
-                KeyCode::Char('N') => {
-                    self.session_jump_track(&id, 1, "NextTrack");
-                    return Some(false);
-                }
-                KeyCode::Char('P') => {
-                    self.session_jump_track(&id, -1, "PreviousTrack");
-                    return Some(false);
-                }
-                _ => {}
-            }
-        }
-        match key.code {
-            KeyCode::Char('-') => {
-                self.adjust_volume(-5);
-                return Some(false);
-            }
-            KeyCode::Char('+') | KeyCode::Char('=') => {
-                self.adjust_volume(5);
-                return Some(false);
-            }
-            KeyCode::Char('<') if active => {
-                self.player.send_command(PlayerCommand::Seek(-5.0));
-                return Some(false);
-            }
-            KeyCode::Char('>') if active => {
-                self.player.send_command(PlayerCommand::Seek(5.0));
-                return Some(false);
-            }
-            KeyCode::Char('N') if active => {
-                self.player.next();
-                return Some(false);
-            }
-            KeyCode::Char('P') if active => {
-                self.player.previous();
-                return Some(false);
-            }
-            KeyCode::Char('z') if !key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.toggle_sub();
-                return Some(false);
-            }
-            KeyCode::Char('m') => {
-                self.mute_on = !self.mute_on;
-                self.player
-                    .send_command(PlayerCommand::SetMute(self.mute_on));
-                self.save_prefs();
-                return Some(false);
-            }
-            _ => {}
-        }
-        if !active {
-            return None;
-        }
-        match key.code {
-            KeyCode::Enter if alt => {
-                self.player.stop();
-                Some(false)
-            }
-            KeyCode::Char(' ') => {
-                self.player.send_command(PlayerCommand::TogglePause);
-                Some(false)
-            }
-            KeyCode::Char('a') => {
-                if self.is_audio_item() {
-                    self.toggle_mute();
-                } else {
-                    self.cycle_audio();
-                }
-                Some(false)
-            }
-            _ => None,
-        }
+        let has_remote_session = self.connected_session_id.is_some();
+        let action = super::action::playback_action_for_key(key, active, has_remote_session)?;
+        self.dispatch(action);
+        Some(false)
     }
 
     /// Handle a key for the focused power-view home list (all groups: CW + library latest).
