@@ -4149,26 +4149,16 @@ impl App {
                 self.player.stop();
             }
             WsEvent::Pause => {
-                if !self.player.status.lock().unwrap().paused {
-                    self.player.send_command(PlayerCommand::TogglePause);
-                }
+                self.player.set_paused(true);
             }
             WsEvent::Unpause => {
-                if self.player.status.lock().unwrap().paused {
-                    self.player.send_command(PlayerCommand::TogglePause);
-                }
+                self.player.set_paused(false);
             }
             WsEvent::NextTrack => {
-                let idx = self.player.status.lock().unwrap().current_idx;
-                if idx + 1 < self.player_tab.items.len() {
-                    self.player.send_command(PlayerCommand::JumpTo(idx + 1));
-                }
+                self.player.next();
             }
             WsEvent::PreviousTrack => {
-                let idx = self.player.status.lock().unwrap().current_idx;
-                if idx > 0 {
-                    self.player.send_command(PlayerCommand::JumpTo(idx - 1));
-                }
+                self.player.previous();
             }
             WsEvent::TogglePause => {
                 self.player.send_command(PlayerCommand::TogglePause);

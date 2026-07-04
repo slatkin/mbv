@@ -2133,14 +2133,9 @@ impl App {
             }
             return;
         }
-        let (active, current_idx) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.current_idx)
-        };
         match btn {
-            0 if active && current_idx > 0 => {
-                self.player
-                    .send_command(PlayerCommand::JumpTo(current_idx - 1));
+            0 => {
+                self.player.previous();
             }
             1 => {
                 self.player.send_command(PlayerCommand::Seek(-5.0));
@@ -2154,9 +2149,8 @@ impl App {
             4 => {
                 self.player.send_command(PlayerCommand::Seek(5.0));
             }
-            5 if active && current_idx + 1 < self.playback_queue().items.len() => {
-                self.player
-                    .send_command(PlayerCommand::JumpTo(current_idx + 1));
+            5 => {
+                self.player.next();
             }
             _ => {}
         }

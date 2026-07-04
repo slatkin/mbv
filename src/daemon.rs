@@ -783,26 +783,16 @@ fn handle_ws(
             player.stop();
         }
         WsEvent::Pause => {
-            if !player.status.lock().unwrap().paused {
-                player.send_command(PlayerCommand::TogglePause);
-            }
+            player.set_paused(true);
         }
         WsEvent::Unpause => {
-            if player.status.lock().unwrap().paused {
-                player.send_command(PlayerCommand::TogglePause);
-            }
+            player.set_paused(false);
         }
         WsEvent::NextTrack => {
-            let idx = player.status.lock().unwrap().current_idx;
-            if idx + 1 < items.len() {
-                player.send_command(PlayerCommand::JumpTo(idx + 1));
-            }
+            player.next();
         }
         WsEvent::PreviousTrack => {
-            let idx = player.status.lock().unwrap().current_idx;
-            if idx > 0 {
-                player.send_command(PlayerCommand::JumpTo(idx - 1));
-            }
+            player.previous();
         }
         WsEvent::Seek(ticks) => {
             use crate::api::TICKS_PER_SECOND;
