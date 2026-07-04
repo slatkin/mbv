@@ -257,7 +257,7 @@ impl App {
 
         let now_playing: Option<String> = if active {
             let idx = self.player.status.lock().unwrap().current_idx;
-            self.player_tab.items.get(idx).map(|i| i.playback_label())
+            self.playback_queue().items.get(idx).map(|i| i.playback_label())
         } else {
             None
         };

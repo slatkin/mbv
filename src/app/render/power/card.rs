@@ -197,12 +197,15 @@ impl App {
             return self.render_card_image(f, area, &cache_key, area.height.min(18));
         }
 
-        let cursor = self.player_tab.playlist_cursor;
-        let n = self.player_tab.items.len();
+        let (cursor, items) = {
+            let queue = self.playback_queue();
+            (queue.playlist_cursor, queue.items.clone())
+        };
+        let n = items.len();
         if n == 0 {
             return (0, false);
         }
-        let item = &self.player_tab.items[cursor];
+        let item = &items[cursor];
         let img_types: &[&str] = match item.item_type.as_str() {
             "MusicAlbum" => &["AudioChild"],
             "Audio" => &["Primary"],
@@ -229,7 +232,7 @@ impl App {
         const PREFETCH_BEHIND: usize = 1;
         let start = cursor.saturating_sub(PREFETCH_BEHIND);
         let end = (cursor + PREFETCH_AHEAD + 1).min(n);
-        let prefetch: Vec<(String, String, String, String)> = self.player_tab.items[start..end]
+        let prefetch: Vec<(String, String, String, String)> = items[start..end]
             .iter()
             .enumerate()
             .filter(|(i, _)| start + i != cursor)

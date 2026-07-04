@@ -189,7 +189,7 @@ impl App {
         {
             let (active, active_idx, _, _, _) = self.effective_playback_state();
             let now_playing_id: Option<String> = if active {
-                self.player_tab.items.get(active_idx).map(|i| i.id.clone())
+                self.playback_queue().items.get(active_idx).map(|i| i.id.clone())
             } else {
                 None
             };
