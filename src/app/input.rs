@@ -673,15 +673,7 @@ impl App {
                 }
             }
             KeyCode::Char('d') => {
-                if self.player.is_remote() {
-                    self.restore_local_mode("Disconnected from direct remote session");
-                } else {
-                    self.connected_session_id = None;
-                    self.connected_session_state = None;
-                    self.session_miss_count = 0;
-                    self.remote_pos_s = 0;
-                    self.flash_status("Disconnected from remote session".to_string());
-                }
+                self.disconnect_remote();
                 self.show_sessions = false;
             }
             _ => {}

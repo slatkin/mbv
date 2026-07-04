@@ -15,7 +15,7 @@ impl App {
             f.area(),
             SESSIONS_PANEL_W,
             "REMOTE SESSIONS",
-            "[↵]conn [d]disc [r]refresh [Esc]close",
+            self.sessions_overlay_footer(),
         );
         let ix = content.x;
         let inner_w = content.width;
@@ -58,12 +58,7 @@ impl App {
             .sessions_scroll
             .min(self.sessions.len().saturating_sub(visible_entries));
 
-        for (i, s) in self
-            .sessions
-            .iter()
-            .enumerate()
-            .skip(self.sessions_scroll)
-        {
+        for (i, s) in self.sessions.iter().enumerate().skip(self.sessions_scroll) {
             let entry_y = list_y + (i - self.sessions_scroll) as u16 * entry_h;
             if entry_y + CARD_H > list_y + list_h {
                 break;

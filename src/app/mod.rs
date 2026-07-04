@@ -391,6 +391,14 @@ enum QueueScope {
     Remote,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RemoteSlotState {
+    Off,
+    AttachedSession,
+    DirectRemote,
+    LocalDaemon,
+}
+
 /// Geometry of one power-home section card in the two-column grid, computed at render
 /// time and reused by keyboard navigation (column jumps).
 #[derive(Clone, Default)]
@@ -741,6 +749,56 @@ const SETTINGS_PANEL_W: u16 = 40;
 const PLAYLISTS_PANEL_W: u16 = 40;
 const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
+    fn remote_slot_state(&self) -> RemoteSlotState {
+        if self.connected_session_id.is_some() {
+            RemoteSlotState::AttachedSession
+        } else if self.player.is_remote() {
+            if self.has_remote_queue() {
+                RemoteSlotState::DirectRemote
+            } else {
+                RemoteSlotState::LocalDaemon
+            }
+        } else {
+            RemoteSlotState::Off
+        }
+    }
+
+    fn can_disconnect_remote(&self) -> bool {
+        !matches!(
+            self.remote_slot_state(),
+            RemoteSlotState::Off | RemoteSlotState::LocalDaemon
+        )
+    }
+
+    fn disconnect_remote(&mut self) {
+        match self.remote_slot_state() {
+            RemoteSlotState::AttachedSession => {
+                self.connected_session_id = None;
+                self.connected_session_state = None;
+                self.session_miss_count = 0;
+                self.remote_pos_s = 0;
+                self.flash_status("Disconnected from remote session".to_string());
+            }
+            RemoteSlotState::DirectRemote => {
+                self.restore_local_mode("Disconnected from direct remote session");
+            }
+            RemoteSlotState::LocalDaemon => {
+                self.flash_status("Local daemon mode stays connected".to_string());
+            }
+            RemoteSlotState::Off => {
+                self.flash_status("No remote session to disconnect".to_string());
+            }
+        }
+    }
+
+    fn sessions_overlay_footer(&self) -> &'static str {
+        if self.can_disconnect_remote() {
+            "[↵]conn [d]disc [r]refresh [Esc]close"
+        } else {
+            "[↵]conn [r]refresh [Esc]close"
+        }
+    }
+
     fn extrapolated_remote_position(remote_pos_s: i64, elapsed: Duration) -> i64 {
         remote_pos_s + elapsed.as_secs() as i64
     }
@@ -2592,15 +2650,18 @@ pub(crate) mod tests {
         use crate::config::Config;
 
         let (remote, player_rx) = crate::remote_player::RemotePlayer::stub(remote_items, 0);
-        let mut app = App::new_remote(
-            EmbyClient::new(Config::default()),
-            remote,
-            player_rx,
-            false,
-        );
+        let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
         app.player_tab.items = local_items;
         app.player_tab.playlist_cursor = 0;
         app
+    }
+
+    fn make_local_daemon_app_stub(remote_items: Vec<MediaItem>) -> App {
+        use crate::api::EmbyClient;
+        use crate::config::Config;
+
+        let (remote, player_rx) = crate::remote_player::RemotePlayer::stub(remote_items, 0);
+        App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, true)
     }
 
     #[test]
@@ -3938,6 +3999,93 @@ pub(crate) mod tests {
             Some(local_items[1].id.as_str())
         );
         assert!(app.last_played_completed);
+    }
+
+    #[test]
+    fn remote_slot_state_is_off_for_local_only_app() {
+        let app = make_app_stub();
+        assert_eq!(app.remote_slot_state(), RemoteSlotState::Off);
+        assert!(!app.can_disconnect_remote());
+        assert_eq!(
+            app.sessions_overlay_footer(),
+            "[↵]conn [r]refresh [Esc]close"
+        );
+    }
+
+    #[test]
+    fn remote_slot_state_is_attached_session_when_connected_to_remote_session() {
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("session-1".into());
+
+        assert_eq!(app.remote_slot_state(), RemoteSlotState::AttachedSession);
+        assert!(app.can_disconnect_remote());
+        assert_eq!(
+            app.sessions_overlay_footer(),
+            "[↵]conn [d]disc [r]refresh [Esc]close"
+        );
+    }
+
+    #[test]
+    fn remote_slot_state_is_direct_remote_for_network_daemon_mode() {
+        let app = make_remote_app_stub(make_items(2), make_items(3));
+
+        assert_eq!(app.remote_slot_state(), RemoteSlotState::DirectRemote);
+        assert!(app.can_disconnect_remote());
+        assert_eq!(
+            app.sessions_overlay_footer(),
+            "[↵]conn [d]disc [r]refresh [Esc]close"
+        );
+    }
+
+    #[test]
+    fn remote_slot_state_is_local_daemon_for_thin_client_mode() {
+        let app = make_local_daemon_app_stub(make_items(3));
+
+        assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
+        assert!(!app.can_disconnect_remote());
+        assert_eq!(
+            app.sessions_overlay_footer(),
+            "[↵]conn [r]refresh [Esc]close"
+        );
+    }
+
+    #[test]
+    fn attached_session_state_wins_over_local_daemon_indicator() {
+        let mut app = make_local_daemon_app_stub(make_items(3));
+        app.connected_session_id = Some("session-1".into());
+
+        assert_eq!(app.remote_slot_state(), RemoteSlotState::AttachedSession);
+        assert!(app.can_disconnect_remote());
+    }
+
+    #[test]
+    fn disconnect_remote_does_not_exit_local_daemon_mode() {
+        let mut app = make_local_daemon_app_stub(make_items(3));
+
+        app.disconnect_remote();
+
+        assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
+        assert!(app.player.is_remote());
+        assert!(!app.can_disconnect_remote());
+        assert_eq!(app.status, "Local daemon mode stays connected");
+    }
+
+    #[test]
+    fn disconnect_remote_clears_attached_remote_session() {
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("session-1".into());
+        app.connected_session_state = Some(make_session("remote-host", "Emby"));
+        app.session_miss_count = 2;
+        app.remote_pos_s = 120;
+
+        app.disconnect_remote();
+
+        assert_eq!(app.remote_slot_state(), RemoteSlotState::Off);
+        assert!(app.connected_session_id.is_none());
+        assert!(app.connected_session_state.is_none());
+        assert_eq!(app.session_miss_count, 0);
+        assert_eq!(app.remote_pos_s, 0);
+        assert_eq!(app.status, "Disconnected from remote session");
     }
 
     // ── home_section_len_cur ─────────────────────────────────────────────────

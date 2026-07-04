@@ -497,7 +497,12 @@ impl App {
     /// last item); our `scroll` is a paragraph offset clamped to
     /// `total - visible`, which is smaller whenever `total > visible + 1` and
     /// left the thumb short of the track's bottom.
-    pub(super) fn render_sidebar_scrollbar(f: &mut Frame, content: Rect, total: usize, scroll: usize) {
+    pub(super) fn render_sidebar_scrollbar(
+        f: &mut Frame,
+        content: Rect,
+        total: usize,
+        scroll: usize,
+    ) {
         let track_len = content.height as usize;
         let visible = track_len;
         if track_len == 0 || total <= visible {
@@ -764,11 +769,11 @@ impl App {
     fn render_control_pill(&mut self, f: &mut Frame, tabs_area: Rect) {
         let bg = palette::PILL_BG;
         let mute_on = self.mute_on;
-        let connected = self.connected_session_id.is_some();
         let is_playlist = matches!(
             &self.queue_source,
             crate::config::QueueSource::Playlist { .. }
         );
+        let remote_state = self.remote_slot_state();
         let icon = |on: bool, on_color: Color, bold: bool| {
             // OFF: no explicit foreground (terminal default bleeds through).
             let style = Style::default()
@@ -795,11 +800,22 @@ impl App {
             width: 1,
             height: 1,
         };
+        let (remote_glyph, remote_on, remote_color, remote_bold) = match remote_state {
+            super::RemoteSlotState::Off => ("\u{21CC}", false, Color::Reset, false),
+            super::RemoteSlotState::AttachedSession => {
+                ("\u{21CC}", true, palette::YELLOW, true)
+            }
+            super::RemoteSlotState::DirectRemote => ("\u{21CC}", true, palette::PINE, true),
+            super::RemoteSlotState::LocalDaemon => ("\u{25CF}", true, palette::PINE, false),
+        };
         let spans = vec![
             Span::styled("  ", pad),
             Span::styled("m", icon(mute_on, palette::RED, true)),
             Span::styled(" ", pad),
-            Span::styled("\u{21CC}", icon(connected, palette::YELLOW, connected)),
+            Span::styled(
+                remote_glyph,
+                icon(remote_on, remote_color, remote_bold),
+            ),
             Span::styled(" ", pad),
             Span::styled("\u{2261}", icon(is_playlist, palette::FOAM, true)),
             Span::styled("  ", pad),
