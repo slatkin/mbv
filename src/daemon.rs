@@ -11,13 +11,31 @@ use crate::ws::WsEvent;
 use ksni::blocking::TrayMethods;
 
 /// Shared by the startup registration and the periodic 10-minute
-/// re-registration in the main loop below — both just need to take the
-/// lock and forward to `EmbyClient::register_capabilities_with_options`.
-fn register_capabilities(client: &Arc<Mutex<EmbyClient>>, direct_commands: &[String], audio_only: bool) {
-    client
-        .lock()
-        .unwrap()
-        .register_capabilities_with_options(direct_commands, audio_only);
+/// re-registration in the main loop below.
+fn register_capabilities(client: &EmbyClient, direct_commands: &[String], audio_only: bool) {
+    client.register_capabilities_with_options(direct_commands, audio_only);
+}
+
+fn bind_ctrl_listener() -> Option<UnixListener> {
+    let path = crate::config::control_socket_path();
+    let _ = std::fs::remove_file(&path);
+    match UnixListener::bind(&path) {
+        Ok(listener) => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+            }
+            Some(listener)
+        }
+        Err(e) => {
+            log::error!(
+                target: "daemon",
+                "ctrl socket bind failed ({e}), remote TUI unavailable"
+            );
+            None
+        }
+    }
 }
 
 enum DaemonEvent {
@@ -194,40 +212,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
 
     let client = Arc::new(Mutex::new(client));
 
-    // Bind the local mbv-to-mbv control socket as early as possible, before
-    // any Emby-network setup below (websocket connect, capability
-    // registration, subtitle-prefs fetch, mpris, tray). Local control is a
-    // different concern than the network/Emby-session machinery and must
-    // not wait on it — a client launched right after `mbv -d` relies on
-    // this socket existing promptly. Actually accepting connections is
-    // wired up further down once player/shared state exists; the bind
-    // itself (and thus the socket file client code connects to) happens
-    // here so the race window is effectively closed.
-    let ctrl_listener = {
-        let path = crate::config::control_socket_path();
-        let _ = std::fs::remove_file(&path);
-        match UnixListener::bind(&path) {
-            Ok(l) => {
-                // Restrict socket permissions to owner-only (prevents other
-                // users on multi-user systems from controlling playback).
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let _ =
-                        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
-                }
-                Some(l)
-            }
-            Err(e) => {
-                log::error!(
-                    target: "daemon",
-                    "ctrl socket bind failed ({e}), remote TUI unavailable"
-                );
-                None
-            }
-        }
-    };
-
     let (player_tx, player_rx) = mpsc::channel();
     let (ws_tx_chan, ws_rx) = mpsc::channel();
     // ws::start() only spawns a background reconnect-loop thread and returns
@@ -321,11 +305,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
     let shared_cursor: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
     let ctrl_clients: ClientList = Arc::new(Mutex::new(Vec::new()));
 
-    // Spawn control socket listener(s). The socket was already bound above
-    // (see `ctrl_listener`) so it's been reachable since well before the
-    // Emby-network setup ran; this just starts serving it now that
-    // player/shared state exists.
-    if let Some(listener) = ctrl_listener {
+    // Bind and start the control socket only once the daemon can immediately
+    // accept and speak the protocol, so local clients never connect and hang
+    // waiting for the daemon hello.
+    if let Some(listener) = bind_ctrl_listener() {
         let ctrl_clients = ctrl_clients.clone();
         let merged_tx2 = merged_tx.clone();
         let client2 = client.clone();
@@ -355,8 +338,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
 
     // --- From here on: network/Emby-session-visibility setup (protocol
     // negotiation metadata, capability registration, live subtitle-prefs
-    // fetch). Local control is already up and serving connections above;
-    // none of this may block or gate it. ---
+    // fetch). Local control is already up and serving connections above. ---
 
     let mut direct_commands = Vec::new();
     let daemon_tcp_listen = client
@@ -400,17 +382,17 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
     // round trips, so run them concurrently and off the startup path
     // entirely rather than blocking one on the other.
     {
-        let client = client.clone();
+        let client = client.lock().unwrap().clone();
         let direct_commands = direct_commands.clone();
         std::thread::spawn(move || {
             register_capabilities(&client, &direct_commands, audio_only);
         });
     }
     if !has_config_subtitle_prefs {
-        let client = client.clone();
+        let client = client.lock().unwrap().clone();
         let player_cmd_tx = player.cmd_tx.clone();
         std::thread::spawn(move || {
-            if let Ok(prefs) = client.lock().unwrap().get_user_subtitle_prefs() {
+            if let Ok(prefs) = client.get_user_subtitle_prefs() {
                 if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
                     let _ = tx.send(PlayerCommand::SetSubtitlePrefs {
                         mode: prefs.mode,
@@ -477,9 +459,11 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
             last_keepalive = Instant::now();
         }
         if last_capabilities.elapsed() >= Duration::from_secs(600) {
-            let client = client.clone();
+            let client = client.lock().unwrap().clone();
             let direct_commands = direct_commands.clone();
-            std::thread::spawn(move || register_capabilities(&client, &direct_commands, audio_only));
+            std::thread::spawn(move || {
+                register_capabilities(&client, &direct_commands, audio_only)
+            });
             last_capabilities = Instant::now();
         }
 
