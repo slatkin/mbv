@@ -916,11 +916,7 @@ impl SingleSession {
             next_up_fired: false,
             next_up_armed: false,
             startup_pause_release_pending: startup_pause_for_pipe,
-            startup_pause_events_to_skip: if startup_pause_for_pipe {
-                2
-            } else {
-                0
-            },
+            startup_pause_events_to_skip: if startup_pause_for_pipe { 2 } else { 0 },
         }
     }
 
@@ -1512,6 +1508,10 @@ impl PlaylistSession {
         s.queue_len = self.items.len();
     }
 
+    // `startup_pause_for_pipe` (added for audio-pipe startup-pause handling)
+    // pushed this past clippy's 10-argument default; grouping these into a
+    // params struct is a reasonable follow-up but out of scope here.
+    #[allow(clippy::too_many_arguments)]
     fn new(
         items: Vec<MediaItem>,
         start_idx: usize,
@@ -1564,11 +1564,7 @@ impl PlaylistSession {
             next_up_jump: false,
             stopped_near_end: false,
             startup_pause_release_pending: startup_pause_for_pipe,
-            startup_pause_events_to_skip: if startup_pause_for_pipe {
-                2
-            } else {
-                0
-            },
+            startup_pause_events_to_skip: if startup_pause_for_pipe { 2 } else { 0 },
             intro_start,
             intro_end,
             intro_show: past,
