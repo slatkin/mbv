@@ -195,6 +195,7 @@ pub struct QueueState {
     #[serde(default)]
     pub source: QueueSource,
     pub item_ids: Vec<String>,
+    #[serde(default)]
     pub cursor: usize,
     pub last_played_item_id: Option<String>,
     pub last_played_completed: bool,
@@ -894,6 +895,7 @@ pub fn save_config_settings(cfg: &Config) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn parse_full_config() {
@@ -1061,6 +1063,34 @@ hidden_latest = ["Movies", "TV SHOWS"]
             parse_config(toml).unwrap().start_on_queue,
             "backward compat: [mbv] fallback"
         );
+    }
+
+    #[test]
+    fn load_queue_state_backfills_missing_cursor() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        let temp = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_dir = temp.join("mbv");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::env::set_var("XDG_STATE_HOME", &temp);
+        std::fs::write(
+            state_dir.join("queue_state.json"),
+            r#"{"source":{"type":"unknown"},"item_ids":["a","b"],"last_played_item_id":null,"last_played_completed":false,"positions":{}}"#,
+        )
+        .unwrap();
+
+        let state = load_queue_state().expect("legacy queue state should still load");
+        assert_eq!(state.item_ids, vec!["a", "b"]);
+        assert_eq!(state.cursor, 0);
+
+        std::env::remove_var("XDG_STATE_HOME");
+        let _ = std::fs::remove_dir_all(temp);
     }
 
     // ── System-instance path routing ─────────────────────────────────────────

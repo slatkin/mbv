@@ -3385,6 +3385,7 @@ impl App {
             LibEvent::QueueRestored {
                 items,
                 source,
+                cursor,
                 last_played_item_id,
                 last_played_completed,
             } => {
@@ -3400,7 +3401,7 @@ impl App {
                         idx
                     }
                 } else {
-                    0
+                    cursor.min(items.len().saturating_sub(1))
                 };
                 self.last_played_item_id = last_played_item_id;
                 self.last_played_completed = last_played_completed;
@@ -3878,9 +3879,10 @@ impl App {
         // Mark the restore as in-flight so save_queue_state won't overwrite
         // the on-disk state with an empty queue before the response arrives.
         self.queue_restore_pending = true;
-        let (item_ids, source, last_played_item_id, last_played_completed, positions) = (
+        let (item_ids, source, cursor, last_played_item_id, last_played_completed, positions) = (
             state.item_ids,
             state.source,
+            state.cursor,
             state.last_played_item_id,
             state.last_played_completed,
             state.positions,
@@ -3912,6 +3914,7 @@ impl App {
             let _ = tx.send(LibEvent::QueueRestored {
                 items,
                 source,
+                cursor,
                 last_played_item_id,
                 last_played_completed,
             });

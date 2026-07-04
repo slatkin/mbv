@@ -369,6 +369,7 @@ enum LibEvent {
     QueueRestored {
         items: Vec<MediaItem>,
         source: crate::config::QueueSource,
+        cursor: usize,
         last_played_item_id: Option<String>,
         last_played_completed: bool,
     },
@@ -2373,6 +2374,23 @@ pub(crate) mod tests {
         let item = make_item("X", "Movie");
         let (_, style) = item_text_and_style(&item, true);
         assert_eq!(style.fg, None);
+    }
+
+    #[test]
+    fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
+        let mut app = make_app_stub();
+        let items = make_items(3);
+
+        app.handle_lib_event(LibEvent::QueueRestored {
+            items,
+            source: crate::config::QueueSource::Unknown,
+            cursor: 2,
+            last_played_item_id: None,
+            last_played_completed: false,
+        });
+
+        assert_eq!(app.player_tab.items.len(), 3);
+        assert_eq!(app.player_tab.playlist_cursor, 2);
     }
 
     // ── test helpers ─────────────────────────────────────────────────────────
