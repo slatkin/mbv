@@ -40,7 +40,7 @@ impl App {
             *v = area;
         }
 
-        let (display_items, cursor) = self.library_display_items(lib_idx);
+        let (display_items, cursor, total_count) = self.library_display_items(lib_idx);
         if self.render_library_table_empty_state(f, area, lib_idx, display_items.len()) {
             return;
         }
@@ -82,7 +82,10 @@ impl App {
         }
 
         if needs_scrollbar {
-            let mut sb_state = ScrollbarState::new(display_items.len()).position(scroll);
+            // Use the server-reported total, not `display_items.len()`, so the
+            // thumb reflects the real list size instead of shrinking to just
+            // whatever page(s) have been lazily fetched so far.
+            let mut sb_state = ScrollbarState::new(total_count.max(display_items.len())).position(scroll);
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
                     .thumb_symbol("▐")
@@ -96,7 +99,10 @@ impl App {
         }
     }
 
-    fn library_display_items(&self, lib_idx: usize) -> (Vec<(usize, MediaItem)>, usize) {
+    /// Returns the visible `(index, item)` pairs for the current level, the
+    /// cursor position, and the true item total (server-reported, not just
+    /// however many pages have been lazily fetched so far).
+    fn library_display_items(&self, lib_idx: usize) -> (Vec<(usize, MediaItem)>, usize, usize) {
         let lib = &self.libs[lib_idx];
         if let Some(s) = &lib.search {
             let items: Vec<(usize, MediaItem)> = s
@@ -104,7 +110,8 @@ impl App {
                 .iter()
                 .filter_map(|&i| s.items.get(i).map(|item| (i, item.clone())))
                 .collect();
-            (items, s.cursor)
+            let total = items.len();
+            (items, s.cursor, total)
         } else {
             let lvl = lib.nav_stack.last();
             let items: Vec<(usize, MediaItem)> = lvl
@@ -117,7 +124,8 @@ impl App {
                 })
                 .unwrap_or_default();
             let cur = lvl.map(|l| l.cursor).unwrap_or(0);
-            (items, cur)
+            let total = lvl.map(|l| l.total_count).unwrap_or(items.len());
+            (items, cur, total)
         }
     }
 
