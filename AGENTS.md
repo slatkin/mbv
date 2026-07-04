@@ -10,3 +10,17 @@ Relevant information about the project is in .serena/memories. If you have acces
 - When a bug fix does not resolve the issue, do NOT suspect user error. Assume the fix is wrong or incomplete and investigate the code further.
 - See docs/CHECKIN.md for pre-commit steps.
 - For releases, run `scripts/release.sh X.Y.Z "one-line summary"` instead of reading a separate release checklist.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (slatkin/mbv), managed via the `gh` CLI. External PRs are not pulled into triage. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Uses the default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
