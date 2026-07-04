@@ -379,6 +379,7 @@ enum SessionEvent {
     Error(String),
 }
 
+#[derive(Default)]
 struct PlayerTab {
     items: Vec<MediaItem>,
     playlist_cursor: usize,
@@ -1102,13 +1103,7 @@ impl App {
         } else {
             // Remote/network daemon: keep a separate remote queue so the
             // user can browse locally while the daemon plays elsewhere.
-            (
-                PlayerTab {
-                    items: Vec::new(),
-                    playlist_cursor: 0,
-                },
-                Some(initial_tab),
-            )
+            (PlayerTab::default(), Some(initial_tab))
         };
         Self::build(AppInit {
             client: client_arc,

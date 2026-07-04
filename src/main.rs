@@ -14,6 +14,22 @@ use api::EmbyClient;
 use app::App;
 use config::load_config;
 
+/// Shared by both daemon-connection call sites in `main()` below: run the
+/// TUI as a thin client of a connected daemon, exiting with an error if the
+/// event loop itself fails. Callers still `return` after calling this so
+/// control flow at each call site stays identical to before.
+fn run_remote_app(
+    client: EmbyClient,
+    remote: remote_player::RemotePlayer,
+    player_rx: std::sync::mpsc::Receiver<player::PlayerEvent>,
+    is_local_daemon: bool,
+) {
+    if let Err(e) = App::new_remote(client, remote, player_rx, is_local_daemon).run() {
+        eprintln!("Error: {e}");
+        std::process::exit(1);
+    }
+}
+
 fn prompt_line(label: &str) -> String {
     use std::io::Write;
     print!("{label}");
@@ -306,12 +322,7 @@ fn main() {
         match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon endpoint connected");
-                if let Err(e) =
-                    App::new_remote(client, remote, player_rx, endpoint.is_local()).run()
-                {
-                    eprintln!("Error: {e}");
-                    std::process::exit(1);
-                }
+                run_remote_app(client, remote, player_rx, endpoint.is_local());
                 return;
             }
             Err(e) => {
@@ -330,12 +341,7 @@ fn main() {
         match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
             Ok((remote, player_rx)) => {
                 log::info!(target: "startup", "daemon socket connected");
-                if let Err(e) =
-                    App::new_remote(client, remote, player_rx, endpoint.is_local()).run()
-                {
-                    eprintln!("Error: {e}");
-                    std::process::exit(1);
-                }
+                run_remote_app(client, remote, player_rx, endpoint.is_local());
                 return;
             }
             Err(e) => {

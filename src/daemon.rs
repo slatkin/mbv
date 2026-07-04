@@ -255,8 +255,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
             })
         }
     };
-    let has_config_subtitle_prefs = subtitle_prefs_from_config.is_some();
-    let subtitle_prefs = subtitle_prefs_from_config.unwrap_or_default();
+    let (has_config_subtitle_prefs, subtitle_prefs) = match subtitle_prefs_from_config {
+        Some(prefs) => (true, prefs),
+        None => (false, crate::player::SubtitlePrefs::default()),
+    };
     let client_locked = client.lock().unwrap().clone();
     let player = Player::new(
         client_locked.config.server_url.clone(),
@@ -394,23 +396,27 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
     };
 
     // Register capabilities and, if the config didn't pin subtitle/audio
-    // prefs, fetch the live user prefs — both are Emby HTTP round trips, so
-    // do them off the startup path entirely.
+    // prefs, fetch the live user prefs — both are independent Emby HTTP
+    // round trips, so run them concurrently and off the startup path
+    // entirely rather than blocking one on the other.
     {
         let client = client.clone();
         let direct_commands = direct_commands.clone();
-        let player_cmd_tx = player.cmd_tx.clone();
         std::thread::spawn(move || {
             register_capabilities(&client, &direct_commands, audio_only);
-            if !has_config_subtitle_prefs {
-                if let Ok(prefs) = client.lock().unwrap().get_user_subtitle_prefs() {
-                    if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
-                        let _ = tx.send(PlayerCommand::SetSubtitlePrefs {
-                            mode: prefs.mode,
-                            subtitle_lang: prefs.subtitle_lang,
-                            audio_lang: prefs.audio_lang,
-                        });
-                    }
+        });
+    }
+    if !has_config_subtitle_prefs {
+        let client = client.clone();
+        let player_cmd_tx = player.cmd_tx.clone();
+        std::thread::spawn(move || {
+            if let Ok(prefs) = client.lock().unwrap().get_user_subtitle_prefs() {
+                if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
+                    let _ = tx.send(PlayerCommand::SetSubtitlePrefs {
+                        mode: prefs.mode,
+                        subtitle_lang: prefs.subtitle_lang,
+                        audio_lang: prefs.audio_lang,
+                    });
                 }
             }
         });
