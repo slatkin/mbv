@@ -4,6 +4,7 @@ Relevant information about the project is in .serena/memories. If you have acces
 
 ## Rules
 - Use Serena for code exploration and targeted writes.
+- If creating or working in a git worktree, read docs/WORKTREES.md first.
 - Always fix compile warnings — delete unused code rather than suppressing with `#[allow]`.
 - Adding debugging and conducting tests to get more information about an issue is preferred over staring at the code for extended periods of time trying to speculate what might be happening. See docs/DEBUG.md for for troubleshooting strategies.
 - Any live Emby API calls (curl, item lookups, endpoint research) must be done inside an `emby-research` subagent, not in the main thread.

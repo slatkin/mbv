@@ -117,6 +117,34 @@ impl PlayerStatus {
     }
 }
 
+impl Default for PlayerStatus {
+    fn default() -> Self {
+        PlayerStatus {
+            position_ticks: 0,
+            last_valid_pos: 0,
+            runtime_ticks: 0,
+            paused: false,
+            volume: 100,
+            volume_max: 130,
+            current_idx: 0,
+            queue_len: 0,
+            active: false,
+            title: String::new(),
+            audio_tracks: Vec::new(),
+            sub_tracks: Vec::new(),
+            sub_track_stream_indexes: Vec::new(),
+            audio_id: 0,
+            audio_lang: String::new(),
+            sub_id: 0,
+            sub_lang: String::new(),
+            muted: false,
+            video_height: 0,
+            audio_codec: String::new(),
+            video_is_image: false,
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum PlayerEvent {
     Stopped {
@@ -2433,29 +2461,7 @@ impl Player {
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
             cmd_tx: Arc::new(Mutex::new(None)),
-            status: Arc::new(Mutex::new(PlayerStatus {
-                position_ticks: 0,
-                last_valid_pos: 0,
-                runtime_ticks: 0,
-                paused: false,
-                volume: 100,
-                volume_max: 130,
-                current_idx: 0,
-                queue_len: 0,
-                active: false,
-                title: String::new(),
-                audio_tracks: Vec::new(),
-                sub_tracks: Vec::new(),
-                sub_track_stream_indexes: Vec::new(),
-                audio_id: 0,
-                audio_lang: String::new(),
-                sub_id: 0,
-                sub_lang: String::new(),
-                muted: false,
-                video_height: 0,
-                audio_codec: String::new(),
-                video_is_image: false,
-            })),
+            status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
             ws_tx,
         }
@@ -3156,27 +3162,11 @@ mod tests {
     #[test]
     fn subtitle_stream_index_maps_to_mpv_subtitle_id() {
         let status = PlayerStatus {
-            position_ticks: 0,
-            last_valid_pos: 0,
-            runtime_ticks: 0,
-            paused: false,
-            volume: 100,
-            volume_max: 130,
-            current_idx: 0,
-            queue_len: 0,
             active: true,
-            title: String::new(),
-            audio_tracks: Vec::new(),
             sub_tracks: vec![(1, "English".to_string(), false)],
             sub_track_stream_indexes: vec![(1, 2)],
-            audio_id: 0,
-            audio_lang: String::new(),
-            sub_id: 0,
-            sub_lang: String::new(),
-            muted: false,
             video_height: 1080,
-            audio_codec: String::new(),
-            video_is_image: false,
+            ..Default::default()
         };
 
         assert_eq!(status.subtitle_stream_index_to_mpv_id(2), Some(1));
@@ -3195,27 +3185,11 @@ mod tests {
         paused: bool,
     ) -> PlayerStatus {
         PlayerStatus {
-            position_ticks: 0,
-            last_valid_pos: 0,
-            runtime_ticks: 0,
             paused,
-            volume: 100,
-            volume_max: 130,
             current_idx,
             queue_len,
             active,
-            title: String::new(),
-            audio_tracks: Vec::new(),
-            sub_tracks: Vec::new(),
-            sub_track_stream_indexes: Vec::new(),
-            audio_id: 0,
-            audio_lang: String::new(),
-            sub_id: 0,
-            sub_lang: String::new(),
-            muted: false,
-            video_height: 0,
-            audio_codec: String::new(),
-            video_is_image: false,
+            ..Default::default()
         }
     }
 
