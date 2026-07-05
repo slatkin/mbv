@@ -1,5 +1,6 @@
 use super::super::super::ui_util::*;
 use crate::api::TICKS_PER_SECOND;
+use crate::app::layout::AppLayout;
 use crate::app::{palette, App, QueueScope};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -14,16 +15,17 @@ impl App {
         f: &mut Frame,
         area: Rect,
         focused: bool,
+        layout: &mut AppLayout,
     ) -> Vec<u16> {
         if area.height < 1 {
             return vec![];
         }
 
-        self.layout.power.queue_cursor_screen_y = None;
+        layout.power.queue_cursor_screen_y = None;
 
         let show_remote_scope = self.has_direct_remote_queue();
-        self.layout.power.queue_scope_local_area = Rect::default();
-        self.layout.power.queue_scope_remote_area = Rect::default();
+        layout.power.queue_scope_local_area = Rect::default();
+        layout.power.queue_scope_remote_area = Rect::default();
 
         // Queue header row: default FOAM rule when there is only one scope,
         // or scope pills plus Queue pill when both Local/Remote scopes exist.
@@ -39,13 +41,13 @@ impl App {
                 let local_w = local_label.width() as u16;
                 let remote_w = remote_label.width() as u16;
                 let gap = 1u16;
-                self.layout.power.queue_scope_local_area = Rect {
+                layout.power.queue_scope_local_area = Rect {
                     x: area.x,
                     y: area.y,
                     width: local_w,
                     height: 1,
                 };
-                self.layout.power.queue_scope_remote_area = Rect {
+                layout.power.queue_scope_remote_area = Rect {
                     x: area.x + local_w + gap,
                     y: area.y,
                     width: remote_w,
@@ -103,7 +105,7 @@ impl App {
             ..area
         };
         // Store the content area (after header) so mouse clicks map to the right rows.
-        self.layout.power.queue_area = area;
+        layout.power.queue_area = area;
 
         let (items, cursor) = {
             let queue = self.displayed_queue();
@@ -112,7 +114,7 @@ impl App {
         let n = items.len();
         if n == 0 {
             self.power_queue_scroll = 0;
-            self.layout.power.queue_row_map.clear();
+            layout.power.queue_row_map.clear();
             f.render_widget(
                 Paragraph::new(if self.displayed_queue_scope() == QueueScope::Local {
                     "  Add items with p from Home or library tabs"
@@ -157,7 +159,7 @@ impl App {
             self.power_queue_scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
         }
         let offset = self.power_queue_scroll;
-        self.layout.power.queue_cursor_screen_y =
+        layout.power.queue_cursor_screen_y =
             Some(area.y + (cursor_row.saturating_sub(self.power_queue_scroll)) as u16);
 
         // Count how many group headers appear before the scroll offset, so we
@@ -186,7 +188,7 @@ impl App {
         };
 
         // Build visible ListItems and the row map simultaneously.
-        self.layout.power.queue_row_map.clear();
+        layout.power.queue_row_map.clear();
         let mut list_items: Vec<ListItem> = Vec::new();
         let mut header_ys: Vec<u16> = Vec::new();
 
@@ -206,11 +208,11 @@ impl App {
                             .fg(palette::YELLOW)
                             .add_modifier(Modifier::BOLD),
                     ))));
-                    self.layout.power.queue_row_map.push(None);
+                    layout.power.queue_row_map.push(None);
                 }
                 QueueRow::Spacer => {
                     list_items.push(ListItem::new(Line::raw("")));
-                    self.layout.power.queue_row_map.push(None);
+                    layout.power.queue_row_map.push(None);
                 }
                 QueueRow::Track { idx, in_group: _ } => {
                     let i = *idx;
@@ -343,7 +345,7 @@ impl App {
                     }
 
                     list_items.push(ListItem::new(Line::from(spans)).style(row_style));
-                    self.layout.power.queue_row_map.push(Some(i));
+                    layout.power.queue_row_map.push(Some(i));
                 }
             }
         }

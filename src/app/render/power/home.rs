@@ -1,5 +1,6 @@
 use super::super::super::ui_util::*;
 use crate::api::TICKS_PER_SECOND;
+use crate::app::layout::AppLayout;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -211,15 +212,16 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut AppLayout,
     ) {
         if area.height == 0 {
             return;
         }
         self.ensure_lib_loaded_for(lib_idx);
-        self.layout.power.left_row_map.clear();
+        layout.power.left_row_map.clear();
 
         let mut content_area = area;
-        self.layout.power.left_area = content_area;
+        layout.power.left_area = content_area;
 
         let (items, cursor, total_count) = {
             let lib = &self.libs[lib_idx];
@@ -303,7 +305,7 @@ impl App {
             let item_h = item_heights[i];
             let selected = i == cursor;
             if selected {
-                self.layout.power.cursor_screen_y = Some(row_y);
+                layout.power.cursor_screen_y = Some(row_y);
             }
             render_home_video_item(
                 f,
@@ -325,7 +327,7 @@ impl App {
             row_y += item_h;
         }
         row_map.resize(content_area.height as usize, None);
-        self.layout.power.left_row_map = row_map;
+        layout.power.left_row_map = row_map;
 
         // Scrollbar (hidden when unfocused, consistent with queue panel).
         if needs_scrollbar && focused {
@@ -350,12 +352,13 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut AppLayout,
     ) {
         if area.height == 0 {
             return;
         }
         self.ensure_lib_loaded_for(lib_idx);
-        self.layout.power.left_row_map.clear();
+        layout.power.left_row_map.clear();
 
         let Some(root_level) = self.libs[lib_idx].nav_stack.first() else {
             return;
@@ -488,7 +491,7 @@ impl App {
         if row < max_y {
             row += 1;
         }
-        self.layout.power.selector_tabs = selector_tabs;
+        layout.power.selector_tabs = selector_tabs;
 
         let list_area = Rect {
             x: area.x,
@@ -496,7 +499,7 @@ impl App {
             width: area.width,
             height: max_y.saturating_sub(row),
         };
-        self.layout.power.left_area = list_area;
+        layout.power.left_area = list_area;
         if list_area.height == 0 {
             return;
         }
@@ -558,7 +561,7 @@ impl App {
             let item_h = item_heights[item_idx];
             let selected = item_idx == current_pos;
             if selected {
-                self.layout.power.cursor_screen_y = Some(row_y);
+                layout.power.cursor_screen_y = Some(row_y);
             }
             render_home_video_item(
                 f, item, row_y, item_h, list_area, text_w, selected, focused, true,
@@ -572,7 +575,7 @@ impl App {
             row_y += item_h;
         }
         row_map.resize(list_area.height as usize, None);
-        self.layout.power.left_row_map = row_map;
+        layout.power.left_row_map = row_map;
 
         if needs_scrollbar && focused {
             let max_off = items.len().saturating_sub(1);
@@ -590,11 +593,17 @@ impl App {
         }
     }
 
-    pub(super) fn render_power_home_list(&mut self, f: &mut Frame, area: Rect, focused: bool) {
+    pub(super) fn render_power_home_list(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        focused: bool,
+        layout: &mut AppLayout,
+    ) {
         if area.height == 0 || area.width == 0 {
             return;
         }
-        self.layout.power.left_area = area;
+        layout.power.left_area = area;
 
         // --- Build sections from the home data (clone to avoid borrow conflicts). ---
         struct Section {
@@ -705,13 +714,13 @@ impl App {
         };
 
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
-        let mut layout: Vec<crate::app::layout::PowerHomeSectionMeta> =
+        let mut section_metas: Vec<crate::app::layout::PowerHomeSectionMeta> =
             Vec::with_capacity(n_sections);
 
         for (i, s) in sections.iter().enumerate() {
             let r = i / cols;
             let c = i % cols;
-            layout.push(crate::app::layout::PowerHomeSectionMeta {
+            section_metas.push(crate::app::layout::PowerHomeSectionMeta {
                 flat_start: s.flat_start,
                 len: s.items.len(),
                 row: r,
@@ -790,7 +799,7 @@ impl App {
                 let flat_idx = s.flat_start + item_idx;
                 let selected = flat_idx == cursor;
                 if selected {
-                    self.layout.power.cursor_screen_y = Some(sy);
+                    layout.power.cursor_screen_y = Some(sy);
                 }
 
                 let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
@@ -831,8 +840,8 @@ impl App {
             }
         }
 
-        self.layout.power.home.hitmap = hitmap;
-        self.layout.power.home.layout = layout;
+        layout.power.home.hitmap = hitmap;
+        layout.power.home.layout = section_metas;
 
         // Panel scrollbar on the far right.
         if needs_scrollbar && focused {
@@ -855,6 +864,7 @@ impl App {
 mod tests {
     use super::power_home_panel_scroll;
     use crate::api::TICKS_PER_SECOND;
+    use crate::app::layout::AppLayout;
     use crate::app::palette;
     use crate::app::tests::{make_app_stub, make_items};
     use ratatui::backend::TestBackend;
@@ -906,9 +916,10 @@ mod tests {
 
         let backend = TestBackend::new(80, 20);
         let mut term = Terminal::new(backend).unwrap();
+        let mut layout = AppLayout::default();
         term.draw(|f| {
             let area = Rect::new(0, 0, 80, 20);
-            app.render_power_home_list(f, area, true);
+            app.render_power_home_list(f, area, true, &mut layout);
         })
         .unwrap();
 
@@ -945,8 +956,8 @@ mod tests {
         // Section titles present.
         assert!(out.contains("YouTube"));
         // Grid geometry + hitmap were recorded.
-        assert_eq!(app.layout.power.home.layout.len(), 3);
-        assert!(!app.layout.power.home.hitmap.is_empty());
+        assert_eq!(layout.power.home.layout.len(), 3);
+        assert!(!layout.power.home.hitmap.is_empty());
     }
 
     #[test]

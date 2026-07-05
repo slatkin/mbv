@@ -1,5 +1,6 @@
 use super::super::super::ui_util::*;
 use crate::api::TICKS_PER_SECOND;
+use crate::app::layout::AppLayout;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -17,6 +18,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut AppLayout,
     ) {
         // Clone so self is free for scroll-state writes below.
         let item = match self.libs[lib_idx].power_detail_item.clone() {
@@ -27,7 +29,7 @@ impl App {
             return;
         }
 
-        self.layout.power.cursor_screen_y = Some(area.y);
+        layout.power.cursor_screen_y = Some(area.y);
 
         let inner_x = area.x + 1;
         let inner_w = (area.width as usize).saturating_sub(2);
@@ -86,7 +88,7 @@ impl App {
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
         // img_end_row is exclusive: image rows + 1 blank padding row below.
         let img_end_row = img_start_row + img_height + 1;
-        self.layout.power.inline_image_rect = if img_height > 0 {
+        layout.power.inline_image_rect = if img_height > 0 {
             Some(Rect {
                 x: img_x,
                 y: img_start_row,
@@ -306,8 +308,8 @@ impl App {
             let max_scroll = total.saturating_sub(avail);
             let scroll = self.libs[lib_idx].power_detail_scroll.min(max_scroll);
             self.libs[lib_idx].power_detail_scroll = scroll;
-            self.layout.power.detail_max_scroll = max_scroll;
-            self.layout.power.detail_page_h = avail.max(1);
+            layout.power.detail_max_scroll = max_scroll;
+            layout.power.detail_page_h = avail.max(1);
 
             if avail > 0 {
                 for (disp_idx, line_text) in all_lines.iter().skip(scroll).take(avail).enumerate() {

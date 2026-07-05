@@ -2,6 +2,7 @@ mod album;
 mod season_grid;
 mod table;
 
+use super::super::layout::AppLayout;
 use super::super::palette;
 use super::super::App;
 use ratatui::layout::{Alignment, Rect};
@@ -20,6 +21,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         crumb_area: Option<Rect>,
+        layout: &mut AppLayout,
     ) {
         if lib_idx >= self.libs.len() {
             return;
@@ -117,7 +119,7 @@ impl App {
                 x += sep.len() as u16;
             }
         }
-        self.layout.library.breadcrumbs = if is_deep { new_breadcrumbs } else { Vec::new() };
+        layout.library.breadcrumbs = if is_deep { new_breadcrumbs } else { Vec::new() };
 
         // Build the search/crumb label and render it — either onto crumb_area
         // (panel visible) or as a block title on the top border (panel hidden).
@@ -173,7 +175,7 @@ impl App {
         if self.is_album_level(lib_idx) && self.libs[lib_idx].search.is_none() {
             self.render_album_view(f, inner, lib_idx);
         } else {
-            self.render_library_table(f, inner, lib_idx);
+            self.render_library_table(f, inner, lib_idx, layout);
         }
     }
 }

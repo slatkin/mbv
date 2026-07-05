@@ -1,5 +1,6 @@
 use super::super::super::ui_util::*;
 use crate::api::TICKS_PER_SECOND;
+use crate::app::layout::AppLayout;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -17,6 +18,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut AppLayout,
     ) {
         if area.height == 0 {
             return;
@@ -194,7 +196,7 @@ impl App {
         .column_spacing(1)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
-        self.layout.power.cursor_screen_y =
+        layout.power.cursor_screen_y =
             Some(table_area.y + (cursor.saturating_sub(state.offset())) as u16);
 
         let visible_rows = table_area.height as usize;

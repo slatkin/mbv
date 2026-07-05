@@ -2,10 +2,21 @@
 //! hit-testing in `input.rs`.
 //!
 //! `App` owns a single `AppLayout` value (`app.layout`) instead of ~35
-//! scattered `layout_*`/`power_*`/`playlist_*` fields. Render code writes
-//! into `self.layout.<view>.<field>` in place; input code reads from the
-//! same paths. Grouping by view mirrors the boundaries `render/` and
-//! `input.rs` already use, rather than inventing a new one.
+//! scattered `layout_*`/`power_*`/`playlist_*` fields. Grouping by view
+//! mirrors the boundaries `render/` and `input.rs` already use, rather than
+//! inventing a new one.
+//!
+//! Render code does not write into `self.layout` in place. Each call to
+//! `App::render` builds a fresh, local `AppLayout::default()` and threads it
+//! (or the relevant per-view sub-struct) through the render call graph as an
+//! explicit parameter; every render function that used to write
+//! `self.layout.<view>.<field> = ...` now writes `layout.<field> = ...` on
+//! that local value instead. Only once the full pass completes does `render`
+//! swap it into `self.layout` in a single atomic assignment. This means
+//! `self.layout` (read by `input.rs`) always reflects the last frame that
+//! rendered in full, or is left completely untouched by an early return
+//! (e.g. the zero-area guard) -- it can never hold a mix of fields from two
+//! different frames.
 
 use ratatui::layout::Rect;
 

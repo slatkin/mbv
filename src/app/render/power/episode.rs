@@ -1,5 +1,6 @@
 use super::super::super::ui_util::*;
 use crate::api::TICKS_PER_SECOND;
+use crate::app::layout::AppLayout;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -17,6 +18,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut AppLayout,
     ) {
         if area.height == 0 {
             return;
@@ -118,7 +120,7 @@ impl App {
             let img_x = area.x + area.width.saturating_sub(img_actual_w);
             let img_end_row = img_start_row + img_height + 1;
             metadata_img_end_row = img_end_row;
-            self.layout.power.inline_image_rect = if img_height > 0 {
+            layout.power.inline_image_rect = if img_height > 0 {
                 Some(Rect {
                     x: img_x,
                     y: img_start_row,
@@ -614,7 +616,7 @@ impl App {
         .column_spacing(1)
         .row_highlight_style(Style::default());
         f.render_stateful_widget(table, table_area, &mut state);
-        self.layout.power.cursor_screen_y =
+        layout.power.cursor_screen_y =
             Some(table_area.y + (ep_cursor.saturating_sub(state.offset())) as u16);
 
         let visible_rows = table_area.height as usize;

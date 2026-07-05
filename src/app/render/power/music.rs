@@ -1,5 +1,6 @@
 use super::super::super::ui_util::*;
 use super::parse_album_folder_name;
+use crate::app::layout::AppLayout;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -18,6 +19,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
+        layout: &mut AppLayout,
     ) {
         if area.height == 0 {
             return;
@@ -155,7 +157,7 @@ impl App {
                     height: 1,
                 },
             );
-            self.layout.power.selector_tabs = selector_tabs;
+            layout.power.selector_tabs = selector_tabs;
         }
         if row < max_y {
             row += 1;
@@ -207,9 +209,9 @@ impl App {
         }
 
         // Store for click/page-size calculations (used by mouse handler and PageUp/Down).
-        self.layout.power.left_area = list_area;
-        self.layout.power.left_sorted_indices.clear();
-        self.layout.power.left_row_map.clear();
+        layout.power.left_area = list_area;
+        layout.power.left_sorted_indices.clear();
+        layout.power.left_row_map.clear();
 
         let visible = list_area.height as usize;
         let avail_chars = (list_area.width as usize).saturating_sub(2);
@@ -346,7 +348,7 @@ impl App {
             list_area,
             &mut state,
         );
-        self.layout.power.cursor_screen_y =
+        layout.power.cursor_screen_y =
             Some(list_area.y + (display_cursor.saturating_sub(offset)) as u16);
 
         let display_n = display_rows.len();

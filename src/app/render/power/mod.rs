@@ -7,6 +7,7 @@ mod list;
 mod music;
 mod queue;
 
+use super::super::layout::AppLayout;
 use super::super::ui_util::trunc_str;
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::Rect;
@@ -94,7 +95,7 @@ pub(super) fn letter_bucket(item: &crate::api::MediaItem, total: usize) -> Strin
 }
 
 impl App {
-    pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect) {
+    pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect, layout: &mut AppLayout) {
         if area.height < 4 {
             return;
         }
@@ -236,7 +237,7 @@ impl App {
                 x_cursor = x_end;
             }
             pill_spans.push(Span::styled(" ", pill_style));
-            self.layout.power.breadcrumbs = new_power_crumbs;
+            layout.power.breadcrumbs = new_power_crumbs;
 
             let mut line_spans = vec![Span::styled(
                 "\u{2500}".repeat(left_line_w),
@@ -323,12 +324,18 @@ impl App {
             )
         };
 
-        self.render_power_queue(f, queue_area, queue_focused);
-        self.render_power_library(f, lib_area, left_focused);
+        self.render_power_queue(f, queue_area, queue_focused, layout);
+        self.render_power_library(f, lib_area, left_focused, layout);
     }
 
-    fn render_power_library(&mut self, f: &mut Frame, area: Rect, focused: bool) {
-        let power = &mut self.layout.power;
+    fn render_power_library(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        focused: bool,
+        layout: &mut AppLayout,
+    ) {
+        let power = &mut layout.power;
         power.cursor_screen_y = None;
         power.inline_image_rect = None;
         power.selector_tabs.clear();
@@ -340,7 +347,7 @@ impl App {
         }
 
         if self.power_left_tab == 0 {
-            self.render_power_home_list(f, area, focused);
+            self.render_power_home_list(f, area, focused, layout);
             return;
         }
         let lib_idx = self.power_left_tab.saturating_sub(1);
@@ -351,19 +358,19 @@ impl App {
         let is_series = self.power_left_tab > 0 && self.is_series_view(lib_idx);
         let is_home_video = self.power_left_tab > 0 && self.is_home_video_view(lib_idx);
         if has_detail {
-            self.render_power_detail(f, area, lib_idx, focused);
+            self.render_power_detail(f, area, lib_idx, focused, layout);
         } else if is_feed_group {
-            self.render_power_feed_home_video_group_view(f, area, lib_idx, focused);
+            self.render_power_feed_home_video_group_view(f, area, lib_idx, focused, layout);
         } else if is_music_group {
-            self.render_power_music_group_view(f, area, lib_idx, focused);
+            self.render_power_music_group_view(f, area, lib_idx, focused, layout);
         } else if is_album {
-            self.render_power_album_detail(f, area, lib_idx, focused);
+            self.render_power_album_detail(f, area, lib_idx, focused, layout);
         } else if is_series {
-            self.render_power_episode_detail(f, area, lib_idx, focused);
+            self.render_power_episode_detail(f, area, lib_idx, focused, layout);
         } else if is_home_video {
-            self.render_power_home_video_list(f, area, lib_idx, focused);
+            self.render_power_home_video_list(f, area, lib_idx, focused, layout);
         } else {
-            self.render_power_list(f, area, focused);
+            self.render_power_list(f, area, focused, layout);
         }
     }
 }

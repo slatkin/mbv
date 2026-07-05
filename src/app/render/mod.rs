@@ -7,8 +7,9 @@ mod playlist;
 mod power;
 
 use super::ui_util::{fmt_duration, take_chars, trunc_str};
-use super::{palette, App};
+use super::{layout::AppLayout, palette, App};
 use crate::api::TICKS_PER_SECOND;
+use crate::app::layout::LayoutPlayback;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -21,6 +22,8 @@ impl App {
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
         // Guard against zero-dimension terminal (e.g. minimized or piped).
+        // `self.layout` is left untouched here -- it still reflects the last
+        // frame that rendered in full.
         if area.width == 0 || area.height == 0 {
             return;
         }
@@ -30,6 +33,24 @@ impl App {
         }
         self.terminal_width = area.width;
         self.terminal_height = area.height;
+
+        // Every render sub-call below writes into this fresh, local value
+        // instead of `self.layout` directly. It's swapped into `self.layout`
+        // in one atomic assignment only once this pass completes in full, so
+        // an early return partway through (like the guard above) can never
+        // leave `self.layout` holding a mix of fields from two different
+        // frames.
+        let mut layout = AppLayout::default();
+        // The library-table geometry caches are indexed by library tab index
+        // and sized once (to `self.libs.len()`) by `rebuild_library_tabs_from_views`,
+        // not rebuilt every frame -- each render pass only overwrites the slot
+        // for the currently-viewed library. Carry the existing sizing/values
+        // forward so `get_mut(lib_idx)` below still finds a slot to write into;
+        // otherwise every library-tab index in a freshly-defaulted (empty) Vec
+        // would be unwritable and this state would never survive a frame.
+        layout.library.lib_scroll = self.layout.library.lib_scroll.clone();
+        layout.library.lib_row_heights = self.layout.library.lib_row_heights.clone();
+        layout.library.lib_table_area = self.layout.library.lib_table_area.clone();
 
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
@@ -66,9 +87,9 @@ impl App {
         // Full-width seekbar row: live bar when playing, plain grey divider otherwise.
         if seek_h > 0 {
             if show_controls {
-                self.render_seekbar(f, seek_area);
+                self.render_seekbar(f, seek_area, &mut layout.playback);
             } else {
-                self.layout.playback.seekbar_area = Rect::default();
+                layout.playback.seekbar_area = Rect::default();
                 let bar = "\u{2500}".repeat(seek_area.width as usize);
                 f.render_widget(
                     Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
@@ -76,22 +97,22 @@ impl App {
                 );
             }
         } else {
-            self.layout.playback.seekbar_area = Rect::default();
+            layout.playback.seekbar_area = Rect::default();
         }
         // Indicator-bar click regions are never set anymore; clear them every frame.
-        self.layout.playback.ind_mu = Rect::default();
-        self.layout.playback.ind_rc = Rect::default();
+        layout.playback.ind_mu = Rect::default();
+        layout.playback.ind_rc = Rect::default();
 
         {
             // Control pill (m ⇌ ≡) on the far left of the tab bar.
-            self.render_control_pill(f, tabs_area);
+            self.render_control_pill(f, tabs_area, &mut layout.playback);
 
             // Tabs occupy the space between the control pill (left) and VOL (right).
             let tabs_x = tabs_area.x + super::TABBAR_LEFT_RESERVE;
             let tabs_w = tabs_area
                 .width
                 .saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
-            self.layout.tabs_area = Rect {
+            layout.tabs_area = Rect {
                 x: tabs_x,
                 width: tabs_w,
                 ..tabs_area
@@ -134,7 +155,7 @@ impl App {
                 width: vol_w,
                 height: 1,
             };
-            self.layout.tabbar_vol_area = vol_rect;
+            layout.tabbar_vol_area = vol_rect;
             f.render_widget(Paragraph::new(Line::from(vol_spans)), vol_rect);
 
             let (vis_start, vis_end) = self.visible_tab_range(tabs_w);
@@ -284,15 +305,21 @@ impl App {
             self.render_title_row(f, title_area, title, color);
         }
         if self.tab_idx == 0 {
-            self.render_combined(f, main_area);
+            self.render_combined(f, main_area, &mut layout);
         } else if self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER {
-            self.render_power_view(f, main_area);
+            self.render_power_view(f, main_area, &mut layout);
         } else if self.tab_idx == 1 {
-            self.render_playlist_panel(f, main_area);
+            self.render_playlist_panel(f, main_area, &mut layout);
         } else if self.tab_idx == self.log_tab_idx() {
             self.render_log(f, main_area);
         } else {
-            self.render_library(f, main_area, self.tab_idx - self.lib_tab_offset(), None);
+            self.render_library(
+                f,
+                main_area,
+                self.tab_idx - self.lib_tab_offset(),
+                None,
+                &mut layout,
+            );
         }
 
         if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {
@@ -316,7 +343,7 @@ impl App {
             );
         }
 
-        self.render_context_menu(f);
+        self.render_context_menu(f, &mut layout);
 
         if self.show_sessions {
             self.render_sessions_overlay(f);
@@ -328,7 +355,7 @@ impl App {
             self.render_help_panel(f);
         }
         if self.show_settings {
-            self.render_settings_panel(f);
+            self.render_settings_panel(f, &mut layout);
             if self.multiselect_popup.is_some() {
                 self.render_multiselect_popup(f);
             }
@@ -339,6 +366,10 @@ impl App {
         if self.show_save_playlist_modal {
             self.render_dirty_playlist_modal(f);
         }
+
+        // One atomic replace, reached only once the full pass above has
+        // completed -- `self.layout` never observes a half-updated frame.
+        self.layout = layout;
     }
 
     fn toast_line(s: &str) -> Line<'static> {
@@ -759,7 +790,7 @@ impl App {
     /// Control pill on the far left of the tab bar: `  m ⇌ ≡  ` on an always-green
     /// background. Each icon is its assigned color when ON, or reverse-video
     /// (dark on green) when OFF. `m` mute and `⇌` remote are clickable.
-    fn render_control_pill(&mut self, f: &mut Frame, tabs_area: Rect) {
+    fn render_control_pill(&mut self, f: &mut Frame, tabs_area: Rect, layout: &mut LayoutPlayback) {
         let bg = palette::PILL_BG;
         let mute_on = self.mute_on;
         let is_playlist = matches!(
@@ -781,13 +812,13 @@ impl App {
         let pad = Style::default().bg(bg);
         let (x, y) = (tabs_area.x, tabs_area.y);
         // Layout: "  m ⇌ ≡  " — m at x+2, ⇌ at x+4, ≡ at x+6.
-        self.layout.playback.ind_mu = Rect {
+        layout.ind_mu = Rect {
             x: x + 2,
             y,
             width: 1,
             height: 1,
         };
-        self.layout.playback.ind_rc = Rect {
+        layout.ind_rc = Rect {
             x: x + 4,
             y,
             width: 1,
@@ -821,9 +852,9 @@ impl App {
 
     /// Full-width seekbar row: green up to the playhead, gray for the remainder.
     /// No knob — the green/gray boundary marks the position. Records the click region.
-    fn render_seekbar(&mut self, f: &mut Frame, area: Rect) {
+    fn render_seekbar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
         if area.height == 0 || area.width == 0 {
-            self.layout.playback.seekbar_area = Rect::default();
+            layout.seekbar_area = Rect::default();
             return;
         }
         let (pos_ticks, rt_ticks, _paused) = self.playback_progress();
@@ -832,7 +863,7 @@ impl App {
         } else {
             0.0
         };
-        self.layout.playback.seekbar_area = area;
+        layout.seekbar_area = area;
         let w = area.width as usize;
         let green_len = ((ratio * w as f64).round() as usize).min(w);
         let gray_len = w - green_len;

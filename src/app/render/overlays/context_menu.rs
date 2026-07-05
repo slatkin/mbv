@@ -1,3 +1,4 @@
+use super::super::super::layout::AppLayout;
 use super::super::super::palette;
 use super::super::super::App;
 use ratatui::layout::Rect;
@@ -7,9 +8,13 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 impl App {
-    pub(in crate::app::render) fn render_context_menu(&mut self, f: &mut Frame) {
+    pub(in crate::app::render) fn render_context_menu(
+        &mut self,
+        f: &mut Frame,
+        layout: &mut AppLayout,
+    ) {
         let Some(ref menu) = self.context_menu else {
-            self.layout.context_menu_rect = None;
+            layout.context_menu_rect = None;
             return;
         };
         let width = (menu
@@ -29,7 +34,7 @@ impl App {
             width,
             height,
         };
-        self.layout.context_menu_rect = Some(rect);
+        layout.context_menu_rect = Some(rect);
         f.render_widget(Clear, rect);
         f.render_widget(
             Block::default()

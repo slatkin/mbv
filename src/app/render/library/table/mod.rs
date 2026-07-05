@@ -2,6 +2,7 @@ mod context;
 mod meta;
 mod row;
 
+use super::super::super::layout::AppLayout;
 use super::super::super::palette;
 use super::super::super::App;
 use crate::api::MediaItem;
@@ -28,15 +29,21 @@ pub(super) struct LibraryTableContext {
 }
 
 impl App {
-    pub(super) fn render_library_table(&mut self, f: &mut Frame, area: Rect, lib_idx: usize) {
+    pub(super) fn render_library_table(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        layout: &mut AppLayout,
+    ) {
         if lib_idx >= self.libs.len() {
             return;
         }
         if self.is_viewing_season_grid(lib_idx) {
-            self.render_season_grid(f, area, lib_idx);
+            self.render_season_grid(f, area, lib_idx, layout);
             return;
         }
-        if let Some(v) = self.layout.library.lib_table_area.get_mut(lib_idx) {
+        if let Some(v) = layout.library.lib_table_area.get_mut(lib_idx) {
             *v = area;
         }
 
@@ -51,7 +58,7 @@ impl App {
             .enumerate()
             .map(|(i, (_, item))| self.library_row_height(area, item, i, cursor, &ctx))
             .collect();
-        let scroll = self.library_table_scroll(area, lib_idx, cursor, &all_heights);
+        let scroll = self.library_table_scroll(area, lib_idx, cursor, &all_heights, layout);
 
         self.prefetch_library_table_assets(&display_items, cursor, &ctx);
 
@@ -77,7 +84,7 @@ impl App {
             rendered_heights.push(row_h);
             row_y += row_h;
         }
-        if let Some(v) = self.layout.library.lib_row_heights.get_mut(lib_idx) {
+        if let Some(v) = layout.library.lib_row_heights.get_mut(lib_idx) {
             *v = rendered_heights;
         }
 

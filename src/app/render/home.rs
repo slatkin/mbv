@@ -1,3 +1,4 @@
+use super::super::layout::AppLayout;
 use super::super::palette;
 use super::super::ui_util::{
     fmt_item_continue, fmt_item_wrapped, highlight_style, highlight_style_continue,
@@ -15,7 +16,7 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 impl App {
-    pub(super) fn render_home_cards(&mut self, f: &mut Frame, area: Rect) {
+    pub(super) fn render_home_cards(&mut self, f: &mut Frame, area: Rect, layout: &mut AppLayout) {
         let n_sections = 1 + self.home.latest.len();
         if n_sections == 0 {
             return;
@@ -90,14 +91,15 @@ impl App {
                         .alignment(Alignment::Center),
                     strip,
                 );
-                self.layout.home.home_card_strips.push((s, strip));
+                layout.home.home_card_strips.push((s, strip));
                 continue;
             }
-            let slots = self.render_home_cards_section(f, strip, title, items, cursor, is_active);
+            let slots =
+                self.render_home_cards_section(f, strip, title, items, cursor, is_active, layout);
             if is_active {
-                self.layout.home.carousel_slots = slots;
+                layout.home.carousel_slots = slots;
             }
-            self.layout.home.home_card_strips.push((s, strip));
+            layout.home.home_card_strips.push((s, strip));
         }
 
         let ud_arrow_style = Style::default().fg(palette::IRIS);
@@ -108,7 +110,7 @@ impl App {
                 width: area.width,
                 height: 1,
             };
-            self.layout.home.carousel_up_arrow = Some(r);
+            layout.home.carousel_up_arrow = Some(r);
             f.render_widget(
                 Paragraph::new("▲")
                     .style(ud_arrow_style)
@@ -123,7 +125,7 @@ impl App {
                 width: area.width,
                 height: 1,
             };
-            self.layout.home.carousel_down_arrow = Some(r);
+            layout.home.carousel_down_arrow = Some(r);
             f.render_widget(
                 Paragraph::new("▼")
                     .style(ud_arrow_style)
@@ -141,6 +143,7 @@ impl App {
         items: &[crate::api::MediaItem],
         cursor: usize,
         is_active: bool,
+        layout: &mut AppLayout,
     ) -> [(Option<usize>, Rect); 3] {
         let n = items.len();
         if n == 0 {
@@ -339,7 +342,7 @@ impl App {
                     width: 1,
                     height: 1,
                 };
-                self.layout.home.carousel_left_arrow = Some(r);
+                layout.home.carousel_left_arrow = Some(r);
                 f.render_widget(Paragraph::new("◀").style(lr_arrow_style), r);
             }
             if show_sides && cursor + 1 < n {
@@ -349,7 +352,7 @@ impl App {
                     width: 1,
                     height: 1,
                 };
-                self.layout.home.carousel_right_arrow = Some(r);
+                layout.home.carousel_right_arrow = Some(r);
                 f.render_widget(Paragraph::new("▶").style(lr_arrow_style), r);
             }
         }
@@ -361,7 +364,7 @@ impl App {
         ]
     }
 
-    pub(super) fn render_home_panel(&mut self, f: &mut Frame, area: Rect) {
+    pub(super) fn render_home_panel(&mut self, f: &mut Frame, area: Rect, layout: &mut AppLayout) {
         let home_focused = true;
         let n_latest = self.home.latest.len();
         let n_sections = 1 + n_latest;
@@ -481,8 +484,8 @@ impl App {
             }
         }
 
-        self.layout.home.section_areas = areas;
-        self.layout.home.home_scrolls = scrolls;
+        layout.home.section_areas = areas;
+        layout.home.home_scrolls = scrolls;
 
         if scrollable {
             let sb_rect = Rect {
@@ -491,7 +494,7 @@ impl App {
                 width: 1,
                 height: area.height,
             };
-            self.layout.home.home_scrollbar = sb_rect;
+            layout.home.home_scrollbar = sb_rect;
             let mut sb_state = ScrollbarState::new(max_offset + 1).position(row_offset);
             f.render_stateful_widget(
                 Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -504,7 +507,7 @@ impl App {
                 &mut sb_state,
             );
         } else {
-            self.layout.home.home_scrollbar = Rect::default();
+            layout.home.home_scrollbar = Rect::default();
         }
     }
 

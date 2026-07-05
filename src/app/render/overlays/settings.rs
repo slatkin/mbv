@@ -1,3 +1,4 @@
+use super::super::super::layout::AppLayout;
 use super::super::super::palette;
 use super::super::super::settings::{
     setting_label, setting_value, settings_cursor_to_key, settings_total_rows,
@@ -141,7 +142,11 @@ impl App {
         self.settings_save_at = Some(Instant::now() + Duration::from_millis(500));
     }
 
-    pub(in crate::app::render) fn render_settings_panel(&mut self, f: &mut Frame) {
+    pub(in crate::app::render) fn render_settings_panel(
+        &mut self,
+        f: &mut Frame,
+        layout: &mut AppLayout,
+    ) {
         let content = Self::render_panel_shell(
             f,
             f.area(),
@@ -231,7 +236,7 @@ impl App {
         }
         let total = lines.len();
         self.settings_scroll = self.settings_scroll.min(total.saturating_sub(visible));
-        self.layout.settings_line_of_cursor = line_of_cursor;
+        layout.settings_line_of_cursor = line_of_cursor;
 
         f.render_widget(
             Paragraph::new(lines).scroll((self.settings_scroll as u16, 0)),
