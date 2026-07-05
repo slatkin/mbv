@@ -377,6 +377,11 @@ enum LibEvent {
         last_played_item_id: Option<String>,
         last_played_completed: bool,
     },
+    /// Restore failed (network error, server error, etc). Distinct from
+    /// `Error` so the handler can clear `queue_restore_pending` — otherwise a
+    /// single failed restore permanently disables `save_queue_state` for the
+    /// rest of the session (see `spawn_restore_queue_state`).
+    QueueRestoreFailed,
     Error(String),
 }
 

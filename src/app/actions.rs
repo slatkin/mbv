@@ -3423,6 +3423,7 @@ impl App {
                 last_played_item_id,
                 last_played_completed,
             } => {
+                self.queue_restore_pending = false;
                 if items.is_empty() {
                     crate::config::clear_queue_state();
                     return;
@@ -3448,6 +3449,9 @@ impl App {
                 if self.client.lock().unwrap().config.start_on_queue {
                     self.tab_idx = 1;
                 }
+            }
+            LibEvent::QueueRestoreFailed => {
+                self.queue_restore_pending = false;
             }
             LibEvent::Error(e) => {
                 self.flash_status_high(format!("Error: {e}"));
@@ -3922,7 +3926,12 @@ impl App {
             positions,
         };
         if state.item_ids.is_empty() {
-            crate::config::clear_queue_state();
+            // Don't nuke the on-disk queue just because the local tab happens to be
+            // empty while attached to a remote session — that reflects remote-control
+            // UI state, not the user intentionally clearing their local queue.
+            if self.connected_session_id.is_none() {
+                crate::config::clear_queue_state();
+            }
         } else {
             crate::config::save_queue_state(&state);
         }
@@ -3954,6 +3963,7 @@ impl App {
                 Ok(items) => items,
                 Err(e) => {
                     log::warn!(target: "queue", "restore: network error, will retry next startup: {e}");
+                    let _ = tx.send(LibEvent::QueueRestoreFailed);
                     return;
                 }
             };
@@ -4470,6 +4480,96 @@ mod tests {
             std::env::remove_var("XDG_STATE_HOME");
             let _ = std::fs::remove_dir_all(&self.dir);
         }
+    }
+
+    // ── queue_state persistence: restore-failure + attached-session guards ──
+
+    #[test]
+    fn queue_restore_failed_clears_pending_flag() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.queue_restore_pending = true;
+
+        app.handle_lib_event(LibEvent::QueueRestoreFailed);
+
+        assert!(
+            !app.queue_restore_pending,
+            "a failed restore must clear queue_restore_pending, otherwise save_queue_state \
+             is permanently disabled for the rest of the session"
+        );
+    }
+
+    #[test]
+    fn queue_restored_with_no_items_clears_pending_flag() {
+        let _g = XDG_HOME_LOCK.lock().unwrap();
+        let _xdg = XdgHomeGuard::new();
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.queue_restore_pending = true;
+
+        app.handle_lib_event(LibEvent::QueueRestored {
+            items: vec![],
+            source: crate::config::QueueSource::Unknown,
+            cursor: 0,
+            last_played_item_id: None,
+            last_played_completed: false,
+        });
+
+        assert!(!app.queue_restore_pending);
+    }
+
+    #[test]
+    fn save_queue_state_does_not_delete_file_while_attached_to_remote_session() {
+        let _g = XDG_HOME_LOCK.lock().unwrap();
+        let _xdg = XdgHomeGuard::new();
+
+        // Seed an on-disk queue as if a previous local session left one behind.
+        crate::config::save_queue_state(&crate::config::QueueState {
+            source: crate::config::QueueSource::Unknown,
+            item_ids: vec!["a".into(), "b".into()],
+            cursor: 0,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        });
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.player_tab.items.clear();
+        app.connected_session_id = Some("session-1".into());
+
+        app.save_queue_state();
+
+        assert!(
+            crate::config::load_queue_state().is_some(),
+            "an empty local tab while attached to a remote session must not delete the \
+             saved queue — that emptiness reflects remote-control UI state, not the user \
+             clearing their queue"
+        );
+    }
+
+    #[test]
+    fn save_queue_state_still_clears_file_when_locally_empty_and_not_attached() {
+        let _g = XDG_HOME_LOCK.lock().unwrap();
+        let _xdg = XdgHomeGuard::new();
+
+        crate::config::save_queue_state(&crate::config::QueueState {
+            source: crate::config::QueueSource::Unknown,
+            item_ids: vec!["a".into()],
+            cursor: 0,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        });
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.player_tab.items.clear();
+        app.connected_session_id = None;
+
+        app.save_queue_state();
+
+        assert!(
+            crate::config::load_queue_state().is_none(),
+            "a genuinely empty local queue with no remote session attached should still clear"
+        );
     }
 
     #[test]
