@@ -20,6 +20,20 @@ _Avoid_: implying it's a field that gets set; it's computed fresh from other sta
 The local player and its event channels, parked in place when control is handed off to a direct remote, so that local playback can be resumed later without rebuilding it from scratch.
 _Avoid_: conflating with remote slot state — that's a classification of the current relationship; this is a stashed resource that exists only during part of one such relationship (direct remote).
 
+## Daemon/TUI control seam
+
+The boundary where the TUI process and a long-running daemon process exchange player commands and status over a socket (Unix or TCP), as JSON lines.
+
+### Language
+
+**Wire command**:
+The serialized representation of a player command as it crosses the daemon/TUI process boundary. Currently the *same* Rust type as the in-process channel message (`PlayerCommand`, derived `Serialize`/`Deserialize` with no explicit tag renaming, so the JSON tag is the Rust variant identifier verbatim) — see #81, which introduces a dedicated `WireCommand` adapter type with pinned, stable serde tags and an exhaustive conversion match, so a purely in-process rename or a new variant can no longer silently reshape or break the wire protocol.
+_Avoid_: assuming the wire representation and the in-process message are — or should stay — the same type; that coupling is the specific problem #81 addresses.
+
+**Capability negotiation**:
+The connection-time exchange of feature-support strings (`CtrlHello.capabilities`) between daemon and TUI. Currently all-or-nothing at the whole-connection level: `validate_peer` rejects the entire connection if any capability in a fixed required list is missing, and the negotiated list is otherwise discarded (not stored for later query). It is not yet a per-command runtime check. A follow-up to #81 explores per-command capability gating with graceful UI degradation (e.g. hiding/disabling a control the connected daemon doesn't support) — that needs its own design pass before it's buildable.
+_Avoid_: assuming a capability maps to a specific `PlayerCommand` variant today — no such mapping exists yet; capabilities currently describe coarser daemon-side features (queue state, start-index play, status-only mode).
+
 ## Library browsing
 
 The subsystem that fetches, sorts, and displays Emby library contents — artists, albums, tracks — in navigable list views.
