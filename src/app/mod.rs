@@ -4016,6 +4016,47 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_playlist_or_dirty_flag() {
+        let local_items = make_items(2);
+        let remote_items = make_items(2);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items);
+        // The local queue happens to be a saved playlist with autosave-on-consume enabled —
+        // the trap scenario: before the scope gate, consuming on the *remote* queue would
+        // still fire save_playlist_to_emby() and push the unrelated, unmodified local
+        // playlist to Emby.
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        };
+        app.client.lock().unwrap().config.consume_videos = true;
+        app.client.lock().unwrap().config.save_playlist_on_consume = true;
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        });
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert_eq!(
+            app.remote_player_tab.as_ref().unwrap().items.len(),
+            1,
+            "consumed item should still be removed from the remote queue"
+        );
+        assert_eq!(
+            app.player_tab.items.len(),
+            local_items.len(),
+            "consume on a direct-remote queue must not touch the unrelated local playlist"
+        );
+        assert!(
+            !app.queue_dirty,
+            "consume on a direct-remote queue must not mark the local queue dirty or trigger \
+             an autosave of the local playlist — the change happened on the remote queue"
+        );
+    }
+
+    #[test]
     fn alt_q_enqueues_from_home_view() {
         let mut app = make_app_stub();
         app.tab_idx = 0;

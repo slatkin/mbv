@@ -3590,11 +3590,17 @@ impl App {
     /// `save_playlist_on_consume` and the current queue is a saved Emby playlist — pushes
     /// the shorter item list back to Emby immediately, so other devices loading this
     /// playlist see the consumed items already removed instead of stale, longer state.
+    ///
+    /// Both checks are gated on `queue_scope_has_local_metadata`: `save_playlist_to_emby`
+    /// always pushes `player_tab.items` (the *local* queue), so if the consume actually
+    /// happened on a direct-remote/daemon queue, autosaving here would push an unrelated,
+    /// unmodified local playlist to Emby instead of the queue that actually changed.
     pub(super) fn on_video_consumed(&mut self) {
         let scope = self.playback_queue_scope();
-        if self.queue_scope_has_local_metadata(scope) {
-            self.queue_dirty = true;
+        if !self.queue_scope_has_local_metadata(scope) {
+            return;
         }
+        self.queue_dirty = true;
         if self.client.lock().unwrap().config.save_playlist_on_consume
             && self.queue_is_saved_playlist()
         {
