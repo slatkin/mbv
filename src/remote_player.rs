@@ -221,29 +221,7 @@ impl RemotePlayer {
         let mut stream = endpoint.connect_stream()?;
         log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
 
-        let status = Arc::new(Mutex::new(PlayerStatus {
-            position_ticks: 0,
-            last_valid_pos: 0,
-            runtime_ticks: 0,
-            paused: false,
-            volume: 100,
-            volume_max: 130,
-            current_idx: 0,
-            queue_len: 0,
-            active: false,
-            title: String::new(),
-            audio_tracks: Vec::new(),
-            sub_tracks: Vec::new(),
-            sub_track_stream_indexes: Vec::new(),
-            audio_id: 0,
-            audio_lang: String::new(),
-            sub_id: 0,
-            sub_lang: String::new(),
-            muted: false,
-            video_height: 0,
-            audio_codec: String::new(),
-            video_is_image: false,
-        }));
+        let status = Arc::new(Mutex::new(PlayerStatus::default()));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
         let disconnected = Arc::new(AtomicBool::new(false));
@@ -386,27 +364,10 @@ impl RemotePlayer {
     pub fn stub(items: Vec<MediaItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
         let queue_len = items.len();
         let status = Arc::new(Mutex::new(PlayerStatus {
-            position_ticks: 0,
-            last_valid_pos: 0,
-            runtime_ticks: 0,
-            paused: false,
-            volume: 100,
-            volume_max: 130,
             current_idx,
             queue_len,
             active: true,
-            title: String::new(),
-            audio_tracks: Vec::new(),
-            sub_tracks: Vec::new(),
-            sub_track_stream_indexes: Vec::new(),
-            audio_id: 0,
-            audio_lang: String::new(),
-            sub_id: 0,
-            sub_lang: String::new(),
-            muted: false,
-            video_height: 0,
-            audio_codec: String::new(),
-            video_is_image: false,
+            ..Default::default()
         }));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items = Arc::new(Mutex::new(items));
@@ -473,27 +434,10 @@ mod tests {
 
     fn status_with_idx_and_len(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
-            position_ticks: 0,
-            last_valid_pos: 0,
-            runtime_ticks: 0,
-            paused: false,
-            volume: 100,
-            volume_max: 130,
             current_idx,
             queue_len,
             active: true,
-            title: String::new(),
-            audio_tracks: Vec::new(),
-            sub_tracks: Vec::new(),
-            sub_track_stream_indexes: Vec::new(),
-            audio_id: 0,
-            audio_lang: String::new(),
-            sub_id: 0,
-            sub_lang: String::new(),
-            muted: false,
-            video_height: 0,
-            audio_codec: String::new(),
-            video_is_image: false,
+            ..Default::default()
         }
     }
 

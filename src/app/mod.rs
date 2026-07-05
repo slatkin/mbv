@@ -2411,27 +2411,8 @@ pub(crate) mod tests {
         use std::sync::{Arc, Mutex};
 
         let status = Arc::new(Mutex::new(PlayerStatus {
-            position_ticks: 0,
-            last_valid_pos: 0,
-            runtime_ticks: 0,
-            paused: false,
-            volume: 100,
             volume_max: 100,
-            current_idx: 0,
-            queue_len: 0,
-            active: false,
-            title: String::new(),
-            audio_tracks: Vec::new(),
-            sub_tracks: Vec::new(),
-            sub_track_stream_indexes: Vec::new(),
-            audio_id: 0,
-            audio_lang: String::new(),
-            sub_id: 0,
-            sub_lang: String::new(),
-            muted: false,
-            video_height: 0,
-            audio_codec: String::new(),
-            video_is_image: false,
+            ..Default::default()
         }));
 
         let (_, player_rx) = std::sync::mpsc::channel();
