@@ -1048,6 +1048,9 @@ impl SingleSession {
                 // Cancel any pending quit so the new file loads in the same window.
                 cancel_stop = true;
                 self.quit_at = None;
+                // Loading a new item should always start playing it, even if mpv
+                // was left paused on the previous item (reused-window fast path).
+                let _ = mpv.set_property("pause", false);
                 // Stop progress reporter during transition to prevent stale reports.
                 progress.stop_and_join();
                 self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
@@ -1643,6 +1646,12 @@ impl PlaylistSession {
                     if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
                         self.forced_idx = None;
                         log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
+                    } else {
+                        // Selecting a track should always start it playing, even if
+                        // mpv was paused on the previous track — otherwise the new
+                        // track loads silently "stuck" paused (see issue: Enter on a
+                        // queue item, or a remote Next/Previous command, while paused).
+                        let _ = mpv.set_property("pause", false);
                     }
                 }
             }
@@ -1780,6 +1789,9 @@ impl PlaylistSession {
         // report_stopped for current item; is_audio zeroing handled inside.
         self.reporter.report_stopped(self.last_valid_pos);
         self.stop_reported = true;
+        // Replacing the playlist should always start playing it, even if mpv
+        // was left paused on the previous item (reused-window fast path).
+        let _ = mpv.set_property("pause", false);
 
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
         // Remove all old playlist entries except the current one so that
@@ -1858,6 +1870,9 @@ impl PlaylistSession {
     ) {
         self.quit_at = None;
         self.playlist_cancelled = true;
+        // Loading a new item should always start playing it, even if mpv
+        // was left paused on the previous item (reused-window fast path).
+        let _ = mpv.set_property("pause", false);
 
         // Stop progress reporter during transition to prevent stale reports.
         progress.stop_and_join();
