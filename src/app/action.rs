@@ -23,7 +23,13 @@ pub(super) enum Action {
     SeekRelative(f64),
     NextTrack,
     PreviousTrack,
-    /// `dispatch` picks `cycle_sub()` (remote session) vs `toggle_sub()` (local).
+    /// `z`: `dispatch` always calls `cycle_sub()`, which cycles through all
+    /// available subtitle tracks (plus "off") for both remote sessions and
+    /// local playback -- unified in #86 so the two backends no longer
+    /// diverge (local used to be a plain on/off `toggle_sub()`). The
+    /// local-idle fallback (cycling the default subtitle *mode* when there's
+    /// no active player) still lives inside `cycle_sub()`, since it has no
+    /// session equivalent to unify with.
     CycleOrToggleSubtitle,
     AdjustVolume(i64),
     /// The `m` key: flips `mute_on` and sends `PlayerCommand::SetMute`.
@@ -176,11 +182,10 @@ impl App {
                 }
             }
             Action::CycleOrToggleSubtitle => {
-                if self.connected_session_id.is_some() {
-                    self.cycle_sub();
-                } else {
-                    self.toggle_sub();
-                }
+                // cycle_sub() branches internally on connected_session_id,
+                // and falls back to the idle subtitle-mode cycle itself when
+                // local playback has no active player (see #86).
+                self.cycle_sub();
             }
             Action::AdjustVolume(delta) => {
                 // adjust_volume already branches session vs. local internally.

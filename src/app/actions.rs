@@ -1351,45 +1351,47 @@ impl App {
         self.flash_status(format!("Subtitle mode: {new_mode}"));
     }
 
+    /// Returns the next entry in a subtitle-cycle sequence, wrapping around.
+    /// `entries` is the ordered list of subtitle option ids -- the "off"
+    /// sentinel first (`0` for local playback, `-1` for remote sessions),
+    /// followed by each available track/index -- and `current` is the
+    /// presently active selection. Shared by the remote-session and local
+    /// branches of `cycle_sub` so both walk the exact same wraparound logic
+    /// (see #86: local `z` used to be a plain on/off toggle instead of
+    /// cycling through every track like the remote path).
+    pub(super) fn next_subtitle_entry(entries: &[i64], current: i64) -> i64 {
+        if entries.is_empty() {
+            return current;
+        }
+        let cur_pos = entries.iter().position(|&e| e == current).unwrap_or(0);
+        entries[(cur_pos + 1) % entries.len()]
+    }
+
+    /// Toggles between "off" and the last-selected subtitle index for a
+    /// remote session. The only remaining caller is `cycle_sub`'s
+    /// remote-session branch, as a fallback for when the session reports
+    /// zero subtitle tracks (nothing to cycle through). Local playback no
+    /// longer routes through here -- see #86, which replaced its on/off
+    /// toggle with full track-cycling in `cycle_sub`.
     pub(super) fn toggle_sub(&mut self) {
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let remote_indexes = self.remote_subtitle_indexes();
-            let idx = self
-                .connected_session_state
-                .as_ref()
-                .map(|s| s.sub_index)
-                .unwrap_or(-1);
-            let next = if idx == -1 {
-                remote_indexes.first().copied().unwrap_or(1)
-            } else {
-                -1
-            };
-            let id = conn_id.clone();
-            if let Some(ref mut state) = self.connected_session_state {
-                state.sub_index = next;
-            }
-            self.do_session_command(move |c| c.session_set_subtitle_index(&id, next));
+        let Some(conn_id) = self.connected_session_id.clone() else {
             return;
-        }
-        // When idle: cycle the default subtitle mode instead of toggling a track
-        let active = self.player.status.lock().unwrap().active;
-        if !active {
-            self.cycle_subtitle_mode();
-            return;
-        }
-        let (tracks, current_id) = {
-            let s = self.player.status.lock().unwrap();
-            (s.sub_tracks.clone(), s.sub_id)
         };
-        let currently_off = current_id == 0;
-        if currently_off {
-            if let Some(&(first_id, _, _)) = tracks.first() {
-                self.player.send_command(PlayerCommand::SetSub(first_id));
-            }
+        let remote_indexes = self.remote_subtitle_indexes();
+        let idx = self
+            .connected_session_state
+            .as_ref()
+            .map(|s| s.sub_index)
+            .unwrap_or(-1);
+        let next = if idx == -1 {
+            remote_indexes.first().copied().unwrap_or(1)
         } else {
-            self.player.send_command(PlayerCommand::SetSub(0));
+            -1
+        };
+        if let Some(ref mut state) = self.connected_session_state {
+            state.sub_index = next;
         }
-        self.save_prefs();
+        self.do_session_command(move |c| c.session_set_subtitle_index(&conn_id, next));
     }
 
     pub(super) fn cycle_sub(&mut self) {
@@ -1407,8 +1409,7 @@ impl App {
             let mut entries = Vec::with_capacity(remote_indexes.len() + 1);
             entries.push(-1);
             entries.extend(remote_indexes);
-            let cur_pos = entries.iter().position(|&idx| idx == current).unwrap_or(0);
-            let next = entries[(cur_pos + 1) % entries.len()];
+            let next = Self::next_subtitle_entry(&entries, current);
             let id = self.connected_session_id.clone().unwrap();
             if let Some(ref mut state) = self.connected_session_state {
                 state.sub_index = next;
@@ -1416,18 +1417,22 @@ impl App {
             self.do_session_command(move |c| c.session_set_subtitle_index(&id, next));
             return;
         }
-        let (tracks, current_id) = {
+        // When idle: cycle the default subtitle mode instead of a track --
+        // there's no session equivalent to unify this fallback with (#86).
+        let (active, tracks, current_id) = {
             let s = self.player.status.lock().unwrap();
-            (s.sub_tracks.clone(), s.sub_id)
+            (s.active, s.sub_tracks.clone(), s.sub_id)
         };
+        if !active {
+            self.cycle_subtitle_mode();
+            return;
+        }
         if tracks.is_empty() {
             return;
         }
         let mut entries: Vec<i64> = vec![0];
         entries.extend(tracks.iter().map(|(id, _, _)| *id));
-        let cur = entries.iter().position(|&id| id == current_id).unwrap_or(0);
-        let next = (cur + 1) % entries.len();
-        let next_id = entries[next];
+        let next_id = Self::next_subtitle_entry(&entries, current_id);
         self.player.send_command(PlayerCommand::SetSub(next_id));
         self.save_prefs();
     }
@@ -4371,5 +4376,118 @@ mod tests {
         // pos_s plus a large forward delta simply goes wherever the math
         // says, same as rewind's clamp being absent here.
         assert_eq!(App::remote_seek_ticks(3, 5.0), 8 * TICKS_PER_SECOND);
+    }
+
+    // ── next_subtitle_entry: shared cycling math (remote/local parity, #86) ─
+
+    #[test]
+    fn next_subtitle_entry_advances_from_off() {
+        assert_eq!(App::next_subtitle_entry(&[0, 5, 7], 0), 5);
+    }
+
+    #[test]
+    fn next_subtitle_entry_wraps_from_last_back_to_off() {
+        assert_eq!(App::next_subtitle_entry(&[0, 5, 7], 7), 0);
+    }
+
+    #[test]
+    fn next_subtitle_entry_unknown_current_restarts_at_first() {
+        // A stale/unrecognized current selection (e.g. a track that
+        // disappeared) is treated as if it were at position 0, matching the
+        // pre-existing `.unwrap_or(0)` fallback in both the remote and local
+        // branches -- so the *next* entry advances to position 1.
+        assert_eq!(App::next_subtitle_entry(&[0, 5, 7], 99), 5);
+    }
+
+    #[test]
+    fn next_subtitle_entry_empty_returns_current_unchanged() {
+        assert_eq!(App::next_subtitle_entry(&[], 3), 3);
+    }
+
+    #[test]
+    fn next_subtitle_entry_matches_remote_sentinel_convention() {
+        // Remote sessions use -1 as the "off" sentinel (vs. 0 for local
+        // playback) -- same wraparound math, different sentinel value.
+        assert_eq!(App::next_subtitle_entry(&[-1, 2, 4], -1), 2);
+        assert_eq!(App::next_subtitle_entry(&[-1, 2, 4], 4), -1);
+    }
+
+    // ── cycle_sub: local branch (#86 unification + idle fallback) ───────────
+
+    // `XDG_CONFIG_HOME`/`XDG_STATE_HOME` are process-global env vars, so
+    // tests that touch them must not run concurrently with each other.
+    // Mirrors action.rs's `XDG_STATE_HOME_LOCK` / config.rs's `SYS_ENV_LOCK`
+    // convention (each module guards only its own tests; see those for the
+    // same caveat).
+    static XDG_HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    /// RAII guard that points both `XDG_CONFIG_HOME` (subtitle-mode saves)
+    /// and `XDG_STATE_HOME` (prefs saves) at a fresh tempdir, restoring and
+    /// cleaning up on drop -- including on panic.
+    struct XdgHomeGuard {
+        dir: std::path::PathBuf,
+    }
+
+    impl XdgHomeGuard {
+        fn new() -> Self {
+            let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(&dir).unwrap();
+            std::env::set_var("XDG_CONFIG_HOME", &dir);
+            std::env::set_var("XDG_STATE_HOME", &dir);
+            std::env::remove_var("MBV_SYSTEM");
+            Self { dir }
+        }
+    }
+
+    impl Drop for XdgHomeGuard {
+        fn drop(&mut self) {
+            std::env::remove_var("XDG_CONFIG_HOME");
+            std::env::remove_var("XDG_STATE_HOME");
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    #[test]
+    fn cycle_sub_local_idle_cycles_subtitle_mode_not_a_track() {
+        let _g = XDG_HOME_LOCK.lock().unwrap();
+        let _xdg = XdgHomeGuard::new();
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.player.status.lock().unwrap().active = false;
+        let before = app.client.lock().unwrap().config.subtitle_mode.clone();
+
+        app.cycle_sub();
+
+        let after = app.client.lock().unwrap().config.subtitle_mode.clone();
+        assert_ne!(
+            before, after,
+            "idle z has no session equivalent, so it should still cycle the default subtitle mode"
+        );
+    }
+
+    #[test]
+    fn cycle_sub_local_active_does_not_fall_back_to_subtitle_mode() {
+        let _g = XDG_HOME_LOCK.lock().unwrap();
+        let _xdg = XdgHomeGuard::new();
+
+        let mut app = crate::app::tests::make_app_stub();
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.sub_tracks = vec![(1, "English".to_string(), false)];
+            status.sub_id = 0;
+        }
+        let before = app.client.lock().unwrap().config.subtitle_mode.clone();
+
+        // #86: local `z` while active now cycles every track (like the
+        // remote path) instead of the old on/off `toggle_sub()` -- assert at
+        // minimum that it does *not* take the idle subtitle-mode fallback.
+        app.cycle_sub();
+
+        let after = app.client.lock().unwrap().config.subtitle_mode.clone();
+        assert_eq!(
+            before, after,
+            "an active player has tracks to cycle and must not touch the idle subtitle-mode fallback"
+        );
     }
 }
