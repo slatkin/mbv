@@ -361,14 +361,19 @@ impl RemotePlayer {
     }
 
     #[cfg(test)]
-    pub fn stub(items: Vec<MediaItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
-        let queue_len = items.len();
-        let status = Arc::new(Mutex::new(PlayerStatus {
+    fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
+        PlayerStatus {
             current_idx,
             queue_len,
             active: true,
             ..Default::default()
-        }));
+        }
+    }
+
+    #[cfg(test)]
+    pub fn stub(items: Vec<MediaItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
+        let queue_len = items.len();
+        let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items = Arc::new(Mutex::new(items));
         let disconnected = Arc::new(AtomicBool::new(false));
@@ -433,12 +438,7 @@ mod tests {
     }
 
     fn status_with_idx_and_len(current_idx: usize, queue_len: usize) -> PlayerStatus {
-        PlayerStatus {
-            current_idx,
-            queue_len,
-            active: true,
-            ..Default::default()
-        }
+        RemotePlayer::stub_status(current_idx, queue_len)
     }
 
     #[test]
