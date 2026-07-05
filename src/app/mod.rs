@@ -2033,6 +2033,7 @@ impl App {
                                 .playlist_cursor
                                 .min(queue.items.len().saturating_sub(1));
                         }
+                        self.on_video_consumed();
                     }
                 }
                 self.refresh_after_stop();
@@ -2076,11 +2077,9 @@ impl App {
                     if remove_idx < queue.items.len() {
                         queue.items.remove(remove_idx);
                     }
-                    if remove_idx < idx {
-                        idx - 1
-                    } else {
-                        idx
-                    }
+                    let adjusted = if remove_idx < idx { idx - 1 } else { idx };
+                    self.on_video_consumed();
+                    adjusted
                 } else {
                     idx
                 };
@@ -3947,6 +3946,73 @@ pub(crate) mod tests {
             Some(local_items[1].id.as_str())
         );
         assert!(app.last_played_completed);
+    }
+
+    #[test]
+    fn consuming_a_video_without_autosave_marks_queue_dirty() {
+        let items = make_items(2);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        };
+        app.client.lock().unwrap().config.consume_videos = true;
+        app.client.lock().unwrap().config.save_playlist_on_consume = false;
+
+        // First item finishes playing and is consumed while advancing to the next track.
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        });
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            1,
+            "consumed item should be removed from the local queue"
+        );
+        assert!(
+            app.queue_dirty,
+            "consuming an item changes the saved playlist's contents; without \
+             save_playlist_on_consume the queue must be marked dirty so the user is still \
+             prompted to save before quitting/replacing the queue"
+        );
+    }
+
+    #[test]
+    fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
+        let items = make_items(2);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        };
+        app.client.lock().unwrap().config.consume_videos = true;
+        app.client.lock().unwrap().config.save_playlist_on_consume = true;
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        });
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            1,
+            "consumed item should be removed from the local queue"
+        );
+        assert!(
+            !app.queue_dirty,
+            "with save_playlist_on_consume enabled, consuming from a saved playlist should \
+             trigger an immediate re-save to Emby (mirroring the manual save-playlist flow), \
+             so the queue is no longer considered dirty"
+        );
     }
 
     #[test]

@@ -3584,6 +3584,25 @@ impl App {
         }
     }
 
+    /// Called when a video item is removed from the queue because "consume" is enabled.
+    /// Marks the queue dirty (matching how other queue-mutating actions behave, so the
+    /// user is prompted to save on quit/replace), and — if the user has opted in via
+    /// `save_playlist_on_consume` and the current queue is a saved Emby playlist — pushes
+    /// the shorter item list back to Emby immediately, so other devices loading this
+    /// playlist see the consumed items already removed instead of stale, longer state.
+    pub(super) fn on_video_consumed(&mut self) {
+        let scope = self.playback_queue_scope();
+        if self.queue_scope_has_local_metadata(scope) {
+            self.queue_dirty = true;
+        }
+        if self.client.lock().unwrap().config.save_playlist_on_consume
+            && self.queue_is_saved_playlist()
+        {
+            self.queue_dirty = false;
+            self.save_playlist_to_emby();
+        }
+    }
+
     pub(super) fn save_playlist_to_emby(&self) {
         let Some(playlist_id) = self.queue_playlist_id() else {
             return;
