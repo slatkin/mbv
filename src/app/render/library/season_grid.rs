@@ -1,4 +1,4 @@
-use super::super::super::layout::AppLayout;
+use super::super::super::layout::LayoutLibrary;
 use super::super::super::palette;
 use super::super::super::ui_util::trunc_str;
 use super::super::super::App;
@@ -13,7 +13,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         lib_idx: usize,
-        layout: &mut AppLayout,
+        layout: &mut LayoutLibrary,
     ) {
         if lib_idx >= self.libs.len() {
             return;
@@ -64,11 +64,11 @@ impl App {
 
         let cursor_row = cursor / COLS;
         let scroll_row = {
-            let prev = layout.library.lib_scroll.get(lib_idx).copied().unwrap_or(0);
+            let prev = layout.lib_scroll.get(lib_idx).copied().unwrap_or(0);
             let s = prev
                 .min(cursor_row)
                 .max(cursor_row.saturating_sub(n_visible_rows - 1));
-            if let Some(v) = layout.library.lib_scroll.get_mut(lib_idx) {
+            if let Some(v) = layout.lib_scroll.get_mut(lib_idx) {
                 *v = s;
             }
             s

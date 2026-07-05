@@ -1,7 +1,7 @@
 use super::super::super::ui_util::*;
 use super::{effective_sort_str, letter_bucket, parse_album_folder_name, strip_article};
 use crate::api::TICKS_PER_SECOND;
-use crate::app::layout::AppLayout;
+use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -18,7 +18,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         focused: bool,
-        layout: &mut AppLayout,
+        layout: &mut LayoutPower,
     ) {
         if area.height == 0 {
             return;
@@ -32,7 +32,7 @@ impl App {
         let mut content_area = area;
 
         // Store for click / page-size calculations.
-        layout.power.left_area = content_area;
+        layout.left_area = content_area;
 
         // Gather items, cursor, stored scroll offset, and the *true* library total
         // (not just how many pages have been fetched so far) from the appropriate
@@ -168,7 +168,6 @@ impl App {
         let final_offset: usize;
 
         if show_grouped {
-            layout.power.left_sorted_indices.clear();
             // Build a display row list that interleaves artist headers with album rows.
             enum DisplayRow {
                 ArtistHeader(String),
@@ -216,7 +215,7 @@ impl App {
             // follows display order rather than the raw (SortName-by-album-title)
             // order `items` arrived in — otherwise arrow keys jump the cursor to
             // an unrelated album whenever the artist-sort permutes the list.
-            layout.power.left_sorted_indices = order.clone();
+            layout.left_sorted_indices = order.clone();
 
             let mut display_rows: Vec<DisplayRow> = Vec::new();
             let mut last_artist = String::new();
@@ -313,7 +312,7 @@ impl App {
 
             let mut state = ListState::default();
             state.select(Some(display_cursor.saturating_sub(offset)));
-            layout.power.cursor_screen_y =
+            layout.cursor_screen_y =
                 Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
             f.render_stateful_widget(
                 List::new(list_items).highlight_style(Style::default()),
@@ -323,7 +322,7 @@ impl App {
 
             // Row map so mouse clicks translate a visual row back to the correct
             // (sorted-order) album index; header rows map to None.
-            layout.power.left_row_map = display_rows
+            layout.left_row_map = display_rows
                 .iter()
                 .skip(offset)
                 .take(visible)
@@ -361,7 +360,7 @@ impl App {
             let mut sorted_indices: Vec<usize> = (0..n).collect();
             sorted_indices.sort_by_key(|&i| natural_sort_key(effective_sort_str(&items[i])));
             // Publish the sorted order so cursor navigation can follow display order.
-            layout.power.left_sorted_indices = sorted_indices.clone();
+            layout.left_sorted_indices = sorted_indices.clone();
 
             let mut display_rows: Vec<DisplayRow> = Vec::new();
             let mut last_bucket = String::new();
@@ -391,9 +390,8 @@ impl App {
             final_offset = offset;
 
             // Build row map so mouse clicks can map visual row → item index.
-            layout.power.left_row_map.clear();
             for row in display_rows.iter().skip(offset).take(visible) {
-                layout.power.left_row_map.push(match row {
+                layout.left_row_map.push(match row {
                     DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
                     DisplayRow::Item(idx) => Some(*idx),
                 });
@@ -468,7 +466,7 @@ impl App {
 
             let mut state = ListState::default();
             state.select(Some(display_cursor.saturating_sub(offset)));
-            layout.power.cursor_screen_y =
+            layout.cursor_screen_y =
                 Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
             f.render_stateful_widget(
                 List::new(list_items).highlight_style(Style::default()),
@@ -491,8 +489,6 @@ impl App {
                 );
             }
         } else {
-            layout.power.left_row_map.clear();
-            layout.power.left_sorted_indices.clear();
             let offset =
                 stored_scroll.clamp(cursor.saturating_sub(visible.saturating_sub(1)), cursor);
             final_offset = offset;
@@ -560,8 +556,7 @@ impl App {
 
             let mut state = ListState::default();
             state.select(Some(cursor.saturating_sub(offset)));
-            layout.power.cursor_screen_y =
-                Some(content_area.y + (cursor.saturating_sub(offset)) as u16);
+            layout.cursor_screen_y = Some(content_area.y + (cursor.saturating_sub(offset)) as u16);
             f.render_stateful_widget(
                 List::new(list_items).highlight_style(Style::default()),
                 content_area,

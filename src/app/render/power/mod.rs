@@ -7,7 +7,7 @@ mod list;
 mod music;
 mod queue;
 
-use super::super::layout::AppLayout;
+use super::super::layout::LayoutPower;
 use super::super::ui_util::{natural_sort_key, trunc_str};
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::Rect;
@@ -121,7 +121,12 @@ pub(super) fn letter_bucket(item: &crate::api::MediaItem, total: usize) -> Strin
 }
 
 impl App {
-    pub(super) fn render_power_view(&mut self, f: &mut Frame, area: Rect, layout: &mut AppLayout) {
+    pub(super) fn render_power_view(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        layout: &mut LayoutPower,
+    ) {
         if area.height < 4 {
             return;
         }
@@ -263,7 +268,7 @@ impl App {
                 x_cursor = x_end;
             }
             pill_spans.push(Span::styled(" ", pill_style));
-            layout.power.breadcrumbs = new_power_crumbs;
+            layout.breadcrumbs = new_power_crumbs;
 
             let mut line_spans = vec![Span::styled(
                 "\u{2500}".repeat(left_line_w),
@@ -359,12 +364,8 @@ impl App {
         f: &mut Frame,
         area: Rect,
         focused: bool,
-        layout: &mut AppLayout,
+        layout: &mut LayoutPower,
     ) {
-        let power = &mut layout.power;
-        power.cursor_screen_y = None;
-        power.inline_image_rect = None;
-        power.selector_tabs.clear();
         // If a music-group library's nav_stack was truncated to just the group
         // level (e.g., stale breadcrumb click), immediately re-push the album level.
         if self.power_left_tab > 0 {

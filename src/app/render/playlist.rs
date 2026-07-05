@@ -1,4 +1,4 @@
-use super::super::layout::AppLayout;
+use super::super::layout::{LayoutHome, LayoutPlaylist};
 use super::super::ui_util::{build_queue_rows, fmt_duration, trunc_str, QueueRow};
 use super::super::{palette, App};
 use crate::api::TICKS_PER_SECOND;
@@ -10,13 +10,13 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 impl App {
-    pub(super) fn render_combined(&mut self, f: &mut Frame, area: Rect, layout: &mut AppLayout) {
+    pub(super) fn render_combined(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutHome) {
         // Carousel arrow hitboxes and card strips are only ever populated by
         // the card-view branch below; they no longer need an unconditional
         // reset here because `layout` is a fresh `AppLayout::default()` built
         // at the top of this frame's render pass (see `App::render`), so they
         // already start at their default (unset) values on every frame.
-        layout.home.home_rect = area;
+        layout.home_rect = area;
         if self.home_search.is_some() {
             self.render_home_search(f, area);
         } else if self.home_card_view {
@@ -30,7 +30,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
-        layout: &mut AppLayout,
+        layout: &mut LayoutPlaylist,
     ) {
         if self.home_search.is_some() {
             self.render_home_search(f, area);
@@ -43,11 +43,10 @@ impl App {
             (queue.items.clone(), queue.playlist_cursor)
         };
 
-        layout.playlist.rect = area;
+        layout.rect = area;
 
         let inner = area;
-        layout.playlist.inner = inner;
-        layout.playlist.row_map.clear();
+        layout.inner = inner;
 
         if items.is_empty() {
             f.render_widget(
@@ -130,7 +129,7 @@ impl App {
                         Cell::from(""),
                         Cell::from(""),
                     ]));
-                    layout.playlist.row_map.push(None);
+                    layout.row_map.push(None);
                 }
                 QueueRow::Spacer => {
                     rows.push(Row::new([
@@ -140,7 +139,7 @@ impl App {
                         Cell::from(""),
                         Cell::from(""),
                     ]));
-                    layout.playlist.row_map.push(None);
+                    layout.row_map.push(None);
                 }
                 QueueRow::Track { idx, in_group } => {
                     let i = *idx;
@@ -263,7 +262,7 @@ impl App {
                         .style(row_style)
                     };
                     rows.push(row);
-                    layout.playlist.row_map.push(Some(i));
+                    layout.row_map.push(Some(i));
                 }
             }
         }

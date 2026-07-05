@@ -1,4 +1,4 @@
-use super::super::super::super::layout::AppLayout;
+use super::super::super::super::layout::LayoutLibrary;
 use super::super::super::super::ui_util::trunc_overview;
 use super::super::super::super::App;
 use super::meta::{library_is_audio, library_is_episode_like};
@@ -205,11 +205,10 @@ impl App {
         lib_idx: usize,
         cursor: usize,
         all_heights: &[u16],
-        layout: &mut AppLayout,
+        layout: &mut LayoutLibrary,
     ) -> usize {
         let scroll = if self.libs[lib_idx].search.is_some() {
             let mut s = layout
-                .library
                 .lib_scroll
                 .get(lib_idx)
                 .copied()
@@ -226,7 +225,7 @@ impl App {
         } else {
             cursor
         };
-        if let Some(v) = layout.library.lib_scroll.get_mut(lib_idx) {
+        if let Some(v) = layout.lib_scroll.get_mut(lib_idx) {
             *v = scroll;
         }
         scroll

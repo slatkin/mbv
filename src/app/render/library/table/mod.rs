@@ -2,7 +2,7 @@ mod context;
 mod meta;
 mod row;
 
-use super::super::super::layout::AppLayout;
+use super::super::super::layout::LayoutLibrary;
 use super::super::super::palette;
 use super::super::super::App;
 use crate::api::MediaItem;
@@ -34,7 +34,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         lib_idx: usize,
-        layout: &mut AppLayout,
+        layout: &mut LayoutLibrary,
     ) {
         if lib_idx >= self.libs.len() {
             return;
@@ -43,7 +43,7 @@ impl App {
             self.render_season_grid(f, area, lib_idx, layout);
             return;
         }
-        if let Some(v) = layout.library.lib_table_area.get_mut(lib_idx) {
+        if let Some(v) = layout.lib_table_area.get_mut(lib_idx) {
             *v = area;
         }
 
@@ -84,7 +84,7 @@ impl App {
             rendered_heights.push(row_h);
             row_y += row_h;
         }
-        if let Some(v) = layout.library.lib_row_heights.get_mut(lib_idx) {
+        if let Some(v) = layout.lib_row_heights.get_mut(lib_idx) {
             *v = rendered_heights;
         }
 

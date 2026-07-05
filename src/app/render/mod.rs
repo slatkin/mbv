@@ -305,11 +305,11 @@ impl App {
             self.render_title_row(f, title_area, title, color);
         }
         if self.tab_idx == 0 {
-            self.render_combined(f, main_area, &mut layout);
+            self.render_combined(f, main_area, &mut layout.home);
         } else if self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER {
-            self.render_power_view(f, main_area, &mut layout);
+            self.render_power_view(f, main_area, &mut layout.power);
         } else if self.tab_idx == 1 {
-            self.render_playlist_panel(f, main_area, &mut layout);
+            self.render_playlist_panel(f, main_area, &mut layout.playlist);
         } else if self.tab_idx == self.log_tab_idx() {
             self.render_log(f, main_area);
         } else {
@@ -318,7 +318,7 @@ impl App {
                 main_area,
                 self.tab_idx - self.lib_tab_offset(),
                 None,
-                &mut layout,
+                &mut layout.library,
             );
         }
 

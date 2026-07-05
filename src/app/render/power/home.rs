@@ -1,6 +1,6 @@
 use super::super::super::ui_util::*;
 use crate::api::TICKS_PER_SECOND;
-use crate::app::layout::AppLayout;
+use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -212,16 +212,15 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
-        layout: &mut AppLayout,
+        layout: &mut LayoutPower,
     ) {
         if area.height == 0 {
             return;
         }
         self.ensure_lib_loaded_for(lib_idx);
-        layout.power.left_row_map.clear();
 
         let mut content_area = area;
-        layout.power.left_area = content_area;
+        layout.left_area = content_area;
 
         let (items, cursor, total_count) = {
             let lib = &self.libs[lib_idx];
@@ -305,7 +304,7 @@ impl App {
             let item_h = item_heights[i];
             let selected = i == cursor;
             if selected {
-                layout.power.cursor_screen_y = Some(row_y);
+                layout.cursor_screen_y = Some(row_y);
             }
             render_home_video_item(
                 f,
@@ -327,7 +326,7 @@ impl App {
             row_y += item_h;
         }
         row_map.resize(content_area.height as usize, None);
-        layout.power.left_row_map = row_map;
+        layout.left_row_map = row_map;
 
         // Scrollbar (hidden when unfocused, consistent with queue panel).
         if needs_scrollbar && focused {
@@ -352,13 +351,12 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
-        layout: &mut AppLayout,
+        layout: &mut LayoutPower,
     ) {
         if area.height == 0 {
             return;
         }
         self.ensure_lib_loaded_for(lib_idx);
-        layout.power.left_row_map.clear();
 
         let Some(root_level) = self.libs[lib_idx].nav_stack.first() else {
             return;
@@ -491,7 +489,7 @@ impl App {
         if row < max_y {
             row += 1;
         }
-        layout.power.selector_tabs = selector_tabs;
+        layout.selector_tabs = selector_tabs;
 
         let list_area = Rect {
             x: area.x,
@@ -499,7 +497,7 @@ impl App {
             width: area.width,
             height: max_y.saturating_sub(row),
         };
-        layout.power.left_area = list_area;
+        layout.left_area = list_area;
         if list_area.height == 0 {
             return;
         }
@@ -561,7 +559,7 @@ impl App {
             let item_h = item_heights[item_idx];
             let selected = item_idx == current_pos;
             if selected {
-                layout.power.cursor_screen_y = Some(row_y);
+                layout.cursor_screen_y = Some(row_y);
             }
             render_home_video_item(
                 f, item, row_y, item_h, list_area, text_w, selected, focused, true,
@@ -575,7 +573,7 @@ impl App {
             row_y += item_h;
         }
         row_map.resize(list_area.height as usize, None);
-        layout.power.left_row_map = row_map;
+        layout.left_row_map = row_map;
 
         if needs_scrollbar && focused {
             let max_off = items.len().saturating_sub(1);
@@ -598,12 +596,12 @@ impl App {
         f: &mut Frame,
         area: Rect,
         focused: bool,
-        layout: &mut AppLayout,
+        layout: &mut LayoutPower,
     ) {
         if area.height == 0 || area.width == 0 {
             return;
         }
-        layout.power.left_area = area;
+        layout.left_area = area;
 
         // --- Build sections from the home data (clone to avoid borrow conflicts). ---
         struct Section {
@@ -799,7 +797,7 @@ impl App {
                 let flat_idx = s.flat_start + item_idx;
                 let selected = flat_idx == cursor;
                 if selected {
-                    layout.power.cursor_screen_y = Some(sy);
+                    layout.cursor_screen_y = Some(sy);
                 }
 
                 let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
@@ -840,8 +838,8 @@ impl App {
             }
         }
 
-        layout.power.home.hitmap = hitmap;
-        layout.power.home.layout = section_metas;
+        layout.home.hitmap = hitmap;
+        layout.home.layout = section_metas;
 
         // Panel scrollbar on the far right.
         if needs_scrollbar && focused {
@@ -919,7 +917,7 @@ mod tests {
         let mut layout = AppLayout::default();
         term.draw(|f| {
             let area = Rect::new(0, 0, 80, 20);
-            app.render_power_home_list(f, area, true, &mut layout);
+            app.render_power_home_list(f, area, true, &mut layout.power);
         })
         .unwrap();
 

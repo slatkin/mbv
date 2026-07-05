@@ -1,6 +1,6 @@
 use super::super::super::ui_util::*;
 use super::{parse_album_folder_name, strip_article};
-use crate::app::layout::AppLayout;
+use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -19,7 +19,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
-        layout: &mut AppLayout,
+        layout: &mut LayoutPower,
     ) {
         if area.height == 0 {
             return;
@@ -157,7 +157,7 @@ impl App {
                     height: 1,
                 },
             );
-            layout.power.selector_tabs = selector_tabs;
+            layout.selector_tabs = selector_tabs;
         }
         if row < max_y {
             row += 1;
@@ -209,9 +209,7 @@ impl App {
         }
 
         // Store for click/page-size calculations (used by mouse handler and PageUp/Down).
-        layout.power.left_area = list_area;
-        layout.power.left_sorted_indices.clear();
-        layout.power.left_row_map.clear();
+        layout.left_area = list_area;
 
         let visible = list_area.height as usize;
         let avail_chars = (list_area.width as usize).saturating_sub(2);
@@ -262,7 +260,7 @@ impl App {
         // follows display order rather than the raw (SortName-by-album-title)
         // order `albums` arrived in — otherwise arrow keys jump the cursor to
         // an unrelated album whenever the artist-sort permutes the list.
-        layout.power.left_sorted_indices = order.clone();
+        layout.left_sorted_indices = order.clone();
 
         let mut display_rows: Vec<DisplayRow> = Vec::new();
         let mut last_artist = String::new();
@@ -299,7 +297,7 @@ impl App {
 
         // Row map so mouse clicks translate a visual row back to the correct
         // (sorted-order) album index; header rows map to None.
-        layout.power.left_row_map = display_rows
+        layout.left_row_map = display_rows
             .iter()
             .skip(offset)
             .take(visible)
@@ -375,8 +373,7 @@ impl App {
             list_area,
             &mut state,
         );
-        layout.power.cursor_screen_y =
-            Some(list_area.y + (display_cursor.saturating_sub(offset)) as u16);
+        layout.cursor_screen_y = Some(list_area.y + (display_cursor.saturating_sub(offset)) as u16);
 
         let display_n = display_rows.len();
         if focused && display_n > visible {
