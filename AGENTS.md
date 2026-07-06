@@ -11,6 +11,7 @@ Relevant information about the project is in .serena/memories. If you have acces
 - When a bug fix does not resolve the issue, do NOT suspect user error. Assume the fix is wrong or incomplete and investigate the code further.
 - See docs/CHECKIN.md for pre-commit steps.
 - For releases, run `scripts/release.sh X.Y.Z "one-line summary"` instead of reading a separate release checklist.
+- Always commit any edited `.md` file immediately after editing it — don't batch documentation edits with unrelated code changes or leave them uncommitted.
 
 ## Agent skills
 
