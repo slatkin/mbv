@@ -1256,6 +1256,26 @@ impl App {
         self.queue_for_scope_mut(self.playback_queue_scope())
     }
 
+    /// Whether the item at `idx` in the playback queue should be consumed, given a
+    /// player-reported completion (`consume`) and the type-specific consume flags.
+    /// Returns `(should_consume, is_audio)` — callers that act on the removal need
+    /// `is_audio` afterward to route to `on_video_consumed`/`on_audio_consumed`.
+    fn should_consume_item(&self, idx: usize, consume: bool) -> (bool, bool) {
+        let item = self.playback_queue().items.get(idx);
+        let is_video = item.is_some_and(|i| i.is_video());
+        let is_audio = item.is_some_and(|i| i.is_audio());
+        let (consume_videos, consume_audio) = {
+            let cfg = &self.client.lock().unwrap().config;
+            (cfg.consume_videos, cfg.consume_audio)
+        };
+        let should_consume =
+            consume && ((is_video && consume_videos) || (is_audio && consume_audio));
+        log::info!(target: "consume", "consume check: idx={idx} consume={consume} \
+            is_video={is_video} consume_videos={consume_videos} \
+            is_audio={is_audio} consume_audio={consume_audio} => {should_consume}");
+        (should_consume, is_audio)
+    }
+
     /// Removes `idx` from the currently active playback queue and, if
     /// something was actually removed, tells the player to drop the same
     /// index from its own internal playlist copy. `PlaylistSession` (or its
@@ -2038,26 +2058,7 @@ impl App {
                         self.playlist_undo_stack.push((idx, item));
                     }
                 } else {
-                    let is_video = self
-                        .playback_queue()
-                        .items
-                        .get(idx)
-                        .is_some_and(|i| i.is_video());
-                    let is_audio = self
-                        .playback_queue()
-                        .items
-                        .get(idx)
-                        .is_some_and(|i| i.is_audio());
-                    let (consume_videos, consume_audio) = {
-                        let cfg = &self.client.lock().unwrap().config;
-                        (cfg.consume_videos, cfg.consume_audio)
-                    };
-                    let should_consume =
-                        consume && ((is_video && consume_videos) || (is_audio && consume_audio));
-                    log::info!(target: "consume", "Stopped-path consume check: idx={idx} consume={consume} \
-                        is_video={is_video} consume_videos={consume_videos} \
-                        is_audio={is_audio} consume_audio={consume_audio} \
-                        => {should_consume}");
+                    let (should_consume, is_audio) = self.should_consume_item(idx, consume);
                     if should_consume {
                         let len_before = self.playback_queue().items.len();
                         let removed_id = self.remove_from_active_playback_queue(idx);
@@ -2104,26 +2105,7 @@ impl App {
                         item.playback_position_ticks = position_ticks;
                     }
                 }
-                let is_video = self
-                    .playback_queue()
-                    .items
-                    .get(idx)
-                    .is_some_and(|i| i.is_video());
-                let is_audio = self
-                    .playback_queue()
-                    .items
-                    .get(idx)
-                    .is_some_and(|i| i.is_audio());
-                let (consume_videos, consume_audio) = {
-                    let cfg = &self.client.lock().unwrap().config;
-                    (cfg.consume_videos, cfg.consume_audio)
-                };
-                let should_consume =
-                    consume && ((is_video && consume_videos) || (is_audio && consume_audio));
-                log::info!(target: "consume", "TrackCompleted consume check: idx={idx} consume={consume} \
-                    is_video={is_video} consume_videos={consume_videos} \
-                    is_audio={is_audio} consume_audio={consume_audio} \
-                    => pending_queue_removal={should_consume}");
+                let (should_consume, is_audio) = self.should_consume_item(idx, consume);
                 if should_consume {
                     self.pending_queue_removal = Some((idx, is_audio));
                 }
