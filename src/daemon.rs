@@ -575,7 +575,7 @@ fn handle_ctrl(
         CtrlCmd::Hello(_) => {
             log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
         }
-        CtrlCmd::PlayerCmd(pc) => match pc {
+        CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
             PlayerCommand::ReplacePlaylist {
                 items: new_items,
                 start_idx,

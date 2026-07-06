@@ -321,7 +321,7 @@ impl RemotePlayer {
     }
 
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
-        self.cmd_tx.send(CtrlCmd::PlayerCmd(cmd)).is_ok()
+        self.cmd_tx.send(CtrlCmd::PlayerCmd(cmd.into())).is_ok()
     }
 
     pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _initial_volume: u8) {
