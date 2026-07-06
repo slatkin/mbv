@@ -120,8 +120,13 @@ impl App {
                         c.config.always_play_next = !c.config.always_play_next
                     }
                     SettingKey::ConsumeVideos => c.config.consume_videos = !c.config.consume_videos,
+                    SettingKey::ConsumeAudio => c.config.consume_audio = !c.config.consume_audio,
                     SettingKey::SavePlaylistOnConsume => {
                         c.config.save_playlist_on_consume = !c.config.save_playlist_on_consume
+                    }
+                    SettingKey::SavePlaylistOnConsumeAudio => {
+                        c.config.save_playlist_on_consume_audio =
+                            !c.config.save_playlist_on_consume_audio
                     }
                     SettingKey::AlwaysSkipIntro => {
                         c.config.always_skip_intro = !c.config.always_skip_intro

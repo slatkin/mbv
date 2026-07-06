@@ -18,6 +18,7 @@ pub struct Config {
     pub audio_pipe_bitdepth: u8,    // fixed PCM bit depth for the pipe (16|24|32)
     pub always_play_next: bool,
     pub consume_videos: bool,
+    pub consume_audio: bool,
     pub always_skip_intro: bool,
     pub image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
     pub show_systray_icon: bool,
@@ -30,6 +31,7 @@ pub struct Config {
     pub system_notifications: bool,
     pub image_cache_size: usize,
     pub save_playlist_on_consume: bool,
+    pub save_playlist_on_consume_audio: bool,
     pub use_nerd_fonts: bool,
     pub indicator_style: String, // status-indicator treatment: chips|brackets|outlined|dots|pipes|keyvalue|powerline
     // [playback] — client-only subtitle/audio preferences (never pushed to Emby server)
@@ -64,6 +66,7 @@ impl Default for Config {
             audio_pipe_bitdepth: 32,
             always_play_next: false,
             consume_videos: false,
+            consume_audio: false,
             always_skip_intro: false,
             image_protocol: None,
             show_systray_icon: true,
@@ -76,6 +79,7 @@ impl Default for Config {
             system_notifications: false,
             image_cache_size: 50,
             save_playlist_on_consume: false,
+            save_playlist_on_consume_audio: false,
             use_nerd_fonts: false,
             indicator_style: "keyvalue".into(),
             subtitle_mode: String::new(),
@@ -479,6 +483,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let consume_audio = queue
+        .and_then(|q| q.get("consume_audio"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let start_on_queue = queue
         .and_then(|q| q.get("start_on_queue"))
         .and_then(|v| v.as_bool())
@@ -551,6 +560,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
 
     let save_playlist_on_consume = queue
         .and_then(|q| q.get("save_playlist_on_consume"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let save_playlist_on_consume_audio = queue
+        .and_then(|q| q.get("save_playlist_on_consume_audio"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
@@ -646,6 +660,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         audio_pipe_bitdepth,
         always_play_next,
         consume_videos,
+        consume_audio,
         always_skip_intro,
         image_protocol,
         show_systray_icon,
@@ -658,6 +673,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         system_notifications,
         image_cache_size,
         save_playlist_on_consume,
+        save_playlist_on_consume_audio,
         use_nerd_fonts,
         indicator_style,
         subtitle_mode,
@@ -783,12 +799,20 @@ pub fn save_config_settings(cfg: &Config) {
         toml::Value::Boolean(cfg.consume_videos),
     );
     queue.insert(
+        "consume_audio".to_string(),
+        toml::Value::Boolean(cfg.consume_audio),
+    );
+    queue.insert(
         "start_on_queue".to_string(),
         toml::Value::Boolean(cfg.start_on_queue),
     );
     queue.insert(
         "save_playlist_on_consume".to_string(),
         toml::Value::Boolean(cfg.save_playlist_on_consume),
+    );
+    queue.insert(
+        "save_playlist_on_consume_audio".to_string(),
+        toml::Value::Boolean(cfg.save_playlist_on_consume_audio),
     );
 
     let mpv = section!("mpv");
@@ -984,6 +1008,58 @@ tcp_listen = "0.0.0.0:8890"
 "#;
         let cfg = parse_config(toml).unwrap();
         assert_eq!(cfg.daemon_server_tcp_listen, "0.0.0.0:8890");
+    }
+
+    #[test]
+    fn parse_consume_audio_and_autosave_default_to_false() {
+        let cfg = parse_config("").unwrap();
+        assert!(!cfg.consume_audio);
+        assert!(!cfg.save_playlist_on_consume_audio);
+    }
+
+    #[test]
+    fn parse_consume_audio_and_autosave_flags() {
+        let toml = r#"
+[server]
+url = "http://localhost:8096"
+[queue]
+consume_audio = true
+save_playlist_on_consume_audio = true
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(cfg.consume_audio);
+        assert!(cfg.save_playlist_on_consume_audio);
+    }
+
+    #[test]
+    fn save_config_settings_round_trips_consume_audio_flags() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("mbv")).unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        std::env::remove_var("MBV_SYSTEM");
+
+        let mut cfg = Config {
+            server_url: "http://localhost:8096".into(),
+            ..Default::default()
+        };
+        cfg.consume_audio = true;
+        cfg.save_playlist_on_consume_audio = true;
+        save_config_settings(&cfg);
+
+        let saved = std::fs::read_to_string(config_path()).unwrap();
+        let reparsed = parse_config(&saved).unwrap();
+        assert!(reparsed.consume_audio);
+        assert!(reparsed.save_playlist_on_consume_audio);
+
+        std::env::remove_var("XDG_CONFIG_HOME");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
