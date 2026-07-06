@@ -1,3 +1,4 @@
+use crate::api::MediaItem;
 use std::env;
 use std::path::PathBuf;
 
@@ -194,7 +195,12 @@ pub enum QueueSource {
 pub struct QueueState {
     #[serde(default)]
     pub source: QueueSource,
-    pub item_ids: Vec<String>,
+    // Full items, not just IDs: restoring the queue must be instant and local
+    // (no network round-trip), so everything needed to display and play it
+    // has to already be on disk. A separate best-effort background fetch
+    // refreshes played/position state from the server afterward.
+    #[serde(default)]
+    pub items: Vec<MediaItem>,
     #[serde(default)]
     pub cursor: usize,
     pub last_played_item_id: Option<String>,
@@ -220,7 +226,13 @@ pub fn save_queue_state(state: &QueueState) {
 
 pub fn load_queue_state() -> Option<QueueState> {
     let text = std::fs::read_to_string(queue_state_path()).ok()?;
-    serde_json::from_str(&text).ok()
+    match serde_json::from_str(&text) {
+        Ok(state) => Some(state),
+        Err(e) => {
+            log::warn!(target: "queue", "queue_state.json failed to parse, queue not restored: {e}");
+            None
+        }
+    }
 }
 
 pub fn clear_queue_state() {
@@ -1081,12 +1093,14 @@ hidden_latest = ["Movies", "TV SHOWS"]
         std::env::set_var("XDG_STATE_HOME", &temp);
         std::fs::write(
             state_dir.join("queue_state.json"),
-            r#"{"source":{"type":"unknown"},"item_ids":["a","b"],"last_played_item_id":null,"last_played_completed":false,"positions":{}}"#,
+            r#"{"source":{"type":"unknown"},"last_played_item_id":null,"last_played_completed":false,"positions":{}}"#,
         )
         .unwrap();
 
-        let state = load_queue_state().expect("legacy queue state should still load");
-        assert_eq!(state.item_ids, vec!["a", "b"]);
+        // Pre-"full items" on-disk files have no `items` field at all; it must
+        // default to empty rather than fail to load.
+        let state = load_queue_state().expect("queue state missing newer fields should still load");
+        assert!(state.items.is_empty());
         assert_eq!(state.cursor, 0);
 
         std::env::remove_var("XDG_STATE_HOME");

@@ -370,18 +370,10 @@ enum LibEvent {
         playlist_id: String,
         items: Vec<MediaItem>,
     },
-    QueueRestored {
-        items: Vec<MediaItem>,
-        source: crate::config::QueueSource,
-        cursor: usize,
-        last_played_item_id: Option<String>,
-        last_played_completed: bool,
-    },
-    /// Restore failed (network error, server error, etc). Distinct from
-    /// `Error` so the handler can clear `queue_restore_pending` — otherwise a
-    /// single failed restore permanently disables `save_queue_state` for the
-    /// rest of the session (see `spawn_restore_queue_state`).
-    QueueRestoreFailed,
+    /// Best-effort background refresh of played/position state for the queue
+    /// that `restore_queue_state` already populated synchronously from disk.
+    /// See `spawn_enrich_queue_state`.
+    QueueEnriched { items: Vec<MediaItem> },
     Error(String),
 }
 
@@ -543,11 +535,6 @@ pub struct App {
     playlists_open_scroll: usize,
     playlists_open_loading: bool,
     queue_source: crate::config::QueueSource,
-    queue_restored: bool,
-    /// True from `spawn_restore_queue_state` until the `QueueRestored` event
-    /// is processed. Prevents `save_queue_state` from overwriting the on-disk
-    /// state with an empty queue while the restore is still in-flight.
-    queue_restore_pending: bool,
     queue_dirty: bool,
     pending_queue_action: Option<PendingQueueAction>,
     show_save_playlist_modal: bool,
@@ -888,8 +875,6 @@ impl App {
             playlists_open_scroll: 0,
             playlists_open_loading: false,
             queue_source: crate::config::QueueSource::Unknown,
-            queue_restored: false,
-            queue_restore_pending: false,
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
@@ -1181,7 +1166,6 @@ impl App {
 
     fn clear_local_queue_metadata(&mut self) {
         self.queue_source = crate::config::QueueSource::Unknown;
-        self.queue_restored = false;
         self.queue_dirty = false;
         self.playlist_undo_stack.clear();
     }
@@ -1450,7 +1434,7 @@ impl App {
             Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
         self.home_loading = false;
-        self.spawn_restore_queue_state();
+        self.restore_queue_state();
         terminal.draw(|f| self.render(f))?;
 
         install_signal_handlers();
@@ -1907,7 +1891,7 @@ impl App {
                     self.last_played_item_id = Some(item.id.clone());
                 }
             }
-            self.save_queue_state();
+            self.save_queue_state_no_clear();
             if !self.player.is_remote() {
                 self.player.stop();
                 self.player.join_or_timeout(Duration::from_secs(5));
@@ -1938,7 +1922,7 @@ impl App {
                 self.last_played_item_id = Some(item.id.clone());
             }
         }
-        self.save_queue_state();
+        self.save_queue_state_no_clear();
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
         Ok(())
     }
@@ -2034,17 +2018,31 @@ impl App {
                         .items
                         .get(idx)
                         .is_some_and(|i| i.is_video());
-                    if played && is_video && self.client.lock().unwrap().config.consume_videos {
+                    let consume_videos = self.client.lock().unwrap().config.consume_videos;
+                    log::info!(target: "consume", "Stopped-path consume check: idx={idx} played={played} \
+                        is_video={is_video} consume_videos={consume_videos} \
+                        => {}", played && is_video && consume_videos);
+                    if played && is_video && consume_videos {
                         let queue = self.playback_queue_mut();
-                        if idx < queue.items.len() {
-                            queue.items.remove(idx);
-                        }
+                        let len_before = queue.items.len();
+                        let removed_id = if idx < queue.items.len() {
+                            Some(queue.items.remove(idx).id)
+                        } else {
+                            None
+                        };
+                        let len_after = queue.items.len();
                         if queue.items.is_empty() {
                             queue.playlist_cursor = 0;
                         } else {
                             queue.playlist_cursor = queue
                                 .playlist_cursor
                                 .min(queue.items.len().saturating_sub(1));
+                        }
+                        log::info!(target: "consume", "Stopped-path: removed idx={idx} from queue \
+                            len_before={len_before} len_after={len_after} removed_id={removed_id:?}");
+                        if removed_id.is_none() {
+                            log::warn!(target: "consume", "Stopped-path: idx={idx} out of bounds \
+                                (len={len_before}), removal SKIPPED");
                         }
                         self.on_video_consumed();
                     }
@@ -2075,7 +2073,11 @@ impl App {
                     .items
                     .get(idx)
                     .is_some_and(|i| i.is_video());
-                if consume && is_video && self.client.lock().unwrap().config.consume_videos {
+                let consume_videos = self.client.lock().unwrap().config.consume_videos;
+                log::info!(target: "consume", "TrackCompleted consume check: idx={idx} consume={consume} \
+                    is_video={is_video} consume_videos={consume_videos} \
+                    => pending_queue_removal={}", consume && is_video && consume_videos);
+                if consume && is_video && consume_videos {
                     self.pending_queue_removal = Some(idx);
                 }
             }
@@ -2087,10 +2089,29 @@ impl App {
                 }
                 let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
                     let queue = self.playback_queue_mut();
-                    if remove_idx < queue.items.len() {
-                        queue.items.remove(remove_idx);
-                    }
+                    let len_before = queue.items.len();
+                    let removed_id = if remove_idx < queue.items.len() {
+                        Some(queue.items.remove(remove_idx).id)
+                    } else {
+                        None
+                    };
+                    let len_after = queue.items.len();
                     let adjusted = if remove_idx < idx { idx - 1 } else { idx };
+                    log::info!(target: "consume", "TrackChanged: consuming pending removal remove_idx={remove_idx} \
+                        new_idx={idx} adjusted={adjusted} len_before={len_before} len_after={len_after} \
+                        removed_id={removed_id:?}");
+                    if removed_id.is_none() {
+                        log::warn!(target: "consume", "TrackChanged: remove_idx={remove_idx} out of bounds \
+                            (len={len_before}), removal SKIPPED");
+                    } else {
+                        // Keep the player's own internal playlist (a separate copy from
+                        // the app-side queue above) in sync — otherwise its index space
+                        // permanently diverges from the displayed queue after this first
+                        // consume, and any later index-based command (Enter on a queue
+                        // row, JumpTo, next natural advance) operates on stale indices.
+                        self.player
+                            .send_command(PlayerCommand::PlaylistRemove(remove_idx));
+                    }
                     self.on_video_consumed();
                     adjusted
                 } else {
@@ -2103,6 +2124,9 @@ impl App {
                     }
                 }
                 if !self.has_direct_remote_queue() {
+                    let queue = self.playback_queue();
+                    log::info!(target: "consume", "TrackChanged: post-save queue len={} ids={:?}",
+                        queue.items.len(), queue.items.iter().map(|i| &i.id).collect::<Vec<_>>());
                     self.save_queue_state();
                 }
             }
@@ -2406,19 +2430,9 @@ pub(crate) mod tests {
 
     #[test]
     fn queue_restore_uses_saved_cursor_when_last_played_is_missing() {
-        let mut app = make_app_stub();
         let items = make_items(3);
-
-        app.handle_lib_event(LibEvent::QueueRestored {
-            items,
-            source: crate::config::QueueSource::Unknown,
-            cursor: 2,
-            last_played_item_id: None,
-            last_played_completed: false,
-        });
-
-        assert_eq!(app.player_tab.items.len(), 3);
-        assert_eq!(app.player_tab.playlist_cursor, 2);
+        let cursor = super::actions::queue_restore_cursor(&items, 2, None, false);
+        assert_eq!(cursor, 2);
     }
 
     // ── test helpers ─────────────────────────────────────────────────────────
@@ -2568,8 +2582,6 @@ pub(crate) mod tests {
             playlists_open_scroll: 0,
             playlists_open_loading: false,
             queue_source: crate::config::QueueSource::Unknown,
-            queue_restored: false,
-            queue_restore_pending: false,
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
@@ -4011,6 +4023,38 @@ pub(crate) mod tests {
             "consuming an item changes the saved playlist's contents; without \
              save_playlist_on_consume the queue must be marked dirty so the user is still \
              prompted to save before quitting/replacing the queue"
+        );
+    }
+
+    #[test]
+    fn consuming_a_video_resyncs_the_players_own_playlist() {
+        // The player thread (PlaylistSession) keeps its own separate copy of the
+        // items list, independent of `player_tab.items`. If consume only shrinks
+        // the app-side queue and never tells the player, the player's internal
+        // index space permanently diverges from the displayed queue after the
+        // first consume — any later index-based command (Enter on a queue row,
+        // JumpTo, next natural advance) then lands on the wrong item.
+        let items = make_items(2);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.client.lock().unwrap().config.consume_videos = true;
+        let cmd_rx = app.player.spy_on_commands();
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        });
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert!(
+            matches!(
+                cmd_rx.try_recv(),
+                Ok(crate::player::PlayerCommand::PlaylistRemove(0))
+            ),
+            "consuming idx=0 must tell the player to remove idx=0 from its own \
+             internal playlist, keeping it in sync with the app-side queue"
         );
     }
 

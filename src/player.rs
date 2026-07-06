@@ -2113,6 +2113,11 @@ impl PlaylistSession {
         let was_next_up = std::mem::replace(&mut self.next_up_jump, false);
         let played_out = (natural || near_end || was_next_up) && !completed_is_audio;
         let consume_track = (natural || near_end || was_next_up) && !completed_is_audio;
+        log::info!(target: "consume", "on_end_file decision: idx={completed_idx} reason={reason:?} \
+            natural={natural} near_end={near_end} was_next_up={was_next_up} \
+            completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
+            => played_out={played_out} consume_track={consume_track}",
+            self.last_valid_pos, self.items[completed_idx].runtime_ticks);
         let completed_pos =
             playlist_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
 
@@ -2882,6 +2887,18 @@ impl PlayerProxy {
             subtitle_prefs,
             inner: PlayerProxyInner::Local(player),
         }
+    }
+
+    /// Wires a fresh command channel into the local player and returns the
+    /// receiving end, so a test can assert on what `send_command` actually sent
+    /// without a real mpv thread running.
+    #[cfg(test)]
+    pub fn spy_on_commands(&self) -> mpsc::Receiver<PlayerCommand> {
+        let (tx, rx) = mpsc::channel();
+        if let PlayerProxyInner::Local(p) = &self.inner {
+            *p.cmd_tx.lock().unwrap() = Some(tx);
+        }
+        rx
     }
 
     pub fn local(player: Player, always_play_next: bool) -> Self {
