@@ -10,7 +10,8 @@ use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{
-    List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+    Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Scrollbar,
+    ScrollbarOrientation, ScrollbarState,
 };
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
@@ -484,6 +485,28 @@ impl App {
             }
         }
 
+        // While the initial home fetch is still in flight, `home.latest` is
+        // still empty and the row layout above only reserves space for the
+        // Continue Watching section. Rather than leaving the rest of the
+        // panel blank (which reads as a broken/collapsed layout), fill the
+        // remaining reserved area with a loading skeleton so the region's
+        // footprint doesn't visibly jump once the real sections land.
+        if self.home_loading && n_latest == 0 {
+            if let Some(last_row) = row_areas.last() {
+                let filled_bottom = last_row.bottom();
+                let total_bottom = layout_area.bottom();
+                if total_bottom > filled_bottom {
+                    let skeleton_area = Rect {
+                        x: layout_area.x,
+                        y: filled_bottom,
+                        width: layout_area.width,
+                        height: total_bottom - filled_bottom,
+                    };
+                    Self::render_home_skeleton_fill(f, skeleton_area);
+                }
+            }
+        }
+
         layout.section_areas = areas;
         layout.home_scrolls = scrolls;
 
@@ -508,6 +531,37 @@ impl App {
             );
         } else {
             layout.home_scrollbar = Rect::default();
+        }
+    }
+
+    /// Fills `area` with a muted "Loading…" placeholder, used to reserve the
+    /// footprint of remote-backed home sections while they're still loading.
+    fn render_home_skeleton_fill(f: &mut Frame, area: Rect) {
+        if area.height == 0 || area.width == 0 {
+            return;
+        }
+        // A bordered block spans the full reserved footprint (its top and
+        // bottom edges touch the area's bounds), so the region reads as
+        // "reserved, still loading" rather than blank/collapsed.
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(palette::SUBTLE));
+        let inner = block.inner(area);
+        f.render_widget(block, area);
+        if inner.height > 0 {
+            let rect = Rect {
+                x: inner.x,
+                y: inner.y + inner.height / 2,
+                width: inner.width,
+                height: 1,
+            };
+            f.render_widget(
+                Paragraph::new("Loading…")
+                    .style(Style::default().fg(palette::MUTED))
+                    .alignment(Alignment::Center),
+                rect,
+            );
         }
     }
 
@@ -777,5 +831,83 @@ impl App {
                 &mut sb_state,
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::layout::LayoutHome;
+    use super::super::super::tests::make_app_stub;
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
+
+    fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Before the initial `fetch_home` completes, `home.latest` is empty and
+    /// the row layout only reserves space for Continue Watching. Without a
+    /// skeleton fill, the rest of the panel renders blank, which reads as a
+    /// collapsed/broken layout (issue #89). With `home_loading` set, the
+    /// panel should fill the reserved area instead of leaving it blank.
+    #[test]
+    fn loading_state_fills_area_with_skeleton_instead_of_blank_gap() {
+        let mut app = make_app_stub();
+        app.home_loading = true;
+        // home.latest / continue_items are empty by default in the stub.
+
+        let backend = TestBackend::new(40, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutHome::default();
+        term.draw(|f| {
+            let area = Rect::new(0, 0, 40, 20);
+            app.render_home_panel(f, area, &mut layout);
+        })
+        .unwrap();
+
+        let out = buffer_to_string(&term);
+        let last_line = out.lines().last().unwrap();
+        assert!(
+            last_line.chars().any(|c| c != ' '),
+            "expected the loading skeleton to reach the bottom of the reserved \
+             area instead of leaving it blank:\n{out}"
+        );
+        assert!(
+            out.contains("Loading"),
+            "expected a loading placeholder to be rendered:\n{out}"
+        );
+    }
+
+    /// When there's genuinely nothing to show (not a loading condition), the
+    /// panel keeps its prior behavior: no skeleton filler is drawn.
+    #[test]
+    fn non_loading_empty_state_does_not_render_skeleton() {
+        let mut app = make_app_stub();
+        app.home_loading = false;
+
+        let backend = TestBackend::new(40, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutHome::default();
+        term.draw(|f| {
+            let area = Rect::new(0, 0, 40, 20);
+            app.render_home_panel(f, area, &mut layout);
+        })
+        .unwrap();
+
+        let out = buffer_to_string(&term);
+        assert!(
+            !out.contains("Loading"),
+            "did not expect a loading placeholder outside the loading state:\n{out}"
+        );
     }
 }

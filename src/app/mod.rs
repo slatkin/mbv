@@ -465,6 +465,11 @@ pub struct App {
 
     home_panel_section_offset: usize,
     home_cards_section_offset: usize,
+    /// True from startup until the first `fetch_home` completes. While true,
+    /// the home view doesn't yet know how many remote sections exist, so the
+    /// renderer fills the reserved area with skeleton placeholders instead of
+    /// collapsing to just the sections that happen to be populated so far.
+    home_loading: bool,
     mouse_col: u16,
     mouse_row: u16,
     last_click_time: Instant,
@@ -826,6 +831,7 @@ impl App {
 
             home_panel_section_offset: 0,
             home_cards_section_offset: 0,
+            home_loading: true,
             mouse_col: 0,
             mouse_row: 0,
             last_click_time: Instant::now(),
@@ -1431,6 +1437,7 @@ impl App {
         self.image_picker = Some(picker);
 
         self.status = "Loading...".into();
+        self.home_loading = true;
         terminal.draw(|f| self.render(f))?;
 
         {
@@ -1442,6 +1449,7 @@ impl App {
             Ok(()) => self.status.clear(),
             Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
+        self.home_loading = false;
         self.spawn_restore_queue_state();
         terminal.draw(|f| self.render(f))?;
 
@@ -2489,6 +2497,7 @@ pub(crate) mod tests {
 
             home_panel_section_offset: 0,
             home_cards_section_offset: 0,
+            home_loading: false,
             mouse_col: 0,
             mouse_row: 0,
             last_click_time: std::time::Instant::now(),
