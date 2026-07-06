@@ -612,18 +612,20 @@ impl SessionReporter {
     // stale IDs to Emby.
     // Returns (ext_sub_urls, success).
     fn start_item(&self, item: &MediaItem) -> (Vec<String>, bool) {
-        let (new_sid, new_msid, ext_sub_urls) = self.client.get_playback_info(&item.id);
+        let info = self.client.get_playback_info(&item.id);
         // Update ids before report_start so the progress reporter (which reads
         // ids on a 10-second timer) always sees the new item.
         {
             let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
             ids.0 = item.id.clone();
-            ids.1 = new_msid.clone();
-            ids.2 = new_sid.clone();
+            ids.1 = info.media_source_id.clone();
+            ids.2 = info.session_id.clone();
         }
         self.is_audio.store(item.is_audio(), Ordering::Relaxed);
-        let ok = self.client.report_start(item, &new_msid, &new_sid);
-        (ext_sub_urls, ok)
+        let ok = self
+            .client
+            .report_start(item, &info.media_source_id, &info.session_id);
+        (info.external_subtitle_urls, ok)
     }
 
     // report_stopped for current item then start_item for the new one.
@@ -2663,14 +2665,14 @@ impl Player {
             send_ep_info(&mpv, &item);
             observe_properties(&mpv, config.use_mpv_config);
 
-            let (sid, msid, ext_sub_urls) = client.get_playback_info(&item.id);
-            client.report_start(&item, &msid, &sid);
+            let info = client.get_playback_info(&item.id);
+            client.report_start(&item, &info.media_source_id, &info.session_id);
             let reporter = SessionReporter::new(
                 client,
                 ws_tx,
                 item.id.clone(),
-                msid,
-                sid,
+                info.media_source_id,
+                info.session_id,
                 is_audio,
                 status.clone(),
             );
@@ -2683,7 +2685,7 @@ impl Player {
                 status,
                 event_tx,
                 subtitle_prefs,
-                ext_sub_urls,
+                info.external_subtitle_urls,
             );
             session.run(mpv, stop_rx, cmd_rx, progress);
         });
@@ -2803,14 +2805,14 @@ impl Player {
             send_ep_info(&mpv, &items[start_idx]);
             observe_properties(&mpv, config.use_mpv_config);
 
-            let (sid, msid, ext_sub_urls) = client.get_playback_info(&items[start_idx].id);
-            client.report_start(&items[start_idx], &msid, &sid);
+            let info = client.get_playback_info(&items[start_idx].id);
+            client.report_start(&items[start_idx], &info.media_source_id, &info.session_id);
             let reporter = SessionReporter::new(
                 client,
                 ws_tx,
                 items[start_idx].id.clone(),
-                msid,
-                sid,
+                info.media_source_id,
+                info.session_id,
                 items[start_idx].is_audio(),
                 status.clone(),
             );
@@ -2826,7 +2828,7 @@ impl Player {
                 subtitle_prefs,
                 server_url,
                 token,
-                ext_sub_urls,
+                info.external_subtitle_urls,
             );
             session.run(mpv, stop_rx, cmd_rx, progress);
         });
