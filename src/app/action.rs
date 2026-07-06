@@ -198,10 +198,14 @@ impl App {
                 self.adjust_volume(delta);
             }
             Action::ToggleMute => {
-                self.mute_on = !self.mute_on;
-                self.player
-                    .send_command(PlayerCommand::SetMute(self.mute_on));
-                self.save_prefs();
+                if self.connected_session_id.is_some() {
+                    self.session_toggle_mute();
+                } else {
+                    self.mute_on = !self.mute_on;
+                    self.player
+                        .send_command(PlayerCommand::SetMute(self.mute_on));
+                    self.save_prefs();
+                }
             }
             Action::ToggleMuteOrCycleAudio => {
                 if self.is_audio_item() {
@@ -596,6 +600,58 @@ mod tests {
         assert_eq!(v["mute_on"], serde_json::json!(true));
 
         app.dispatch(Action::ToggleMute);
+        assert!(!app.mute_on);
+    }
+
+    #[test]
+    fn dispatch_toggle_mute_while_attached_to_session_mutes_the_session_not_local() {
+        use crate::app::tests::make_session;
+
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("session-1".into());
+        let mut sess = make_session("remote-host", "Emby");
+        sess.muted = false;
+        app.connected_session_state = Some(sess);
+
+        app.dispatch(Action::ToggleMute);
+
+        assert!(
+            app.connected_session_state.as_ref().unwrap().muted,
+            "pressing mute while attached to a session must mute that session \
+             (optimistically, before the network round-trip completes)"
+        );
+        assert!(
+            !app.mute_on,
+            "the local mute preference must not change while attached to a session"
+        );
+    }
+
+    #[test]
+    fn dispatch_toggle_mute_while_attached_to_session_toggles_back_off() {
+        use crate::app::tests::make_session;
+
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("session-1".into());
+        let mut sess = make_session("remote-host", "Emby");
+        sess.muted = true;
+        app.connected_session_state = Some(sess);
+
+        app.dispatch(Action::ToggleMute);
+
+        assert!(!app.connected_session_state.as_ref().unwrap().muted);
+    }
+
+    #[test]
+    fn dispatch_toggle_mute_while_attached_to_session_with_unknown_mute_state_mutes_first() {
+        // No session-state poll has landed yet for this connected session --
+        // `connected_session_state` is still `None`. The first press should
+        // be treated as "currently not muted" and mute.
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("session-1".into());
+        app.connected_session_state = None;
+
+        app.dispatch(Action::ToggleMute);
+
         assert!(!app.mute_on);
     }
 

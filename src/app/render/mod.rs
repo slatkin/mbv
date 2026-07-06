@@ -792,7 +792,11 @@ impl App {
     /// (dark on green) when OFF. `m` mute and `⇌` remote are clickable.
     fn render_control_pill(&mut self, f: &mut Frame, tabs_area: Rect, layout: &mut LayoutPlayback) {
         let bg = palette::PILL_BG;
-        let mute_on = self.mute_on;
+        let mute_on = self
+            .connected_session_state
+            .as_ref()
+            .map(|s| s.muted)
+            .unwrap_or(self.mute_on);
         let is_playlist = matches!(
             &self.queue_source,
             crate::config::QueueSource::Playlist { .. }

@@ -2295,6 +2295,7 @@ pub(crate) mod tests {
             volume: 100,
             sub_index: -1,
             audio_index: 1,
+            muted: false,
             media_info: crate::api::SessionMediaInfo::default(),
         }
     }

@@ -1296,6 +1296,29 @@ impl App {
         self.save_prefs();
     }
 
+    /// Session-aware mute toggle for `Action::ToggleMute` (the `m` key) when
+    /// attached to a remote session. Mirrors `cycle_audio()`/`cycle_sub()`:
+    /// computes an explicit target state (not a blind server-side toggle),
+    /// writes it into `connected_session_state` optimistically, and fires the
+    /// outbound command asynchronously via `do_session_command`. Does not
+    /// touch local player mute state or the persisted `mute_on` preference --
+    /// those are exclusively the local (no-session) branch's concern.
+    pub(super) fn session_toggle_mute(&mut self) {
+        let Some(conn_id) = self.connected_session_id.clone() else {
+            return;
+        };
+        let current = self
+            .connected_session_state
+            .as_ref()
+            .map(|s| s.muted)
+            .unwrap_or(false);
+        let next = !current;
+        if let Some(ref mut state) = self.connected_session_state {
+            state.muted = next;
+        }
+        self.do_session_command(move |c| c.session_set_mute(&conn_id, next));
+    }
+
     pub(super) fn cycle_audio(&mut self) {
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             let remote_indexes = self.remote_audio_indexes();

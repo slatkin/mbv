@@ -226,6 +226,7 @@ pub struct SessionInfo {
     pub volume: i64,
     pub sub_index: i64,   // -1 = disabled
     pub audio_index: i64, // stream index; 0 = unknown
+    pub muted: bool,
     pub media_info: SessionMediaInfo,
 }
 
@@ -1661,6 +1662,7 @@ impl EmbyClient {
                             volume: ps["VolumeLevel"].as_i64().unwrap_or(100),
                             sub_index: ps["SubtitleStreamIndex"].as_i64().unwrap_or(-1),
                             audio_index: ps["AudioStreamIndex"].as_i64().unwrap_or(0),
+                            muted: ps["IsMuted"].as_bool().unwrap_or(false),
                             media_info,
                         })
                     })
@@ -1702,6 +1704,14 @@ impl EmbyClient {
     pub fn session_set_audio_index(&self, id: &str, index: i64) -> Result<(), String> {
         self.post(&format!("/Sessions/{id}/Command/SetAudioStreamIndex"))
             .send_json(ureq::json!({"Arguments":{"Index": index.to_string()}}))
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn session_set_mute(&self, id: &str, muted: bool) -> Result<(), String> {
+        let cmd = if muted { "Mute" } else { "Unmute" };
+        self.post(&format!("/Sessions/{id}/Command/{cmd}"))
+            .send_string("")
             .map_err(|e| e.to_string())?;
         Ok(())
     }
