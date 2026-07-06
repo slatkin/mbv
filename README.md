@@ -6,7 +6,7 @@ This was made because I use Niri and the beta client does not officially support
 
 This allows one to browse libraries, build a queue, and play media from their library in a way that syncs playback with the Emby server. A person can leverage the standard Emby remote control API to control playback from any Emby remote app on their phone or browser. It can also run headless as a background daemon to provide a purely remote-controlled mpv launcher lol.
 
-This was built with Claude Code because I am lazy and I already have a job (for now). You can tell because there's a lot of unnecessary images in a TUI app.
+This was built with AI because I am lazy and I already have a job (for now). You can tell because there's a lot of unnecessary images in a TUI app.
 
 ## Requirements
 
