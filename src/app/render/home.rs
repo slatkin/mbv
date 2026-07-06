@@ -494,16 +494,13 @@ impl App {
         if self.home_loading && n_latest == 0 {
             if let Some(last_row) = row_areas.last() {
                 let filled_bottom = last_row.bottom();
-                let total_bottom = layout_area.bottom();
-                if total_bottom > filled_bottom {
-                    let skeleton_area = Rect {
-                        x: layout_area.x,
-                        y: filled_bottom,
-                        width: layout_area.width,
-                        height: total_bottom - filled_bottom,
-                    };
-                    Self::render_home_skeleton_fill(f, skeleton_area);
-                }
+                let skeleton_area = Rect {
+                    x: layout_area.x,
+                    y: filled_bottom,
+                    width: layout_area.width,
+                    height: layout_area.bottom().saturating_sub(filled_bottom),
+                };
+                Self::render_home_skeleton_fill(f, skeleton_area);
             }
         }
 
@@ -534,15 +531,17 @@ impl App {
         }
     }
 
-    /// Fills `area` with a muted "Loading…" placeholder, used to reserve the
+    /// Fills `area` with a "Loading…" placeholder, used to reserve the
     /// footprint of remote-backed home sections while they're still loading.
+    ///
+    /// Unlike the plain muted text used for the sessions/playlists overlay
+    /// loading states (which already sit inside a bordered panel shell), this
+    /// area has no surrounding chrome of its own, so it draws its own border
+    /// to keep the reserved footprint visually distinct from blank space.
     fn render_home_skeleton_fill(f: &mut Frame, area: Rect) {
         if area.height == 0 || area.width == 0 {
             return;
         }
-        // A bordered block spans the full reserved footprint (its top and
-        // bottom edges touch the area's bounds), so the region reads as
-        // "reserved, still loading" rather than blank/collapsed.
         let block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -558,7 +557,7 @@ impl App {
             };
             f.render_widget(
                 Paragraph::new("Loading…")
-                    .style(Style::default().fg(palette::MUTED))
+                    .style(Style::default().fg(palette::SUBTLE))
                     .alignment(Alignment::Center),
                 rect,
             );
@@ -855,6 +854,19 @@ mod tests {
         out
     }
 
+    /// Renders `app`'s home panel into a 40x20 buffer and returns it as text.
+    fn render_home_panel_to_string(app: &mut crate::app::App) -> String {
+        let backend = TestBackend::new(40, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutHome::default();
+        term.draw(|f| {
+            let area = Rect::new(0, 0, 40, 20);
+            app.render_home_panel(f, area, &mut layout);
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
     /// Before the initial `fetch_home` completes, `home.latest` is empty and
     /// the row layout only reserves space for Continue Watching. Without a
     /// skeleton fill, the rest of the panel renders blank, which reads as a
@@ -866,16 +878,7 @@ mod tests {
         app.home_loading = true;
         // home.latest / continue_items are empty by default in the stub.
 
-        let backend = TestBackend::new(40, 20);
-        let mut term = Terminal::new(backend).unwrap();
-        let mut layout = LayoutHome::default();
-        term.draw(|f| {
-            let area = Rect::new(0, 0, 40, 20);
-            app.render_home_panel(f, area, &mut layout);
-        })
-        .unwrap();
-
-        let out = buffer_to_string(&term);
+        let out = render_home_panel_to_string(&mut app);
         let last_line = out.lines().last().unwrap();
         assert!(
             last_line.chars().any(|c| c != ' '),
@@ -895,16 +898,7 @@ mod tests {
         let mut app = make_app_stub();
         app.home_loading = false;
 
-        let backend = TestBackend::new(40, 20);
-        let mut term = Terminal::new(backend).unwrap();
-        let mut layout = LayoutHome::default();
-        term.draw(|f| {
-            let area = Rect::new(0, 0, 40, 20);
-            app.render_home_panel(f, area, &mut layout);
-        })
-        .unwrap();
-
-        let out = buffer_to_string(&term);
+        let out = render_home_panel_to_string(&mut app);
         assert!(
             !out.contains("Loading"),
             "did not expect a loading placeholder outside the loading state:\n{out}"
