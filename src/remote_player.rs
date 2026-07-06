@@ -290,6 +290,7 @@ impl RemotePlayer {
                 idx: 0,
                 position_ticks: 0,
                 played: false,
+                consume: false,
                 error: None,
             });
         });

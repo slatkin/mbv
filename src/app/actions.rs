@@ -3814,6 +3814,34 @@ impl App {
         }
     }
 
+    /// Called when an audio item is removed from the queue because "consume" is enabled.
+    /// Mirrors `on_video_consumed`, but is gated on the audio-specific
+    /// `save_playlist_on_consume_audio` flag instead — kept as a separate method (rather
+    /// than a shared helper with a boolean parameter) so the video and audio consume paths
+    /// stay independently readable and don't require the caller to track which flag applies.
+    pub(super) fn on_audio_consumed(&mut self) {
+        let scope = self.playback_queue_scope();
+        log::info!(target: "consume", "on_audio_consumed: scope={scope:?} has_local_metadata={}",
+            self.queue_scope_has_local_metadata(scope));
+        if !self.queue_scope_has_local_metadata(scope) {
+            return;
+        }
+        self.queue_dirty = true;
+        let save_on_consume = self
+            .client
+            .lock()
+            .unwrap()
+            .config
+            .save_playlist_on_consume_audio;
+        let is_saved_playlist = self.queue_is_saved_playlist();
+        log::info!(target: "consume", "on_audio_consumed: queue_dirty=true \
+            save_playlist_on_consume_audio={save_on_consume} is_saved_playlist={is_saved_playlist}");
+        if save_on_consume && is_saved_playlist {
+            self.queue_dirty = false;
+            self.save_playlist_to_emby();
+        }
+    }
+
     pub(super) fn save_playlist_to_emby(&self) {
         let Some(playlist_id) = self.queue_playlist_id() else {
             return;

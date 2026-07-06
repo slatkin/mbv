@@ -32,14 +32,14 @@ mbv's own concept — an ordered, session-scoped list of media items driving pla
 _Avoid_: treating "queue" as an Emby API concept, or assuming every queue traces back to a saved Playlist entity — see **Saved-playlist queue** vs **ad-hoc queue** below.
 
 **Saved-playlist queue** vs **ad-hoc queue**:
-Whether the current queue's `QueueSource` is a named Emby `Playlist` entity (`is_saved_playlist` true) or was assembled by enqueue/"play these items" actions with no backing Playlist. Changes two behaviors: whether consume also pushes the reduced list back to Emby (`save_playlist_on_consume`), and whether quitting with unsaved changes prompts to save.
+Whether the current queue's `QueueSource` is a named Emby `Playlist` entity (`is_saved_playlist` true) or was assembled by enqueue/"play these items" actions with no backing Playlist. Changes two behaviors: whether consume also pushes the reduced list back to Emby (`save_playlist_on_consume` for video, `save_playlist_on_consume_audio` for audio), and whether quitting with unsaved changes prompts to save.
 
 **Consume**:
-Automatic removal of a video item from the queue once it finishes playing (natural end, near-end, or a next-up jump), gated by the `consume_videos` setting. Modeled after mpd/ncmpcpp's "consume mode" (remove a track from the playlist once it's been played) — but mbv currently only implements the video half of that concept: there is no audio equivalent, and mpd's original feature applies uniformly regardless of track type. See #101 (expand consume to match parity with the mpd/ncmpcpp original).
+Automatic removal of an item from the queue once it finishes playing (natural end, near-end, or a next-up jump). Gated separately per track type: `consume_videos` for video items, `consume_audio` for audio items — the two flags are independent, so a user can enable one without the other. Modeled after mpd/ncmpcpp's "consume mode" (remove a track from the playlist once it's been played), which applies uniformly regardless of track type; mbv keeps the two flags separate rather than unifying them, since the two media types have different playback-completion semantics (audio has no near-end detection, only natural end and next-up jumps trigger it — see `is_near_end` in `player.rs`). See #101.
 _Avoid_: confusing this with a user-initiated removal (Delete key) or a full queue clear — consume is specifically the automatic, playback-driven kind.
 
-**`save_playlist_on_consume`** ("autosave on consume"):
-Real, wired-up config flag: push the queue back to the saved Emby playlist immediately after each consume. Replaced an earlier `autosave_playlist` key, which was removed entirely (not just renamed) in favor of this flag.
+**`save_playlist_on_consume`** ("autosave on consume") **/ `save_playlist_on_consume_audio`**:
+Real, wired-up config flags: push the queue back to the saved Emby playlist immediately after each consume. `save_playlist_on_consume` gates this for video consumes, `save_playlist_on_consume_audio` gates it for audio consumes — independently toggleable, mirroring the `consume_videos`/`consume_audio` split. Replaced an earlier `autosave_playlist` key, which was removed entirely (not just renamed) in favor of these flags.
 
 **On-disk queue state** (`queue_state.json`) vs **in-memory queue**:
 The on-disk snapshot should only matter at the two boundary moments — startup restore and quit-time save. It must never be read or re-synced mid-session; the in-memory queue is the sole source of truth while mbv is running. (#99 was a violation of this: quit could delete a valid on-disk snapshot based on incidental in-memory emptiness.)

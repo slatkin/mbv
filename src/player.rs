@@ -151,6 +151,7 @@ pub enum PlayerEvent {
         idx: usize,
         position_ticks: i64,
         played: bool,
+        consume: bool,
         error: Option<String>,
     },
     TrackChanged(usize),
@@ -1266,6 +1267,7 @@ impl SingleSession {
                 idx: 0,
                 position_ticks: 0,
                 played: !self.reporter.is_audio.load(Ordering::Relaxed),
+                consume: false,
                 error: None,
             });
             self.stopped_event_sent = true;
@@ -1297,6 +1299,7 @@ impl SingleSession {
                 idx: 0,
                 position_ticks: self.last_valid_pos,
                 played: near_end,
+                consume: false,
                 error: None,
             });
         }
@@ -1346,6 +1349,7 @@ impl SingleSession {
                         idx: 0,
                         position_ticks: self.last_valid_pos,
                         played: near_end,
+                        consume: false,
                         error: None,
                     });
                     return;
@@ -1495,6 +1499,7 @@ impl SingleSession {
                 idx: 0,
                 position_ticks: 0,
                 played: false,
+                consume: false,
                 error: Some(msg),
             });
         }
@@ -2134,6 +2139,7 @@ impl PlaylistSession {
                 idx: completed_idx.min(self.items.len().saturating_sub(1)),
                 position_ticks: self.last_valid_pos,
                 played: false,
+                consume: false,
                 error: None,
             });
             return false;
@@ -2147,8 +2153,12 @@ impl PlaylistSession {
             self.items[completed_idx].runtime_ticks,
         );
         let was_next_up = std::mem::replace(&mut self.next_up_jump, false);
-        let played_out = (natural || near_end || was_next_up) && !completed_is_audio;
-        let consume_track = (natural || near_end || was_next_up) && !completed_is_audio;
+        let track_finished = natural || near_end || was_next_up;
+        // played_out drives mark-played/Emby watched-status and stays video-only;
+        // consume_track drives queue auto-removal and is type-agnostic — the app layer
+        // gates it per-type against consume_videos/consume_audio.
+        let played_out = track_finished && !completed_is_audio;
+        let consume_track = track_finished;
         log::info!(target: "consume", "on_end_file decision: idx={completed_idx} reason={reason:?} \
             natural={natural} near_end={near_end} was_next_up={was_next_up} \
             completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
@@ -2174,6 +2184,7 @@ impl PlaylistSession {
                 idx: completed_idx,
                 position_ticks: completed_pos,
                 played: played_out,
+                consume: consume_track,
                 error: None,
             });
             return false; // signals run() to return
@@ -2246,10 +2257,15 @@ impl PlaylistSession {
             self.stop_reported = true;
         }
         self.status.lock().unwrap().active = false;
+        // played and consume are deliberately the same value here: stopped_near_end
+        // is already video-only (see is_near_end's !is_audio gate), so a quit/cancel
+        // near the end of an audio item never sets either — consistent with on_end_file's
+        // normal advance path, where only natural/next-up (not near-end) triggers audio consume.
         let _ = self.event_tx.send(PlayerEvent::Stopped {
             idx: self.current_idx,
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
+            consume: self.stopped_near_end,
             error: None,
         });
         // mpv exited on its own (not via our stop command) — tell the app to quit.
@@ -2292,6 +2308,7 @@ impl PlaylistSession {
                         idx: self.current_idx,
                         position_ticks: self.last_valid_pos,
                         played: self.stopped_near_end,
+                        consume: self.stopped_near_end,
                         error: None,
                     });
                     return;
@@ -2451,6 +2468,7 @@ impl PlaylistSession {
                 idx: current_idx_panic,
                 position_ticks: 0,
                 played: false,
+                consume: false,
                 error: Some(msg),
             });
         }

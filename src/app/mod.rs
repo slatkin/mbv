@@ -480,7 +480,7 @@ pub struct App {
     last_drag_seek: Instant,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
-    pending_queue_removal: Option<usize>, // deferred removal after TrackChanged index-shifts
+    pending_queue_removal: Option<(usize, bool)>, // deferred removal (idx, is_audio) after TrackChanged index-shifts
     confirm_clear_playlist: bool,
     playlist_undo_stack: Vec<UndoEntry>,
     remote_playlist_undo_stack: Vec<UndoEntry>,
@@ -639,7 +639,9 @@ enum SettingKey {
     StartOnQueue,
     AlwaysPlayNext,
     ConsumeVideos,
+    ConsumeAudio,
     SavePlaylistOnConsume,
+    SavePlaylistOnConsumeAudio,
     AlwaysSkipIntro,
     ShowLogTab,
     ImageProtocol,
@@ -681,7 +683,9 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::StartOnQueue,
             SettingKey::AlwaysPlayNext,
             SettingKey::ConsumeVideos,
+            SettingKey::ConsumeAudio,
             SettingKey::SavePlaylistOnConsume,
+            SettingKey::SavePlaylistOnConsumeAudio,
         ],
     ),
     (
@@ -1261,6 +1265,26 @@ impl App {
 
     fn playback_queue_mut(&mut self) -> &mut PlayerTab {
         self.queue_for_scope_mut(self.playback_queue_scope())
+    }
+
+    /// Whether the item at `idx` in the playback queue should be consumed, given a
+    /// player-reported completion (`consume`) and the type-specific consume flags.
+    /// Returns `(should_consume, is_audio)` — callers that act on the removal need
+    /// `is_audio` afterward to route to `on_video_consumed`/`on_audio_consumed`.
+    fn should_consume_item(&self, idx: usize, consume: bool) -> (bool, bool) {
+        let item = self.playback_queue().items.get(idx);
+        let is_video = item.is_some_and(|i| i.is_video());
+        let is_audio = item.is_some_and(|i| i.is_audio());
+        let (consume_videos, consume_audio) = {
+            let cfg = &self.client.lock().unwrap().config;
+            (cfg.consume_videos, cfg.consume_audio)
+        };
+        let should_consume =
+            consume && ((is_video && consume_videos) || (is_audio && consume_audio));
+        log::info!(target: "consume", "consume check: idx={idx} consume={consume} \
+            is_video={is_video} consume_videos={consume_videos} \
+            is_audio={is_audio} consume_audio={consume_audio} => {should_consume}");
+        (should_consume, is_audio)
     }
 
     /// Removes `idx` from the currently active playback queue and, if
@@ -1994,6 +2018,7 @@ impl App {
                 idx,
                 position_ticks,
                 played,
+                consume,
                 error,
             } => {
                 log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played} error={error:?}",
@@ -2045,16 +2070,8 @@ impl App {
                             .push(UndoEntry::Remove(idx, Box::new(item)));
                     }
                 } else {
-                    let is_video = self
-                        .playback_queue()
-                        .items
-                        .get(idx)
-                        .is_some_and(|i| i.is_video());
-                    let consume_videos = self.client.lock().unwrap().config.consume_videos;
-                    log::info!(target: "consume", "Stopped-path consume check: idx={idx} played={played} \
-                        is_video={is_video} consume_videos={consume_videos} \
-                        => {}", played && is_video && consume_videos);
-                    if played && is_video && consume_videos {
+                    let (should_consume, is_audio) = self.should_consume_item(idx, consume);
+                    if should_consume {
                         let len_before = self.playback_queue().items.len();
                         let removed_id = self.remove_from_active_playback_queue(idx);
                         let len_after = len_before - removed_id.is_some() as usize;
@@ -2072,7 +2089,11 @@ impl App {
                             log::warn!(target: "consume", "Stopped-path: idx={idx} out of bounds \
                                 (len={len_before}), removal SKIPPED");
                         }
-                        self.on_video_consumed();
+                        if is_audio {
+                            self.on_audio_consumed();
+                        } else {
+                            self.on_video_consumed();
+                        }
                     }
                 }
                 self.refresh_after_stop();
@@ -2096,17 +2117,9 @@ impl App {
                         item.playback_position_ticks = position_ticks;
                     }
                 }
-                let is_video = self
-                    .playback_queue()
-                    .items
-                    .get(idx)
-                    .is_some_and(|i| i.is_video());
-                let consume_videos = self.client.lock().unwrap().config.consume_videos;
-                log::info!(target: "consume", "TrackCompleted consume check: idx={idx} consume={consume} \
-                    is_video={is_video} consume_videos={consume_videos} \
-                    => pending_queue_removal={}", consume && is_video && consume_videos);
-                if consume && is_video && consume_videos {
-                    self.pending_queue_removal = Some(idx);
+                let (should_consume, is_audio) = self.should_consume_item(idx, consume);
+                if should_consume {
+                    self.pending_queue_removal = Some((idx, is_audio));
                 }
             }
             PlayerEvent::TrackChanged(idx) => {
@@ -2115,7 +2128,9 @@ impl App {
                 if self.status.starts_with("Next up:") {
                     self.status.clear();
                 }
-                let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
+                let adjusted = if let Some((remove_idx, was_audio)) =
+                    self.pending_queue_removal.take()
+                {
                     let len_before = self.playback_queue().items.len();
                     let removed_id = self.remove_from_active_playback_queue(remove_idx);
                     let len_after = len_before - removed_id.is_some() as usize;
@@ -2127,7 +2142,11 @@ impl App {
                         log::warn!(target: "consume", "TrackChanged: remove_idx={remove_idx} out of bounds \
                             (len={len_before}), removal SKIPPED");
                     }
-                    self.on_video_consumed();
+                    if was_audio {
+                        self.on_audio_consumed();
+                    } else {
+                        self.on_video_consumed();
+                    }
                     adjusted
                 } else {
                     idx
@@ -2457,6 +2476,17 @@ pub(crate) mod tests {
             .map(|i| {
                 let mut item = make_item(&format!("Item {i}"), "Movie");
                 item.id = format!("id{i}");
+                item
+            })
+            .collect()
+    }
+
+    pub(crate) fn make_audio_items(n: usize) -> Vec<MediaItem> {
+        (0..n)
+            .map(|i| {
+                let mut item = make_item(&format!("Track {i}"), "Audio");
+                item.id = format!("id{i}");
+                item.media_type = "Audio".into();
                 item
             })
             .collect()
@@ -4008,6 +4038,53 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn stopped_path_consumes_the_last_audio_item_in_the_queue() {
+        // When the last item in the queue finishes, the player thread sends a
+        // Stopped event (not TrackCompleted/TrackChanged) since there's no next
+        // track to advance to. consume_audio must still remove it, mirroring how
+        // consume_videos already works for a video's Stopped-path removal.
+        let items = make_audio_items(1);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.client.lock().unwrap().config.consume_audio = true;
+
+        app.handle_player_event(PlayerEvent::Stopped {
+            idx: 0,
+            position_ticks: 0,
+            played: false,
+            consume: true,
+            error: None,
+        });
+
+        assert!(
+            app.player_tab.items.is_empty(),
+            "the last audio item should be consumed via the Stopped-path when consume_audio is on"
+        );
+    }
+
+    #[test]
+    fn stopped_path_does_not_consume_audio_when_consume_audio_is_off() {
+        let items = make_audio_items(1);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.client.lock().unwrap().config.consume_audio = false;
+
+        app.handle_player_event(PlayerEvent::Stopped {
+            idx: 0,
+            position_ticks: 0,
+            played: false,
+            consume: true,
+            error: None,
+        });
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            1,
+            "consume_audio is off, so the item must stay in the queue"
+        );
+    }
+
+    #[test]
     fn consuming_a_video_without_autosave_marks_queue_dirty() {
         let items = make_items(2);
         let mut app = make_app_stub();
@@ -4144,6 +4221,125 @@ pub(crate) mod tests {
             !app.queue_dirty,
             "consume on a direct-remote queue must not mark the local queue dirty or trigger \
              an autosave of the local playlist — the change happened on the remote queue"
+        );
+    }
+
+    #[test]
+    fn consuming_an_audio_item_without_autosave_marks_queue_dirty() {
+        let items = make_audio_items(2);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        };
+        app.client.lock().unwrap().config.consume_audio = true;
+        app.client
+            .lock()
+            .unwrap()
+            .config
+            .save_playlist_on_consume_audio = false;
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: false,
+            consume: true,
+        });
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            1,
+            "consumed audio item should be removed from the local queue"
+        );
+        assert!(
+            app.queue_dirty,
+            "consuming an audio item changes the saved playlist's contents; without \
+             save_playlist_on_consume_audio the queue must be marked dirty so the user is \
+             still prompted to save before quitting/replacing the queue"
+        );
+    }
+
+    #[test]
+    fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
+        let items = make_audio_items(2);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".to_string()),
+            name: "My Playlist".to_string(),
+        };
+        app.client.lock().unwrap().config.consume_audio = true;
+        app.client
+            .lock()
+            .unwrap()
+            .config
+            .save_playlist_on_consume_audio = true;
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: false,
+            consume: true,
+        });
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            1,
+            "consumed audio item should be removed from the local queue"
+        );
+        assert!(
+            !app.queue_dirty,
+            "with save_playlist_on_consume_audio enabled, consuming from a saved playlist \
+             should trigger an immediate re-save to Emby, so the queue is no longer dirty"
+        );
+    }
+
+    #[test]
+    fn consume_videos_flag_does_not_consume_audio_items() {
+        let items = make_audio_items(2);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.client.lock().unwrap().config.consume_videos = true;
+        app.client.lock().unwrap().config.consume_audio = false;
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: false,
+            consume: true,
+        });
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            2,
+            "consume_videos must not remove an audio item; consume_audio is off"
+        );
+    }
+
+    #[test]
+    fn consume_audio_flag_does_not_consume_video_items() {
+        let items = make_items(2);
+        let mut app = make_app_stub();
+        app.player_tab.items = items;
+        app.client.lock().unwrap().config.consume_audio = true;
+        app.client.lock().unwrap().config.consume_videos = false;
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        });
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            2,
+            "consume_audio must not remove a video item; consume_videos is off"
         );
     }
 
