@@ -2185,6 +2185,9 @@ impl App {
                 self.status.clear();
                 self.refresh_after_stop();
             }
+            PlayerEvent::CommandRejected(reason) => {
+                self.flash_status(reason);
+            }
         }
         false
     }
@@ -3951,6 +3954,20 @@ pub(crate) mod tests {
             Some(local_items[1].id.as_str())
         );
         assert!(app.last_played_completed);
+    }
+
+    #[test]
+    fn command_rejected_flashes_the_daemon_supplied_reason() {
+        let mut app = make_app_stub();
+
+        app.handle_player_event(PlayerEvent::CommandRejected(
+            "Daemon is running in audio-only mode; can't play video items".to_string(),
+        ));
+
+        assert_eq!(
+            app.status,
+            "Daemon is running in audio-only mode; can't play video items"
+        );
     }
 
     #[test]

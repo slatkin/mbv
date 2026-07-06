@@ -31,8 +31,12 @@ The serialized representation of a player command as it crosses the daemon/TUI p
 _Avoid_: assuming the wire representation and the in-process message are — or should stay — the same type; that coupling is the specific problem #81 addresses.
 
 **Capability negotiation**:
-The connection-time exchange of feature-support strings (`CtrlHello.capabilities`) between daemon and TUI. Currently all-or-nothing at the whole-connection level: `validate_peer` rejects the entire connection if any capability in a fixed required list is missing, and the negotiated list is otherwise discarded (not stored for later query). It is not yet a per-command runtime check. A follow-up to #81 explores per-command capability gating with graceful UI degradation (e.g. hiding/disabling a control the connected daemon doesn't support) — that needs its own design pass before it's buildable.
+The connection-time exchange of feature-support strings (`CtrlHello.capabilities`) between daemon and TUI. Currently all-or-nothing at the whole-connection level: `validate_peer` rejects the entire connection if any capability in a fixed required list is missing, and the negotiated list is otherwise discarded (not stored for later query). It is not yet a per-command runtime check.
 _Avoid_: assuming a capability maps to a specific `PlayerCommand` variant today — no such mapping exists yet; capabilities currently describe coarser daemon-side features (queue state, start-index play, status-only mode).
+
+**Command rejection** (#90):
+A runtime, per-request refusal by the daemon to act on a command it received over the ctrl socket, distinct from connection-level capability negotiation above. First (and currently only) instance: a daemon running in audio-only mode silently dropping a play request for a non-audio item — today this is a server-side log line only, with no signal to the requesting client. #90 narrows this to a reactive design: the daemon remains the sole source of truth (no proactive client-side mirroring of daemon mode/state) and reports a rejection back over the wire instead of dropping it silently, scoped to the ctrl-socket path only (not the Emby-websocket-driven remote-control path, which has no TUI on the other end to show anything to).
+_Avoid_: conflating this with per-command capability gating (the broader, still-undesigned idea of the TUI knowing ahead of time which commands a connected daemon supports) — command rejection is a narrower, already-scoped mechanism for one concrete, reproducible case; general capability-aware gating remains unspecified.
 
 ## Library browsing
 

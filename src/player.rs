@@ -184,6 +184,11 @@ pub enum PlayerEvent {
     SkipIntroPlay,
     /// mpv exited on its own (user pressed q inside mpv, or mpv crashed).
     MpvQuit,
+    /// Emitted by RemotePlayer when the daemon reports (via
+    /// `CtrlEvent::CommandRejected`) that it didn't act on a ctrl-socket
+    /// command. The reason string is server-computed and shown to the user
+    /// as-is (e.g. via the transient status toast). See #90.
+    CommandRejected(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

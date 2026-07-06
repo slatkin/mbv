@@ -41,7 +41,10 @@ fn bind_ctrl_listener() -> Option<UnixListener> {
 enum DaemonEvent {
     Player(PlayerEvent),
     Ws(WsEvent),
-    Ctrl(CtrlCmd),
+    /// Carries the requesting client's own event sender alongside the
+    /// command, so a rejection (see #90) can be replied to that one client
+    /// instead of broadcast to every connected TUI.
+    Ctrl(CtrlCmd, mpsc::Sender<String>),
     Shutdown,
 }
 
@@ -93,6 +96,28 @@ fn broadcast(clients: &ClientList, event: &CtrlEvent) {
             .lock()
             .unwrap()
             .retain(|tx| tx.send(json.clone()).is_ok());
+    }
+}
+
+/// Send an event to a single ctrl-socket client, rather than every connected
+/// TUI. Used for per-request responses like a command rejection (#90).
+fn send_to(client: &mpsc::Sender<String>, event: &CtrlEvent) {
+    if let Ok(json) = serde_json::to_string(event) {
+        let _ = client.send(json);
+    }
+}
+
+/// A reason a ctrl-socket command is not acted on, computed server-side.
+/// Currently the only case is audio-only mode rejecting a non-audio play
+/// request; kept as a small pure function so it's testable without a live
+/// `Player`/`EmbyClient`. Returns the bare reason (not a `CtrlEvent`) so the
+/// same string can be reused for both the server-side log line and the wire
+/// event the caller sends — one message, not two that can drift apart.
+fn audio_only_rejection(audio_only: bool, fetched: &[MediaItem]) -> Option<String> {
+    if audio_only && !all_audio(fetched) {
+        Some("Daemon is running in audio-only mode; can't play video items".to_string())
+    } else {
+        None
     }
 }
 
@@ -166,6 +191,7 @@ fn spawn_ctrl_client<R, W>(
         })) {
             ev_tx.send(init_json).ok();
         }
+        let reply_tx = ev_tx.clone();
         ctrl_clients.lock().unwrap().push(ev_tx);
 
         for line in lines {
@@ -174,7 +200,7 @@ fn spawn_ctrl_client<R, W>(
                 continue;
             }
             if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
-                let _ = merged_tx.send(DaemonEvent::Ctrl(cmd));
+                let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, reply_tx.clone()));
             }
         }
     });
@@ -536,9 +562,10 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
                     &ctrl_clients,
                 );
             }
-            DaemonEvent::Ctrl(cmd) => {
+            DaemonEvent::Ctrl(cmd, reply_tx) => {
                 handle_ctrl(
                     cmd,
+                    &reply_tx,
                     &client,
                     &player,
                     audio_only,
@@ -562,6 +589,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
 
 fn handle_ctrl(
     cmd: CtrlCmd,
+    reply_tx: &mpsc::Sender<String>,
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
@@ -624,11 +652,9 @@ fn handle_ctrl(
             if fetched.is_empty() {
                 return;
             }
-            if audio_only && !all_audio(&fetched) {
-                log::warn!(
-                    target: "daemon",
-                    "rejecting ctrl play request in audio-only mode: non-audio items present"
-                );
+            if let Some(reason) = audio_only_rejection(audio_only, &fetched) {
+                log::warn!(target: "daemon", "rejecting ctrl play request: {reason}");
+                send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
                 return;
             }
             if fetched.len() == 1 {
@@ -852,7 +878,7 @@ fn all_audio(items: &[MediaItem]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::all_audio;
+    use super::{all_audio, audio_only_rejection};
     use crate::api::MediaItem;
 
     fn item(name: &str, media_type: &str, item_type: &str) -> MediaItem {
@@ -905,5 +931,24 @@ mod tests {
             item("song", "Audio", "Audio"),
             item("movie", "Video", "Movie"),
         ]));
+    }
+
+    #[test]
+    fn audio_only_daemon_rejects_non_audio_play_request() {
+        let fetched = [item("movie", "Video", "Movie")];
+        let rejection = audio_only_rejection(true, &fetched);
+        assert!(rejection.is_some_and(|r| !r.is_empty()));
+    }
+
+    #[test]
+    fn audio_only_daemon_accepts_audio_play_request() {
+        let fetched = [item("song", "Audio", "Audio")];
+        assert!(audio_only_rejection(true, &fetched).is_none());
+    }
+
+    #[test]
+    fn non_audio_only_daemon_never_rejects() {
+        let fetched = [item("movie", "Video", "Movie")];
+        assert!(audio_only_rejection(false, &fetched).is_none());
     }
 }

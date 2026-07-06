@@ -234,6 +234,11 @@ pub enum CtrlEvent {
     Player(PlayerEvent),
     State(CtrlState),
     StatusOnly(PlayerStatus),
+    /// A command the daemon received over the ctrl socket was not acted on;
+    /// the payload is a human-readable, server-computed reason. Generic by
+    /// design so future rejection reasons (not just audio-only mode) can
+    /// reuse it — see #90.
+    CommandRejected(String),
 }
 
 #[derive(Serialize, Deserialize)]

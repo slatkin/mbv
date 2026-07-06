@@ -210,6 +210,9 @@ fn apply_ctrl_event(
             }
             let _ = event_tx.send(pe);
         }
+        CtrlEvent::CommandRejected(reason) => {
+            let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
+        }
     }
 }
 
@@ -578,5 +581,26 @@ mod tests {
         let s = status.lock().unwrap();
         assert_eq!(s.current_idx, 2);
         assert_eq!(s.queue_len, 5);
+    }
+
+    #[test]
+    fn command_rejected_forwards_reason_as_player_event() {
+        let status = Arc::new(Mutex::new(status_with_idx(0)));
+        let items = Arc::new(Mutex::new(Vec::new()));
+        let (tx, rx) = mpsc::channel();
+
+        apply_ctrl_event(
+            CtrlEvent::CommandRejected("daemon is audio-only".to_string()),
+            &status,
+            &items,
+            &tx,
+        );
+
+        match rx.recv().unwrap() {
+            PlayerEvent::CommandRejected(reason) => {
+                assert_eq!(reason, "daemon is audio-only");
+            }
+            _ => panic!("expected CommandRejected"),
+        }
     }
 }
