@@ -3523,10 +3523,15 @@ impl App {
                     match fresh_by_id.get(id.as_str()) {
                         Some(&fresh) => self.player_tab.items[idx] = fresh.clone(),
                         None => {
-                            self.player_tab.items.remove(idx);
+                            // When this is live playback, player_tab *is* the active
+                            // playback queue (playback_queue_scope() picks Local exactly
+                            // when is_live_playback is true) — reuse the same
+                            // remove-and-resync-the-player chokepoint the consume paths
+                            // use, instead of re-implementing it here.
                             if is_live_playback {
-                                self.player
-                                    .send_command(PlayerCommand::PlaylistRemove(idx));
+                                self.remove_from_active_playback_queue(idx);
+                            } else {
+                                self.player_tab.items.remove(idx);
                             }
                             if idx < self.player_tab.playlist_cursor {
                                 self.player_tab.playlist_cursor -= 1;

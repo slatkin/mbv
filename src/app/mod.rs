@@ -2045,7 +2045,7 @@ impl App {
                     if played && is_video && consume_videos {
                         let len_before = self.playback_queue().items.len();
                         let removed_id = self.remove_from_active_playback_queue(idx);
-                        let len_after = self.playback_queue().items.len();
+                        let len_after = len_before - removed_id.is_some() as usize;
                         let queue = self.playback_queue_mut();
                         if queue.items.is_empty() {
                             queue.playlist_cursor = 0;
@@ -2106,7 +2106,7 @@ impl App {
                 let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
                     let len_before = self.playback_queue().items.len();
                     let removed_id = self.remove_from_active_playback_queue(remove_idx);
-                    let len_after = self.playback_queue().items.len();
+                    let len_after = len_before - removed_id.is_some() as usize;
                     let adjusted = if remove_idx < idx { idx - 1 } else { idx };
                     log::info!(target: "consume", "TrackChanged: consuming pending removal remove_idx={remove_idx} \
                         new_idx={idx} adjusted={adjusted} len_before={len_before} len_after={len_after} \
