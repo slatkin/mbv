@@ -252,6 +252,14 @@ pub struct SessionSubtitleStream {
     pub forced: bool,
 }
 
+/// Result of a PlaybackInfo lookup for an item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaybackInfo {
+    pub session_id: String,
+    pub media_source_id: String,
+    pub external_subtitle_urls: Vec<String>,
+}
+
 pub const MBV_DIRECT_TCP_PORT_PREFIX: &str = "mbv-direct-tcp-port:";
 
 pub fn mbv_direct_tcp_port_command(port: u16) -> String {
@@ -1275,8 +1283,8 @@ impl EmbyClient {
         }
     }
 
-    // Returns (play_session_id, media_source_id, ext_sub_urls). Falls back to generated id / item_id on failure.
-    pub fn get_playback_info(&self, item_id: &str) -> (String, String, Vec<String>) {
+    /// Falls back to a generated session id / item_id on failure.
+    pub fn get_playback_info(&self, item_id: &str) -> PlaybackInfo {
         let body = ureq::json!({
             "UserId": self.user_id,
             "MaxStreamingBitrate": 140000000,
@@ -1293,12 +1301,20 @@ impl EmbyClient {
                 Ok(v) => v,
                 Err(e) => {
                     log::warn!(target: "api", "err: PlaybackInfo parse: {e}");
-                    return (gen_session_id(), item_id.to_string(), vec![]);
+                    return PlaybackInfo {
+                        session_id: gen_session_id(),
+                        media_source_id: item_id.to_string(),
+                        external_subtitle_urls: vec![],
+                    };
                 }
             },
             Err(e) => {
                 log::warn!(target: "api", "err: PlaybackInfo: {e}");
-                return (gen_session_id(), item_id.to_string(), vec![]);
+                return PlaybackInfo {
+                    session_id: gen_session_id(),
+                    media_source_id: item_id.to_string(),
+                    external_subtitle_urls: vec![],
+                };
             }
         };
         let sid = resp["PlaySessionId"].as_str().unwrap_or("").to_string();
@@ -1319,10 +1335,11 @@ impl EmbyClient {
             .map(|u| format!("{}{}", self.config.server_url, u))
             .collect();
         log::info!(target: "api", "inbound: PlaybackInfo sid={sid} msid={msid} ext_subs={}", sub_urls.len());
-        if sid.is_empty() {
-            (gen_session_id(), msid, sub_urls)
-        } else {
-            (sid, msid, sub_urls)
+        let session_id = if sid.is_empty() { gen_session_id() } else { sid };
+        PlaybackInfo {
+            session_id,
+            media_source_id: msid,
+            external_subtitle_urls: sub_urls,
         }
     }
 
