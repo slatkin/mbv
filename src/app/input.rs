@@ -1464,6 +1464,12 @@ impl App {
                 }
             }
 
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.move_playlist_item_up();
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                self.move_playlist_item_down();
+            }
             KeyCode::Up if self.displayed_queue().playlist_cursor > 0 => {
                 self.last_nav_at = Instant::now();
                 self.displayed_queue_mut().playlist_cursor -= 1;
@@ -1547,17 +1553,7 @@ impl App {
                     self.flash_status_high("Undo is not supported for remote queue edits".into());
                     return false;
                 }
-                if let Some((idx, item)) = self.undo_stack_for_scope_mut(scope).pop() {
-                    let queue = self.queue_for_scope_mut(scope);
-                    let idx = idx.min(queue.items.len());
-                    queue.items.insert(idx, item);
-                    queue.playlist_cursor = idx;
-                    if self.queue_scope_has_local_metadata(scope) {
-                        self.queue_dirty = true;
-                    }
-                    self.persist_local_queue_state_if_needed(scope);
-                    self.set_queue_scope(scope);
-                }
+                self.undo_last_queue_edit(scope);
             }
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);

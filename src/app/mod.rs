@@ -395,6 +395,17 @@ enum QueueScope {
     Remote,
 }
 
+/// A reversible queue edit. `Remove` re-inserts the item at its old position;
+/// `Move` swaps the item back from `to` to `from`. `item_id` is the id of the
+/// item that landed at `to`, checked at undo time so a queue edit made after
+/// the move (which could shift what's actually sitting at `to`) is refused
+/// instead of swapping the wrong items.
+#[derive(Debug)]
+enum UndoEntry {
+    Remove(usize, Box<MediaItem>),
+    Move { from: usize, to: usize, item_id: String },
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum RemoteSlotState {
     Off,
@@ -471,8 +482,8 @@ pub struct App {
     pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
     pending_queue_removal: Option<usize>, // deferred removal after TrackChanged index-shifts
     confirm_clear_playlist: bool,
-    playlist_undo_stack: Vec<(usize, MediaItem)>,
-    remote_playlist_undo_stack: Vec<(usize, MediaItem)>,
+    playlist_undo_stack: Vec<UndoEntry>,
+    remote_playlist_undo_stack: Vec<UndoEntry>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     playlist_view: u8,
@@ -1136,7 +1147,7 @@ impl App {
         }
     }
 
-    fn undo_stack_for_scope_mut(&mut self, scope: QueueScope) -> &mut Vec<(usize, MediaItem)> {
+    fn undo_stack_for_scope_mut(&mut self, scope: QueueScope) -> &mut Vec<UndoEntry> {
         match scope {
             QueueScope::Local => &mut self.playlist_undo_stack,
             QueueScope::Remote => &mut self.remote_playlist_undo_stack,
@@ -2030,7 +2041,8 @@ impl App {
                         item
                     };
                     if allow_undo {
-                        self.playlist_undo_stack.push((idx, item));
+                        self.playlist_undo_stack
+                            .push(UndoEntry::Remove(idx, Box::new(item)));
                     }
                 } else {
                     let is_video = self
@@ -4355,6 +4367,233 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>()
         );
         assert_eq!(app.status, "Remote queue can only be edited while active");
+    }
+
+    #[test]
+    fn move_playlist_item_up_swaps_items_and_cursor_follows() {
+        let items = make_items(3);
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.playlist_cursor = 1;
+
+        app.move_playlist_item_up();
+
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                items[1].id.as_str(),
+                items[0].id.as_str(),
+                items[2].id.as_str()
+            ]
+        );
+        assert_eq!(app.player_tab.playlist_cursor, 0);
+        assert_eq!(app.playlist_undo_stack.len(), 1);
+    }
+
+    #[test]
+    fn move_playlist_item_down_swaps_items_and_cursor_follows() {
+        let items = make_items(3);
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.playlist_cursor = 1;
+
+        app.move_playlist_item_down();
+
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                items[0].id.as_str(),
+                items[2].id.as_str(),
+                items[1].id.as_str()
+            ]
+        );
+        assert_eq!(app.player_tab.playlist_cursor, 2);
+        assert_eq!(app.playlist_undo_stack.len(), 1);
+    }
+
+    #[test]
+    fn move_playlist_item_up_is_noop_at_start_of_queue() {
+        let items = make_items(3);
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.playlist_cursor = 0;
+
+        app.move_playlist_item_up();
+
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(app.player_tab.playlist_cursor, 0);
+        assert!(app.playlist_undo_stack.is_empty());
+    }
+
+    #[test]
+    fn move_playlist_item_down_is_noop_at_end_of_queue() {
+        let items = make_items(3);
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.playlist_cursor = 2;
+
+        app.move_playlist_item_down();
+
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(app.player_tab.playlist_cursor, 2);
+        assert!(app.playlist_undo_stack.is_empty());
+    }
+
+    #[test]
+    fn undo_reverses_a_move_and_cursor_follows_back() {
+        let items = make_items(3);
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.playlist_cursor = 1;
+
+        app.move_playlist_item_up();
+        assert_eq!(app.player_tab.playlist_cursor, 0);
+
+        app.undo_last_queue_edit(QueueScope::Local);
+
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
+        );
+        assert_eq!(app.player_tab.playlist_cursor, 1);
+        assert!(app.playlist_undo_stack.is_empty());
+    }
+
+    #[test]
+    fn undo_of_move_does_not_disturb_prior_removal_undo_history() {
+        let items = make_items(3);
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.playlist_cursor = 0;
+
+        // A removal, then a move -- undoing once should only reverse the move.
+        app.remove_from_playlist(0);
+        app.player_tab.playlist_cursor = 0;
+        app.move_playlist_item_down();
+        assert_eq!(app.playlist_undo_stack.len(), 2);
+
+        app.undo_last_queue_edit(QueueScope::Local);
+
+        assert_eq!(app.playlist_undo_stack.len(), 1);
+        assert!(matches!(
+            app.playlist_undo_stack.last(),
+            Some(UndoEntry::Remove(0, _))
+        ));
+    }
+
+    #[test]
+    fn undo_of_move_is_refused_if_the_moved_item_is_no_longer_at_to() {
+        let items = make_items(3);
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.playlist_cursor = 0;
+
+        app.move_playlist_item_down(); // items[0] now sits at index 1
+        assert_eq!(app.playlist_undo_stack.len(), 1);
+
+        // Something untracked by this undo stack happens to the queue
+        // afterwards (e.g. a natural consume) removing the item that's now
+        // at index 1, so the undo entry's `to` position no longer holds the
+        // item that was actually moved.
+        app.player_tab.items.remove(1);
+
+        app.undo_last_queue_edit(QueueScope::Local);
+
+        // Refused rather than blindly swapping whatever now sits at 0/1.
+        assert_eq!(app.status, "Can't undo move: queue changed since then");
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![items[1].id.as_str(), items[2].id.as_str()]
+        );
+    }
+
+    #[test]
+    fn move_playlist_item_is_rejected_for_remote_scope() {
+        let local_items = make_items(3);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items, remote_items.clone());
+        app.set_queue_scope(QueueScope::Remote);
+        app.remote_player_tab.as_mut().unwrap().playlist_cursor = 1;
+
+        app.move_playlist_item_up();
+
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            remote_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().playlist_cursor, 1);
+        assert_eq!(app.status, "Reorder is not supported for the remote queue");
+    }
+
+    #[test]
+    fn moving_now_playing_item_keeps_cursor_on_it() {
+        // `PlayerProxy::stub` (used by `make_app_stub`) has no live cmd channel to
+        // assert against, so this only covers the app-side item/cursor bookkeeping;
+        // `player::tests` covers the mpv-side PlaylistMove handling directly.
+        let items = make_items(3);
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.playlist_cursor = 1;
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 1;
+        }
+
+        app.move_playlist_item_down();
+
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                items[0].id.as_str(),
+                items[2].id.as_str(),
+                items[1].id.as_str()
+            ]
+        );
+        assert_eq!(app.player_tab.playlist_cursor, 2);
     }
 
     #[test]

@@ -196,6 +196,7 @@ pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
     PlaylistRemove(usize),
+    PlaylistMove(usize, usize),
     SetVolume(i64),
     Seek(f64),
     SeekAbsolute(f64),
@@ -1106,6 +1107,7 @@ impl SingleSession {
             // Not applicable in single-item mode
             PlayerCommand::JumpTo(_)
             | PlayerCommand::PlaylistRemove(_)
+            | PlayerCommand::PlaylistMove(_, _)
             | PlayerCommand::ReplacePlaylist { .. } => {}
         }
         cancel_stop
@@ -1501,6 +1503,20 @@ impl SingleSession {
 
 // ── PlaylistSession ───────────────────────────────────────────────────────────
 
+/// Where index `idx` ends up after moving the entry at `from` to `to`
+/// (both 0-based positions in the same list, `from != to`).
+fn shift_index_for_move(idx: usize, from: usize, to: usize) -> usize {
+    if idx == from {
+        to
+    } else if from < idx && idx <= to {
+        idx - 1
+    } else if to <= idx && idx < from {
+        idx + 1
+    } else {
+        idx
+    }
+}
+
 struct PlaylistSession {
     config: MpvSessionConfig,
     reporter: SessionReporter,
@@ -1685,6 +1701,26 @@ impl PlaylistSession {
                         // stale progress reports until on_end_file transitions to the next track.
                         let mut ids = self.reporter.ids.lock().unwrap();
                         ids.0.clear();
+                    }
+                }
+            }
+            PlayerCommand::PlaylistMove(from, to) => {
+                if from < self.n && to < self.n && from != to {
+                    // mpv's playlist-move index2 names the *pre-move* slot the
+                    // entry should end up next to, not its post-move index: for
+                    // from < to the entry actually lands at to - 1, not to (mpv
+                    // manual's own "paradox" note, confirmed against mpv 0.41).
+                    // Passing to + 1 (one past the end when to == n - 1, which
+                    // mpv also accepts as "move to end") makes mpv's result
+                    // match this struct's from/to bookkeeping below.
+                    let mpv_to = if from < to { to + 1 } else { to };
+                    let _ = mpv.command("playlist-move", &[&from.to_string(), &mpv_to.to_string()]);
+                    let item = self.items.remove(from);
+                    self.items.insert(to, item);
+                    self.current_idx = shift_index_for_move(self.current_idx, from, to);
+                    self.sync_status_position();
+                    if let Some(fi) = self.forced_idx {
+                        self.forced_idx = Some(shift_index_for_move(fi, from, to));
                     }
                 }
             }
@@ -3068,6 +3104,30 @@ pub(crate) fn playlist_completed_pos(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── shift_index_for_move ──────────────────────────────────────────────────
+
+    #[test]
+    fn shift_index_for_move_moves_the_tracked_index_itself() {
+        assert_eq!(shift_index_for_move(1, 1, 3), 3);
+        assert_eq!(shift_index_for_move(3, 3, 1), 1);
+    }
+
+    #[test]
+    fn shift_index_for_move_shifts_indices_between_from_and_to() {
+        // Moving 1 -> 3 closes the gap it left, shifting everything in (1, 3] down.
+        assert_eq!(shift_index_for_move(2, 1, 3), 1);
+        assert_eq!(shift_index_for_move(3, 1, 3), 2);
+        // Moving 3 -> 1 opens a gap at 1, shifting everything in [1, 3) up.
+        assert_eq!(shift_index_for_move(1, 3, 1), 2);
+        assert_eq!(shift_index_for_move(2, 3, 1), 3);
+    }
+
+    #[test]
+    fn shift_index_for_move_leaves_unrelated_indices_alone() {
+        assert_eq!(shift_index_for_move(0, 1, 3), 0);
+        assert_eq!(shift_index_for_move(4, 1, 3), 4);
+    }
 
     // ── mpv_title_opt ────────────────────────────────────────────────────────
 

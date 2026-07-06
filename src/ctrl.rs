@@ -86,6 +86,8 @@ pub enum WireCommand {
     JumpTo(usize),
     #[serde(rename = "PlaylistRemove")]
     PlaylistRemove(usize),
+    #[serde(rename = "PlaylistMove")]
+    PlaylistMove(usize, usize),
     #[serde(rename = "SetVolume")]
     SetVolume(i64),
     #[serde(rename = "Seek")]
@@ -134,6 +136,7 @@ impl From<PlayerCommand> for WireCommand {
             PlayerCommand::TogglePause => WireCommand::TogglePause,
             PlayerCommand::JumpTo(idx) => WireCommand::JumpTo(idx),
             PlayerCommand::PlaylistRemove(idx) => WireCommand::PlaylistRemove(idx),
+            PlayerCommand::PlaylistMove(from, to) => WireCommand::PlaylistMove(from, to),
             PlayerCommand::SetVolume(v) => WireCommand::SetVolume(v),
             PlayerCommand::Seek(s) => WireCommand::Seek(s),
             PlayerCommand::SeekAbsolute(s) => WireCommand::SeekAbsolute(s),
@@ -184,6 +187,7 @@ impl From<WireCommand> for PlayerCommand {
             WireCommand::TogglePause => PlayerCommand::TogglePause,
             WireCommand::JumpTo(idx) => PlayerCommand::JumpTo(idx),
             WireCommand::PlaylistRemove(idx) => PlayerCommand::PlaylistRemove(idx),
+            WireCommand::PlaylistMove(from, to) => PlayerCommand::PlaylistMove(from, to),
             WireCommand::SetVolume(v) => PlayerCommand::SetVolume(v),
             WireCommand::Seek(s) => PlayerCommand::Seek(s),
             WireCommand::SeekAbsolute(s) => PlayerCommand::SeekAbsolute(s),
@@ -320,6 +324,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&WireCommand::PlaylistRemove(2)).unwrap(),
             "{\"PlaylistRemove\":2}"
+        );
+        assert_eq!(
+            serde_json::to_string(&WireCommand::PlaylistMove(2, 3)).unwrap(),
+            "{\"PlaylistMove\":[2,3]}"
         );
         assert_eq!(
             serde_json::to_string(&WireCommand::SetVolume(50)).unwrap(),

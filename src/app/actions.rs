@@ -1,8 +1,8 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes};
 use super::{
     App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent,
-    PendingQueueAction, PowerFocus, QueueScope, SessionEvent, PAGE_SIZE, PLAYLIST_VIEW_POWER,
-    PREFETCH_AHEAD,
+    PendingQueueAction, PowerFocus, QueueScope, SessionEvent, UndoEntry, PAGE_SIZE,
+    PLAYLIST_VIEW_POWER, PREFETCH_AHEAD,
 };
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 use crate::player::PlayerCommand;
@@ -1530,7 +1530,8 @@ impl App {
         if self.queue_scope_has_local_metadata(scope) {
             self.queue_dirty = true;
         }
-        self.undo_stack_for_scope_mut(scope).push((pos, item));
+        self.undo_stack_for_scope_mut(scope)
+            .push(UndoEntry::Remove(pos, Box::new(item)));
         self.persist_local_queue_state_if_needed(scope);
         if controls_playback_queue && active {
             self.player.send_command(PlayerCommand::PlaylistRemove(pos));
@@ -1544,6 +1545,118 @@ impl App {
         } else {
             queue.playlist_cursor = 0;
         }
+    }
+
+    /// Moves the item at the displayed queue's cursor one position earlier.
+    /// No-op at the start of the queue. Reorder is local-queue-only (#105) —
+    /// designing the wire-protocol reorder for the remote queue is #93's job,
+    /// once the local UX this establishes has settled.
+    pub(super) fn move_playlist_item_up(&mut self) {
+        self.move_playlist_item_by(-1);
+    }
+
+    /// Moves the item at the displayed queue's cursor one position later.
+    /// No-op at the end of the queue.
+    pub(super) fn move_playlist_item_down(&mut self) {
+        self.move_playlist_item_by(1);
+    }
+
+    fn move_playlist_item_by(&mut self, delta: isize) {
+        let scope = self.displayed_queue_scope();
+        if scope == QueueScope::Remote {
+            self.flash_status_high("Reorder is not supported for the remote queue".into());
+            return;
+        }
+        let queue = self.queue_for_scope(scope);
+        let from = queue.playlist_cursor;
+        let len = queue.items.len();
+        let to = if delta < 0 {
+            match from.checked_sub(1) {
+                Some(t) => t,
+                None => return,
+            }
+        } else {
+            let t = from + 1;
+            if t >= len {
+                return;
+            }
+            t
+        };
+        if self.apply_playlist_move(scope, from, to) {
+            let item_id = self.queue_for_scope(scope).items[to].id.clone();
+            self.undo_stack_for_scope_mut(scope)
+                .push(UndoEntry::Move { from, to, item_id });
+        }
+    }
+
+    /// Swaps the item at `from` to `to` within `scope`'s queue, moves the
+    /// cursor to follow it, and — if this queue is also the live playback
+    /// queue — tells the player to make the same move in its own internal
+    /// playlist copy (mirroring how `remove_from_playlist` keeps that copy in
+    /// sync; see `remove_from_active_playback_queue`'s doc comment). Returns
+    /// `false` (no-op) if `from`/`to` are out of bounds or equal.
+    pub(super) fn apply_playlist_move(
+        &mut self,
+        scope: QueueScope,
+        from: usize,
+        to: usize,
+    ) -> bool {
+        let len = self.queue_for_scope(scope).items.len();
+        if from >= len || to >= len || from == to {
+            return false;
+        }
+        let controls_playback_queue = self.queue_scope_is_playback(scope);
+        let active = self.player.status.lock().unwrap().active;
+        {
+            let queue = self.queue_for_scope_mut(scope);
+            let item = queue.items.remove(from);
+            queue.items.insert(to, item);
+            queue.playlist_cursor = to;
+        }
+        if self.queue_scope_has_local_metadata(scope) {
+            self.queue_dirty = true;
+        }
+        self.persist_local_queue_state_if_needed(scope);
+        if controls_playback_queue && active {
+            self.player
+                .send_command(PlayerCommand::PlaylistMove(from, to));
+        }
+        true
+    }
+
+    /// Pops and reverses the most recent undoable edit in `scope`'s queue —
+    /// re-inserting a removed item, or swapping a moved item back to where it
+    /// came from. No-op if the undo stack for that scope is empty.
+    pub(super) fn undo_last_queue_edit(&mut self, scope: QueueScope) {
+        let Some(entry) = self.undo_stack_for_scope_mut(scope).pop() else {
+            return;
+        };
+        match entry {
+            UndoEntry::Remove(idx, item) => {
+                let queue = self.queue_for_scope_mut(scope);
+                let idx = idx.min(queue.items.len());
+                queue.items.insert(idx, *item);
+                queue.playlist_cursor = idx;
+                if self.queue_scope_has_local_metadata(scope) {
+                    self.queue_dirty = true;
+                }
+                self.persist_local_queue_state_if_needed(scope);
+            }
+            UndoEntry::Move { from, to, item_id } => {
+                let still_in_place = self
+                    .queue_for_scope(scope)
+                    .items
+                    .get(to)
+                    .is_some_and(|item| item.id == item_id);
+                if !still_in_place || !self.apply_playlist_move(scope, to, from) {
+                    self.flash_status_high(
+                        "Can't undo move: queue changed since then".into(),
+                    );
+                    return;
+                }
+            }
+        }
+        self.set_queue_scope(scope);
     }
 
     fn notify_system(&self, msg: &str) {
