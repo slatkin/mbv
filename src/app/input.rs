@@ -3100,7 +3100,20 @@ impl App {
                     return;
                 }
                 if self.layout.playback.ind_mu.contains((col, row).into()) {
-                    self.toggle_mute();
+                    // The "m" pill renders `self.mute_on` (see
+                    // render_control_pill) and the `m` key flips it via
+                    // `Action::ToggleMute` -- dispatch the same action here
+                    // rather than calling `toggle_mute()` (the *other*,
+                    // ui_volume-based mechanism used by the `a` key; see
+                    // `Action::ToggleMute`'s doc comment in action.rs).
+                    // Calling the wrong one here predates #88, but #88 makes
+                    // it worse: `toggle_mute()` now falls back to
+                    // `cycle_audio()` for a connected remote session, so
+                    // clicking this pill while attached to a session used to
+                    // be a harmless no-op and would otherwise start silently
+                    // cycling that session's audio track instead of muting
+                    // anything.
+                    self.dispatch(super::action::Action::ToggleMute);
                     return;
                 }
                 if self.tab_idx == 0 {

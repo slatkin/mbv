@@ -42,7 +42,15 @@ pub(super) enum Action {
     /// The `a` key: `dispatch` replicates the `is_audio_item()` branch,
     /// calling `toggle_mute()` (the `ui_volume`/`pre_mute_volume`/`SetVolume`
     /// mechanism, *not* `Action::ToggleMute`'s `mute_on`/`SetMute`) if the
-    /// current item is audio-only, otherwise `cycle_audio()`.
+    /// current item is audio-only, otherwise `cycle_audio()`. Gated the same
+    /// way as the other transport keys (`active OR has_remote_session`) —
+    /// see #88. `is_audio_item()` and `toggle_mute()` each own the
+    /// session-vs-local branch internally: `is_audio_item()` reads the
+    /// connected session's `media_info.audio_only` flag when there's no
+    /// local player, and `toggle_mute()` falls back to `cycle_audio()` for a
+    /// connected session, since there's no session-level mute primitive to
+    /// drive instead (see issue #88's "out of scope" decision, to avoid
+    /// inventing new session-command plumbing).
     ToggleMuteOrCycleAudio,
 
     // ── handle_key_help variants ────────────────────────────────────────
@@ -72,11 +80,10 @@ pub(super) enum Action {
 ///
 /// | Keys | Fires when |
 /// | --- | --- |
-/// | Space, `<`/`>` (seek), `N`/`P`, Esc (stop) | `has_remote_session` OR `active` |
+/// | Space, `<`/`>` (seek), `N`/`P`, Esc (stop), `a` (audio) | `has_remote_session` OR `active` |
 /// | `z` (sub cycle/toggle) | unconditionally |
 /// | `m` (mute) | unconditionally, no session check |
 /// | `-`/`+` (volume) | unconditionally |
-/// | `a` (audio) | only if `active`; no remote path |
 pub(super) fn playback_action_for_key(
     key: KeyEvent,
     active: bool,
@@ -95,7 +102,7 @@ pub(super) fn playback_action_for_key(
         KeyCode::Char('m') => Some(Action::ToggleMute),
         KeyCode::Char('-') => Some(Action::AdjustVolume(-5)),
         KeyCode::Char('+') | KeyCode::Char('=') => Some(Action::AdjustVolume(5)),
-        KeyCode::Char('a') if active => Some(Action::ToggleMuteOrCycleAudio),
+        KeyCode::Char('a') if gated => Some(Action::ToggleMuteOrCycleAudio),
         _ => None,
     }
 }
@@ -399,14 +406,19 @@ mod tests {
         assert_fires_unconditionally(KeyCode::Char('='), Action::AdjustVolume(5));
     }
 
-    // ── `a`: only if `active`; no remote path exists for it ─────────────────
+    // ── `a`: gated on (active OR has_remote_session), same as the other
+    // transport keys -- see #88 (previously `active` only, no remote path).
 
     #[test]
-    fn a_fires_only_when_active() {
+    fn a_fires_when_active_only() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), true, false),
             Some(Action::ToggleMuteOrCycleAudio)
         );
+    }
+
+    #[test]
+    fn a_fires_when_active_and_remote_session() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), true, true),
             Some(Action::ToggleMuteOrCycleAudio)
@@ -414,11 +426,15 @@ mod tests {
     }
 
     #[test]
-    fn a_does_not_fire_when_inactive_even_with_remote_session() {
+    fn a_fires_when_remote_session_only() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), false, true),
-            None
+            Some(Action::ToggleMuteOrCycleAudio)
         );
+    }
+
+    #[test]
+    fn a_does_not_fire_when_neither_active_nor_remote() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), false, false),
             None

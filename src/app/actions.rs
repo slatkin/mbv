@@ -1251,7 +1251,21 @@ impl App {
         );
     }
 
+    /// Whether the item currently playing is audio-only, used to decide
+    /// `a`'s mute-vs-cycle branch (`Action::ToggleMuteOrCycleAudio`). When a
+    /// remote session is connected, reads the same `media_info.audio_only`
+    /// flag the render layer already uses to pick audio-only vs. video
+    /// indicators for that session (see #88), rather than the local
+    /// playlist/cursor state, which doesn't reflect what the session is
+    /// playing.
     pub(super) fn is_audio_item(&self) -> bool {
+        if self.connected_session_id.is_some() {
+            return self
+                .connected_session_state
+                .as_ref()
+                .map(|s| s.media_info.audio_only)
+                .unwrap_or(false);
+        }
         let idx = self.player_tab.playlist_cursor;
         self.player_tab
             .items
@@ -1261,6 +1275,14 @@ impl App {
     }
 
     pub(super) fn toggle_mute(&mut self) {
+        if self.connected_session_id.is_some() {
+            // No session-level mute primitive exists (see #88's "out of
+            // scope" decision, to avoid inventing new session-command
+            // plumbing), so fall back to cycling the session's audio
+            // stream via `cycle_audio()`'s existing session-aware branch.
+            self.cycle_audio();
+            return;
+        }
         if self.ui_volume == 0 {
             if let Some(v) = self.pre_mute_volume.take() {
                 self.player.send_command(PlayerCommand::SetVolume(v as i64));
@@ -4613,6 +4635,75 @@ mod tests {
         assert_eq!(
             before, after,
             "an active player has tracks to cycle and must not touch the idle subtitle-mode fallback"
+        );
+    }
+
+    // ── is_audio_item / toggle_mute: remote-session awareness (#88) ─────────
+
+    fn make_remote_session(audio_only: bool) -> crate::api::SessionInfo {
+        crate::api::SessionInfo {
+            media_info: crate::api::SessionMediaInfo {
+                audio_only,
+                ..Default::default()
+            },
+            ..crate::app::tests::make_session("device", "Emby")
+        }
+    }
+
+    #[test]
+    fn is_audio_item_reads_remote_session_audio_only_flag_when_true() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.connected_session_id = Some("sess-1".into());
+        app.connected_session_state = Some(make_remote_session(true));
+
+        assert!(
+            app.is_audio_item(),
+            "a connected session's audio_only flag should decide is_audio_item(), \
+             not local playlist/cursor state"
+        );
+    }
+
+    #[test]
+    fn is_audio_item_reads_remote_session_audio_only_flag_when_false() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.connected_session_id = Some("sess-1".into());
+        app.connected_session_state = Some(make_remote_session(false));
+
+        assert!(!app.is_audio_item());
+    }
+
+    #[test]
+    fn is_audio_item_falls_back_to_local_state_when_no_session() {
+        let mut app = crate::app::tests::make_app_stub();
+        assert!(app.connected_session_id.is_none());
+        app.player_tab.items = vec![crate::app::tests::make_item("song", "Audio")];
+        app.player_tab.playlist_cursor = 0;
+
+        assert!(app.is_audio_item());
+    }
+
+    #[test]
+    fn toggle_mute_falls_back_to_cycle_audio_when_remote_session_connected() {
+        // No session-level mute primitive exists (#88), so toggle_mute()
+        // must hand off to cycle_audio()'s session-aware branch instead of
+        // touching local ui_volume/pre_mute_volume state, which wouldn't
+        // reflect a remote session's audio-only playback anyway.
+        let mut app = crate::app::tests::make_app_stub();
+        app.connected_session_id = Some("sess-1".into());
+        app.connected_session_state = Some(make_remote_session(true));
+        let ui_volume_before = app.ui_volume;
+
+        app.toggle_mute();
+
+        assert_eq!(
+            app.ui_volume, ui_volume_before,
+            "remote toggle_mute() must not touch local ui_volume state"
+        );
+        assert_eq!(
+            app.connected_session_state.as_ref().unwrap().audio_index,
+            2,
+            "toggle_mute() should have delegated to cycle_audio()'s remote branch, \
+             which advances the session's audio_index"
         );
     }
 }
