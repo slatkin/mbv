@@ -39,7 +39,7 @@ Automatic removal of a video item from the queue once it finishes playing (natur
 _Avoid_: confusing this with a user-initiated removal (Delete key) or a full queue clear — consume is specifically the automatic, playback-driven kind.
 
 **`save_playlist_on_consume`** ("autosave on consume"):
-Real, wired-up config flag: push the queue back to the saved Emby playlist immediately after each consume. Not to be confused with `autosave_playlist`, a config key that exists in `config.toml` but is read by zero lines of Rust — dead/orphaned (see #102, remove it).
+Real, wired-up config flag: push the queue back to the saved Emby playlist immediately after each consume. Replaced an earlier `autosave_playlist` key, which was removed entirely (not just renamed) in favor of this flag.
 
 **On-disk queue state** (`queue_state.json`) vs **in-memory queue**:
 The on-disk snapshot should only matter at the two boundary moments — startup restore and quit-time save. It must never be read or re-synced mid-session; the in-memory queue is the sole source of truth while mbv is running. (#99 was a violation of this: quit could delete a valid on-disk snapshot based on incidental in-memory emptiness.)
@@ -47,6 +47,11 @@ The on-disk snapshot should only matter at the two boundary moments — startup 
 **Local queue** vs **remote queue** (`QueueScope`):
 Local is *this* mbv instance's own queue (`player_tab`); remote is the queue belonging to a directly-controlled other mbv instance/daemon (`remote_player_tab`). The line between the two is currently soft — scope resolution is spread across several near-identical helpers (`playback_queue_scope`, `displayed_queue_scope`, `queue_scope_has_local_metadata`) with subtly different rules for which scope wins when. See #103 (harden the local/remote queue boundary).
 _Avoid_: assuming "local" vs "remote" describes where an Emby *server* session runs — both scopes are about which mbv-side queue object is authoritative, not about the media server.
+
+**Move** (`Shift+Up`/`Shift+Down`, #105):
+Single-step adjacent reorder of the item at the queue cursor, local-queue-only. Modeled as its own `UndoEntry::Move { from, to, item_id }` variant alongside `UndoEntry::Remove` — the undo stack is not exclusively "removals to re-insert"; it's a small set of reversible queue edits, and a move reverses by swapping the item back rather than re-inserting it. The cursor always follows the moved item, both on the initial move and when that move is undone. `item_id` is checked against whatever now sits at `to` before reversing — if a later edit shifted things around, undo refuses instead of swapping the wrong pair. Remote-queue reorder is out of scope here — see #93.
+
+_Avoid_: assuming mpv's `playlist-move <i1> <i2>` command means "move the entry at i1 so it ends up at index i2" — that's only true when i1 > i2. When i1 < i2 the entry actually lands at i2 - 1 (mpv's own manual calls this out as a "paradox": i2 names the pre-move slot, not the post-move index). `PlaylistSession`'s mpv command call compensates by passing `to + 1` in that direction (verified against a live mpv instance) so it lands where the app's own `items`/`current_idx` bookkeeping expects.
 
 ## Daemon/TUI control seam
 
