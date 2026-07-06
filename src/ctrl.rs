@@ -365,6 +365,74 @@ mod tests {
             .unwrap(),
             "{\"ReplacePlaylist\":{\"items\":[],\"start_idx\":0}}"
         );
+        // LoadNew and NextUpShow carry a MediaItem / free-form strings, so
+        // asserting the full JSON body would just restate MediaItem's field
+        // list; instead check the pinned tag key only.
+        assert_eq!(
+            wire_tag(&WireCommand::LoadNew {
+                url: "http://emby.local/stream".into(),
+                start_pos: 0.0,
+                item: Box::new(stub_media_item()),
+            }),
+            "LoadNew"
+        );
+        assert_eq!(
+            wire_tag(&WireCommand::NextUpShow {
+                item_id: "item1".into(),
+                show_title: "Show".into(),
+                ep_title: "Ep".into(),
+                artist: String::new(),
+            }),
+            "NextUpShow"
+        );
+    }
+
+    /// Returns the top-level (externally-tagged) JSON key for a serialized
+    /// `WireCommand`, i.e. the pinned wire tag.
+    fn wire_tag(cmd: &WireCommand) -> String {
+        let json = serde_json::to_string(cmd).unwrap();
+        let value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        value
+            .as_object()
+            .and_then(|obj| obj.keys().next())
+            .unwrap_or_else(|| panic!("expected a tagged object, got {json}"))
+            .clone()
+    }
+
+    fn stub_media_item() -> crate::api::MediaItem {
+        crate::api::MediaItem {
+            id: "item1".into(),
+            name: "Test Item".into(),
+            item_type: "Episode".into(),
+            is_folder: false,
+            media_type: "Video".into(),
+            collection_type: String::new(),
+            runtime_ticks: 0,
+            played: false,
+            playback_position_ticks: 0,
+            series_id: String::new(),
+            series_name: String::new(),
+            album_id: String::new(),
+            album: String::new(),
+            index_number: 0,
+            parent_index_number: 0,
+            unplayed_item_count: 0,
+            path: String::new(),
+            artist: String::new(),
+            sort_name: String::new(),
+            production_year: 0,
+            end_year: 0,
+            overview: String::new(),
+            premiere_date: String::new(),
+            date_added: String::new(),
+            total_count: 0,
+            container: String::new(),
+            director: String::new(),
+            video_info: String::new(),
+            audio_info: String::new(),
+            genre: String::new(),
+            playlist_item_id: String::new(),
+        }
     }
 
     #[test]
