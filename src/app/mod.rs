@@ -2279,7 +2279,7 @@ pub(crate) mod tests {
         }
     }
 
-    fn make_session(device_name: &str, client: &str) -> crate::api::SessionInfo {
+    pub(crate) fn make_session(device_name: &str, client: &str) -> crate::api::SessionInfo {
         crate::api::SessionInfo {
             id: "sess-1".into(),
             device_name: device_name.into(),
