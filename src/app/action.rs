@@ -72,7 +72,7 @@ pub(super) enum Action {
 ///
 /// | Keys | Fires when |
 /// | --- | --- |
-/// | Space, `<`/`>` (seek), `N`/`P`, Alt+Enter (stop) | `has_remote_session` OR `active` |
+/// | Space, `<`/`>` (seek), `N`/`P`, Esc (stop) | `has_remote_session` OR `active` |
 /// | `z` (sub cycle/toggle) | unconditionally |
 /// | `m` (mute) | unconditionally, no session check |
 /// | `-`/`+` (volume) | unconditionally |
@@ -82,12 +82,11 @@ pub(super) fn playback_action_for_key(
     active: bool,
     has_remote_session: bool,
 ) -> Option<Action> {
-    let alt = key.modifiers.contains(KeyModifiers::ALT);
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let gated = has_remote_session || active;
     match key.code {
         KeyCode::Char(' ') if gated => Some(Action::TogglePlayPause),
-        KeyCode::Enter if alt && gated => Some(Action::Stop),
+        KeyCode::Esc if gated => Some(Action::Stop),
         KeyCode::Char('<') if gated => Some(Action::SeekRelative(-5.0)),
         KeyCode::Char('>') if gated => Some(Action::SeekRelative(5.0)),
         KeyCode::Char('N') if gated => Some(Action::NextTrack),
@@ -245,10 +244,6 @@ mod tests {
         KeyEvent::new(code, KeyModifiers::NONE)
     }
 
-    fn key_alt(code: KeyCode) -> KeyEvent {
-        KeyEvent::new(code, KeyModifiers::ALT)
-    }
-
     fn key_ctrl(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::CONTROL)
     }
@@ -280,27 +275,31 @@ mod tests {
     }
 
     #[test]
-    fn alt_enter_stops_when_gated() {
+    fn esc_stops_when_gated() {
         assert_eq!(
-            playback_action_for_key(key_alt(KeyCode::Enter), true, false),
+            playback_action_for_key(key(KeyCode::Esc), true, false),
             Some(Action::Stop)
         );
         assert_eq!(
-            playback_action_for_key(key_alt(KeyCode::Enter), false, true),
+            playback_action_for_key(key(KeyCode::Esc), false, true),
             Some(Action::Stop)
         );
     }
 
     #[test]
-    fn plain_enter_does_not_stop() {
+    fn esc_does_not_stop_when_ungated() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Enter), true, true),
+            playback_action_for_key(key(KeyCode::Esc), false, false),
             None
         );
     }
 
     #[test]
-    fn enter_without_alt_and_ungated_does_not_fire() {
+    fn enter_never_stops() {
+        assert_eq!(
+            playback_action_for_key(key(KeyCode::Enter), true, true),
+            None
+        );
         assert_eq!(
             playback_action_for_key(key(KeyCode::Enter), false, false),
             None

@@ -385,13 +385,13 @@ impl App {
             self.confirm_clear_playlist = true;
             return false;
         }
+        if let Some(r) = self.handle_key_context_menu(key) {
+            return r;
+        }
         if self.tab_idx != self.log_tab_idx() {
             if let Some(quit) = self.handle_playback_key(key) {
                 return quit;
             }
-        }
-        if let Some(r) = self.handle_key_context_menu(key) {
-            return r;
         }
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;

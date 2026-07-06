@@ -65,7 +65,7 @@ impl App {
         let sec_playback = vec![
             section("[playback]"),
             mk("Space", "Pause/Resume"),
-            mk("Alt+Enter", "Stop"),
+            mk("Esc", "Stop"),
             mk("< / >", "Seek ±5 seconds"),
             mk("Shift+N / P", "Next / Previous track"),
             mk("- / +", "Volume down / up"),
