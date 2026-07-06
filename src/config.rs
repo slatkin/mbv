@@ -929,7 +929,7 @@ pub fn save_config_settings(cfg: &Config) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1185,11 +1185,22 @@ hidden_latest = ["Movies", "TV SHOWS"]
 
     // ── System-instance path routing ─────────────────────────────────────────
     //
-    // MBV_SYSTEM is a process-global env var, so these tests must not run in
-    // parallel with each other or with the XDG tests above. Use a Mutex.
-
+    // `std::env::set_var`/`var` read and write the process's single, global
+    // `environ` table with no synchronization of their own — mutating *any*
+    // env var on one thread can race with a read of a *different* env var on
+    // another thread (the underlying C `environ` array can be reallocated
+    // out from under a concurrent reader). So every test anywhere in the
+    // crate that touches ANY env var via these functions must serialize on
+    // one shared lock, not just tests that happen to touch the same variable
+    // name. This is THE single shared lock for that: src/app/action.rs,
+    // src/app/actions.rs, and src/api.rs all reference this same
+    // `SYS_ENV_LOCK` (via `crate::config::tests::SYS_ENV_LOCK`) rather than
+    // defining their own — independent per-file mutexes don't exclude each
+    // other and previously caused flaky cross-test env-var races (e.g. one
+    // test's queue_state.json read intermittently coming back empty because
+    // an unrelated, unguarded HOSTNAME mutation in api.rs raced it).
     use std::sync::Mutex;
-    static SYS_ENV_LOCK: Mutex<()> = Mutex::new(());
+    pub(crate) static SYS_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn is_system_instance_false_without_env_var() {

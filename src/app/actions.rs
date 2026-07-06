@@ -4711,11 +4711,12 @@ mod tests {
     // ── cycle_sub: local branch (#86 unification + idle fallback) ───────────
 
     // `XDG_CONFIG_HOME`/`XDG_STATE_HOME` are process-global env vars, so
-    // tests that touch them must not run concurrently with each other.
-    // Mirrors action.rs's `XDG_STATE_HOME_LOCK` / config.rs's `SYS_ENV_LOCK`
-    // convention (each module guards only its own tests; see those for the
-    // same caveat).
-    static XDG_HOME_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // tests that touch them must not run concurrently with each other — or
+    // with any other test in the crate that touches the same env vars.
+    // Reuse config.rs's `SYS_ENV_LOCK` rather than a second, independent
+    // mutex: two separate locks over the same global state don't exclude
+    // each other and previously caused flaky cross-test env-var races.
+    use crate::config::tests::SYS_ENV_LOCK as XDG_HOME_LOCK;
 
     /// RAII guard that points both `XDG_CONFIG_HOME` (subtitle-mode saves)
     /// and `XDG_STATE_HOME` (prefs saves) at a fresh tempdir, restoring and

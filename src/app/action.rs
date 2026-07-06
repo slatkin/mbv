@@ -249,7 +249,6 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::make_app_stub;
-    use std::sync::Mutex;
 
     fn key(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::NONE)
@@ -557,8 +556,11 @@ mod tests {
 
     // `XDG_STATE_HOME` is a process-global env var (like `MBV_SYSTEM` in
     // config.rs), so tests that touch it must not run concurrently with each
-    // other. Mirrors config.rs's `SYS_ENV_LOCK` pattern.
-    static XDG_STATE_HOME_LOCK: Mutex<()> = Mutex::new(());
+    // other — or with any other test in the crate that touches the same env
+    // vars. Reuse config.rs's `SYS_ENV_LOCK` rather than defining a second,
+    // independent mutex here: two separate locks over the same global state
+    // don't exclude each other and previously caused cross-test races.
+    use crate::config::tests::SYS_ENV_LOCK as XDG_STATE_HOME_LOCK;
 
     /// RAII guard that overrides `XDG_STATE_HOME` to a fresh tempdir and
     /// restores/cleans up on drop — including on panic, so a failed

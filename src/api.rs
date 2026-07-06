@@ -2050,7 +2050,7 @@ mod tests {
         // by observing that a client created with HOSTNAME set has no whitespace
         // in its device_name field.
         let name = {
-            let _g = ENV_MTX.lock().unwrap();
+            let _g = crate::config::tests::SYS_ENV_LOCK.lock().unwrap();
             std::env::set_var("HOSTNAME", "  trimtest  \n");
             let c = EmbyClient::new(crate::config::Config::default());
             std::env::remove_var("HOSTNAME");
@@ -2125,8 +2125,6 @@ mod tests {
     fn make_temp_data_dir() -> std::path::PathBuf {
         std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()))
     }
-
-    static ENV_MTX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     // ── decode_html_entities ─────────────────────────────────────────────────
 
