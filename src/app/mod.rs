@@ -4008,6 +4008,7 @@ pub(crate) mod tests {
 
     #[test]
     fn direct_remote_track_changes_do_not_clobber_local_last_played() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items);
@@ -4039,6 +4040,7 @@ pub(crate) mod tests {
 
     #[test]
     fn stopped_path_consumes_the_last_audio_item_in_the_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
         // When the last item in the queue finishes, the player thread sends a
         // Stopped event (not TrackCompleted/TrackChanged) since there's no next
         // track to advance to. consume_audio must still remove it, mirroring how
@@ -4064,6 +4066,7 @@ pub(crate) mod tests {
 
     #[test]
     fn stopped_path_does_not_consume_audio_when_consume_audio_is_off() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_audio_items(1);
         let mut app = make_app_stub();
         app.player_tab.items = items;
@@ -4086,6 +4089,7 @@ pub(crate) mod tests {
 
     #[test]
     fn consuming_a_video_without_autosave_marks_queue_dirty() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(2);
         let mut app = make_app_stub();
         app.player_tab.items = items;
@@ -4120,6 +4124,7 @@ pub(crate) mod tests {
 
     #[test]
     fn consuming_a_video_resyncs_the_players_own_playlist() {
+        let _guard = crate::config::TestStateDirGuard::new();
         // The player thread (PlaylistSession) keeps its own separate copy of the
         // items list, independent of `player_tab.items`. If consume only shrinks
         // the app-side queue and never tells the player, the player's internal
@@ -4152,6 +4157,7 @@ pub(crate) mod tests {
 
     #[test]
     fn consuming_a_video_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(2);
         let mut app = make_app_stub();
         app.player_tab.items = items;
@@ -4185,6 +4191,7 @@ pub(crate) mod tests {
 
     #[test]
     fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_playlist_or_dirty_flag() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(2);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items);
@@ -4226,6 +4233,7 @@ pub(crate) mod tests {
 
     #[test]
     fn consuming_an_audio_item_without_autosave_marks_queue_dirty() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_audio_items(2);
         let mut app = make_app_stub();
         app.player_tab.items = items;
@@ -4263,6 +4271,7 @@ pub(crate) mod tests {
 
     #[test]
     fn consuming_an_audio_item_with_autosave_pushes_playlist_to_emby_and_clears_dirty() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_audio_items(2);
         let mut app = make_app_stub();
         app.player_tab.items = items;
@@ -4299,6 +4308,7 @@ pub(crate) mod tests {
 
     #[test]
     fn consume_videos_flag_does_not_consume_audio_items() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_audio_items(2);
         let mut app = make_app_stub();
         app.player_tab.items = items;
@@ -4322,6 +4332,7 @@ pub(crate) mod tests {
 
     #[test]
     fn consume_audio_flag_does_not_consume_video_items() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(2);
         let mut app = make_app_stub();
         app.player_tab.items = items;
@@ -4455,6 +4466,7 @@ pub(crate) mod tests {
 
     #[test]
     fn removing_from_local_queue_in_direct_remote_mode_does_not_touch_remote_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(3);
         let remote_items = make_items(2);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
@@ -4490,6 +4502,7 @@ pub(crate) mod tests {
 
     #[test]
     fn removing_from_remote_queue_in_direct_remote_mode_does_not_touch_local_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
@@ -4542,6 +4555,7 @@ pub(crate) mod tests {
 
     #[test]
     fn removing_from_inactive_remote_queue_is_rejected() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items, remote_items.clone());
@@ -4567,6 +4581,7 @@ pub(crate) mod tests {
 
     #[test]
     fn move_playlist_item_up_swaps_items_and_cursor_follows() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
@@ -4592,6 +4607,7 @@ pub(crate) mod tests {
 
     #[test]
     fn move_playlist_item_down_swaps_items_and_cursor_follows() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
@@ -4617,6 +4633,7 @@ pub(crate) mod tests {
 
     #[test]
     fn move_playlist_item_up_is_noop_at_start_of_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
@@ -4638,6 +4655,7 @@ pub(crate) mod tests {
 
     #[test]
     fn move_playlist_item_down_is_noop_at_end_of_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
@@ -4659,6 +4677,7 @@ pub(crate) mod tests {
 
     #[test]
     fn undo_reverses_a_move_and_cursor_follows_back() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
@@ -4683,6 +4702,7 @@ pub(crate) mod tests {
 
     #[test]
     fn undo_of_move_does_not_disturb_prior_removal_undo_history() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
@@ -4705,6 +4725,7 @@ pub(crate) mod tests {
 
     #[test]
     fn undo_of_move_is_refused_if_the_moved_item_is_no_longer_at_to() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
@@ -4735,6 +4756,7 @@ pub(crate) mod tests {
 
     #[test]
     fn move_playlist_item_is_rejected_for_remote_scope() {
+        let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(3);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items, remote_items.clone());
@@ -4762,6 +4784,7 @@ pub(crate) mod tests {
 
     #[test]
     fn moving_now_playing_item_keeps_cursor_on_it() {
+        let _guard = crate::config::TestStateDirGuard::new();
         // `PlayerProxy::stub` (used by `make_app_stub`) has no live cmd channel to
         // assert against, so this only covers the app-side item/cursor bookkeeping;
         // `player::tests` covers the mpv-side PlaylistMove handling directly.

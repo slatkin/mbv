@@ -147,7 +147,62 @@ pub fn cache_dir() -> PathBuf {
     base.join("mbv")
 }
 
+// Test-only escape hatch: `state_dir()` (and therefore `queue_state_path()`,
+// `save_queue_state`/`load_queue_state`/`clear_queue_state`) is used not just
+// by tests that are explicitly *about* path resolution, but incidentally by
+// any test that drives consume-mode/queue logic through `App` methods like
+// `save_queue_state()` -- e.g. tests that fire `PlayerEvent::Stopped` and
+// assert on in-memory queue state have no reason to care where the file
+// lands, so historically nobody bothered to isolate them. But
+// `XDG_STATE_HOME`/`MBV_SYSTEM` are process-global env vars: an unguarded
+// test's call to `state_dir()` observes whatever value another, *properly
+// locked* test happens to have set at that exact moment (env vars have no
+// per-thread scoping), so it can transiently read -- and write into --
+// a locked test's private tempdir mid-race, corrupting it. A thread-local
+// override sidesteps the whole problem for these incidental callers: it's
+// only visible on the thread that set it, so two tests running on different
+// threads can never observe (or clobber) each other's override, no lock
+// required. See `TestStateDirGuard` and issue #106.
+#[cfg(test)]
+thread_local! {
+    static TEST_STATE_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+pub(crate) struct TestStateDirGuard;
+
+#[cfg(test)]
+impl TestStateDirGuard {
+    /// Points `state_dir()` at a fresh, unique tempdir for the lifetime of
+    /// this guard, visible only on the calling thread. Use this in any test
+    /// that drives `App` logic which might incidentally call
+    /// `save_queue_state`/`restore_queue_state` (e.g. via consume-mode event
+    /// handling) but isn't itself testing path resolution -- so it never
+    /// touches a real on-disk path or races a sibling test.
+    pub(crate) fn new() -> Self {
+        let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
+        let _ = std::fs::create_dir_all(&dir);
+        TEST_STATE_DIR_OVERRIDE.with(|c| *c.borrow_mut() = Some(dir));
+        TestStateDirGuard
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestStateDirGuard {
+    fn drop(&mut self) {
+        let dir = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow_mut().take());
+        if let Some(dir) = dir {
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+    }
+}
+
 fn state_dir() -> PathBuf {
+    #[cfg(test)]
+    if let Some(dir) = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
+        return dir;
+    }
     if is_system_instance() {
         return PathBuf::from("/var/lib/mbv");
     }
