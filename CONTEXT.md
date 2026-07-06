@@ -11,6 +11,7 @@ The subsystem that drives mpv, tracks play position, and hands control of playba
 **Session**:
 A running playback of a queue of media items (one item or many), owning one mpv instance for as long as that queue plays.
 _Note_: currently implemented as two separate, non-unified state machines — `SingleSession` and `PlaylistSession` — which duplicate almost all of their fields and logic (intro-skip markers, resume position, next-up handling, pause state, etc.), differing only in whether there's one item or an ordered list with a cursor. This is one domain concept split by implementation history (single-item playback existed first; playlist support was added as a parallel path rather than a generalization), not two domain concepts. Treat "Session" as a single term when talking about the domain; the two-struct split is an implementation debt, not a modeling decision.
+_Naming debt_: `PlaylistSession` and the `PlaylistRemove` player command are misnamed relative to the glossary above — both are about mbv's **Queue** (the ordered list a session plays through), not about Emby's `Playlist` entity. The "Playlist" naming predates the Queue/Saved-playlist-queue distinction below and should eventually be renamed (e.g. `PlaylistSession`→`QueueSession`, `PlaylistRemove`→something queue-scoped) — tracked as a follow-up, not fixed inline with unrelated bug work.
 
 **Remote slot state**:
 A derived classification — recomputed on demand, never stored — of which kind of control relationship the app currently has to a player: none, attached to another session, directly remote, or acting as a local daemon.
@@ -19,6 +20,33 @@ _Avoid_: implying it's a field that gets set; it's computed fresh from other sta
 **Suspended local session**:
 The local player and its event channels, parked in place when control is handed off to a direct remote, so that local playback can be resumed later without rebuilding it from scratch.
 _Avoid_: conflating with remote slot state — that's a classification of the current relationship; this is a stashed resource that exists only during part of one such relationship (direct remote).
+
+## Queue
+
+One of the central components of mbv's user experience: the subsystem that holds the ordered list of media items driving local (or locally-controlled remote) playback, independent of Emby's own data model.
+
+### Language
+
+**Queue**:
+mbv's own concept — an ordered, session-scoped list of media items driving playback (`player_tab.items` for the local queue). Emby has no equivalent object; a queue may be populated *from* a saved Emby Playlist, but it is not one, and can just as easily be built ad hoc (enqueue actions, "play these items") with no Playlist backing it at all.
+_Avoid_: treating "queue" as an Emby API concept, or assuming every queue traces back to a saved Playlist entity — see **Saved-playlist queue** vs **ad-hoc queue** below.
+
+**Saved-playlist queue** vs **ad-hoc queue**:
+Whether the current queue's `QueueSource` is a named Emby `Playlist` entity (`is_saved_playlist` true) or was assembled by enqueue/"play these items" actions with no backing Playlist. Changes two behaviors: whether consume also pushes the reduced list back to Emby (`save_playlist_on_consume`), and whether quitting with unsaved changes prompts to save.
+
+**Consume**:
+Automatic removal of a video item from the queue once it finishes playing (natural end, near-end, or a next-up jump), gated by the `consume_videos` setting. Modeled after mpd/ncmpcpp's "consume mode" (remove a track from the playlist once it's been played) — but mbv currently only implements the video half of that concept: there is no audio equivalent, and mpd's original feature applies uniformly regardless of track type. See #101 (expand consume to match parity with the mpd/ncmpcpp original).
+_Avoid_: confusing this with a user-initiated removal (Delete key) or a full queue clear — consume is specifically the automatic, playback-driven kind.
+
+**`save_playlist_on_consume`** ("autosave on consume"):
+Real, wired-up config flag: push the queue back to the saved Emby playlist immediately after each consume. Not to be confused with `autosave_playlist`, a config key that exists in `config.toml` but is read by zero lines of Rust — dead/orphaned (see #102, remove it).
+
+**On-disk queue state** (`queue_state.json`) vs **in-memory queue**:
+The on-disk snapshot should only matter at the two boundary moments — startup restore and quit-time save. It must never be read or re-synced mid-session; the in-memory queue is the sole source of truth while mbv is running. (#99 was a violation of this: quit could delete a valid on-disk snapshot based on incidental in-memory emptiness.)
+
+**Local queue** vs **remote queue** (`QueueScope`):
+Local is *this* mbv instance's own queue (`player_tab`); remote is the queue belonging to a directly-controlled other mbv instance/daemon (`remote_player_tab`). The line between the two is currently soft — scope resolution is spread across several near-identical helpers (`playback_queue_scope`, `displayed_queue_scope`, `queue_scope_has_local_metadata`) with subtly different rules for which scope wins when. See #103 (harden the local/remote queue boundary).
+_Avoid_: assuming "local" vs "remote" describes where an Emby *server* session runs — both scopes are about which mbv-side queue object is authoritative, not about the media server.
 
 ## Daemon/TUI control seam
 
