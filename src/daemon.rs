@@ -91,7 +91,7 @@ pub fn pid_file() -> std::path::PathBuf {
 }
 
 fn broadcast(clients: &ClientList, event: &CtrlEvent) {
-    if let Ok(json) = serde_json::to_string(event) {
+    if let Some(json) = serialize_ctrl_event(event) {
         clients
             .lock()
             .unwrap()
@@ -102,9 +102,15 @@ fn broadcast(clients: &ClientList, event: &CtrlEvent) {
 /// Send an event to a single ctrl-socket client, rather than every connected
 /// TUI. Used for per-request responses like a command rejection (#90).
 fn send_to(client: &mpsc::Sender<String>, event: &CtrlEvent) {
-    if let Ok(json) = serde_json::to_string(event) {
+    if let Some(json) = serialize_ctrl_event(event) {
         let _ = client.send(json);
     }
+}
+
+/// Shared by `broadcast` and `send_to` so both go through one serialization
+/// path instead of repeating `serde_json::to_string(event).ok()` inline.
+fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
+    serde_json::to_string(event).ok()
 }
 
 /// A reason a ctrl-socket command is not acted on, computed server-side.
@@ -762,11 +768,10 @@ fn handle_ws(
             if fetched.is_empty() {
                 return;
             }
-            if audio_only && !all_audio(&fetched) {
-                log::warn!(
-                    target: "daemon",
-                    "rejecting websocket play request in audio-only mode: non-audio items present"
-                );
+            if let Some(reason) = audio_only_rejection(audio_only, &fetched) {
+                // Emby-websocket-driven remote control has no TUI on the other end
+                // to show a rejection to — log only, per #90's scope.
+                log::warn!(target: "daemon", "rejecting websocket play request: {reason}");
                 return;
             }
             // Clamp start_index in case the server sends an out-of-range value
