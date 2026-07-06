@@ -24,15 +24,20 @@ pub(crate) fn queue_restore_cursor(
     last_played_item_id: Option<&str>,
     last_played_completed: bool,
 ) -> usize {
-    if let Some(id) = last_played_item_id {
-        let idx = items.iter().position(|i| i.id == id).unwrap_or(0);
-        if last_played_completed {
-            (idx + 1).min(items.len().saturating_sub(1))
-        } else {
-            idx
-        }
+    let fallback = saved_cursor.min(items.len().saturating_sub(1));
+    let Some(id) = last_played_item_id else {
+        return fallback;
+    };
+    // If the last-played item is no longer in the restored list (e.g. it was
+    // removed from the queue before quitting), fall back to the saved cursor
+    // rather than silently jumping to the front of the queue.
+    let Some(idx) = items.iter().position(|i| i.id == id) else {
+        return fallback;
+    };
+    if last_played_completed {
+        (idx + 1).min(items.len().saturating_sub(1))
     } else {
-        saved_cursor.min(items.len().saturating_sub(1))
+        idx
     }
 }
 
@@ -3487,24 +3492,46 @@ impl App {
                 // Merge by ID into whatever queue is *currently* live, rather than
                 // overwriting wholesale: this fetch was kicked off by
                 // restore_queue_state and may resolve long after the user has since
-                // consumed items or replaced the queue entirely. An ID that's no
-                // longer present (or belongs to an unrelated newer queue) is simply
-                // skipped, so a late result can never resurrect or clobber anything.
-                // The currently-playing item is also skipped, so a stale server-side
-                // position can't stomp live in-session progress.
-                let active_id = self
-                    .player_tab
-                    .items
-                    .get(self.player_tab.playlist_cursor)
-                    .map(|i| i.id.clone());
+                // consumed items or replaced the queue entirely. An item whose ID is
+                // no longer present in the fresh fetch (deleted server-side, or
+                // belonging to an unrelated newer queue) is removed rather than left
+                // stale, so the restored queue can't accumulate dead entries forever.
+                // The currently-playing *slot* is skipped by position, not by ID —
+                // two queue entries can share the same underlying item ID — so a
+                // stale server-side position can't stomp live in-session progress
+                // and the active item is never pruned out from under playback.
+                let active_idx = self.player_tab.playlist_cursor;
                 let fresh_by_id: std::collections::HashMap<&str, &MediaItem> =
                     items.iter().map(|i| (i.id.as_str(), i)).collect();
-                for item in self.player_tab.items.iter_mut() {
-                    if active_id.as_deref() == Some(item.id.as_str()) {
+                // If this restored local queue happens to already be live playback
+                // (enrichment resolved after the user started it), the player thread
+                // keeps its own separate copy of the playlist that must be told about
+                // any removal here too, or its index space silently diverges from the
+                // displayed queue exactly like the bug this file's PlaylistRemove
+                // sync elsewhere exists to prevent.
+                let is_live_playback = !self.has_direct_remote_queue();
+
+                // Walk backwards so removing an index never invalidates the indices
+                // of items still to be visited.
+                let mut idx = self.player_tab.items.len();
+                while idx > 0 {
+                    idx -= 1;
+                    if idx == active_idx {
                         continue;
                     }
-                    if let Some(&fresh) = fresh_by_id.get(item.id.as_str()) {
-                        *item = fresh.clone();
+                    let id = self.player_tab.items[idx].id.clone();
+                    match fresh_by_id.get(id.as_str()) {
+                        Some(&fresh) => self.player_tab.items[idx] = fresh.clone(),
+                        None => {
+                            self.player_tab.items.remove(idx);
+                            if is_live_playback {
+                                self.player
+                                    .send_command(PlayerCommand::PlaylistRemove(idx));
+                            }
+                            if idx < self.player_tab.playlist_cursor {
+                                self.player_tab.playlist_cursor -= 1;
+                            }
+                        }
                     }
                 }
             }
@@ -3959,8 +3986,36 @@ impl App {
         }
     }
 
+    fn build_queue_state(&self) -> crate::config::QueueState {
+        let positions: std::collections::HashMap<String, i64> = self
+            .player_tab
+            .items
+            .iter()
+            .filter(|i| i.playback_position_ticks > 0 && !i.is_audio())
+            .map(|i| (i.id.clone(), i.playback_position_ticks))
+            .collect();
+        crate::config::QueueState {
+            source: self.queue_source.clone(),
+            items: self.player_tab.items.clone(),
+            cursor: self.player_tab.playlist_cursor,
+            last_played_item_id: self.last_played_item_id.clone(),
+            last_played_completed: self.last_played_completed,
+            positions,
+        }
+    }
+
     pub(super) fn save_queue_state(&self) {
-        self.save_queue_state_impl(true);
+        let state = self.build_queue_state();
+        if state.items.is_empty() {
+            // Don't nuke the on-disk queue just because the local tab happens to be
+            // empty while attached to a remote session — that reflects remote-control
+            // UI state, not the user intentionally clearing their local queue.
+            if self.connected_session_id.is_none() {
+                crate::config::clear_queue_state();
+            }
+        } else {
+            crate::config::save_queue_state(&state);
+        }
     }
 
     /// Like `save_queue_state`, but never deletes the on-disk snapshot when the
@@ -3971,33 +4026,8 @@ impl App {
     /// session with no recovery path. Only an explicit `ClearQueue` action (which
     /// goes through `save_queue_state`) should ever delete the file.
     pub(super) fn save_queue_state_no_clear(&self) {
-        self.save_queue_state_impl(false);
-    }
-
-    fn save_queue_state_impl(&self, allow_clear: bool) {
-        let positions: std::collections::HashMap<String, i64> = self
-            .player_tab
-            .items
-            .iter()
-            .filter(|i| i.playback_position_ticks > 0 && !i.is_audio())
-            .map(|i| (i.id.clone(), i.playback_position_ticks))
-            .collect();
-        let state = crate::config::QueueState {
-            source: self.queue_source.clone(),
-            items: self.player_tab.items.clone(),
-            cursor: self.player_tab.playlist_cursor,
-            last_played_item_id: self.last_played_item_id.clone(),
-            last_played_completed: self.last_played_completed,
-            positions,
-        };
-        if state.items.is_empty() {
-            // Don't nuke the on-disk queue just because the local tab happens to be
-            // empty while attached to a remote session — that reflects remote-control
-            // UI state, not the user intentionally clearing their local queue.
-            if allow_clear && self.connected_session_id.is_none() {
-                crate::config::clear_queue_state();
-            }
-        } else {
+        let state = self.build_queue_state();
+        if !state.items.is_empty() {
             crate::config::save_queue_state(&state);
         }
     }
@@ -4028,6 +4058,7 @@ impl App {
         self.queue_source = state.source;
         self.player_tab.playlist_cursor = cursor;
         self.player_tab.items = state.items;
+        self.queue_dirty = false;
         if self.client.lock().unwrap().config.start_on_queue {
             self.tab_idx = 1;
         }
@@ -4566,6 +4597,46 @@ mod tests {
         }
     }
 
+    // ── queue_restore_cursor: last-played-id lookup + drift fallback ────────
+
+    #[test]
+    fn queue_restore_cursor_finds_last_played_by_id() {
+        let items = crate::app::tests::make_items(3);
+        let cursor = queue_restore_cursor(&items, 0, Some("id1"), false);
+        assert_eq!(cursor, 1);
+    }
+
+    #[test]
+    fn queue_restore_cursor_advances_past_a_completed_last_played_item() {
+        let items = crate::app::tests::make_items(3);
+        let cursor = queue_restore_cursor(&items, 0, Some("id1"), true);
+        assert_eq!(cursor, 2);
+    }
+
+    #[test]
+    fn queue_restore_cursor_falls_back_to_saved_cursor_when_last_played_id_missing() {
+        let items = crate::app::tests::make_items(3);
+        // "id5" isn't in the restored list (e.g. it was removed from the
+        // queue before quitting) — must fall back to the saved cursor, not
+        // silently snap back to the front of the queue.
+        let cursor = queue_restore_cursor(&items, 2, Some("id5"), false);
+        assert_eq!(cursor, 2);
+    }
+
+    #[test]
+    fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
+        let items = crate::app::tests::make_items(3);
+        let cursor = queue_restore_cursor(&items, 99, Some("id5"), false);
+        assert_eq!(cursor, 2, "out-of-range saved cursor must clamp to the last valid index");
+    }
+
+    #[test]
+    fn queue_restore_cursor_uses_saved_cursor_when_no_last_played_id() {
+        let items = crate::app::tests::make_items(3);
+        let cursor = queue_restore_cursor(&items, 1, None, false);
+        assert_eq!(cursor, 1);
+    }
+
     // ── queue_state persistence: restore + attached-session guards ──────────
 
     #[test]
@@ -4621,6 +4692,81 @@ mod tests {
         // this is a synchronous, local read, not a spawned background fetch.
         assert_eq!(app.player_tab.items.len(), 3);
         assert_eq!(app.player_tab.playlist_cursor, 1);
+    }
+
+    #[test]
+    fn restore_queue_state_clears_a_stale_dirty_flag() {
+        let _g = XDG_HOME_LOCK.lock().unwrap();
+        let _xdg = XdgHomeGuard::new();
+
+        crate::config::save_queue_state(&crate::config::QueueState {
+            source: crate::config::QueueSource::Unknown,
+            items: crate::app::tests::make_items(1),
+            cursor: 0,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        });
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.queue_dirty = true;
+        app.restore_queue_state();
+
+        assert!(
+            !app.queue_dirty,
+            "restoring a queue from disk is not a local edit — it must not \
+             leave a stale dirty flag that could trigger an unwanted \
+             save_playlist_to_emby() push on the next consume"
+        );
+    }
+
+    #[test]
+    fn queue_enriched_prunes_items_the_server_no_longer_returns() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.player_tab.items = crate::app::tests::make_items(3); // id0, id1, id2
+        app.player_tab.playlist_cursor = 0;
+
+        // The background fetch no longer returns id1 (e.g. deleted server-side).
+        let fresh = vec![app.player_tab.items[0].clone(), app.player_tab.items[2].clone()];
+        app.handle_lib_event(LibEvent::QueueEnriched { items: fresh });
+
+        let ids: Vec<&str> = app.player_tab.items.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(
+            ids,
+            vec!["id0", "id2"],
+            "an item missing from the fresh fetch must be pruned from the \
+             restored queue, not left stale forever"
+        );
+        assert_eq!(
+            app.player_tab.playlist_cursor, 0,
+            "removing an item after the cursor must not shift the cursor"
+        );
+    }
+
+    #[test]
+    fn queue_enriched_never_prunes_or_merges_the_active_slot_even_with_a_duplicate_id() {
+        let mut app = crate::app::tests::make_app_stub();
+        let mut items = crate::app::tests::make_items(2); // id0, id1
+        items[1].id = "id0".to_string(); // duplicate of the active item's id
+        app.player_tab.items = items;
+        app.player_tab.playlist_cursor = 0; // slot 0 (id0) is the active one
+
+        // The fetch confirms id0 still exists, so slot 1's duplicate id0 would
+        // also match by id alone if the skip weren't by-slot.
+        let mut fresh = app.player_tab.items[0].clone();
+        fresh.name = "Refreshed Name".to_string();
+        app.handle_lib_event(LibEvent::QueueEnriched {
+            items: vec![fresh.clone()],
+        });
+
+        assert_eq!(
+            app.player_tab.items[0].name, "Item 0",
+            "the active slot must never be merged into, even though its id matched"
+        );
+        assert_eq!(
+            app.player_tab.items[1].name, "Refreshed Name",
+            "the non-active duplicate-id slot must still be enriched from the fresh fetch"
+        );
     }
 
     #[test]

@@ -1252,6 +1252,26 @@ impl App {
         self.queue_for_scope_mut(self.playback_queue_scope())
     }
 
+    /// Removes `idx` from the currently active playback queue and, if
+    /// something was actually removed, tells the player to drop the same
+    /// index from its own internal playlist copy. `PlaylistSession` (or its
+    /// remote equivalent) keeps that copy independently of `PlayerTab.items`
+    /// above — without this, the two silently diverge after the first
+    /// removal, and any later index-based command (Enter on a queue row,
+    /// JumpTo, the next natural advance) lands on the wrong item. Returns the
+    /// removed item's id, or `None` if `idx` was out of bounds (nothing
+    /// removed, nothing sent).
+    fn remove_from_active_playback_queue(&mut self, idx: usize) -> Option<String> {
+        let queue = self.playback_queue_mut();
+        if idx >= queue.items.len() {
+            return None;
+        }
+        let removed_id = queue.items.remove(idx).id;
+        self.player
+            .send_command(PlayerCommand::PlaylistRemove(idx));
+        Some(removed_id)
+    }
+
     fn set_queue_scope(&mut self, scope: QueueScope) {
         self.queue_scope = if scope == QueueScope::Remote && self.has_direct_remote_queue() {
             QueueScope::Remote
@@ -2023,14 +2043,10 @@ impl App {
                         is_video={is_video} consume_videos={consume_videos} \
                         => {}", played && is_video && consume_videos);
                     if played && is_video && consume_videos {
+                        let len_before = self.playback_queue().items.len();
+                        let removed_id = self.remove_from_active_playback_queue(idx);
+                        let len_after = self.playback_queue().items.len();
                         let queue = self.playback_queue_mut();
-                        let len_before = queue.items.len();
-                        let removed_id = if idx < queue.items.len() {
-                            Some(queue.items.remove(idx).id)
-                        } else {
-                            None
-                        };
-                        let len_after = queue.items.len();
                         if queue.items.is_empty() {
                             queue.playlist_cursor = 0;
                         } else {
@@ -2088,14 +2104,9 @@ impl App {
                     self.status.clear();
                 }
                 let adjusted = if let Some(remove_idx) = self.pending_queue_removal.take() {
-                    let queue = self.playback_queue_mut();
-                    let len_before = queue.items.len();
-                    let removed_id = if remove_idx < queue.items.len() {
-                        Some(queue.items.remove(remove_idx).id)
-                    } else {
-                        None
-                    };
-                    let len_after = queue.items.len();
+                    let len_before = self.playback_queue().items.len();
+                    let removed_id = self.remove_from_active_playback_queue(remove_idx);
+                    let len_after = self.playback_queue().items.len();
                     let adjusted = if remove_idx < idx { idx - 1 } else { idx };
                     log::info!(target: "consume", "TrackChanged: consuming pending removal remove_idx={remove_idx} \
                         new_idx={idx} adjusted={adjusted} len_before={len_before} len_after={len_after} \
@@ -2103,14 +2114,6 @@ impl App {
                     if removed_id.is_none() {
                         log::warn!(target: "consume", "TrackChanged: remove_idx={remove_idx} out of bounds \
                             (len={len_before}), removal SKIPPED");
-                    } else {
-                        // Keep the player's own internal playlist (a separate copy from
-                        // the app-side queue above) in sync — otherwise its index space
-                        // permanently diverges from the displayed queue after this first
-                        // consume, and any later index-based command (Enter on a queue
-                        // row, JumpTo, next natural advance) operates on stale indices.
-                        self.player
-                            .send_command(PlayerCommand::PlaylistRemove(remove_idx));
                     }
                     self.on_video_consumed();
                     adjusted
