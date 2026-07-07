@@ -2,3 +2,4 @@
 /target
 *.jpg
 *.png
+!assets/*.png

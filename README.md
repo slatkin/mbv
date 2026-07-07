@@ -8,7 +8,7 @@ This allows one to browse libraries, build a queue, and play media from their li
 
 This was built with AI because I am lazy and I already have a job (for now). You can tell because there's a lot of unnecessary images in a TUI app.
 
-![mbv power view: library browser, video preview, and queue](assets/screenshot.png)
+![mbv power view: library browser, video preview, and queue](assets/screenshot-power.png)
 
 ## Requirements
 
@@ -111,3 +111,5 @@ levels = ["group", "album"]
 - **Feed-library defaults** — selected libraries can behave like feed views with unplayed/date-sorted defaults, which is useful for YouTube/channel-style libraries.
 - **Extra local control surfaces** — MPRIS integration lets desktop widgets, `playerctl`, and media keys control mbv directly.
 - **Desktop-integrated prompts** — with `system_notifications = true`, Skip Intro, Next Up, and queue prompts can be surfaced as actionable desktop notifications.
+
+![mbv music tab: grouped browsing by decade/artist with album art](assets/screenshot-music.png)
