@@ -1,7 +1,6 @@
 mod home;
 pub mod indicators;
 mod library;
-mod log;
 mod overlays;
 mod playlist;
 pub(crate) mod power;
@@ -226,12 +225,8 @@ impl App {
                 let all_names: Vec<String> = std::iter::once("Home".to_string())
                     .chain(std::iter::once("Queue".to_string()))
                     .chain(self.libs.iter().map(|l| l.library.name.clone()))
-                    .chain(self.show_log_tab.then(|| "Log".to_string()))
                     .collect();
-                let selected_tab = if (!self.show_log_tab && self.tab_idx == self.log_tab_idx())
-                    || self.tab_idx < vis_start
-                    || self.tab_idx >= vis_end
-                {
+                let selected_tab = if self.tab_idx < vis_start || self.tab_idx >= vis_end {
                     usize::MAX
                 } else {
                     self.tab_idx - vis_start
@@ -310,8 +305,6 @@ impl App {
             self.render_power_view(f, main_area, &mut layout.power);
         } else if self.tab_idx == 1 {
             self.render_playlist_panel(f, main_area, &mut layout.playlist);
-        } else if self.tab_idx == self.log_tab_idx() {
-            self.render_log(f, main_area);
         } else {
             self.render_library(
                 f,

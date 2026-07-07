@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -12,14 +11,6 @@ pub enum Level {
 }
 
 impl Level {
-    pub fn label(self) -> &'static str {
-        match self {
-            Level::Error => "E",
-            Level::Warn => "W",
-            Level::Info => "I",
-            Level::Debug => "D",
-        }
-    }
     pub fn logfmt(self) -> &'static str {
         match self {
             Level::Error => "error",
@@ -64,14 +55,12 @@ fn now_ts() -> String {
 
 #[derive(Clone)]
 pub struct AppLog {
-    buf: Arc<Mutex<VecDeque<LogEntry>>>,
-    capacity: usize,
     stderr: bool,
     file: Arc<Mutex<Option<std::fs::File>>>,
 }
 
 impl AppLog {
-    fn new(capacity: usize, stderr: bool, log_path: Option<PathBuf>) -> Self {
+    fn new(stderr: bool, log_path: Option<PathBuf>) -> Self {
         let file = log_path.and_then(|path| {
             if let Some(parent) = path.parent() {
                 let _ = std::fs::create_dir_all(parent);
@@ -89,8 +78,6 @@ impl AppLog {
                 .ok()
         });
         AppLog {
-            buf: Arc::new(Mutex::new(VecDeque::new())),
-            capacity,
             stderr,
             file: Arc::new(Mutex::new(file)),
         }
@@ -113,18 +100,6 @@ impl AppLog {
                 let _ = writeln!(f, "{line}");
             }
         }
-        if self.capacity == 0 {
-            return;
-        }
-        let mut g = self.buf.lock().unwrap();
-        if g.len() >= self.capacity {
-            g.drain(..(self.capacity / 10).max(1));
-        }
-        g.push_back(entry);
-    }
-
-    pub fn snapshot(&self) -> Vec<LogEntry> {
-        self.buf.lock().unwrap().iter().cloned().collect()
     }
 }
 
@@ -158,65 +133,19 @@ impl log::Log for GlobalLogger {
     fn flush(&self) {}
 }
 
-pub fn init(capacity: usize, stderr: bool, log_path: Option<PathBuf>) {
+pub fn init(stderr: bool, log_path: Option<PathBuf>) {
     if GLOBAL.get().is_some() {
         return;
     }
-    let applog = AppLog::new(capacity, stderr, log_path);
+    let applog = AppLog::new(stderr, log_path);
     GLOBAL.get_or_init(|| applog);
     let _ = log::set_logger(&LOGGER);
     log::set_max_level(log::LevelFilter::Debug);
 }
 
-/// Returns the global ring buffer for the TUI Log tab.
-pub fn global() -> Option<&'static AppLog> {
-    GLOBAL.get()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn make(capacity: usize) -> AppLog {
-        AppLog::new(capacity, false, None)
-    }
-
-    fn entry(level: Level, source: &str, msg: &str) -> LogEntry {
-        LogEntry {
-            level,
-            ts: String::new(),
-            source: source.into(),
-            msg: msg.into(),
-        }
-    }
-
-    #[test]
-    fn capacity_zero_drops_all_pushes() {
-        let log = make(0);
-        log.push_entry(entry(Level::Info, "src", "msg"));
-        assert!(log.snapshot().is_empty());
-    }
-
-    #[test]
-    fn capacity_respected_drains_ten_percent() {
-        let log = make(10);
-        for i in 0..10 {
-            log.push_entry(entry(Level::Info, "s", &i.to_string()));
-        }
-        assert_eq!(log.snapshot().len(), 10);
-        log.push_entry(entry(Level::Info, "s", "10"));
-        assert_eq!(log.snapshot().len(), 10);
-        assert_eq!(log.snapshot()[0].msg, "1");
-    }
-
-    #[test]
-    fn clone_shares_underlying_storage() {
-        let log = make(10);
-        let clone = log.clone();
-        log.push_entry(entry(Level::Debug, "s", "shared"));
-        assert_eq!(clone.snapshot().len(), 1);
-        assert_eq!(clone.snapshot()[0].msg, "shared");
-    }
 
     // ── log::Level conversion ─────────────────────────────────────────────────
 
@@ -225,41 +154,21 @@ mod tests {
         assert_eq!(Level::from(log::Level::Trace), Level::Debug);
     }
 
-    // ── global ring buffer via log macros ─────────────────────────────────────
-    // init() uses a OnceLock so it can only succeed once per process.
-    // This test exercises the path where the global is already initialized
-    // (by a prior call in the same process) and verifies global() returns Some.
-
     #[test]
-    fn global_returns_some_after_init() {
-        // init() is idempotent via OnceLock; if already called, this is a no-op.
-        crate::applog::init(100, false, None);
-        assert!(crate::applog::global().is_some());
-    }
-
-    #[test]
-    fn log_macro_routes_to_ring_buffer() {
-        // `applog::global()` is a single process-wide ring buffer that every
-        // test's `log::*!` calls write into concurrently (the `log` crate's
-        // global logger has no per-thread/per-test scoping), so this test
-        // can't assume its own entry is the *last* one in the snapshot --
-        // another test can log something after this call but before the
-        // snapshot is taken. Search for our own entry by its unique
-        // target+message instead of relying on ordering.
-        crate::applog::init(100, false, None);
-        let before = crate::applog::global().unwrap().snapshot().len();
-        log::info!(target: "test", "ring buffer routing test");
-        let after = crate::applog::global().unwrap().snapshot().len();
-        assert!(
-            after > before,
-            "log macro should have added an entry to the ring buffer"
-        );
-        let entry = crate::applog::global()
-            .unwrap()
-            .snapshot()
-            .into_iter()
-            .find(|e| e.source == "test" && e.msg == "ring buffer routing test")
-            .expect("our own log entry should be present in the ring buffer snapshot");
-        assert_eq!(entry.level, Level::Info);
+    fn push_entry_writes_to_file() {
+        let dir = std::env::temp_dir().join(format!("mbv-applog-test-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("test.log");
+        let _ = std::fs::remove_file(&path);
+        let log = AppLog::new(false, Some(path.clone()));
+        log.push_entry(LogEntry {
+            level: Level::Info,
+            ts: String::new(),
+            source: "s".into(),
+            msg: "hello".into(),
+        });
+        let contents = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(contents.contains("hello"));
+        let _ = std::fs::remove_file(&path);
     }
 }

@@ -96,12 +96,6 @@ use crate::api::{parse_mbv_direct_tcp_port, EmbyClient, MediaItem};
 use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use crate::ws::WsEvent;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum LogPane {
-    Sources,
-    Log,
-}
-
 #[derive(Clone)]
 enum ContextAction {
     Play,
@@ -456,10 +450,6 @@ pub struct App {
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
     music_levels: Vec<String>,
-    log_scroll: usize,
-    log_pane: LogPane,        // which pane has focus
-    log_source_cursor: usize, // selected row in sources pane
-    log_disabled_sources: std::collections::HashSet<String>,
     // Per-frame layout geometry from last render, used for mouse hit-testing.
     // See src/app/layout.rs for the grouping rationale.
     layout: layout::AppLayout,
@@ -520,7 +510,6 @@ pub struct App {
     confirm_logout: bool,
     multiselect_popup: Option<MultiSelectPopup>,
     help_scroll: u16,
-    show_log_tab: bool,
     system_notifications: bool,
     notif_failed: bool,
     notif_action_tx: mpsc::Sender<String>,
@@ -594,7 +583,6 @@ struct AppInit {
     ws_send_tx: Option<crate::ws::WsSender>,
     player_tab: PlayerTab,
     remote_player_tab: Option<PlayerTab>,
-    show_log_tab: bool,
     system_notifications: bool,
     image_protocol_enabled: bool,
     hidden_libraries: Vec<String>,
@@ -643,7 +631,6 @@ enum SettingKey {
     SavePlaylistOnConsume,
     SavePlaylistOnConsumeAudio,
     AlwaysSkipIntro,
-    ShowLogTab,
     ImageProtocol,
     HiddenLibraries,
     HiddenLatest,
@@ -669,7 +656,6 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         &[
             SettingKey::DaemonModeOnExit,
             SettingKey::AlwaysSkipIntro,
-            SettingKey::ShowLogTab,
             SettingKey::SystemNotifications,
             SettingKey::ImageProtocol,
             SettingKey::HiddenLibraries,
@@ -781,7 +767,6 @@ impl App {
             ws_send_tx: init.ws_send_tx,
             player_tab: init.player_tab,
             remote_player_tab: init.remote_player_tab,
-            show_log_tab: init.show_log_tab,
             system_notifications: init.system_notifications,
             image_protocol_enabled: init.image_protocol_enabled,
             hidden_libraries: init.hidden_libraries,
@@ -817,10 +802,6 @@ impl App {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            log_scroll: 0,
-            log_pane: LogPane::Log,
-            log_source_cursor: 0,
-            log_disabled_sources: std::collections::HashSet::new(),
             layout: layout::AppLayout {
                 power: layout::LayoutPower {
                     detail_page_h: 5,
@@ -943,7 +924,6 @@ impl App {
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
-        let show_log_tab = client.config.show_log_tab;
         let system_notifications = client.config.system_notifications;
         let image_protocol_enabled = client.config.image_protocol.is_some();
         let image_cache_size = client.config.image_cache_size;
@@ -1010,7 +990,6 @@ impl App {
                 playlist_cursor: 0,
             },
             remote_player_tab: None,
-            show_log_tab,
             system_notifications,
             image_protocol_enabled,
             hidden_libraries,
@@ -1100,7 +1079,6 @@ impl App {
             ws_send_tx: None,
             player_tab,
             remote_player_tab,
-            show_log_tab: false,
             system_notifications: false,
             image_protocol_enabled,
             hidden_libraries,
@@ -2541,10 +2519,6 @@ pub(crate) mod tests {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            log_scroll: 0,
-            log_pane: LogPane::Log,
-            log_source_cursor: 0,
-            log_disabled_sources: std::collections::HashSet::new(),
             layout: layout::AppLayout {
                 power: layout::LayoutPower {
                     detail_page_h: 5,
@@ -2595,7 +2569,6 @@ pub(crate) mod tests {
             confirm_logout: false,
             multiselect_popup: None,
             help_scroll: 0,
-            show_log_tab: false,
             system_notifications: false,
             notif_failed: false,
             notif_action_tx,

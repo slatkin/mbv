@@ -115,7 +115,6 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     always_skip_intro: base_config.always_skip_intro,
                     image_protocol: base_config.image_protocol.clone(),
                     show_systray_icon: base_config.show_systray_icon,
-                    show_log_tab: base_config.show_log_tab,
                     no_scripts: base_config.no_scripts,
                     start_on_queue: base_config.start_on_queue,
                     daemon_mode_on_exit: base_config.daemon_mode_on_exit,

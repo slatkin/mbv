@@ -42,8 +42,6 @@ impl App {
         };
         let blank = || Line::from("");
 
-        let show_log = self.show_log_tab;
-
         let sec_global = vec![
             section("[global]"),
             mk("F1", "Help"),
@@ -105,23 +103,7 @@ impl App {
             mk("Ctrl+R", "Rescan"),
             blank(),
         ];
-        let sec_log = if show_log {
-            vec![
-                section("[log]"),
-                mk("Alt+L", "Open Log"),
-                mk("← / →", "Switch pane (Sources / Log)"),
-                mk("↑ / ↓", "Scroll log / navigate sources"),
-                mk("PgUp / PgDn", "Page scroll"),
-                mk("Space", "Toggle source on/off"),
-                mk("c", "Copy log to clipboard"),
-                blank(),
-            ]
-        } else {
-            vec![]
-        };
-
-        let is_log = show_log && self.tab_idx == self.log_tab_idx();
-        let is_lib = self.tab_idx >= self.lib_tab_offset() && self.tab_idx < self.log_tab_idx();
+        let is_lib = self.tab_idx >= self.lib_tab_offset();
         let is_queue = self.tab_idx == 1;
         let is_home = self.tab_idx == 0;
 
@@ -132,35 +114,19 @@ impl App {
             ordered.push(sec_playback);
             ordered.push(sec_queue);
             ordered.push(sec_library);
-            ordered.push(sec_log);
         } else if is_queue {
             ordered.push(sec_queue);
             ordered.push(sec_global);
             ordered.push(sec_playback);
             ordered.push(sec_home);
             ordered.push(sec_library);
-            ordered.push(sec_log);
-        } else if is_lib {
-            ordered.push(sec_library);
-            ordered.push(sec_global);
-            ordered.push(sec_playback);
-            ordered.push(sec_queue);
-            ordered.push(sec_home);
-            ordered.push(sec_log);
-        } else if is_log {
-            ordered.push(sec_log);
-            ordered.push(sec_global);
-            ordered.push(sec_playback);
-            ordered.push(sec_queue);
-            ordered.push(sec_home);
-            ordered.push(sec_library);
         } else {
+            debug_assert!(is_lib);
+            ordered.push(sec_library);
             ordered.push(sec_global);
             ordered.push(sec_playback);
             ordered.push(sec_queue);
             ordered.push(sec_home);
-            ordered.push(sec_library);
-            ordered.push(sec_log);
         }
 
         let mut lines: Vec<Line> = ordered.into_iter().flatten().collect();

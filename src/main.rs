@@ -240,13 +240,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    let log_capacity = if daemon_inner || config::is_system_instance() {
-        0
-    } else if config.show_log_tab {
-        5000
-    } else {
-        0
-    };
     let log_stderr = config::is_system_instance();
     let log_path = {
         let state_dir = std::env::var("XDG_STATE_HOME")
@@ -259,7 +252,7 @@ fn main() {
             .join("mbv");
         Some(state_dir.join("mbv.log"))
     };
-    applog::init(log_capacity, log_stderr, log_path);
+    applog::init(log_stderr, log_path);
     log::info!(target: "startup", "mbv starting");
 
     let mut client = EmbyClient::new(config);

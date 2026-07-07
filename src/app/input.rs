@@ -1,9 +1,9 @@
 use super::settings::settings_total_rows;
 use super::ui_util::item_text_and_style;
 use super::{
-    App, ContextAction, ContextMenu, HomeSearch, LibSearch, LogPane, PendingQueueAction,
-    QueueScope, SavePlaylistDialog, SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H,
-    PLAYLISTS_PANEL_W, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
+    App, ContextAction, ContextMenu, HomeSearch, LibSearch, PendingQueueAction, QueueScope,
+    SavePlaylistDialog, SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
+    SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
 use super::{PowerFocus, PLAYLIST_VIEW_COUNT, PLAYLIST_VIEW_POWER};
 use crate::api::{MediaItem, TICKS_PER_SECOND};
@@ -39,7 +39,7 @@ impl App {
     fn context_menu_lib_idx(&self) -> Option<usize> {
         if let Some(lib_idx) = self.context_menu_power_lib_idx() {
             Some(lib_idx)
-        } else if self.tab_idx >= self.lib_tab_offset() && self.tab_idx != self.log_tab_idx() {
+        } else if self.tab_idx >= self.lib_tab_offset() {
             Some(self.tab_idx - self.lib_tab_offset())
         } else {
             None
@@ -93,9 +93,6 @@ impl App {
     }
 
     pub(super) fn tab_count(&self) -> usize {
-        2 + self.libs.len() + if self.show_log_tab { 1 } else { 0 }
-    }
-    pub(super) fn log_tab_idx(&self) -> usize {
         2 + self.libs.len()
     }
     pub(super) fn lib_tab_offset(&self) -> usize {
@@ -270,7 +267,6 @@ impl App {
         }
         // When library search is active, unmodified keys feed the search
         if self.tab_idx > 1
-            && self.tab_idx != self.log_tab_idx()
             && !key.modifiers.contains(KeyModifiers::ALT)
             && !key.modifiers.contains(KeyModifiers::CONTROL)
             && self
@@ -292,7 +288,6 @@ impl App {
             return false;
         }
         let in_lib_search = self.tab_idx > 1
-            && self.tab_idx != self.log_tab_idx()
             && self
                 .libs
                 .get(self.tab_idx - self.lib_tab_offset())
@@ -364,8 +359,7 @@ impl App {
             }
             return false;
         }
-        if self.tab_idx != self.log_tab_idx()
-            && key.code == KeyCode::Char('c')
+        if key.code == KeyCode::Char('c')
             && !key.modifiers.contains(KeyModifiers::ALT)
             && !in_lib_search
         {
@@ -388,10 +382,8 @@ impl App {
         if let Some(r) = self.handle_key_context_menu(key) {
             return r;
         }
-        if self.tab_idx != self.log_tab_idx() {
-            if let Some(quit) = self.handle_playback_key(key) {
-                return quit;
-            }
+        if let Some(quit) = self.handle_playback_key(key) {
+            return quit;
         }
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;
@@ -406,9 +398,6 @@ impl App {
         }
         if self.tab_idx == 1 {
             return self.handle_playlist_key(key);
-        }
-        if self.tab_idx == self.log_tab_idx() {
-            return self.handle_log_key(key);
         }
         self.handle_lib_key(key)
     }
@@ -1762,118 +1751,6 @@ impl App {
         false
     }
 
-    fn handle_log_key(&mut self, key: KeyEvent) -> bool {
-        match key.code {
-            KeyCode::Char('q') if key.modifiers.is_empty() => {
-                return self.try_quit();
-            }
-            KeyCode::Tab | KeyCode::BackTab => {
-                self.set_tab(0);
-            }
-            KeyCode::Left => {
-                self.log_pane = LogPane::Sources;
-            }
-            KeyCode::Right => {
-                self.log_pane = LogPane::Log;
-            }
-            KeyCode::Up => match self.log_pane {
-                LogPane::Log => {
-                    self.log_scroll += 1;
-                }
-                LogPane::Sources => {
-                    self.log_source_cursor = self.log_source_cursor.saturating_sub(1);
-                }
-            },
-            KeyCode::Down => match self.log_pane {
-                LogPane::Log => {
-                    self.log_scroll = self.log_scroll.saturating_sub(1);
-                }
-                LogPane::Sources => {
-                    self.log_source_cursor += 1;
-                }
-            },
-            KeyCode::PageUp => {
-                self.log_scroll += 20;
-            }
-            KeyCode::PageDown => {
-                self.log_scroll = self.log_scroll.saturating_sub(20);
-            }
-            KeyCode::Char(' ') => {
-                let sources = self.log_sources();
-                let src_cursor = self.log_source_cursor.min(sources.len().saturating_sub(1));
-                if let Some(src) = sources.get(src_cursor) {
-                    if self.log_disabled_sources.contains(src) {
-                        self.log_disabled_sources.remove(src);
-                    } else {
-                        self.log_disabled_sources.insert(src.clone());
-                    }
-                }
-            }
-            KeyCode::Char('c') => {
-                let entries = self.visible_log_entries();
-                let text = entries
-                    .iter()
-                    .map(|e| format!("{}│{}│{}", e.level.label(), e.source, e.msg))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-                let n = entries.len();
-                let copied = std::process::Command::new("wl-copy")
-                    .arg(&text)
-                    .status()
-                    .map(|s| s.success())
-                    .unwrap_or(false)
-                    || std::process::Command::new("xclip")
-                        .args(["-selection", "clipboard"])
-                        .stdin(std::process::Stdio::piped())
-                        .spawn()
-                        .and_then(|mut c| {
-                            use std::io::Write;
-                            c.stdin.take().unwrap().write_all(text.as_bytes())?;
-                            c.wait()
-                        })
-                        .map(|s| s.success())
-                        .unwrap_or(false);
-                if copied {
-                    self.flash_status(format!("Copied {n} log lines to clipboard"));
-                } else {
-                    self.flash_status_high("Copy failed — wl-copy/xclip not found".into());
-                }
-            }
-            KeyCode::Char(c @ '1'..='9') => {
-                let idx = (c as usize) - ('1' as usize);
-                if idx < self.tab_count() {
-                    self.set_tab(idx);
-                }
-            }
-            _ => {}
-        }
-        false
-    }
-
-    pub(super) fn log_sources(&self) -> Vec<String> {
-        let mut seen = std::collections::HashSet::new();
-        let mut sources: Vec<String> = Vec::new();
-        for e in &crate::applog::global()
-            .map(|l| l.snapshot())
-            .unwrap_or_default()
-        {
-            if seen.insert(e.source.clone()) {
-                sources.push(e.source.clone());
-            }
-        }
-        sources.sort_unstable();
-        sources
-    }
-
-    pub(super) fn visible_log_entries(&self) -> Vec<crate::applog::LogEntry> {
-        crate::applog::global()
-            .map(|l| l.snapshot())
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|e| !self.log_disabled_sources.contains(&e.source))
-            .collect()
-    }
-
     pub(super) fn visible_tab_range(&self, avail_w: u16) -> (usize, usize) {
         let widths = self.tab_title_widths();
         let n = widths.len();
@@ -1922,9 +1799,6 @@ impl App {
         ];
         for l in &self.libs {
             w.push(l.library.name.chars().count() as u16 + pad);
-        }
-        if self.show_log_tab {
-            w.push("Log".chars().count() as u16 + pad);
         }
         w
     }
@@ -2027,7 +1901,7 @@ impl App {
         } else if self.tab_idx == 1 {
             let queue = self.displayed_queue();
             queue.items.get(queue.playlist_cursor).cloned()
-        } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
+        } else if self.tab_idx > 1 {
             self.current_lib_item()
         } else {
             None
@@ -2224,7 +2098,7 @@ impl App {
                 let row = cursor.saturating_sub(scroll) as u16;
                 return (self.terminal_width / 2, area.y + 1 + row);
             }
-        } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
+        } else if self.tab_idx > 1 {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
             let lib = &self.libs[lib_idx];
             let cursor = lib
@@ -2524,7 +2398,7 @@ impl App {
                     }
                 }
             }
-        } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
+        } else if self.tab_idx > 1 {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
             let lib = &self.layout.library;
             let tbl = lib.lib_table_area.get(lib_idx).copied().unwrap_or_default();
@@ -2902,12 +2776,6 @@ impl App {
                         queue.playlist_cursor =
                             (queue.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                     }
-                } else if self.tab_idx == self.log_tab_idx() {
-                    if delta > 0 {
-                        self.log_scroll += 1;
-                    } else {
-                        self.log_scroll = self.log_scroll.saturating_sub(1);
-                    }
                 } else {
                     self.move_lib_cursor(delta);
                 }
@@ -3077,11 +2945,10 @@ impl App {
                                 }
                             }
                         }
-                    } else if self.tab_idx != self.log_tab_idx()
-                        && self
-                            .current_lib_item()
-                            .map(|i| !i.is_folder)
-                            .unwrap_or(false)
+                    } else if self
+                        .current_lib_item()
+                        .map(|i| !i.is_folder)
+                        .unwrap_or(false)
                     {
                         self.select();
                     }
@@ -3136,7 +3003,7 @@ impl App {
                     }
                 }
 
-                if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
+                if self.tab_idx > 1 {
                     let crumbs = self.layout.library.breadcrumbs.clone();
                     let lib_off = self.lib_tab_offset();
                     for (x_start, x_end, crumb_row, target_depth) in crumbs {
@@ -3151,7 +3018,6 @@ impl App {
                 let hit = self.click_set_cursor(col, row);
                 if hit
                     && self.tab_idx > 1
-                    && self.tab_idx != self.log_tab_idx()
                     && self
                         .current_lib_item()
                         .map(|i| i.is_folder)

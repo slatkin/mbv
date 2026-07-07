@@ -63,14 +63,6 @@ impl App {
                     self.save_prefs();
                 }
             }
-            SettingKey::ShowLogTab => {
-                let new_val = {
-                    let mut c = self.client.lock().unwrap();
-                    c.config.show_log_tab = !c.config.show_log_tab;
-                    c.config.show_log_tab
-                };
-                self.show_log_tab = new_val;
-            }
             SettingKey::SystemNotifications => {
                 let new_val = {
                     let mut c = self.client.lock().unwrap();

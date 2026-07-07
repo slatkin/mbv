@@ -22,7 +22,6 @@ pub struct Config {
     pub always_skip_intro: bool,
     pub image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
     pub show_systray_icon: bool,
-    pub show_log_tab: bool,
     pub no_scripts: bool,
     pub start_on_queue: bool,
     pub daemon_mode_on_exit: bool,
@@ -70,7 +69,6 @@ impl Default for Config {
             always_skip_intro: false,
             image_protocol: None,
             show_systray_icon: true,
-            show_log_tab: false,
             no_scripts: false,
             start_on_queue: false,
             daemon_mode_on_exit: false,
@@ -571,11 +569,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let show_log_tab = general
-        .and_then(|m| m.get("show_log_tab"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-
     let daemon_mode_on_exit = general
         .and_then(|m| m.get("daemon_mode_on_exit"))
         .and_then(|v| v.as_bool())
@@ -719,7 +712,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         always_skip_intro,
         image_protocol,
         show_systray_icon,
-        show_log_tab,
         no_scripts,
         start_on_queue,
         daemon_mode_on_exit,
@@ -799,10 +791,6 @@ pub fn save_config_settings(cfg: &Config) {
     general.insert(
         "always_skip_intro".to_string(),
         toml::Value::Boolean(cfg.always_skip_intro),
-    );
-    general.insert(
-        "show_log_tab".to_string(),
-        toml::Value::Boolean(cfg.show_log_tab),
     );
     general.insert(
         "system_notifications".to_string(),

@@ -1855,7 +1855,7 @@ impl App {
             self.flash_status(format!("Added: {name}"));
             self.persist_local_queue_state_if_needed(scope);
             self.sync_direct_remote_queue_after_edit(scope);
-        } else if self.tab_idx >= 2 && self.tab_idx != self.log_tab_idx() {
+        } else if self.tab_idx >= 2 {
             let Some(item) = self.current_lib_item() else {
                 return;
             };
@@ -2108,7 +2108,7 @@ impl App {
     }
 
     pub(super) fn go_back(&mut self) {
-        if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
+        if self.tab_idx > 1 {
             let lib_off = self.lib_tab_offset();
             let lib_idx = self.tab_idx - lib_off;
 
@@ -2444,7 +2444,7 @@ impl App {
     }
 
     pub(super) fn refresh_lib(&mut self) {
-        let lib_idx = if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
+        let lib_idx = if self.tab_idx > 1 {
             self.tab_idx - self.lib_tab_offset()
         } else if self.playlist_view == PLAYLIST_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left)
@@ -2512,13 +2512,13 @@ impl App {
             }
         } else if self.tab_idx == 1 {
             self.refresh_queue();
-        } else if self.tab_idx != self.log_tab_idx() {
+        } else {
             self.refresh_lib();
         }
     }
 
     pub(super) fn shuffle_play(&mut self) {
-        if self.tab_idx <= 1 || self.tab_idx == self.log_tab_idx() {
+        if self.tab_idx <= 1 {
             return;
         }
         let lib_idx = self.tab_idx - self.lib_tab_offset();
@@ -2635,7 +2635,7 @@ impl App {
     }
 
     pub(super) fn ensure_library_loaded(&mut self) {
-        if self.tab_idx <= 1 || self.tab_idx == self.log_tab_idx() {
+        if self.tab_idx <= 1 {
             return;
         }
         let idx = self.tab_idx - self.lib_tab_offset();
