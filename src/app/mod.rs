@@ -4915,6 +4915,41 @@ pub(crate) mod tests {
         assert_eq!(app.status, "Disconnected from remote session");
     }
 
+    #[test]
+    fn displayed_queue_playback_state_stays_active_for_local_daemon_queue() {
+        let app = make_local_daemon_app_stub(make_items(3));
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 2;
+            status.position_ticks = 42;
+            status.runtime_ticks = 84;
+            status.paused = true;
+        }
+
+        assert_eq!(
+            app.displayed_queue_playback_state(),
+            (true, 2, 42, 84, true)
+        );
+    }
+
+    #[test]
+    fn displayed_queue_playback_state_is_inactive_for_non_playback_scope() {
+        let mut app = make_remote_app_stub(make_items(2), make_items(3));
+        app.connected_session_state = Some(make_session("remote-host", "Emby"));
+        app.connected_session_state
+            .as_mut()
+            .unwrap()
+            .now_playing_item_id = Some("id1".into());
+        app.set_queue_scope(QueueScope::Local);
+
+        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+        assert_eq!(
+            app.displayed_queue_playback_state(),
+            (false, 0, 0, 0, false)
+        );
+    }
+
     // ── home_section_len_cur ─────────────────────────────────────────────────
 
     #[test]

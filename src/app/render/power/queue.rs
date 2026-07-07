@@ -127,11 +127,7 @@ impl App {
         }
 
         let (active, active_idx, live_pos, live_runtime, live_paused) =
-            if self.displayed_queue_scope() == QueueScope::Remote || !self.player.is_remote() {
-                self.effective_playback_state()
-            } else {
-                (false, 0, 0, 0, false)
-            };
+            self.displayed_queue_playback_state();
 
         // Build display rows: audio grouped by album, episodes by series, the rest
         // flat. group_for_header[j] holds the label for the j-th Header.

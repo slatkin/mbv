@@ -37,7 +37,7 @@ impl App {
             return;
         }
         let (active, current_idx, live_pos, live_runtime, live_paused) =
-            self.effective_playback_state();
+            self.displayed_queue_playback_state();
         let (items, cursor) = {
             let queue = self.displayed_queue();
             (queue.items.clone(), queue.queue_cursor)

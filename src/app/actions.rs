@@ -1746,6 +1746,14 @@ impl App {
         }
     }
 
+    pub(super) fn displayed_queue_playback_state(&self) -> (bool, usize, i64, i64, bool) {
+        if self.queue_scope_is_playback(self.displayed_queue_scope()) {
+            self.effective_playback_state()
+        } else {
+            (false, 0, 0, 0, false)
+        }
+    }
+
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_queue_scope());
