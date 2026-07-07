@@ -59,7 +59,7 @@ impl App {
                 self.image_protocol_enabled = !now_none;
                 if now_none {
                     self.home_card_view = false;
-                    self.playlist_view = 0;
+                    self.queue_view = 0;
                     self.save_prefs();
                 }
             }

@@ -167,7 +167,13 @@ pub enum PlayerEvent {
         episode: i64,
     },
     NextUpPlay,
-    PlaylistNextUp {
+    /// Rust identifier renamed from `PlaylistNextUp` (see #104); the wire tag
+    /// is pinned via `serde(rename)` so daemon/TUI processes at different
+    /// versions during an upgrade still speak the same JSON tag. `PlayerEvent`
+    /// has no `WireCommand`-style adapter (unlike `PlayerCommand`, see #81),
+    /// so this pin lives directly on the variant.
+    #[serde(rename = "PlaylistNextUp")]
+    QueueNextUp {
         next_idx: usize,
     },
     /// Emitted by RemotePlayer when CtrlState arrives so App can sync player_tab.
@@ -196,8 +202,8 @@ pub enum PlayerEvent {
 pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
-    PlaylistRemove(usize),
-    PlaylistMove(usize, usize),
+    QueueRemove(usize),
+    QueueMove(usize, usize),
     SetVolume(i64),
     Seek(f64),
     SeekAbsolute(f64),
@@ -222,7 +228,7 @@ pub enum PlayerCommand {
     },
     NextUpDismiss,
     SkipIntroDismiss,
-    ReplacePlaylist {
+    ReplaceQueue {
         items: Vec<MediaItem>,
         start_idx: usize,
     },
@@ -1107,9 +1113,9 @@ impl SingleSession {
             }
             // Not applicable in single-item mode
             PlayerCommand::JumpTo(_)
-            | PlayerCommand::PlaylistRemove(_)
-            | PlayerCommand::PlaylistMove(_, _)
-            | PlayerCommand::ReplacePlaylist { .. } => {}
+            | PlayerCommand::QueueRemove(_)
+            | PlayerCommand::QueueMove(_, _)
+            | PlayerCommand::ReplaceQueue { .. } => {}
         }
         cancel_stop
     }
@@ -1506,7 +1512,7 @@ impl SingleSession {
     }
 }
 
-// ── PlaylistSession ───────────────────────────────────────────────────────────
+// ── QueueSession ───────────────────────────────────────────────────────────
 
 /// Where index `idx` ends up after moving the entry at `from` to `to`
 /// (both 0-based positions in the same list, `from != to`).
@@ -1522,7 +1528,7 @@ fn shift_index_for_move(idx: usize, from: usize, to: usize) -> usize {
     }
 }
 
-struct PlaylistSession {
+struct QueueSession {
     config: MpvSessionConfig,
     reporter: SessionReporter,
     event_tx: mpsc::Sender<PlayerEvent>,
@@ -1540,15 +1546,15 @@ struct PlaylistSession {
     last_seek_at: Option<Instant>,
     last_valid_pos: i64,
     tracks_initialized: bool,
-    playlist_cancelled: bool,
+    queue_cancelled: bool,
     pending_load: u8,
     pending_initial_jump: bool,
     stop_reported: bool,
     osd_title: String,
     last_mouse_osd: Option<Instant>,
     pending_resume_secs: Option<f64>,
-    playlist_next_up_fired: bool,
-    playlist_next_up_armed: bool,
+    queue_next_up_fired: bool,
+    queue_next_up_armed: bool,
     next_up_jump: bool,
     stopped_near_end: bool,
     startup_pause_release_pending: bool,
@@ -1560,7 +1566,7 @@ struct PlaylistSession {
     intro_hide: bool,
 }
 
-impl PlaylistSession {
+impl QueueSession {
     fn sync_status_position(&self) {
         let mut s = self.status.lock().unwrap();
         s.current_idx = self.current_idx;
@@ -1594,10 +1600,10 @@ impl PlaylistSession {
             } else {
                 None
             };
-        log::info!(target: "player", "playlist init idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
+        log::info!(target: "player", "queue init idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
             initial_pos / crate::api::TICKS_PER_SECOND);
         let osd_title = items[start_idx].display_name();
-        PlaylistSession {
+        QueueSession {
             config,
             reporter,
             event_tx,
@@ -1613,13 +1619,13 @@ impl PlaylistSession {
             last_seek_at: None,
             last_valid_pos: initial_pos,
             tracks_initialized: false,
-            playlist_cancelled: false,
+            queue_cancelled: false,
             pending_load: 0,
             pending_initial_jump: start_idx > 0,
             stop_reported: false,
             last_mouse_osd: None,
-            playlist_next_up_fired: false,
-            playlist_next_up_armed: false,
+            queue_next_up_fired: false,
+            queue_next_up_armed: false,
             next_up_jump: false,
             stopped_near_end: false,
             startup_pause_release_pending: startup_pause_for_pipe,
@@ -1683,7 +1689,7 @@ impl PlaylistSession {
                     }
                 }
             }
-            PlayerCommand::PlaylistRemove(idx) => {
+            PlayerCommand::QueueRemove(idx) => {
                 if idx < self.n {
                     let _ = mpv.command("playlist-remove", &[&idx.to_string()]);
                     self.items.remove(idx);
@@ -1709,7 +1715,7 @@ impl PlaylistSession {
                     }
                 }
             }
-            PlayerCommand::PlaylistMove(from, to) => {
+            PlayerCommand::QueueMove(from, to) => {
                 if from < self.n && to < self.n && from != to {
                     // mpv's playlist-move index2 names the *pre-move* slot the
                     // entry should end up next to, not its post-move index: for
@@ -1735,11 +1741,11 @@ impl PlaylistSession {
             PlayerCommand::SkipIntroDismiss => {
                 let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             }
-            PlayerCommand::ReplacePlaylist {
+            PlayerCommand::ReplaceQueue {
                 items: new_items,
                 start_idx,
             } => {
-                self.cmd_replace_playlist(new_items, start_idx, mpv, progress);
+                self.cmd_replace_queue(new_items, start_idx, mpv, progress);
                 cancel_stop = true;
             }
             PlayerCommand::SetVolume(v) => {
@@ -1806,7 +1812,7 @@ impl PlaylistSession {
         cancel_stop
     }
 
-    fn cmd_replace_playlist(
+    fn cmd_replace_queue(
         &mut self,
         new_items: Vec<MediaItem>,
         start_idx: usize,
@@ -1826,10 +1832,10 @@ impl PlaylistSession {
             self.pending_initial_jump = false;
             self.pending_load = 0;
             self.tracks_initialized = false;
-            self.playlist_cancelled = true;
+            self.queue_cancelled = true;
             self.forced_idx = None;
-            self.playlist_next_up_fired = false;
-            self.playlist_next_up_armed = false;
+            self.queue_next_up_fired = false;
+            self.queue_next_up_armed = false;
             self.next_up_jump = false;
             self.osd_title.clear();
             return;
@@ -1859,7 +1865,7 @@ impl PlaylistSession {
             let title_opt = mpv_title_opt(&item.display_name());
             if let Err(e) = mpv.command("loadfile", &[url.as_str(), mode, "-1", title_opt.as_str()])
             {
-                log::warn!(target: "player", "ReplacePlaylist loadfile error: {}", mpv_err_str(&e));
+                log::warn!(target: "player", "ReplaceQueue loadfile error: {}", mpv_err_str(&e));
             }
         }
         let _ = mpv.set_property("start", "0");
@@ -1878,10 +1884,10 @@ impl PlaylistSession {
         self.tracks_initialized = false;
         // stop_reported stays true until pending_load drains to 0 in on_end_file,
         // preventing a duplicate report_stopped for the displaced file's EndFile(Quit).
-        self.playlist_cancelled = false;
+        self.queue_cancelled = false;
         self.forced_idx = None;
-        self.playlist_next_up_fired = false;
-        self.playlist_next_up_armed = false;
+        self.queue_next_up_fired = false;
+        self.queue_next_up_armed = false;
         self.next_up_jump = false;
         self.osd_title = new_items[start_idx].display_name();
         self.pending_resume_secs =
@@ -1917,7 +1923,7 @@ impl PlaylistSession {
         progress: &mut ProgressGuard,
     ) {
         self.quit_at = None;
-        self.playlist_cancelled = true;
+        self.queue_cancelled = true;
         // Loading a new item should always start playing it, even if mpv
         // was left paused on the previous item (reused-window fast path).
         let _ = mpv.set_property("pause", false);
@@ -1977,22 +1983,22 @@ impl PlaylistSession {
             if runtime > 0 {
                 let show_at = runtime - 60 * TICKS_PER_SECOND;
                 let remaining = runtime - ticks;
-                if self.playlist_next_up_fired && ticks < show_at {
-                    self.playlist_next_up_fired = false;
-                    self.playlist_next_up_armed = false;
+                if self.queue_next_up_fired && ticks < show_at {
+                    self.queue_next_up_fired = false;
+                    self.queue_next_up_armed = false;
                 }
-                if !self.playlist_next_up_fired && runtime >= MIN_RUNTIME_TICKS {
+                if !self.queue_next_up_fired && runtime >= MIN_RUNTIME_TICKS {
                     if remaining >= MIN_REMAIN_TICKS && ticks >= show_at {
-                        self.playlist_next_up_fired = true;
-                        let _ = self.event_tx.send(PlayerEvent::PlaylistNextUp {
+                        self.queue_next_up_fired = true;
+                        let _ = self.event_tx.send(PlayerEvent::QueueNextUp {
                             next_idx: self.current_idx + 1,
                         });
-                    } else if !self.playlist_next_up_armed
+                    } else if !self.queue_next_up_armed
                         && ticks > 0
                         && ticks < TICKS_PER_SECOND * 5
                     {
-                        self.playlist_next_up_armed = true;
-                        log::info!(target: "player", "playlist next-up armed idx={}", self.current_idx + 1);
+                        self.queue_next_up_armed = true;
+                        log::info!(target: "player", "queue next-up armed idx={}", self.current_idx + 1);
                     }
                 }
             }
@@ -2085,7 +2091,7 @@ impl PlaylistSession {
         }
         if self.pending_load > 0 {
             self.pending_load -= 1;
-            // Once all pending EndFiles from a ReplacePlaylist are drained, the new item's
+            // Once all pending EndFiles from a ReplaceQueue are drained, the new item's
             // lifecycle begins — reset stop_reported so on_end_file/on_shutdown can report it.
             if self.pending_load == 0 {
                 self.stop_reported = false;
@@ -2100,7 +2106,7 @@ impl PlaylistSession {
         let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
         let runtime = self.status.lock().unwrap().runtime_ticks;
 
-        if self.playlist_cancelled || reason == mpv_end_file_reason::Quit {
+        if self.queue_cancelled || reason == mpv_end_file_reason::Quit {
             let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
             let near_end = !natural_end
                 && !completed_is_audio
@@ -2127,7 +2133,7 @@ impl PlaylistSession {
         let completed_idx = self.current_idx;
         log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={} pending_resume={}",
             self.last_valid_pos, self.status.lock().unwrap().runtime_ticks, self.pending_resume_secs.is_some());
-        // H11: bounds-check completed_idx — PlaylistRemove can shrink the list
+        // H11: bounds-check completed_idx — QueueRemove can shrink the list
         // while the current track is finishing.
         if completed_idx >= self.items.len() {
             log::warn!(target: "player", "on_end_file: completed_idx={completed_idx} out of bounds (len={}), stopping",
@@ -2165,7 +2171,7 @@ impl PlaylistSession {
             => played_out={played_out} consume_track={consume_track}",
             self.last_valid_pos, self.items[completed_idx].runtime_ticks);
         let completed_pos =
-            playlist_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
+            queue_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
 
         let next_idx = self.forced_idx.take().unwrap_or(self.current_idx + 1);
 
@@ -2213,8 +2219,8 @@ impl PlaylistSession {
         }
 
         let _ = mpv.set_property("start", "0");
-        self.playlist_next_up_fired = false;
-        self.playlist_next_up_armed = false;
+        self.queue_next_up_fired = false;
+        self.queue_next_up_armed = false;
         send_ep_info(mpv, &self.items[self.current_idx]);
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
@@ -2463,7 +2469,7 @@ impl PlaylistSession {
                 .map(|s| s.to_string())
                 .or_else(|| panic.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "unknown panic".to_string());
-            log::error!(target: "player", "PlaylistSession panicked: {msg}");
+            log::error!(target: "player", "QueueSession panicked: {msg}");
             let _ = event_tx_panic.send(PlayerEvent::Stopped {
                 idx: current_idx_panic,
                 position_ticks: 0,
@@ -2505,7 +2511,7 @@ pub struct Player {
     pub always_play_next: bool,
     pub always_skip_intro: bool,
     pub subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-    is_playlist_mode: Arc<AtomicBool>,
+    is_queue_mode: Arc<AtomicBool>,
     current_is_headless: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
@@ -2537,7 +2543,7 @@ impl Player {
             always_play_next,
             always_skip_intro,
             subtitle_prefs: Arc::new(Mutex::new(subtitle_prefs)),
-            is_playlist_mode: Arc::new(AtomicBool::new(false)),
+            is_queue_mode: Arc::new(AtomicBool::new(false)),
             current_is_headless: Arc::new(AtomicBool::new(false)),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
@@ -2678,7 +2684,7 @@ impl Player {
         let event_tx = self.event_tx.clone();
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
-        let is_playlist_mode = self.is_playlist_mode.clone();
+        let is_queue_mode = self.is_queue_mode.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
         {
@@ -2698,7 +2704,7 @@ impl Player {
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
         let handle = thread::spawn(move || {
-            is_playlist_mode.store(false, Ordering::Relaxed);
+            is_queue_mode.store(false, Ordering::Relaxed);
 
             let (mpv, startup_pause_for_pipe) = match init_mpv(&config) {
                 Ok(v) => v,
@@ -2751,7 +2757,7 @@ impl Player {
         *self.thread_handle.lock().unwrap() = Some(handle);
     }
 
-    pub fn play_playlist(
+    pub fn play_queue(
         &self,
         items: Vec<MediaItem>,
         start_idx: usize,
@@ -2771,7 +2777,7 @@ impl Player {
         // place (no window close). Mismatched state (e.g. video→audio-only or
         // vice-versa) always spawns a new process so visibility is correct.
         if self.status.lock().unwrap().active
-            && self.is_playlist_mode.load(Ordering::Relaxed)
+            && self.is_queue_mode.load(Ordering::Relaxed)
             && (self.current_is_headless.load(Ordering::Relaxed) == new_is_headless)
         {
             let start_idx = start_idx.min(items.len() - 1);
@@ -2784,7 +2790,7 @@ impl Player {
                 st.queue_len = items.len();
                 st.title = items[start_idx].display_name();
             }
-            self.send_command(PlayerCommand::ReplacePlaylist { items, start_idx });
+            self.send_command(PlayerCommand::ReplaceQueue { items, start_idx });
             return;
         }
 
@@ -2807,7 +2813,7 @@ impl Player {
         let event_tx = self.event_tx.clone();
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
-        let is_playlist_mode = self.is_playlist_mode.clone();
+        let is_queue_mode = self.is_queue_mode.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
@@ -2829,7 +2835,7 @@ impl Player {
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
         let handle = thread::spawn(move || {
-            is_playlist_mode.store(true, Ordering::Relaxed);
+            is_queue_mode.store(true, Ordering::Relaxed);
 
             let (mpv, startup_pause_for_pipe) = match init_mpv(&config) {
                 Ok(v) => v,
@@ -2876,7 +2882,7 @@ impl Player {
                 status.clone(),
             );
             let progress = spawn_progress_reporter(reporter.clone());
-            let session = PlaylistSession::new(
+            let session = QueueSession::new(
                 items,
                 start_idx,
                 reporter,
@@ -2984,7 +2990,7 @@ impl PlayerProxy {
         }
     }
 
-    pub fn play_playlist(
+    pub fn play_queue(
         &self,
         items: Vec<MediaItem>,
         start_idx: usize,
@@ -2992,9 +2998,9 @@ impl PlayerProxy {
         initial_volume: u8,
     ) {
         match &self.inner {
-            PlayerProxyInner::Local(p) => p.play_playlist(items, start_idx, client, initial_volume),
+            PlayerProxyInner::Local(p) => p.play_queue(items, start_idx, client, initial_volume),
             PlayerProxyInner::Remote(r) => {
-                r.play_playlist(items, start_idx, client, initial_volume)
+                r.play_queue(items, start_idx, client, initial_volume)
             }
         }
     }
@@ -3106,7 +3112,7 @@ pub(crate) fn is_near_end(
 // Zero means "treat as fully played / reset resume point".
 // was_next_up alone does NOT zero the position — the user may have dismissed
 // or ignored the overlay, and we must preserve where they actually were.
-pub(crate) fn playlist_completed_pos(
+pub(crate) fn queue_completed_pos(
     is_audio: bool,
     natural: bool,
     near_end: bool,
@@ -3222,7 +3228,7 @@ mod tests {
         assert!(matches!(decoded, PlayerCommand::LoadNew { .. }));
     }
 
-    // ── playlist_completed_pos / is_near_end ─────────────────────────────────
+    // ── queue_completed_pos / is_near_end ─────────────────────────────────
 
     const RUNTIME: i64 = 600 * TICKS_PER_SECOND; // 10-minute episode
 
@@ -3233,23 +3239,23 @@ mod tests {
         // user pressed q rather than clicking the overlay. Position must be preserved.
         let pos = 528 * TICKS_PER_SECOND;
         assert!(!is_near_end(false, false, pos, RUNTIME)); // 88% < 95%
-        assert_eq!(playlist_completed_pos(false, false, false, pos), pos);
+        assert_eq!(queue_completed_pos(false, false, false, pos), pos);
     }
 
     #[test]
     fn next_up_fired_preserves_position() {
         // Bug fix: was_next_up alone used to force completed_pos = 0. After the fix,
         // only natural EOF or >=95% position zeroes it. next_up_jump is now irrelevant
-        // to completed_pos — playlist_completed_pos doesn't receive it at all.
+        // to completed_pos — queue_completed_pos doesn't receive it at all.
         let pos = 540 * TICKS_PER_SECOND; // 90% — past 60s-before-end threshold
         assert!(!is_near_end(false, false, pos, RUNTIME)); // still below 95%
-        assert_eq!(playlist_completed_pos(false, false, false, pos), pos);
+        assert_eq!(queue_completed_pos(false, false, false, pos), pos);
     }
 
     #[test]
     fn natural_end_resets_position() {
         let pos = RUNTIME - TICKS_PER_SECOND; // 1 s before end
-        assert_eq!(playlist_completed_pos(false, true, false, pos), 0);
+        assert_eq!(queue_completed_pos(false, true, false, pos), 0);
     }
 
     #[test]
@@ -3259,15 +3265,15 @@ mod tests {
         let below = at_95 - 1;
         assert!(is_near_end(false, false, at_95, RUNTIME));
         assert!(!is_near_end(false, false, below, RUNTIME));
-        assert_eq!(playlist_completed_pos(false, false, true, at_95), 0);
-        assert_eq!(playlist_completed_pos(false, false, false, below), below);
+        assert_eq!(queue_completed_pos(false, false, true, at_95), 0);
+        assert_eq!(queue_completed_pos(false, false, false, below), below);
     }
 
     #[test]
     fn audio_track_always_resets_position() {
         let pos = 300 * TICKS_PER_SECOND; // 50%
         assert!(!is_near_end(true, false, pos, RUNTIME));
-        assert_eq!(playlist_completed_pos(true, false, false, pos), 0);
+        assert_eq!(queue_completed_pos(true, false, false, pos), 0);
     }
 
     #[test]

@@ -5,7 +5,7 @@ use super::{
     QueueScope, SavePlaylistDialog, SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H,
     PLAYLISTS_PANEL_W, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
-use super::{PowerFocus, PLAYLIST_VIEW_COUNT, PLAYLIST_VIEW_POWER};
+use super::{PowerFocus, QUEUE_VIEW_COUNT, QUEUE_VIEW_POWER};
 use crate::api::{MediaItem, TICKS_PER_SECOND};
 use crate::player::PlayerCommand;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -26,7 +26,7 @@ impl App {
 
     fn context_menu_power_lib_idx(&self) -> Option<usize> {
         if self.tab_idx == 1
-            && self.playlist_view == PLAYLIST_VIEW_POWER
+            && self.queue_view == QUEUE_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab > 0
         {
@@ -255,7 +255,7 @@ impl App {
             return false;
         }
         // Power-view: when the left panel is focused on a library with active search, intercept keys
-        if self.playlist_view == PLAYLIST_VIEW_POWER
+        if self.queue_view == QUEUE_VIEW_POWER
             && !key.modifiers.contains(KeyModifiers::ALT)
             && !key.modifiers.contains(KeyModifiers::CONTROL)
             && self.context_menu.is_none()
@@ -297,8 +297,8 @@ impl App {
                 .libs
                 .get(self.tab_idx - self.lib_tab_offset())
                 .is_some_and(|l| l.search.is_some());
-        if self.confirm_clear_playlist {
-            self.confirm_clear_playlist = false;
+        if self.confirm_clear_queue {
+            self.confirm_clear_queue = false;
             if matches!(
                 key.code,
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
@@ -353,7 +353,7 @@ impl App {
                     {
                         let label = item.playback_label();
                         self.player.send_command(PlayerCommand::JumpTo(idx));
-                        self.playback_queue_mut().playlist_cursor = idx;
+                        self.playback_queue_mut().queue_cursor = idx;
                         self.flash_status(label);
                     }
                 }
@@ -382,7 +382,7 @@ impl App {
                 &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
             );
             self.status = "Clear queue? (Y/n)".into();
-            self.confirm_clear_playlist = true;
+            self.confirm_clear_queue = true;
             return false;
         }
         if let Some(r) = self.handle_key_context_menu(key) {
@@ -405,7 +405,7 @@ impl App {
             return self.handle_combined_key(key);
         }
         if self.tab_idx == 1 {
-            return self.handle_playlist_key(key);
+            return self.handle_queue_key(key);
         }
         if self.tab_idx == self.log_tab_idx() {
             return self.handle_log_key(key);
@@ -1208,7 +1208,7 @@ impl App {
         (self.layout.power.left_area.height as usize).max(1)
     }
 
-    fn handle_playlist_key(&mut self, key: KeyEvent) -> bool {
+    fn handle_queue_key(&mut self, key: KeyEvent) -> bool {
         if let Some(t) = self.confirm_remove_idx {
             self.confirm_remove_idx = None;
             self.status.clear();
@@ -1227,7 +1227,7 @@ impl App {
 
         // In power view, bare Left/Right switch focus between the two panels.
         // Queue is on the left; library is on the right.
-        if self.playlist_view == PLAYLIST_VIEW_POWER && !key.modifiers.contains(KeyModifiers::ALT) {
+        if self.queue_view == QUEUE_VIEW_POWER && !key.modifiers.contains(KeyModifiers::ALT) {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
                 self.power_focus = PowerFocus::Left;
                 self.last_card_height = 0; // reset stale image height for new view
@@ -1241,7 +1241,7 @@ impl App {
         }
 
         // In power view, route nav keys to the focused library panel.
-        if self.playlist_view == PLAYLIST_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)
+        if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)
         {
             if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
                 return false;
@@ -1405,7 +1405,7 @@ impl App {
         }
 
         // Power view queue focus: PageUp/PageDown use the actual queue panel height.
-        if self.playlist_view == PLAYLIST_VIEW_POWER
+        if self.queue_view == QUEUE_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Queue)
         {
             let page = self.layout.power.queue_area.height.saturating_sub(1).max(1) as usize;
@@ -1429,14 +1429,14 @@ impl App {
                 KeyCode::PageUp => {
                     self.last_nav_at = Instant::now();
                     let queue = self.displayed_queue_mut();
-                    queue.playlist_cursor = queue.playlist_cursor.saturating_sub(page);
+                    queue.queue_cursor = queue.queue_cursor.saturating_sub(page);
                     return false;
                 }
                 KeyCode::PageDown => {
                     self.last_nav_at = Instant::now();
                     let queue = self.displayed_queue_mut();
                     let n = queue.items.len();
-                    queue.playlist_cursor = (queue.playlist_cursor + page).min(n.saturating_sub(1));
+                    queue.queue_cursor = (queue.queue_cursor + page).min(n.saturating_sub(1));
                     return false;
                 }
                 _ => {}
@@ -1448,7 +1448,7 @@ impl App {
                 return self.try_quit();
             }
             KeyCode::Tab => {
-                if self.playlist_view == PLAYLIST_VIEW_POWER {
+                if self.queue_view == QUEUE_VIEW_POWER {
                     self.power_left_tab_next();
                 } else {
                     let n = (self.tab_idx + 1) % self.tab_count();
@@ -1456,7 +1456,7 @@ impl App {
                 }
             }
             KeyCode::BackTab => {
-                if self.playlist_view == PLAYLIST_VIEW_POWER {
+                if self.queue_view == QUEUE_VIEW_POWER {
                     self.power_left_tab_prev();
                 } else {
                     let n = self.tab_count();
@@ -1465,46 +1465,46 @@ impl App {
             }
 
             KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.move_playlist_item_up();
+                self.move_queue_item_up();
             }
             KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                self.move_playlist_item_down();
+                self.move_queue_item_down();
             }
-            KeyCode::Up if self.displayed_queue().playlist_cursor > 0 => {
+            KeyCode::Up if self.displayed_queue().queue_cursor > 0 => {
                 self.last_nav_at = Instant::now();
-                self.displayed_queue_mut().playlist_cursor -= 1;
+                self.displayed_queue_mut().queue_cursor -= 1;
             }
             KeyCode::Down
-                if self.displayed_queue().playlist_cursor + 1
+                if self.displayed_queue().queue_cursor + 1
                     < self.displayed_queue().items.len() =>
             {
                 self.last_nav_at = Instant::now();
-                self.displayed_queue_mut().playlist_cursor += 1;
+                self.displayed_queue_mut().queue_cursor += 1;
             }
             KeyCode::PageUp => {
-                let p = self.playlist_page_size();
+                let p = self.queue_page_size();
                 let queue = self.displayed_queue_mut();
-                queue.playlist_cursor = queue.playlist_cursor.saturating_sub(p);
+                queue.queue_cursor = queue.queue_cursor.saturating_sub(p);
             }
             KeyCode::PageDown => {
-                let p = self.playlist_page_size();
+                let p = self.queue_page_size();
                 let queue = self.displayed_queue_mut();
                 let n = queue.items.len();
-                queue.playlist_cursor = (queue.playlist_cursor + p).min(n.saturating_sub(1));
+                queue.queue_cursor = (queue.queue_cursor + p).min(n.saturating_sub(1));
             }
             KeyCode::Home => {
-                self.displayed_queue_mut().playlist_cursor = 0;
+                self.displayed_queue_mut().queue_cursor = 0;
             }
             KeyCode::End => {
                 let n = self.displayed_queue().items.len();
                 if n > 0 {
-                    self.displayed_queue_mut().playlist_cursor = n - 1;
+                    self.displayed_queue_mut().queue_cursor = n - 1;
                 }
             }
             KeyCode::Enter => {
                 let scope = self.displayed_queue_scope();
                 let queue = self.displayed_queue();
-                let t = queue.playlist_cursor;
+                let t = queue.queue_cursor;
                 let n = queue.items.len();
                 if t < n {
                     if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -1535,16 +1535,16 @@ impl App {
                             let items = queue.items.clone();
                             let c = Arc::new(self.client.lock().unwrap().clone());
                             self.replace_playback_queue(items.clone(), t);
-                            self.player.play_playlist(items, t, c, self.ui_volume);
+                            self.player.play_queue(items, t, c, self.ui_volume);
                         }
                     }
                 }
             }
             KeyCode::Delete => {
                 let queue = self.displayed_queue();
-                let t = queue.playlist_cursor;
+                let t = queue.queue_cursor;
                 if t < queue.items.len() {
-                    self.remove_from_playlist(t);
+                    self.remove_from_queue(t);
                 }
             }
             KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1563,7 +1563,7 @@ impl App {
             }
             KeyCode::Char('i') => {
                 let queue = self.displayed_queue();
-                let cursor = queue.playlist_cursor;
+                let cursor = queue.queue_cursor;
                 if let Some(item) = queue.items.get(cursor) {
                     let item_id = item.id.clone();
                     let item_type = item.item_type.clone();
@@ -1599,8 +1599,8 @@ impl App {
                 return false;
             }
             KeyCode::Char('v') => {
-                self.playlist_view = (self.playlist_view + 1) % PLAYLIST_VIEW_COUNT;
-                if self.playlist_view == PLAYLIST_VIEW_POWER {
+                self.queue_view = (self.queue_view + 1) % QUEUE_VIEW_COUNT;
+                if self.queue_view == QUEUE_VIEW_POWER {
                     self.power_focus = PowerFocus::Left;
                 }
                 if !self.card_image_states.is_empty() {
@@ -1608,9 +1608,9 @@ impl App {
                 }
             }
             KeyCode::Char('g')
-                if self.tab_idx == 1 && self.playlist_view != PLAYLIST_VIEW_POWER =>
+                if self.tab_idx == 1 && self.queue_view != QUEUE_VIEW_POWER =>
             {
-                self.playlist_group = !self.playlist_group;
+                self.queue_group = !self.queue_group;
             }
             KeyCode::Char('p') => {
                 let (active, current_idx) = {
@@ -1618,7 +1618,7 @@ impl App {
                     (s.active, s.current_idx)
                 };
                 if active {
-                    self.playback_queue_mut().playlist_cursor = current_idx;
+                    self.playback_queue_mut().queue_cursor = current_idx;
                     if self.player.is_remote() {
                         self.set_queue_scope(QueueScope::Remote);
                     }
@@ -1639,13 +1639,13 @@ impl App {
                 }
             }
             KeyCode::Left | KeyCode::Up
-                if self.playlist_view == PLAYLIST_VIEW_POWER
+                if self.queue_view == QUEUE_VIEW_POWER
                     && key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.power_left_tab_prev();
             }
             KeyCode::Right | KeyCode::Down
-                if self.playlist_view == PLAYLIST_VIEW_POWER
+                if self.queue_view == QUEUE_VIEW_POWER
                     && key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.power_left_tab_next();
@@ -1993,7 +1993,7 @@ impl App {
     pub(super) fn open_context_menu(&mut self) {
         let mut entries: Vec<super::ContextMenuEntry> = vec![];
 
-        let cw_focused = self.playlist_view == PLAYLIST_VIEW_POWER
+        let cw_focused = self.queue_view == QUEUE_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab == 0;
         let power_lib_idx = self.context_menu_power_lib_idx();
@@ -2026,7 +2026,7 @@ impl App {
             self.current_home_item()
         } else if self.tab_idx == 1 {
             let queue = self.displayed_queue();
-            queue.items.get(queue.playlist_cursor).cloned()
+            queue.items.get(queue.queue_cursor).cloned()
         } else if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
             self.current_lib_item()
         } else {
@@ -2124,8 +2124,8 @@ impl App {
                 {
                     Self::push_context_action(
                         &mut entries,
-                        "Remove from Playlist",
-                        ContextAction::RemoveFromPlaylist(self.player_tab.playlist_cursor),
+                        "Remove from Queue",
+                        ContextAction::RemoveFromQueue(self.player_tab.queue_cursor),
                     );
                 }
                 if self.home_search.is_some() || self.tab_idx == 1 {
@@ -2180,7 +2180,7 @@ impl App {
             let center = self.layout.home.carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
-        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+        if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
             match self.power_focus {
                 PowerFocus::Left => {
                     let area = self.layout.power.left_area;
@@ -2272,7 +2272,7 @@ impl App {
             "mute_on": self.mute_on,
             "pre_mute_volume": self.pre_mute_volume,
             "tab_idx": self.tab_idx,
-            "playlist_view": self.playlist_view,
+            "playlist_view": self.queue_view,
             "power_left_tab": self.power_left_tab,
         });
         if let Ok(s) = serde_json::to_string(&v) {
@@ -2313,7 +2313,7 @@ impl App {
     }
 
     fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
-        if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+        if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
             if self.has_direct_remote_queue() {
                 if self
                     .layout
@@ -2343,7 +2343,7 @@ impl App {
                 self.power_focus = PowerFocus::Queue;
                 let content_y = (row - qa.y) as usize;
                 if let Some(&Some(item_idx)) = self.layout.power.queue_row_map.get(content_y) {
-                    self.displayed_queue_mut().playlist_cursor = item_idx;
+                    self.displayed_queue_mut().queue_cursor = item_idx;
                 }
                 return true;
             }
@@ -2451,11 +2451,11 @@ impl App {
                 return true;
             }
         } else if self.tab_idx == 1 {
-            let inner = self.layout.playlist.inner;
+            let inner = self.layout.queue.inner;
             if inner.contains((col, row).into()) {
                 let click_y = (row - inner.y) as usize;
-                if let Some(&Some(idx)) = self.layout.playlist.row_map.get(click_y) {
-                    self.player_tab.playlist_cursor = idx;
+                if let Some(&Some(idx)) = self.layout.queue.row_map.get(click_y) {
+                    self.player_tab.queue_cursor = idx;
                     return true;
                 }
             }
@@ -2804,7 +2804,7 @@ impl App {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout.tabs_area.contains((col, row).into())
         {
-            if self.playlist_view == PLAYLIST_VIEW_POWER {
+            if self.queue_view == QUEUE_VIEW_POWER {
                 // In power view, tab clicks change the left-panel selection, not the app tab.
                 if let Some(idx) = self.power_tab_idx_at(col) {
                     self.power_left_tab = idx;
@@ -2871,7 +2871,7 @@ impl App {
                             self.move_home_cursor(delta);
                         }
                     }
-                } else if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+                } else if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
                     // Scroll in whichever power-view panel the mouse is over.
                     let queue_area = self.layout.power.queue_area;
                     let left_area = self.layout.power.left_area;
@@ -2880,7 +2880,7 @@ impl App {
                         if n > 0 {
                             let delta = delta * 3;
                             let queue = self.displayed_queue_mut();
-                            queue.playlist_cursor = (queue.playlist_cursor as i64 + delta)
+                            queue.queue_cursor = (queue.queue_cursor as i64 + delta)
                                 .clamp(0, n as i64 - 1)
                                 as usize;
                         }
@@ -2899,8 +2899,8 @@ impl App {
                     let n = self.displayed_queue().items.len();
                     if n > 0 {
                         let queue = self.displayed_queue_mut();
-                        queue.playlist_cursor =
-                            (queue.playlist_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                        queue.queue_cursor =
+                            (queue.queue_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                     }
                 } else if self.tab_idx == self.log_tab_idx() {
                     if delta > 0 {
@@ -2954,8 +2954,8 @@ impl App {
                         if self.tab_idx == 0 {
                             self.move_home_cursor(-1);
                         } else {
-                            if self.displayed_queue().playlist_cursor > 0 {
-                                self.displayed_queue_mut().playlist_cursor -= 1;
+                            if self.displayed_queue().queue_cursor > 0 {
+                                self.displayed_queue_mut().queue_cursor -= 1;
                             }
                         }
                         return;
@@ -2967,8 +2967,8 @@ impl App {
                             self.move_home_cursor(1);
                         } else {
                             let n = self.displayed_queue().items.len();
-                            if self.displayed_queue().playlist_cursor + 1 < n {
-                                self.displayed_queue_mut().playlist_cursor += 1;
+                            if self.displayed_queue().queue_cursor + 1 < n {
+                                self.displayed_queue_mut().queue_cursor += 1;
                             }
                         }
                         return;
@@ -3012,7 +3012,7 @@ impl App {
                 self.last_click_time = now;
                 self.last_click_pos = (col, row);
 
-                if self.tab_idx == 1 && self.playlist_view == PLAYLIST_VIEW_POWER {
+                if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
                     for (rect, target) in self.layout.power.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
                             if self.power_left_tab > 0 {
@@ -3044,9 +3044,9 @@ impl App {
                         }
                     } else if self.tab_idx == 1 {
                         let queue = self.displayed_queue();
-                        let t = queue.playlist_cursor;
+                        let t = queue.queue_cursor;
                         if t < queue.items.len()
-                            && self.layout.playlist.inner.contains((col, row).into())
+                            && self.layout.queue.inner.contains((col, row).into())
                         {
                             let scope = self.displayed_queue_scope();
                             if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -3073,7 +3073,7 @@ impl App {
                                     let items = queue.items.clone();
                                     let c = Arc::new(self.client.lock().unwrap().clone());
                                     self.replace_playback_queue(items.clone(), t);
-                                    self.player.play_playlist(items, t, c, self.ui_volume);
+                                    self.player.play_queue(items, t, c, self.ui_volume);
                                 }
                             }
                         }
@@ -3122,7 +3122,7 @@ impl App {
 
                 // Power-view header breadcrumb clicks.
                 if self.tab_idx == 1
-                    && self.playlist_view == PLAYLIST_VIEW_POWER
+                    && self.queue_view == QUEUE_VIEW_POWER
                     && self.power_left_tab > 0
                 {
                     let crumbs = self.layout.power.breadcrumbs.clone();

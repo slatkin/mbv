@@ -2,7 +2,7 @@ use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_epis
 use super::{
     App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent,
     PendingQueueAction, PowerFocus, QueueScope, SessionEvent, UndoEntry, PAGE_SIZE,
-    PLAYLIST_VIEW_POWER, PREFETCH_AHEAD,
+    QUEUE_VIEW_POWER, PREFETCH_AHEAD,
 };
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 use crate::player::PlayerCommand;
@@ -212,7 +212,7 @@ impl App {
         lib_idx: usize,
         extra_ok: impl FnOnce(&BrowseLevel) -> bool,
     ) -> bool {
-        self.playlist_view == PLAYLIST_VIEW_POWER
+        self.queue_view == QUEUE_VIEW_POWER
             && self.power_left_tab == lib_idx + 1
             && (self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
             && self
@@ -357,7 +357,7 @@ impl App {
         // normal-view per-row height map (`layout.library.lib_row_heights`) is never populated,
         // so it would fall back to 1. Use the panel height directly (rows are single-line;
         // subtract 1 for the count/search header line).
-        if self.playlist_view == PLAYLIST_VIEW_POWER {
+        if self.queue_view == QUEUE_VIEW_POWER {
             return (self.layout.power.left_area.height as usize)
                 .saturating_sub(1)
                 .max(1);
@@ -375,8 +375,8 @@ impl App {
             .unwrap_or(1)
     }
 
-    pub(super) fn playlist_page_size(&self) -> usize {
-        self.layout.playlist.inner.height.saturating_sub(2).max(1) as usize
+    pub(super) fn queue_page_size(&self) -> usize {
+        self.layout.queue.inner.height.saturating_sub(2).max(1) as usize
     }
 
     pub(super) fn move_lib_cursor(&mut self, delta: i64) {
@@ -399,7 +399,7 @@ impl App {
 
         // In power view with letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
-        if self.playlist_view == PLAYLIST_VIEW_POWER
+        if self.queue_view == QUEUE_VIEW_POWER
             && !self.layout.power.left_sorted_indices.is_empty()
         {
             let needs_sorted = self.libs[lib_idx].search.is_none()
@@ -461,7 +461,7 @@ impl App {
 
         // In power view with letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
-        if self.playlist_view == PLAYLIST_VIEW_POWER
+        if self.queue_view == QUEUE_VIEW_POWER
             && !self.layout.power.left_sorted_indices.is_empty()
         {
             let needs_sorted = self.libs[lib_idx].search.is_none()
@@ -1293,7 +1293,7 @@ impl App {
                 .map(|s| s.media_info.audio_only)
                 .unwrap_or(false);
         }
-        let idx = self.player_tab.playlist_cursor;
+        let idx = self.player_tab.queue_cursor;
         self.player_tab
             .items
             .get(idx)
@@ -1509,7 +1509,7 @@ impl App {
         self.save_prefs();
     }
 
-    pub(super) fn remove_from_playlist(&mut self, pos: usize) {
+    pub(super) fn remove_from_queue(&mut self, pos: usize) {
         let scope = self.displayed_queue_scope();
         let controls_playback_queue = self.queue_scope_is_playback(scope);
         let (active, current_idx) = {
@@ -1534,16 +1534,16 @@ impl App {
             .push(UndoEntry::Remove(pos, Box::new(item)));
         self.persist_local_queue_state_if_needed(scope);
         if controls_playback_queue && active {
-            self.player.send_command(PlayerCommand::PlaylistRemove(pos));
+            self.player.send_command(PlayerCommand::QueueRemove(pos));
             // Player thread adjusts current_idx when it processes the command.
             // No eager adjustment here — doing so races with the player thread
             // and can cause index mismatches during rapid removals.
         }
         let queue = self.queue_for_scope_mut(scope);
         if !queue.items.is_empty() {
-            queue.playlist_cursor = queue.playlist_cursor.min(queue.items.len() - 1);
+            queue.queue_cursor = queue.queue_cursor.min(queue.items.len() - 1);
         } else {
-            queue.playlist_cursor = 0;
+            queue.queue_cursor = 0;
         }
     }
 
@@ -1551,24 +1551,24 @@ impl App {
     /// No-op at the start of the queue. Reorder is local-queue-only (#105) —
     /// designing the wire-protocol reorder for the remote queue is #93's job,
     /// once the local UX this establishes has settled.
-    pub(super) fn move_playlist_item_up(&mut self) {
-        self.move_playlist_item_by(-1);
+    pub(super) fn move_queue_item_up(&mut self) {
+        self.move_queue_item_by(-1);
     }
 
     /// Moves the item at the displayed queue's cursor one position later.
     /// No-op at the end of the queue.
-    pub(super) fn move_playlist_item_down(&mut self) {
-        self.move_playlist_item_by(1);
+    pub(super) fn move_queue_item_down(&mut self) {
+        self.move_queue_item_by(1);
     }
 
-    fn move_playlist_item_by(&mut self, delta: isize) {
+    fn move_queue_item_by(&mut self, delta: isize) {
         let scope = self.displayed_queue_scope();
         if scope == QueueScope::Remote {
             self.flash_status_high("Reorder is not supported for the remote queue".into());
             return;
         }
         let queue = self.queue_for_scope(scope);
-        let from = queue.playlist_cursor;
+        let from = queue.queue_cursor;
         let len = queue.items.len();
         let to = if delta < 0 {
             match from.checked_sub(1) {
@@ -1582,7 +1582,7 @@ impl App {
             }
             t
         };
-        if self.apply_playlist_move(scope, from, to) {
+        if self.apply_queue_move(scope, from, to) {
             let item_id = self.queue_for_scope(scope).items[to].id.clone();
             self.undo_stack_for_scope_mut(scope)
                 .push(UndoEntry::Move { from, to, item_id });
@@ -1592,10 +1592,10 @@ impl App {
     /// Swaps the item at `from` to `to` within `scope`'s queue, moves the
     /// cursor to follow it, and — if this queue is also the live playback
     /// queue — tells the player to make the same move in its own internal
-    /// playlist copy (mirroring how `remove_from_playlist` keeps that copy in
+    /// queue copy (mirroring how `remove_from_queue` keeps that copy in
     /// sync; see `remove_from_active_playback_queue`'s doc comment). Returns
     /// `false` (no-op) if `from`/`to` are out of bounds or equal.
-    pub(super) fn apply_playlist_move(
+    pub(super) fn apply_queue_move(
         &mut self,
         scope: QueueScope,
         from: usize,
@@ -1611,7 +1611,7 @@ impl App {
             let queue = self.queue_for_scope_mut(scope);
             let item = queue.items.remove(from);
             queue.items.insert(to, item);
-            queue.playlist_cursor = to;
+            queue.queue_cursor = to;
         }
         if self.queue_scope_has_local_metadata(scope) {
             self.queue_dirty = true;
@@ -1619,7 +1619,7 @@ impl App {
         self.persist_local_queue_state_if_needed(scope);
         if controls_playback_queue && active {
             self.player
-                .send_command(PlayerCommand::PlaylistMove(from, to));
+                .send_command(PlayerCommand::QueueMove(from, to));
         }
         true
     }
@@ -1636,7 +1636,7 @@ impl App {
                 let queue = self.queue_for_scope_mut(scope);
                 let idx = idx.min(queue.items.len());
                 queue.items.insert(idx, *item);
-                queue.playlist_cursor = idx;
+                queue.queue_cursor = idx;
                 if self.queue_scope_has_local_metadata(scope) {
                     self.queue_dirty = true;
                 }
@@ -1648,7 +1648,7 @@ impl App {
                     .items
                     .get(to)
                     .is_some_and(|item| item.id == item_id);
-                if !still_in_place || !self.apply_playlist_move(scope, to, from) {
+                if !still_in_place || !self.apply_queue_move(scope, to, from) {
                     self.flash_status_high(
                         "Can't undo move: queue changed since then".into(),
                     );
@@ -1760,7 +1760,7 @@ impl App {
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_queue_scope());
         // Keep library focus when playing from the power-view library panel.
-        if !(self.playlist_view == PLAYLIST_VIEW_POWER
+        if !(self.queue_view == QUEUE_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left))
         {
             self.power_focus = PowerFocus::Queue;
@@ -1784,7 +1784,7 @@ impl App {
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
         self.player
-            .play_playlist(items, start_idx, c, self.ui_volume);
+            .play_queue(items, start_idx, c, self.ui_volume);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
@@ -1792,7 +1792,7 @@ impl App {
     pub(super) fn play_item(&mut self, item: MediaItem) {
         self.on_queue_replace_silent();
         // Keep library focus when playing from the power-view library panel.
-        if !(self.playlist_view == PLAYLIST_VIEW_POWER
+        if !(self.queue_view == QUEUE_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left))
         {
             self.power_focus = PowerFocus::Queue;
@@ -1815,7 +1815,7 @@ impl App {
                 let c = Arc::new(self.client.lock().unwrap().clone());
                 self.on_queue_replace_silent();
                 self.replace_playback_queue(episodes.clone(), 0);
-                self.player.play_playlist(episodes, 0, c, self.ui_volume);
+                self.player.play_queue(episodes, 0, c, self.ui_volume);
                 self.player
                     .send_command(PlayerCommand::SetMute(self.mute_on));
                 if !self.has_direct_remote_queue() {
@@ -2117,7 +2117,7 @@ impl App {
             // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is
             // no list above to go back to. Search-clearing still falls through
             // because this guard only fires when search is None.
-            if self.playlist_view == PLAYLIST_VIEW_POWER
+            if self.queue_view == QUEUE_VIEW_POWER
                 && self.power_left_tab == lib_idx + 1
                 && self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.len() == 2
@@ -2153,7 +2153,7 @@ impl App {
 
                 // In the power view, skip past the auto-pushed Season level so
                 // a single Escape takes the user back to the series list.
-                if self.playlist_view == PLAYLIST_VIEW_POWER && self.power_left_tab == lib_idx + 1 {
+                if self.queue_view == QUEUE_VIEW_POWER && self.power_left_tab == lib_idx + 1 {
                     let exposed_seasons = self.libs[lib_idx]
                         .nav_stack
                         .last()
@@ -2185,7 +2185,7 @@ impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
         match action {
             Some(ContextAction::Play) => {
-                if self.playlist_view == super::PLAYLIST_VIEW_POWER
+                if self.queue_view == super::QUEUE_VIEW_POWER
                     && matches!(self.power_focus, PowerFocus::Left)
                     && self.power_left_tab == 0
                 {
@@ -2195,7 +2195,7 @@ impl App {
                 } else if self.tab_idx == 1 {
                     let scope = self.displayed_queue_scope();
                     let queue = self.displayed_queue();
-                    let t = queue.playlist_cursor;
+                    let t = queue.queue_cursor;
                     if t < queue.items.len() {
                         if let Some(ref conn_id) = self.connected_session_id.clone() {
                             let item = queue.items[t].clone();
@@ -2221,7 +2221,7 @@ impl App {
                                 let items = queue.items.clone();
                                 let c = Arc::new(self.client.lock().unwrap().clone());
                                 self.replace_playback_queue(items.clone(), t);
-                                self.player.play_playlist(items, t, c, self.ui_volume);
+                                self.player.play_queue(items, t, c, self.ui_volume);
                             }
                         }
                     }
@@ -2248,7 +2248,7 @@ impl App {
                 self.shuffle_folder(&id);
             }
             Some(ContextAction::Enqueue) => {
-                if self.playlist_view == super::PLAYLIST_VIEW_POWER
+                if self.queue_view == super::QUEUE_VIEW_POWER
                     && matches!(self.power_focus, PowerFocus::Left)
                     && self.power_left_tab == 0
                 {
@@ -2263,7 +2263,7 @@ impl App {
             Some(ContextAction::MarkUnplayed(id)) => self.context_set_played(&id, false),
             Some(ContextAction::MarkItemsUnplayed(ids)) => self.context_set_many_unplayed(&ids),
             Some(ContextAction::RemoveFromContinueWatching) => self.remove_from_continue_watching(),
-            Some(ContextAction::RemoveFromPlaylist(pos)) => self.remove_from_playlist(pos),
+            Some(ContextAction::RemoveFromQueue(pos)) => self.remove_from_queue(pos),
             Some(ContextAction::GoToLibrary(item_id, item_type)) => {
                 let libs: Vec<(usize, String, String)> = self
                     .libs
@@ -2320,7 +2320,7 @@ impl App {
                 if played {
                     let lib_idx_opt = if self.tab_idx >= self.lib_tab_offset() {
                         Some(self.tab_idx - self.lib_tab_offset())
-                    } else if self.playlist_view == super::PLAYLIST_VIEW_POWER
+                    } else if self.queue_view == super::QUEUE_VIEW_POWER
                         && matches!(self.power_focus, PowerFocus::Left)
                         && self.power_left_tab > 0
                     {
@@ -2446,7 +2446,7 @@ impl App {
     pub(super) fn refresh_lib(&mut self) {
         let lib_idx = if self.tab_idx > 1 && self.tab_idx != self.log_tab_idx() {
             self.tab_idx - self.lib_tab_offset()
-        } else if self.playlist_view == PLAYLIST_VIEW_POWER
+        } else if self.queue_view == QUEUE_VIEW_POWER
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab > 0
         {
@@ -2646,14 +2646,14 @@ impl App {
         if idx >= self.libs.len() {
             return;
         }
-        if self.playlist_view == PLAYLIST_VIEW_POWER
+        if self.queue_view == QUEUE_VIEW_POWER
             && self.power_left_tab == idx + 1
             && self.is_feed_home_video_library(idx)
         {
             self.ensure_feed_home_video_root_loaded(idx);
             return;
         }
-        if self.playlist_view == PLAYLIST_VIEW_POWER
+        if self.queue_view == QUEUE_VIEW_POWER
             && self.power_left_tab == idx + 1
             && self.is_podcast_library(idx)
         {
@@ -3265,7 +3265,7 @@ impl App {
                 // In the power view: when a season list arrives for a TV library,
                 // automatically push a loading placeholder and fetch the first season's
                 // episodes so the user lands directly in the combined series view.
-                let should_auto_push = self.playlist_view == PLAYLIST_VIEW_POWER
+                let should_auto_push = self.queue_view == QUEUE_VIEW_POWER
                     && self.power_left_tab == lib_idx + 1
                     && self
                         .libs
@@ -3325,7 +3325,7 @@ impl App {
                 // In the power view: when the group list loads for a music library
                 // with levels = ["group", …], automatically push the first group's
                 // album level so the user lands directly in the combined group view.
-                let should_auto_push_music = self.playlist_view == PLAYLIST_VIEW_POWER
+                let should_auto_push_music = self.queue_view == QUEUE_VIEW_POWER
                     && self.power_left_tab == lib_idx + 1
                     && self
                         .libs
@@ -3471,7 +3471,7 @@ impl App {
                     .libs
                     .get(lib_idx)
                     .map(|lib| {
-                        self.playlist_view == PLAYLIST_VIEW_POWER
+                        self.queue_view == QUEUE_VIEW_POWER
                             && self.power_left_tab == lib_idx + 1
                             && (self.is_feed_home_video_library(lib_idx)
                                 || self.is_podcast_library(lib_idx))
@@ -3613,7 +3613,7 @@ impl App {
                 // two queue entries can share the same underlying item ID — so a
                 // stale server-side position can't stomp live in-session progress
                 // and the active item is never pruned out from under playback.
-                let active_idx = self.player_tab.playlist_cursor;
+                let active_idx = self.player_tab.queue_cursor;
                 let fresh_by_id: std::collections::HashMap<&str, &MediaItem> =
                     items.iter().map(|i| (i.id.as_str(), i)).collect();
                 // If this restored local queue happens to already be live playback
@@ -3646,8 +3646,8 @@ impl App {
                             } else {
                                 self.player_tab.items.remove(idx);
                             }
-                            if idx < self.player_tab.playlist_cursor {
-                                self.player_tab.playlist_cursor -= 1;
+                            if idx < self.player_tab.queue_cursor {
+                                self.player_tab.queue_cursor -= 1;
                             }
                         }
                     }
@@ -3723,7 +3723,7 @@ impl App {
                 } else {
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     self.player
-                        .play_playlist(items, start_idx, c, self.ui_volume);
+                        .play_queue(items, start_idx, c, self.ui_volume);
                     self.player
                         .send_command(PlayerCommand::SetMute(self.mute_on));
                 }
@@ -3736,7 +3736,7 @@ impl App {
                 if self.queue_scope_has_local_metadata(scope) {
                     self.clear_local_queue_metadata();
                 } else {
-                    self.remote_playlist_undo_stack.clear();
+                    self.remote_queue_undo_stack.clear();
                 }
                 if scope == QueueScope::Remote {
                     self.replace_direct_remote_queue(Vec::new(), 0);
@@ -3746,7 +3746,7 @@ impl App {
                 if scope != QueueScope::Remote {
                     let queue = self.queue_for_scope_mut(scope);
                     queue.items.clear();
-                    queue.playlist_cursor = 0;
+                    queue.queue_cursor = 0;
                 }
                 self.persist_local_queue_state_if_needed(scope);
                 self.flash_status("Queue cleared".into());
@@ -4143,7 +4143,7 @@ impl App {
         crate::config::QueueState {
             source: self.queue_source.clone(),
             items: self.player_tab.items.clone(),
-            cursor: self.player_tab.playlist_cursor,
+            cursor: self.player_tab.queue_cursor,
             last_played_item_id: self.last_played_item_id.clone(),
             last_played_completed: self.last_played_completed,
             positions,
@@ -4202,7 +4202,7 @@ impl App {
         self.last_played_item_id = state.last_played_item_id;
         self.last_played_completed = state.last_played_completed;
         self.queue_source = state.source;
-        self.player_tab.playlist_cursor = cursor;
+        self.player_tab.queue_cursor = cursor;
         self.player_tab.items = state.items;
         self.queue_dirty = false;
         if self.client.lock().unwrap().config.start_on_queue {
@@ -4492,27 +4492,27 @@ impl App {
                         item.playback_position_ticks = start_position_ticks;
                     }
                     self.player_tab.items = vec![item.clone()];
-                    self.player_tab.playlist_cursor = 0;
+                    self.player_tab.queue_cursor = 0;
                     self.flash_status(item.playback_label());
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     self.player.play(&item, c, self.ui_volume);
                 } else {
                     let count = items.len();
                     self.player_tab.items = items.clone();
-                    self.player_tab.playlist_cursor = start_idx;
+                    self.player_tab.queue_cursor = start_idx;
                     self.flash_status(format!("Playing {count} items"));
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     log::info!(target: "ws", "Play multi: count={count}, start_idx={start_idx}");
-                    // Always hand the whole list to play_playlist (not just the clicked
+                    // Always hand the whole list to play_queue (not just the clicked
                     // item) so the remote-controlled queue continues past start_idx.
-                    // play_playlist already handles the "something is already playing"
-                    // case in place via ReplacePlaylist.
+                    // play_queue already handles the "something is already playing"
+                    // case in place via ReplaceQueue.
                     let mut items_with_pos = items.clone();
                     if start_position_ticks > 0 {
                         items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
                     }
                     self.player
-                        .play_playlist(items_with_pos, start_idx, c, self.ui_volume);
+                        .play_queue(items_with_pos, start_idx, c, self.ui_volume);
                 }
                 self.queue_source = crate::config::QueueSource::Remote;
                 self.save_queue_state();
@@ -4838,7 +4838,7 @@ mod tests {
         // No network call is needed for the queue to already be correct —
         // this is a synchronous, local read, not a spawned background fetch.
         assert_eq!(app.player_tab.items.len(), 3);
-        assert_eq!(app.player_tab.playlist_cursor, 1);
+        assert_eq!(app.player_tab.queue_cursor, 1);
     }
 
     #[test]
@@ -4871,7 +4871,7 @@ mod tests {
     fn queue_enriched_prunes_items_the_server_no_longer_returns() {
         let mut app = crate::app::tests::make_app_stub();
         app.player_tab.items = crate::app::tests::make_items(3); // id0, id1, id2
-        app.player_tab.playlist_cursor = 0;
+        app.player_tab.queue_cursor = 0;
 
         // The background fetch no longer returns id1 (e.g. deleted server-side).
         let fresh = vec![app.player_tab.items[0].clone(), app.player_tab.items[2].clone()];
@@ -4885,7 +4885,7 @@ mod tests {
              restored queue, not left stale forever"
         );
         assert_eq!(
-            app.player_tab.playlist_cursor, 0,
+            app.player_tab.queue_cursor, 0,
             "removing an item after the cursor must not shift the cursor"
         );
     }
@@ -4896,7 +4896,7 @@ mod tests {
         let mut items = crate::app::tests::make_items(2); // id0, id1
         items[1].id = "id0".to_string(); // duplicate of the active item's id
         app.player_tab.items = items;
-        app.player_tab.playlist_cursor = 0; // slot 0 (id0) is the active one
+        app.player_tab.queue_cursor = 0; // slot 0 (id0) is the active one
 
         // The fetch confirms id0 still exists, so slot 1's duplicate id0 would
         // also match by id alone if the skip weren't by-slot.
@@ -5097,7 +5097,7 @@ mod tests {
         let mut app = crate::app::tests::make_app_stub();
         assert!(app.connected_session_id.is_none());
         app.player_tab.items = vec![crate::app::tests::make_item("song", "Audio")];
-        app.player_tab.playlist_cursor = 0;
+        app.player_tab.queue_cursor = 0;
 
         assert!(app.is_audio_item());
     }

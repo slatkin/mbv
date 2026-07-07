@@ -337,7 +337,7 @@ impl RemotePlayer {
         *self.items.lock().unwrap() = vec![item.clone()];
     }
 
-    pub fn play_playlist(
+    pub fn play_queue(
         &self,
         items: Vec<MediaItem>,
         start_idx: usize,
@@ -550,7 +550,7 @@ mod tests {
         let (tx, _rx) = mpsc::channel();
 
         // s.status.queue_len (99) is stale relative to s.items.len() (2) — the
-        // daemon broadcasts CtrlState before calling play_playlist(...), so
+        // daemon broadcasts CtrlState before calling play_queue(...), so
         // items/cursor are authoritative over status at broadcast time.
         apply_ctrl_event(
             CtrlEvent::State(CtrlState {

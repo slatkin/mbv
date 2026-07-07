@@ -538,7 +538,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
                     }),
                 );
             }
-            DaemonEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }) => {
+            DaemonEvent::Player(PlayerEvent::QueueNextUp { next_idx }) => {
                 if let Some(item) = items.get(next_idx) {
                     player.send_command(PlayerCommand::NextUpShow {
                         item_id: item.id.clone(),
@@ -549,7 +549,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
                 }
                 broadcast(
                     &ctrl_clients,
-                    &CtrlEvent::Player(PlayerEvent::PlaylistNextUp { next_idx }),
+                    &CtrlEvent::Player(PlayerEvent::QueueNextUp { next_idx }),
                 );
             }
             DaemonEvent::Player(pe) => {
@@ -610,7 +610,7 @@ fn handle_ctrl(
             log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
         }
         CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
-            PlayerCommand::ReplacePlaylist {
+            PlayerCommand::ReplaceQueue {
                 items: new_items,
                 start_idx,
             } => {
@@ -631,7 +631,7 @@ fn handle_ctrl(
                         cursor: next_cursor,
                     }),
                 );
-                player.send_command(PlayerCommand::ReplacePlaylist {
+                player.send_command(PlayerCommand::ReplaceQueue {
                     items: new_items,
                     start_idx,
                 });
@@ -684,7 +684,7 @@ fn handle_ctrl(
                             }),
                         );
                         let c = Arc::new(client.lock().unwrap().clone());
-                        player.play_playlist(queue, 0, c, 100);
+                        player.play_queue(queue, 0, c, 100);
                         return;
                     }
                 }
@@ -725,7 +725,7 @@ fn handle_ctrl(
                     }),
                 );
                 let c = Arc::new(client.lock().unwrap().clone());
-                player.play_playlist(play_items, start_idx, c, 100);
+                player.play_queue(play_items, start_idx, c, 100);
             }
         }
         CtrlCmd::Stop => {
@@ -807,7 +807,7 @@ fn handle_ws(
                 let mut items_with_pos = fetched.clone();
                 items_with_pos[start_idx] = start_item;
                 let c = Arc::new(client.lock().unwrap().clone());
-                player.play_playlist(items_with_pos, start_idx, c, 100);
+                player.play_queue(items_with_pos, start_idx, c, 100);
             }
         }
         WsEvent::Stop => {
