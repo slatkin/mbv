@@ -8,7 +8,6 @@ use crate::api::{mbv_direct_tcp_port_command, EmbyClient, MediaItem};
 use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, CtrlState};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
-use ksni::blocking::TrayMethods;
 
 /// Shared by the startup registration and the periodic 10-minute
 /// re-registration in the main loop below.
@@ -49,40 +48,6 @@ enum DaemonEvent {
 }
 
 type ClientList = Arc<Mutex<Vec<mpsc::Sender<String>>>>;
-
-const TRAY_ICON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tray_icon.bin"));
-
-struct MbyTray {
-    shutdown_tx: mpsc::SyncSender<()>,
-}
-
-impl ksni::Tray for MbyTray {
-    fn id(&self) -> String {
-        "mbv".into()
-    }
-    fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        vec![ksni::Icon {
-            width: 24,
-            height: 24,
-            data: TRAY_ICON.to_vec(),
-        }]
-    }
-    fn title(&self) -> String {
-        "mbv".into()
-    }
-    fn menu(&self) -> Vec<ksni::MenuItem<Self>> {
-        use ksni::menu::*;
-        vec![StandardItem {
-            label: "Quit".into(),
-            icon_name: "application-exit".into(),
-            activate: Box::new(|tray: &mut Self| {
-                let _ = tray.shutdown_tx.try_send(());
-            }),
-            ..Default::default()
-        }
-        .into()]
-    }
-}
 
 pub fn pid_file() -> std::path::PathBuf {
     let dir = crate::config::data_dir_system_or_local();
@@ -212,7 +177,19 @@ fn spawn_ctrl_client<R, W>(
     });
 }
 
-pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
+pub fn run_with_options<F, G>(
+    client: EmbyClient,
+    audio_only: bool,
+    on_player_ready: F,
+    on_tray_ready: G,
+) -> !
+where
+    F: FnOnce(
+        Arc<Mutex<crate::player::PlayerStatus>>,
+        Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
+    ),
+    G: FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>,
+{
     std::fs::write(pid_file(), std::process::id().to_string())
         .expect("mbv daemon: failed to write PID file");
 
@@ -291,25 +268,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool) -> ! {
 
     let player_status = player.status.clone();
     let player_cmd_tx = player.cmd_tx.clone();
-    crate::mpris::start(player_status, move |cmd| {
-        if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
-            let _ = tx.send(cmd);
-        }
-    });
+    on_player_ready(player_status, player_cmd_tx);
 
-    let show_systray_icon = client.lock().unwrap().config.show_systray_icon;
-    let _tray = if show_systray_icon {
-        MbyTray {
-            shutdown_tx: shutdown_signal_tx,
-        }
-        .spawn()
-        .map_err(|e| {
-            log::warn!(target: "tray", "not available: {e}");
-        })
-        .ok()
-    } else {
-        None
-    };
+    let _tray = on_tray_ready(shutdown_signal_tx.clone());
 
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
 

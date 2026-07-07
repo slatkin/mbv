@@ -1,14 +1,8 @@
-mod api;
 mod app;
-mod applog;
-mod config;
-mod ctrl;
-mod daemon;
 mod login;
 mod mpris;
-mod player;
-mod remote_player;
-mod ws;
+mod tray;
+pub use mbv_core::{api, applog, config, ctrl, daemon, player, remote_player, ws};
 
 use api::EmbyClient;
 use app::App;
@@ -306,7 +300,25 @@ fn main() {
     }
 
     if daemon_inner {
-        daemon::run_with_options(client, daemon_audio_only); // never returns
+        let show_systray_icon = client.config.show_systray_icon;
+        daemon::run_with_options(
+            client,
+            daemon_audio_only,
+            |player_status, player_cmd_tx| {
+                mpris::start(player_status, move |cmd| {
+                    if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
+                        let _ = tx.send(cmd);
+                    }
+                });
+            },
+            move |shutdown_tx| {
+                if show_systray_icon {
+                    tray::spawn(shutdown_tx)
+                } else {
+                    None
+                }
+            },
+        ); // never returns
     }
 
     if let Some(endpoint) = explicit_daemon_endpoint {

@@ -364,7 +364,6 @@ impl RemotePlayer {
         // No thread to join; daemon keeps running when TUI exits.
     }
 
-    #[cfg(test)]
     fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,
@@ -374,7 +373,8 @@ impl RemotePlayer {
         }
     }
 
-    #[cfg(test)]
+    /// Test helper for root-crate integration tests that need a remote-player
+    /// stand-in without a live daemon connection.
     pub fn stub(items: Vec<MediaItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
         let queue_len = items.len();
         let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));

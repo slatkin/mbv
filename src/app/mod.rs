@@ -367,7 +367,9 @@ enum LibEvent {
     /// Best-effort background refresh of played/position state for the queue
     /// that `restore_queue_state` already populated synchronously from disk.
     /// See `spawn_enrich_queue_state`.
-    QueueEnriched { items: Vec<MediaItem> },
+    QueueEnriched {
+        items: Vec<MediaItem>,
+    },
     Error(String),
 }
 
@@ -1280,8 +1282,7 @@ impl App {
             return None;
         }
         let removed_id = queue.items.remove(idx).id;
-        self.player
-            .send_command(PlayerCommand::QueueRemove(idx));
+        self.player.send_command(PlayerCommand::QueueRemove(idx));
         Some(removed_id)
     }
 

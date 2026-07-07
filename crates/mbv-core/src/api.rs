@@ -1336,7 +1336,11 @@ impl EmbyClient {
             .map(|u| format!("{}{}", self.config.server_url, u))
             .collect();
         log::info!(target: "api", "inbound: PlaybackInfo sid={sid} msid={msid} ext_subs={}", sub_urls.len());
-        let session_id = if sid.is_empty() { gen_session_id() } else { sid };
+        let session_id = if sid.is_empty() {
+            gen_session_id()
+        } else {
+            sid
+        };
         PlaybackInfo {
             session_id,
             media_source_id: msid,

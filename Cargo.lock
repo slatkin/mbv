@@ -1437,6 +1437,7 @@ dependencies = [
  "libmpv2",
  "libmpv2-sys",
  "log",
+ "mbv-core",
  "rand 0.10.1",
  "ratatui",
  "ratatui-image",
@@ -1451,6 +1452,23 @@ dependencies = [
  "ureq",
  "uuid",
  "zbus 4.4.0",
+]
+
+[[package]]
+name = "mbv-core"
+version = "0.10.5"
+dependencies = [
+ "libc",
+ "libmpv2",
+ "libmpv2-sys",
+ "log",
+ "rand 0.10.1",
+ "serde",
+ "serde_json",
+ "toml",
+ "tungstenite",
+ "ureq",
+ "uuid",
 ]
 
 [[package]]

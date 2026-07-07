@@ -4774,7 +4774,10 @@ mod tests {
     fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
         let items = crate::app::tests::make_items(3);
         let cursor = queue_restore_cursor(&items, 99, Some("id5"), false);
-        assert_eq!(cursor, 2, "out-of-range saved cursor must clamp to the last valid index");
+        assert_eq!(
+            cursor, 2,
+            "out-of-range saved cursor must clamp to the last valid index"
+        );
     }
 
     #[test]
@@ -4874,7 +4877,10 @@ mod tests {
         app.player_tab.queue_cursor = 0;
 
         // The background fetch no longer returns id1 (e.g. deleted server-side).
-        let fresh = vec![app.player_tab.items[0].clone(), app.player_tab.items[2].clone()];
+        let fresh = vec![
+            app.player_tab.items[0].clone(),
+            app.player_tab.items[2].clone(),
+        ];
         app.handle_lib_event(LibEvent::QueueEnriched { items: fresh });
 
         let ids: Vec<&str> = app.player_tab.items.iter().map(|i| i.id.as_str()).collect();
