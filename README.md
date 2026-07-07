@@ -8,6 +8,8 @@ This allows one to browse libraries, build a queue, and play media from their li
 
 This was built with AI because I am lazy and I already have a job (for now). You can tell because there's a lot of unnecessary images in a TUI app.
 
+![mbv power view: library browser, video preview, and queue](assets/screenshot.png)
+
 ## Requirements
 
 - Rust toolchain (for building)
