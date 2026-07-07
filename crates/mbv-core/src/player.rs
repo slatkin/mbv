@@ -1993,9 +1993,7 @@ impl QueueSession {
                         let _ = self.event_tx.send(PlayerEvent::QueueNextUp {
                             next_idx: self.current_idx + 1,
                         });
-                    } else if !self.queue_next_up_armed
-                        && ticks > 0
-                        && ticks < TICKS_PER_SECOND * 5
+                    } else if !self.queue_next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5
                     {
                         self.queue_next_up_armed = true;
                         log::info!(target: "player", "queue next-up armed idx={}", self.current_idx + 1);
@@ -3002,9 +3000,7 @@ impl PlayerProxy {
     ) {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.play_queue(items, start_idx, client, initial_volume),
-            PlayerProxyInner::Remote(r) => {
-                r.play_queue(items, start_idx, client, initial_volume)
-            }
+            PlayerProxyInner::Remote(r) => r.play_queue(items, start_idx, client, initial_volume),
         }
     }
 

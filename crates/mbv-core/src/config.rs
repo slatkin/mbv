@@ -153,16 +153,16 @@ pub fn cache_dir() -> PathBuf {
 // only visible on the thread that set it, so two tests running on different
 // threads can never observe (or clobber) each other's override, no lock
 // required. See `TestStateDirGuard` and issue #106.
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 thread_local! {
     static TEST_STATE_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
         const { std::cell::RefCell::new(None) };
 }
 
-#[cfg(test)]
-pub(crate) struct TestStateDirGuard;
+#[cfg(any(test, feature = "test-support"))]
+pub struct TestStateDirGuard;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
 impl TestStateDirGuard {
     /// Points `state_dir()` at a fresh, unique tempdir for the lifetime of
     /// this guard, visible only on the calling thread. Use this in any test
@@ -170,7 +170,7 @@ impl TestStateDirGuard {
     /// `save_queue_state`/`restore_queue_state` (e.g. via consume-mode event
     /// handling) but isn't itself testing path resolution -- so it never
     /// touches a real on-disk path or races a sibling test.
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
         let _ = std::fs::create_dir_all(&dir);
         TEST_STATE_DIR_OVERRIDE.with(|c| *c.borrow_mut() = Some(dir));
@@ -178,7 +178,14 @@ impl TestStateDirGuard {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "test-support"))]
+impl Default for TestStateDirGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[cfg(any(test, feature = "test-support"))]
 impl Drop for TestStateDirGuard {
     fn drop(&mut self) {
         let dir = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow_mut().take());
@@ -857,11 +864,14 @@ pub fn save_config_settings(cfg: &Config) {
     }
 }
 
-#[cfg(test)]
-pub(crate) mod tests {
+#[cfg(any(test, feature = "test-support"))]
+pub mod tests {
+    #[cfg(test)]
     use super::*;
+    #[cfg(test)]
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    #[cfg(test)]
     #[test]
     fn parse_full_config() {
         let toml = r#"
@@ -875,6 +885,7 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
         assert_eq!(cfg.hidden_libraries, vec!["live tv", "podcasts", "music"]);
     }
 
+    #[cfg(test)]
     #[test]
     fn parse_missing_server_section_returns_default() {
         let cfg = parse_config("[mpv]\nshow_audio_window = false").unwrap();
@@ -882,12 +893,14 @@ hidden_libraries = ["Live TV", "Podcasts", "Music"]
         assert_eq!(cfg.hidden_libraries, vec!["live tv"]);
     }
 
+    #[cfg(test)]
     #[test]
     fn parse_empty_string_returns_default() {
         let cfg = parse_config("").unwrap();
         assert_eq!(cfg.server_url, "");
     }
 
+    #[cfg(test)]
     #[test]
     fn parse_audio_pipe_settings() {
         let toml = r#"
@@ -906,6 +919,7 @@ audio_pipe_bitdepth = 16
         assert_eq!(cfg.audio_pipe_bitdepth, 16);
     }
 
+    #[cfg(test)]
     #[test]
     fn parse_audio_pipe_defaults() {
         let cfg = parse_config("").unwrap();
@@ -915,6 +929,7 @@ audio_pipe_bitdepth = 16
         assert_eq!(cfg.audio_pipe_bitdepth, 32);
     }
 
+    #[cfg(test)]
     #[test]
     fn parse_daemon_client_endpoint() {
         let toml = r#"
@@ -927,6 +942,7 @@ endpoint = "unix:///tmp/mbv.sock"
         assert_eq!(cfg.daemon_client_endpoint, "unix:///tmp/mbv.sock");
     }
 
+    #[cfg(test)]
     #[test]
     fn parse_daemon_server_tcp_listen() {
         let toml = r#"
@@ -939,6 +955,7 @@ tcp_listen = "0.0.0.0:8890"
         assert_eq!(cfg.daemon_server_tcp_listen, "0.0.0.0:8890");
     }
 
+    #[cfg(test)]
     #[test]
     fn parse_consume_audio_and_autosave_default_to_false() {
         let cfg = parse_config("").unwrap();
@@ -946,6 +963,7 @@ tcp_listen = "0.0.0.0:8890"
         assert!(!cfg.save_playlist_on_consume_audio);
     }
 
+    #[cfg(test)]
     #[test]
     fn parse_consume_audio_and_autosave_flags() {
         let toml = r#"
@@ -960,6 +978,7 @@ save_playlist_on_consume_audio = true
         assert!(cfg.save_playlist_on_consume_audio);
     }
 
+    #[cfg(test)]
     #[test]
     fn save_config_settings_round_trips_consume_audio_flags() {
         let _g = SYS_ENV_LOCK.lock().unwrap();
@@ -1129,7 +1148,7 @@ hidden_latest = ["Movies", "TV SHOWS"]
     // test's queue_state.json read intermittently coming back empty because
     // an unrelated, unguarded HOSTNAME mutation in api.rs raced it).
     use std::sync::Mutex;
-    pub(crate) static SYS_ENV_LOCK: Mutex<()> = Mutex::new(());
+    pub static SYS_ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn is_system_instance_false_without_env_var() {

@@ -398,7 +398,11 @@ enum QueueScope {
 #[derive(Debug)]
 enum UndoEntry {
     Remove(usize, Box<MediaItem>),
-    Move { from: usize, to: usize, item_id: String },
+    Move {
+        from: usize,
+        to: usize,
+        item_id: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -771,7 +775,7 @@ impl App {
         };
         crate::config::UiConfig {
             image_protocol: self.image_protocol.clone(),
-            show_log_tab: self.show_log_tab,
+            show_log_tab: false,
             image_cache_size: self.image_cache_size,
             use_nerd_fonts: self.use_nerd_fonts,
             indicator_style: indicator_style.to_string(),
@@ -2088,9 +2092,8 @@ impl App {
                         if queue.items.is_empty() {
                             queue.queue_cursor = 0;
                         } else {
-                            queue.queue_cursor = queue
-                                .queue_cursor
-                                .min(queue.items.len().saturating_sub(1));
+                            queue.queue_cursor =
+                                queue.queue_cursor.min(queue.items.len().saturating_sub(1));
                         }
                         log::info!(target: "consume", "Stopped-path: removed idx={idx} from queue \
                             len_before={len_before} len_after={len_after} removed_id={removed_id:?}");

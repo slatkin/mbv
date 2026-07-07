@@ -1,9 +1,16 @@
+#[cfg(test)]
+pub use mbv_core::config::TestStateDirGuard;
 pub use mbv_core::config::{
     clear_queue_state, is_system_instance, load_queue_state, prefs_path, save_queue_state, Config,
     QueueSource, QueueState,
 };
 
 use std::path::PathBuf;
+
+#[cfg(test)]
+pub mod tests {
+    pub use mbv_core::config::tests::SYS_ENV_LOCK;
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiConfig {

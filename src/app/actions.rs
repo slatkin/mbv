@@ -1,8 +1,8 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes};
 use super::{
     App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent,
-    PendingQueueAction, PowerFocus, QueueScope, SessionEvent, UndoEntry, PAGE_SIZE,
-    QUEUE_VIEW_POWER, PREFETCH_AHEAD,
+    PendingQueueAction, PowerFocus, QueueScope, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD,
+    QUEUE_VIEW_POWER,
 };
 use mbv_core::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
@@ -399,8 +399,7 @@ impl App {
 
         // In power view with letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
-        if self.queue_view == QUEUE_VIEW_POWER
-            && !self.layout.power.left_sorted_indices.is_empty()
+        if self.queue_view == QUEUE_VIEW_POWER && !self.layout.power.left_sorted_indices.is_empty()
         {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.last().is_some();
@@ -461,8 +460,7 @@ impl App {
 
         // In power view with letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
-        if self.queue_view == QUEUE_VIEW_POWER
-            && !self.layout.power.left_sorted_indices.is_empty()
+        if self.queue_view == QUEUE_VIEW_POWER && !self.layout.power.left_sorted_indices.is_empty()
         {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && !self.layout.power.left_sorted_indices.is_empty();
@@ -1595,12 +1593,7 @@ impl App {
     /// queue copy (mirroring how `remove_from_queue` keeps that copy in
     /// sync; see `remove_from_active_playback_queue`'s doc comment). Returns
     /// `false` (no-op) if `from`/`to` are out of bounds or equal.
-    pub(super) fn apply_queue_move(
-        &mut self,
-        scope: QueueScope,
-        from: usize,
-        to: usize,
-    ) -> bool {
+    pub(super) fn apply_queue_move(&mut self, scope: QueueScope, from: usize, to: usize) -> bool {
         let len = self.queue_for_scope(scope).items.len();
         if from >= len || to >= len || from == to {
             return false;
@@ -1618,8 +1611,7 @@ impl App {
         }
         self.persist_local_queue_state_if_needed(scope);
         if controls_playback_queue && active {
-            self.player
-                .send_command(PlayerCommand::QueueMove(from, to));
+            self.player.send_command(PlayerCommand::QueueMove(from, to));
         }
         true
     }
@@ -1649,9 +1641,7 @@ impl App {
                     .get(to)
                     .is_some_and(|item| item.id == item_id);
                 if !still_in_place || !self.apply_queue_move(scope, to, from) {
-                    self.flash_status_high(
-                        "Can't undo move: queue changed since then".into(),
-                    );
+                    self.flash_status_high("Can't undo move: queue changed since then".into());
                     return;
                 }
             }
@@ -1760,9 +1750,7 @@ impl App {
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_queue_scope());
         // Keep library focus when playing from the power-view library panel.
-        if !(self.queue_view == QUEUE_VIEW_POWER
-            && matches!(self.power_focus, PowerFocus::Left))
-        {
+        if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
             self.power_focus = PowerFocus::Queue;
         }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -1783,8 +1771,7 @@ impl App {
             return;
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
-        self.player
-            .play_queue(items, start_idx, c, self.ui_volume);
+        self.player.play_queue(items, start_idx, c, self.ui_volume);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
@@ -1792,9 +1779,7 @@ impl App {
     pub(super) fn play_item(&mut self, item: MediaItem) {
         self.on_queue_replace_silent();
         // Keep library focus when playing from the power-view library panel.
-        if !(self.queue_view == QUEUE_VIEW_POWER
-            && matches!(self.power_focus, PowerFocus::Left))
-        {
+        if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
             self.power_focus = PowerFocus::Queue;
         }
         let label = item.playback_label();
@@ -3722,8 +3707,7 @@ impl App {
                     });
                 } else {
                     let c = Arc::new(self.client.lock().unwrap().clone());
-                    self.player
-                        .play_queue(items, start_idx, c, self.ui_volume);
+                    self.player.play_queue(items, start_idx, c, self.ui_volume);
                     self.player
                         .send_command(PlayerCommand::SetMute(self.mute_on));
                 }

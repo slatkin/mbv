@@ -1230,8 +1230,7 @@ impl App {
         }
 
         // In power view, route nav keys to the focused library panel.
-        if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)
-        {
+        if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left) {
             if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
                 return false;
             }
@@ -1394,9 +1393,7 @@ impl App {
         }
 
         // Power view queue focus: PageUp/PageDown use the actual queue panel height.
-        if self.queue_view == QUEUE_VIEW_POWER
-            && matches!(self.power_focus, PowerFocus::Queue)
-        {
+        if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Queue) {
             let page = self.layout.power.queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
                 KeyCode::Char('[')
@@ -1464,8 +1461,7 @@ impl App {
                 self.displayed_queue_mut().queue_cursor -= 1;
             }
             KeyCode::Down
-                if self.displayed_queue().queue_cursor + 1
-                    < self.displayed_queue().items.len() =>
+                if self.displayed_queue().queue_cursor + 1 < self.displayed_queue().items.len() =>
             {
                 self.last_nav_at = Instant::now();
                 self.displayed_queue_mut().queue_cursor += 1;
@@ -1596,9 +1592,7 @@ impl App {
                     self.force_clear = true;
                 }
             }
-            KeyCode::Char('g')
-                if self.tab_idx == 1 && self.queue_view != QUEUE_VIEW_POWER =>
-            {
+            KeyCode::Char('g') if self.tab_idx == 1 && self.queue_view != QUEUE_VIEW_POWER => {
                 self.queue_group = !self.queue_group;
             }
             KeyCode::Char('p') => {
@@ -2754,9 +2748,8 @@ impl App {
                         if n > 0 {
                             let delta = delta * 3;
                             let queue = self.displayed_queue_mut();
-                            queue.queue_cursor = (queue.queue_cursor as i64 + delta)
-                                .clamp(0, n as i64 - 1)
-                                as usize;
+                            queue.queue_cursor =
+                                (queue.queue_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                         }
                     } else if left_area.contains((col, row).into()) {
                         if self.power_left_tab == 0 {

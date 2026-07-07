@@ -1456,7 +1456,7 @@ dependencies = [
 
 [[package]]
 name = "mbv-core"
-version = "0.10.5"
+version = "0.10.7"
 dependencies = [
  "libc",
  "libmpv2",
