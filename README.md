@@ -8,9 +8,7 @@ This allows one to browse libraries, build a queue, and play media from their li
 
 This was built with AI because I am lazy and I already have a job (for now). You can tell because there's a lot of unnecessary images in a TUI app.
 
-| Power view | Music |
-| --- | --- |
-| ![mbv power view: library browser, video preview, and queue](assets/screenshot-power.png) | ![mbv music tab: grouped browsing by decade/artist with album art](assets/screenshot-music.png) |
+<img src="assets/screenshot-power.png" width="49%" alt="mbv power view: library browser, video preview, and queue" /> <img src="assets/screenshot-music.png" width="49%" alt="mbv music tab: grouped browsing by decade/artist with album art" />
 
 ## Requirements
 
