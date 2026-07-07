@@ -239,6 +239,13 @@ mod tests {
 
     #[test]
     fn log_macro_routes_to_ring_buffer() {
+        // `applog::global()` is a single process-wide ring buffer that every
+        // test's `log::*!` calls write into concurrently (the `log` crate's
+        // global logger has no per-thread/per-test scoping), so this test
+        // can't assume its own entry is the *last* one in the snapshot --
+        // another test can log something after this call but before the
+        // snapshot is taken. Search for our own entry by its unique
+        // target+message instead of relying on ordering.
         crate::applog::init(100, false, None);
         let before = crate::applog::global().unwrap().snapshot().len();
         log::info!(target: "test", "ring buffer routing test");
@@ -247,14 +254,12 @@ mod tests {
             after > before,
             "log macro should have added an entry to the ring buffer"
         );
-        let last = crate::applog::global()
+        let entry = crate::applog::global()
             .unwrap()
             .snapshot()
             .into_iter()
-            .last()
-            .unwrap();
-        assert_eq!(last.source, "test");
-        assert_eq!(last.msg, "ring buffer routing test");
-        assert_eq!(last.level, Level::Info);
+            .find(|e| e.source == "test" && e.msg == "ring buffer routing test")
+            .expect("our own log entry should be present in the ring buffer snapshot");
+        assert_eq!(entry.level, Level::Info);
     }
 }
