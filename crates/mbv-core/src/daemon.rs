@@ -125,6 +125,10 @@ fn queue_restore_cursor(
     }
 }
 
+/// Local-daemon bootstrap only: a freshly spawned `--daemon-inner` inherits the
+/// persisted local queue snapshot until a thin client reconnects. This is not
+/// used when attaching to an already-running daemon; in that case the daemon's
+/// live state is authoritative and the client adopts it.
 fn load_initial_queue_snapshot() -> (Vec<MediaItem>, usize) {
     let Some(state) = crate::config::load_queue_state() else {
         return (Vec::new(), 0);
@@ -289,6 +293,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         Some(prefs) => (true, prefs),
         None => (false, crate::player::SubtitlePrefs::default()),
     };
+    let (initial_items, initial_cursor) = load_initial_queue_snapshot();
     let client_locked = client.lock().unwrap().clone();
     let player = Player::new(
         client_locked.config.server_url.clone(),
@@ -302,6 +307,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         player_tx,
         Some(ws_send_tx.clone()),
     );
+
+    player.set_initial_queue(&initial_items, initial_cursor);
 
     let player_status = player.status.clone();
     let player_cmd_tx = player.cmd_tx.clone();
@@ -332,8 +339,6 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
             let _ = tx.send(DaemonEvent::Shutdown);
         }
     });
-
-    let (initial_items, initial_cursor) = load_initial_queue_snapshot();
 
     // Shared state for ctrl socket initial-state snapshots
     let shared_items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(initial_items.clone()));

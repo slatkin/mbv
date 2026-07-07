@@ -2603,6 +2603,32 @@ impl Player {
         }
     }
 
+    /// Seed queue/status state without starting playback. Used when a freshly
+    /// spawned local daemon should inherit a queue snapshot before any thin
+    /// client connects, while an already-running daemon keeps its live state.
+    pub fn set_initial_queue(&self, items: &[MediaItem], cursor: usize) {
+        let mut st = self.status.lock().unwrap();
+        if items.is_empty() {
+            st.position_ticks = 0;
+            st.runtime_ticks = 0;
+            st.paused = false;
+            st.current_idx = 0;
+            st.queue_len = 0;
+            st.active = false;
+            st.title.clear();
+            return;
+        }
+
+        let cursor = cursor.min(items.len().saturating_sub(1));
+        st.position_ticks = items[cursor].playback_position_ticks;
+        st.runtime_ticks = items[cursor].runtime_ticks;
+        st.paused = false;
+        st.current_idx = cursor;
+        st.queue_len = items.len();
+        st.active = false;
+        st.title = items[cursor].display_name();
+    }
+
     // Pipe mode always forces headless (no video window), regardless of item
     // type. Reads `audio_pipe_enabled` from `client.config` (rather than a
     // field cached on `Player`) so a setting toggled mid-session takes effect
@@ -3366,6 +3392,36 @@ mod tests {
             status.toggle_to_reach(true),
             Some(PlayerCommand::TogglePause)
         ));
+    }
+
+    #[test]
+    fn set_initial_queue_seeds_status_without_starting_playback() {
+        let (tx, _rx) = mpsc::channel();
+        let player = Player::new(
+            String::new(),
+            String::new(),
+            false,
+            false,
+            false,
+            false,
+            false,
+            SubtitlePrefs::default(),
+            tx,
+            None,
+        );
+        let mut items = vec![make_media_item("ep1"), make_media_item("ep2")];
+        items[1].playback_position_ticks = 123;
+        items[1].runtime_ticks = 456;
+
+        player.set_initial_queue(&items, 1);
+
+        let status = player.status.lock().unwrap().clone();
+        assert_eq!(status.current_idx, 1);
+        assert_eq!(status.queue_len, 2);
+        assert_eq!(status.position_ticks, 123);
+        assert_eq!(status.runtime_ticks, 456);
+        assert!(!status.active);
+        assert_eq!(status.title, items[1].display_name());
     }
 
     // ── lang_code_to_name (sync with parse_audio_info in api.rs) ─────────────
