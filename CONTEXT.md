@@ -16,6 +16,10 @@ _Note_: currently implemented as two separate, non-unified state machines — `S
 A derived classification — recomputed on demand, never stored — of which kind of control relationship the app currently has to a player: none, attached to another session, directly remote, or acting as a local daemon.
 _Avoid_: implying it's a field that gets set; it's computed fresh from other state each time it's read.
 
+**Thin client**:
+A TUI instance whose authoritative playback state comes from a daemon-backed player/queue instead of a locally-owned player. This describes the control model, not where the daemon runs.
+_Avoid_: treating this as synonymous with **Local daemon** — a thin client can target either a same-machine daemon or a remote daemon.
+
 **Suspended local session**:
 The local player and its event channels, parked in place when control is handed off to a direct remote, so that local playback can be resumed later without rebuilding it from scratch.
 _Avoid_: conflating with remote slot state — that's a classification of the current relationship; this is a stashed resource that exists only during part of one such relationship (direct remote).
@@ -73,6 +77,10 @@ _Avoid_: conflating this with per-command capability gating (the broader, still-
 **Driving client** (#97):
 Among however many clients are attached to a daemon simultaneously (already supported today — `ctrl_clients` broadcasts to a `Vec`, not a single peer), exactly one holds driving authority at a time: its queue/session view is what the daemon treats as authoritative. Settled via #97's grilling: this is forced by the daemon's real deployment (one central server, one physical audio output), not an arbitrary design preference. Uses **takeover** semantics — a newcomer's explicit claim bumps the previous driver to observer — rather than connection rejection, since the expected case is one person switching machines, not multiple parties contending for control.
 _Avoid_: confusing "single driving client" with "single connection allowed" — other attached clients remain valid simultaneous observers (status broadcasts, remote-queue viewing), exactly as today.
+
+**Local daemon**:
+A daemon deployment relationship where the daemon is running on the same machine as the TUI instance. This describes location, not whether the TUI is operating as a thin client or in the separate direct-remote-queue model.
+_Avoid_: using this as a full substitute for **Thin client** — same-machine placement and queue/control semantics are different axes.
 
 **Daemon responsibility boundary** (#97/#73):
 What belongs in the daemon vs. what's "Emby-specific weight" to push elsewhere turned out narrower than first assumed. Stays daemon-side, unconditionally: the queue (`items`/`cursor` — this *is* the daemon's job, not Emby-specific), Emby progress/watched-state sync (pinned there by physics — only the process actually running mpv can observe playback events in real time to report them), and the Emby remote-control websocket (just another command source hitting the same queue, no different from a ctrl-socket client). Moves out entirely, unconditionally: `mpris` (client-side desktop integration; a daemon has no desktop session, regardless of deployment mode). The actual "thin daemon" goal is a build-dependency problem, not a runtime-responsibility redesign — see #97 for the `mbvd` binary-target split and #73 for the underlying crate extraction both depend on.
