@@ -8,8 +8,8 @@ use ratatui::{
     Terminal,
 };
 
-use crate::api::EmbyClient;
-use crate::config::Config;
+use crate::config::{Config, UiConfig};
+use mbv_core::api::EmbyClient;
 
 const BASE: Color = Color::Rgb(26, 26, 26);
 const OVERLAY: Color = Color::Rgb(63, 63, 63);
@@ -42,7 +42,10 @@ impl LoginForm {
     }
 }
 
-pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Error>> {
+pub fn run(
+    base_client: EmbyClient,
+    ui_config: &UiConfig,
+) -> Result<EmbyClient, Box<dyn std::error::Error>> {
     let base_config = base_client.config.clone();
 
     crossterm::terminal::enable_raw_mode()?;
@@ -113,7 +116,6 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     consume_videos: base_config.consume_videos,
                     consume_audio: base_config.consume_audio,
                     always_skip_intro: base_config.always_skip_intro,
-                    image_protocol: base_config.image_protocol.clone(),
                     show_systray_icon: base_config.show_systray_icon,
                     no_scripts: base_config.no_scripts,
                     start_on_queue: base_config.start_on_queue,
@@ -121,11 +123,8 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                     autoload: base_config.autoload,
                     music_levels: base_config.music_levels.clone(),
                     system_notifications: base_config.system_notifications,
-                    image_cache_size: base_config.image_cache_size,
                     save_playlist_on_consume: base_config.save_playlist_on_consume,
                     save_playlist_on_consume_audio: base_config.save_playlist_on_consume_audio,
-                    use_nerd_fonts: base_config.use_nerd_fonts,
-                    indicator_style: base_config.indicator_style.clone(),
                     subtitle_mode: base_config.subtitle_mode.clone(),
                     subtitle_lang: base_config.subtitle_lang.clone(),
                     audio_lang: base_config.audio_lang.clone(),
@@ -140,7 +139,7 @@ pub fn run(base_client: EmbyClient) -> Result<EmbyClient, Box<dyn std::error::Er
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {
                     Ok(()) => {
-                        crate::config::save_config_settings(&client.config);
+                        crate::config::save_config_with_ui(&client.config, ui_config);
                         done = Some(Ok(client));
                     }
                     Err(e) => {

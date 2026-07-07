@@ -69,7 +69,7 @@ fn strip_article(s: &str) -> &str {
 /// Mirrors that method's synchronous fallback chain (Emby tag →
 /// folder-name-parsed artist → literal "Unknown Artist"), minus the
 /// cache/fetch steps, since nothing is cached yet at initial load.
-pub(crate) fn initial_group_artist_sort_key(item: &crate::api::MediaItem) -> String {
+pub(crate) fn initial_group_artist_sort_key(item: &mbv_core::api::MediaItem) -> String {
     let artist = if !item.artist.is_empty() {
         item.artist.clone()
     } else if let Some((artist, _, _)) = parse_album_folder_name(&item.name) {
@@ -82,7 +82,7 @@ pub(crate) fn initial_group_artist_sort_key(item: &crate::api::MediaItem) -> Str
 
 /// Returns the effective sort key for an item: `sort_name` when Emby provides it,
 /// otherwise the item's display name with any leading article stripped.
-pub(super) fn effective_sort_str(item: &crate::api::MediaItem) -> &str {
+pub(super) fn effective_sort_str(item: &mbv_core::api::MediaItem) -> &str {
     if !item.sort_name.is_empty() {
         &item.sort_name
     } else {
@@ -94,7 +94,7 @@ pub(super) fn effective_sort_str(item: &crate::api::MediaItem) -> &str {
 /// Uses `sort_name` when available (so "The Wire" → 'W'), otherwise the article-stripped
 /// name. "#" for titles starting with a digit or non-letter; ranges for 50–999 items;
 /// individual letters for 250+ items.
-pub(super) fn letter_bucket(item: &crate::api::MediaItem, total: usize) -> String {
+pub(super) fn letter_bucket(item: &mbv_core::api::MediaItem, total: usize) -> String {
     let key = effective_sort_str(item);
     let first = key
         .chars()
@@ -410,7 +410,7 @@ impl App {
     ///    the cache has neither a value nor an empty-tombstone yet, and no
     ///    fetch is already in flight, triggers `fetch_album_artist`.
     /// 4. Literal "Unknown Artist".
-    pub(super) fn resolve_group_album_artist(&mut self, item: &crate::api::MediaItem) -> String {
+    pub(super) fn resolve_group_album_artist(&mut self, item: &mbv_core::api::MediaItem) -> String {
         if !item.artist.is_empty() {
             return item.artist.clone();
         }

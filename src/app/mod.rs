@@ -63,7 +63,7 @@ fn stdin_has_hup() -> bool {
 // The forced exit is gated on TERMINAL_GONE (set only by SIGHUP/stdin POLLHUP),
 // never on QUIT_REQUESTED alone. A clean q-quit sets QUIT_REQUESTED but not
 // TERMINAL_GONE, so the watchdog stops mpv but never races report_stopped.
-fn start_quit_watchdog(quit_handle: Option<crate::player::QuitHandle>) {
+fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>) {
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(50));
@@ -92,9 +92,9 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
 
-use crate::api::{parse_mbv_direct_tcp_port, EmbyClient, MediaItem};
-use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
-use crate::ws::WsEvent;
+use mbv_core::api::{parse_mbv_direct_tcp_port, EmbyClient, MediaItem};
+use mbv_core::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
+use mbv_core::ws::WsEvent;
 
 #[derive(Clone)]
 enum ContextAction {
@@ -167,7 +167,7 @@ impl ContextMenu {
 
 struct LibSearch {
     query: String,
-    items: Vec<crate::api::MediaItem>,
+    items: Vec<mbv_core::api::MediaItem>,
     results: Vec<usize>, // indices into items, sorted by score desc
     cursor: usize,       // position within results
     scroll: usize,       // viewport scroll offset for the results list
@@ -177,7 +177,7 @@ struct LibSearch {
 struct HomeSearch {
     query: String,
     last_query: String, // query string that produced current results
-    results: Vec<crate::api::MediaItem>,
+    results: Vec<mbv_core::api::MediaItem>,
     cursor: usize,
     loading: bool,
     scroll: usize,
@@ -216,7 +216,7 @@ impl HomeSearch {
         types
     }
 
-    pub(super) fn filtered_results(&self) -> Vec<&crate::api::MediaItem> {
+    pub(super) fn filtered_results(&self) -> Vec<&mbv_core::api::MediaItem> {
         let types = self.available_types();
         let filter = if self.type_filter == 0 {
             None
@@ -367,15 +367,14 @@ enum LibEvent {
     /// Best-effort background refresh of played/position state for the queue
     /// that `restore_queue_state` already populated synchronously from disk.
     /// See `spawn_enrich_queue_state`.
-    QueueEnriched {
-        items: Vec<MediaItem>,
-    },
+    #[rustfmt::skip]
+    QueueEnriched { items: Vec<MediaItem> },
     Error(String),
 }
 
 enum SessionEvent {
-    Loaded(Vec<crate::api::SessionInfo>),
-    ItemRefreshed(String, Box<crate::api::MediaItem>), // (item_id, fresh)
+    Loaded(Vec<mbv_core::api::SessionInfo>),
+    ItemRefreshed(String, Box<mbv_core::api::MediaItem>), // (item_id, fresh)
     Error(String),
 }
 
@@ -434,7 +433,7 @@ struct SuspendedLocalSession {
     player: PlayerProxy,
     player_rx: mpsc::Receiver<PlayerEvent>,
     ws_rx: mpsc::Receiver<WsEvent>,
-    ws_send_tx: Option<crate::ws::WsSender>,
+    ws_send_tx: Option<mbv_core::ws::WsSender>,
 }
 
 pub struct App {
@@ -521,7 +520,7 @@ pub struct App {
     home_search: Option<HomeSearch>,
     search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
     search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
-    sessions: Vec<crate::api::SessionInfo>,
+    sessions: Vec<mbv_core::api::SessionInfo>,
     sessions_cursor: usize,
     sessions_scroll: usize,
     sessions_loading: bool,
@@ -543,13 +542,13 @@ pub struct App {
     use_nerd_fonts: bool,
     indicator_style: render::indicators::IndicatorStyle,
     panel_mode: crate::config::PanelMode,
-    ws_send_tx: Option<crate::ws::WsSender>,
+    ws_send_tx: Option<mbv_core::ws::WsSender>,
     last_keepalive: Instant,
     last_capabilities: Instant,
     sessions_tx: mpsc::Sender<SessionEvent>,
     sessions_rx: mpsc::Receiver<SessionEvent>,
     connected_session_id: Option<String>,
-    connected_session_state: Option<crate::api::SessionInfo>,
+    connected_session_state: Option<mbv_core::api::SessionInfo>,
     last_session_poll: Instant,
     session_miss_count: u8, // consecutive polls that didn't find the connected session
     remote_pos_s: i64,      // monotonic position estimate for the connected remote
@@ -572,6 +571,7 @@ pub struct App {
     pending_album_artist_fetches: std::collections::VecDeque<String>,
     album_artist_fetches_active: usize,
     save_playlist_dialog: Option<SavePlaylistDialog>,
+    image_protocol: Option<String>,
     image_protocol_enabled: bool,
     confirm_rescan: bool,
     queue_scope: QueueScope,
@@ -579,13 +579,14 @@ pub struct App {
 
 struct AppInit {
     client: std::sync::Arc<std::sync::Mutex<EmbyClient>>,
-    player: crate::player::PlayerProxy,
-    player_rx: std::sync::mpsc::Receiver<crate::player::PlayerEvent>,
+    player: mbv_core::player::PlayerProxy,
+    player_rx: std::sync::mpsc::Receiver<mbv_core::player::PlayerEvent>,
     ws_rx: std::sync::mpsc::Receiver<WsEvent>,
-    ws_send_tx: Option<crate::ws::WsSender>,
+    ws_send_tx: Option<mbv_core::ws::WsSender>,
     player_tab: PlayerTab,
     remote_player_tab: Option<PlayerTab>,
     system_notifications: bool,
+    image_protocol: Option<String>,
     image_protocol_enabled: bool,
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
@@ -758,6 +759,25 @@ impl App {
         remote_pos_s + elapsed.as_secs() as i64
     }
 
+    fn ui_config_snapshot(&self) -> crate::config::UiConfig {
+        let indicator_style = match self.indicator_style {
+            render::indicators::IndicatorStyle::Brackets => "brackets",
+            render::indicators::IndicatorStyle::Chips => "chips",
+            render::indicators::IndicatorStyle::Outlined => "outlined",
+            render::indicators::IndicatorStyle::Dots => "dots",
+            render::indicators::IndicatorStyle::Pipes => "pipes",
+            render::indicators::IndicatorStyle::KeyValue => "keyvalue",
+            render::indicators::IndicatorStyle::Powerline => "powerline",
+        };
+        crate::config::UiConfig {
+            image_protocol: self.image_protocol.clone(),
+            show_log_tab: self.show_log_tab,
+            image_cache_size: self.image_cache_size,
+            use_nerd_fonts: self.use_nerd_fonts,
+            indicator_style: indicator_style.to_string(),
+        }
+    }
+
     fn build(init: AppInit) -> Self {
         let prefs = Self::load_prefs();
         let has_remote_queue = init.remote_player_tab.is_some();
@@ -770,6 +790,7 @@ impl App {
             player_tab: init.player_tab,
             remote_player_tab: init.remote_player_tab,
             system_notifications: init.system_notifications,
+            image_protocol: init.image_protocol,
             image_protocol_enabled: init.image_protocol_enabled,
             hidden_libraries: init.hidden_libraries,
             hidden_latest: init.hidden_latest,
@@ -921,23 +942,25 @@ impl App {
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
+        let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let system_notifications = client.config.system_notifications;
-        let image_protocol_enabled = client.config.image_protocol.is_some();
-        let image_cache_size = client.config.image_cache_size;
-        let use_nerd_fonts = client.config.use_nerd_fonts;
+        let image_protocol = ui_config.image_protocol.clone();
+        let image_protocol_enabled = image_protocol.is_some();
+        let image_cache_size = ui_config.image_cache_size;
+        let use_nerd_fonts = ui_config.use_nerd_fonts;
         let indicator_style: render::indicators::IndicatorStyle =
-            client.config.indicator_style.parse().unwrap_or_default();
+            ui_config.indicator_style.parse().unwrap_or_default();
         let start_on_queue = client.config.start_on_queue;
         let always_play_next = client.config.always_play_next;
         let always_skip_intro = client.config.always_skip_intro;
         crate::config::evict_old_image_cache();
         let ws_url = client.ws_url();
-        let ws_send_tx = crate::ws::start(ws_url, ws_tx);
+        let ws_send_tx = mbv_core::ws::start(ws_url, ws_tx);
         let ws_send_tx_app = ws_send_tx.clone();
         // Prefer local config; fall back to Emby server prefs only on first run (all empty).
         let subtitle_prefs = if client.config.subtitle_mode.is_empty()
@@ -946,7 +969,7 @@ impl App {
         {
             client.get_user_subtitle_prefs().unwrap_or_default()
         } else {
-            crate::player::SubtitlePrefs {
+            mbv_core::player::SubtitlePrefs {
                 mode: client.config.subtitle_mode.clone(),
                 subtitle_lang: client.config.subtitle_lang.clone(),
                 audio_lang: client.config.audio_lang.clone(),
@@ -993,6 +1016,7 @@ impl App {
             },
             remote_player_tab: None,
             system_notifications,
+            image_protocol,
             image_protocol_enabled,
             hidden_libraries,
             hidden_latest,
@@ -1028,27 +1052,29 @@ impl App {
     ///   mid-session upgrade case).
     pub fn new_remote(
         client: EmbyClient,
-        remote: crate::remote_player::RemotePlayer,
+        remote: mbv_core::remote_player::RemotePlayer,
         player_rx: mpsc::Receiver<PlayerEvent>,
         is_local_daemon: bool,
     ) -> Self {
-        let (_, ws_rx) = mpsc::channel::<crate::ws::WsEvent>();
+        let (_, ws_rx) = mpsc::channel::<mbv_core::ws::WsEvent>();
         let (lib_tx, lib_rx) = mpsc::channel();
         let (sessions_tx, sessions_rx) = mpsc::channel::<SessionEvent>();
         let (card_image_tx, card_image_rx) =
             mpsc::channel::<(String, Option<image::DynamicImage>)>();
         let (notif_action_tx, notif_action_rx) = mpsc::channel::<String>();
         let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
+        let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = client.config.hidden_libraries.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let always_play_next = client.config.always_play_next;
         let start_on_queue = client.config.start_on_queue;
-        let image_protocol_enabled = client.config.image_protocol.is_some();
-        let image_cache_size = client.config.image_cache_size;
-        let use_nerd_fonts = client.config.use_nerd_fonts;
+        let image_protocol = ui_config.image_protocol.clone();
+        let image_protocol_enabled = image_protocol.is_some();
+        let image_cache_size = ui_config.image_cache_size;
+        let use_nerd_fonts = ui_config.use_nerd_fonts;
         let indicator_style: render::indicators::IndicatorStyle =
-            client.config.indicator_style.parse().unwrap_or_default();
+            ui_config.indicator_style.parse().unwrap_or_default();
         crate::config::evict_old_image_cache();
         let client_arc = Arc::new(Mutex::new(client));
         {
@@ -1082,6 +1108,7 @@ impl App {
             player_tab,
             remote_player_tab,
             system_notifications: false,
+            image_protocol,
             image_protocol_enabled,
             hidden_libraries,
             hidden_latest,
@@ -1297,14 +1324,14 @@ impl App {
 
     fn session_direct_endpoint(
         &self,
-        sess: &crate::api::SessionInfo,
-    ) -> Option<crate::remote_player::DaemonEndpoint> {
+        sess: &mbv_core::api::SessionInfo,
+    ) -> Option<mbv_core::remote_player::DaemonEndpoint> {
         if !sess.client.eq_ignore_ascii_case("mbv") {
             return None;
         }
         if let Some(port) = parse_mbv_direct_tcp_port(&sess.supported_commands) {
             if let Ok(ip) = sess.host.parse::<std::net::Ipv4Addr>() {
-                return Some(crate::remote_player::DaemonEndpoint::Tcp(
+                return Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
                     std::net::SocketAddr::from((ip, port)),
                 ));
             }
@@ -1319,13 +1346,13 @@ impl App {
         let client = self.client.lock().unwrap();
         sess.device_name
             .eq_ignore_ascii_case(&client.device_name)
-            .then_some(crate::remote_player::DaemonEndpoint::Local)
+            .then_some(mbv_core::remote_player::DaemonEndpoint::Local)
     }
 
     fn switch_to_direct_remote(
         &mut self,
-        sess: &crate::api::SessionInfo,
-        remote: crate::remote_player::RemotePlayer,
+        sess: &mbv_core::api::SessionInfo,
+        remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
     ) {
         let initial_items = remote.items.lock().unwrap().clone();
@@ -1392,11 +1419,14 @@ impl App {
         self.flash_status_high(status.to_string());
     }
 
-    fn connect_to_session(&mut self, sess: &crate::api::SessionInfo) {
+    fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
         if !self.player.is_remote() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
                 let auth_token = self.client.lock().unwrap().token.clone();
-                match crate::remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
+                match mbv_core::remote_player::RemotePlayer::connect_endpoint(
+                    &endpoint,
+                    &auth_token,
+                ) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_direct_remote(sess, remote, remote_rx);
                         return;
@@ -1438,7 +1468,7 @@ impl App {
 
         // Initialise image picker after terminal is in raw mode.
         use ratatui_image::picker::ProtocolType;
-        let protocol_override = self.client.lock().unwrap().config.image_protocol.clone();
+        let protocol_override = self.image_protocol.clone();
         let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
         let proto = protocol_override
             .as_deref()
@@ -1493,7 +1523,7 @@ impl App {
                 match action.as_str() {
                     "skip_intro:skip" => {
                         if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                            let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
+                            let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
                             self.player.send_command(PlayerCommand::SeekAbsolute(secs));
                             self.player.send_command(PlayerCommand::SkipIntroDismiss);
                             self.status.clear();
@@ -1757,7 +1787,7 @@ impl App {
             if let Some(at) = self.settings_save_at {
                 if Instant::now() >= at {
                     let cfg = self.client.lock().unwrap().config.clone();
-                    crate::config::save_config_settings(&cfg);
+                    crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
                     self.settings_save_at = None;
                 }
             }
@@ -2001,7 +2031,7 @@ impl App {
                 error,
             } => {
                 log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played} error={error:?}",
-                    position_ticks / crate::api::TICKS_PER_SECOND);
+                    position_ticks / mbv_core::api::TICKS_PER_SECOND);
                 if self.player.is_remote_disconnected() {
                     self.next_up_item = None;
                     self.skip_intro_end_ticks = None;
@@ -2019,7 +2049,7 @@ impl App {
                             log::info!(target: "player", "Stopped: marked played, position reset to 0");
                         } else if position_ticks > 0 && !item.is_audio() {
                             item.playback_position_ticks = position_ticks;
-                            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / crate::api::TICKS_PER_SECOND);
+                            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / mbv_core::api::TICKS_PER_SECOND);
                         } else {
                             log::info!(target: "player", "Stopped: position not saved (position_ticks={} is_audio={})", position_ticks, item.is_audio());
                         }
@@ -2277,8 +2307,8 @@ fn restore_terminal(
 pub(crate) mod tests {
     use super::ui_util::{fmt_duration, item_text_and_style};
     use super::*;
-    use crate::api::TICKS_PER_SECOND;
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use mbv_core::api::TICKS_PER_SECOND;
 
     pub(crate) fn make_item(name: &str, item_type: &str) -> MediaItem {
         MediaItem {
@@ -2316,8 +2346,8 @@ pub(crate) mod tests {
         }
     }
 
-    pub(crate) fn make_session(device_name: &str, client: &str) -> crate::api::SessionInfo {
-        crate::api::SessionInfo {
+    pub(crate) fn make_session(device_name: &str, client: &str) -> mbv_core::api::SessionInfo {
+        mbv_core::api::SessionInfo {
             id: "sess-1".into(),
             device_name: device_name.into(),
             client: client.into(),
@@ -2333,7 +2363,7 @@ pub(crate) mod tests {
             sub_index: -1,
             audio_index: 1,
             muted: false,
-            media_info: crate::api::SessionMediaInfo::default(),
+            media_info: mbv_core::api::SessionMediaInfo::default(),
         }
     }
 
@@ -2473,7 +2503,7 @@ pub(crate) mod tests {
 
     /// Minimal App stub for logic-only tests.
     pub(crate) fn make_app_stub() -> App {
-        use crate::player::{PlayerProxy, PlayerStatus};
+        use mbv_core::player::{PlayerProxy, PlayerStatus};
         use std::sync::{Arc, Mutex};
 
         let status = Arc::new(Mutex::new(PlayerStatus {
@@ -2491,8 +2521,8 @@ pub(crate) mod tests {
 
         let player = PlayerProxy::stub(status.clone());
 
-        use crate::api::EmbyClient;
         use crate::config::Config;
+        use mbv_core::api::EmbyClient;
         let client = EmbyClient::new(Config::default());
 
         App {
@@ -2635,6 +2665,7 @@ pub(crate) mod tests {
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             image_cache_size: 50,
+            image_protocol: None,
             image_protocol_enabled: false,
             confirm_rescan: false,
             queue_scope: QueueScope::Local,
@@ -2642,10 +2673,10 @@ pub(crate) mod tests {
     }
 
     fn make_remote_app_stub(local_items: Vec<MediaItem>, remote_items: Vec<MediaItem>) -> App {
-        use crate::api::EmbyClient;
         use crate::config::Config;
+        use mbv_core::api::EmbyClient;
 
-        let (remote, player_rx) = crate::remote_player::RemotePlayer::stub(remote_items, 0);
+        let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
         let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
         app.player_tab.items = local_items;
         app.player_tab.queue_cursor = 0;
@@ -2653,10 +2684,10 @@ pub(crate) mod tests {
     }
 
     fn make_local_daemon_app_stub(remote_items: Vec<MediaItem>) -> App {
-        use crate::api::EmbyClient;
         use crate::config::Config;
+        use mbv_core::api::EmbyClient;
 
-        let (remote, player_rx) = crate::remote_player::RemotePlayer::stub(remote_items, 0);
+        let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
         App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, true)
     }
 
@@ -2665,10 +2696,10 @@ pub(crate) mod tests {
         let app = make_app_stub();
         let mut sess = make_session("remote-host", "mbv");
         sess.host = "192.168.1.20".into();
-        sess.supported_commands = vec![crate::api::mbv_direct_tcp_port_command(47788)];
+        sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
         assert_eq!(
             app.session_direct_endpoint(&sess),
-            Some(crate::remote_player::DaemonEndpoint::Tcp(
+            Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
                 "192.168.1.20:47788".parse().unwrap()
             ))
         );
@@ -2688,7 +2719,7 @@ pub(crate) mod tests {
         let sess = make_session(&device_name, "mbv");
         assert_eq!(
             app.session_direct_endpoint(&sess),
-            Some(crate::remote_player::DaemonEndpoint::Local)
+            Some(mbv_core::remote_player::DaemonEndpoint::Local)
         );
     }
 

@@ -1,7 +1,7 @@
 use super::super::super::ui_util::*;
-use crate::api::TICKS_PER_SECOND;
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -62,7 +62,7 @@ fn feed_added_date(date_added: &str) -> String {
         .unwrap_or_else(|| date_added.to_string())
 }
 
-fn home_video_item_height(item: &crate::api::MediaItem, text_w: usize) -> u16 {
+fn home_video_item_height(item: &mbv_core::api::MediaItem, text_w: usize) -> u16 {
     if item.overview.is_empty() || text_w == 0 {
         3 // title + meta + separator
     } else {
@@ -74,7 +74,7 @@ fn home_video_item_height(item: &crate::api::MediaItem, text_w: usize) -> u16 {
 
 fn render_home_video_item(
     f: &mut Frame,
-    item: &crate::api::MediaItem,
+    item: &mbv_core::api::MediaItem,
     row_y: u16,
     item_h: u16,
     content_area: Rect,
@@ -608,7 +608,7 @@ impl App {
             title: String,
             color: Color,
             flat_start: usize,
-            items: Vec<crate::api::MediaItem>,
+            items: Vec<mbv_core::api::MediaItem>,
         }
 
         let continue_items = self.home.continue_items.clone();
@@ -861,10 +861,10 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::power_home_panel_scroll;
-    use crate::api::TICKS_PER_SECOND;
     use crate::app::layout::AppLayout;
     use crate::app::palette;
     use crate::app::tests::{make_app_stub, make_items};
+    use mbv_core::api::TICKS_PER_SECOND;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;

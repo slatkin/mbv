@@ -1,6 +1,6 @@
 use super::ui_util::fmt_duration;
 use super::{palette, App, LibEvent};
-use crate::api::TICKS_PER_SECOND;
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};

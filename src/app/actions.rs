@@ -4,9 +4,9 @@ use super::{
     PendingQueueAction, PowerFocus, QueueScope, SessionEvent, UndoEntry, PAGE_SIZE,
     QUEUE_VIEW_POWER, PREFETCH_AHEAD,
 };
-use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
-use crate::player::PlayerCommand;
-use crate::ws::WsEvent;
+use mbv_core::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
+use mbv_core::player::PlayerCommand;
+use mbv_core::ws::WsEvent;
 use rand::seq::SliceRandom;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -1403,7 +1403,7 @@ impl App {
     pub(super) fn push_subtitle_prefs(&self) {
         let prefs = self.player.subtitle_prefs.lock().unwrap().clone();
         self.player
-            .send_command(crate::player::PlayerCommand::SetSubtitlePrefs {
+            .send_command(mbv_core::player::PlayerCommand::SetSubtitlePrefs {
                 mode: prefs.mode,
                 subtitle_lang: prefs.subtitle_lang,
                 audio_lang: prefs.audio_lang,
@@ -1735,13 +1735,13 @@ impl App {
                     self.remote_pos_at.elapsed().as_secs_f64()
                 };
                 let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
-                (pos_s * crate::api::TICKS_PER_SECOND as f64) as i64
+                (pos_s * mbv_core::api::TICKS_PER_SECOND as f64) as i64
             };
             (
                 remote.now_playing.is_some() && maybe_active_idx.is_some(),
                 active_idx,
                 pos_ticks,
-                remote.runtime_s * crate::api::TICKS_PER_SECOND,
+                remote.runtime_s * mbv_core::api::TICKS_PER_SECOND,
                 remote.is_paused,
             )
         } else {
@@ -1880,7 +1880,7 @@ impl App {
         }
     }
 
-    pub(super) fn do_enqueue_folder(&mut self, item: crate::api::MediaItem) {
+    pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::MediaItem) {
         let client = self.client.lock().unwrap();
         match client.get_all_playable_recursive(&item.id) {
             Ok(mut items) => {
@@ -2493,7 +2493,7 @@ impl App {
             .collect();
         let client = self.client.lock().unwrap();
         if let Ok(fetched) = client.get_items_by_ids(&ids) {
-            let mut map: HashMap<String, crate::api::MediaItem> =
+            let mut map: HashMap<String, mbv_core::api::MediaItem> =
                 fetched.into_iter().map(|i| (i.id.clone(), i)).collect();
             drop(client);
             for item in &mut self.queue_for_scope_mut(scope).items {
@@ -4240,8 +4240,8 @@ impl App {
                 if let Some(&saved_pos) = positions.get(&item.id) {
                     if saved_pos > item.playback_position_ticks {
                         log::info!(target: "player", "restore: applying saved pos={}s (Emby had {}s) for item={}",
-                            saved_pos / crate::api::TICKS_PER_SECOND,
-                            item.playback_position_ticks / crate::api::TICKS_PER_SECOND,
+                            saved_pos / mbv_core::api::TICKS_PER_SECOND,
+                            item.playback_position_ticks / mbv_core::api::TICKS_PER_SECOND,
                             item.id);
                         item.playback_position_ticks = saved_pos;
                     }
@@ -4338,7 +4338,7 @@ impl App {
         struct SavedLibState {
             nav_stack: Vec<BrowseLevel>,
             feed_home_video: Option<FeedHomeVideoState>,
-            detail_item: Option<crate::api::MediaItem>,
+            detail_item: Option<mbv_core::api::MediaItem>,
             detail_scroll: usize,
         }
         let old_libs: HashMap<String, SavedLibState> = self
@@ -4774,6 +4774,7 @@ mod tests {
     fn queue_restore_cursor_falls_back_to_saved_cursor_clamped_to_len() {
         let items = crate::app::tests::make_items(3);
         let cursor = queue_restore_cursor(&items, 99, Some("id5"), false);
+        #[rustfmt::skip]
         assert_eq!(
             cursor, 2,
             "out-of-range saved cursor must clamp to the last valid index"
@@ -4877,10 +4878,8 @@ mod tests {
         app.player_tab.queue_cursor = 0;
 
         // The background fetch no longer returns id1 (e.g. deleted server-side).
-        let fresh = vec![
-            app.player_tab.items[0].clone(),
-            app.player_tab.items[2].clone(),
-        ];
+        #[rustfmt::skip]
+        let fresh = vec![app.player_tab.items[0].clone(), app.player_tab.items[2].clone()];
         app.handle_lib_event(LibEvent::QueueEnriched { items: fresh });
 
         let ids: Vec<&str> = app.player_tab.items.iter().map(|i| i.id.as_str()).collect();
@@ -5066,9 +5065,9 @@ mod tests {
 
     // ── is_audio_item / toggle_mute: remote-session awareness (#88) ─────────
 
-    fn make_remote_session(audio_only: bool) -> crate::api::SessionInfo {
-        crate::api::SessionInfo {
-            media_info: crate::api::SessionMediaInfo {
+    fn make_remote_session(audio_only: bool) -> mbv_core::api::SessionInfo {
+        mbv_core::api::SessionInfo {
+            media_info: mbv_core::api::SessionMediaInfo {
                 audio_only,
                 ..Default::default()
             },

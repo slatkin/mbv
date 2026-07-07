@@ -1,5 +1,5 @@
 use super::palette;
-use crate::api::MediaItem;
+use mbv_core::api::MediaItem;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use unicode_width::UnicodeWidthStr;

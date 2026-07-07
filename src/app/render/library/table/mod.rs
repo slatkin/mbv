@@ -5,7 +5,7 @@ mod row;
 use super::super::super::layout::LayoutLibrary;
 use super::super::super::palette;
 use super::super::super::App;
-use crate::api::MediaItem;
+use mbv_core::api::MediaItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};

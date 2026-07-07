@@ -49,6 +49,19 @@ enum DaemonEvent {
 
 type ClientList = Arc<Mutex<Vec<mpsc::Sender<String>>>>;
 
+pub struct DaemonPlayerHandle {
+    pub status: Arc<Mutex<crate::player::PlayerStatus>>,
+    pub command_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
+}
+
+type OnPlayerReady = Box<dyn FnOnce(DaemonPlayerHandle)>;
+type OnTrayReady = Box<dyn FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>>;
+
+pub struct DaemonRuntimeHooks {
+    pub on_player_ready: OnPlayerReady,
+    pub on_tray_ready: OnTrayReady,
+}
+
 pub fn pid_file() -> std::path::PathBuf {
     let dir = crate::config::data_dir_system_or_local();
     let _ = std::fs::create_dir_all(&dir);
@@ -177,19 +190,7 @@ fn spawn_ctrl_client<R, W>(
     });
 }
 
-pub fn run_with_options<F, G>(
-    client: EmbyClient,
-    audio_only: bool,
-    on_player_ready: F,
-    on_tray_ready: G,
-) -> !
-where
-    F: FnOnce(
-        Arc<Mutex<crate::player::PlayerStatus>>,
-        Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
-    ),
-    G: FnOnce(mpsc::SyncSender<()>) -> Option<Box<dyn Send>>,
-{
+pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRuntimeHooks) -> ! {
     std::fs::write(pid_file(), std::process::id().to_string())
         .expect("mbv daemon: failed to write PID file");
 
@@ -268,9 +269,12 @@ where
 
     let player_status = player.status.clone();
     let player_cmd_tx = player.cmd_tx.clone();
-    on_player_ready(player_status, player_cmd_tx);
+    (hooks.on_player_ready)(DaemonPlayerHandle {
+        status: player_status,
+        command_tx: player_cmd_tx,
+    });
 
-    let _tray = on_tray_ready(shutdown_signal_tx.clone());
+    let _tray = (hooks.on_tray_ready)(shutdown_signal_tx.clone());
 
     let (merged_tx, merged_rx) = mpsc::channel::<DaemonEvent>();
 

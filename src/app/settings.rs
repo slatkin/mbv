@@ -1,5 +1,5 @@
 use super::{SettingKey, SETTING_SECTIONS};
-use crate::config::Config;
+use crate::config::{Config, UiConfig};
 
 pub fn setting_label(key: SettingKey) -> &'static str {
     match key {
@@ -30,7 +30,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
     }
 }
 
-pub fn setting_value(key: SettingKey, cfg: &Config) -> String {
+pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
     match key {
         SettingKey::DaemonModeOnExit => bool_val(cfg.daemon_mode_on_exit),
         SettingKey::StartOnQueue => bool_val(cfg.start_on_queue),
@@ -40,7 +40,7 @@ pub fn setting_value(key: SettingKey, cfg: &Config) -> String {
         SettingKey::SavePlaylistOnConsume => bool_val(cfg.save_playlist_on_consume),
         SettingKey::SavePlaylistOnConsumeAudio => bool_val(cfg.save_playlist_on_consume_audio),
         SettingKey::AlwaysSkipIntro => bool_val(cfg.always_skip_intro),
-        SettingKey::ImageProtocol => cfg.image_protocol.clone().unwrap_or_else(|| "none".into()),
+        SettingKey::ImageProtocol => ui.image_protocol.clone().unwrap_or_else(|| "none".into()),
         SettingKey::HiddenLibraries => fmt_hidden_list(&cfg.hidden_libraries),
         SettingKey::HiddenLatest => fmt_hidden_list(&cfg.hidden_latest),
         SettingKey::ShowAudioWindow => bool_val(cfg.show_audio_window),

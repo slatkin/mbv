@@ -12,8 +12,8 @@
 //! enum over time, one handler at a time.
 
 use super::App;
-use crate::player::PlayerCommand;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::player::PlayerCommand;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Action {

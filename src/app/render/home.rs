@@ -5,7 +5,7 @@ use super::super::ui_util::{
 };
 use super::super::App;
 use super::super::HOME_MIN_SECTION_H;
-use crate::api::MediaItem;
+use mbv_core::api::MediaItem;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -63,7 +63,7 @@ impl App {
         let content_rect = area;
         let strips = ratatui::layout::Layout::vertical(constraints).split(content_rect);
 
-        let mut section_data: Vec<(String, Vec<crate::api::MediaItem>, usize)> =
+        let mut section_data: Vec<(String, Vec<mbv_core::api::MediaItem>, usize)> =
             Vec::with_capacity(visible);
         for i in 0..visible {
             let s = offset + i;
@@ -141,7 +141,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         sec_title: &str,
-        items: &[crate::api::MediaItem],
+        items: &[mbv_core::api::MediaItem],
         cursor: usize,
         is_active: bool,
         layout: &mut LayoutHome,

@@ -1,7 +1,7 @@
 use super::super::super::palette;
 use super::super::super::ui_util::{fmt_duration, trunc_str};
 use super::super::super::App;
-use crate::api::TICKS_PER_SECOND;
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};

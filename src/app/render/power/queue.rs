@@ -1,7 +1,7 @@
 use super::super::super::ui_util::*;
-use crate::api::TICKS_PER_SECOND;
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App, QueueScope};
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;

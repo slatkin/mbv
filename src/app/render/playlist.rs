@@ -1,7 +1,7 @@
 use super::super::layout::{LayoutHome, LayoutQueue};
 use super::super::ui_util::{build_queue_rows, fmt_duration, trunc_str, QueueRow};
 use super::super::{palette, App};
-use crate::api::TICKS_PER_SECOND;
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};

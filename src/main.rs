@@ -1,12 +1,13 @@
 mod app;
+mod config;
 mod login;
 mod mpris;
 mod tray;
-pub use mbv_core::{api, applog, config, ctrl, daemon, player, remote_player, ws};
 
-use api::EmbyClient;
 use app::App;
 use config::load_config;
+use mbv_core::api::EmbyClient;
+use mbv_core::{applog, daemon, player, remote_player};
 
 /// Shared by both daemon-connection call sites in `main()` below: run the
 /// TUI as a thin client of a connected daemon, exiting with an error if the
@@ -212,6 +213,13 @@ fn main() {
             std::process::exit(1);
         }
     };
+    let ui_config = match config::load_ui_config() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("{e}");
+            std::process::exit(1);
+        }
+    };
 
     let explicit_daemon_endpoint = cli_daemon_endpoint
         .or_else(|| {
@@ -271,7 +279,7 @@ fn main() {
                 std::process::exit(1);
             }
         } else {
-            client = match login::run(client) {
+            client = match login::run(client, &ui_config) {
                 Ok(c) => c,
                 Err(_) => std::process::exit(0),
             };
@@ -304,19 +312,21 @@ fn main() {
         daemon::run_with_options(
             client,
             daemon_audio_only,
-            |player_status, player_cmd_tx| {
-                mpris::start(player_status, move |cmd| {
-                    if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
-                        let _ = tx.send(cmd);
+            daemon::DaemonRuntimeHooks {
+                on_player_ready: Box::new(|player| {
+                    mpris::start(player.status, move |cmd| {
+                        if let Some(tx) = player.command_tx.lock().unwrap().as_ref() {
+                            let _ = tx.send(cmd);
+                        }
+                    });
+                }),
+                on_tray_ready: Box::new(move |shutdown_tx| {
+                    if show_systray_icon {
+                        tray::spawn(shutdown_tx)
+                    } else {
+                        None
                     }
-                });
-            },
-            move |shutdown_tx| {
-                if show_systray_icon {
-                    tray::spawn(shutdown_tx)
-                } else {
-                    None
-                }
+                }),
             },
         ); // never returns
     }

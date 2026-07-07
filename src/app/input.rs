@@ -6,9 +6,9 @@ use super::{
     SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
 use super::{PowerFocus, QUEUE_VIEW_COUNT, QUEUE_VIEW_POWER};
-use crate::api::{MediaItem, TICKS_PER_SECOND};
-use crate::player::PlayerCommand;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
+use mbv_core::player::PlayerCommand;
 use ratatui::layout::Rect;
 use ratatui::widgets::{Block, BorderType, Borders};
 use std::sync::Arc;
@@ -322,7 +322,7 @@ impl App {
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
             ) {
                 if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                    let secs = end_ticks as f64 / crate::api::TICKS_PER_SECOND as f64;
+                    let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
                     self.player.send_command(PlayerCommand::SeekAbsolute(secs));
                     self.player.send_command(PlayerCommand::SkipIntroDismiss);
                     self.status.clear();
@@ -524,7 +524,7 @@ impl App {
         }
         if self.confirm_logout {
             if matches!(key.code, KeyCode::Char('y')) {
-                crate::api::clear_cached_token();
+                mbv_core::api::clear_cached_token();
                 self.confirm_logout = false;
                 self.show_settings = false;
                 return Some(true);
@@ -1292,7 +1292,7 @@ impl App {
                     && !key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
                 {
-                    let maybe_movie: Option<crate::api::MediaItem> =
+                    let maybe_movie: Option<mbv_core::api::MediaItem> =
                         self.libs.get(lib_idx).and_then(|lib| {
                             if let Some(s) = &lib.search {
                                 let &idx = s.results.get(s.cursor)?;
@@ -2169,7 +2169,7 @@ impl App {
             if runtime_s == 0 {
                 return;
             }
-            let ticks = (fraction * (runtime_s * crate::api::TICKS_PER_SECOND) as f64) as i64;
+            let ticks = (fraction * (runtime_s * mbv_core::api::TICKS_PER_SECOND) as f64) as i64;
             let id = conn_id.clone();
             self.remote_pos_s = (fraction * runtime_s as f64) as i64;
             self.remote_pos_at = Instant::now();

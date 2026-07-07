@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use zbus::{connection, interface, zvariant};
 
-use crate::api::TICKS_PER_SECOND;
-use crate::player::{PlayerCommand, PlayerStatus};
+use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::player::{PlayerCommand, PlayerStatus};
 
 struct MediaPlayer2;
 

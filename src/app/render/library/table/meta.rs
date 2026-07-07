@@ -1,7 +1,7 @@
 use super::super::super::super::palette;
 use super::super::super::super::App;
 use super::LibraryTableContext;
-use crate::api::{MediaItem, TICKS_PER_SECOND};
+use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 

@@ -6,7 +6,7 @@ use super::meta::{
     library_meta_line, library_title_line,
 };
 use super::{LibraryTableContext, LIB_AUDIO_IMG_W, LIB_EPISODE_IMG_W, LIB_SELECTED_IMG_W};
-use crate::api::MediaItem;
+use mbv_core::api::MediaItem;
 use ratatui::layout::{Constraint, Layout, Rect, Size};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};

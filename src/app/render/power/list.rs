@@ -1,8 +1,8 @@
 use super::super::super::ui_util::*;
 use super::{effective_sort_str, letter_bucket, parse_album_folder_name, strip_article};
-use crate::api::TICKS_PER_SECOND;
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -46,7 +46,7 @@ impl App {
             let lib_idx = self.power_left_tab - 1;
             let lib = &self.libs[lib_idx];
             let (items, cur, scroll, total) = if let Some(s) = &lib.search {
-                let items: Vec<crate::api::MediaItem> = s
+                let items: Vec<mbv_core::api::MediaItem> = s
                     .results
                     .iter()
                     .filter_map(|&i| s.items.get(i).cloned())

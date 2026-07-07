@@ -7,8 +7,8 @@ pub(crate) mod power;
 
 use super::ui_util::{fmt_duration, take_chars, trunc_str};
 use super::{layout::AppLayout, palette, App};
-use crate::api::TICKS_PER_SECOND;
 use crate::app::layout::LayoutPlayback;
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};

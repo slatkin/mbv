@@ -16,7 +16,7 @@ impl App {
     pub(crate) fn close_settings(&mut self) {
         if self.settings_save_at.take().is_some() {
             let cfg = self.client.lock().unwrap().config.clone();
-            crate::config::save_config_settings(&cfg);
+            crate::config::save_config_with_ui(&cfg, &self.ui_config_snapshot());
         }
         self.show_settings = false;
     }
@@ -44,18 +44,15 @@ impl App {
                 self.confirm_logout = true;
             }
             SettingKey::ImageProtocol => {
-                let now_none = {
-                    let mut c = self.client.lock().unwrap();
-                    c.config.image_protocol = match c.config.image_protocol.as_deref() {
-                        None => Some("halfblocks".into()),
-                        Some("halfblocks") => Some("sixel".into()),
-                        Some("sixel") => Some("kitty".into()),
-                        Some("kitty") => Some("iterm2".into()),
-                        Some("iterm2") => Some("auto".into()),
-                        _ => None,
-                    };
-                    c.config.image_protocol.is_none()
+                self.image_protocol = match self.image_protocol.as_deref() {
+                    None => Some("halfblocks".into()),
+                    Some("halfblocks") => Some("sixel".into()),
+                    Some("sixel") => Some("kitty".into()),
+                    Some("kitty") => Some("iterm2".into()),
+                    Some("iterm2") => Some("auto".into()),
+                    _ => None,
                 };
+                let now_none = self.image_protocol.is_none();
                 self.image_protocol_enabled = !now_none;
                 if now_none {
                     self.home_card_view = false;
@@ -152,6 +149,7 @@ impl App {
             "[Space]toggle [Esc]close",
         );
         let cfg = self.client.lock().unwrap().config.clone();
+        let ui = self.ui_config_snapshot();
 
         let cursor = self.settings_cursor;
         let confirm_logout = self.confirm_logout;
@@ -182,7 +180,7 @@ impl App {
                 let focused = item_idx == cursor;
                 let indicator = if focused { "▌" } else { " " };
                 let label = setting_label(key);
-                let val = setting_value(key, &cfg);
+                let val = setting_value(key, &cfg, &ui);
                 let label_style = if focused {
                     Style::default().fg(palette::TEXT)
                 } else {

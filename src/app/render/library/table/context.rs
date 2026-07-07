@@ -3,7 +3,7 @@ use super::super::super::super::ui_util::trunc_overview;
 use super::super::super::super::App;
 use super::meta::{library_is_audio, library_is_episode_like};
 use super::{LibraryTableContext, LIB_AUDIO_IMG_W, LIB_EPISODE_IMG_W, LIB_SELECTED_IMG_W};
-use crate::api::MediaItem;
+use mbv_core::api::MediaItem;
 use ratatui::layout::{Rect, Size};
 use std::time::Duration;
 use textwrap::wrap;
