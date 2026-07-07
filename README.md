@@ -36,76 +36,54 @@ mbv --daemon # run headless, controlled via remote only
 
 ## Configuration
 
-On first run a login screen prompts for server URL, username, and password. Credentials are saved after a successful login.
-
-Optionally create `~/.config/mbv/config.toml`:
-
-```toml
-[server]
-# Override the server URL (normally set via the login screen)
-url = "http://emby.local:8096"
-
-[general]
-# Hide libraries from the tab bar (case-insensitive). Default: ["Live TV", "Podcasts"]
-hidden_libraries = ["Live TV", "Podcasts"]
-
-# Hide the Latest block for specific libraries on the Home tab (case-insensitive).
-# Does not affect the library tab itself — use hidden_libraries for that. Default: []
-hidden_latest = ["Music"]
-
-# Show a Log tab in the tab bar after all library tabs (default: false).
-show_log_tab = false
-
-# Always skip intros automatically without prompting (default: false).
-always_skip_intro = false
-
-# Send desktop notifications (via notify-send) for toasts and interactive prompts.
-# Interactive prompts (Skip Intro, Next Up, Clear Playlist) include action buttons.
-# When enabled, toasts are suppressed in the TUI and sent to the desktop instead. Default: false.
-system_notifications = false
-
-# Keep mbv running as a daemon when you close the TUI window (default: false).
-daemon_mode_on_exit = false
-
-# Image rendering protocol for album art and card images.
-# Options: "halfblocks", "sixel", "kitty", "iterm2", "auto". Default: disabled.
-# image_protocol = "kitty"
-
-[queue]
-# Start on the Queue tab instead of Home on launch (default: false).
-start_on_queue = false
-
-# Always play the next queue item automatically, even for videos (default: false).
-always_play_next = false
-
-# Remove a video from the queue and mpv playlist when it finishes playing (default: false).
-consume_videos = false
-
-[mpv]
-# Show an mpv window for audio playback (default: false = headless)
-show_audio_window = false
-
-# Use your own ~/.config/mpv/ setup (scripts, OSC, mpv.conf) instead of
-# mbv's bundled OSC. Default false = mbv manages its own mpv environment.
-use_mpv_config = false
-
-# Enable mpv's autoload script to automatically load adjacent files (default: false).
-autoload = false
-
-[daemon]
-# Show a system tray icon when running in daemon mode (default: true)
-show_systray_icon = true
-
-# [music]
-# Describe the folder layout of your music library so mbv can identify albums.
-# Each entry names one level of nesting. The track/file level is always implied
-# and should not be included. See "Music libraries" under Features for details.
-# levels = ["group", "album"]
-```
+On first run a login screen prompts for server URL, username, and password. Credentials are saved after a successful login. You don't need to touch a config file to use mbv — nearly every setting is editable live from the in-app Settings panel (`F2`).
 
 Press `F1` at any time to open the help and keybindings reference.
 
-Most settings can also be toggled live in the settings panel (`F2`).
+### In-app settings (`F2`)
+
+- **Daemon mode on exit** — keep mbv running as a background daemon when you close the TUI window.
+- **Start on queue** — start on the Queue tab instead of Home on launch.
+- **Always play next** — always play the next queue item automatically, even for videos.
+- **Consume videos** / **Consume audio** — remove an item from the queue and mpv's playlist once it finishes playing.
+- **Save playlist on consume** / **Save playlist on consume (audio)** — push the queue back to its saved Emby playlist immediately after each consume.
+- **Always skip intro** — skip intros automatically without prompting.
+- **Image protocol** — album art and card image rendering: halfblocks, sixel, kitty, iterm2, or auto.
+- **Hidden libraries** — hide libraries from the tab bar (case-insensitive).
+- **Hidden latest** — hide the Latest block for specific libraries on the Home tab (case-insensitive); doesn't affect the library tab itself.
+- **Show audio window** — show an mpv window for audio playback instead of running headless.
+- **Use mpv config** — use your own `~/.config/mpv/` setup (scripts, OSC, mpv.conf) instead of mbv's bundled OSC.
+- **No scripts** / **autoload** — disable mpv's default scripts / enable mpv's autoload script for adjacent files.
+- **Show systray icon** — show a system tray icon when running in daemon mode.
+- **System notifications** — send desktop notifications (via `notify-send`) for toasts and interactive prompts (Skip Intro, Next Up, queue prompts) instead of in-TUI toasts; prompts include action buttons.
+- **My languages**, **Subtitle mode**, **Subtitle language**, **Audio language** — client-only playback language preferences.
+- **Feed view** — libraries to treat as feed views (unplayed/date-sorted defaults).
+- **Log out**.
+
+### File-only options (`~/.config/mbv/config.toml`)
+
+A handful of knobs have no live UI and only take effect via a hand-edited config file:
+
+```toml
+[server]
+# Override the server URL. Rarely needed — the login screen sets and persists
+# this after your first successful login.
+url = "http://emby.local:8096"
+
+[mpv]
+# PCM pipe output for external consumers like Snapserver. No live toggle.
+audio_pipe_enabled = false
+audio_pipe_path = "/tmp/mbv-pipe"
+# Snapserver's `sampleformat` must match these two exactly.
+audio_pipe_samplerate = 192000
+audio_pipe_bitdepth = 32
+
+[music]
+# Describe the folder layout of your music library so mbv can identify albums.
+# Each entry names one level of nesting; the track/file level is always implied
+# and should not be included. See "Special music library handling" under Features.
+levels = ["group", "album"]
+```
 
 ## Features
 
