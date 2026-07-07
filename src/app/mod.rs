@@ -384,6 +384,15 @@ struct PlayerTab {
     queue_cursor: usize,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct PlaybackState {
+    active: bool,
+    active_idx: usize,
+    position_ticks: i64,
+    runtime_ticks: i64,
+    paused: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum QueueScope {
     Local,
@@ -1917,8 +1926,8 @@ impl App {
             // fully idle. Remote queue views need the fast cadence even if the
             // active item match is temporarily unavailable.
             let render_interval = {
-                let (active, ..) = self.effective_playback_state();
-                if active || self.connected_session_state.is_some() {
+                let playback = self.effective_playback_state();
+                if playback.active || self.connected_session_state.is_some() {
                     Duration::from_millis(150)
                 } else {
                     Duration::from_secs(1)
@@ -4929,7 +4938,13 @@ pub(crate) mod tests {
 
         assert_eq!(
             app.displayed_queue_playback_state(),
-            (true, 2, 42, 84, true)
+            PlaybackState {
+                active: true,
+                active_idx: 2,
+                position_ticks: 42,
+                runtime_ticks: 84,
+                paused: true,
+            }
         );
     }
 
@@ -4946,7 +4961,7 @@ pub(crate) mod tests {
         assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
         assert_eq!(
             app.displayed_queue_playback_state(),
-            (false, 0, 0, 0, false)
+            PlaybackState::default()
         );
     }
 

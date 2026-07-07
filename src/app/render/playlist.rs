@@ -36,8 +36,7 @@ impl App {
             self.render_home_search(f, area);
             return;
         }
-        let (active, current_idx, live_pos, live_runtime, live_paused) =
-            self.displayed_queue_playback_state();
+        let playback = self.displayed_queue_playback_state();
         let (items, cursor) = {
             let queue = self.displayed_queue();
             (queue.items.clone(), queue.queue_cursor)
@@ -74,10 +73,10 @@ impl App {
 
         const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         // Drive frame index from playback position (10M ticks/sec; 1.5M ticks = 150ms per frame).
-        // live_pos is frozen when paused, so the spinner naturally freezes at the right frame.
-        let spinner_char: &str =
-            SPINNER_FRAMES[(live_pos.max(0) / 1_500_000) as usize % SPINNER_FRAMES.len()];
-        let spinner_color = if live_paused {
+        // position_ticks is frozen when paused, so the spinner naturally freezes at the right frame.
+        let spinner_char: &str = SPINNER_FRAMES
+            [(playback.position_ticks.max(0) / 1_500_000) as usize % SPINNER_FRAMES.len()];
+        let spinner_color = if playback.paused {
             palette::YELLOW
         } else {
             palette::IRIS
@@ -144,7 +143,7 @@ impl App {
                 QueueRow::Track { idx, in_group } => {
                     let i = *idx;
                     let item = &items[i];
-                    let now_playing = i == current_idx && active;
+                    let now_playing = i == playback.active_idx && playback.active;
                     let row_style = if i == cursor {
                         Style::default().fg(palette::YELLOW)
                     } else {
@@ -175,12 +174,12 @@ impl App {
                         "—".to_string()
                     };
                     let (pos_ticks, rt_ticks) = if now_playing {
-                        let pos = if live_pos > 0 {
-                            live_pos
+                        let pos = if playback.position_ticks > 0 {
+                            playback.position_ticks
                         } else {
                             item.playback_position_ticks
                         };
-                        (pos, live_runtime)
+                        (pos, playback.runtime_ticks)
                     } else {
                         (item.playback_position_ticks, item.runtime_ticks)
                     };

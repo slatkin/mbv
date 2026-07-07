@@ -126,8 +126,7 @@ impl App {
             return vec![];
         }
 
-        let (active, active_idx, live_pos, live_runtime, live_paused) =
-            self.displayed_queue_playback_state();
+        let playback = self.displayed_queue_playback_state();
 
         // Build display rows: audio grouped by album, episodes by series, the rest
         // flat. group_for_header[j] holds the label for the j-th Header.
@@ -173,10 +172,10 @@ impl App {
         // Spinner character for the active item — computed once per frame, not per row.
         const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         // Drive frame index from playback position (10M ticks/sec; 1.5M ticks = 150ms per frame).
-        // live_pos is frozen when paused, so the spinner naturally freezes at the right frame.
-        let spinner_frame: &str =
-            SPINNER_FRAMES[(live_pos.max(0) / 1_500_000) as usize % SPINNER_FRAMES.len()];
-        let spinner_color = if live_paused {
+        // position_ticks is frozen when paused, so the spinner naturally freezes at the right frame.
+        let spinner_frame: &str = SPINNER_FRAMES
+            [(playback.position_ticks.max(0) / 1_500_000) as usize % SPINNER_FRAMES.len()];
+        let spinner_color = if playback.paused {
             palette::YELLOW
         } else {
             palette::IRIS
@@ -212,7 +211,7 @@ impl App {
                     let i = *idx;
                     let indent: usize = 0;
                     let item = &items[i];
-                    let is_active = i == active_idx && active;
+                    let is_active = i == playback.active_idx && playback.active;
                     let is_cursor = i == cursor && focused;
 
                     let fg = if is_cursor {
@@ -225,12 +224,12 @@ impl App {
                     let row_style = Style::default().fg(fg);
 
                     let (pt, rt) = if is_active {
-                        let pos = if live_pos > 0 {
-                            live_pos
+                        let pos = if playback.position_ticks > 0 {
+                            playback.position_ticks
                         } else {
                             item.playback_position_ticks
                         };
-                        (pos, live_runtime)
+                        (pos, playback.runtime_ticks)
                     } else {
                         (item.playback_position_ticks, item.runtime_ticks)
                     };

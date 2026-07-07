@@ -1711,7 +1711,7 @@ impl App {
         self.status_expires = Some(Instant::now() + Duration::from_secs(5));
     }
 
-    pub(super) fn effective_playback_state(&self) -> (bool, usize, i64, i64, bool) {
+    pub(super) fn effective_playback_state(&self) -> super::PlaybackState {
         if let Some(ref remote) = self.connected_session_state {
             let maybe_active_idx = remote
                 .now_playing_item_id
@@ -1727,30 +1727,30 @@ impl App {
                 let pos_s = (self.remote_pos_s as f64 + elapsed_s).min(remote.runtime_s as f64);
                 (pos_s * mbv_core::api::TICKS_PER_SECOND as f64) as i64
             };
-            (
-                remote.now_playing.is_some() && maybe_active_idx.is_some(),
+            super::PlaybackState {
+                active: remote.now_playing.is_some() && maybe_active_idx.is_some(),
                 active_idx,
-                pos_ticks,
-                remote.runtime_s * mbv_core::api::TICKS_PER_SECOND,
-                remote.is_paused,
-            )
+                position_ticks: pos_ticks,
+                runtime_ticks: remote.runtime_s * mbv_core::api::TICKS_PER_SECOND,
+                paused: remote.is_paused,
+            }
         } else {
             let s = self.player.status.lock().unwrap();
-            (
-                s.active,
-                s.current_idx,
-                s.position_ticks,
-                s.runtime_ticks,
-                s.paused,
-            )
+            super::PlaybackState {
+                active: s.active,
+                active_idx: s.current_idx,
+                position_ticks: s.position_ticks,
+                runtime_ticks: s.runtime_ticks,
+                paused: s.paused,
+            }
         }
     }
 
-    pub(super) fn displayed_queue_playback_state(&self) -> (bool, usize, i64, i64, bool) {
+    pub(super) fn displayed_queue_playback_state(&self) -> super::PlaybackState {
         if self.queue_scope_is_playback(self.displayed_queue_scope()) {
             self.effective_playback_state()
         } else {
-            (false, 0, 0, 0, false)
+            super::PlaybackState::default()
         }
     }
 

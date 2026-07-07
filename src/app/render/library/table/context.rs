@@ -61,11 +61,11 @@ impl App {
                 .feed_view_libraries
                 .contains(&self.libs[lib_idx].library.name.to_lowercase())
         };
-        let (active, active_idx, _, _, _) = self.effective_playback_state();
-        let now_playing_id = if active {
+        let playback = self.effective_playback_state();
+        let now_playing_id = if playback.active {
             self.playback_queue()
                 .items
-                .get(active_idx)
+                .get(playback.active_idx)
                 .map(|i| i.id.clone())
         } else {
             None

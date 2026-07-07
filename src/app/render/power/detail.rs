@@ -189,11 +189,11 @@ impl App {
 
         // — Play status block: blank / status / blank —
         {
-            let (active, active_idx, _, _, _) = self.effective_playback_state();
-            let now_playing_id: Option<String> = if active {
+            let playback = self.effective_playback_state();
+            let now_playing_id: Option<String> = if playback.active {
                 self.playback_queue()
                     .items
-                    .get(active_idx)
+                    .get(playback.active_idx)
                     .map(|i| i.id.clone())
             } else {
                 None
