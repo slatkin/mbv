@@ -17,8 +17,8 @@ static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 // The watchdog's forced exit arms only on this flag so clean q-quits are never raced.
 static TERMINAL_GONE: AtomicBool = AtomicBool::new(false);
 
-pub(super) const PLAYLIST_VIEW_POWER: u8 = 1;
-pub(super) const PLAYLIST_VIEW_COUNT: u8 = 2;
+pub(super) const QUEUE_VIEW_POWER: u8 = 1;
+pub(super) const QUEUE_VIEW_COUNT: u8 = 2;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
 /// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
@@ -108,7 +108,7 @@ enum ContextAction {
     MarkUnplayed(String),
     MarkItemsUnplayed(Vec<String>),
     RemoveFromContinueWatching,
-    RemoveFromPlaylist(usize),
+    RemoveFromQueue(usize),
     GoToLibrary(String, String), // (item_id, item_type)
 }
 
@@ -380,7 +380,7 @@ enum SessionEvent {
 #[derive(Default)]
 struct PlayerTab {
     items: Vec<MediaItem>,
-    playlist_cursor: usize,
+    queue_cursor: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -471,13 +471,13 @@ pub struct App {
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
     pending_queue_removal: Option<(usize, bool)>, // deferred removal (idx, is_audio) after TrackChanged index-shifts
-    confirm_clear_playlist: bool,
-    playlist_undo_stack: Vec<UndoEntry>,
-    remote_playlist_undo_stack: Vec<UndoEntry>,
+    confirm_clear_queue: bool,
+    queue_undo_stack: Vec<UndoEntry>,
+    remote_queue_undo_stack: Vec<UndoEntry>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
-    playlist_view: u8,
-    playlist_group: bool, // list view: group audio by album / episodes by series
+    queue_view: u8,
+    queue_group: bool, // list view: group audio by album / episodes by series
     power_focus: PowerFocus,
     power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
@@ -823,13 +823,13 @@ impl App {
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
-            confirm_clear_playlist: false,
-            playlist_undo_stack: Vec::new(),
-            remote_playlist_undo_stack: Vec::new(),
+            confirm_clear_queue: false,
+            queue_undo_stack: Vec::new(),
+            remote_queue_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
-            playlist_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
-            playlist_group: true,
+            queue_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
+            queue_group: true,
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
             power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
@@ -987,7 +987,7 @@ impl App {
             ws_send_tx: Some(ws_send_tx_app),
             player_tab: PlayerTab {
                 items: Vec::new(),
-                playlist_cursor: 0,
+                queue_cursor: 0,
             },
             remote_player_tab: None,
             system_notifications,
@@ -1059,7 +1059,7 @@ impl App {
         }
         let initial_tab = PlayerTab {
             items: remote.items.lock().unwrap().clone(),
-            playlist_cursor: remote.status.lock().unwrap().current_idx,
+            queue_cursor: remote.status.lock().unwrap().current_idx,
         };
         let player = PlayerProxy::remote(remote, always_play_next);
         let (player_tab, remote_player_tab) = if is_local_daemon {
@@ -1131,8 +1131,8 @@ impl App {
 
     fn undo_stack_for_scope_mut(&mut self, scope: QueueScope) -> &mut Vec<UndoEntry> {
         match scope {
-            QueueScope::Local => &mut self.playlist_undo_stack,
-            QueueScope::Remote => &mut self.remote_playlist_undo_stack,
+            QueueScope::Local => &mut self.queue_undo_stack,
+            QueueScope::Remote => &mut self.remote_queue_undo_stack,
         }
     }
 
@@ -1160,7 +1160,7 @@ impl App {
     fn clear_local_queue_metadata(&mut self) {
         self.queue_source = crate::config::QueueSource::Unknown;
         self.queue_dirty = false;
-        self.playlist_undo_stack.clear();
+        self.queue_undo_stack.clear();
     }
 
     fn persist_local_queue_state_if_needed(&self, scope: QueueScope) {
@@ -1172,13 +1172,13 @@ impl App {
     fn replace_direct_remote_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
         let cursor = cursor.min(items.len().saturating_sub(1));
         self.player
-            .send_command(crate::player::PlayerCommand::ReplacePlaylist {
+            .send_command(crate::player::PlayerCommand::ReplaceQueue {
                 items: items.clone(),
                 start_idx: cursor,
             });
         if let Some(queue) = self.remote_player_tab.as_mut() {
             queue.items = items;
-            queue.playlist_cursor = cursor;
+            queue.queue_cursor = cursor;
         }
     }
 
@@ -1189,7 +1189,7 @@ impl App {
                     .remote_player_tab
                     .as_ref()
                     .expect("direct remote queue requires remote queue");
-                (queue.items.clone(), queue.playlist_cursor)
+                (queue.items.clone(), queue.queue_cursor)
             };
             self.replace_direct_remote_queue(items, cursor);
         }
@@ -1208,7 +1208,7 @@ impl App {
         match self.playback_queue_scope() {
             QueueScope::Local => {
                 self.player_tab.items = items;
-                self.player_tab.playlist_cursor = cursor;
+                self.player_tab.queue_cursor = cursor;
             }
             QueueScope::Remote => {
                 let queue = self
@@ -1216,7 +1216,7 @@ impl App {
                     .as_mut()
                     .expect("direct remote playback queue requires remote queue");
                 queue.items = items;
-                queue.playlist_cursor = cursor;
+                queue.queue_cursor = cursor;
             }
         }
     }
@@ -1267,7 +1267,7 @@ impl App {
 
     /// Removes `idx` from the currently active playback queue and, if
     /// something was actually removed, tells the player to drop the same
-    /// index from its own internal playlist copy. `PlaylistSession` (or its
+    /// index from its own internal queue copy. `QueueSession` (or its
     /// remote equivalent) keeps that copy independently of `PlayerTab.items`
     /// above — without this, the two silently diverge after the first
     /// removal, and any later index-based command (Enter on a queue row,
@@ -1281,7 +1281,7 @@ impl App {
         }
         let removed_id = queue.items.remove(idx).id;
         self.player
-            .send_command(PlayerCommand::PlaylistRemove(idx));
+            .send_command(PlayerCommand::QueueRemove(idx));
         Some(removed_id)
     }
 
@@ -1352,7 +1352,7 @@ impl App {
 
         self.remote_player_tab = Some(PlayerTab {
             items: initial_items,
-            playlist_cursor: initial_cursor,
+            queue_cursor: initial_cursor,
         });
         self.connected_session_id = None;
         self.connected_session_state = None;
@@ -1508,7 +1508,7 @@ impl App {
                             {
                                 let label = item.playback_label();
                                 self.player.send_command(PlayerCommand::JumpTo(idx));
-                                self.playback_queue_mut().playlist_cursor = idx;
+                                self.playback_queue_mut().queue_cursor = idx;
                                 self.flash_status(label);
                             }
                         }
@@ -1520,8 +1520,8 @@ impl App {
                         self.status.clear();
                     }
                     "clear:yes" => {
-                        if self.confirm_clear_playlist {
-                            self.confirm_clear_playlist = false;
+                        if self.confirm_clear_queue {
+                            self.confirm_clear_queue = false;
                             self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
                         }
                     }
@@ -1673,7 +1673,7 @@ impl App {
                                             self.player_tab.items.iter().position(|it| &it.id == id)
                                         })
                                     {
-                                        self.player_tab.playlist_cursor = new_idx;
+                                        self.player_tab.queue_cursor = new_idx;
                                     }
                                     self.runtime_zero_since = None;
                                 }
@@ -1902,7 +1902,7 @@ impl App {
         // Signal quit (SIGHUP/SIGTERM — terminal closed or process termination).
         // Stop player and join its thread so the mpv window closes and
         // report_stopped completes before we exit. The player thread closes
-        // the window before making the HTTP call (see SingleSession/PlaylistSession
+        // the window before making the HTTP call (see SingleSession/QueueSession
         // run()), so the window disappears promptly even if the HTTP call takes a
         // moment.
         if QUIT_REQUESTED.load(Ordering::Relaxed) {
@@ -1946,7 +1946,7 @@ impl App {
         // Update the playing item's position before saving — the PlayerEvent::Stopped
         // that carries this update is never processed after we break out of the event loop.
         // Use last_valid_pos (never zeroed during track transitions) rather than
-        // position_ticks (transiently 0 when PlaylistSession advances to the next track).
+        // position_ticks (transiently 0 when QueueSession advances to the next track).
         if was_playing && !self.has_direct_remote_queue() {
             if let Some(item) = self.player_tab.items.get_mut(current_idx) {
                 if last_valid_pos > 0 && !item.is_audio() {
@@ -2036,7 +2036,7 @@ impl App {
                     let item = {
                         let queue = self.playback_queue_mut();
                         let item = queue.items.remove(idx);
-                        queue.playlist_cursor = if queue.items.is_empty() {
+                        queue.queue_cursor = if queue.items.is_empty() {
                             0
                         } else {
                             idx.min(queue.items.len() - 1)
@@ -2044,7 +2044,7 @@ impl App {
                         item
                     };
                     if allow_undo {
-                        self.playlist_undo_stack
+                        self.queue_undo_stack
                             .push(UndoEntry::Remove(idx, Box::new(item)));
                     }
                 } else {
@@ -2055,10 +2055,10 @@ impl App {
                         let len_after = len_before - removed_id.is_some() as usize;
                         let queue = self.playback_queue_mut();
                         if queue.items.is_empty() {
-                            queue.playlist_cursor = 0;
+                            queue.queue_cursor = 0;
                         } else {
-                            queue.playlist_cursor = queue
-                                .playlist_cursor
+                            queue.queue_cursor = queue
+                                .queue_cursor
                                 .min(queue.items.len().saturating_sub(1));
                         }
                         log::info!(target: "consume", "Stopped-path: removed idx={idx} from queue \
@@ -2129,7 +2129,7 @@ impl App {
                 } else {
                     idx
                 };
-                self.playback_queue_mut().playlist_cursor = adjusted;
+                self.playback_queue_mut().queue_cursor = adjusted;
                 if !self.has_direct_remote_queue() {
                     if let Some(item) = self.playback_queue().items.get(adjusted) {
                         self.last_played_item_id = Some(item.id.clone());
@@ -2142,7 +2142,7 @@ impl App {
                     self.save_queue_state();
                 }
             }
-            PlayerEvent::PlaylistNextUp { next_idx } => {
+            PlayerEvent::QueueNextUp { next_idx } => {
                 if let Some(item) = self.playback_queue().items.get(next_idx).cloned() {
                     let item_id = item.id.clone();
                     let show_title = item.series_name.clone();
@@ -2170,7 +2170,7 @@ impl App {
                 }
             }
             PlayerEvent::NextUpThreshold { .. } => {
-                // Series episodes now use play_playlist; this only fires for movies
+                // Series episodes now use play_queue; this only fires for movies
                 // (always_play_next=false or non-series content). No action needed.
             }
             PlayerEvent::NextUpPlay => {
@@ -2184,7 +2184,7 @@ impl App {
                         .position(|i| i.id == item.id)
                     {
                         self.player.send_command(PlayerCommand::JumpTo(idx));
-                        self.playback_queue_mut().playlist_cursor = idx;
+                        self.playback_queue_mut().queue_cursor = idx;
                         self.flash_status(label);
                     } else {
                         log::warn!(target: "app", "next-up: item not in queue, cannot jump");
@@ -2196,14 +2196,14 @@ impl App {
             PlayerEvent::QueueUpdated { items, cursor } => {
                 let queue = self.playback_queue_mut();
                 queue.items = items;
-                queue.playlist_cursor = cursor;
+                queue.queue_cursor = cursor;
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 self.skip_intro_end_ticks = Some(intro_end_ticks);
                 let playing_title = self
                     .playback_queue()
                     .items
-                    .get(self.playback_queue().playlist_cursor)
+                    .get(self.playback_queue().queue_cursor)
                     .map(|i| i.name.clone())
                     .unwrap_or_else(|| "mbv".into());
                 self.notify_with_actions(
@@ -2505,7 +2505,7 @@ pub(crate) mod tests {
             music_levels: Vec::new(),
             player_tab: PlayerTab {
                 items: Vec::new(),
-                playlist_cursor: 0,
+                queue_cursor: 0,
             },
             remote_player_tab: None,
             home: HomePane {
@@ -2540,13 +2540,13 @@ pub(crate) mod tests {
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
-            confirm_clear_playlist: false,
-            playlist_undo_stack: Vec::new(),
-            remote_playlist_undo_stack: Vec::new(),
+            confirm_clear_queue: false,
+            queue_undo_stack: Vec::new(),
+            remote_queue_undo_stack: Vec::new(),
             skip_intro_end_ticks: None,
             next_up_item: None,
-            playlist_view: 0,
-            playlist_group: true,
+            queue_view: 0,
+            queue_group: true,
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
             power_left_tab_pending: 0,
@@ -2647,7 +2647,7 @@ pub(crate) mod tests {
         let (remote, player_rx) = crate::remote_player::RemotePlayer::stub(remote_items, 0);
         let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
         app.player_tab.items = local_items;
-        app.player_tab.playlist_cursor = 0;
+        app.player_tab.queue_cursor = 0;
         app
     }
 
@@ -2865,7 +2865,7 @@ pub(crate) mod tests {
     #[test]
     fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() {
         let mut app = make_app_stub();
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -3206,7 +3206,7 @@ pub(crate) mod tests {
     #[test]
     fn go_back_keeps_feed_home_video_group_view_intact() {
         let mut app = make_app_stub();
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.tab_idx = 2;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -3266,7 +3266,7 @@ pub(crate) mod tests {
     #[test]
     fn feed_home_video_root_filters_groups_from_all_video_paths() {
         let mut app = make_app_stub();
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -3381,7 +3381,7 @@ pub(crate) mod tests {
         // A stale selected group from a prior aggregation run with more groups
         // must clamp to the groups that actually exist now.
         let mut app = make_app_stub();
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -3441,7 +3441,7 @@ pub(crate) mod tests {
     #[test]
     fn refresh_lib_targets_power_feed_selection() {
         let mut app = make_app_stub();
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.tab_idx = 1;
         app.power_left_tab = 1;
         app.power_focus = PowerFocus::Left;
@@ -3662,7 +3662,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
         });
         app.tab_idx = 1;
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -3726,7 +3726,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
         });
         app.tab_idx = 1;
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -3827,7 +3827,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
         });
         app.tab_idx = 1;
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -3856,7 +3856,7 @@ pub(crate) mod tests {
     #[test]
     fn refreshed_does_not_overwrite_feed_root_with_video_items() {
         let mut app = make_app_stub();
-        app.playlist_view = PLAYLIST_VIEW_POWER;
+        app.queue_view = QUEUE_VIEW_POWER;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -3921,7 +3921,7 @@ pub(crate) mod tests {
         let mut app = make_app_stub();
         app.remote_player_tab = Some(PlayerTab {
             items: make_items(2),
-            playlist_cursor: 1,
+            queue_cursor: 1,
         });
         app.queue_scope = QueueScope::Remote;
 
@@ -3958,7 +3958,7 @@ pub(crate) mod tests {
                 .map(|i| i.id.as_str())
                 .collect::<Vec<_>>()
         );
-        assert_eq!(app.player_tab.playlist_cursor, 0);
+        assert_eq!(app.player_tab.queue_cursor, 0);
         assert_eq!(
             app.remote_player_tab
                 .as_ref()
@@ -3972,7 +3972,7 @@ pub(crate) mod tests {
                 .map(|i| i.id.as_str())
                 .collect::<Vec<_>>()
         );
-        assert_eq!(app.remote_player_tab.as_ref().unwrap().playlist_cursor, 2);
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
         assert!(matches!(
             app.queue_source,
             crate::config::QueueSource::Album
@@ -4097,9 +4097,9 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn consuming_a_video_resyncs_the_players_own_playlist() {
+    fn consuming_a_video_resyncs_the_players_own_queue() {
         let _guard = crate::config::TestStateDirGuard::new();
-        // The player thread (PlaylistSession) keeps its own separate copy of the
+        // The player thread (QueueSession) keeps its own separate copy of the
         // items list, independent of `player_tab.items`. If consume only shrinks
         // the app-side queue and never tells the player, the player's internal
         // index space permanently diverges from the displayed queue after the
@@ -4122,10 +4122,10 @@ pub(crate) mod tests {
         assert!(
             matches!(
                 cmd_rx.try_recv(),
-                Ok(crate::player::PlayerCommand::PlaylistRemove(0))
+                Ok(crate::player::PlayerCommand::QueueRemove(0))
             ),
             "consuming idx=0 must tell the player to remove idx=0 from its own \
-             internal playlist, keeping it in sync with the app-side queue"
+             internal queue, keeping it in sync with the app-side queue"
         );
     }
 
@@ -4164,7 +4164,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_playlist_or_dirty_flag() {
+    fn consuming_a_video_on_direct_remote_queue_does_not_touch_local_queue_or_dirty_flag() {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(2);
@@ -4388,7 +4388,7 @@ pub(crate) mod tests {
         app.execute_pending_queue_action(PendingQueueAction::ClearQueue);
 
         assert!(app.player_tab.items.is_empty());
-        assert_eq!(app.player_tab.playlist_cursor, 0);
+        assert_eq!(app.player_tab.queue_cursor, 0);
         assert_eq!(
             app.remote_player_tab
                 .as_ref()
@@ -4450,7 +4450,7 @@ pub(crate) mod tests {
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
         app.set_queue_scope(QueueScope::Local);
 
-        app.remove_from_playlist(1);
+        app.remove_from_queue(1);
 
         assert_eq!(app.player_tab.items.len(), 2);
         assert_eq!(
@@ -4475,7 +4475,7 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>()
         );
         assert!(app.queue_dirty);
-        assert_eq!(app.remote_playlist_undo_stack.len(), 0);
+        assert_eq!(app.remote_queue_undo_stack.len(), 0);
     }
 
     #[test]
@@ -4485,7 +4485,7 @@ pub(crate) mod tests {
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
 
-        app.remove_from_playlist(1);
+        app.remove_from_queue(1);
 
         assert_eq!(app.remote_player_tab.as_ref().unwrap().items.len(), 2);
         assert_eq!(
@@ -4510,8 +4510,8 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>()
         );
         assert!(!app.queue_dirty);
-        assert_eq!(app.playlist_undo_stack.len(), 0);
-        assert_eq!(app.remote_playlist_undo_stack.len(), 1);
+        assert_eq!(app.queue_undo_stack.len(), 0);
+        assert_eq!(app.remote_queue_undo_stack.len(), 1);
     }
 
     #[test]
@@ -4539,7 +4539,7 @@ pub(crate) mod tests {
         let mut app = make_remote_app_stub(local_items, remote_items.clone());
         app.player.status.lock().unwrap().active = false;
 
-        app.remove_from_playlist(1);
+        app.remove_from_queue(1);
 
         assert_eq!(
             app.remote_player_tab
@@ -4558,14 +4558,14 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn move_playlist_item_up_swaps_items_and_cursor_follows() {
+    fn move_queue_item_up_swaps_items_and_cursor_follows() {
         let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
-        app.player_tab.playlist_cursor = 1;
+        app.player_tab.queue_cursor = 1;
 
-        app.move_playlist_item_up();
+        app.move_queue_item_up();
 
         assert_eq!(
             app.player_tab
@@ -4579,19 +4579,19 @@ pub(crate) mod tests {
                 items[2].id.as_str()
             ]
         );
-        assert_eq!(app.player_tab.playlist_cursor, 0);
-        assert_eq!(app.playlist_undo_stack.len(), 1);
+        assert_eq!(app.player_tab.queue_cursor, 0);
+        assert_eq!(app.queue_undo_stack.len(), 1);
     }
 
     #[test]
-    fn move_playlist_item_down_swaps_items_and_cursor_follows() {
+    fn move_queue_item_down_swaps_items_and_cursor_follows() {
         let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
-        app.player_tab.playlist_cursor = 1;
+        app.player_tab.queue_cursor = 1;
 
-        app.move_playlist_item_down();
+        app.move_queue_item_down();
 
         assert_eq!(
             app.player_tab
@@ -4605,19 +4605,19 @@ pub(crate) mod tests {
                 items[1].id.as_str()
             ]
         );
-        assert_eq!(app.player_tab.playlist_cursor, 2);
-        assert_eq!(app.playlist_undo_stack.len(), 1);
+        assert_eq!(app.player_tab.queue_cursor, 2);
+        assert_eq!(app.queue_undo_stack.len(), 1);
     }
 
     #[test]
-    fn move_playlist_item_up_is_noop_at_start_of_queue() {
+    fn move_queue_item_up_is_noop_at_start_of_queue() {
         let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
-        app.player_tab.playlist_cursor = 0;
+        app.player_tab.queue_cursor = 0;
 
-        app.move_playlist_item_up();
+        app.move_queue_item_up();
 
         assert_eq!(
             app.player_tab
@@ -4627,19 +4627,19 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>(),
             items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
         );
-        assert_eq!(app.player_tab.playlist_cursor, 0);
-        assert!(app.playlist_undo_stack.is_empty());
+        assert_eq!(app.player_tab.queue_cursor, 0);
+        assert!(app.queue_undo_stack.is_empty());
     }
 
     #[test]
-    fn move_playlist_item_down_is_noop_at_end_of_queue() {
+    fn move_queue_item_down_is_noop_at_end_of_queue() {
         let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
-        app.player_tab.playlist_cursor = 2;
+        app.player_tab.queue_cursor = 2;
 
-        app.move_playlist_item_down();
+        app.move_queue_item_down();
 
         assert_eq!(
             app.player_tab
@@ -4649,8 +4649,8 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>(),
             items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
         );
-        assert_eq!(app.player_tab.playlist_cursor, 2);
-        assert!(app.playlist_undo_stack.is_empty());
+        assert_eq!(app.player_tab.queue_cursor, 2);
+        assert!(app.queue_undo_stack.is_empty());
     }
 
     #[test]
@@ -4659,10 +4659,10 @@ pub(crate) mod tests {
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
-        app.player_tab.playlist_cursor = 1;
+        app.player_tab.queue_cursor = 1;
 
-        app.move_playlist_item_up();
-        assert_eq!(app.player_tab.playlist_cursor, 0);
+        app.move_queue_item_up();
+        assert_eq!(app.player_tab.queue_cursor, 0);
 
         app.undo_last_queue_edit(QueueScope::Local);
 
@@ -4674,8 +4674,8 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>(),
             items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
         );
-        assert_eq!(app.player_tab.playlist_cursor, 1);
-        assert!(app.playlist_undo_stack.is_empty());
+        assert_eq!(app.player_tab.queue_cursor, 1);
+        assert!(app.queue_undo_stack.is_empty());
     }
 
     #[test]
@@ -4684,19 +4684,19 @@ pub(crate) mod tests {
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
-        app.player_tab.playlist_cursor = 0;
+        app.player_tab.queue_cursor = 0;
 
         // A removal, then a move -- undoing once should only reverse the move.
-        app.remove_from_playlist(0);
-        app.player_tab.playlist_cursor = 0;
-        app.move_playlist_item_down();
-        assert_eq!(app.playlist_undo_stack.len(), 2);
+        app.remove_from_queue(0);
+        app.player_tab.queue_cursor = 0;
+        app.move_queue_item_down();
+        assert_eq!(app.queue_undo_stack.len(), 2);
 
         app.undo_last_queue_edit(QueueScope::Local);
 
-        assert_eq!(app.playlist_undo_stack.len(), 1);
+        assert_eq!(app.queue_undo_stack.len(), 1);
         assert!(matches!(
-            app.playlist_undo_stack.last(),
+            app.queue_undo_stack.last(),
             Some(UndoEntry::Remove(0, _))
         ));
     }
@@ -4707,10 +4707,10 @@ pub(crate) mod tests {
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
-        app.player_tab.playlist_cursor = 0;
+        app.player_tab.queue_cursor = 0;
 
-        app.move_playlist_item_down(); // items[0] now sits at index 1
-        assert_eq!(app.playlist_undo_stack.len(), 1);
+        app.move_queue_item_down(); // items[0] now sits at index 1
+        assert_eq!(app.queue_undo_stack.len(), 1);
 
         // Something untracked by this undo stack happens to the queue
         // afterwards (e.g. a natural consume) removing the item that's now
@@ -4733,15 +4733,15 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn move_playlist_item_is_rejected_for_remote_scope() {
+    fn move_queue_item_is_rejected_for_remote_scope() {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(3);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items, remote_items.clone());
         app.set_queue_scope(QueueScope::Remote);
-        app.remote_player_tab.as_mut().unwrap().playlist_cursor = 1;
+        app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
 
-        app.move_playlist_item_up();
+        app.move_queue_item_up();
 
         assert_eq!(
             app.remote_player_tab
@@ -4756,7 +4756,7 @@ pub(crate) mod tests {
                 .map(|i| i.id.as_str())
                 .collect::<Vec<_>>()
         );
-        assert_eq!(app.remote_player_tab.as_ref().unwrap().playlist_cursor, 1);
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
         assert_eq!(app.status, "Reorder is not supported for the remote queue");
     }
 
@@ -4769,14 +4769,14 @@ pub(crate) mod tests {
         let items = make_items(3);
         let mut app = make_app_stub();
         app.player_tab.items = items.clone();
-        app.player_tab.playlist_cursor = 1;
+        app.player_tab.queue_cursor = 1;
         {
             let mut st = app.player.status.lock().unwrap();
             st.active = true;
             st.current_idx = 1;
         }
 
-        app.move_playlist_item_down();
+        app.move_queue_item_down();
 
         assert_eq!(
             app.player_tab
@@ -4790,7 +4790,7 @@ pub(crate) mod tests {
                 items[1].id.as_str()
             ]
         );
-        assert_eq!(app.player_tab.playlist_cursor, 2);
+        assert_eq!(app.player_tab.queue_cursor, 2);
     }
 
     #[test]

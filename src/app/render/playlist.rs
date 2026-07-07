@@ -1,4 +1,4 @@
-use super::super::layout::{LayoutHome, LayoutPlaylist};
+use super::super::layout::{LayoutHome, LayoutQueue};
 use super::super::ui_util::{build_queue_rows, fmt_duration, trunc_str, QueueRow};
 use super::super::{palette, App};
 use crate::api::TICKS_PER_SECOND;
@@ -26,11 +26,11 @@ impl App {
         }
     }
 
-    pub(super) fn render_playlist_panel(
+    pub(super) fn render_queue_panel(
         &mut self,
         f: &mut Frame,
         area: Rect,
-        layout: &mut LayoutPlaylist,
+        layout: &mut LayoutQueue,
     ) {
         if self.home_search.is_some() {
             self.render_home_search(f, area);
@@ -40,7 +40,7 @@ impl App {
             self.effective_playback_state();
         let (items, cursor) = {
             let queue = self.displayed_queue();
-            (queue.items.clone(), queue.playlist_cursor)
+            (queue.items.clone(), queue.queue_cursor)
         };
 
         layout.rect = area;
@@ -84,7 +84,7 @@ impl App {
         };
 
         // Build display rows (grouped or flat) and window them to the visible height.
-        let (display, group_for_header) = build_queue_rows(&items, self.playlist_group);
+        let (display, group_for_header) = build_queue_rows(&items, self.queue_group);
         let visible = table_area.height as usize;
         let cursor_row = display
             .iter()

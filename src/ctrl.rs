@@ -85,9 +85,9 @@ pub enum WireCommand {
     #[serde(rename = "JumpTo")]
     JumpTo(usize),
     #[serde(rename = "PlaylistRemove")]
-    PlaylistRemove(usize),
+    QueueRemove(usize),
     #[serde(rename = "PlaylistMove")]
-    PlaylistMove(usize, usize),
+    QueueMove(usize, usize),
     #[serde(rename = "SetVolume")]
     SetVolume(i64),
     #[serde(rename = "Seek")]
@@ -124,7 +124,7 @@ pub enum WireCommand {
     #[serde(rename = "SkipIntroDismiss")]
     SkipIntroDismiss,
     #[serde(rename = "ReplacePlaylist")]
-    ReplacePlaylist {
+    ReplaceQueue {
         items: Vec<MediaItem>,
         start_idx: usize,
     },
@@ -135,8 +135,8 @@ impl From<PlayerCommand> for WireCommand {
         match cmd {
             PlayerCommand::TogglePause => WireCommand::TogglePause,
             PlayerCommand::JumpTo(idx) => WireCommand::JumpTo(idx),
-            PlayerCommand::PlaylistRemove(idx) => WireCommand::PlaylistRemove(idx),
-            PlayerCommand::PlaylistMove(from, to) => WireCommand::PlaylistMove(from, to),
+            PlayerCommand::QueueRemove(idx) => WireCommand::QueueRemove(idx),
+            PlayerCommand::QueueMove(from, to) => WireCommand::QueueMove(from, to),
             PlayerCommand::SetVolume(v) => WireCommand::SetVolume(v),
             PlayerCommand::Seek(s) => WireCommand::Seek(s),
             PlayerCommand::SeekAbsolute(s) => WireCommand::SeekAbsolute(s),
@@ -174,8 +174,8 @@ impl From<PlayerCommand> for WireCommand {
             },
             PlayerCommand::NextUpDismiss => WireCommand::NextUpDismiss,
             PlayerCommand::SkipIntroDismiss => WireCommand::SkipIntroDismiss,
-            PlayerCommand::ReplacePlaylist { items, start_idx } => {
-                WireCommand::ReplacePlaylist { items, start_idx }
+            PlayerCommand::ReplaceQueue { items, start_idx } => {
+                WireCommand::ReplaceQueue { items, start_idx }
             }
         }
     }
@@ -186,8 +186,8 @@ impl From<WireCommand> for PlayerCommand {
         match cmd {
             WireCommand::TogglePause => PlayerCommand::TogglePause,
             WireCommand::JumpTo(idx) => PlayerCommand::JumpTo(idx),
-            WireCommand::PlaylistRemove(idx) => PlayerCommand::PlaylistRemove(idx),
-            WireCommand::PlaylistMove(from, to) => PlayerCommand::PlaylistMove(from, to),
+            WireCommand::QueueRemove(idx) => PlayerCommand::QueueRemove(idx),
+            WireCommand::QueueMove(from, to) => PlayerCommand::QueueMove(from, to),
             WireCommand::SetVolume(v) => PlayerCommand::SetVolume(v),
             WireCommand::Seek(s) => PlayerCommand::Seek(s),
             WireCommand::SeekAbsolute(s) => PlayerCommand::SeekAbsolute(s),
@@ -225,8 +225,8 @@ impl From<WireCommand> for PlayerCommand {
             },
             WireCommand::NextUpDismiss => PlayerCommand::NextUpDismiss,
             WireCommand::SkipIntroDismiss => PlayerCommand::SkipIntroDismiss,
-            WireCommand::ReplacePlaylist { items, start_idx } => {
-                PlayerCommand::ReplacePlaylist { items, start_idx }
+            WireCommand::ReplaceQueue { items, start_idx } => {
+                PlayerCommand::ReplaceQueue { items, start_idx }
             }
         }
     }
@@ -322,11 +322,11 @@ mod tests {
             "{\"JumpTo\":3}"
         );
         assert_eq!(
-            serde_json::to_string(&WireCommand::PlaylistRemove(2)).unwrap(),
+            serde_json::to_string(&WireCommand::QueueRemove(2)).unwrap(),
             "{\"PlaylistRemove\":2}"
         );
         assert_eq!(
-            serde_json::to_string(&WireCommand::PlaylistMove(2, 3)).unwrap(),
+            serde_json::to_string(&WireCommand::QueueMove(2, 3)).unwrap(),
             "{\"PlaylistMove\":[2,3]}"
         );
         assert_eq!(
@@ -371,7 +371,7 @@ mod tests {
             "{\"SetSubtitlePrefs\":{\"mode\":\"auto\",\"subtitle_lang\":\"eng\",\"audio_lang\":\"jpn\"}}"
         );
         assert_eq!(
-            serde_json::to_string(&WireCommand::ReplacePlaylist {
+            serde_json::to_string(&WireCommand::ReplaceQueue {
                 items: vec![],
                 start_idx: 0,
             })

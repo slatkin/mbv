@@ -199,7 +199,7 @@ impl App {
 
         let (cursor, items) = {
             let queue = self.playback_queue();
-            (queue.playlist_cursor, queue.items.clone())
+            (queue.queue_cursor, queue.items.clone())
         };
         let n = items.len();
         if n == 0 {

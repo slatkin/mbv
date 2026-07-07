@@ -53,7 +53,7 @@ impl App {
 
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
-        let in_power = self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER;
+        let in_power = self.tab_idx == 1 && self.queue_view == super::QUEUE_VIEW_POWER;
         // The 3-state panel toggle (`h`) only applies while something is playing/connected.
         let mode = self.panel_mode;
         let playing_panel = show_controls;
@@ -301,10 +301,10 @@ impl App {
         }
         if self.tab_idx == 0 {
             self.render_combined(f, main_area, &mut layout.home);
-        } else if self.tab_idx == 1 && self.playlist_view == super::PLAYLIST_VIEW_POWER {
+        } else if self.tab_idx == 1 && self.queue_view == super::QUEUE_VIEW_POWER {
             self.render_power_view(f, main_area, &mut layout.power);
         } else if self.tab_idx == 1 {
-            self.render_playlist_panel(f, main_area, &mut layout.playlist);
+            self.render_queue_panel(f, main_area, &mut layout.queue);
         } else {
             self.render_library(
                 f,

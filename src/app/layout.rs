@@ -2,7 +2,7 @@
 //! hit-testing in `input.rs`.
 //!
 //! `App` owns a single `AppLayout` value (`app.layout`) instead of ~35
-//! scattered `layout_*`/`power_*`/`playlist_*` fields. Grouping by view
+//! scattered `layout_*`/`power_*`/`queue_*` fields. Grouping by view
 //! mirrors the boundaries `render/` and `input.rs` already use, rather than
 //! inventing a new one.
 //!
@@ -56,9 +56,9 @@ pub(crate) struct LayoutHome {
     pub carousel_down_arrow: Option<Rect>,
 }
 
-/// Playlist list/filmstrip/card view geometry.
+/// Queue list/filmstrip/card view geometry.
 #[derive(Default)]
-pub(crate) struct LayoutPlaylist {
+pub(crate) struct LayoutQueue {
     pub row_map: Vec<Option<usize>>,
     pub rect: Rect,
     pub inner: Rect,
@@ -112,7 +112,7 @@ pub(crate) struct LayoutLibrary {
 pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
     pub home: LayoutHome,
-    pub playlist: LayoutPlaylist,
+    pub queue: LayoutQueue,
     pub power: LayoutPower,
     pub library: LayoutLibrary,
     pub tabs_area: Rect,
