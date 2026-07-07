@@ -105,6 +105,42 @@ fn audio_only_rejection(audio_only: bool, fetched: &[MediaItem]) -> Option<Strin
     }
 }
 
+fn queue_restore_cursor(
+    items: &[MediaItem],
+    saved_cursor: usize,
+    last_played_item_id: Option<&str>,
+    last_played_completed: bool,
+) -> usize {
+    let fallback = saved_cursor.min(items.len().saturating_sub(1));
+    let Some(id) = last_played_item_id else {
+        return fallback;
+    };
+    let Some(idx) = items.iter().position(|i| i.id == id) else {
+        return fallback;
+    };
+    if last_played_completed {
+        (idx + 1).min(items.len().saturating_sub(1))
+    } else {
+        idx
+    }
+}
+
+fn load_initial_queue_snapshot() -> (Vec<MediaItem>, usize) {
+    let Some(state) = crate::config::load_queue_state() else {
+        return (Vec::new(), 0);
+    };
+    if state.items.is_empty() {
+        return (Vec::new(), 0);
+    }
+    let cursor = queue_restore_cursor(
+        &state.items,
+        state.cursor,
+        state.last_played_item_id.as_deref(),
+        state.last_played_completed,
+    );
+    (state.items, cursor)
+}
+
 fn spawn_ctrl_client<R, W>(
     reader_stream: R,
     writer_stream: W,
@@ -297,9 +333,11 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         }
     });
 
+    let (initial_items, initial_cursor) = load_initial_queue_snapshot();
+
     // Shared state for ctrl socket initial-state snapshots
-    let shared_items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
-    let shared_cursor: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
+    let shared_items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(initial_items.clone()));
+    let shared_cursor: Arc<Mutex<usize>> = Arc::new(Mutex::new(initial_cursor));
     let ctrl_clients: ClientList = Arc::new(Mutex::new(Vec::new()));
 
     // Bind and start the control socket only once the daemon can immediately
@@ -445,8 +483,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         });
     }
 
-    let mut items: Vec<MediaItem> = Vec::new();
-    let mut cursor: usize = 0;
+    let mut items = initial_items;
+    let mut cursor = initial_cursor;
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
 
@@ -848,8 +886,11 @@ fn all_audio(items: &[MediaItem]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{all_audio, audio_only_rejection};
+    use super::{
+        all_audio, audio_only_rejection, load_initial_queue_snapshot, queue_restore_cursor,
+    };
     use crate::api::MediaItem;
+    use crate::config::{save_queue_state, QueueSource, QueueState, TestStateDirGuard};
 
     fn item(name: &str, media_type: &str, item_type: &str) -> MediaItem {
         MediaItem {
@@ -887,6 +928,17 @@ mod tests {
         }
     }
 
+    fn save_test_queue_state(items: Vec<MediaItem>, cursor: usize) {
+        save_queue_state(&QueueState {
+            source: QueueSource::Unknown,
+            items,
+            cursor,
+            last_played_item_id: None,
+            last_played_completed: false,
+            positions: Default::default(),
+        });
+    }
+
     #[test]
     fn all_audio_accepts_audio_items() {
         assert!(all_audio(&[
@@ -920,5 +972,73 @@ mod tests {
     fn non_audio_only_daemon_never_rejects() {
         let fetched = [item("movie", "Video", "Movie")];
         assert!(audio_only_rejection(false, &fetched).is_none());
+    }
+
+    #[test]
+    fn queue_restore_cursor_advances_past_completed_last_played_item() {
+        let items = vec![
+            item("one", "Audio", "Audio"),
+            item("two", "Audio", "Audio"),
+            item("three", "Audio", "Audio"),
+        ];
+
+        let cursor = queue_restore_cursor(&items, 0, Some("two"), true);
+
+        assert_eq!(cursor, 2);
+    }
+
+    #[test]
+    fn load_initial_queue_snapshot_restores_saved_items_and_cursor() {
+        let _state = TestStateDirGuard::new();
+        let items = vec![item("one", "Audio", "Audio"), item("two", "Audio", "Audio")];
+        save_test_queue_state(items.clone(), 1);
+
+        let (restored_items, restored_cursor) = load_initial_queue_snapshot();
+
+        assert_eq!(restored_items.len(), items.len());
+        assert_eq!(
+            restored_items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(restored_cursor, 1);
+    }
+
+    #[test]
+    fn load_initial_queue_snapshot_clamps_out_of_range_cursor() {
+        let _state = TestStateDirGuard::new();
+        let items = vec![item("one", "Audio", "Audio"), item("two", "Audio", "Audio")];
+        save_test_queue_state(items, 99);
+
+        let (_, restored_cursor) = load_initial_queue_snapshot();
+
+        assert_eq!(restored_cursor, 1);
+    }
+
+    #[test]
+    fn load_initial_queue_snapshot_uses_last_played_item_when_present() {
+        let _state = TestStateDirGuard::new();
+        let items = vec![
+            item("one", "Audio", "Audio"),
+            item("two", "Audio", "Audio"),
+            item("three", "Audio", "Audio"),
+        ];
+        save_queue_state(&QueueState {
+            source: QueueSource::Unknown,
+            items,
+            cursor: 0,
+            last_played_item_id: Some("two".into()),
+            last_played_completed: true,
+            positions: Default::default(),
+        });
+
+        let (_, restored_cursor) = load_initial_queue_snapshot();
+
+        assert_eq!(restored_cursor, 2);
     }
 }
