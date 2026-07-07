@@ -9,6 +9,7 @@
 - See docs/CHECKIN.md for pre-commit steps.
 - For releases, run `scripts/release.sh X.Y.Z "one-line summary"` instead of reading a separate release checklist.
 - Always commit any edited `.md` file immediately after editing it — don't batch documentation edits with unrelated code changes or leave them uncommitted.
+- This is a single-user repo — never open a pull request. Push commits directly to the branch (or `main`) as instructed; don't run `gh pr create`.
 
 ## Agent skills
 
