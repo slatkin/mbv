@@ -1,5 +1,24 @@
 {
   "permissions": {
-    "allow": [ ]
+    "allow": [
+      "Bash(grep -n *)",
+      "Bash(rg *)",
+      "Bash(gh issue *)",
+      "Bash(grep -rn *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git status *)",
+      "Bash(grep -rln *)",
+      "Bash(git show *)",
+      "Bash(gh label *)",
+      "Bash(git rev-parse *)",
+      "Bash(find *)",
+      "Bash(gh repo *)",
+      "Bash(git fetch)",
+      "mcp__serena__find_symbol",
+      "mcp__serena__read_memory",
+      "mcp__serena__get_symbols_overview",
+      "mcp__serena__initial_instructions"
+    ]
   }
 }
