@@ -565,6 +565,34 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     }
 }
 
+/// Applies a freshly-decided queue snapshot to the cross-thread shared state
+/// (used to seed newly-connecting ctrl-socket clients) and broadcasts it to
+/// every already-connected client. Centralizes what `CtrlState`'s fields
+/// must always carry together, so a future field addition (like `source` in
+/// #113) can't land in only some of the call sites — previously this exact
+/// shape was hand-rolled inline at five separate command branches.
+fn broadcast_queue_state(
+    ctrl_clients: &ClientList,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    items: &[MediaItem],
+    cursor: usize,
+    source: &crate::config::QueueSource,
+) {
+    *shared_queue.items.lock().unwrap() = items.to_vec();
+    *shared_queue.cursor.lock().unwrap() = cursor;
+    *shared_queue.source.lock().unwrap() = source.clone();
+    broadcast(
+        ctrl_clients,
+        &CtrlEvent::State(CtrlState {
+            status: player.status.lock().unwrap().clone(),
+            items: items.to_vec(),
+            cursor,
+            source: source.clone(),
+        }),
+    );
+}
+
 fn handle_ctrl(
     cmd: CtrlCmd,
     reply_tx: &mpsc::Sender<String>,
@@ -586,27 +614,43 @@ fn handle_ctrl(
             cursor: new_cursor,
             source: new_source,
         } => {
+            // Adoption only ever applies to a Cold daemon (see CONTEXT.md's
+            // "Cold daemon" entry) — one with no queue yet. If another
+            // client's command already gave this daemon a queue by the time
+            // this one arrives (a concurrent first-connect race), the daemon
+            // is no longer cold, and a stale saved snapshot must not be
+            // allowed to silently clobber whatever is already authoritative.
+            if !items.is_empty() {
+                log::warn!(
+                    target: "daemon",
+                    "ignoring AdoptQueue: daemon already has a queue ({} item(s))",
+                    items.len()
+                );
+                send_to(
+                    reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "daemon already has a queue; adoption skipped".to_string(),
+                    ),
+                );
+                return;
+            }
             let next_cursor = if new_items.is_empty() {
                 0
             } else {
                 new_cursor.min(new_items.len().saturating_sub(1))
             };
-            *items = new_items.clone();
-            *cursor = next_cursor;
-            *source = new_source.clone();
-            *shared_queue.items.lock().unwrap() = new_items.clone();
-            *shared_queue.cursor.lock().unwrap() = next_cursor;
-            *shared_queue.source.lock().unwrap() = new_source.clone();
             player.set_initial_queue(&new_items, next_cursor);
-            broadcast(
+            broadcast_queue_state(
                 ctrl_clients,
-                &CtrlEvent::State(CtrlState {
-                    status: player.status.lock().unwrap().clone(),
-                    items: new_items,
-                    cursor: next_cursor,
-                    source: new_source,
-                }),
+                player,
+                shared_queue,
+                &new_items,
+                next_cursor,
+                &new_source,
             );
+            *items = new_items;
+            *cursor = next_cursor;
+            *source = new_source;
         }
         CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
             PlayerCommand::ReplaceQueue {
@@ -620,17 +664,13 @@ fn handle_ctrl(
                 };
                 *items = new_items.clone();
                 *cursor = next_cursor;
-                *shared_queue.items.lock().unwrap() = new_items.clone();
-                *shared_queue.cursor.lock().unwrap() = next_cursor;
-                *shared_queue.source.lock().unwrap() = source.clone();
-                broadcast(
+                broadcast_queue_state(
                     ctrl_clients,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: new_items.clone(),
-                        cursor: next_cursor,
-                        source: source.clone(),
-                    }),
+                    player,
+                    shared_queue,
+                    &new_items,
+                    next_cursor,
+                    source,
                 );
                 player.send_command(PlayerCommand::ReplaceQueue {
                     items: new_items,
@@ -675,18 +715,14 @@ fn handle_ctrl(
                     if queue.len() > 1 {
                         *items = queue.clone();
                         *cursor = 0;
-                        *source = new_source.clone();
-                        *shared_queue.items.lock().unwrap() = queue.clone();
-                        *shared_queue.cursor.lock().unwrap() = 0;
-                        *shared_queue.source.lock().unwrap() = source.clone();
-                        broadcast(
+                        *source = new_source;
+                        broadcast_queue_state(
                             ctrl_clients,
-                            &CtrlEvent::State(CtrlState {
-                                status: player.status.lock().unwrap().clone(),
-                                items: queue.clone(),
-                                cursor: 0,
-                                source: source.clone(),
-                            }),
+                            player,
+                            shared_queue,
+                            &queue,
+                            0,
+                            source,
                         );
                         let c = Arc::new(client.lock().unwrap().clone());
                         player.play_queue(queue, 0, c, 100);
@@ -695,19 +731,8 @@ fn handle_ctrl(
                 }
                 *items = vec![item.clone()];
                 *cursor = 0;
-                *source = new_source.clone();
-                *shared_queue.items.lock().unwrap() = items.clone();
-                *shared_queue.cursor.lock().unwrap() = 0;
-                *shared_queue.source.lock().unwrap() = source.clone();
-                broadcast(
-                    ctrl_clients,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: items.clone(),
-                        cursor: 0,
-                        source: source.clone(),
-                    }),
-                );
+                *source = new_source;
+                broadcast_queue_state(ctrl_clients, player, shared_queue, items, 0, source);
                 let mut play_item = item;
                 if start_ticks > 0 {
                     play_item.playback_position_ticks = start_ticks;
@@ -723,17 +748,13 @@ fn handle_ctrl(
                 *items = play_items.clone();
                 *cursor = start_idx;
                 *source = new_source;
-                *shared_queue.items.lock().unwrap() = play_items.clone();
-                *shared_queue.cursor.lock().unwrap() = start_idx;
-                *shared_queue.source.lock().unwrap() = source.clone();
-                broadcast(
+                broadcast_queue_state(
                     ctrl_clients,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: play_items.clone(),
-                        cursor: start_idx,
-                        source: source.clone(),
-                    }),
+                    player,
+                    shared_queue,
+                    &play_items,
+                    start_idx,
+                    source,
                 );
                 let c = Arc::new(client.lock().unwrap().clone());
                 player.play_queue(play_items, start_idx, c, 100);
@@ -790,21 +811,14 @@ fn handle_ws(
             *items = fetched.clone();
             *cursor = start_idx;
             *source = crate::config::QueueSource::Remote;
-            *shared_queue.items.lock().unwrap() = fetched.clone();
-            *shared_queue.cursor.lock().unwrap() = start_idx;
-            *shared_queue.source.lock().unwrap() = source.clone();
-            // Broadcast updated playlist to connected TUIs
-            if let Ok(json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
-                status: player.status.lock().unwrap().clone(),
-                items: fetched.clone(),
-                cursor: start_idx,
-                source: source.clone(),
-            })) {
-                ctrl_clients
-                    .lock()
-                    .unwrap()
-                    .retain(|tx| tx.send(json.clone()).is_ok());
-            }
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                &fetched,
+                start_idx,
+                source,
+            );
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();
                 if start_position_ticks > 0 {
