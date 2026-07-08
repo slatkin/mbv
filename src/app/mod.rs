@@ -4302,6 +4302,62 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn queue_scope_resolution_matrix_without_remote_queue() {
+        let mut app = make_app_stub();
+        app.queue_scope = QueueScope::Local;
+
+        assert!(!app.has_direct_remote_queue());
+        assert_eq!(app.playback_queue_scope(), QueueScope::Local);
+        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+        assert!(app.queue_scope_has_local_metadata(QueueScope::Local));
+        assert!(app.queue_scope_has_local_metadata(QueueScope::Remote));
+    }
+
+    #[test]
+    fn queue_scope_resolution_matrix_stale_remote_scope_without_direct_remote() {
+        let mut app = make_app_stub();
+        app.remote_player_tab = Some(PlayerTab {
+            items: make_items(2),
+            queue_cursor: 0,
+        });
+        app.queue_scope = QueueScope::Remote;
+
+        assert!(!app.has_direct_remote_queue());
+        assert_eq!(app.playback_queue_scope(), QueueScope::Local);
+        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+        assert!(app.queue_scope_has_local_metadata(QueueScope::Local));
+        assert!(app.queue_scope_has_local_metadata(QueueScope::Remote));
+    }
+
+    #[test]
+    fn queue_scope_resolution_matrix_direct_remote_displaying_local() {
+        let local_items = make_items(1);
+        let remote_items = make_items(2);
+        let mut app = make_remote_app_stub(local_items, remote_items);
+        app.queue_scope = QueueScope::Local;
+
+        assert!(app.has_direct_remote_queue());
+        assert_eq!(app.playback_queue_scope(), QueueScope::Remote);
+        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+        assert!(app.queue_scope_has_local_metadata(QueueScope::Local));
+        assert!(!app.queue_scope_has_local_metadata(QueueScope::Remote));
+    }
+
+    #[test]
+    fn queue_scope_resolution_matrix_direct_remote_displaying_remote() {
+        let local_items = make_items(1);
+        let remote_items = make_items(2);
+        let mut app = make_remote_app_stub(local_items, remote_items);
+        app.queue_scope = QueueScope::Remote;
+
+        assert!(app.has_direct_remote_queue());
+        assert_eq!(app.playback_queue_scope(), QueueScope::Remote);
+        assert_eq!(app.displayed_queue_scope(), QueueScope::Remote);
+        assert!(app.queue_scope_has_local_metadata(QueueScope::Local));
+        assert!(!app.queue_scope_has_local_metadata(QueueScope::Remote));
+    }
+
+    #[test]
     fn direct_remote_play_items_keeps_local_queue_intact() {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
