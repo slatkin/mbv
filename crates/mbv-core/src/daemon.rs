@@ -579,18 +579,18 @@ fn broadcast_queue_state(
     cursor: usize,
     source: &crate::config::QueueSource,
 ) {
-    *shared_queue.items.lock().unwrap() = items.to_vec();
+    let event = CtrlEvent::State(CtrlState {
+        status: player.status.lock().unwrap().clone(),
+        items: items.to_vec(),
+        cursor,
+        source: source.clone(),
+    });
+    broadcast(ctrl_clients, &event);
     *shared_queue.cursor.lock().unwrap() = cursor;
     *shared_queue.source.lock().unwrap() = source.clone();
-    broadcast(
-        ctrl_clients,
-        &CtrlEvent::State(CtrlState {
-            status: player.status.lock().unwrap().clone(),
-            items: items.to_vec(),
-            cursor,
-            source: source.clone(),
-        }),
-    );
+    if let CtrlEvent::State(state) = event {
+        *shared_queue.items.lock().unwrap() = state.items;
+    }
 }
 
 fn handle_ctrl(

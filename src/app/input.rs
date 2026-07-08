@@ -880,10 +880,10 @@ impl App {
                             .library
                             .collection_type
                             .clone();
-                        self.play_folder(&item.id.clone());
                         self.queue_source = crate::config::QueueSource::Collection {
                             collection_type: ct,
                         };
+                        self.play_folder(&item.id.clone());
                         self.save_queue_state();
                     } else {
                         self.select();

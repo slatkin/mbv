@@ -2058,8 +2058,8 @@ impl App {
                 sort_audio_tracks(&mut tracks);
                 if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
                     self.replace_playback_queue(tracks.clone(), start_idx);
+                    self.queue_source = crate::config::QueueSource::Album;
                     if !self.has_direct_remote_queue() {
-                        self.queue_source = crate::config::QueueSource::Album;
                         self.save_queue_state();
                     }
                     self.play_items_routed(tracks, start_idx);
@@ -2087,10 +2087,10 @@ impl App {
                                 let ct = self.libs[lib_idx].library.collection_type.clone();
                                 drop(client);
                                 self.replace_playback_queue(siblings.clone(), start_idx);
+                                self.queue_source = crate::config::QueueSource::Collection {
+                                    collection_type: ct,
+                                };
                                 if !self.has_direct_remote_queue() {
-                                    self.queue_source = crate::config::QueueSource::Collection {
-                                        collection_type: ct,
-                                    };
                                     self.save_queue_state();
                                 }
                                 self.play_items_routed(siblings, start_idx);
@@ -2559,8 +2559,8 @@ impl App {
                 self.replace_playback_queue(items.clone(), 0);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
+                self.queue_source = crate::config::QueueSource::Shuffle;
                 if !self.has_direct_remote_queue() {
-                    self.queue_source = crate::config::QueueSource::Shuffle;
                     self.save_queue_state();
                 }
                 self.play_items_routed(items, 0);
@@ -2614,8 +2614,8 @@ impl App {
                 self.replace_playback_queue(items.clone(), 0);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
+                self.queue_source = crate::config::QueueSource::Shuffle;
                 if !self.has_direct_remote_queue() {
-                    self.queue_source = crate::config::QueueSource::Shuffle;
                     self.save_queue_state();
                 }
                 self.play_items_routed(items, 0);
@@ -4231,7 +4231,10 @@ impl App {
     /// has since consumed, nor clobber a queue they've since replaced —
     /// unlike a wholesale overwrite, an ID that's no longer present is simply
     /// skipped.
-    fn spawn_enrich_queue_state(&self, positions: std::collections::HashMap<String, i64>) {
+    pub(super) fn spawn_enrich_queue_state(
+        &self,
+        positions: std::collections::HashMap<String, i64>,
+    ) {
         let item_ids: Vec<String> = self.player_tab.items.iter().map(|i| i.id.clone()).collect();
         if item_ids.is_empty() {
             return;

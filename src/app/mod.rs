@@ -390,6 +390,12 @@ struct LocalDaemonBootstrap {
     last_played_item_id: Option<String>,
     last_played_completed: bool,
     adopt_queue: Option<(Vec<MediaItem>, usize, crate::config::QueueSource)>,
+    /// Per-item resume positions carried over from the saved queue snapshot
+    /// (see `QueueState::positions`), so the same best-effort enrichment that
+    /// `restore_queue_state` performs for plain local playback also happens
+    /// for a cold daemon adopting a saved queue. Empty when there's nothing
+    /// to enrich (remote-populated queue, or no saved state).
+    positions: std::collections::HashMap<String, i64>,
 }
 
 fn bootstrap_local_daemon_queue(
@@ -408,6 +414,7 @@ fn bootstrap_local_daemon_queue(
             last_played_item_id: None,
             last_played_completed: false,
             adopt_queue: None,
+            positions: Default::default(),
         };
     }
 
@@ -421,6 +428,7 @@ fn bootstrap_local_daemon_queue(
             last_played_item_id: None,
             last_played_completed: false,
             adopt_queue: None,
+            positions: Default::default(),
         };
     };
 
@@ -439,6 +447,7 @@ fn bootstrap_local_daemon_queue(
         last_played_item_id: state.last_played_item_id.clone(),
         last_played_completed: state.last_played_completed,
         adopt_queue: Some((state.items, cursor, state.source)),
+        positions: state.positions,
     }
 }
 
@@ -1226,6 +1235,9 @@ impl App {
             app.queue_source = bootstrap.queue_source;
             app.last_played_item_id = bootstrap.last_played_item_id;
             app.last_played_completed = bootstrap.last_played_completed;
+            if !bootstrap.positions.is_empty() {
+                app.spawn_enrich_queue_state(bootstrap.positions);
+            }
         } else {
             app.queue_source = remote_queue_source;
         }
@@ -2830,6 +2842,36 @@ pub(crate) mod tests {
             bootstrap.adopt_queue,
             Some((_, 1, crate::config::QueueSource::Playlist { ref name, .. })) if name == "Saved"
         ));
+    }
+
+    #[test]
+    fn local_daemon_bootstrap_carries_saved_positions_for_enrichment() {
+        let items = make_items(2);
+        let mut positions = std::collections::HashMap::new();
+        positions.insert(items[0].id.clone(), 999);
+        let bootstrap = bootstrap_local_daemon_queue(
+            Vec::new(),
+            0,
+            crate::config::QueueSource::Unknown,
+            Some(crate::config::QueueState {
+                source: crate::config::QueueSource::Album,
+                items,
+                cursor: 0,
+                last_played_item_id: None,
+                last_played_completed: false,
+                positions: positions.clone(),
+            }),
+        );
+
+        assert_eq!(bootstrap.positions, positions);
+    }
+
+    #[test]
+    fn local_daemon_bootstrap_has_no_positions_without_saved_state() {
+        let bootstrap =
+            bootstrap_local_daemon_queue(Vec::new(), 0, crate::config::QueueSource::Unknown, None);
+
+        assert!(bootstrap.positions.is_empty());
     }
 
     #[test]
