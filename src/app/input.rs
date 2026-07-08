@@ -1991,15 +1991,12 @@ impl App {
                         ContextAction::RemoveFromContinueWatching,
                     );
                 }
-                if !cw_focused
-                    && self.home_search.is_none()
-                    && self.tab_idx == 1
-                    && self.visible_queue_scope() == QueueScope::Local
-                {
+                if !cw_focused && self.home_search.is_none() && self.tab_idx == 1 {
+                    let pos = self.displayed_queue().queue_cursor;
                     Self::push_context_action(
                         &mut entries,
                         "Remove from Queue",
-                        ContextAction::RemoveFromQueue(self.player_tab.queue_cursor),
+                        ContextAction::RemoveFromQueue(pos),
                     );
                 }
                 if self.home_search.is_some() || self.tab_idx == 1 {
