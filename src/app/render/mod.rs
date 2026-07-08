@@ -297,7 +297,7 @@ impl App {
             };
         if let Some((ref title, color)) = now_playing_title {
             // The one-row now-playing header: "▶ Title │ time … badges".
-            self.render_title_row(f, title_area, title, color);
+            self.render_title_row(f, title_area, title, color, &mut layout.playback);
         }
         if self.tab_idx == 0 {
             self.render_combined(f, main_area, &mut layout.home);
@@ -698,10 +698,25 @@ impl App {
         ))
     }
 
-    /// One-line now-playing header: `▶ Title │ elapsed / total` on the left,
-    /// the status-indicator badges right-aligned. Mirrors the design handoff.
-    fn render_title_row(&mut self, f: &mut Frame, area: Rect, title: &str, title_color: Color) {
+    /// One-line now-playing header: `▶ Title │ elapsed / total  ⏮ | ⏭` on the
+    /// left, the status-indicator badges right-aligned. Mirrors the design
+    /// handoff. Records click regions for the play/pause glyph and the
+    /// previous/next transport cluster into `layout` (see issue #112);
+    /// previous/next are greyed out (and, per `handle_mouse`, non-clickable)
+    /// when `transport_prev_next_available()` says the queue is at that
+    /// boundary.
+    fn render_title_row(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        title: &str,
+        title_color: Color,
+        layout: &mut LayoutPlayback,
+    ) {
         if area.height == 0 || area.width == 0 {
+            layout.play_pause_area = Rect::default();
+            layout.prev_area = Rect::default();
+            layout.next_area = Rect::default();
             return;
         }
 
@@ -725,26 +740,89 @@ impl App {
             )
         };
 
-        // Left: glyph  title  │  elapsed / total
+        let (prev_avail, next_avail) = self.transport_prev_next_available();
+        let prev_color = if prev_avail {
+            palette::WHITE
+        } else {
+            palette::MUTED
+        };
+        let next_color = if next_avail {
+            palette::WHITE
+        } else {
+            palette::MUTED
+        };
+
+        // Left: glyph  title  │  elapsed / total  ⏮ | ⏭
+        // A running `x` cursor tracks where each clickable glyph lands in the
+        // rendered `Line`, so `layout.*_area` exactly matches what's on screen
+        // rather than an estimate.
         let mut left: Vec<Span> = Vec::new();
+        let mut x = area.x;
+
+        let glyph_text = format!("{glyph} ");
+        let glyph_w = glyph_text.width() as u16;
+        layout.play_pause_area = Rect {
+            x,
+            y: area.y,
+            width: glyph_w,
+            height: 1,
+        };
+        x += glyph_w;
         left.push(Span::styled(
-            format!("{glyph} "),
+            glyph_text,
             Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
         ));
+
+        let title_text = title.to_string();
+        x += title_text.width() as u16;
         left.push(Span::styled(
-            title.to_string(),
+            title_text,
             Style::default()
                 .fg(title_color)
                 .add_modifier(Modifier::BOLD),
         ));
+
+        let sep_text = " \u{2502} ";
+        x += sep_text.width() as u16;
         left.push(Span::styled(
-            " \u{2502} ",
+            sep_text,
             Style::default().fg(palette::OVERLAY),
         ));
+
+        let time_text = format!("{pos_str} / {dur_str}");
+        x += time_text.width() as u16;
         left.push(Span::styled(
-            format!("{pos_str} / {dur_str}"),
+            time_text,
             Style::default().fg(palette::SUBTLE),
         ));
+
+        let gap1 = "  ";
+        x += gap1.width() as u16;
+        left.push(Span::raw(gap1));
+
+        layout.prev_area = Rect {
+            x,
+            y: area.y,
+            width: 1,
+            height: 1,
+        };
+        x += 1;
+        left.push(Span::styled("\u{23EE}", Style::default().fg(prev_color)));
+
+        let div_text = " | ";
+        x += div_text.width() as u16;
+        left.push(Span::styled(
+            div_text,
+            Style::default().fg(palette::OVERLAY),
+        ));
+
+        layout.next_area = Rect {
+            x,
+            y: area.y,
+            width: 1,
+            height: 1,
+        };
+        left.push(Span::styled("\u{23ED}", Style::default().fg(next_color)));
 
         // Right: status-indicator badges.
         let right = self.build_status_indicator_spans().unwrap_or_default();

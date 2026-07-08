@@ -30,15 +30,25 @@ pub(crate) struct PowerHomeSectionMeta {
     pub col: usize,        // grid column
 }
 
-/// Seekbar rect and the two divider status indicators that still have a
-/// click target (remote-session and mute). The button/track/volume/
-/// subtitle/audio rects this used to hold were removed with the expanded
-/// playback view; see the "Tab bar restyle" commit that zeroed them out.
+/// Seekbar rect, the two divider status indicators that still have a click
+/// target (remote-session and mute), and the mouse hit targets for the
+/// one-row playback header's transport cluster (play/pause glyph, previous,
+/// next). The button/track/volume/subtitle/audio rects this used to hold
+/// were removed with the expanded playback view; see the "Tab bar restyle"
+/// commit that zeroed them out.
 #[derive(Default)]
 pub(crate) struct LayoutPlayback {
     pub seekbar_area: Rect,
     pub ind_rc: Rect,
     pub ind_mu: Rect,
+    /// Playback header play/pause glyph; always clickable when the row renders.
+    pub play_pause_area: Rect,
+    /// Playback header `⏮` glyph; only wired to the action when
+    /// `App::transport_prev_next_available().0` is true.
+    pub prev_area: Rect,
+    /// Playback header `⏭` glyph; only wired to the action when
+    /// `App::transport_prev_next_available().1` is true.
+    pub next_area: Rect,
 }
 
 /// Home-tab section/carousel geometry.

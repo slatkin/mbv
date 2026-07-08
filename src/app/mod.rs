@@ -1287,6 +1287,25 @@ impl App {
         self.queue_for_scope_mut(self.playback_queue_scope())
     }
 
+    /// Whether the previous/next transport controls (playback-header mouse
+    /// buttons and, implicitly, the `P`/`N` keys) are currently at a usable
+    /// queue position: `(prev_available, next_available)`.
+    ///
+    /// A connected remote session exposes no queue-position/length fields in
+    /// `SessionInfo` (see `mbv_core::api::SessionInfo`), so there is no way to
+    /// tell whether it's at a queue boundary; both remain available there,
+    /// mirroring `Action::PreviousTrack`/`Action::NextTrack`'s dispatch, which
+    /// calls `session_jump_track` unconditionally for a connected session with
+    /// no boundary check. Local playback uses `PlayerStatus::previous_idx`/
+    /// `next_idx`, which already fold in `active` and `queue_len`.
+    pub(super) fn transport_prev_next_available(&self) -> (bool, bool) {
+        if self.connected_session_id.is_some() {
+            return (true, true);
+        }
+        let st = self.player.status.lock().unwrap();
+        (st.previous_idx().is_some(), st.next_idx().is_some())
+    }
+
     /// Whether the item at `idx` in the playback queue should be consumed, given a
     /// player-reported completion (`consume`) and the type-specific consume flags.
     /// Returns `(should_consume, is_audio)` — callers that act on the removal need
@@ -2682,6 +2701,84 @@ pub(crate) mod tests {
             confirm_rescan: false,
             queue_scope: QueueScope::Local,
         }
+    }
+
+    // ── transport_prev_next_available (issue #112) ─────────────────────────
+    // Drives whether the playback header's mouse-clickable `⏮`/`⏭` controls
+    // are available (rendered white, clickable) or unavailable (greyed out,
+    // inert) at the current queue position.
+
+    #[test]
+    fn transport_prev_next_unavailable_when_player_inactive() {
+        let app = make_app_stub();
+        assert!(!app.player.status.lock().unwrap().active);
+        assert_eq!(app.transport_prev_next_available(), (false, false));
+    }
+
+    #[test]
+    fn transport_prev_next_both_available_mid_queue() {
+        let app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 3;
+            st.current_idx = 1;
+        }
+        assert_eq!(app.transport_prev_next_available(), (true, true));
+    }
+
+    #[test]
+    fn transport_prev_unavailable_on_first_item() {
+        let app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 3;
+            st.current_idx = 0;
+        }
+        assert_eq!(app.transport_prev_next_available(), (false, true));
+    }
+
+    #[test]
+    fn transport_next_unavailable_on_last_item() {
+        let app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 3;
+            st.current_idx = 2;
+        }
+        assert_eq!(app.transport_prev_next_available(), (true, false));
+    }
+
+    #[test]
+    fn transport_prev_next_both_unavailable_on_single_item_queue() {
+        let app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 1;
+            st.current_idx = 0;
+        }
+        assert_eq!(app.transport_prev_next_available(), (false, false));
+    }
+
+    #[test]
+    fn transport_prev_next_both_available_for_connected_remote_session_regardless_of_local_status()
+    {
+        // SessionInfo (see mbv_core::api::SessionInfo) exposes no
+        // queue-position/length fields, so there's no boundary to check for a
+        // connected remote session. Local status here is deliberately set to
+        // "last item" to prove it's ignored while a session is connected.
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("session-1".into());
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 3;
+            st.current_idx = 2;
+        }
+        assert_eq!(app.transport_prev_next_available(), (true, true));
     }
 
     fn make_remote_app_stub(local_items: Vec<MediaItem>, remote_items: Vec<MediaItem>) -> App {
