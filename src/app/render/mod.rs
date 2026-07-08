@@ -750,6 +750,7 @@ impl App {
         } else {
             palette::MUTED
         };
+        let right = self.build_status_indicator_spans().unwrap_or_default();
 
         // Left: glyph  next  title  │  elapsed / total
         // A running `x` cursor tracks where each clickable glyph lands in the
@@ -783,7 +784,23 @@ impl App {
 
         left.push(Span::raw(next_gap));
 
-        let title_text = title.to_string();
+        let sep_text = " \u{2502} ";
+        let time_text = format!("{pos_str} / {dur_str}");
+        let post_time_gap = "  ";
+        let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
+        let fixed_w = glyph_w as usize
+            + next_w as usize
+            + next_gap.width()
+            + sep_text.width()
+            + time_text.width()
+            + post_time_gap.width()
+            + right_w as usize;
+        let title_w = (area.width as usize).saturating_sub(fixed_w);
+        let title_text = if title_w == 0 {
+            String::new()
+        } else {
+            trunc_str(title, title_w)
+        };
         left.push(Span::styled(
             title_text,
             Style::default()
@@ -791,26 +808,19 @@ impl App {
                 .add_modifier(Modifier::BOLD),
         ));
 
-        let sep_text = " \u{2502} ";
         left.push(Span::styled(
             sep_text,
             Style::default().fg(palette::OVERLAY),
         ));
 
-        let time_text = format!("{pos_str} / {dur_str}");
         left.push(Span::styled(
             time_text,
             Style::default().fg(palette::SUBTLE),
         ));
 
-        let gap1 = "  ";
-        left.push(Span::raw(gap1));
-
-        // Right: status-indicator badges.
-        let right = self.build_status_indicator_spans().unwrap_or_default();
+        left.push(Span::raw(post_time_gap));
 
         let left_w: u16 = left.iter().map(|s| s.content.width() as u16).sum();
-        let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
         let gap = area.width.saturating_sub(left_w + right_w) as usize;
 
         let mut spans = left;
@@ -1030,5 +1040,51 @@ mod tests {
 
         assert_eq!(layout.next_area.x, next_x);
         assert_eq!(layout.next_area.width, next_glyph.width() as u16);
+    }
+
+    #[test]
+    fn title_row_truncates_long_title_before_transport_status_and_badges() {
+        let mut app = make_app_stub();
+        app.use_nerd_fonts = false;
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 2;
+            st.current_idx = 0;
+            st.position_ticks = 65 * TICKS_PER_SECOND;
+            st.runtime_ticks = 90 * TICKS_PER_SECOND;
+            st.video_height = 1080;
+            st.audio_lang = "en".into();
+        }
+
+        let backend = TestBackend::new(50, 1);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPlayback::default();
+        term.draw(|f| {
+            app.render_title_row(
+                f,
+                Rect::new(0, 0, 50, 1),
+                "This is an extremely long title that would otherwise push controls away",
+                palette::FOAM,
+                &mut layout,
+            );
+        })
+        .unwrap();
+
+        let line = buffer_to_string(&term).lines().next().unwrap().to_string();
+
+        assert!(
+            line.contains('\u{2026}'),
+            "expected long title to be truncated with ellipsis:\n{line}"
+        );
+        assert!(
+            line.contains("1:05 / 1:30"),
+            "expected time cluster to remain visible:\n{line}"
+        );
+        assert!(
+            line.ends_with("RES 1080p  AUD en  SUB off"),
+            "expected status badges to remain right-aligned:\n{line}"
+        );
+        assert!(layout.next_area.x + layout.next_area.width <= 50);
     }
 }
