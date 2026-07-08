@@ -62,7 +62,7 @@ impl App {
         // content doesn't shift when the player appears or disappears.
         let reserve_player_rows = in_power && mode == crate::config::PanelMode::OneRow;
         let tabs_h: u16 = 1;
-        let spacer_h: u16 = 0;
+        let spacer_h: u16 = 1;
         // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it. (status is unused.)
         let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) =
             if onerow || reserve_player_rows {

@@ -82,8 +82,27 @@ impl App {
             palette::IRIS
         };
 
-        // Build display rows (grouped or flat) and window them to the visible height.
-        let (display, group_for_header) = build_queue_rows(&items, self.queue_group);
+        // Build display rows and window them to the visible height.
+        //
+        // A queue sourced from a saved playlist gets a single header naming the
+        // playlist, rather than the per-album/per-series headers `build_queue_rows`
+        // would otherwise produce -- those make a playlist queue look like it was
+        // built by "play series"/"play album" and hide the fact that it's a curated
+        // playlist (see the "QI XL" show-name header bug: a playlist of episodes
+        // from one show rendered with the show name as if the queue were a
+        // "play series" queue).
+        let playlist_name = self.queue_playlist_name();
+        let (display, group_for_header) = if !playlist_name.is_empty() {
+            let mut rows: Vec<QueueRow> = Vec::with_capacity(items.len() + 1);
+            rows.push(QueueRow::Header);
+            rows.extend((0..items.len()).map(|idx| QueueRow::Track {
+                idx,
+                in_group: false,
+            }));
+            (rows, vec![playlist_name.to_string()])
+        } else {
+            build_queue_rows(&items, self.queue_group)
+        };
         let visible = table_area.height as usize;
         let cursor_row = display
             .iter()
