@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::api::MediaItem;
+use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 1;
+pub const CTRL_PROTOCOL_VERSION: u32 = 2;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -62,10 +63,16 @@ impl CtrlHello {
 pub enum CtrlCmd {
     Hello(CtrlHello),
     PlayerCmd(WireCommand),
+    AdoptQueue {
+        items: Vec<MediaItem>,
+        cursor: usize,
+        source: QueueSource,
+    },
     PlayItems {
         item_ids: Vec<String>,
         start_idx: usize,
         start_ticks: i64,
+        source: QueueSource,
     },
     Stop,
 }
@@ -250,6 +257,7 @@ pub struct CtrlState {
     pub status: PlayerStatus,
     pub items: Vec<MediaItem>,
     pub cursor: usize,
+    pub source: QueueSource,
 }
 
 #[cfg(test)]
@@ -262,6 +270,7 @@ mod tests {
             item_ids: vec!["a".to_string(), "b".to_string()],
             start_idx: 1,
             start_ticks: 42,
+            source: QueueSource::Album,
         })
         .unwrap();
 
@@ -271,10 +280,12 @@ mod tests {
                 item_ids,
                 start_idx,
                 start_ticks,
+                source,
             } => {
                 assert_eq!(item_ids, vec!["a", "b"]);
                 assert_eq!(start_idx, 1);
                 assert_eq!(start_ticks, 42);
+                assert!(matches!(source, QueueSource::Album));
             }
             _ => panic!("expected PlayItems"),
         }

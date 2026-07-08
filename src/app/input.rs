@@ -1520,7 +1520,13 @@ impl App {
                             let items = queue.items.clone();
                             let c = Arc::new(self.client.lock().unwrap().clone());
                             self.replace_playback_queue(items.clone(), t);
-                            self.player.play_queue(items, t, c, self.ui_volume);
+                            self.player.play_queue(
+                                items,
+                                t,
+                                self.queue_source.clone(),
+                                c,
+                                self.ui_volume,
+                            );
                         }
                     }
                 }
@@ -2934,7 +2940,13 @@ impl App {
                                     let items = queue.items.clone();
                                     let c = Arc::new(self.client.lock().unwrap().clone());
                                     self.replace_playback_queue(items.clone(), t);
-                                    self.player.play_queue(items, t, c, self.ui_volume);
+                                    self.player.play_queue(
+                                        items,
+                                        t,
+                                        self.queue_source.clone(),
+                                        c,
+                                        self.ui_volume,
+                                    );
                                 }
                             }
                         }

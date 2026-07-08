@@ -180,6 +180,7 @@ pub enum PlayerEvent {
     QueueUpdated {
         items: Vec<crate::api::MediaItem>,
         cursor: usize,
+        source: crate::config::QueueSource,
     },
     /// Chapter API: playback entered the intro window.
     IntroStarted {
@@ -3021,12 +3022,15 @@ impl PlayerProxy {
         &self,
         items: Vec<MediaItem>,
         start_idx: usize,
+        source: crate::config::QueueSource,
         client: Arc<EmbyClient>,
         initial_volume: u8,
     ) {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.play_queue(items, start_idx, client, initial_volume),
-            PlayerProxyInner::Remote(r) => r.play_queue(items, start_idx, client, initial_volume),
+            PlayerProxyInner::Remote(r) => {
+                r.play_queue(items, start_idx, source, client, initial_volume)
+            }
         }
     }
 

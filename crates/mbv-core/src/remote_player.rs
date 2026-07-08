@@ -25,6 +25,7 @@ pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
     pub items: Arc<Mutex<Vec<MediaItem>>>,
+    pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     cmd_tx: mpsc::Sender<CtrlCmd>,
     disconnected: Arc<AtomicBool>,
 }
@@ -173,6 +174,7 @@ fn apply_ctrl_event(
     ev: CtrlEvent,
     status: &Arc<Mutex<PlayerStatus>>,
     items: &Arc<Mutex<Vec<MediaItem>>>,
+    queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
 ) {
     match ev {
@@ -193,9 +195,11 @@ fn apply_ctrl_event(
             next_status.queue_len = s.items.len();
             *status.lock().unwrap() = next_status;
             *items.lock().unwrap() = s.items.clone();
+            *queue_source.lock().unwrap() = s.source.clone();
             let _ = event_tx.send(PlayerEvent::QueueUpdated {
                 items: s.items,
                 cursor: s.cursor,
+                source: s.source,
             });
         }
         CtrlEvent::Player(pe) => {
@@ -227,6 +231,7 @@ impl RemotePlayer {
         let status = Arc::new(Mutex::new(PlayerStatus::default()));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
+        let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
 
         let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
@@ -265,9 +270,21 @@ impl RemotePlayer {
         writeln!(stream, "{client_hello}")
             .map_err(|e| format!("failed to send daemon protocol hello: {e}"))?;
 
+        let mut state_line = String::new();
+        reader
+            .read_line(&mut state_line)
+            .map_err(|e| format!("failed to read daemon initial state: {e}"))?;
+        if state_line.trim().is_empty() {
+            return Err("daemon closed connection before initial state".to_string());
+        }
+        let state_event = serde_json::from_str::<CtrlEvent>(state_line.trim_end())
+            .map_err(|e| format!("invalid daemon initial state: {e}"))?;
+        apply_ctrl_event(state_event, &status, &items, &queue_source, &event_tx);
+
         // Reader thread: deserializes CtrlEvent lines from daemon
         let status_r = status.clone();
         let items_r = items.clone();
+        let queue_source_r = queue_source.clone();
         let disconnected_r = disconnected.clone();
         let event_tx_r = event_tx;
         std::thread::spawn(move || {
@@ -280,7 +297,7 @@ impl RemotePlayer {
                             log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                             continue;
                         };
-                        apply_ctrl_event(ev, &status_r, &items_r, &event_tx_r);
+                        apply_ctrl_event(ev, &status_r, &items_r, &queue_source_r, &event_tx_r);
                     }
                 }
             }
@@ -313,6 +330,7 @@ impl RemotePlayer {
                 status,
                 subtitle_prefs,
                 items,
+                queue_source,
                 cmd_tx,
                 disconnected,
             },
@@ -328,11 +346,36 @@ impl RemotePlayer {
         self.cmd_tx.send(CtrlCmd::PlayerCmd(cmd.into())).is_ok()
     }
 
+    pub fn adopt_queue(
+        &self,
+        items: Vec<MediaItem>,
+        cursor: usize,
+        source: crate::config::QueueSource,
+    ) -> bool {
+        let cursor = cursor.min(items.len().saturating_sub(1));
+        {
+            let mut status = self.status.lock().unwrap();
+            status.current_idx = cursor;
+            status.queue_len = items.len();
+            status.active = false;
+        }
+        *self.items.lock().unwrap() = items.clone();
+        *self.queue_source.lock().unwrap() = source.clone();
+        self.cmd_tx
+            .send(CtrlCmd::AdoptQueue {
+                items,
+                cursor,
+                source,
+            })
+            .is_ok()
+    }
+
     pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _initial_volume: u8) {
         let _ = self.cmd_tx.send(CtrlCmd::PlayItems {
             item_ids: vec![item.id.clone()],
             start_idx: 0,
             start_ticks: item.playback_position_ticks,
+            source: crate::config::QueueSource::Unknown,
         });
         *self.items.lock().unwrap() = vec![item.clone()];
     }
@@ -341,6 +384,7 @@ impl RemotePlayer {
         &self,
         items: Vec<MediaItem>,
         start_idx: usize,
+        source: crate::config::QueueSource,
         _client: Arc<EmbyClient>,
         _initial_volume: u8,
     ) {
@@ -352,8 +396,10 @@ impl RemotePlayer {
             item_ids,
             start_idx,
             start_ticks,
+            source: source.clone(),
         });
         *self.items.lock().unwrap() = items;
+        *self.queue_source.lock().unwrap() = source;
     }
 
     pub fn stop(&self) {
@@ -380,6 +426,7 @@ impl RemotePlayer {
         let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items = Arc::new(Mutex::new(items));
+        let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
         let (cmd_tx, _cmd_rx) = mpsc::channel::<CtrlCmd>();
         let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
@@ -388,6 +435,7 @@ impl RemotePlayer {
                 status,
                 subtitle_prefs,
                 items,
+                queue_source,
                 cmd_tx,
                 disconnected,
             },
@@ -399,6 +447,7 @@ impl RemotePlayer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::QueueSource;
     use crate::ctrl::CtrlState;
 
     fn make_media_item(id: &str) -> MediaItem {
@@ -489,12 +538,14 @@ mod tests {
     fn status_only_preserves_event_confirmed_current_index() {
         let status = Arc::new(Mutex::new(status_with_idx(3)));
         let items = Arc::new(Mutex::new(Vec::new()));
+        let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
         let (tx, _rx) = mpsc::channel();
 
         apply_ctrl_event(
             CtrlEvent::StatusOnly(status_with_idx(5)),
             &status,
             &items,
+            &queue_source,
             &tx,
         );
 
@@ -505,6 +556,7 @@ mod tests {
     fn state_uses_cursor_as_current_index() {
         let status = Arc::new(Mutex::new(status_with_idx(0)));
         let items = Arc::new(Mutex::new(Vec::new()));
+        let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
         let (tx, rx) = mpsc::channel();
 
         apply_ctrl_event(
@@ -512,9 +564,11 @@ mod tests {
                 status: status_with_idx(5),
                 items: Vec::new(),
                 cursor: 3,
+                source: QueueSource::Unknown,
             }),
             &status,
             &items,
+            &queue_source,
             &tx,
         );
 
@@ -529,12 +583,14 @@ mod tests {
     fn status_only_preserves_current_idx_and_queue_len() {
         let status = Arc::new(Mutex::new(status_with_idx_and_len(3, 7)));
         let items = Arc::new(Mutex::new(Vec::new()));
+        let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
         let (tx, _rx) = mpsc::channel();
 
         apply_ctrl_event(
             CtrlEvent::StatusOnly(status_with_idx_and_len(5, 2)),
             &status,
             &items,
+            &queue_source,
             &tx,
         );
 
@@ -547,6 +603,7 @@ mod tests {
     fn state_derives_queue_len_from_items_not_status() {
         let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 0)));
         let items = Arc::new(Mutex::new(Vec::new()));
+        let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
         let (tx, _rx) = mpsc::channel();
 
         // s.status.queue_len (99) is stale relative to s.items.len() (2) — the
@@ -557,9 +614,11 @@ mod tests {
                 status: status_with_idx_and_len(5, 99),
                 items: vec![make_media_item("a"), make_media_item("b")],
                 cursor: 1,
+                source: QueueSource::Unknown,
             }),
             &status,
             &items,
+            &queue_source,
             &tx,
         );
 
@@ -570,12 +629,14 @@ mod tests {
     fn track_changed_updates_current_idx_but_not_queue_len() {
         let status = Arc::new(Mutex::new(status_with_idx_and_len(0, 5)));
         let items = Arc::new(Mutex::new(Vec::new()));
+        let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
         let (tx, _rx) = mpsc::channel();
 
         apply_ctrl_event(
             CtrlEvent::Player(PlayerEvent::TrackChanged(2)),
             &status,
             &items,
+            &queue_source,
             &tx,
         );
 
@@ -588,12 +649,14 @@ mod tests {
     fn command_rejected_forwards_reason_as_player_event() {
         let status = Arc::new(Mutex::new(status_with_idx(0)));
         let items = Arc::new(Mutex::new(Vec::new()));
+        let queue_source = Arc::new(Mutex::new(QueueSource::Unknown));
         let (tx, rx) = mpsc::channel();
 
         apply_ctrl_event(
             CtrlEvent::CommandRejected("daemon is audio-only".to_string()),
             &status,
             &items,
+            &queue_source,
             &tx,
         );
 

@@ -1779,7 +1779,13 @@ impl App {
             return;
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
-        self.player.play_queue(items, start_idx, c, self.ui_volume);
+        self.player.play_queue(
+            items,
+            start_idx,
+            self.queue_source.clone(),
+            c,
+            self.ui_volume,
+        );
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
@@ -1808,11 +1814,12 @@ impl App {
                 let c = Arc::new(self.client.lock().unwrap().clone());
                 self.on_queue_replace_silent();
                 self.replace_playback_queue(episodes.clone(), 0);
-                self.player.play_queue(episodes, 0, c, self.ui_volume);
+                self.queue_source = crate::config::QueueSource::Series;
+                self.player
+                    .play_queue(episodes, 0, self.queue_source.clone(), c, self.ui_volume);
                 self.player
                     .send_command(PlayerCommand::SetMute(self.mute_on));
                 if !self.has_direct_remote_queue() {
-                    self.queue_source = crate::config::QueueSource::Series;
                     self.save_queue_state();
                 }
                 return;
@@ -2214,7 +2221,13 @@ impl App {
                                 let items = queue.items.clone();
                                 let c = Arc::new(self.client.lock().unwrap().clone());
                                 self.replace_playback_queue(items.clone(), t);
-                                self.player.play_queue(items, t, c, self.ui_volume);
+                                self.player.play_queue(
+                                    items,
+                                    t,
+                                    self.queue_source.clone(),
+                                    c,
+                                    self.ui_volume,
+                                );
                             }
                         }
                     }
@@ -3715,7 +3728,13 @@ impl App {
                     });
                 } else {
                     let c = Arc::new(self.client.lock().unwrap().clone());
-                    self.player.play_queue(items, start_idx, c, self.ui_volume);
+                    self.player.play_queue(
+                        items,
+                        start_idx,
+                        self.queue_source.clone(),
+                        c,
+                        self.ui_volume,
+                    );
                     self.player
                         .send_command(PlayerCommand::SetMute(self.mute_on));
                 }
@@ -4503,8 +4522,13 @@ impl App {
                     if start_position_ticks > 0 {
                         items_with_pos[start_idx].playback_position_ticks = start_position_ticks;
                     }
-                    self.player
-                        .play_queue(items_with_pos, start_idx, c, self.ui_volume);
+                    self.player.play_queue(
+                        items_with_pos,
+                        start_idx,
+                        self.queue_source.clone(),
+                        c,
+                        self.ui_volume,
+                    );
                 }
                 self.queue_source = crate::config::QueueSource::Remote;
                 self.save_queue_state();

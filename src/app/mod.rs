@@ -378,10 +378,68 @@ enum SessionEvent {
     Error(String),
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct PlayerTab {
     items: Vec<MediaItem>,
     queue_cursor: usize,
+}
+
+struct LocalDaemonBootstrap {
+    player_tab: PlayerTab,
+    queue_source: crate::config::QueueSource,
+    last_played_item_id: Option<String>,
+    last_played_completed: bool,
+    adopt_queue: Option<(Vec<MediaItem>, usize, crate::config::QueueSource)>,
+}
+
+fn bootstrap_local_daemon_queue(
+    remote_items: Vec<MediaItem>,
+    remote_cursor: usize,
+    remote_source: crate::config::QueueSource,
+    saved_state: Option<crate::config::QueueState>,
+) -> LocalDaemonBootstrap {
+    if !remote_items.is_empty() {
+        return LocalDaemonBootstrap {
+            player_tab: PlayerTab {
+                items: remote_items,
+                queue_cursor: remote_cursor,
+            },
+            queue_source: remote_source,
+            last_played_item_id: None,
+            last_played_completed: false,
+            adopt_queue: None,
+        };
+    }
+
+    let Some(state) = saved_state.filter(|state| !state.items.is_empty()) else {
+        return LocalDaemonBootstrap {
+            player_tab: PlayerTab {
+                items: remote_items,
+                queue_cursor: remote_cursor,
+            },
+            queue_source: remote_source,
+            last_played_item_id: None,
+            last_played_completed: false,
+            adopt_queue: None,
+        };
+    };
+
+    let cursor = self::actions::queue_restore_cursor(
+        &state.items,
+        state.cursor,
+        state.last_played_item_id.as_deref(),
+        state.last_played_completed,
+    );
+    LocalDaemonBootstrap {
+        player_tab: PlayerTab {
+            items: state.items.clone(),
+            queue_cursor: cursor,
+        },
+        queue_source: state.source.clone(),
+        last_played_item_id: state.last_played_item_id.clone(),
+        last_played_completed: state.last_played_completed,
+        adopt_queue: Some((state.items, cursor, state.source)),
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1098,21 +1156,43 @@ impl App {
                 c.lock().unwrap().chapter_api_available = probe.chapter_api_available;
             });
         }
-        let initial_tab = PlayerTab {
-            items: remote.items.lock().unwrap().clone(),
-            queue_cursor: remote.status.lock().unwrap().current_idx,
-        };
+        let remote_items = remote.items.lock().unwrap().clone();
+        let remote_cursor = remote.status.lock().unwrap().current_idx;
+        let remote_queue_source = remote.queue_source.lock().unwrap().clone();
+        let local_daemon_bootstrap = is_local_daemon.then(|| {
+            bootstrap_local_daemon_queue(
+                remote_items.clone(),
+                remote_cursor,
+                remote_queue_source.clone(),
+                crate::config::load_queue_state(),
+            )
+        });
+        if let Some((items, cursor, source)) = local_daemon_bootstrap
+            .as_ref()
+            .and_then(|bootstrap| bootstrap.adopt_queue.clone())
+        {
+            remote.adopt_queue(items, cursor, source);
+        }
         let player = PlayerProxy::remote(remote, always_play_next);
         let (player_tab, remote_player_tab) = if is_local_daemon {
             // Local daemon: one unified queue, exactly like plain local
             // playback — no separate remote_player_tab, no scope pill.
-            (initial_tab, None)
+            (
+                local_daemon_bootstrap.as_ref().unwrap().player_tab.clone(),
+                None,
+            )
         } else {
             // Remote/network daemon: keep a separate remote queue so the
             // user can browse locally while the daemon plays elsewhere.
-            (PlayerTab::default(), Some(initial_tab))
+            (
+                PlayerTab::default(),
+                Some(PlayerTab {
+                    items: remote_items,
+                    queue_cursor: remote_cursor,
+                }),
+            )
         };
-        Self::build(AppInit {
+        let mut app = Self::build(AppInit {
             client: client_arc,
             player,
             player_rx,
@@ -1140,7 +1220,16 @@ impl App {
             notif_action_rx,
             search_tx,
             search_rx,
-        })
+        });
+        if is_local_daemon {
+            let bootstrap = local_daemon_bootstrap.unwrap();
+            app.queue_source = bootstrap.queue_source;
+            app.last_played_item_id = bootstrap.last_played_item_id;
+            app.last_played_completed = bootstrap.last_played_completed;
+        } else {
+            app.queue_source = remote_queue_source;
+        }
+        app
     }
 
     fn has_remote_queue(&self) -> bool {
@@ -2172,6 +2261,7 @@ impl App {
                 } else {
                     idx
                 };
+                self.player.status.lock().unwrap().current_idx = adjusted;
                 self.playback_queue_mut().queue_cursor = adjusted;
                 if !self.has_direct_remote_queue() {
                     if let Some(item) = self.playback_queue().items.get(adjusted) {
@@ -2236,10 +2326,17 @@ impl App {
                     log::warn!(target: "app", "next-up: NextUpPlay fired but next_up_item is None");
                 }
             }
-            PlayerEvent::QueueUpdated { items, cursor } => {
+            PlayerEvent::QueueUpdated {
+                items,
+                cursor,
+                source,
+            } => {
                 let queue = self.playback_queue_mut();
                 queue.items = items;
                 queue.queue_cursor = cursor;
+                if !self.has_direct_remote_queue() {
+                    self.queue_source = source;
+                }
             }
             PlayerEvent::IntroStarted { intro_end_ticks } => {
                 self.skip_intro_end_ticks = Some(intro_end_ticks);
@@ -2701,6 +2798,95 @@ pub(crate) mod tests {
 
         let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
         App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, true)
+    }
+
+    #[test]
+    fn local_daemon_bootstrap_adopts_saved_local_queue_and_source() {
+        let items = make_items(2);
+        let bootstrap = bootstrap_local_daemon_queue(
+            Vec::new(),
+            0,
+            crate::config::QueueSource::Unknown,
+            Some(crate::config::QueueState {
+                source: crate::config::QueueSource::Playlist {
+                    id: Some("pl1".into()),
+                    name: "Saved".into(),
+                },
+                items,
+                cursor: 1,
+                last_played_item_id: None,
+                last_played_completed: false,
+                positions: Default::default(),
+            }),
+        );
+
+        assert_eq!(bootstrap.player_tab.items.len(), 2);
+        assert_eq!(bootstrap.player_tab.queue_cursor, 1);
+        assert!(matches!(
+            bootstrap.queue_source,
+            crate::config::QueueSource::Playlist { ref name, .. } if name == "Saved"
+        ));
+        assert!(matches!(
+            bootstrap.adopt_queue,
+            Some((_, 1, crate::config::QueueSource::Playlist { ref name, .. })) if name == "Saved"
+        ));
+    }
+
+    #[test]
+    fn local_daemon_bootstrap_uses_restore_cursor_and_carries_last_played_state() {
+        let items = make_items(3);
+        let bootstrap = bootstrap_local_daemon_queue(
+            Vec::new(),
+            0,
+            crate::config::QueueSource::Unknown,
+            Some(crate::config::QueueState {
+                source: crate::config::QueueSource::Album,
+                items: items.clone(),
+                cursor: 0,
+                last_played_item_id: Some(items[1].id.clone()),
+                last_played_completed: true,
+                positions: Default::default(),
+            }),
+        );
+
+        assert_eq!(bootstrap.player_tab.queue_cursor, 2);
+        assert_eq!(
+            bootstrap.last_played_item_id.as_deref(),
+            Some(items[1].id.as_str())
+        );
+        assert!(bootstrap.last_played_completed);
+    }
+
+    #[test]
+    fn local_daemon_bootstrap_prefers_existing_daemon_queue_state() {
+        let remote_items = make_items(2);
+        let bootstrap = bootstrap_local_daemon_queue(
+            remote_items.clone(),
+            0,
+            crate::config::QueueSource::Playlist {
+                id: Some("daemon".into()),
+                name: "Daemon Queue".into(),
+            },
+            Some(crate::config::QueueState {
+                source: crate::config::QueueSource::Playlist {
+                    id: Some("local".into()),
+                    name: "Local Saved".into(),
+                },
+                items: make_items(1),
+                cursor: 0,
+                last_played_item_id: None,
+                last_played_completed: false,
+                positions: Default::default(),
+            }),
+        );
+
+        assert_eq!(bootstrap.player_tab.items.len(), 2);
+        assert_eq!(bootstrap.player_tab.items[0].id, remote_items[0].id);
+        assert!(matches!(
+            bootstrap.queue_source,
+            crate::config::QueueSource::Playlist { ref name, .. } if name == "Daemon Queue"
+        ));
+        assert!(bootstrap.adopt_queue.is_none());
     }
 
     #[test]
@@ -4945,6 +5131,42 @@ pub(crate) mod tests {
                 runtime_ticks: 84,
                 paused: true,
             }
+        );
+    }
+
+    #[test]
+    fn local_daemon_consume_adjusts_active_idx_after_removal_shift() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_local_daemon_app_stub(make_items(4));
+        app.client.lock().unwrap().config.consume_videos = true;
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 1;
+        }
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 1,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        });
+        {
+            let mut status = app.player.status.lock().unwrap();
+            // Thin-client path: the remote player updates status.current_idx
+            // from the daemon's TrackChanged event before App handles the
+            // pending consume removal, so App must correct the shifted index.
+            status.current_idx = 2;
+        }
+        app.handle_player_event(PlayerEvent::TrackChanged(2));
+
+        assert_eq!(app.player_tab.queue_cursor, 1);
+        assert_eq!(
+            app.displayed_queue_playback_state().active_idx,
+            1,
+            "after removing the completed item, the active index must shift to \
+             the now-playing item's new slot instead of following the stale \
+             pre-removal numeric index"
         );
     }
 
