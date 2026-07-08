@@ -49,6 +49,13 @@ enum DaemonEvent {
 
 type ClientList = Arc<Mutex<Vec<mpsc::Sender<String>>>>;
 
+#[derive(Clone)]
+struct SharedQueueState {
+    items: Arc<Mutex<Vec<MediaItem>>>,
+    cursor: Arc<Mutex<usize>>,
+    source: Arc<Mutex<crate::config::QueueSource>>,
+}
+
 pub struct DaemonPlayerHandle {
     pub status: Arc<Mutex<crate::player::PlayerStatus>>,
     pub command_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
@@ -112,8 +119,7 @@ fn spawn_ctrl_client<R, W>(
     ctrl_clients: ClientList,
     client: Arc<Mutex<EmbyClient>>,
     player_status: Arc<Mutex<crate::player::PlayerStatus>>,
-    shared_items: Arc<Mutex<Vec<MediaItem>>>,
-    shared_cursor: Arc<Mutex<usize>>,
+    shared_queue: SharedQueueState,
 ) where
     R: std::io::Read + Send + 'static,
     W: Write + Send + 'static,
@@ -170,8 +176,9 @@ fn spawn_ctrl_client<R, W>(
 
         if let Ok(init_json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
             status: player_status.lock().unwrap().clone(),
-            items: shared_items.lock().unwrap().clone(),
-            cursor: *shared_cursor.lock().unwrap(),
+            items: shared_queue.items.lock().unwrap().clone(),
+            cursor: *shared_queue.cursor.lock().unwrap(),
+            source: shared_queue.source.lock().unwrap().clone(),
         })) {
             ev_tx.send(init_json).ok();
         }
@@ -298,8 +305,11 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     });
 
     // Shared state for ctrl socket initial-state snapshots
-    let shared_items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
-    let shared_cursor: Arc<Mutex<usize>> = Arc::new(Mutex::new(0));
+    let shared_queue = SharedQueueState {
+        items: Arc::new(Mutex::new(Vec::new())),
+        cursor: Arc::new(Mutex::new(0)),
+        source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
+    };
     let ctrl_clients: ClientList = Arc::new(Mutex::new(Vec::new()));
 
     // Bind and start the control socket only once the daemon can immediately
@@ -310,8 +320,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         let merged_tx2 = merged_tx.clone();
         let client2 = client.clone();
         let player_status = player.status.clone();
-        let shared_items = shared_items.clone();
-        let shared_cursor = shared_cursor.clone();
+        let shared_queue = shared_queue.clone();
 
         std::thread::spawn(move || {
             for stream in listener.incoming() {
@@ -326,8 +335,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     ctrl_clients.clone(),
                     client2.clone(),
                     player_status.clone(),
-                    shared_items.clone(),
-                    shared_cursor.clone(),
+                    shared_queue.clone(),
                 );
             }
         });
@@ -406,8 +414,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         let merged_tx2 = merged_tx.clone();
         let client2 = client.clone();
         let player_status = player.status.clone();
-        let shared_items = shared_items.clone();
-        let shared_cursor = shared_cursor.clone();
+        let shared_queue = shared_queue.clone();
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
@@ -421,8 +428,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     ctrl_clients.clone(),
                     client2.clone(),
                     player_status.clone(),
-                    shared_items.clone(),
-                    shared_cursor.clone(),
+                    shared_queue.clone(),
                 );
             }
         });
@@ -447,6 +453,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
 
     let mut items: Vec<MediaItem> = Vec::new();
     let mut cursor: usize = 0;
+    let mut source = crate::config::QueueSource::Unknown;
     let mut last_keepalive = Instant::now();
     let mut last_capabilities = Instant::now();
 
@@ -475,7 +482,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         match ev {
             DaemonEvent::Player(PlayerEvent::TrackChanged(idx)) => {
                 cursor = idx;
-                *shared_cursor.lock().unwrap() = idx;
+                *shared_queue.cursor.lock().unwrap() = idx;
                 broadcast(
                     &ctrl_clients,
                     &CtrlEvent::Player(PlayerEvent::TrackChanged(idx)),
@@ -528,8 +535,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     audio_only,
                     &mut items,
                     &mut cursor,
-                    &shared_items,
-                    &shared_cursor,
+                    &mut source,
+                    &shared_queue,
                     &ctrl_clients,
                 );
             }
@@ -542,8 +549,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     audio_only,
                     &mut items,
                     &mut cursor,
-                    &shared_items,
-                    &shared_cursor,
+                    &mut source,
+                    &shared_queue,
                     &ctrl_clients,
                 );
             }
@@ -558,6 +565,34 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
     }
 }
 
+/// Applies a freshly-decided queue snapshot to the cross-thread shared state
+/// (used to seed newly-connecting ctrl-socket clients) and broadcasts it to
+/// every already-connected client. Centralizes what `CtrlState`'s fields
+/// must always carry together, so a future field addition (like `source` in
+/// #113) can't land in only some of the call sites — previously this exact
+/// shape was hand-rolled inline at five separate command branches.
+fn broadcast_queue_state(
+    ctrl_clients: &ClientList,
+    player: &Player,
+    shared_queue: &SharedQueueState,
+    items: &[MediaItem],
+    cursor: usize,
+    source: &crate::config::QueueSource,
+) {
+    let event = CtrlEvent::State(CtrlState {
+        status: player.status.lock().unwrap().clone(),
+        items: items.to_vec(),
+        cursor,
+        source: source.clone(),
+    });
+    broadcast(ctrl_clients, &event);
+    *shared_queue.cursor.lock().unwrap() = cursor;
+    *shared_queue.source.lock().unwrap() = source.clone();
+    if let CtrlEvent::State(state) = event {
+        *shared_queue.items.lock().unwrap() = state.items;
+    }
+}
+
 fn handle_ctrl(
     cmd: CtrlCmd,
     reply_tx: &mpsc::Sender<String>,
@@ -566,13 +601,56 @@ fn handle_ctrl(
     audio_only: bool,
     items: &mut Vec<MediaItem>,
     cursor: &mut usize,
-    shared_items: &Arc<Mutex<Vec<MediaItem>>>,
-    shared_cursor: &Arc<Mutex<usize>>,
+    source: &mut crate::config::QueueSource,
+    shared_queue: &SharedQueueState,
     ctrl_clients: &ClientList,
 ) {
     match cmd {
         CtrlCmd::Hello(_) => {
             log::warn!(target: "daemon", "unexpected ctrl protocol hello after negotiation");
+        }
+        CtrlCmd::AdoptQueue {
+            items: new_items,
+            cursor: new_cursor,
+            source: new_source,
+        } => {
+            // Adoption only ever applies to a Cold daemon (see CONTEXT.md's
+            // "Cold daemon" entry) — one with no queue yet. If another
+            // client's command already gave this daemon a queue by the time
+            // this one arrives (a concurrent first-connect race), the daemon
+            // is no longer cold, and a stale saved snapshot must not be
+            // allowed to silently clobber whatever is already authoritative.
+            if !items.is_empty() {
+                log::warn!(
+                    target: "daemon",
+                    "ignoring AdoptQueue: daemon already has a queue ({} item(s))",
+                    items.len()
+                );
+                send_to(
+                    reply_tx,
+                    &CtrlEvent::CommandRejected(
+                        "daemon already has a queue; adoption skipped".to_string(),
+                    ),
+                );
+                return;
+            }
+            let next_cursor = if new_items.is_empty() {
+                0
+            } else {
+                new_cursor.min(new_items.len().saturating_sub(1))
+            };
+            player.set_initial_queue(&new_items, next_cursor);
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                &new_items,
+                next_cursor,
+                &new_source,
+            );
+            *items = new_items;
+            *cursor = next_cursor;
+            *source = new_source;
         }
         CtrlCmd::PlayerCmd(pc) => match PlayerCommand::from(pc) {
             PlayerCommand::ReplaceQueue {
@@ -586,15 +664,13 @@ fn handle_ctrl(
                 };
                 *items = new_items.clone();
                 *cursor = next_cursor;
-                *shared_items.lock().unwrap() = new_items.clone();
-                *shared_cursor.lock().unwrap() = next_cursor;
-                broadcast(
+                broadcast_queue_state(
                     ctrl_clients,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: new_items.clone(),
-                        cursor: next_cursor,
-                    }),
+                    player,
+                    shared_queue,
+                    &new_items,
+                    next_cursor,
+                    source,
                 );
                 player.send_command(PlayerCommand::ReplaceQueue {
                     items: new_items,
@@ -609,6 +685,7 @@ fn handle_ctrl(
             item_ids,
             start_idx,
             start_ticks,
+            source: new_source,
         } => {
             let fetched = {
                 let c = client.lock().unwrap();
@@ -638,15 +715,14 @@ fn handle_ctrl(
                     if queue.len() > 1 {
                         *items = queue.clone();
                         *cursor = 0;
-                        *shared_items.lock().unwrap() = queue.clone();
-                        *shared_cursor.lock().unwrap() = 0;
-                        broadcast(
+                        *source = new_source;
+                        broadcast_queue_state(
                             ctrl_clients,
-                            &CtrlEvent::State(CtrlState {
-                                status: player.status.lock().unwrap().clone(),
-                                items: queue.clone(),
-                                cursor: 0,
-                            }),
+                            player,
+                            shared_queue,
+                            &queue,
+                            0,
+                            source,
                         );
                         let c = Arc::new(client.lock().unwrap().clone());
                         player.play_queue(queue, 0, c, 100);
@@ -655,16 +731,8 @@ fn handle_ctrl(
                 }
                 *items = vec![item.clone()];
                 *cursor = 0;
-                *shared_items.lock().unwrap() = items.clone();
-                *shared_cursor.lock().unwrap() = 0;
-                broadcast(
-                    ctrl_clients,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: items.clone(),
-                        cursor: 0,
-                    }),
-                );
+                *source = new_source;
+                broadcast_queue_state(ctrl_clients, player, shared_queue, items, 0, source);
                 let mut play_item = item;
                 if start_ticks > 0 {
                     play_item.playback_position_ticks = start_ticks;
@@ -679,15 +747,14 @@ fn handle_ctrl(
                 }
                 *items = play_items.clone();
                 *cursor = start_idx;
-                *shared_items.lock().unwrap() = play_items.clone();
-                *shared_cursor.lock().unwrap() = start_idx;
-                broadcast(
+                *source = new_source;
+                broadcast_queue_state(
                     ctrl_clients,
-                    &CtrlEvent::State(CtrlState {
-                        status: player.status.lock().unwrap().clone(),
-                        items: play_items.clone(),
-                        cursor: start_idx,
-                    }),
+                    player,
+                    shared_queue,
+                    &play_items,
+                    start_idx,
+                    source,
                 );
                 let c = Arc::new(client.lock().unwrap().clone());
                 player.play_queue(play_items, start_idx, c, 100);
@@ -706,8 +773,8 @@ fn handle_ws(
     audio_only: bool,
     items: &mut Vec<MediaItem>,
     cursor: &mut usize,
-    shared_items: &Arc<Mutex<Vec<MediaItem>>>,
-    shared_cursor: &Arc<Mutex<usize>>,
+    source: &mut crate::config::QueueSource,
+    shared_queue: &SharedQueueState,
     ctrl_clients: &ClientList,
 ) {
     match ev {
@@ -743,19 +810,15 @@ fn handle_ws(
             let start_idx = start_index.min(fetched.len().saturating_sub(1));
             *items = fetched.clone();
             *cursor = start_idx;
-            *shared_items.lock().unwrap() = fetched.clone();
-            *shared_cursor.lock().unwrap() = start_idx;
-            // Broadcast updated playlist to connected TUIs
-            if let Ok(json) = serde_json::to_string(&CtrlEvent::State(CtrlState {
-                status: player.status.lock().unwrap().clone(),
-                items: fetched.clone(),
-                cursor: start_idx,
-            })) {
-                ctrl_clients
-                    .lock()
-                    .unwrap()
-                    .retain(|tx| tx.send(json.clone()).is_ok());
-            }
+            *source = crate::config::QueueSource::Remote;
+            broadcast_queue_state(
+                ctrl_clients,
+                player,
+                shared_queue,
+                &fetched,
+                start_idx,
+                source,
+            );
             if fetched.len() == 1 {
                 let mut play_item = fetched[0].clone();
                 if start_position_ticks > 0 {

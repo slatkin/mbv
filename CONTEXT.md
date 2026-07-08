@@ -78,6 +78,10 @@ _Avoid_: conflating this with per-command capability gating (the broader, still-
 Among however many clients are attached to a daemon simultaneously (already supported today — `ctrl_clients` broadcasts to a `Vec`, not a single peer), exactly one holds driving authority at a time: its queue/session view is what the daemon treats as authoritative. Settled via #97's grilling: this is forced by the daemon's real deployment (one central server, one physical audio output), not an arbitrary design preference. Uses **takeover** semantics — a newcomer's explicit claim bumps the previous driver to observer — rather than connection rejection, since the expected case is one person switching machines, not multiple parties contending for control.
 _Avoid_: confusing "single driving client" with "single connection allowed" — other attached clients remain valid simultaneous observers (status broadcasts, remote-queue viewing), exactly as today.
 
+**Cold daemon**:
+A daemon process between startup and its first driving-client command: it holds no queue at all — not an empty snapshot restored from disk, an actual absence of one — until a client (a ctrl-socket TUI via an adopt/play command, or an Emby remote-control websocket command) gives it one. Follows directly from **Driving client**: since the queue belongs to whichever client currently holds driving authority, a daemon with no driver yet has no queue to hold.
+_Avoid_: treating an empty queue on a freshly started daemon as a missing "restore my last queue from disk" step, or flagging the daemon's lack of self-persistence/self-restore as a bug — that's the intended shape of the client-driven model above, not a gap in it.
+
 **Local daemon**:
 A daemon deployment relationship where the daemon is running on the same machine as the TUI instance. This describes location, not whether the TUI is operating as a thin client or in the separate direct-remote-queue model.
 _Avoid_: using this as a full substitute for **Thin client** — same-machine placement and queue/control semantics are different axes.
