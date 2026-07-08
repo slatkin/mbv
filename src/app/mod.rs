@@ -460,10 +460,61 @@ struct PlaybackState {
     paused: bool,
 }
 
+/// Which queue an operation refers to.
+///
+/// `Local` is this TUI instance's own queue and carries local-only metadata:
+/// dirty state, undo history, saved-playlist source, and on-disk persistence.
+/// `Remote` is the queue owned by a directly-controlled mbv daemon or remote
+/// instance. A stale `Remote` UI preference is ignored unless a direct remote
+/// queue is actually present.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum QueueScope {
     Local,
     Remote,
+}
+
+/// Derived answers for the local/remote queue boundary.
+///
+/// The three answers intentionally differ:
+/// - playback commands target `Remote` whenever a direct remote queue exists;
+/// - the visible queue is `Remote` only when a direct remote queue exists and
+///   the user has selected the remote scope;
+/// - local queue metadata applies only to local scope while a direct remote
+///   queue exists, but applies to any effective scope when no direct remote
+///   queue exists because all queue state is local then.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct QueueScopeResolution {
+    has_direct_remote_queue: bool,
+    requested_visible_scope: QueueScope,
+}
+
+impl QueueScopeResolution {
+    fn new(has_direct_remote_queue: bool, requested_visible_scope: QueueScope) -> Self {
+        Self {
+            has_direct_remote_queue,
+            requested_visible_scope,
+        }
+    }
+
+    fn playback_target(self) -> QueueScope {
+        if self.has_direct_remote_queue {
+            QueueScope::Remote
+        } else {
+            QueueScope::Local
+        }
+    }
+
+    fn visible_scope(self) -> QueueScope {
+        if self.has_direct_remote_queue && self.requested_visible_scope == QueueScope::Remote {
+            QueueScope::Remote
+        } else {
+            QueueScope::Local
+        }
+    }
+
+    fn local_metadata_applies(self, scope: QueueScope) -> bool {
+        scope == QueueScope::Local || !self.has_direct_remote_queue
+    }
 }
 
 /// A reversible queue edit. `Remove` re-inserts the item at its old position;
@@ -1279,25 +1330,29 @@ impl App {
         }
     }
 
-    fn queue_scope_has_local_metadata(&self, scope: QueueScope) -> bool {
-        scope == QueueScope::Local || !self.has_direct_remote_queue()
+    fn queue_scope_resolution(&self) -> QueueScopeResolution {
+        QueueScopeResolution::new(self.has_direct_remote_queue(), self.queue_scope)
+    }
+
+    fn local_queue_metadata_applies(&self, scope: QueueScope) -> bool {
+        self.queue_scope_resolution().local_metadata_applies(scope)
     }
 
     fn queue_scope_is_playback(&self, scope: QueueScope) -> bool {
-        scope == self.playback_queue_scope()
+        scope == self.playback_target_queue_scope()
     }
 
     fn action_queue_scope(&self, action: &PendingQueueAction) -> QueueScope {
         match action {
-            PendingQueueAction::PlayItems { .. } => self.playback_queue_scope(),
-            PendingQueueAction::ClearQueue => self.displayed_queue_scope(),
+            PendingQueueAction::PlayItems { .. } => self.playback_target_queue_scope(),
+            PendingQueueAction::ClearQueue => self.visible_queue_scope(),
             PendingQueueAction::Quit => QueueScope::Local,
         }
     }
 
     fn action_touches_local_queue(&self, action: &PendingQueueAction) -> bool {
         matches!(action, PendingQueueAction::Quit)
-            || self.queue_scope_has_local_metadata(self.action_queue_scope(action))
+            || self.local_queue_metadata_applies(self.action_queue_scope(action))
     }
 
     fn clear_local_queue_metadata(&mut self) {
@@ -1307,7 +1362,7 @@ impl App {
     }
 
     fn persist_local_queue_state_if_needed(&self, scope: QueueScope) {
-        if self.queue_scope_has_local_metadata(scope) {
+        if self.local_queue_metadata_applies(scope) {
             self.save_queue_state();
         }
     }
@@ -1338,17 +1393,13 @@ impl App {
         }
     }
 
-    fn playback_queue_scope(&self) -> QueueScope {
-        if self.has_direct_remote_queue() {
-            QueueScope::Remote
-        } else {
-            QueueScope::Local
-        }
+    fn playback_target_queue_scope(&self) -> QueueScope {
+        self.queue_scope_resolution().playback_target()
     }
 
     fn replace_playback_queue(&mut self, items: Vec<MediaItem>, cursor: usize) {
         let cursor = cursor.min(items.len().saturating_sub(1));
-        match self.playback_queue_scope() {
+        match self.playback_target_queue_scope() {
             QueueScope::Local => {
                 self.player_tab.items = items;
                 self.player_tab.queue_cursor = cursor;
@@ -1364,28 +1415,24 @@ impl App {
         }
     }
 
-    fn displayed_queue_scope(&self) -> QueueScope {
-        if self.has_direct_remote_queue() && self.queue_scope == QueueScope::Remote {
-            QueueScope::Remote
-        } else {
-            QueueScope::Local
-        }
+    fn visible_queue_scope(&self) -> QueueScope {
+        self.queue_scope_resolution().visible_scope()
     }
 
     fn displayed_queue(&self) -> &PlayerTab {
-        self.queue_for_scope(self.displayed_queue_scope())
+        self.queue_for_scope(self.visible_queue_scope())
     }
 
     fn displayed_queue_mut(&mut self) -> &mut PlayerTab {
-        self.queue_for_scope_mut(self.displayed_queue_scope())
+        self.queue_for_scope_mut(self.visible_queue_scope())
     }
 
     fn playback_queue(&self) -> &PlayerTab {
-        self.queue_for_scope(self.playback_queue_scope())
+        self.queue_for_scope(self.playback_target_queue_scope())
     }
 
     fn playback_queue_mut(&mut self) -> &mut PlayerTab {
-        self.queue_for_scope_mut(self.playback_queue_scope())
+        self.queue_for_scope_mut(self.playback_target_queue_scope())
     }
 
     /// Whether the previous/next transport controls (playback-header mouse
@@ -4294,10 +4341,10 @@ pub(crate) mod tests {
         });
         app.queue_scope = QueueScope::Remote;
 
-        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
 
         app.set_queue_scope(QueueScope::Remote);
-        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
         assert_eq!(app.queue_scope, QueueScope::Local);
     }
 
@@ -4307,10 +4354,10 @@ pub(crate) mod tests {
         app.queue_scope = QueueScope::Local;
 
         assert!(!app.has_direct_remote_queue());
-        assert_eq!(app.playback_queue_scope(), QueueScope::Local);
-        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
-        assert!(app.queue_scope_has_local_metadata(QueueScope::Local));
-        assert!(app.queue_scope_has_local_metadata(QueueScope::Remote));
+        assert_eq!(app.playback_target_queue_scope(), QueueScope::Local);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+        assert!(app.local_queue_metadata_applies(QueueScope::Local));
+        assert!(app.local_queue_metadata_applies(QueueScope::Remote));
     }
 
     #[test]
@@ -4323,10 +4370,10 @@ pub(crate) mod tests {
         app.queue_scope = QueueScope::Remote;
 
         assert!(!app.has_direct_remote_queue());
-        assert_eq!(app.playback_queue_scope(), QueueScope::Local);
-        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
-        assert!(app.queue_scope_has_local_metadata(QueueScope::Local));
-        assert!(app.queue_scope_has_local_metadata(QueueScope::Remote));
+        assert_eq!(app.playback_target_queue_scope(), QueueScope::Local);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+        assert!(app.local_queue_metadata_applies(QueueScope::Local));
+        assert!(app.local_queue_metadata_applies(QueueScope::Remote));
     }
 
     #[test]
@@ -4337,10 +4384,10 @@ pub(crate) mod tests {
         app.queue_scope = QueueScope::Local;
 
         assert!(app.has_direct_remote_queue());
-        assert_eq!(app.playback_queue_scope(), QueueScope::Remote);
-        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
-        assert!(app.queue_scope_has_local_metadata(QueueScope::Local));
-        assert!(!app.queue_scope_has_local_metadata(QueueScope::Remote));
+        assert_eq!(app.playback_target_queue_scope(), QueueScope::Remote);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+        assert!(app.local_queue_metadata_applies(QueueScope::Local));
+        assert!(!app.local_queue_metadata_applies(QueueScope::Remote));
     }
 
     #[test]
@@ -4351,10 +4398,10 @@ pub(crate) mod tests {
         app.queue_scope = QueueScope::Remote;
 
         assert!(app.has_direct_remote_queue());
-        assert_eq!(app.playback_queue_scope(), QueueScope::Remote);
-        assert_eq!(app.displayed_queue_scope(), QueueScope::Remote);
-        assert!(app.queue_scope_has_local_metadata(QueueScope::Local));
-        assert!(!app.queue_scope_has_local_metadata(QueueScope::Remote));
+        assert_eq!(app.playback_target_queue_scope(), QueueScope::Remote);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+        assert!(app.local_queue_metadata_applies(QueueScope::Local));
+        assert!(!app.local_queue_metadata_applies(QueueScope::Remote));
     }
 
     #[test]
@@ -4402,7 +4449,7 @@ pub(crate) mod tests {
             app.queue_source,
             crate::config::QueueSource::Album
         ));
-        assert_eq!(app.displayed_queue_scope(), QueueScope::Remote);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
     }
 
     #[test]
@@ -5375,7 +5422,7 @@ pub(crate) mod tests {
             .now_playing_item_id = Some("id1".into());
         app.set_queue_scope(QueueScope::Local);
 
-        assert_eq!(app.displayed_queue_scope(), QueueScope::Local);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
         assert_eq!(
             app.displayed_queue_playback_state(),
             PlaybackState::default()

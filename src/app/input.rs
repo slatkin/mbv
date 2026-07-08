@@ -363,7 +363,7 @@ impl App {
             && !key.modifiers.contains(KeyModifiers::ALT)
             && !in_lib_search
         {
-            if self.tab_idx == 1 && self.displayed_queue_scope() == QueueScope::Remote {
+            if self.tab_idx == 1 && self.visible_queue_scope() == QueueScope::Remote {
                 self.flash_status_high("Remote queue is controlled by the daemon".into());
                 return false;
             }
@@ -1207,7 +1207,7 @@ impl App {
                 // (which would have its playback_position_ticks corrupted otherwise).
                 self.pending_delete_idx = Some(t);
                 self.player.stop();
-                if self.queue_scope_has_local_metadata(self.displayed_queue_scope()) {
+                if self.local_queue_metadata_applies(self.visible_queue_scope()) {
                     self.queue_dirty = true;
                 }
             }
@@ -1487,7 +1487,7 @@ impl App {
                 }
             }
             KeyCode::Enter => {
-                let scope = self.displayed_queue_scope();
+                let scope = self.visible_queue_scope();
                 let queue = self.displayed_queue();
                 let t = queue.queue_cursor;
                 let n = queue.items.len();
@@ -1539,7 +1539,7 @@ impl App {
                 }
             }
             KeyCode::Char('z') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                let scope = self.displayed_queue_scope();
+                let scope = self.visible_queue_scope();
                 if scope == QueueScope::Remote {
                     self.flash_status_high("Undo is not supported for remote queue edits".into());
                     return false;
@@ -1994,7 +1994,7 @@ impl App {
                 if !cw_focused
                     && self.home_search.is_none()
                     && self.tab_idx == 1
-                    && self.displayed_queue_scope() == QueueScope::Local
+                    && self.visible_queue_scope() == QueueScope::Local
                 {
                     Self::push_context_action(
                         &mut entries,
@@ -2915,7 +2915,7 @@ impl App {
                         if t < queue.items.len()
                             && self.layout.queue.inner.contains((col, row).into())
                         {
-                            let scope = self.displayed_queue_scope();
+                            let scope = self.visible_queue_scope();
                             if let Some(ref conn_id) = self.connected_session_id.clone() {
                                 let item = queue.items[t].clone();
                                 let id = conn_id.clone();

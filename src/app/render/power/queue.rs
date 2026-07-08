@@ -35,7 +35,7 @@ impl App {
                 let queue_w = queue_label.width() as u16;
                 let queue_x = area.x + area.width.saturating_sub(queue_w);
                 let mut spans = Vec::new();
-                let local_selected = self.displayed_queue_scope() == QueueScope::Local;
+                let local_selected = self.visible_queue_scope() == QueueScope::Local;
                 let local_label = " Local ";
                 let remote_label = " Remote ";
                 let local_w = local_label.width() as u16;
@@ -115,7 +115,7 @@ impl App {
         if n == 0 {
             self.power_queue_scroll = 0;
             f.render_widget(
-                Paragraph::new(if self.displayed_queue_scope() == QueueScope::Local {
+                Paragraph::new(if self.visible_queue_scope() == QueueScope::Local {
                     "  Add items with p from Home or library tabs"
                 } else {
                     "  Remote queue is empty"

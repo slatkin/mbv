@@ -1508,7 +1508,7 @@ impl App {
     }
 
     pub(super) fn remove_from_queue(&mut self, pos: usize) {
-        let scope = self.displayed_queue_scope();
+        let scope = self.visible_queue_scope();
         let controls_playback_queue = self.queue_scope_is_playback(scope);
         let (active, current_idx) = {
             let s = self.player.status.lock().unwrap();
@@ -1525,7 +1525,7 @@ impl App {
             return;
         }
         let item = self.queue_for_scope_mut(scope).items.remove(pos);
-        if self.queue_scope_has_local_metadata(scope) {
+        if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
         self.undo_stack_for_scope_mut(scope)
@@ -1560,7 +1560,7 @@ impl App {
     }
 
     fn move_queue_item_by(&mut self, delta: isize) {
-        let scope = self.displayed_queue_scope();
+        let scope = self.visible_queue_scope();
         if scope == QueueScope::Remote {
             self.flash_status_high("Reorder is not supported for the remote queue".into());
             return;
@@ -1606,7 +1606,7 @@ impl App {
             queue.items.insert(to, item);
             queue.queue_cursor = to;
         }
-        if self.queue_scope_has_local_metadata(scope) {
+        if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
         self.persist_local_queue_state_if_needed(scope);
@@ -1629,7 +1629,7 @@ impl App {
                 let idx = idx.min(queue.items.len());
                 queue.items.insert(idx, *item);
                 queue.queue_cursor = idx;
-                if self.queue_scope_has_local_metadata(scope) {
+                if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
                 self.persist_local_queue_state_if_needed(scope);
@@ -1747,7 +1747,7 @@ impl App {
     }
 
     pub(super) fn displayed_queue_playback_state(&self) -> super::PlaybackState {
-        if self.queue_scope_is_playback(self.displayed_queue_scope()) {
+        if self.queue_scope_is_playback(self.visible_queue_scope()) {
             self.effective_playback_state()
         } else {
             super::PlaybackState::default()
@@ -1756,7 +1756,7 @@ impl App {
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
         self.on_queue_replace_silent();
-        self.set_queue_scope(self.playback_queue_scope());
+        self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the power-view library panel.
         if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
             self.power_focus = PowerFocus::Queue;
@@ -1846,11 +1846,11 @@ impl App {
                 return;
             }
             let name = item.display_name();
-            let scope = self.displayed_queue_scope();
+            let scope = self.visible_queue_scope();
             {
                 self.queue_for_scope_mut(scope).items.push(item);
             }
-            if self.queue_scope_has_local_metadata(scope) {
+            if self.local_queue_metadata_applies(scope) {
                 self.queue_dirty = true;
             }
             self.flash_status(format!("Added: {name}"));
@@ -1868,11 +1868,11 @@ impl App {
                 return;
             }
             let name = item.display_name();
-            let scope = self.displayed_queue_scope();
+            let scope = self.visible_queue_scope();
             {
                 self.queue_for_scope_mut(scope).items.push(item);
             }
-            if self.queue_scope_has_local_metadata(scope) {
+            if self.local_queue_metadata_applies(scope) {
                 self.queue_dirty = true;
             }
             self.flash_status(format!("Added: {name}"));
@@ -1893,12 +1893,12 @@ impl App {
                     self.flash_status_high("Nothing to enqueue".into());
                     return;
                 }
-                let scope = self.displayed_queue_scope();
+                let scope = self.visible_queue_scope();
                 {
                     let queue = self.queue_for_scope_mut(scope);
                     queue.items.extend(items);
                 }
-                if self.queue_scope_has_local_metadata(scope) {
+                if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
                 self.flash_status(format!(
@@ -2194,7 +2194,7 @@ impl App {
                 } else if self.tab_idx == 0 {
                     self.select_home();
                 } else if self.tab_idx == 1 {
-                    let scope = self.displayed_queue_scope();
+                    let scope = self.visible_queue_scope();
                     let queue = self.displayed_queue();
                     let t = queue.queue_cursor;
                     if t < queue.items.len() {
@@ -2488,7 +2488,7 @@ impl App {
     }
 
     fn refresh_queue(&mut self) {
-        let scope = self.displayed_queue_scope();
+        let scope = self.visible_queue_scope();
         if self.queue_for_scope(scope).items.is_empty() {
             return;
         }
@@ -3644,7 +3644,7 @@ impl App {
                         Some(&fresh) => self.player_tab.items[idx] = fresh.clone(),
                         None => {
                             // When this is live playback, player_tab *is* the active
-                            // playback queue (playback_queue_scope() picks Local exactly
+                            // playback queue (playback_target_queue_scope() picks Local exactly
                             // when is_live_playback is true) — reuse the same
                             // remove-and-resync-the-player chokepoint the consume paths
                             // use, instead of re-implementing it here.
@@ -3707,11 +3707,11 @@ impl App {
                 source,
             } => {
                 let direct_remote = self.has_direct_remote_queue();
-                if self.queue_scope_has_local_metadata(self.playback_queue_scope()) {
+                if self.local_queue_metadata_applies(self.playback_target_queue_scope()) {
                     self.queue_source = source;
                 }
                 self.replace_playback_queue(items.clone(), start_idx);
-                self.set_queue_scope(self.playback_queue_scope());
+                self.set_queue_scope(self.playback_target_queue_scope());
                 if let Some(ref conn_id) = self.connected_session_id.clone() {
                     self.clear_playback_overlays();
                     let id = conn_id.clone();
@@ -3744,8 +3744,8 @@ impl App {
                 }
             }
             PendingQueueAction::ClearQueue => {
-                let scope = self.displayed_queue_scope();
-                if self.queue_scope_has_local_metadata(scope) {
+                let scope = self.visible_queue_scope();
+                if self.local_queue_metadata_applies(scope) {
                     self.clear_local_queue_metadata();
                 } else {
                     self.remote_queue_undo_stack.clear();
@@ -3804,15 +3804,15 @@ impl App {
     /// the shorter item list back to Emby immediately, so other devices loading this
     /// playlist see the consumed items already removed instead of stale, longer state.
     ///
-    /// Both checks are gated on `queue_scope_has_local_metadata`: `save_playlist_to_emby`
+    /// Both checks are gated on `local_queue_metadata_applies`: `save_playlist_to_emby`
     /// always pushes `player_tab.items` (the *local* queue), so if the consume actually
     /// happened on a direct-remote/daemon queue, autosaving here would push an unrelated,
     /// unmodified local playlist to Emby instead of the queue that actually changed.
     pub(super) fn on_video_consumed(&mut self) {
-        let scope = self.playback_queue_scope();
+        let scope = self.playback_target_queue_scope();
         log::info!(target: "consume", "on_video_consumed: scope={scope:?} has_local_metadata={}",
-            self.queue_scope_has_local_metadata(scope));
-        if !self.queue_scope_has_local_metadata(scope) {
+            self.local_queue_metadata_applies(scope));
+        if !self.local_queue_metadata_applies(scope) {
             return;
         }
         self.queue_dirty = true;
@@ -3832,10 +3832,10 @@ impl App {
     /// than a shared helper with a boolean parameter) so the video and audio consume paths
     /// stay independently readable and don't require the caller to track which flag applies.
     pub(super) fn on_audio_consumed(&mut self) {
-        let scope = self.playback_queue_scope();
+        let scope = self.playback_target_queue_scope();
         log::info!(target: "consume", "on_audio_consumed: scope={scope:?} has_local_metadata={}",
-            self.queue_scope_has_local_metadata(scope));
-        if !self.queue_scope_has_local_metadata(scope) {
+            self.local_queue_metadata_applies(scope));
+        if !self.local_queue_metadata_applies(scope) {
             return;
         }
         self.queue_dirty = true;
