@@ -176,6 +176,7 @@ fn apply_ctrl_event(
     items: &Arc<Mutex<Vec<MediaItem>>>,
     queue_source: &Arc<Mutex<crate::config::QueueSource>>,
     event_tx: &mpsc::Sender<PlayerEvent>,
+    notify: bool,
 ) {
     match ev {
         CtrlEvent::Hello(_) => {
@@ -196,11 +197,18 @@ fn apply_ctrl_event(
             *status.lock().unwrap() = next_status;
             *items.lock().unwrap() = s.items.clone();
             *queue_source.lock().unwrap() = s.source.clone();
-            let _ = event_tx.send(PlayerEvent::QueueUpdated {
-                items: s.items,
-                cursor: s.cursor,
-                source: s.source,
-            });
+            // The very first State snapshot read synchronously during connect()
+            // establishes baseline state before the App (and its event loop)
+            // exists; it must not be queued, or it would be applied *after* a
+            // local-daemon queue adoption that happens between connect() and
+            // App construction, transiently wiping the just-adopted queue.
+            if notify {
+                let _ = event_tx.send(PlayerEvent::QueueUpdated {
+                    items: s.items,
+                    cursor: s.cursor,
+                    source: s.source,
+                });
+            }
         }
         CtrlEvent::Player(pe) => {
             match &pe {
@@ -212,10 +220,14 @@ fn apply_ctrl_event(
                 }
                 _ => {}
             }
-            let _ = event_tx.send(pe);
+            if notify {
+                let _ = event_tx.send(pe);
+            }
         }
         CtrlEvent::CommandRejected(reason) => {
-            let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
+            if notify {
+                let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
+            }
         }
     }
 }
@@ -279,7 +291,14 @@ impl RemotePlayer {
         }
         let state_event = serde_json::from_str::<CtrlEvent>(state_line.trim_end())
             .map_err(|e| format!("invalid daemon initial state: {e}"))?;
-        apply_ctrl_event(state_event, &status, &items, &queue_source, &event_tx);
+        apply_ctrl_event(
+            state_event,
+            &status,
+            &items,
+            &queue_source,
+            &event_tx,
+            false,
+        );
 
         // Reader thread: deserializes CtrlEvent lines from daemon
         let status_r = status.clone();
@@ -297,7 +316,14 @@ impl RemotePlayer {
                             log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                             continue;
                         };
-                        apply_ctrl_event(ev, &status_r, &items_r, &queue_source_r, &event_tx_r);
+                        apply_ctrl_event(
+                            ev,
+                            &status_r,
+                            &items_r,
+                            &queue_source_r,
+                            &event_tx_r,
+                            true,
+                        );
                     }
                 }
             }
@@ -370,14 +396,21 @@ impl RemotePlayer {
             .is_ok()
     }
 
-    pub fn play(&self, item: &MediaItem, _client: Arc<EmbyClient>, _initial_volume: u8) {
+    pub fn play(
+        &self,
+        item: &MediaItem,
+        source: crate::config::QueueSource,
+        _client: Arc<EmbyClient>,
+        _initial_volume: u8,
+    ) {
         let _ = self.cmd_tx.send(CtrlCmd::PlayItems {
             item_ids: vec![item.id.clone()],
             start_idx: 0,
             start_ticks: item.playback_position_ticks,
-            source: crate::config::QueueSource::Unknown,
+            source: source.clone(),
         });
         *self.items.lock().unwrap() = vec![item.clone()];
+        *self.queue_source.lock().unwrap() = source;
     }
 
     pub fn play_queue(
@@ -547,6 +580,7 @@ mod tests {
             &items,
             &queue_source,
             &tx,
+            true,
         );
 
         assert_eq!(status.lock().unwrap().current_idx, 3);
@@ -570,6 +604,7 @@ mod tests {
             &items,
             &queue_source,
             &tx,
+            true,
         );
 
         assert_eq!(status.lock().unwrap().current_idx, 3);
@@ -592,6 +627,7 @@ mod tests {
             &items,
             &queue_source,
             &tx,
+            true,
         );
 
         let s = status.lock().unwrap();
@@ -620,6 +656,7 @@ mod tests {
             &items,
             &queue_source,
             &tx,
+            true,
         );
 
         assert_eq!(status.lock().unwrap().queue_len, 2);
@@ -638,6 +675,7 @@ mod tests {
             &items,
             &queue_source,
             &tx,
+            true,
         );
 
         let s = status.lock().unwrap();
@@ -658,6 +696,7 @@ mod tests {
             &items,
             &queue_source,
             &tx,
+            true,
         );
 
         match rx.recv().unwrap() {

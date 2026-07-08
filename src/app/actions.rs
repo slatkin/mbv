@@ -1827,7 +1827,8 @@ impl App {
         }
         let c = Arc::new(self.client.lock().unwrap().clone());
         self.replace_playback_queue(vec![item.clone()], 0);
-        self.player.play(&item, c, self.ui_volume);
+        self.player
+            .play(&item, self.queue_source.clone(), c, self.ui_volume);
         self.player
             .send_command(PlayerCommand::SetMute(self.mute_on));
     }
@@ -2057,11 +2058,11 @@ impl App {
                 sort_audio_tracks(&mut tracks);
                 if let Some(start_idx) = tracks.iter().position(|i| i.id == fresh.id) {
                     self.replace_playback_queue(tracks.clone(), start_idx);
-                    self.play_items_routed(tracks, start_idx);
                     if !self.has_direct_remote_queue() {
                         self.queue_source = crate::config::QueueSource::Album;
                         self.save_queue_state();
                     }
+                    self.play_items_routed(tracks, start_idx);
                     return;
                 }
             }
@@ -2086,13 +2087,13 @@ impl App {
                                 let ct = self.libs[lib_idx].library.collection_type.clone();
                                 drop(client);
                                 self.replace_playback_queue(siblings.clone(), start_idx);
-                                self.play_items_routed(siblings, start_idx);
                                 if !self.has_direct_remote_queue() {
                                     self.queue_source = crate::config::QueueSource::Collection {
                                         collection_type: ct,
                                     };
                                     self.save_queue_state();
                                 }
+                                self.play_items_routed(siblings, start_idx);
                                 return;
                             }
                             drop(client);
@@ -2244,10 +2245,10 @@ impl App {
                 } else {
                     String::new()
                 };
-                self.play_folder(&id);
                 self.queue_source = crate::config::QueueSource::Collection {
                     collection_type: ct,
                 };
+                self.play_folder(&id);
                 self.save_queue_state();
             }
             Some(ContextAction::ShuffleFolder(id)) => {
@@ -2558,11 +2559,11 @@ impl App {
                 self.replace_playback_queue(items.clone(), 0);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
-                self.play_items_routed(items, 0);
                 if !self.has_direct_remote_queue() {
                     self.queue_source = crate::config::QueueSource::Shuffle;
                     self.save_queue_state();
                 }
+                self.play_items_routed(items, 0);
             }
             Err(e) => {
                 let msg = format!("Error: {e}");
@@ -2613,11 +2614,11 @@ impl App {
                 self.replace_playback_queue(items.clone(), 0);
                 self.tab_idx = 1;
                 self.flash_status(format!("Shuffling {count} items"));
-                self.play_items_routed(items, 0);
                 if !self.has_direct_remote_queue() {
                     self.queue_source = crate::config::QueueSource::Shuffle;
                     self.save_queue_state();
                 }
+                self.play_items_routed(items, 0);
             }
             Err(e) => {
                 drop(client);
@@ -4497,6 +4498,7 @@ impl App {
                 }
                 let start_idx = start_index.min(items.len().saturating_sub(1));
                 self.tab_idx = 1;
+                self.queue_source = crate::config::QueueSource::Remote;
                 if items.len() == 1 {
                     let mut item = items[0].clone();
                     if start_position_ticks > 0 {
@@ -4506,7 +4508,8 @@ impl App {
                     self.player_tab.queue_cursor = 0;
                     self.flash_status(item.playback_label());
                     let c = Arc::new(self.client.lock().unwrap().clone());
-                    self.player.play(&item, c, self.ui_volume);
+                    self.player
+                        .play(&item, self.queue_source.clone(), c, self.ui_volume);
                 } else {
                     let count = items.len();
                     self.player_tab.items = items.clone();
@@ -4530,7 +4533,6 @@ impl App {
                         self.ui_volume,
                     );
                 }
-                self.queue_source = crate::config::QueueSource::Remote;
                 self.save_queue_state();
             }
             WsEvent::Stop => {

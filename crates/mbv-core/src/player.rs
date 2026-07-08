@@ -3011,10 +3011,16 @@ impl PlayerProxy {
         }
     }
 
-    pub fn play(&self, item: &MediaItem, client: Arc<EmbyClient>, initial_volume: u8) {
+    pub fn play(
+        &self,
+        item: &MediaItem,
+        source: crate::config::QueueSource,
+        client: Arc<EmbyClient>,
+        initial_volume: u8,
+    ) {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.play(item, client, initial_volume),
-            PlayerProxyInner::Remote(r) => r.play(item, client, initial_volume),
+            PlayerProxyInner::Remote(r) => r.play(item, source, client, initial_volume),
         }
     }
 
