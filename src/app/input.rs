@@ -2993,14 +2993,6 @@ impl App {
                     self.dispatch(super::action::Action::TogglePlayPause);
                     return;
                 }
-                if self.layout.playback.prev_area.contains((col, row).into()) {
-                    // Greyed-out (unavailable) previous must not be clickable --
-                    // see issue #112's acceptance criteria.
-                    if self.transport_prev_next_available().0 {
-                        self.dispatch(super::action::Action::PreviousTrack);
-                    }
-                    return;
-                }
                 if self.layout.playback.next_area.contains((col, row).into()) {
                     if self.transport_prev_next_available().1 {
                         self.dispatch(super::action::Action::NextTrack);
@@ -3115,9 +3107,9 @@ impl App {
 #[cfg(test)]
 mod playback_header_mouse_tests {
     //! Mouse hit-testing for the one-row playback header's transport
-    //! cluster (issue #112): the play/pause glyph, and the previous/next
-    //! `⏮ | ⏭` controls that must reuse the existing playback actions and
-    //! must not fire when the queue is at that boundary.
+    //! controls (issue #112): the play/pause glyph and the next glyph,
+    //! both of which must reuse the existing playback actions. The next
+    //! control must not fire when the queue is already at that boundary.
     use super::*;
     use crate::app::tests::make_app_stub;
     use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
@@ -3146,52 +3138,12 @@ mod playback_header_mouse_tests {
     }
 
     #[test]
-    fn click_prev_area_jumps_back_when_not_first_item() {
-        let mut app = make_app_stub();
-        app.layout.playback.prev_area = Rect {
-            x: 5,
-            y: 0,
-            width: 1,
-            height: 1,
-        };
-        {
-            let mut st = app.player.status.lock().unwrap();
-            st.active = true;
-            st.queue_len = 2;
-            st.current_idx = 1;
-        }
-        let rx = app.player.spy_on_commands();
-        app.handle_mouse(left_down(5, 0));
-        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(0))));
-    }
-
-    #[test]
-    fn click_prev_area_is_a_no_op_on_first_item() {
-        let mut app = make_app_stub();
-        app.layout.playback.prev_area = Rect {
-            x: 5,
-            y: 0,
-            width: 1,
-            height: 1,
-        };
-        {
-            let mut st = app.player.status.lock().unwrap();
-            st.active = true;
-            st.queue_len = 2;
-            st.current_idx = 0;
-        }
-        let rx = app.player.spy_on_commands();
-        app.handle_mouse(left_down(5, 0));
-        assert!(rx.try_recv().is_err(), "first item: previous must not fire");
-    }
-
-    #[test]
     fn click_next_area_jumps_forward_when_not_last_item() {
         let mut app = make_app_stub();
         app.layout.playback.next_area = Rect {
-            x: 9,
+            x: 5,
             y: 0,
-            width: 1,
+            width: 2,
             height: 1,
         };
         {
@@ -3201,7 +3153,27 @@ mod playback_header_mouse_tests {
             st.current_idx = 0;
         }
         let rx = app.player.spy_on_commands();
-        app.handle_mouse(left_down(9, 0));
+        app.handle_mouse(left_down(5, 0));
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
+    }
+
+    #[test]
+    fn click_second_cell_of_wide_next_area_also_jumps_forward() {
+        let mut app = make_app_stub();
+        app.layout.playback.next_area = Rect {
+            x: 5,
+            y: 0,
+            width: 2,
+            height: 1,
+        };
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 2;
+            st.current_idx = 0;
+        }
+        let rx = app.player.spy_on_commands();
+        app.handle_mouse(left_down(6, 0));
         assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
     }
 
@@ -3209,9 +3181,9 @@ mod playback_header_mouse_tests {
     fn click_next_area_is_a_no_op_on_last_item() {
         let mut app = make_app_stub();
         app.layout.playback.next_area = Rect {
-            x: 9,
+            x: 5,
             y: 0,
-            width: 1,
+            width: 2,
             height: 1,
         };
         {
@@ -3221,23 +3193,17 @@ mod playback_header_mouse_tests {
             st.current_idx = 1;
         }
         let rx = app.player.spy_on_commands();
-        app.handle_mouse(left_down(9, 0));
+        app.handle_mouse(left_down(5, 0));
         assert!(rx.try_recv().is_err(), "last item: next must not fire");
     }
 
     #[test]
-    fn click_prev_and_next_are_no_ops_on_single_item_queue() {
+    fn click_next_is_a_no_op_on_single_item_queue() {
         let mut app = make_app_stub();
-        app.layout.playback.prev_area = Rect {
+        app.layout.playback.next_area = Rect {
             x: 5,
             y: 0,
-            width: 1,
-            height: 1,
-        };
-        app.layout.playback.next_area = Rect {
-            x: 9,
-            y: 0,
-            width: 1,
+            width: 2,
             height: 1,
         };
         {
@@ -3248,10 +3214,9 @@ mod playback_header_mouse_tests {
         }
         let rx = app.player.spy_on_commands();
         app.handle_mouse(left_down(5, 0));
-        app.handle_mouse(left_down(9, 0));
         assert!(
             rx.try_recv().is_err(),
-            "single-item queue: neither previous nor next may fire"
+            "single-item queue: next must not fire"
         );
     }
 }

@@ -2813,9 +2813,9 @@ pub(crate) mod tests {
     }
 
     // ── transport_prev_next_available (issue #112) ─────────────────────────
-    // Drives whether the playback header's mouse-clickable `⏮`/`⏭` controls
-    // are available (rendered white, clickable) or unavailable (greyed out,
-    // inert) at the current queue position.
+    // Drives whether playback transport is currently available at the queue
+    // boundaries. The header uses the `next` half directly, while the `P`/`N`
+    // keys still reuse both halves.
 
     #[test]
     fn transport_prev_next_unavailable_when_player_inactive() {

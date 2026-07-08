@@ -698,11 +698,10 @@ impl App {
         ))
     }
 
-    /// One-line now-playing header: `▶ Title │ elapsed / total  ⏮ | ⏭` on the
-    /// left, the status-indicator badges right-aligned. Mirrors the design
-    /// handoff. Records click regions for the play/pause glyph and the
-    /// previous/next transport cluster into `layout` (see issue #112);
-    /// previous/next are greyed out (and, per `handle_mouse`, non-clickable)
+    /// One-line now-playing header: play/pause, next, title, and time on the
+    /// left, with the status-indicator badges right-aligned. Records click
+    /// regions for the play/pause and next glyphs into `layout` (see issue
+    /// #112); next is greyed out (and, per `handle_mouse`, non-clickable)
     /// when `transport_prev_next_available()` says the queue is at that
     /// boundary.
     fn render_title_row(
@@ -715,7 +714,6 @@ impl App {
     ) {
         if area.height == 0 || area.width == 0 {
             layout.play_pause_area = Rect::default();
-            layout.prev_area = Rect::default();
             layout.next_area = Rect::default();
             return;
         }
@@ -740,19 +738,20 @@ impl App {
             )
         };
 
-        let (prev_avail, next_avail) = self.transport_prev_next_available();
-        let prev_color = if prev_avail {
-            palette::WHITE
+        let next_glyph = if self.use_nerd_fonts {
+            "\u{f051}"
         } else {
-            palette::MUTED
+            ">>"
         };
+        let next_gap = " ";
+        let next_avail = self.transport_prev_next_available().1;
         let next_color = if next_avail {
             palette::WHITE
         } else {
             palette::MUTED
         };
 
-        // Left: glyph  title  │  elapsed / total  ⏮ | ⏭
+        // Left: glyph  next  title  │  elapsed / total
         // A running `x` cursor tracks where each clickable glyph lands in the
         // rendered `Line`, so `layout.*_area` exactly matches what's on screen
         // rather than an estimate.
@@ -773,8 +772,18 @@ impl App {
             Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
         ));
 
+        let next_w = next_glyph.width() as u16;
+        layout.next_area = Rect {
+            x,
+            y: area.y,
+            width: next_w,
+            height: 1,
+        };
+        left.push(Span::styled(next_glyph, Style::default().fg(next_color)));
+
+        left.push(Span::raw(next_gap));
+
         let title_text = title.to_string();
-        x += title_text.width() as u16;
         left.push(Span::styled(
             title_text,
             Style::default()
@@ -783,46 +792,19 @@ impl App {
         ));
 
         let sep_text = " \u{2502} ";
-        x += sep_text.width() as u16;
         left.push(Span::styled(
             sep_text,
             Style::default().fg(palette::OVERLAY),
         ));
 
         let time_text = format!("{pos_str} / {dur_str}");
-        x += time_text.width() as u16;
         left.push(Span::styled(
             time_text,
             Style::default().fg(palette::SUBTLE),
         ));
 
         let gap1 = "  ";
-        x += gap1.width() as u16;
         left.push(Span::raw(gap1));
-
-        layout.prev_area = Rect {
-            x,
-            y: area.y,
-            width: 1,
-            height: 1,
-        };
-        x += 1;
-        left.push(Span::styled("\u{23EE}", Style::default().fg(prev_color)));
-
-        let div_text = " | ";
-        x += div_text.width() as u16;
-        left.push(Span::styled(
-            div_text,
-            Style::default().fg(palette::OVERLAY),
-        ));
-
-        layout.next_area = Rect {
-            x,
-            y: area.y,
-            width: 1,
-            height: 1,
-        };
-        left.push(Span::styled("\u{23ED}", Style::default().fg(next_color)));
 
         // Right: status-indicator badges.
         let right = self.build_status_indicator_spans().unwrap_or_default();
@@ -953,5 +935,100 @@ impl App {
             ),
         ];
         f.render_widget(Paragraph::new(Line::from(spans)), area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::make_app_stub;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn title_row_next_area_matches_rendered_next_glyph_width_and_position() {
+        let mut app = make_app_stub();
+        app.use_nerd_fonts = false;
+        let next_glyph = ">>";
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 2;
+            st.current_idx = 0;
+            st.runtime_ticks = 90 * TICKS_PER_SECOND;
+        }
+
+        let backend = TestBackend::new(60, 1);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPlayback::default();
+        term.draw(|f| {
+            app.render_title_row(
+                f,
+                Rect::new(0, 0, 60, 1),
+                "Title",
+                palette::FOAM,
+                &mut layout,
+            );
+        })
+        .unwrap();
+
+        let line = buffer_to_string(&term).lines().next().unwrap().to_string();
+        let next_byte = line.find(next_glyph).unwrap();
+        let next_x = line[..next_byte].width() as u16;
+
+        assert_eq!(layout.next_area.x, next_x);
+        assert_eq!(layout.next_area.width, next_glyph.width() as u16);
+        assert!(
+            line.starts_with("> >> Title"),
+            "expected next glyph between play/pause and title:\n{line}"
+        );
+    }
+
+    #[test]
+    fn title_row_next_area_matches_nerd_font_glyph_width_and_position() {
+        let mut app = make_app_stub();
+        app.use_nerd_fonts = true;
+        let next_glyph = "\u{f051}";
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.queue_len = 2;
+            st.current_idx = 0;
+            st.runtime_ticks = 90 * TICKS_PER_SECOND;
+        }
+
+        let backend = TestBackend::new(60, 1);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPlayback::default();
+        term.draw(|f| {
+            app.render_title_row(
+                f,
+                Rect::new(0, 0, 60, 1),
+                "Title",
+                palette::FOAM,
+                &mut layout,
+            );
+        })
+        .unwrap();
+
+        let line = buffer_to_string(&term).lines().next().unwrap().to_string();
+        let next_byte = line.find(next_glyph).unwrap();
+        let next_x = line[..next_byte].width() as u16;
+
+        assert_eq!(layout.next_area.x, next_x);
+        assert_eq!(layout.next_area.width, next_glyph.width() as u16);
     }
 }
