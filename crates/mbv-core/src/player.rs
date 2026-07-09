@@ -4,6 +4,11 @@ use std::sync::{
 };
 use std::thread;
 use std::time::{Duration, Instant};
+use std::{
+    ffi::OsStr,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 use libmpv2::{
@@ -515,6 +520,133 @@ struct MpvSessionConfig {
     audio_pipe_bitdepth: u8,
 }
 
+fn user_mpv_config_dir() -> Option<PathBuf> {
+    if let Some(config_home) = std::env::var_os("XDG_CONFIG_HOME") {
+        return Some(PathBuf::from(config_home).join("mpv"));
+    }
+    std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config").join("mpv"))
+}
+
+fn is_mpv_ipc_config_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    if trimmed.starts_with('#') {
+        return false;
+    }
+    let option = trimmed.strip_prefix("--").unwrap_or(trimmed);
+    let key_end = option
+        .find(|c: char| c == '=' || c.is_whitespace())
+        .unwrap_or(option.len());
+    &option[..key_end] == "input-ipc-server"
+}
+
+fn sanitized_mpv_conf(user_conf: Option<&Path>, ipc_path: &str) -> String {
+    let mut sanitized = String::new();
+    if let Some(path) = user_conf {
+        if let Ok(text) = fs::read_to_string(path) {
+            for line in text.lines() {
+                if !is_mpv_ipc_config_line(line) {
+                    sanitized.push_str(line);
+                    sanitized.push('\n');
+                }
+            }
+        }
+    }
+    sanitized.push_str("input-ipc-server=");
+    sanitized.push_str(ipc_path);
+    sanitized.push('\n');
+    sanitized
+}
+
+#[cfg(unix)]
+fn symlink_mpv_config_entry(src: &Path, dest: &Path) -> std::io::Result<()> {
+    std::os::unix::fs::symlink(src, dest)
+}
+
+#[cfg(not(unix))]
+fn symlink_mpv_config_entry(src: &Path, dest: &Path) -> std::io::Result<()> {
+    let meta = fs::metadata(src)?;
+    if meta.is_dir() {
+        fs::create_dir(dest)
+    } else {
+        fs::copy(src, dest).map(|_| ())
+    }
+}
+
+fn reset_private_mpv_config_dir(private_dir: &Path) -> Result<(), String> {
+    match fs::symlink_metadata(private_dir) {
+        Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => {
+            fs::remove_dir_all(private_dir).map_err(|e| {
+                format!(
+                    "failed to remove private mpv config dir '{}': {e}",
+                    private_dir.display()
+                )
+            })?;
+        }
+        Ok(_) => {
+            fs::remove_file(private_dir).map_err(|e| {
+                format!(
+                    "failed to remove private mpv config path '{}': {e}",
+                    private_dir.display()
+                )
+            })?;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(format!(
+                "failed to inspect private mpv config dir '{}': {e}",
+                private_dir.display()
+            ));
+        }
+    }
+    fs::create_dir_all(private_dir).map_err(|e| {
+        format!(
+            "failed to create private mpv config dir '{}': {e}",
+            private_dir.display()
+        )
+    })
+}
+
+fn prepare_mpv_config_dir(use_mpv_config: bool, ipc_path: &str) -> Result<PathBuf, String> {
+    let private_dir = crate::config::mpv_config_dir();
+    reset_private_mpv_config_dir(&private_dir)?;
+
+    let user_dir = use_mpv_config.then(user_mpv_config_dir).flatten();
+    if let Some(user_dir) = &user_dir {
+        match fs::read_dir(user_dir) {
+            Ok(entries) => {
+                for entry in entries.flatten() {
+                    let name = entry.file_name();
+                    if name == OsStr::new("mpv.conf") || name == OsStr::new("input.conf") {
+                        continue;
+                    }
+                    let src = entry.path();
+                    let dest = private_dir.join(&name);
+                    if let Err(e) = symlink_mpv_config_entry(&src, &dest) {
+                        log::warn!(target: "player", "mpv config: failed to link {} into private config dir: {e}", src.display());
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!(target: "player", "mpv config: cannot read user config dir {}: {e}", user_dir.display());
+            }
+        }
+    }
+
+    let user_conf = user_dir
+        .as_ref()
+        .map(|dir| dir.join("mpv.conf"))
+        .filter(|path| path.exists());
+    let conf = sanitized_mpv_conf(user_conf.as_deref(), ipc_path);
+    fs::write(private_dir.join("mpv.conf"), conf).map_err(|e| {
+        format!(
+            "failed to write private mpv.conf in '{}': {e}",
+            private_dir.display()
+        )
+    })?;
+
+    Ok(private_dir)
+}
+
 // Ensures `path` exists as a FIFO, creating it via mkfifo(3) if it doesn't
 // already exist. Refuses to touch a path that exists but isn't a FIFO.
 fn ensure_pipe(path: &str) -> Result<(), String> {
@@ -654,7 +786,8 @@ impl SessionReporter {
 
 fn init_mpv(config: &MpvSessionConfig) -> Result<(Mpv, bool), String> {
     let ipc_path = crate::config::mpv_ipc_path();
-    let ipc_existed = std::path::Path::new(&ipc_path).exists();
+    let private_config_dir = prepare_mpv_config_dir(config.use_mpv_config, &ipc_path)?;
+    let ipc_existed = Path::new(&ipc_path).exists();
     if ipc_existed {
         let _ = std::fs::remove_file(&ipc_path);
         log::info!(target: "player", "init: removed stale ipc socket {}", ipc_path);
@@ -679,6 +812,9 @@ fn init_mpv(config: &MpvSessionConfig) -> Result<(Mpv, bool), String> {
             }};
         }
         opt!("config", "yes");
+        // Use an mbv-owned config dir so user mpv.conf cannot override
+        // input-ipc-server during mpv_initialize() and clobber a live mpv socket.
+        opt!("config-dir", private_config_dir.to_str().unwrap_or(""));
         opt!("input-ipc-server", ipc_path.as_str());
         opt!("input-default-bindings", "yes");
         opt!("input-vo-keyboard", "yes");
@@ -3163,6 +3299,142 @@ pub(crate) fn queue_completed_pos(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex as TestMutex;
+
+    static ENV_LOCK: TestMutex<()> = TestMutex::new(());
+
+    struct MpvConfigTestEnv {
+        root: PathBuf,
+        runtime_dir: PathBuf,
+        user_mpv: PathBuf,
+        old_runtime: Option<std::ffi::OsString>,
+        old_config: Option<std::ffi::OsString>,
+        old_system: Option<std::ffi::OsString>,
+    }
+
+    impl MpvConfigTestEnv {
+        fn new(name: &str) -> Self {
+            let mut root = std::env::temp_dir();
+            root.push(format!(
+                "mbv-{name}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            let runtime_dir = root.join("runtime");
+            let xdg_config = root.join("xdg-config");
+            let user_mpv = xdg_config.join("mpv");
+            let old_runtime = std::env::var_os("XDG_RUNTIME_DIR");
+            let old_config = std::env::var_os("XDG_CONFIG_HOME");
+            let old_system = std::env::var_os("MBV_SYSTEM");
+
+            std::env::set_var("XDG_RUNTIME_DIR", &runtime_dir);
+            std::env::set_var("XDG_CONFIG_HOME", &xdg_config);
+            std::env::remove_var("MBV_SYSTEM");
+
+            Self {
+                root,
+                runtime_dir,
+                user_mpv,
+                old_runtime,
+                old_config,
+                old_system,
+            }
+        }
+
+        fn restore_env(key: &str, previous: &Option<std::ffi::OsString>) {
+            if let Some(value) = previous {
+                std::env::set_var(key, value);
+            } else {
+                std::env::remove_var(key);
+            }
+        }
+    }
+
+    impl Drop for MpvConfigTestEnv {
+        fn drop(&mut self) {
+            Self::restore_env("XDG_RUNTIME_DIR", &self.old_runtime);
+            Self::restore_env("XDG_CONFIG_HOME", &self.old_config);
+            Self::restore_env("MBV_SYSTEM", &self.old_system);
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    // ── private mpv config isolation ─────────────────────────────────────────
+
+    #[test]
+    fn sanitized_mpv_conf_removes_active_ipc_options_and_appends_mbv_ipc() {
+        let env = MpvConfigTestEnv::new("sanitize-mpv-conf");
+        std::fs::create_dir_all(&env.user_mpv).unwrap();
+        let conf_path = env.user_mpv.join("mpv.conf");
+        std::fs::write(
+            &conf_path,
+            "\
+volume=75
+input-ipc-server=/tmp/user.sock
+--input-ipc-server=/tmp/other.sock
+ input-ipc-server /tmp/spaced.sock
+# input-ipc-server=/tmp/commented.sock
+",
+        )
+        .unwrap();
+
+        let sanitized = sanitized_mpv_conf(Some(&conf_path), "/tmp/mbv.sock");
+
+        assert!(sanitized.contains("volume=75\n"));
+        assert!(!sanitized.contains("/tmp/user.sock"));
+        assert!(!sanitized.contains("/tmp/other.sock"));
+        assert!(!sanitized.contains("/tmp/spaced.sock"));
+        assert!(sanitized.contains("# input-ipc-server=/tmp/commented.sock\n"));
+        assert!(sanitized.ends_with("input-ipc-server=/tmp/mbv.sock\n"));
+    }
+
+    #[test]
+    fn prepare_mpv_config_dir_symlinks_user_entries_but_not_mpv_or_input_conf() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let env = MpvConfigTestEnv::new("private-mpv-config");
+        std::fs::create_dir_all(env.user_mpv.join("scripts")).unwrap();
+        std::fs::create_dir_all(env.user_mpv.join("script-opts")).unwrap();
+        std::fs::write(
+            env.user_mpv.join("mpv.conf"),
+            "volume=65\ninput-ipc-server=/tmp/user.sock\n",
+        )
+        .unwrap();
+        std::fs::write(env.user_mpv.join("input.conf"), "q quit\n").unwrap();
+
+        let private_dir = prepare_mpv_config_dir(true, "/tmp/mbv.sock").unwrap();
+        let conf = std::fs::read_to_string(private_dir.join("mpv.conf")).unwrap();
+
+        assert_eq!(private_dir, env.runtime_dir.join("mpv-config"));
+        assert!(conf.contains("volume=65\n"));
+        assert!(!conf.contains("/tmp/user.sock"));
+        assert!(conf.contains("input-ipc-server=/tmp/mbv.sock\n"));
+        assert!(std::fs::symlink_metadata(private_dir.join("scripts"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert!(std::fs::symlink_metadata(private_dir.join("script-opts"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert!(!private_dir.join("input.conf").exists());
+    }
+
+    #[test]
+    fn prepare_mpv_config_dir_ignores_user_config_when_disabled() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let env = MpvConfigTestEnv::new("private-mpv-config-disabled");
+        std::fs::create_dir_all(env.user_mpv.join("scripts")).unwrap();
+        std::fs::write(env.user_mpv.join("mpv.conf"), "volume=65\n").unwrap();
+
+        let private_dir = prepare_mpv_config_dir(false, "/tmp/mbv.sock").unwrap();
+        let conf = std::fs::read_to_string(private_dir.join("mpv.conf")).unwrap();
+
+        assert_eq!(conf, "input-ipc-server=/tmp/mbv.sock\n");
+        assert!(!private_dir.join("scripts").exists());
+    }
 
     // ── shift_index_for_move ──────────────────────────────────────────────────
 

@@ -351,6 +351,10 @@ pub fn mpv_ipc_path() -> String {
     format!("{}/mbv-mpv.sock", runtime_dir())
 }
 
+pub fn mpv_config_dir() -> PathBuf {
+    PathBuf::from(runtime_dir()).join("mpv-config")
+}
+
 pub fn control_socket_path() -> String {
     format!("{}/mbv-ctrl.sock", runtime_dir())
 }
