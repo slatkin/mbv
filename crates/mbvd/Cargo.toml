@@ -1,0 +1,13 @@
+[package]
+name = "mbvd"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "mbvd"
+path = "src/main.rs"
+
+[dependencies]
+mbv-core = { path = "../mbv-core" }
+libc.workspace = true
+log.workspace = true

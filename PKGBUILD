@@ -13,6 +13,7 @@ sha256sums=('abe21160ce0fd75504f23532f1a513bdddd212e9e6363205780951aeef630e8c')
 package() {
     cd "${pkgname}-${pkgver}"
     install -Dm755 "${pkgname}" "${pkgdir}/usr/bin/${pkgname}"
+    install -Dm755 "mbvd" "${pkgdir}/usr/bin/mbvd"
     install -Dm644 "mbv.lua" "${pkgdir}/usr/share/${pkgname}/scripts/mbv.lua"
     install -Dm644 "Material-Design-Iconic-Font.ttf" \
         "${pkgdir}/usr/share/${pkgname}/fonts/Material-Design-Iconic-Font.ttf"

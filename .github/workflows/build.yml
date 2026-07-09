@@ -54,6 +54,7 @@ jobs:
           DIST="mbv-${PKGVER}"
           mkdir -p "${DIST}"
           cp target/release/mbv "${DIST}/"
+          cp target/release/mbvd "${DIST}/"
           cp scripts/mbv.lua "${DIST}/"
           cp fonts/Material-Design-Iconic-Font.ttf "${DIST}/"
           cp dist/config.toml "${DIST}/"
