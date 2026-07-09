@@ -2177,9 +2177,9 @@ impl QueueSession {
                 self.current_idx = 0;
             }
             self.sync_status_position();
-            let _ = self.event_tx.send(PlayerEvent::QueueDesynced(
-                format!("Queue desynced: {removed} item(s) removed externally"),
-            ));
+            let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
+                "Queue desynced: {removed} item(s) removed externally"
+            )));
         } else {
             let added = count - old_n;
             log::warn!(target: "player", "playlist-count increased from {} to {}: {} item(s) added externally", old_n, count, added);
@@ -2190,9 +2190,9 @@ impl QueueSession {
                 self.current_idx = self.n - 1;
             }
             self.sync_status_position();
-            let _ = self.event_tx.send(PlayerEvent::QueueDesynced(
-                format!("Queue desynced: {added} item(s) added externally"),
-            ));
+            let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
+                "Queue desynced: {added} item(s) added externally"
+            )));
         }
     }
 

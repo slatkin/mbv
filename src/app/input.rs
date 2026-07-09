@@ -1229,6 +1229,34 @@ impl App {
             }
         }
 
+        // Power view bracket keys are panel-scoped; the queue panel owns
+        // Local/Remote scope switching, while the left panel keeps its
+        // section/season/group bracket actions.
+        if self.tab_idx == 1
+            && self.queue_view == QUEUE_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Queue)
+        {
+            match key.code {
+                KeyCode::Char('[')
+                    if self.has_direct_remote_queue()
+                        && !key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    self.set_queue_scope(QueueScope::Local);
+                    return false;
+                }
+                KeyCode::Char(']')
+                    if self.has_direct_remote_queue()
+                        && !key.modifiers.contains(KeyModifiers::CONTROL)
+                        && !key.modifiers.contains(KeyModifiers::ALT) =>
+                {
+                    self.set_queue_scope(QueueScope::Remote);
+                    return false;
+                }
+                _ => {}
+            }
+        }
+
         // In power view, route nav keys to the focused library panel.
         if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left) {
             if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
@@ -1396,6 +1424,26 @@ impl App {
         if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Queue) {
             let page = self.layout.power.queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
+                KeyCode::PageUp => {
+                    self.last_nav_at = Instant::now();
+                    let queue = self.displayed_queue_mut();
+                    queue.queue_cursor = queue.queue_cursor.saturating_sub(page);
+                    return false;
+                }
+                KeyCode::PageDown => {
+                    self.last_nav_at = Instant::now();
+                    let queue = self.displayed_queue_mut();
+                    let n = queue.items.len();
+                    queue.queue_cursor = (queue.queue_cursor + page).min(n.saturating_sub(1));
+                    return false;
+                }
+                _ => {}
+            }
+        }
+
+        // Non-power queue view: scope switching via [ / ].
+        if self.tab_idx == 1 && self.queue_view != QUEUE_VIEW_POWER {
+            match key.code {
                 KeyCode::Char('[')
                     if self.has_direct_remote_queue()
                         && !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -1410,19 +1458,6 @@ impl App {
                         && !key.modifiers.contains(KeyModifiers::ALT) =>
                 {
                     self.set_queue_scope(QueueScope::Remote);
-                    return false;
-                }
-                KeyCode::PageUp => {
-                    self.last_nav_at = Instant::now();
-                    let queue = self.displayed_queue_mut();
-                    queue.queue_cursor = queue.queue_cursor.saturating_sub(page);
-                    return false;
-                }
-                KeyCode::PageDown => {
-                    self.last_nav_at = Instant::now();
-                    let queue = self.displayed_queue_mut();
-                    let n = queue.items.len();
-                    queue.queue_cursor = (queue.queue_cursor + page).min(n.saturating_sub(1));
                     return false;
                 }
                 _ => {}
@@ -2322,11 +2357,31 @@ impl App {
                 return true;
             }
         } else if self.tab_idx == 1 {
+            if self.has_direct_remote_queue() {
+                if self
+                    .layout
+                    .queue
+                    .scope_local_area
+                    .contains((col, row).into())
+                {
+                    self.set_queue_scope(QueueScope::Local);
+                    return true;
+                }
+                if self
+                    .layout
+                    .queue
+                    .scope_remote_area
+                    .contains((col, row).into())
+                {
+                    self.set_queue_scope(QueueScope::Remote);
+                    return true;
+                }
+            }
             let inner = self.layout.queue.inner;
             if inner.contains((col, row).into()) {
                 let click_y = (row - inner.y) as usize;
                 if let Some(&Some(idx)) = self.layout.queue.row_map.get(click_y) {
-                    self.player_tab.queue_cursor = idx;
+                    self.displayed_queue_mut().queue_cursor = idx;
                     return true;
                 }
             }

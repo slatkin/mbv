@@ -2502,8 +2502,13 @@ fn restore_terminal(
 pub(crate) mod tests {
     use super::ui_util::{fmt_duration, item_text_and_style};
     use super::*;
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::{
+        KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    };
     use mbv_core::api::TICKS_PER_SECOND;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+    use unicode_width::UnicodeWidthStr;
 
     pub(crate) fn make_item(name: &str, item_type: &str) -> MediaItem {
         MediaItem {
@@ -2865,6 +2870,32 @@ pub(crate) mod tests {
             confirm_rescan: false,
             queue_scope: QueueScope::Local,
         }
+    }
+
+    fn left_down(col: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: col,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
+    }
+
+    fn render_app_to_string(app: &mut App, width: u16, height: u16) -> String {
+        let backend = TestBackend::new(width, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.render(f)).unwrap();
+
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
     }
 
     // ── transport_prev_next_available (issue #112) ─────────────────────────
@@ -4410,6 +4441,225 @@ pub(crate) mod tests {
         assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
         assert!(app.local_queue_metadata_applies(QueueScope::Local));
         assert!(!app.local_queue_metadata_applies(QueueScope::Remote));
+    }
+
+    #[test]
+    fn non_power_queue_scope_switch_via_keyboard_local() {
+        let local_items = make_items(1);
+        let remote_items = make_items(2);
+        let mut app = make_remote_app_stub(local_items, remote_items);
+        app.tab_idx = 1;
+        app.queue_view = 0;
+        app.queue_scope = QueueScope::Remote;
+
+        assert!(app.has_direct_remote_queue());
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(app.queue_scope, QueueScope::Local);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn non_power_queue_scope_switch_via_keyboard_remote() {
+        let local_items = make_items(1);
+        let remote_items = make_items(2);
+        let mut app = make_remote_app_stub(local_items, remote_items);
+        app.tab_idx = 1;
+        app.queue_view = 0;
+        app.queue_scope = QueueScope::Local;
+
+        assert!(app.has_direct_remote_queue());
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(app.queue_scope, QueueScope::Remote);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+    }
+
+    #[test]
+    fn power_queue_renders_scope_pills_and_hitboxes_for_direct_remote() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.set_queue_scope(QueueScope::Local);
+
+        let rendered = render_app_to_string(&mut app, 90, 28);
+
+        assert!(
+            rendered.contains(" Local ") && rendered.contains(" Remote "),
+            "expected power queue scope pills in rendered output:\n{rendered}"
+        );
+        assert!(
+            rendered.contains(" Queue "),
+            "expected queue pill:\n{rendered}"
+        );
+        assert!(app.layout.power.queue_scope_local_area.width >= " Local ".width() as u16);
+        assert!(app.layout.power.queue_scope_remote_area.width >= " Remote ".width() as u16);
+    }
+
+    #[test]
+    fn power_queue_scope_switch_via_keyboard_works_from_queue_focus() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Queue;
+        app.set_queue_scope(QueueScope::Local);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn power_left_focus_brackets_do_not_switch_queue_scope() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.set_queue_scope(QueueScope::Local);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.set_queue_scope(QueueScope::Local);
+        let _ = render_app_to_string(&mut app, 90, 28);
+
+        let remote = app.layout.power.queue_scope_remote_area;
+        app.handle_mouse(left_down(remote.x, remote.y));
+        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+
+        let local = app.layout.power.queue_scope_local_area;
+        app.handle_mouse(left_down(local.x, local.y));
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn non_power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = 0;
+        app.set_queue_scope(QueueScope::Local);
+        let _ = render_app_to_string(&mut app, 90, 24);
+
+        let remote = app.layout.queue.scope_remote_area;
+        app.handle_mouse(left_down(remote.x, remote.y));
+        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+
+        let local = app.layout.queue.scope_local_area;
+        app.handle_mouse(left_down(local.x, local.y));
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn non_power_remote_queue_row_click_updates_remote_cursor() {
+        let mut app = make_remote_app_stub(make_items(2), make_items(3));
+        app.tab_idx = 1;
+        app.queue_view = 0;
+        app.set_queue_scope(QueueScope::Remote);
+        let _ = render_app_to_string(&mut app, 90, 24);
+
+        let row = app.layout.queue.inner.y + 1;
+        app.handle_mouse(left_down(app.layout.queue.inner.x, row));
+
+        assert_eq!(app.player_tab.queue_cursor, 0);
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
+    }
+
+    #[test]
+    fn power_scope_keys_are_ignored_outside_queue_tab() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.set_queue_scope(QueueScope::Local);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn non_power_queue_scope_switch_ignored_without_direct_remote() {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = 0;
+        app.queue_scope = QueueScope::Local;
+
+        assert!(!app.has_direct_remote_queue());
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(app.queue_scope, QueueScope::Local);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(app.queue_scope, QueueScope::Local);
+    }
+
+    #[test]
+    fn local_daemon_queue_has_no_scope_affordance_or_remote_switch() {
+        let mut app = make_local_daemon_app_stub(make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = 0;
+        let rendered = render_app_to_string(&mut app, 90, 24);
+
+        assert!(!app.has_direct_remote_queue());
+        assert_eq!(
+            app.layout.queue.scope_local_area,
+            ratatui::layout::Rect::default()
+        );
+        assert_eq!(
+            app.layout.queue.scope_remote_area,
+            ratatui::layout::Rect::default()
+        );
+        assert!(
+            !rendered.contains(" Local ") && !rendered.contains(" Remote "),
+            "local-daemon queue should not render split-scope pills:\n{rendered}"
+        );
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn attached_session_only_queue_has_no_scope_affordance_or_remote_switch() {
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("session-1".into());
+        app.connected_session_state = Some(make_session("remote-host", "Emby"));
+        app.tab_idx = 1;
+        app.queue_view = 0;
+        let rendered = render_app_to_string(&mut app, 90, 24);
+
+        assert!(!app.has_direct_remote_queue());
+        assert_eq!(
+            app.layout.queue.scope_local_area,
+            ratatui::layout::Rect::default()
+        );
+        assert_eq!(
+            app.layout.queue.scope_remote_area,
+            ratatui::layout::Rect::default()
+        );
+        assert!(
+            !rendered.contains(" Local ") && !rendered.contains(" Remote "),
+            "attached-session queue should not render split-scope pills:\n{rendered}"
+        );
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use super::super::layout::{LayoutHome, LayoutQueue};
 use super::super::ui_util::{build_queue_rows, fmt_duration, trunc_str, QueueRow};
-use super::super::{palette, App};
+use super::super::{palette, App, QueueScope};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::Style;
@@ -44,21 +44,91 @@ impl App {
 
         layout.rect = area;
 
-        let inner = area;
+        // Render scope-pill header when a direct remote queue exists.
+        let show_scope_header = self.has_direct_remote_queue();
+        layout.scope_local_area = Rect::default();
+        layout.scope_remote_area = Rect::default();
+
+        let header_h: u16 = if show_scope_header { 1 } else { 0 };
+        if show_scope_header {
+            let queue_label = " Queue ";
+            let queue_w = queue_label.width() as u16;
+            let queue_x = area.x + area.width.saturating_sub(queue_w);
+            let mut spans = Vec::new();
+            let local_selected = self.visible_queue_scope() == QueueScope::Local;
+            let local_label = " Local ";
+            let remote_label = " Remote ";
+            let local_w = local_label.width() as u16;
+            let remote_w = remote_label.width() as u16;
+            let gap = 1u16;
+            layout.scope_local_area = Rect {
+                x: area.x,
+                y: area.y,
+                width: local_w,
+                height: 1,
+            };
+            layout.scope_remote_area = Rect {
+                x: area.x + local_w + gap,
+                y: area.y,
+                width: remote_w,
+                height: 1,
+            };
+            let inactive = Style::default().fg(palette::MUTED).bg(palette::PILL_BG);
+            let active = Style::default().fg(palette::BASE).bg(palette::FOAM);
+            spans.push(Span::styled(
+                local_label,
+                if local_selected { active } else { inactive },
+            ));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                remote_label,
+                if local_selected { inactive } else { active },
+            ));
+            let header_used = spans.iter().map(|span| span.content.width()).sum::<usize>() as u16;
+            let gap_to_queue = queue_x.saturating_sub(area.x + header_used);
+            spans.push(Span::raw(" ".repeat(gap_to_queue as usize)));
+            spans.push(Span::styled(
+                queue_label,
+                Style::default().fg(palette::BASE).bg(palette::FOAM),
+            ));
+            f.render_widget(
+                Paragraph::new(Line::from(spans)),
+                Rect {
+                    x: area.x,
+                    y: area.y,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+        }
+
+        let inner = if header_h > 0 {
+            Rect {
+                y: area.y + 1,
+                height: area.height.saturating_sub(1),
+                ..area
+            }
+        } else {
+            area
+        };
         layout.inner = inner;
 
         if items.is_empty() {
+            let msg = if show_scope_header && self.visible_queue_scope() == QueueScope::Remote {
+                "  Remote queue is empty"
+            } else {
+                "  Add items with p from Home or library tabs"
+            };
             f.render_widget(
-                Paragraph::new("Add items with p from Home or library tabs")
-                    .style(Style::default().fg(palette::MUTED)),
+                Paragraph::new(msg).style(Style::default().fg(palette::MUTED)),
                 inner,
             );
             return;
         }
 
         // List view occupies 90% of available width, centered.
-        let list_w = (area.width as u32 * 9 / 10) as u16;
-        let list_x = area.x + (area.width.saturating_sub(list_w)) / 2;
+        let list_w = (inner.width as u32 * 9 / 10) as u16;
+        let list_x = inner.x + (inner.width.saturating_sub(list_w)) / 2;
         let table_area = Rect {
             x: list_x,
             width: list_w,

@@ -69,6 +69,8 @@ pub(crate) struct LayoutQueue {
     pub row_map: Vec<Option<usize>>,
     pub rect: Rect,
     pub inner: Rect,
+    pub scope_local_area: Rect,
+    pub scope_remote_area: Rect,
 }
 
 /// Geometry for the power-view's own Home sub-tab (the two-column card grid),
