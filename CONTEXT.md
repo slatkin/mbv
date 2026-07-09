@@ -175,6 +175,10 @@ The left column in Power View: the column that contains the media card at the to
 Its resize controls are `Ctrl+Alt+Left`/`Ctrl+Alt+Right`, active only while Power View itself is active; they are not global shortcuts that invisibly change a later Power View layout from another tab.
 _Avoid_: using "left panel" without qualification when discussing #111, since other views also have left/right areas; the resize target is specifically the Power View left column, not the normal library table split or any modal/sidebar.
 
+**Toast**:
+A transient status message rendered over the TUI for short-lived feedback, such as confirming an action or explaining why a keypress had no effect. Power View left-column resize actions should use this existing feedback channel.
+_Avoid_: introducing a separate notification surface for routine in-app feedback; use the existing toast/status mechanism.
+
 ## Input handling
 
 The subsystem that turns key and mouse events into app behavior. Today it is decentralized across `App::handle_key` and `App::handle_mouse` in `src/app/input.rs`; the terms below are the **target shape** from #129 (see `docs/adr/0002-centralized-input-handling.md`), partially present as the existing `Action`/`dispatch` seam in `src/app/action.rs`.
