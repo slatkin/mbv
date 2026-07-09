@@ -5746,6 +5746,58 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn direct_remote_consume_adjusts_active_idx_after_removal_shift() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let remote_items = make_items(4);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
+        app.client.lock().unwrap().config.consume_videos = true;
+        app.set_queue_scope(QueueScope::Remote);
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 1;
+        }
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 1,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        });
+        {
+            let mut status = app.player.status.lock().unwrap();
+            // Network direct-remote path receives the same raw pre-removal
+            // TrackChanged index from the daemon as the same thin-client
+            // control path covered above.
+            status.current_idx = 2;
+        }
+        app.handle_player_event(PlayerEvent::TrackChanged(2));
+
+        let item_ids = |items: &[MediaItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+        assert_eq!(
+            serde_json::to_value(&app.player_tab.items).unwrap(),
+            serde_json::to_value(&local_items).unwrap()
+        );
+        assert_eq!(app.player_tab.queue_cursor, 0);
+        assert_eq!(
+            item_ids(&app.remote_player_tab.as_ref().unwrap().items),
+            vec![
+                remote_items[0].id.clone(),
+                remote_items[2].id.clone(),
+                remote_items[3].id.clone(),
+            ]
+        );
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
+        assert_eq!(
+            app.displayed_queue_playback_state().active_idx,
+            1,
+            "after removing the completed remote item, the active index must \
+             shift to the now-playing item's new remote-queue slot"
+        );
+    }
+
+    #[test]
     fn displayed_queue_playback_state_is_inactive_for_non_playback_scope() {
         let mut app = make_remote_app_stub(make_items(2), make_items(3));
         app.connected_session_state = Some(make_session("remote-host", "Emby"));
