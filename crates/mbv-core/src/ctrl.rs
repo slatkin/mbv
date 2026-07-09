@@ -245,11 +245,23 @@ pub enum CtrlEvent {
     Player(PlayerEvent),
     State(CtrlState),
     StatusOnly(PlayerStatus),
+    #[serde(rename = "Disconnected")]
+    Disconnected {
+        reason: DisconnectReason,
+    },
     /// A command the daemon received over the ctrl socket was not acted on;
     /// the payload is a human-readable, server-computed reason. Generic by
     /// design so future rejection reasons (not just audio-only mode) can
     /// reuse it — see #90.
     CommandRejected(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DisconnectReason {
+    #[serde(rename = "TakenOverByCtrlClient")]
+    TakenOverByCtrlClient,
+    #[serde(rename = "TakenOverByEmbyRemote")]
+    TakenOverByEmbyRemote,
 }
 
 #[derive(Serialize, Deserialize)]

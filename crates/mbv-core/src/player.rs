@@ -202,6 +202,9 @@ pub enum PlayerEvent {
     /// command. The reason string is server-computed and shown to the user
     /// as-is (e.g. via the transient status toast). See #90.
     CommandRejected(String),
+    /// Emitted by RemotePlayer when the daemon intentionally disconnects this
+    /// ctrl client, for example because another controller took over.
+    RemoteDisconnected(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

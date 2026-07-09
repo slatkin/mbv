@@ -1,11 +1,11 @@
 use std::io::{BufRead, BufReader, Write};
-use std::net::TcpListener;
-use std::os::unix::net::UnixListener;
+use std::net::{Shutdown, TcpListener, TcpStream};
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::api::{mbv_direct_tcp_port_command, EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, CtrlState};
+use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, CtrlState, DisconnectReason};
 use crate::player::{Player, PlayerCommand, PlayerEvent};
 use crate::ws::WsEvent;
 
@@ -43,11 +43,62 @@ enum DaemonEvent {
     /// Carries the requesting client's own event sender alongside the
     /// command, so a rejection (see #90) can be replied to that one client
     /// instead of broadcast to every connected TUI.
-    Ctrl(CtrlCmd, mpsc::Sender<String>),
+    Ctrl(CtrlCmd, CtrlClientId, CtrlSender),
+    CtrlDisconnected(CtrlClientId),
     Shutdown,
 }
 
-type ClientList = Arc<Mutex<Vec<mpsc::Sender<String>>>>;
+type CtrlClientId = u64;
+type CtrlSender = mpsc::Sender<CtrlOutbound>;
+
+enum CtrlOutbound {
+    Event(String),
+    Close,
+}
+
+trait CtrlStream: std::io::Read + Write + Send + Sized + 'static {
+    fn try_clone_stream(&self) -> std::io::Result<Self>;
+    fn shutdown_stream(&self);
+}
+
+impl CtrlStream for UnixStream {
+    fn try_clone_stream(&self) -> std::io::Result<Self> {
+        self.try_clone()
+    }
+
+    fn shutdown_stream(&self) {
+        let _ = self.shutdown(Shutdown::Both);
+    }
+}
+
+impl CtrlStream for TcpStream {
+    fn try_clone_stream(&self) -> std::io::Result<Self> {
+        self.try_clone()
+    }
+
+    fn shutdown_stream(&self) {
+        let _ = self.shutdown(Shutdown::Both);
+    }
+}
+
+#[derive(Default)]
+struct CtrlClients {
+    next_id: CtrlClientId,
+    driver: Option<CtrlClientId>,
+    clients: Vec<CtrlClient>,
+}
+
+struct CtrlClient {
+    id: CtrlClientId,
+    tx: CtrlSender,
+}
+
+type ClientRegistry = Arc<Mutex<CtrlClients>>;
+
+struct CtrlRequest<'a> {
+    client_id: CtrlClientId,
+    reply_tx: &'a CtrlSender,
+}
 
 #[derive(Clone)]
 struct SharedQueueState {
@@ -75,20 +126,18 @@ pub fn pid_file() -> std::path::PathBuf {
     dir.join("mbv.pid")
 }
 
-fn broadcast(clients: &ClientList, event: &CtrlEvent) {
-    if let Some(json) = serialize_ctrl_event(event) {
-        clients
-            .lock()
-            .unwrap()
-            .retain(|tx| tx.send(json.clone()).is_ok());
-    }
+fn broadcast(clients: &ClientRegistry, event: &CtrlEvent) {
+    let Some(json) = serialize_ctrl_event(event) else {
+        return;
+    };
+    clients.lock().unwrap().send_to_driver(json);
 }
 
 /// Send an event to a single ctrl-socket client, rather than every connected
 /// TUI. Used for per-request responses like a command rejection (#90).
-fn send_to(client: &mpsc::Sender<String>, event: &CtrlEvent) {
+fn send_to(client: &CtrlSender, event: &CtrlEvent) {
     if let Some(json) = serialize_ctrl_event(event) {
-        let _ = client.send(json);
+        let _ = client.send(CtrlOutbound::Event(json));
     }
 }
 
@@ -96,6 +145,90 @@ fn send_to(client: &mpsc::Sender<String>, event: &CtrlEvent) {
 /// path instead of repeating `serde_json::to_string(event).ok()` inline.
 fn serialize_ctrl_event(event: &CtrlEvent) -> Option<String> {
     serde_json::to_string(event).ok()
+}
+
+impl CtrlClients {
+    fn add_pending(&mut self, tx: CtrlSender) -> CtrlClientId {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.clients.push(CtrlClient { id, tx });
+        id
+    }
+
+    fn remove(&mut self, id: CtrlClientId) {
+        self.clients.retain(|client| client.id != id);
+        if self.driver == Some(id) {
+            self.driver = None;
+        }
+    }
+
+    fn has_client(&self, id: CtrlClientId) -> bool {
+        self.clients.iter().any(|client| client.id == id)
+    }
+
+    fn has_driver(&self) -> bool {
+        self.driver
+            .is_some_and(|id| self.clients.iter().any(|client| client.id == id))
+    }
+
+    fn send_to_driver(&mut self, json: String) {
+        let Some(driver_id) = self.driver else {
+            return;
+        };
+        let mut stale = false;
+        if let Some(driver) = self.clients.iter().find(|client| client.id == driver_id) {
+            stale = driver.tx.send(CtrlOutbound::Event(json)).is_err();
+        }
+        if stale {
+            self.remove(driver_id);
+        }
+    }
+
+    fn take_over(&mut self, next_driver: CtrlClientId, reason: DisconnectReason) {
+        if !self.has_client(next_driver) {
+            return;
+        }
+        if self.driver == Some(next_driver) {
+            return;
+        }
+        let previous_driver = self.driver;
+        self.driver = Some(next_driver);
+        if let Some(previous_driver) = previous_driver {
+            self.disconnect(previous_driver, reason);
+        }
+    }
+
+    fn disconnect(&mut self, id: CtrlClientId, reason: DisconnectReason) {
+        let Some(pos) = self.clients.iter().position(|client| client.id == id) else {
+            return;
+        };
+        let client = self.clients.remove(pos);
+        if self.driver == Some(id) {
+            self.driver = None;
+        }
+        send_to(&client.tx, &CtrlEvent::Disconnected { reason });
+        let _ = client.tx.send(CtrlOutbound::Close);
+    }
+
+    fn disconnect_driver(&mut self, reason: DisconnectReason) {
+        if let Some(driver) = self.driver {
+            self.disconnect(driver, reason);
+        }
+    }
+}
+
+fn take_over_ctrl_driver(ctrl_clients: &ClientRegistry, client_id: CtrlClientId) {
+    ctrl_clients
+        .lock()
+        .unwrap()
+        .take_over(client_id, DisconnectReason::TakenOverByCtrlClient);
+}
+
+fn evict_ctrl_driver_for_emby_remote(ctrl_clients: &ClientRegistry) {
+    ctrl_clients
+        .lock()
+        .unwrap()
+        .disconnect_driver(DisconnectReason::TakenOverByEmbyRemote);
 }
 
 /// A reason a ctrl-socket command is not acted on, computed server-side.
@@ -112,35 +245,42 @@ fn audio_only_rejection(audio_only: bool, fetched: &[MediaItem]) -> Option<Strin
     }
 }
 
-fn spawn_ctrl_client<R, W>(
-    reader_stream: R,
-    writer_stream: W,
+fn spawn_ctrl_client<S>(
+    stream: S,
     merged_tx: mpsc::Sender<DaemonEvent>,
-    ctrl_clients: ClientList,
+    ctrl_clients: ClientRegistry,
     client: Arc<Mutex<EmbyClient>>,
     player_status: Arc<Mutex<crate::player::PlayerStatus>>,
     shared_queue: SharedQueueState,
 ) where
-    R: std::io::Read + Send + 'static,
-    W: Write + Send + 'static,
+    S: CtrlStream,
 {
-    let (ev_tx, ev_rx) = mpsc::channel::<String>();
+    let Ok(writer_stream) = stream.try_clone_stream() else {
+        return;
+    };
+    let (ev_tx, ev_rx) = mpsc::channel::<CtrlOutbound>();
 
     if let Ok(hello_json) = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())) {
-        ev_tx.send(hello_json).ok();
+        ev_tx.send(CtrlOutbound::Event(hello_json)).ok();
     }
 
     std::thread::spawn(move || {
         let mut w = writer_stream;
-        for line in ev_rx {
-            if writeln!(w, "{line}").is_err() {
-                break;
+        for outbound in ev_rx {
+            match outbound {
+                CtrlOutbound::Event(line) => {
+                    if writeln!(w, "{line}").is_err() {
+                        break;
+                    }
+                }
+                CtrlOutbound::Close => break,
             }
         }
+        w.shutdown_stream();
     });
 
     std::thread::spawn(move || {
-        let reader = BufReader::new(reader_stream);
+        let reader = BufReader::new(stream);
         let mut lines = reader.lines();
         let Some(Ok(line)) = lines.next() else {
             return;
@@ -180,10 +320,10 @@ fn spawn_ctrl_client<R, W>(
             cursor: *shared_queue.cursor.lock().unwrap(),
             source: shared_queue.source.lock().unwrap().clone(),
         })) {
-            ev_tx.send(init_json).ok();
+            ev_tx.send(CtrlOutbound::Event(init_json)).ok();
         }
         let reply_tx = ev_tx.clone();
-        ctrl_clients.lock().unwrap().push(ev_tx);
+        let client_id = ctrl_clients.lock().unwrap().add_pending(ev_tx);
 
         for line in lines {
             let Ok(line) = line else { break };
@@ -191,9 +331,10 @@ fn spawn_ctrl_client<R, W>(
                 continue;
             }
             if let Ok(cmd) = serde_json::from_str::<CtrlCmd>(&line) {
-                let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, reply_tx.clone()));
+                let _ = merged_tx.send(DaemonEvent::Ctrl(cmd, client_id, reply_tx.clone()));
             }
         }
+        let _ = merged_tx.send(DaemonEvent::CtrlDisconnected(client_id));
     });
 }
 
@@ -310,7 +451,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         cursor: Arc::new(Mutex::new(0)),
         source: Arc::new(Mutex::new(crate::config::QueueSource::Unknown)),
     };
-    let ctrl_clients: ClientList = Arc::new(Mutex::new(Vec::new()));
+    let ctrl_clients: ClientRegistry = Arc::new(Mutex::new(CtrlClients::default()));
 
     // Bind and start the control socket only once the daemon can immediately
     // accept and speak the protocol, so local clients never connect and hang
@@ -325,12 +466,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
-                let Ok(stream_w) = stream.try_clone() else {
-                    continue;
-                };
                 spawn_ctrl_client(
                     stream,
-                    stream_w,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
                     client2.clone(),
@@ -418,12 +555,8 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         std::thread::spawn(move || {
             for stream in listener.incoming() {
                 let Ok(stream) = stream else { continue };
-                let Ok(stream_w) = stream.try_clone() else {
-                    continue;
-                };
                 spawn_ctrl_client(
                     stream,
-                    stream_w,
                     merged_tx2.clone(),
                     ctrl_clients.clone(),
                     client2.clone(),
@@ -443,7 +576,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         let ctrl_clients = ctrl_clients.clone();
         std::thread::spawn(move || loop {
             std::thread::sleep(broadcast_interval);
-            if ctrl_clients.lock().unwrap().is_empty() {
+            if !ctrl_clients.lock().unwrap().has_driver() {
                 continue;
             }
             let status = player_status.lock().unwrap().clone();
@@ -540,10 +673,16 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &ctrl_clients,
                 );
             }
-            DaemonEvent::Ctrl(cmd, reply_tx) => {
+            DaemonEvent::Ctrl(cmd, client_id, reply_tx) => {
+                if !ctrl_clients.lock().unwrap().has_client(client_id) {
+                    continue;
+                }
                 handle_ctrl(
                     cmd,
-                    &reply_tx,
+                    CtrlRequest {
+                        client_id,
+                        reply_tx: &reply_tx,
+                    },
                     &client,
                     &player,
                     audio_only,
@@ -553,6 +692,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
                     &shared_queue,
                     &ctrl_clients,
                 );
+            }
+            DaemonEvent::CtrlDisconnected(client_id) => {
+                ctrl_clients.lock().unwrap().remove(client_id);
             }
             DaemonEvent::Shutdown => {
                 log::info!(target: "daemon", "graceful shutdown: stopping player");
@@ -572,7 +714,7 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
 /// #113) can't land in only some of the call sites — previously this exact
 /// shape was hand-rolled inline at five separate command branches.
 fn broadcast_queue_state(
-    ctrl_clients: &ClientList,
+    ctrl_clients: &ClientRegistry,
     player: &Player,
     shared_queue: &SharedQueueState,
     items: &[MediaItem],
@@ -595,7 +737,7 @@ fn broadcast_queue_state(
 
 fn handle_ctrl(
     cmd: CtrlCmd,
-    reply_tx: &mpsc::Sender<String>,
+    request: CtrlRequest<'_>,
     client: &Arc<Mutex<EmbyClient>>,
     player: &Player,
     audio_only: bool,
@@ -603,7 +745,7 @@ fn handle_ctrl(
     cursor: &mut usize,
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
-    ctrl_clients: &ClientList,
+    ctrl_clients: &ClientRegistry,
 ) {
     match cmd {
         CtrlCmd::Hello(_) => {
@@ -627,7 +769,7 @@ fn handle_ctrl(
                     items.len()
                 );
                 send_to(
-                    reply_tx,
+                    request.reply_tx,
                     &CtrlEvent::CommandRejected(
                         "daemon already has a queue; adoption skipped".to_string(),
                     ),
@@ -640,6 +782,9 @@ fn handle_ctrl(
                 new_cursor.min(new_items.len().saturating_sub(1))
             };
             player.set_initial_queue(&new_items, next_cursor);
+            if !new_items.is_empty() {
+                take_over_ctrl_driver(ctrl_clients, request.client_id);
+            }
             broadcast_queue_state(
                 ctrl_clients,
                 player,
@@ -664,6 +809,7 @@ fn handle_ctrl(
                 };
                 *items = new_items.clone();
                 *cursor = next_cursor;
+                take_over_ctrl_driver(ctrl_clients, request.client_id);
                 broadcast_queue_state(
                     ctrl_clients,
                     player,
@@ -678,7 +824,9 @@ fn handle_ctrl(
                 });
             }
             other => {
-                player.send_command(other);
+                if player.send_command(other) {
+                    take_over_ctrl_driver(ctrl_clients, request.client_id);
+                }
             }
         },
         CtrlCmd::PlayItems {
@@ -702,7 +850,7 @@ fn handle_ctrl(
             }
             if let Some(reason) = audio_only_rejection(audio_only, &fetched) {
                 log::warn!(target: "daemon", "rejecting ctrl play request: {reason}");
-                send_to(reply_tx, &CtrlEvent::CommandRejected(reason));
+                send_to(request.reply_tx, &CtrlEvent::CommandRejected(reason));
                 return;
             }
             if fetched.len() == 1 {
@@ -716,6 +864,7 @@ fn handle_ctrl(
                         *items = queue.clone();
                         *cursor = 0;
                         *source = new_source;
+                        take_over_ctrl_driver(ctrl_clients, request.client_id);
                         broadcast_queue_state(
                             ctrl_clients,
                             player,
@@ -732,6 +881,7 @@ fn handle_ctrl(
                 *items = vec![item.clone()];
                 *cursor = 0;
                 *source = new_source;
+                take_over_ctrl_driver(ctrl_clients, request.client_id);
                 broadcast_queue_state(ctrl_clients, player, shared_queue, items, 0, source);
                 let mut play_item = item;
                 if start_ticks > 0 {
@@ -748,6 +898,7 @@ fn handle_ctrl(
                 *items = play_items.clone();
                 *cursor = start_idx;
                 *source = new_source;
+                take_over_ctrl_driver(ctrl_clients, request.client_id);
                 broadcast_queue_state(
                     ctrl_clients,
                     player,
@@ -762,6 +913,9 @@ fn handle_ctrl(
         }
         CtrlCmd::Stop => {
             player.stop();
+            if !items.is_empty() {
+                take_over_ctrl_driver(ctrl_clients, request.client_id);
+            }
         }
     }
 }
@@ -775,7 +929,7 @@ fn handle_ws(
     cursor: &mut usize,
     source: &mut crate::config::QueueSource,
     shared_queue: &SharedQueueState,
-    ctrl_clients: &ClientList,
+    ctrl_clients: &ClientRegistry,
 ) {
     match ev {
         WsEvent::Play {
@@ -811,6 +965,7 @@ fn handle_ws(
             *items = fetched.clone();
             *cursor = start_idx;
             *source = crate::config::QueueSource::Remote;
+            evict_ctrl_driver_for_emby_remote(ctrl_clients);
             broadcast_queue_state(
                 ctrl_clients,
                 player,
@@ -840,54 +995,83 @@ fn handle_ws(
         }
         WsEvent::Stop => {
             player.stop();
+            if !items.is_empty() {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::Pause => {
-            player.set_paused(true);
+            if player.set_paused(true) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::Unpause => {
-            player.set_paused(false);
+            if player.set_paused(false) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::NextTrack => {
-            player.next();
+            if player.next() {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::PreviousTrack => {
-            player.previous();
+            if player.previous() {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::Seek(ticks) => {
             use crate::api::TICKS_PER_SECOND;
-            player.send_command(PlayerCommand::SeekAbsolute(
+            if player.send_command(PlayerCommand::SeekAbsolute(
                 ticks as f64 / TICKS_PER_SECOND as f64,
-            ));
+            )) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::TogglePause => {
-            player.send_command(PlayerCommand::TogglePause);
+            if player.send_command(PlayerCommand::TogglePause) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::SeekRelative(secs) => {
-            player.send_command(PlayerCommand::Seek(secs));
+            if player.send_command(PlayerCommand::Seek(secs)) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::SetVolume(v) => {
             let vol_max = player.status.lock().unwrap().volume_max;
-            player.send_command(PlayerCommand::SetVolume(v.clamp(0, vol_max)));
+            if player.send_command(PlayerCommand::SetVolume(v.clamp(0, vol_max))) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::VolumeUp => {
             let st = player.status.lock().unwrap();
             let v = (st.volume + 5).min(st.volume_max);
             drop(st);
-            player.send_command(PlayerCommand::SetVolume(v));
+            if player.send_command(PlayerCommand::SetVolume(v)) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::VolumeDown => {
             let v = (player.status.lock().unwrap().volume - 5).max(0);
-            player.send_command(PlayerCommand::SetVolume(v));
+            if player.send_command(PlayerCommand::SetVolume(v)) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::SetMute(muted) => {
-            player.send_command(PlayerCommand::SetMute(muted));
+            if player.send_command(PlayerCommand::SetMute(muted)) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::ToggleMute => {
             let muted = !player.status.lock().unwrap().muted;
-            player.send_command(PlayerCommand::SetMute(muted));
+            if player.send_command(PlayerCommand::SetMute(muted)) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::SetAudio(index) => {
-            player.send_command(PlayerCommand::SetAudio(index));
+            if player.send_command(PlayerCommand::SetAudio(index)) {
+                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            }
         }
         WsEvent::SetSub(index) => {
             let sid = player
@@ -896,7 +1080,9 @@ fn handle_ws(
                 .unwrap()
                 .subtitle_stream_index_to_mpv_id(index);
             if let Some(sid) = sid {
-                player.send_command(PlayerCommand::SetSub(sid));
+                if player.send_command(PlayerCommand::SetSub(sid)) {
+                    evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                }
             } else {
                 log::warn!(target: "daemon", "subtitle stream index {index} did not match any mpv subtitle track");
             }
@@ -911,8 +1097,17 @@ fn all_audio(items: &[MediaItem]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{all_audio, audio_only_rejection};
+    use super::{
+        all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws, send_to, CtrlClients,
+        CtrlEvent, CtrlOutbound, CtrlRequest, SharedQueueState,
+    };
     use crate::api::MediaItem;
+    use crate::config::{Config, QueueSource};
+    use crate::ctrl::DisconnectReason;
+    use crate::ctrl::{CtrlCmd, WireCommand};
+    use crate::player::{Player, PlayerCommand, PlayerEvent, PlayerStatus, SubtitlePrefs};
+    use crate::ws::WsEvent;
+    use std::sync::{mpsc, Arc, Mutex};
 
     fn item(name: &str, media_type: &str, item_type: &str) -> MediaItem {
         MediaItem {
@@ -983,5 +1178,217 @@ mod tests {
     fn non_audio_only_daemon_never_rejects() {
         let fetched = [item("movie", "Video", "Movie")];
         assert!(audio_only_rejection(false, &fetched).is_none());
+    }
+
+    fn add_client(clients: &mut CtrlClients) -> (u64, mpsc::Receiver<CtrlOutbound>) {
+        let (tx, rx) = mpsc::channel();
+        let id = clients.add_pending(tx);
+        (id, rx)
+    }
+
+    fn shared_queue_state() -> SharedQueueState {
+        SharedQueueState {
+            items: Arc::new(Mutex::new(Vec::new())),
+            cursor: Arc::new(Mutex::new(0)),
+            source: Arc::new(Mutex::new(QueueSource::Unknown)),
+        }
+    }
+
+    fn cold_player() -> Player {
+        let (event_tx, _event_rx) = mpsc::channel::<PlayerEvent>();
+        Player::new(
+            String::new(),
+            String::new(),
+            false,
+            false,
+            true,
+            false,
+            false,
+            SubtitlePrefs::default(),
+            event_tx,
+            None,
+        )
+    }
+
+    fn recv_event(rx: &mpsc::Receiver<CtrlOutbound>) -> CtrlEvent {
+        match rx.recv().unwrap() {
+            CtrlOutbound::Event(json) => serde_json::from_str(&json).unwrap(),
+            CtrlOutbound::Close => panic!("expected event, got close"),
+        }
+    }
+
+    fn assert_close(rx: &mpsc::Receiver<CtrlOutbound>) {
+        match rx.recv().unwrap() {
+            CtrlOutbound::Close => {}
+            CtrlOutbound::Event(json) => panic!("expected close, got {json}"),
+        }
+    }
+
+    #[test]
+    fn ctrl_takeover_disconnects_previous_driver_and_routes_updates_to_new_driver() {
+        let mut clients = CtrlClients::default();
+        let (old_id, old_rx) = add_client(&mut clients);
+        let (new_id, new_rx) = add_client(&mut clients);
+
+        clients.take_over(old_id, DisconnectReason::TakenOverByCtrlClient);
+        clients.take_over(new_id, DisconnectReason::TakenOverByCtrlClient);
+
+        match recv_event(&old_rx) {
+            CtrlEvent::Disconnected { reason } => {
+                assert_eq!(reason, DisconnectReason::TakenOverByCtrlClient);
+            }
+            _ => panic!("expected structured disconnect"),
+        }
+        assert_close(&old_rx);
+
+        let registry = Arc::new(Mutex::new(clients));
+        broadcast(
+            &registry,
+            &CtrlEvent::StatusOnly(PlayerStatus {
+                volume: 77,
+                ..PlayerStatus::default()
+            }),
+        );
+
+        match recv_event(&new_rx) {
+            CtrlEvent::StatusOnly(status) => assert_eq!(status.volume, 77),
+            _ => panic!("expected status update"),
+        }
+        assert!(old_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn pending_ctrl_clients_do_not_receive_broadcasts_before_takeover() {
+        let mut clients = CtrlClients::default();
+        let (_pending_id, pending_rx) = add_client(&mut clients);
+        let registry = Arc::new(Mutex::new(clients));
+
+        broadcast(
+            &registry,
+            &CtrlEvent::StatusOnly(PlayerStatus {
+                volume: 12,
+                ..PlayerStatus::default()
+            }),
+        );
+
+        assert!(pending_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn command_rejection_to_pending_client_does_not_take_over() {
+        let mut clients = CtrlClients::default();
+        let (driver_id, driver_rx) = add_client(&mut clients);
+        let (_pending_id, pending_rx) = add_client(&mut clients);
+        clients.take_over(driver_id, DisconnectReason::TakenOverByCtrlClient);
+
+        send_to(
+            &clients.clients[1].tx,
+            &CtrlEvent::CommandRejected("rejected".to_string()),
+        );
+
+        match recv_event(&pending_rx) {
+            CtrlEvent::CommandRejected(reason) => assert_eq!(reason, "rejected"),
+            _ => panic!("expected rejection"),
+        }
+
+        let registry = Arc::new(Mutex::new(clients));
+        broadcast(
+            &registry,
+            &CtrlEvent::StatusOnly(PlayerStatus {
+                volume: 33,
+                ..PlayerStatus::default()
+            }),
+        );
+
+        match recv_event(&driver_rx) {
+            CtrlEvent::StatusOnly(status) => assert_eq!(status.volume, 33),
+            _ => panic!("expected driver status update"),
+        }
+        assert!(pending_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn emby_remote_takeover_disconnects_current_ctrl_driver() {
+        let mut clients = CtrlClients::default();
+        let (driver_id, driver_rx) = add_client(&mut clients);
+        clients.take_over(driver_id, DisconnectReason::TakenOverByCtrlClient);
+
+        clients.disconnect_driver(DisconnectReason::TakenOverByEmbyRemote);
+
+        match recv_event(&driver_rx) {
+            CtrlEvent::Disconnected { reason } => {
+                assert_eq!(reason, DisconnectReason::TakenOverByEmbyRemote);
+            }
+            _ => panic!("expected structured disconnect"),
+        }
+        assert_close(&driver_rx);
+        assert!(!clients.has_driver());
+    }
+
+    #[test]
+    fn cold_ctrl_player_command_does_not_take_over() {
+        let player = cold_player();
+        let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+        let registry = Arc::new(Mutex::new(CtrlClients::default()));
+        let (sender_id, sender_rx) = {
+            let mut clients = registry.lock().unwrap();
+            add_client(&mut clients)
+        };
+        let (reply_tx, _reply_rx) = mpsc::channel();
+        let mut items = Vec::new();
+        let mut cursor = 0;
+        let mut source = QueueSource::Unknown;
+
+        handle_ctrl(
+            CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::TogglePause)),
+            CtrlRequest {
+                client_id: sender_id,
+                reply_tx: &reply_tx,
+            },
+            &client,
+            &player,
+            false,
+            &mut items,
+            &mut cursor,
+            &mut source,
+            &shared_queue_state(),
+            &registry,
+        );
+
+        assert!(!registry.lock().unwrap().has_driver());
+        assert!(sender_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn cold_websocket_noop_does_not_evict_ctrl_driver() {
+        let player = cold_player();
+        let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+        let registry = Arc::new(Mutex::new(CtrlClients::default()));
+        let (driver_id, driver_rx) = {
+            let mut clients = registry.lock().unwrap();
+            let (driver_id, driver_rx) = add_client(&mut clients);
+            clients.take_over(driver_id, DisconnectReason::TakenOverByCtrlClient);
+            (driver_id, driver_rx)
+        };
+        let mut items = Vec::new();
+        let mut cursor = 0;
+        let mut source = QueueSource::Unknown;
+
+        handle_ws(
+            WsEvent::TogglePause,
+            &client,
+            &player,
+            false,
+            &mut items,
+            &mut cursor,
+            &mut source,
+            &shared_queue_state(),
+            &registry,
+        );
+
+        let clients = registry.lock().unwrap();
+        assert_eq!(clients.driver, Some(driver_id));
+        drop(clients);
+        assert!(driver_rx.try_recv().is_err());
     }
 }

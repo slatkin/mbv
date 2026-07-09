@@ -7,7 +7,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello};
+use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, DisconnectReason};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
@@ -229,6 +229,24 @@ fn apply_ctrl_event(
                 let _ = event_tx.send(PlayerEvent::CommandRejected(reason));
             }
         }
+        CtrlEvent::Disconnected { reason } => {
+            if notify {
+                let _ = event_tx.send(PlayerEvent::RemoteDisconnected(
+                    disconnect_reason_message(&reason).to_string(),
+                ));
+            }
+        }
+    }
+}
+
+fn disconnect_reason_message(reason: &DisconnectReason) -> &'static str {
+    match reason {
+        DisconnectReason::TakenOverByCtrlClient => {
+            "Another controller took over — returned to local mode"
+        }
+        DisconnectReason::TakenOverByEmbyRemote => {
+            "Emby remote control took over — returned to local mode"
+        }
     }
 }
 
@@ -307,6 +325,7 @@ impl RemotePlayer {
         let disconnected_r = disconnected.clone();
         let event_tx_r = event_tx;
         std::thread::spawn(move || {
+            let mut expected_disconnect = false;
             for line in reader.lines() {
                 match line {
                     Err(_) => break,
@@ -316,6 +335,7 @@ impl RemotePlayer {
                             log::warn!(target: "remote", "unrecognized event from daemon: {l}");
                             continue;
                         };
+                        let is_structured_disconnect = matches!(ev, CtrlEvent::Disconnected { .. });
                         apply_ctrl_event(
                             ev,
                             &status_r,
@@ -324,18 +344,21 @@ impl RemotePlayer {
                             &event_tx_r,
                             true,
                         );
+                        expected_disconnect |= is_structured_disconnect;
                     }
                 }
             }
             disconnected_r.store(true, Ordering::SeqCst);
             log::info!(target: "remote", "daemon disconnected");
-            let _ = event_tx_r.send(PlayerEvent::Stopped {
-                idx: 0,
-                position_ticks: 0,
-                played: false,
-                consume: false,
-                error: None,
-            });
+            if !expected_disconnect {
+                let _ = event_tx_r.send(PlayerEvent::Stopped {
+                    idx: 0,
+                    position_ticks: 0,
+                    played: false,
+                    consume: false,
+                    error: None,
+                });
+            }
         });
 
         // Writer thread: serializes CtrlCmd to daemon

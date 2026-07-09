@@ -2450,6 +2450,11 @@ impl App {
             PlayerEvent::CommandRejected(reason) => {
                 self.flash_status(reason);
             }
+            PlayerEvent::RemoteDisconnected(reason) => {
+                self.restore_local_mode(&reason);
+                self.refresh_after_stop();
+                return true;
+            }
         }
         false
     }
