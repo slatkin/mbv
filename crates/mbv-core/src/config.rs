@@ -172,9 +172,26 @@ impl TestStateDirGuard {
     /// touches a real on-disk path or races a sibling test.
     pub fn new() -> Self {
         let dir = std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()));
+        Self::new_at(dir)
+    }
+
+    /// Points `state_dir()` at `dir` for the lifetime of this guard.
+    pub fn new_at(dir: impl Into<PathBuf>) -> Self {
+        let dir = dir.into();
         let _ = std::fs::create_dir_all(&dir);
         TEST_STATE_DIR_OVERRIDE.with(|c| *c.borrow_mut() = Some(dir));
         TestStateDirGuard
+    }
+
+    /// Installs a fresh override only when this thread does not already have
+    /// one. This lets broad app-test fixtures isolate incidental queue-state
+    /// writes without shadowing tests that explicitly seeded queue state first.
+    pub fn new_if_unset() -> Option<Self> {
+        if TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().is_some()) {
+            None
+        } else {
+            Some(Self::new())
+        }
     }
 }
 
@@ -196,7 +213,7 @@ impl Drop for TestStateDirGuard {
 }
 
 fn state_dir() -> PathBuf {
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-support"))]
     if let Some(dir) = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
         return dir;
     }

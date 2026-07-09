@@ -3370,9 +3370,7 @@ pub(crate) fn queue_completed_pos(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Mutex as TestMutex;
-
-    static ENV_LOCK: TestMutex<()> = TestMutex::new(());
+    use crate::config::tests::SYS_ENV_LOCK;
 
     struct MpvConfigTestEnv {
         root: PathBuf,
@@ -3437,6 +3435,7 @@ mod tests {
 
     #[test]
     fn sanitized_mpv_conf_removes_active_ipc_options_and_appends_mbv_ipc() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
         let env = MpvConfigTestEnv::new("sanitize-mpv-conf");
         std::fs::create_dir_all(&env.user_mpv).unwrap();
         let conf_path = env.user_mpv.join("mpv.conf");
@@ -3464,7 +3463,7 @@ input-ipc-server=/tmp/user.sock
 
     #[test]
     fn prepare_mpv_config_dir_symlinks_user_entries_but_not_mpv_or_input_conf() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = SYS_ENV_LOCK.lock().unwrap();
         let env = MpvConfigTestEnv::new("private-mpv-config");
         std::fs::create_dir_all(env.user_mpv.join("scripts")).unwrap();
         std::fs::create_dir_all(env.user_mpv.join("script-opts")).unwrap();
@@ -3495,7 +3494,7 @@ input-ipc-server=/tmp/user.sock
 
     #[test]
     fn prepare_mpv_config_dir_ignores_user_config_when_disabled() {
-        let _g = ENV_LOCK.lock().unwrap();
+        let _g = SYS_ENV_LOCK.lock().unwrap();
         let env = MpvConfigTestEnv::new("private-mpv-config-disabled");
         std::fs::create_dir_all(env.user_mpv.join("scripts")).unwrap();
         std::fs::write(env.user_mpv.join("mpv.conf"), "volume=65\n").unwrap();

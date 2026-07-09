@@ -554,41 +554,39 @@ mod tests {
 
     // ── dispatch: state-mutating variants ────────────────────────────────────
 
-    // `XDG_STATE_HOME` is a process-global env var (like `MBV_SYSTEM` in
-    // config.rs), so tests that touch it must not run concurrently with each
-    // other — or with any other test in the crate that touches the same env
-    // vars. Reuse config.rs's `SYS_ENV_LOCK` rather than defining a second,
-    // independent mutex here: two separate locks over the same global state
-    // don't exclude each other and previously caused cross-test races.
-    use crate::config::tests::SYS_ENV_LOCK as XDG_STATE_HOME_LOCK;
+    // `MBV_SYSTEM` is a process-global env var, so tests that touch it must
+    // not run concurrently with other env-mutating tests. Reuse config.rs's
+    // `SYS_ENV_LOCK` rather than defining a second, independent mutex here.
+    use crate::config::tests::SYS_ENV_LOCK as ENV_LOCK;
 
-    /// RAII guard that overrides `XDG_STATE_HOME` to a fresh tempdir and
-    /// restores/cleans up on drop — including on panic, so a failed
-    /// assertion mid-test can't leak the env var or the directory into
-    /// later tests.
+    /// RAII guard that points state-dir lookups at a fresh tempdir and
+    /// cleans up on drop -- including on panic.
     struct XdgStateHomeGuard {
         dir: std::path::PathBuf,
+        _state_dir: crate::config::TestStateDirGuard,
     }
 
     impl XdgStateHomeGuard {
         fn new() -> Self {
             let dir = tempfile_dir();
-            std::env::set_var("XDG_STATE_HOME", &dir);
             std::env::remove_var("MBV_SYSTEM");
-            Self { dir }
+            let state_dir = crate::config::TestStateDirGuard::new_at(dir.join("mbv"));
+            Self {
+                dir,
+                _state_dir: state_dir,
+            }
         }
     }
 
     impl Drop for XdgStateHomeGuard {
         fn drop(&mut self) {
-            std::env::remove_var("XDG_STATE_HOME");
             let _ = std::fs::remove_dir_all(&self.dir);
         }
     }
 
     #[test]
     fn dispatch_toggle_mute_flips_state_and_persists() {
-        let _g = XDG_STATE_HOME_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap();
         let _xdg = XdgStateHomeGuard::new();
 
         let mut app = make_app_stub();
@@ -740,7 +738,7 @@ mod tests {
 
     #[test]
     fn dispatch_quit_when_queue_not_dirty_returns_true_and_persists() {
-        let _g = XDG_STATE_HOME_LOCK.lock().unwrap();
+        let _g = ENV_LOCK.lock().unwrap();
         let _xdg = XdgStateHomeGuard::new();
 
         let mut app = make_app_stub();

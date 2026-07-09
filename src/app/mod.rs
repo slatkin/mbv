@@ -707,6 +707,8 @@ pub struct App {
     image_protocol_enabled: bool,
     confirm_rescan: bool,
     queue_scope: QueueScope,
+    #[cfg(test)]
+    _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
 
 struct AppInit {
@@ -914,6 +916,8 @@ impl App {
         let prefs = Self::load_prefs();
         let has_remote_queue = init.remote_player_tab.is_some();
         App {
+            #[cfg(test)]
+            _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
             client: init.client,
             player: init.player,
             player_rx: init.player_rx,
@@ -2737,6 +2741,7 @@ pub(crate) mod tests {
         let client = EmbyClient::new(Config::default());
 
         App {
+            _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
             client: Arc::new(Mutex::new(client)),
             player,
             player_rx,
