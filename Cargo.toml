@@ -23,6 +23,7 @@ libc = "0.2"
 name = "mbv"
 version.workspace = true
 edition.workspace = true
+default-run = "mbv"
 
 [[bin]]
 name = "mbv"
