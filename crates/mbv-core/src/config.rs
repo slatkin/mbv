@@ -159,6 +159,9 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+#[cfg(test)]
+static TEST_DEFAULT_STATE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 #[cfg(any(test, feature = "test-support"))]
 pub struct TestStateDirGuard;
 
@@ -216,6 +219,16 @@ fn state_dir() -> PathBuf {
     #[cfg(any(test, feature = "test-support"))]
     if let Some(dir) = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
         return dir;
+    }
+    #[cfg(test)]
+    {
+        if env::var_os("XDG_STATE_HOME").is_none() && env::var_os("MBV_SYSTEM").is_none() {
+            return TEST_DEFAULT_STATE_DIR
+                .get_or_init(|| {
+                    std::env::temp_dir().join(format!("mbv-test-{}", uuid::Uuid::new_v4()))
+                })
+                .clone();
+        }
     }
     if is_system_instance() {
         return PathBuf::from("/var/lib/mbv");
