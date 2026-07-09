@@ -3631,7 +3631,14 @@ impl App {
                 // two queue entries can share the same underlying item ID — so a
                 // stale server-side position can't stomp live in-session progress
                 // and the active item is never pruned out from under playback.
-                let active_idx = self.player_tab.queue_cursor;
+                let active_idx = {
+                    let st = self.player.status.lock().unwrap();
+                    if st.active && st.current_idx < self.player_tab.items.len() {
+                        st.current_idx
+                    } else {
+                        self.player_tab.queue_cursor
+                    }
+                };
                 let fresh_by_id: std::collections::HashMap<&str, &MediaItem> =
                     items.iter().map(|i| (i.id.as_str(), i)).collect();
                 // If this restored local queue happens to already be live playback
@@ -4953,6 +4960,29 @@ mod tests {
         assert_eq!(
             app.player_tab.items[1].name, "Refreshed Name",
             "the non-active duplicate-id slot must still be enriched from the fresh fetch"
+        );
+    }
+
+    #[test]
+    fn queue_enriched_skips_player_active_idx_not_queue_cursor() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.player_tab.items = crate::app::tests::make_items(2);
+        app.player_tab.queue_cursor = 1;
+        app.player_tab.items[0].playback_position_ticks = 3 * mbv_core::api::TICKS_PER_SECOND;
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 0;
+        }
+        let mut stale = app.player_tab.items[0].clone();
+        stale.playback_position_ticks = 46 * mbv_core::api::TICKS_PER_SECOND;
+
+        app.handle_lib_event(LibEvent::QueueEnriched { items: vec![stale] });
+
+        assert_eq!(
+            app.player_tab.items[0].playback_position_ticks,
+            3 * mbv_core::api::TICKS_PER_SECOND,
+            "stale enrichment must not overwrite the actively playing slot"
         );
     }
 

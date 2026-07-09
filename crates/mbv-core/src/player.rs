@@ -2161,6 +2161,30 @@ impl QueueSession {
         );
     }
 
+    fn on_playlist_pos_changed(&mut self, pos: i64) {
+        if pos < 0 {
+            return;
+        }
+        let pos = pos as usize;
+        if self.pending_initial_jump || self.pending_load > 0 || self.forced_idx.is_some() {
+            log::debug!(
+                target: "player",
+                "ignoring transient playlist-pos={pos} while queue transition is pending"
+            );
+            return;
+        }
+        if pos >= self.n {
+            log::warn!(
+                target: "player",
+                "ignoring out-of-range playlist-pos={pos} for queue len {}",
+                self.n
+            );
+            return;
+        }
+        self.current_idx = pos;
+        self.sync_status_position();
+    }
+
     fn on_playlist_count_changed(&mut self, count: usize) {
         if count == self.n {
             return;
@@ -2587,10 +2611,7 @@ impl QueueSession {
                         change: PropertyData::Int64(pos),
                         ..
                     })) => {
-                        if pos >= 0 {
-                            self.current_idx = pos as usize;
-                            self.sync_status_position();
-                        }
+                        self.on_playlist_pos_changed(pos);
                     }
                     Some(Ok(Event::PropertyChange {
                         name: "playlist-count",
@@ -3591,6 +3612,103 @@ input-ipc-server=/tmp/user.sock
             genre: String::new(),
             playlist_item_id: String::new(),
         }
+    }
+
+    fn make_queue_session_for_pos_tests(
+        start_idx: usize,
+    ) -> (QueueSession, Arc<Mutex<PlayerStatus>>) {
+        let items = vec![
+            make_media_item("ep1"),
+            make_media_item("ep2"),
+            make_media_item("ep3"),
+        ];
+        let status = Arc::new(Mutex::new(PlayerStatus {
+            active: true,
+            current_idx: start_idx,
+            queue_len: items.len(),
+            runtime_ticks: items[start_idx].runtime_ticks,
+            title: items[start_idx].display_name(),
+            ..Default::default()
+        }));
+        let client = Arc::new(EmbyClient::new(crate::config::Config::default()));
+        let reporter = SessionReporter::new(
+            client,
+            None,
+            items[start_idx].id.clone(),
+            "msid".into(),
+            "sid".into(),
+            false,
+            status.clone(),
+        );
+        let (event_tx, _event_rx) = mpsc::channel();
+        let session = QueueSession::new(
+            items,
+            start_idx,
+            reporter,
+            MpvSessionConfig {
+                headless: false,
+                use_mpv_config: false,
+                no_scripts: true,
+                always_skip_intro: false,
+                audio_pipe_path: Some("/tmp/mbv-test-pipe".into()),
+                audio_pipe_samplerate: 48_000,
+                audio_pipe_bitdepth: 16,
+            },
+            false,
+            status.clone(),
+            event_tx,
+            Arc::new(Mutex::new(SubtitlePrefs::default())),
+            "http://example.test".into(),
+            "token".into(),
+            Vec::new(),
+        );
+        (session, status)
+    }
+
+    #[test]
+    fn playlist_pos_does_not_clobber_pending_initial_queue_jump() {
+        let (mut session, status) = make_queue_session_for_pos_tests(2);
+
+        session.on_playlist_pos_changed(0);
+
+        assert_eq!(session.current_idx, 2);
+        assert_eq!(status.lock().unwrap().current_idx, 2);
+    }
+
+    #[test]
+    fn playlist_pos_does_not_clobber_pending_replace_queue_load() {
+        let (mut session, status) = make_queue_session_for_pos_tests(1);
+        session.pending_initial_jump = false;
+        session.pending_load = 1;
+
+        session.on_playlist_pos_changed(0);
+
+        assert_eq!(session.current_idx, 1);
+        assert_eq!(status.lock().unwrap().current_idx, 1);
+    }
+
+    #[test]
+    fn playlist_pos_does_not_clobber_in_flight_jump_to() {
+        let (mut session, status) = make_queue_session_for_pos_tests(0);
+        session.pending_initial_jump = false;
+        session.forced_idx = Some(1);
+
+        session.on_playlist_pos_changed(1);
+
+        assert_eq!(session.current_idx, 0);
+        assert_eq!(status.lock().unwrap().current_idx, 0);
+        assert_eq!(session.forced_idx, Some(1));
+    }
+
+    #[test]
+    fn playlist_pos_updates_idle_queue_with_valid_mpv_position() {
+        let (mut session, status) = make_queue_session_for_pos_tests(0);
+        session.pending_initial_jump = false;
+
+        session.on_playlist_pos_changed(2);
+
+        assert_eq!(session.current_idx, 2);
+        assert_eq!(status.lock().unwrap().current_idx, 2);
     }
 
     #[test]
