@@ -11,3 +11,15 @@ path = "src/main.rs"
 mbv-core = { path = "../mbv-core" }
 libc.workspace = true
 log.workspace = true
+
+[package.metadata.deb]
+maintainer = "slatkin <slatkin@gmail.com>"
+copyright = "2024, slatkin"
+license-file = ["../../LICENSE", "0"]
+extended-description = "Daemon process for mbv media playback. Syncs position with Emby and supports remote control over Emby's websocket API."
+depends = "libmpv2 | libmpv1, libc6, libssl3 | libssl1.1"
+section = "video"
+priority = "optional"
+assets = [
+    ["target/release/mbvd", "usr/bin/mbvd", "755"],
+]

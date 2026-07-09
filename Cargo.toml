@@ -66,7 +66,6 @@ section = "video"
 priority = "optional"
 assets = [
     ["target/release/mbv", "usr/bin/mbv", "755"],
-    ["target/release/mbvd", "usr/bin/mbvd", "755"],
     ["scripts/mbv.lua", "usr/share/mbv/mbv.lua", "644"],
     ["fonts/Material-Design-Iconic-Font.ttf", "usr/share/mbv/Material-Design-Iconic-Font.ttf", "644"],
     ["dist/config.toml", "usr/share/mbv/config.toml", "644"],

@@ -67,8 +67,11 @@ jobs:
         run: |
           test -x ~/.cargo/bin/cargo-deb || cargo install cargo-deb --locked
           cargo deb --no-build --deb-version "${PKGVER}"
-          DEB=$(ls target/debian/mbv_*.deb | head -1)
-          echo "DEB=${DEB}" >> "$GITHUB_ENV"
+          cargo deb --no-build --manifest-path crates/mbvd/Cargo.toml --deb-version "${PKGVER}"
+          MBV_DEB=$(ls target/debian/mbv_*.deb | head -1)
+          MBVD_DEB=$(ls target/debian/mbvd_*.deb | head -1)
+          echo "MBV_DEB=${MBV_DEB}" >> "$GITHUB_ENV"
+          echo "MBVD_DEB=${MBVD_DEB}" >> "$GITHUB_ENV"
 
       - name: Upload release asset
         if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
@@ -79,7 +82,8 @@ jobs:
           gh release view "v${PKGVER}" > /dev/null 2>&1 || \
             gh release create "v${PKGVER}" --title "v${PKGVER}" --generate-notes
           gh release upload "v${PKGVER}" "${TARBALL}" --clobber
-          gh release upload "v${PKGVER}" "${DEB}" --clobber
+          gh release upload "v${PKGVER}" "${MBV_DEB}" --clobber
+          gh release upload "v${PKGVER}" "${MBVD_DEB}" --clobber
           gh release edit "v${PKGVER}" --draft=false
 
       - name: Update PKGBUILD sha256 on main
@@ -126,5 +130,6 @@ jobs:
           name: mbv-linux-x86_64
           path: |
             *.tar.gz
-            target/debian/*.deb
+            target/debian/mbv_*.deb
+            target/debian/mbvd_*.deb
           if-no-files-found: error
