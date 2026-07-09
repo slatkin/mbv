@@ -115,3 +115,13 @@ _Avoid_: "sorted order" — ambiguous with API order, which is also a sort resul
 **Grouped album view**:
 A display mode for an album listing that inserts an artist header row at each artist boundary, built from resolved artist rather than API order. One of several power-list view modes that produce a display order (another being the letter-grouped view, which buckets by first letter instead of artist).
 _Avoid_: conflating with "album level" (whether a navigation level shows albums at all) — grouping is about whether those albums are clustered by resolved artist within that level, an orthogonal concern.
+
+## UI layout
+
+The subsystem that divides terminal space between mbv's browsing, queue, playback, and overlay surfaces.
+
+### Language
+
+**Power View left column**:
+The left column in Power View: the column that contains the media card at the top and the queue below it. This is the "left panel" meant by #111's user-resizable panel-width work.
+_Avoid_: using "left panel" without qualification when discussing #111, since other views also have left/right areas; the resize target is specifically the Power View left column, not the normal library table split or any modal/sidebar.
