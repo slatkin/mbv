@@ -12,6 +12,14 @@ The subsystem that drives mpv, tracks play position, and hands control of playba
 A running playback of a queue of media items (one item or many), owning one mpv instance for as long as that queue plays.
 _Note_: currently implemented as two separate, non-unified state machines — `SingleSession` and `QueueSession` — which duplicate almost all of their fields and logic (intro-skip markers, resume position, next-up handling, pause state, etc.), differing only in whether there's one item or an ordered list with a cursor. This is one domain concept split by implementation history (single-item playback existed first; playlist support was added as a parallel path rather than a generalization), not two domain concepts. Treat "Session" as a single term when talking about the domain; the two-struct split is an implementation debt, not a modeling decision.
 
+**PlaybackSession**:
+The target implementation shape for **Session**: one running playback authority over a **PlaybackQueue**, backed by an mpv adapter and responsible for reporting progress to Emby. A standalone item is a one-slot queue, not a separate session kind.
+_Avoid_: preserving separate single-item and queue session concepts in the domain model. The current `SingleSession`/`QueueSession` split is implementation history to collapse.
+
+**PlaybackQueue**:
+The core model for ordered queue slots, slot identity, active playback slot, queue revision, cursor-independent queue mutations, and progress merge/protection rules. It does not own mpv process lifecycle, network retry scheduling, rendering, or client-specific queue cursor state.
+_Avoid_: putting UI focus/scroll/cursor concerns or mpv adapter mechanics inside the queue model.
+
 **Remote slot state**:
 A derived classification — recomputed on demand, never stored — of which kind of control relationship the app currently has to a player: none, attached to another session, directly remote, or acting as a local daemon.
 _Avoid_: implying it's a field that gets set; it's computed fresh from other state each time it's read.
@@ -52,8 +60,40 @@ Local is *this* mbv instance's own queue (`player_tab`); remote is the queue bel
 _Avoid_: assuming "local" vs "remote" describes where an Emby *server* session runs — both scopes are about which mbv-side queue object is authoritative, not about the media server.
 
 **Authoritative playback queue**:
-The one queue that currently owns playback authority for a given playback authority: the local queue in normal local playback, the remote queue during direct-remote control, or the daemon queue for a thin client. During remote control, a local queue may still exist as a staging queue: normal play routing sends local-queue playback into the remote queue, and autoload similarly loads the staged queue through its autoload path, rather than making the local queue a second authority.
+The one queue that currently owns playback authority for a given playback authority: the local queue in normal local playback, the remote queue during direct-remote control, or the daemon queue for a thin client. During remote control, the local queue may still exist and remain labeled as the local queue, but normal play routing sends local-queue playback into the remote queue, and autoload similarly loads the local queue through its autoload path, rather than making the local queue a second authority.
 _Avoid_: describing local and remote queues as simultaneous playback authorities. They may coexist as stored/displayable queue objects, but only one queue drives playback for a playback authority at a time.
+
+During remote control, the local queue remains a first-class editable queue: the user can tailor it locally, then play/autoload it into the remote queue. Playback-derived mutations such as active item changes, progress reconciliation, consume, and next/previous belong to the authoritative remote queue, not to the local queue being edited.
+
+**Queue cursor**:
+The client-specific position or selected row within a queue. It belongs to UI/navigation state, even when it is persisted for restore, and is distinct from the active playback slot.
+_Avoid_: using queue cursor as a fallback for playback identity. The currently selected row and the currently playing slot are separate concepts.
+
+**Queue slot** / **QueueSlotId**:
+A single occurrence in a queue that holds a media item, with stable identity distinct from both the Emby item ID and the slot's current index. A media item is not a queue slot; a queue slot contains a media item. Duplicate item IDs are valid in a queue, and remove/reorder/consume operations shift indices, so playback events and progress reconciliation need occurrence identity rather than raw item ID or index alone.
+Operations that target a specific queue occurrence should prefer `QueueSlotId`; UI indices, mpv playlist positions, and wire-compatible index commands are adapter coordinates that should resolve to slot identity as early as possible. Slot IDs are runtime identities and are regenerated when a queue is restored from disk.
+_Avoid_: treating `item_id` as queue identity, treating an index as stable across async event boundaries, or persisting slot IDs as cross-run identity.
+
+**Slot-targeted progress**:
+Playback progress and stop/completion events apply to a queue slot, not to a raw queue index. If the slot still exists after reorder or removals before it, the event updates that slot at its current position. If the slot no longer exists because it was removed, consumed, or the queue was replaced, the event must not mutate the current queue.
+For the active slot, local playback progress is authoritative: mbv has mpv's live position, while Emby userdata may lag or be stale. Server refresh/enrichment must not overwrite active-slot local progress.
+_Avoid_: rejecting a valid progress event only because the queue index changed, or applying an old progress event to whatever item currently occupies the old index.
+
+**Pending progress sync**:
+Local playback progress for a queue slot that mbv has reported to Emby but has not yet seen confirmed in fetched server userdata. While progress sync is pending, stale server progress must not overwrite the local value; if Emby does not catch up, mbv should treat that as a sync problem rather than accepting the stale server value. Resume position can be considered confirmed when server userdata matches the locally reported position within a small tolerance, such as a few seconds; watched/completed state should match exactly.
+_Avoid_: treating an HTTP success from the stopped/progress endpoint as proof that a later server refresh will immediately contain the reported userdata.
+
+**Queue refresh/enrichment**:
+A server fetch that updates queue slot metadata and userdata. Refresh/enrichment may prune inactive slots that the server no longer returns, but active slots and slots with pending progress sync are protected: mbv must not remove or overwrite them solely because one server fetch missed them or returned stale userdata.
+_Avoid_: wholesale replacement of queue slots from server results, especially for active or locally pending slots.
+
+**mpv playlist position**:
+An adapter observation from mpv, not authoritative queue state. mbv owns the queue; mpv should reflect the queue and report signals such as playlist position changes, which mbv validates against the expected queue transition and resolves to queue slot identity.
+_Avoid_: silently assigning active playback identity from raw mpv `playlist-pos` without validating that mbv expected the transition.
+
+**Active-slot removal**:
+Manual removal of the currently playing queue slot is a combined queue deletion and playback stop, so it requires confirmation. Ordinary queue removals are lower risk because they are undoable; removing the active slot also stops playback, which makes it a distinct destructive action. Once confirmed, the stop/removal flow must still target the original queue slot.
+_Avoid_: silently treating active-slot removal like a normal remove, or advancing playback automatically unless that behavior is intentionally redesigned.
 
 **Move** (`Shift+Up`/`Shift+Down`, #105):
 Single-step adjacent reorder of the item at the queue cursor, local-queue-only. Modeled as its own `UndoEntry::Move { from, to, item_id }` variant alongside `UndoEntry::Remove` — the undo stack is not exclusively "removals to re-insert"; it's a small set of reversible queue edits, and a move reverses by swapping the item back rather than re-inserting it. The cursor always follows the moved item, both on the initial move and when that move is undone. `item_id` is checked against whatever now sits at `to` before reversing — if a later edit shifted things around, undo refuses instead of swapping the wrong pair. Remote-queue reorder is out of scope here — see #93.
