@@ -1555,9 +1555,7 @@ impl App {
     }
 
     /// Moves the item at the displayed queue's cursor one position earlier.
-    /// No-op at the start of the queue. Reorder is local-queue-only (#105) —
-    /// designing the wire-protocol reorder for the remote queue is #93's job,
-    /// once the local UX this establishes has settled.
+    /// No-op at the start of the queue.
     pub(super) fn move_queue_item_up(&mut self) {
         self.move_queue_item_by(-1);
     }
@@ -1570,8 +1568,9 @@ impl App {
 
     fn move_queue_item_by(&mut self, delta: isize) {
         let scope = self.visible_queue_scope();
-        if scope == QueueScope::Remote {
-            self.flash_status_high("Reorder is not supported for the remote queue".into());
+        let active = self.player.status.lock().unwrap().active;
+        if scope == QueueScope::Remote && !active {
+            self.flash_status_high("Remote queue can only be edited while active".into());
             return;
         }
         let queue = self.queue_for_scope(scope);
@@ -1591,6 +1590,9 @@ impl App {
         };
         if self.apply_queue_move(scope, from, to) {
             let item_id = self.queue_for_scope(scope).items[to].id.clone();
+            if scope == QueueScope::Remote {
+                self.pending_remote_move_cursor_item_id = Some(item_id.clone());
+            }
             self.undo_stack_for_scope_mut(scope)
                 .push(UndoEntry::Move { from, to, item_id });
         }

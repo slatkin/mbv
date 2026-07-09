@@ -1663,7 +1663,7 @@ impl SingleSession {
 
 /// Where index `idx` ends up after moving the entry at `from` to `to`
 /// (both 0-based positions in the same list, `from != to`).
-fn shift_index_for_move(idx: usize, from: usize, to: usize) -> usize {
+pub(crate) fn shift_index_for_move(idx: usize, from: usize, to: usize) -> usize {
     if idx == from {
         to
     } else if from < idx && idx <= to {
@@ -2781,6 +2781,13 @@ impl Player {
         } else {
             false
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn spy_on_commands(&self) -> mpsc::Receiver<PlayerCommand> {
+        let (tx, rx) = mpsc::channel();
+        *self.cmd_tx.lock().unwrap() = Some(tx);
+        rx
     }
 
     pub fn next(&self) -> bool {

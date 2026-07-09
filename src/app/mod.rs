@@ -606,6 +606,7 @@ pub struct App {
     confirm_clear_queue: bool,
     queue_undo_stack: Vec<UndoEntry>,
     remote_queue_undo_stack: Vec<UndoEntry>,
+    pending_remote_move_cursor_item_id: Option<String>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     queue_view: u8,
@@ -980,6 +981,7 @@ impl App {
             confirm_clear_queue: false,
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
+            pending_remote_move_cursor_item_id: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
             queue_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
@@ -2409,6 +2411,14 @@ impl App {
                 cursor,
                 source,
             } => {
+                let cursor = if self.has_direct_remote_queue() {
+                    self.pending_remote_move_cursor_item_id
+                        .take()
+                        .and_then(|item_id| items.iter().position(|item| item.id == item_id))
+                        .unwrap_or(cursor)
+                } else {
+                    cursor
+                };
                 let queue = self.playback_queue_mut();
                 queue.items = items;
                 queue.queue_cursor = cursor;
@@ -2774,6 +2784,7 @@ pub(crate) mod tests {
             confirm_clear_queue: false,
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
+            pending_remote_move_cursor_item_id: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
             queue_view: 0,
@@ -2985,6 +2996,21 @@ pub(crate) mod tests {
         app.player_tab.items = local_items;
         app.player_tab.queue_cursor = 0;
         app
+    }
+
+    fn make_remote_app_stub_with_cmd_rx(
+        local_items: Vec<MediaItem>,
+        remote_items: Vec<MediaItem>,
+    ) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+        use crate::config::Config;
+        use mbv_core::api::EmbyClient;
+
+        let (remote, player_rx, cmd_rx) =
+            mbv_core::remote_player::RemotePlayer::stub_with_command_rx(remote_items, 0);
+        let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
+        app.player_tab.items = local_items;
+        app.player_tab.queue_cursor = 0;
+        (app, cmd_rx)
     }
 
     fn make_local_daemon_app_stub(remote_items: Vec<MediaItem>) -> App {
@@ -5538,13 +5564,63 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn move_queue_item_is_rejected_for_remote_scope() {
+    fn move_queue_item_for_remote_scope_sends_move_command_and_preserves_local_queue() {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(3);
         let remote_items = make_items(3);
-        let mut app = make_remote_app_stub(local_items, remote_items.clone());
+        let (mut app, cmd_rx) =
+            make_remote_app_stub_with_cmd_rx(local_items.clone(), remote_items.clone());
         app.set_queue_scope(QueueScope::Remote);
         app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+
+        app.move_queue_item_up();
+
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                remote_items[1].id.as_str(),
+                remote_items[0].id.as_str(),
+                remote_items[2].id.as_str()
+            ]
+        );
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            local_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert!(!app.queue_dirty);
+        assert_eq!(app.queue_undo_stack.len(), 0);
+        assert_eq!(app.remote_queue_undo_stack.len(), 1);
+        assert!(matches!(
+            cmd_rx.try_recv(),
+            Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
+                mbv_core::ctrl::WireCommand::QueueMove(1, 0)
+            ))
+        ));
+    }
+
+    #[test]
+    fn move_queue_item_for_inactive_remote_scope_is_rejected() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(3);
+        let remote_items = make_items(3);
+        let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
+        app.set_queue_scope(QueueScope::Remote);
+        app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+        app.player.status.lock().unwrap().active = false;
 
         app.move_queue_item_up();
 
@@ -5562,7 +5638,89 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>()
         );
         assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
-        assert_eq!(app.status, "Reorder is not supported for the remote queue");
+        assert_eq!(app.status, "Remote queue can only be edited while active");
+        assert!(cmd_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn remote_queue_update_reconciles_remote_queue_without_touching_local_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
+        let updated_remote = vec![
+            remote_items[2].clone(),
+            remote_items[0].clone(),
+            remote_items[1].clone(),
+        ];
+
+        app.handle_player_event(PlayerEvent::QueueUpdated {
+            items: updated_remote.clone(),
+            cursor: 2,
+            source: crate::config::QueueSource::Remote,
+        });
+
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            updated_remote
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            local_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn remote_queue_update_after_move_keeps_cursor_on_moved_item() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let (mut app, _cmd_rx) =
+            make_remote_app_stub_with_cmd_rx(local_items.clone(), remote_items.clone());
+        app.set_queue_scope(QueueScope::Remote);
+        app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+
+        app.move_queue_item_up();
+
+        app.handle_player_event(PlayerEvent::QueueUpdated {
+            items: vec![
+                remote_items[1].clone(),
+                remote_items[0].clone(),
+                remote_items[2].clone(),
+            ],
+            cursor: 1,
+            source: crate::config::QueueSource::Remote,
+        });
+
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            local_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]

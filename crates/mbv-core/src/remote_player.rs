@@ -478,13 +478,22 @@ impl RemotePlayer {
     /// Test helper for root-crate integration tests that need a remote-player
     /// stand-in without a live daemon connection.
     pub fn stub(items: Vec<MediaItem>, current_idx: usize) -> (Self, mpsc::Receiver<PlayerEvent>) {
+        let (remote, event_rx, _cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        (remote, event_rx)
+    }
+
+    /// Test helper variant that also exposes commands sent to the daemon.
+    pub fn stub_with_command_rx(
+        items: Vec<MediaItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
         let queue_len = items.len();
         let status = Arc::new(Mutex::new(Self::stub_status(current_idx, queue_len)));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items = Arc::new(Mutex::new(items));
         let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
         let disconnected = Arc::new(AtomicBool::new(false));
-        let (cmd_tx, _cmd_rx) = mpsc::channel::<CtrlCmd>();
+        let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
         let (_event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
         (
             RemotePlayer {
@@ -496,6 +505,7 @@ impl RemotePlayer {
                 disconnected,
             },
             event_rx,
+            cmd_rx,
         )
     }
 }
