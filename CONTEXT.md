@@ -31,8 +31,8 @@ One of the central components of mbv's user experience: the subsystem that holds
 ### Language
 
 **Queue**:
-mbv's own concept — an ordered, session-scoped list of media items driving playback (`player_tab.items` for the local queue). Emby has no equivalent object; a queue may be populated *from* a saved Emby Playlist, but it is not one, and can just as easily be built ad hoc (enqueue actions, "play these items") with no Playlist backing it at all.
-_Avoid_: treating "queue" as an Emby API concept, or assuming every queue traces back to a saved Playlist entity — see **Saved-playlist queue** vs **ad-hoc queue** below.
+mbv's own core playback concept — an ordered, session-scoped list of media items driving playback. It is not a TUI convenience or merely the currently selected rows on screen. Emby has no equivalent object; a queue may be populated *from* a saved Emby Playlist, but it is not one, and can just as easily be built ad hoc (enqueue actions, "play these items") with no Playlist backing it at all.
+_Avoid_: treating "queue" as an Emby API concept, a UI selection/list widget, or assuming every queue traces back to a saved Playlist entity — see **Saved-playlist queue** vs **ad-hoc queue** below.
 
 **Saved-playlist queue** vs **ad-hoc queue**:
 Whether the current queue's `QueueSource` is a named Emby `Playlist` entity (`is_saved_playlist` true) or was assembled by enqueue/"play these items" actions with no backing Playlist. Changes two behaviors: whether consume also pushes the reduced list back to Emby (`save_playlist_on_consume` for video, `save_playlist_on_consume_audio` for audio), and whether quitting with unsaved changes prompts to save.
