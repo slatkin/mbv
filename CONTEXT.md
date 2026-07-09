@@ -124,4 +124,5 @@ The subsystem that divides terminal space between mbv's browsing, queue, playbac
 
 **Power View left column**:
 The left column in Power View: the column that contains the media card at the top and the queue below it. This is the "left panel" meant by #111's user-resizable panel-width work. Its width is a persistent user layout preference, not a transient per-session adjustment.
+Its resize controls are active only while Power View itself is active; they are not global shortcuts that invisibly change a later Power View layout from another tab.
 _Avoid_: using "left panel" without qualification when discussing #111, since other views also have left/right areas; the resize target is specifically the Power View left column, not the normal library table split or any modal/sidebar.
