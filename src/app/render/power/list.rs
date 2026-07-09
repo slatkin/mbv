@@ -383,10 +383,23 @@ impl App {
                 .iter()
                 .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
                 .unwrap_or(0);
-            let offset = stored_scroll.clamp(
+            let mut offset = stored_scroll.clamp(
                 display_cursor.saturating_sub(visible.saturating_sub(1)),
                 display_cursor,
             );
+            // If stale scroll state would put the first item of a bucket at the
+            // top of the viewport, back up one row so its letter header remains
+            // visible.
+            if visible > 1
+                && offset > 0
+                && matches!(display_rows.get(offset), Some(DisplayRow::Item(_)))
+                && matches!(
+                    display_rows.get(offset.saturating_sub(1)),
+                    Some(DisplayRow::LetterHeader(_))
+                )
+            {
+                offset -= 1;
+            }
             final_offset = offset;
 
             // Build row map so mouse clicks can map visual row → item index.
@@ -589,5 +602,99 @@ impl App {
                 lvl.scroll = final_offset;
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::layout::LayoutPower;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{BrowseLevel, LibraryTab};
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
+
+    fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    fn render_power_list_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
+        let backend = TestBackend::new(60, 8);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_power_list(f, Rect::new(0, 0, 60, 8), true, layout);
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
+    #[test]
+    fn letter_group_keeps_top_bucket_header_after_scrolling_back_to_top() {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Power View Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.collection_type = "movies".into();
+        library.is_folder = true;
+
+        let mut items = Vec::new();
+        let mut first = make_item("The 8 Diagram Pole Fighter", "Movie");
+        first.id = "movie-first".into();
+        first.sort_name = "8 Diagram Pole Fighter".into();
+        items.push(first);
+        for i in 0..670 {
+            let mut item = make_item(&format!("Movie {i:03}"), "Movie");
+            item.id = format!("movie-{i:03}");
+            items.push(item);
+        }
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Power View Movies".into(),
+                items,
+                total_count: 671,
+                cursor: 0,
+                scroll: 1,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        let mut layout = LayoutPower::default();
+        app.libs[0].nav_stack[0].cursor = 20;
+        app.libs[0].nav_stack[0].scroll = 20;
+        let _ = render_power_list_to_string(&mut app, &mut layout);
+
+        app.libs[0].nav_stack[0].cursor = 0;
+        app.libs[0].nav_stack[0].scroll = 1;
+        let out = render_power_list_to_string(&mut app, &mut layout);
+
+        assert!(out.contains("#"), "expected first bucket header:\n{out}");
+        assert!(
+            out.find('#').unwrap() < out.find("The 8 Diagram Pole Fighter").unwrap(),
+            "expected bucket header above first item:\n{out}"
+        );
+        assert_eq!(app.libs[0].nav_stack[0].scroll, 0);
     }
 }
