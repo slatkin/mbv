@@ -1518,6 +1518,15 @@ impl App {
             self.flash_status_high("Remote queue can only be edited while active".into());
             return;
         }
+        if pos >= self.queue_for_scope(scope).items.len() {
+            let queue = self.queue_for_scope_mut(scope);
+            if !queue.items.is_empty() {
+                queue.queue_cursor = queue.queue_cursor.min(queue.items.len() - 1);
+            } else {
+                queue.queue_cursor = 0;
+            }
+            return;
+        }
         if controls_playback_queue && active && current_idx == pos {
             self.confirm_remove_idx = Some(pos);
             self.status = "Remove now-playing item and stop playback? (y/N)".into();

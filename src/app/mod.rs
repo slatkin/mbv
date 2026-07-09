@@ -5067,6 +5067,44 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn stale_context_menu_remove_remote_queue_index_is_ignored() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
+        app.tab_idx = 1;
+        app.queue_view = 0;
+        app.set_queue_scope(QueueScope::Remote);
+        app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
+
+        app.open_context_menu();
+
+        let action = app
+            .context_menu
+            .as_ref()
+            .expect("context menu")
+            .entries
+            .iter()
+            .find_map(|entry| match entry.action.as_ref() {
+                Some(ContextAction::RemoveFromQueue(pos)) => Some(*pos),
+                _ => None,
+            })
+            .expect("remove from queue action");
+        app.remote_player_tab.as_mut().unwrap().items.truncate(2);
+
+        app.execute_context_action(Some(ContextAction::RemoveFromQueue(action)));
+
+        let item_ids = |items: &[MediaItem]| items.iter().map(|i| i.id.clone()).collect::<Vec<_>>();
+        assert_eq!(item_ids(&app.player_tab.items), item_ids(&local_items));
+        assert_eq!(
+            item_ids(&app.remote_player_tab.as_ref().unwrap().items),
+            vec![remote_items[0].id.clone(), remote_items[1].id.clone()]
+        );
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
+        assert!(app.remote_queue_undo_stack.is_empty());
+    }
+
+    #[test]
     fn move_queue_item_up_swaps_items_and_cursor_follows() {
         let _guard = crate::config::TestStateDirGuard::new();
         let items = make_items(3);
