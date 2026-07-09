@@ -2455,6 +2455,9 @@ impl App {
                 self.refresh_after_stop();
                 return true;
             }
+            PlayerEvent::QueueDesynced(reason) => {
+                self.flash_status(reason);
+            }
         }
         false
     }

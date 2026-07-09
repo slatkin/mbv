@@ -205,6 +205,11 @@ pub enum PlayerEvent {
     /// Emitted by RemotePlayer when the daemon intentionally disconnects this
     /// ctrl client, for example because another controller took over.
     RemoteDisconnected(String),
+    /// Emitted when an external tool modifies mpv's playlist outside of mbv's
+    /// control (e.g. by writing to the mpv IPC socket), causing mbv's queue
+    /// mirror to become stale. The detail describes what was detected. The UI
+    /// shows this as a warning toast.
+    QueueDesynced(String),
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -945,6 +950,8 @@ fn observe_properties(mpv: &Mpv, use_mpv_config: bool) {
     let _ = mpv.observe_property("video-params/h", Format::Int64, 6);
     let _ = mpv.observe_property("audio-codec-name", Format::String, 7);
     let _ = mpv.observe_property("current-tracks/video/image", Format::Flag, 8);
+    let _ = mpv.observe_property("playlist-pos", Format::Int64, 9);
+    let _ = mpv.observe_property("playlist-count", Format::Int64, 10);
     if use_mpv_config {
         let _ = mpv.command("keybind", &["MOUSE_MOVE", "script-message mouse-moved"]);
     }
@@ -2154,6 +2161,41 @@ impl QueueSession {
         );
     }
 
+    fn on_playlist_count_changed(&mut self, count: usize) {
+        if count == self.n {
+            return;
+        }
+        let old_n = self.n;
+        if count < old_n {
+            let removed = old_n - count;
+            log::warn!(target: "player", "playlist-count dropped from {} to {}: {} item(s) removed externally", old_n, count, removed);
+            self.items.truncate(count);
+            self.n = self.items.len();
+            if self.current_idx >= self.n && self.n > 0 {
+                self.current_idx = self.n - 1;
+            } else if self.n == 0 {
+                self.current_idx = 0;
+            }
+            self.sync_status_position();
+            let _ = self.event_tx.send(PlayerEvent::QueueDesynced(
+                format!("Queue desynced: {removed} item(s) removed externally"),
+            ));
+        } else {
+            let added = count - old_n;
+            log::warn!(target: "player", "playlist-count increased from {} to {}: {} item(s) added externally", old_n, count, added);
+            // We cannot reconstruct the added MediaItems from mpv's playlist,
+            // so we keep the items vector as-is. Clamp current_idx to the last
+            // known item in case the external tool also changed position.
+            if self.current_idx >= self.n && self.n > 0 {
+                self.current_idx = self.n - 1;
+            }
+            self.sync_status_position();
+            let _ = self.event_tx.send(PlayerEvent::QueueDesynced(
+                format!("Queue desynced: {added} item(s) added externally"),
+            ));
+        }
+    }
+
     fn on_playback_restart(&mut self, mpv: &Mpv) {
         {
             let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
@@ -2539,6 +2581,25 @@ impl QueueSession {
                     })) => {
                         log::info!(target: "player", "video/image (playlist): is_img={is_img}");
                         self.status.lock().unwrap().video_is_image = is_img;
+                    }
+                    Some(Ok(Event::PropertyChange {
+                        name: "playlist-pos",
+                        change: PropertyData::Int64(pos),
+                        ..
+                    })) => {
+                        if pos >= 0 {
+                            self.current_idx = pos as usize;
+                            self.sync_status_position();
+                        }
+                    }
+                    Some(Ok(Event::PropertyChange {
+                        name: "playlist-count",
+                        change: PropertyData::Int64(count),
+                        ..
+                    })) => {
+                        if self.pending_load == 0 {
+                            self.on_playlist_count_changed(count as usize);
+                        }
                     }
                     Some(Ok(Event::PlaybackRestart)) => {
                         self.on_playback_restart(&mpv);
