@@ -606,7 +606,7 @@ pub struct App {
     confirm_clear_queue: bool,
     queue_undo_stack: Vec<UndoEntry>,
     remote_queue_undo_stack: Vec<UndoEntry>,
-    pending_remote_move_cursor_item_id: Option<String>,
+    pending_remote_move_cursor: Option<usize>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     queue_view: u8,
@@ -981,7 +981,7 @@ impl App {
             confirm_clear_queue: false,
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
-            pending_remote_move_cursor_item_id: None,
+            pending_remote_move_cursor: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
             queue_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
@@ -2412,9 +2412,9 @@ impl App {
                 source,
             } => {
                 let cursor = if self.has_direct_remote_queue() {
-                    self.pending_remote_move_cursor_item_id
+                    self.pending_remote_move_cursor
                         .take()
-                        .and_then(|item_id| items.iter().position(|item| item.id == item_id))
+                        .filter(|pending_cursor| *pending_cursor < items.len())
                         .unwrap_or(cursor)
                 } else {
                     cursor
@@ -2458,6 +2458,7 @@ impl App {
                 self.refresh_after_stop();
             }
             PlayerEvent::CommandRejected(reason) => {
+                self.pending_remote_move_cursor = None;
                 self.flash_status(reason);
             }
             PlayerEvent::RemoteDisconnected(reason) => {
@@ -2784,7 +2785,7 @@ pub(crate) mod tests {
             confirm_clear_queue: false,
             queue_undo_stack: Vec::new(),
             remote_queue_undo_stack: Vec::new(),
-            pending_remote_move_cursor_item_id: None,
+            pending_remote_move_cursor: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
             queue_view: 0,
@@ -5710,6 +5711,43 @@ pub(crate) mod tests {
         });
 
         assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 0);
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            local_items
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn remote_queue_update_after_move_tracks_duplicate_item_by_position() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let mut remote_items = make_items(3);
+        remote_items[1].id = remote_items[0].id.clone();
+        let (mut app, _cmd_rx) =
+            make_remote_app_stub_with_cmd_rx(local_items.clone(), remote_items.clone());
+        app.set_queue_scope(QueueScope::Remote);
+        app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+
+        app.move_queue_item_down();
+
+        app.handle_player_event(PlayerEvent::QueueUpdated {
+            items: vec![
+                remote_items[0].clone(),
+                remote_items[2].clone(),
+                remote_items[1].clone(),
+            ],
+            cursor: 0,
+            source: crate::config::QueueSource::Remote,
+        });
+
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 2);
         assert_eq!(
             app.player_tab
                 .items

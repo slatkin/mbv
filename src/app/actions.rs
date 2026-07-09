@@ -1591,7 +1591,7 @@ impl App {
         if self.apply_queue_move(scope, from, to) {
             let item_id = self.queue_for_scope(scope).items[to].id.clone();
             if scope == QueueScope::Remote {
-                self.pending_remote_move_cursor_item_id = Some(item_id.clone());
+                self.pending_remote_move_cursor = Some(to);
             }
             self.undo_stack_for_scope_mut(scope)
                 .push(UndoEntry::Move { from, to, item_id });

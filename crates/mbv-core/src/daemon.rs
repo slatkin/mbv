@@ -824,7 +824,23 @@ fn handle_ctrl(
                 });
             }
             PlayerCommand::QueueMove(from, to) => {
-                if from < items.len() && to < items.len() && from != to {
+                if from >= items.len() || to >= items.len() {
+                    send_to(
+                        request.reply_tx,
+                        &CtrlEvent::CommandRejected(
+                            "remote queue changed; move skipped".to_string(),
+                        ),
+                    );
+                    send_to(
+                        request.reply_tx,
+                        &CtrlEvent::State(CtrlState {
+                            status: player.status.lock().unwrap().clone(),
+                            items: items.clone(),
+                            cursor: *cursor,
+                            source: source.clone(),
+                        }),
+                    );
+                } else if from != to {
                     let item = items.remove(from);
                     items.insert(to, item);
                     *cursor = crate::player::shift_index_for_move(*cursor, from, to);
@@ -1445,6 +1461,69 @@ mod tests {
                 assert_eq!(state.cursor, 2);
             }
             _ => panic!("expected queue state update"),
+        }
+    }
+
+    #[test]
+    fn stale_ctrl_queue_move_is_rejected_and_resyncs_sender() {
+        let player = cold_player();
+        let player_cmd_rx = player.spy_on_commands();
+        let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+        let registry = Arc::new(Mutex::new(CtrlClients::default()));
+        let (sender_id, sender_rx) = {
+            let mut clients = registry.lock().unwrap();
+            add_client(&mut clients)
+        };
+        let (reply_tx, reply_rx) = mpsc::channel();
+        let shared_queue = shared_queue_state();
+        let mut items = vec![
+            item("item-0", "Video", "Movie"),
+            item("item-1", "Video", "Movie"),
+        ];
+        let mut cursor = 1;
+        let mut source = QueueSource::Remote;
+
+        handle_ctrl(
+            CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueMove(1, 2))),
+            CtrlRequest {
+                client_id: sender_id,
+                reply_tx: &reply_tx,
+            },
+            &client,
+            &player,
+            false,
+            &mut items,
+            &mut cursor,
+            &mut source,
+            &shared_queue,
+            &registry,
+        );
+
+        assert!(player_cmd_rx.try_recv().is_err());
+        assert_eq!(
+            items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+            vec!["item-0", "item-1"]
+        );
+        assert!(sender_rx.try_recv().is_err());
+        match recv_event(&reply_rx) {
+            CtrlEvent::CommandRejected(reason) => {
+                assert_eq!(reason, "remote queue changed; move skipped");
+            }
+            _ => panic!("expected command rejection"),
+        }
+        match recv_event(&reply_rx) {
+            CtrlEvent::State(state) => {
+                assert_eq!(
+                    state
+                        .items
+                        .iter()
+                        .map(|i| i.id.as_str())
+                        .collect::<Vec<_>>(),
+                    vec!["item-0", "item-1"]
+                );
+                assert_eq!(state.cursor, 1);
+            }
+            _ => panic!("expected queue state resync"),
         }
     }
 
