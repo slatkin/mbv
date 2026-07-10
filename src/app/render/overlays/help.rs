@@ -1,3 +1,4 @@
+use super::super::super::action::PLAYBACK_HELP_BINDINGS;
 use super::super::super::palette;
 use super::super::super::App;
 use super::super::super::HELP_PANEL_W;
@@ -60,19 +61,15 @@ impl App {
             mk("q", "Quit"),
             blank(),
         ];
-        let sec_playback = vec![
-            section("[playback]"),
-            mk("Space", "Pause/Resume"),
-            mk("Esc", "Stop"),
-            mk("< / >", "Seek ±5 seconds"),
-            mk("Shift+N / P", "Next / Previous track"),
-            mk("- / +", "Volume down / up"),
-            mk("m", "Mute"),
-            mk("a", "Cycle audio track"),
-            mk("z", "Enable subtitles"),
-            mk("h", "Hide/show player"),
-            blank(),
-        ];
+        // Rendered from `PLAYBACK_HELP_BINDINGS` (issue #133, phase 4) so this
+        // section can no longer silently drift from `playback_command_for_key`.
+        // `h` (hide/show player) isn't part of that Command seam yet — it
+        // lives in `handle_key_panel_toggle` — so it stays hand-written here
+        // until that handler migrates too.
+        let mut sec_playback = vec![section("[playback]")];
+        sec_playback.extend(PLAYBACK_HELP_BINDINGS.iter().map(|b| mk(b.keys, b.label)));
+        sec_playback.push(mk("h", "Hide/show player"));
+        sec_playback.push(blank());
         let sec_queue = vec![
             section("[queue]"),
             mk("p", "Jump to playing item"),

@@ -108,6 +108,129 @@ pub(super) fn playback_command_for_key(
     }
 }
 
+/// Help-overlay metadata for a subset of `playback_command_for_key`'s
+/// bindings — the "[playback]" section of the help overlay renders directly
+/// from this table (see `render_help_panel`) instead of a hand-copied list,
+/// so the two can no longer silently drift apart. See issue #133 (phase 4)
+/// and `docs/adr/0002-centralized-input-handling.md`.
+///
+/// Each entry pairs display text with a *sample* chord + gating flag that a
+/// characterization test (`playback_help_bindings_match_playback_command_for_key`,
+/// below) replays through `playback_command_for_key` to assert this table
+/// stays truthful. Not every arm of `playback_command_for_key` needs its own
+/// row: `<`/`>` and `N`/`P` each collapse to one display entry, matching the
+/// pre-existing hand-written help text.
+///
+/// Keys not yet covered here (e.g. `h` hide/show player, which lives in
+/// `handle_key_panel_toggle`, not this Command seam) stay hand-written in
+/// `render_help_panel` until their handler migrates onto `Command` too.
+pub(super) struct PlaybackHelpBinding {
+    /// Display text shown in the help overlay (e.g. `"Space"`, `"< / >"`).
+    pub keys: &'static str,
+    /// One-line description shown next to `keys`.
+    pub label: &'static str,
+    // Only read by the `playback_help_bindings_match_playback_command_for_key`
+    // characterization test below; kept outside `#[cfg(test)]` since these
+    // fields are part of the type's intended (drift-guard) purpose, not
+    // test-only scaffolding — mirrors `ContextEntry::name` in
+    // `input_resolver.rs`.
+    #[allow(dead_code)]
+    /// A representative chord that produces `command` via
+    /// `playback_command_for_key`, used only to keep this table honest in
+    /// tests — not consulted at runtime.
+    pub sample: KeyChord,
+    #[allow(dead_code)]
+    /// Whether `sample` only resolves to `command` when gated (`active ||
+    /// has_remote_session`); `false` means it fires unconditionally.
+    pub gated: bool,
+    #[allow(dead_code)]
+    /// The command `sample` must resolve to when gated appropriately.
+    pub command: Command,
+}
+
+pub(super) const PLAYBACK_HELP_BINDINGS: &[PlaybackHelpBinding] = &[
+    PlaybackHelpBinding {
+        keys: "Space",
+        label: "Pause/Resume",
+        sample: KeyChord {
+            code: KeyCode::Char(' '),
+            mods: KeyModifiers::NONE,
+        },
+        gated: true,
+        command: Command::TogglePlayPause,
+    },
+    PlaybackHelpBinding {
+        keys: "Esc",
+        label: "Stop",
+        sample: KeyChord {
+            code: KeyCode::Esc,
+            mods: KeyModifiers::NONE,
+        },
+        gated: true,
+        command: Command::Stop,
+    },
+    PlaybackHelpBinding {
+        keys: "< / >",
+        label: "Seek \u{b1}5 seconds",
+        sample: KeyChord {
+            code: KeyCode::Char('<'),
+            mods: KeyModifiers::NONE,
+        },
+        gated: true,
+        command: Command::SeekRelative(-5.0),
+    },
+    PlaybackHelpBinding {
+        keys: "Shift+N / P",
+        label: "Next / Previous track",
+        sample: KeyChord {
+            code: KeyCode::Char('N'),
+            mods: KeyModifiers::NONE,
+        },
+        gated: true,
+        command: Command::NextTrack,
+    },
+    PlaybackHelpBinding {
+        keys: "- / +",
+        label: "Volume down / up",
+        sample: KeyChord {
+            code: KeyCode::Char('-'),
+            mods: KeyModifiers::NONE,
+        },
+        gated: false,
+        command: Command::AdjustVolume(-5),
+    },
+    PlaybackHelpBinding {
+        keys: "m",
+        label: "Mute",
+        sample: KeyChord {
+            code: KeyCode::Char('m'),
+            mods: KeyModifiers::NONE,
+        },
+        gated: false,
+        command: Command::ToggleMute,
+    },
+    PlaybackHelpBinding {
+        keys: "a",
+        label: "Cycle audio track",
+        sample: KeyChord {
+            code: KeyCode::Char('a'),
+            mods: KeyModifiers::NONE,
+        },
+        gated: true,
+        command: Command::ToggleMuteOrCycleAudio,
+    },
+    PlaybackHelpBinding {
+        keys: "z",
+        label: "Cycle subtitles",
+        sample: KeyChord {
+            code: KeyCode::Char('z'),
+            mods: KeyModifiers::NONE,
+        },
+        gated: false,
+        command: Command::CycleOrToggleSubtitle,
+    },
+];
+
 /// Translate a key event into a help-overlay `Command`, or `None` if this key
 /// isn't bound. Pure function; no `App` access.
 ///
@@ -257,6 +380,51 @@ mod tests {
 
     fn key_ctrl(code: KeyCode) -> KeyChord {
         KeyChord::new(code, KeyModifiers::CONTROL)
+    }
+
+    // ── PLAYBACK_HELP_BINDINGS stays truthful to playback_command_for_key ───
+
+    /// Characterization test: replays each `PLAYBACK_HELP_BINDINGS` sample
+    /// chord through the real `playback_command_for_key` and asserts it
+    /// resolves to the command the help table claims — for `gated` entries,
+    /// only when gated open, and never resolving to *some other* command
+    /// when gated closed. This is what keeps the help overlay's `[playback]`
+    /// section from silently drifting off the real bindings (issue #133).
+    #[test]
+    fn playback_help_bindings_match_playback_command_for_key() {
+        for binding in PLAYBACK_HELP_BINDINGS {
+            if binding.gated {
+                assert_eq!(
+                    playback_command_for_key(binding.sample, true, false),
+                    Some(binding.command.clone()),
+                    "keys={:?} label={:?} should fire when active",
+                    binding.keys,
+                    binding.label
+                );
+                assert_eq!(
+                    playback_command_for_key(binding.sample, false, true),
+                    Some(binding.command.clone()),
+                    "keys={:?} label={:?} should fire on a remote session",
+                    binding.keys,
+                    binding.label
+                );
+                assert_eq!(
+                    playback_command_for_key(binding.sample, false, false),
+                    None,
+                    "keys={:?} label={:?} should not fire when ungated",
+                    binding.keys,
+                    binding.label
+                );
+            } else {
+                assert_eq!(
+                    playback_command_for_key(binding.sample, false, false),
+                    Some(binding.command.clone()),
+                    "keys={:?} label={:?} should fire unconditionally",
+                    binding.keys,
+                    binding.label
+                );
+            }
+        }
     }
 
     // ── playback_command_for_key: gated on (active OR has_remote_session) ────
