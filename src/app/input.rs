@@ -100,55 +100,87 @@ impl App {
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> bool {
-        if let Some(r) = self.handle_key_save_modal(key) {
-            return r;
+        for entry in super::input_resolver::CONTEXT_STACK {
+            if let Some(quit) = (entry.handler)(self, key) {
+                return quit;
+            }
         }
+        false
+    }
+
+    pub(super) fn handle_key_save_playlist_entry(&mut self, key: KeyEvent) -> Option<bool> {
         if self.save_playlist_dialog.is_some() {
-            return self.handle_save_playlist_key(key);
+            Some(self.handle_save_playlist_key(key))
+        } else {
+            None
         }
-        if let Some(r) = self.handle_key_settings(key) {
-            return r;
-        }
-        if let Some(r) = self.handle_key_help(key) {
-            return r;
-        }
-        if let Some(r) = self.handle_key_sessions(key) {
-            return r;
-        }
-        if let Some(r) = self.handle_key_playlists(key) {
-            return r;
-        }
+    }
+
+    pub(super) fn handle_key_global_overlay_open(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::F(1) {
             self.show_help = true;
-            return false;
+            return Some(false);
         }
         if key.code == KeyCode::F(2) {
             self.show_settings = !self.show_settings;
-            return false;
+            return Some(false);
         }
         if key.code == KeyCode::F(3) {
             self.show_sessions = true;
             self.spawn_sessions_load();
-            return false;
+            return Some(false);
         }
         if key.code == KeyCode::F(4) {
             self.open_playlists_panel();
-            return false;
+            return Some(false);
         }
+        None
+    }
+
+    pub(super) fn handle_key_legacy_tail_power_width(&mut self, key: KeyEvent) -> Option<bool> {
         if self.handle_power_left_width_key(key) {
-            return false;
+            Some(false)
+        } else {
+            None
         }
-        // Alt+Left/Right cycle type filter when home search is active
-        if (self.tab_idx == 0 || self.tab_idx == 1)
-            && key.modifiers.contains(KeyModifiers::ALT)
+    }
+
+    // Correctness note: in the pre-phase-2 source, this check ran *after*
+    // home-search/power-lib-search/lib-search (source order: power-left-width,
+    // home-search Alt-cycle, home-search char-capture, power-lib-search,
+    // lib-search, `h`-toggle, confirms...). It must stay positioned after
+    // `lib_search` in CONTEXT_STACK — not bundled with power-left-width above
+    // — otherwise `h` would win over an active search box typing the literal
+    // character 'h', which is a real behavior change, not just a structural
+    // one. (Caught during Task 4's self-review; fixed here rather than left
+    // for Task 5, since leaving it in the wrong slot even temporarily would
+    // ship a regression.)
+    pub(super) fn handle_key_panel_toggle(&mut self, key: KeyEvent) -> Option<bool> {
+        if key.code != KeyCode::Char('h') {
+            return None;
+        }
+        let active = self.player.status.lock().unwrap().active;
+        let show_controls = active || self.connected_session_id.is_some();
+        if show_controls {
+            self.panel_mode = self.panel_mode.next();
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_home_search(&mut self, key: KeyEvent) -> Option<bool> {
+        if !(self.tab_idx == 0 || self.tab_idx == 1)
+            || self.home_search.is_none()
+            || self.context_menu.is_some()
+        {
+            return None;
+        }
+        if key.modifiers.contains(KeyModifiers::ALT)
             && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self.home_search.is_some()
-            && self.context_menu.is_none()
         {
             match key.code {
                 KeyCode::Left | KeyCode::Right => {
                     if let Some(ref mut hs) = self.home_search {
-                        let n = hs.available_types().len() + 1; // +1 for "All"
+                        let n = hs.available_types().len() + 1;
                         if n > 1 {
                             hs.type_filter = if key.code == KeyCode::Right {
                                 (hs.type_filter + 1) % n
@@ -159,232 +191,248 @@ impl App {
                             hs.scroll = 0;
                         }
                     }
-                    return false;
+                    return Some(false);
                 }
-                _ => {}
+                _ => return None,
             }
         }
-        // When home search is active, unmodified keys feed the search input
-        if (self.tab_idx == 0 || self.tab_idx == 1)
-            && !key.modifiers.contains(KeyModifiers::ALT)
-            && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self.home_search.is_some()
-            && self.context_menu.is_none()
+        if key.modifiers.contains(KeyModifiers::ALT)
+            || key.modifiers.contains(KeyModifiers::CONTROL)
         {
-            let input_focused = self.home_search.as_ref().is_none_or(|s| s.input_focused);
-            match key.code {
-                KeyCode::Esc => {
+            return None;
+        }
+        let input_focused = self.home_search.as_ref().is_none_or(|s| s.input_focused);
+        match key.code {
+            KeyCode::Esc => {
+                self.home_search = None;
+            }
+            KeyCode::Tab => {
+                if let Some(ref mut hs) = self.home_search {
+                    hs.input_focused = !hs.input_focused;
+                }
+            }
+            KeyCode::Backspace if input_focused => {
+                let empty = self.home_search.as_ref().is_none_or(|s| s.query.is_empty());
+                if empty {
                     self.home_search = None;
+                } else {
+                    self.home_search.as_mut().unwrap().query.pop();
                 }
-                KeyCode::Tab => {
-                    if let Some(ref mut hs) = self.home_search {
-                        hs.input_focused = !hs.input_focused;
-                    }
-                }
-                KeyCode::Backspace if input_focused => {
-                    let empty = self.home_search.as_ref().is_none_or(|s| s.query.is_empty());
-                    if empty {
-                        self.home_search = None;
-                    } else {
-                        self.home_search.as_mut().unwrap().query.pop();
+            }
+            KeyCode::Up => {
+                if let Some(ref mut hs) = self.home_search {
+                    hs.cursor = hs.cursor.saturating_sub(1);
+                    if hs.cursor < hs.scroll {
+                        hs.scroll = hs.cursor;
                     }
                 }
-                KeyCode::Up => {
-                    if let Some(ref mut hs) = self.home_search {
-                        hs.cursor = hs.cursor.saturating_sub(1);
-                        if hs.cursor < hs.scroll {
-                            hs.scroll = hs.cursor;
-                        }
-                    }
+            }
+            KeyCode::Down => {
+                if let Some(ref mut hs) = self.home_search {
+                    let max = hs.filtered_count().saturating_sub(1);
+                    hs.cursor = (hs.cursor + 1).min(max);
                 }
-                KeyCode::Down => {
-                    if let Some(ref mut hs) = self.home_search {
-                        let max = hs.filtered_count().saturating_sub(1);
-                        hs.cursor = (hs.cursor + 1).min(max);
-                    }
+            }
+            KeyCode::Enter => {
+                let (query, last_query, loading, has_results) = self
+                    .home_search
+                    .as_ref()
+                    .map(|hs| {
+                        (
+                            hs.query.clone(),
+                            hs.last_query.clone(),
+                            hs.loading,
+                            !hs.results.is_empty(),
+                        )
+                    })
+                    .unwrap_or_default();
+                if loading {
+                    return Some(false);
                 }
-                KeyCode::Enter => {
-                    let (query, last_query, loading, has_results) = self
-                        .home_search
-                        .as_ref()
-                        .map(|hs| {
-                            (
-                                hs.query.clone(),
-                                hs.last_query.clone(),
-                                hs.loading,
-                                !hs.results.is_empty(),
-                            )
-                        })
-                        .unwrap_or_default();
-                    if loading {
-                        return false;
-                    }
-                    if !input_focused {
-                        if has_results {
-                            self.select_home();
-                        }
-                        return false;
-                    }
-                    if query.is_empty() {
-                        return false;
-                    }
-                    if query != last_query {
-                        if let Some(ref mut hs) = self.home_search {
-                            hs.last_query = query.clone();
-                            hs.loading = true;
-                            hs.results.clear();
-                            hs.cursor = 0;
-                            hs.scroll = 0;
-                        }
-                        self.spawn_global_search(query);
-                    } else if has_results {
+                if !input_focused {
+                    if has_results {
                         self.select_home();
                     }
+                    return Some(false);
                 }
-                KeyCode::Char('q') if !input_focused && key.modifiers.is_empty() => {
-                    return self.try_quit();
+                if query.is_empty() {
+                    return Some(false);
                 }
-                KeyCode::Char(c) => {
+                if query != last_query {
                     if let Some(ref mut hs) = self.home_search {
-                        hs.input_focused = true;
-                        hs.query.push(c);
+                        hs.last_query = query.clone();
+                        hs.loading = true;
+                        hs.results.clear();
+                        hs.cursor = 0;
+                        hs.scroll = 0;
                     }
+                    self.spawn_global_search(query);
+                } else if has_results {
+                    self.select_home();
                 }
-                _ => {}
             }
-            return false;
-        }
-        // Power-view: when the left panel is focused on a library with active search, intercept keys
-        if self.queue_view == QUEUE_VIEW_POWER
-            && !key.modifiers.contains(KeyModifiers::ALT)
-            && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self.context_menu.is_none()
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab > 0
-        {
-            let lib_idx = self.power_left_tab - 1;
-            if self.libs[lib_idx].search.is_some() {
-                self.handle_lib_search_key(lib_idx, key);
-                return false;
+            KeyCode::Char('q') if !input_focused && key.modifiers.is_empty() => {
+                return Some(self.try_quit());
             }
+            KeyCode::Char(c) => {
+                if let Some(ref mut hs) = self.home_search {
+                    hs.input_focused = true;
+                    hs.query.push(c);
+                }
+            }
+            _ => {}
         }
-        // When library search is active, unmodified keys feed the search
-        if self.tab_idx > 1
-            && !key.modifiers.contains(KeyModifiers::ALT)
-            && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self
-                .libs
-                .get(self.tab_idx - self.lib_tab_offset())
-                .is_some_and(|l| l.search.is_some())
-            && self.context_menu.is_none()
+        Some(false)
+    }
+
+    pub(super) fn handle_key_power_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
+        if self.queue_view != QUEUE_VIEW_POWER
+            || key.modifiers.contains(KeyModifiers::ALT)
+            || key.modifiers.contains(KeyModifiers::CONTROL)
+            || self.context_menu.is_some()
+            || !matches!(self.power_focus, PowerFocus::Left)
+            || self.power_left_tab == 0
         {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            return None;
+        }
+        let lib_idx = self.power_left_tab - 1;
+        if self.libs[lib_idx].search.is_some() {
             self.handle_lib_search_key(lib_idx, key);
-            return false;
+            Some(false)
+        } else {
+            None
         }
-        if key.code == KeyCode::Char('h') {
-            let active = self.player.status.lock().unwrap().active;
-            let show_controls = active || self.connected_session_id.is_some();
-            if show_controls {
-                self.panel_mode = self.panel_mode.next();
+    }
+
+    pub(super) fn handle_key_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
+        if self.tab_idx <= 1
+            || key.modifiers.contains(KeyModifiers::ALT)
+            || key.modifiers.contains(KeyModifiers::CONTROL)
+            || self.context_menu.is_some()
+        {
+            return None;
+        }
+        if self
+            .libs
+            .get(self.tab_idx - self.lib_tab_offset())
+            .is_none_or(|l| l.search.is_none())
+        {
+            return None;
+        }
+        let lib_idx = self.tab_idx - self.lib_tab_offset();
+        self.handle_lib_search_key(lib_idx, key);
+        Some(false)
+    }
+
+    pub(super) fn handle_key_confirm_clear_queue(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.confirm_clear_queue {
+            return None;
+        }
+        self.confirm_clear_queue = false;
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+        } else {
+            self.status.clear();
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_confirm_rescan(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.confirm_rescan {
+            return None;
+        }
+        self.confirm_rescan = false;
+        self.status.clear();
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            self.trigger_lib_rescan(lib_idx);
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_confirm_skip_intro(&mut self, key: KeyEvent) -> Option<bool> {
+        self.skip_intro_end_ticks?;
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
+                let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+                self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                self.status.clear();
             }
-            return false;
+        } else {
+            self.skip_intro_end_ticks = None;
+            self.player.send_command(PlayerCommand::SkipIntroDismiss);
+            self.status.clear();
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_confirm_next_up(&mut self, key: KeyEvent) -> Option<bool> {
+        self.next_up_item.as_ref()?;
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            if let Some(item) = self.next_up_item.take() {
+                if let Some(idx) = self
+                    .playback_queue()
+                    .items
+                    .iter()
+                    .position(|i| i.id == item.id)
+                {
+                    let label = item.playback_label();
+                    self.player.send_command(PlayerCommand::JumpTo(idx));
+                    self.playback_queue_mut().queue_cursor = idx;
+                    self.flash_status(label);
+                }
+            }
+        } else {
+            self.next_up_item = None;
+            self.player.send_command(PlayerCommand::NextUpDismiss);
+            self.status.clear();
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_clear_queue_prompt(&mut self, key: KeyEvent) -> Option<bool> {
+        if key.code != KeyCode::Char('c') || key.modifiers.contains(KeyModifiers::ALT) {
+            return None;
         }
         let in_lib_search = self.tab_idx > 1
             && self
                 .libs
                 .get(self.tab_idx - self.lib_tab_offset())
                 .is_some_and(|l| l.search.is_some());
-        if self.confirm_clear_queue {
-            self.confirm_clear_queue = false;
-            if matches!(
-                key.code,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-            ) {
-                self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-            } else {
-                self.status.clear();
-            }
-            return false;
+        if in_lib_search {
+            return None;
         }
-        if self.confirm_rescan {
-            self.confirm_rescan = false;
-            self.status.clear();
-            if matches!(
-                key.code,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-            ) {
-                let lib_idx = self.tab_idx - self.lib_tab_offset();
-                self.trigger_lib_rescan(lib_idx);
-            }
-            return false;
+        if self.tab_idx == 1 && self.visible_queue_scope() == QueueScope::Remote {
+            self.flash_status_high("Remote queue is controlled by the daemon".into());
+            return Some(false);
         }
-        if self.skip_intro_end_ticks.is_some() {
-            if matches!(
-                key.code,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-            ) {
-                if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                    let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-                    self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-                    self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                    self.status.clear();
-                }
-            } else {
-                self.skip_intro_end_ticks = None;
-                self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                self.status.clear();
-            }
-            return false;
+        if self.player_tab.items.is_empty() {
+            return Some(false);
         }
-        if self.next_up_item.is_some() {
-            if matches!(
-                key.code,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-            ) {
-                if let Some(item) = self.next_up_item.take() {
-                    if let Some(idx) = self
-                        .playback_queue()
-                        .items
-                        .iter()
-                        .position(|i| i.id == item.id)
-                    {
-                        let label = item.playback_label();
-                        self.player.send_command(PlayerCommand::JumpTo(idx));
-                        self.playback_queue_mut().queue_cursor = idx;
-                        self.flash_status(label);
-                    }
-                }
-            } else {
-                self.next_up_item = None;
-                self.player.send_command(PlayerCommand::NextUpDismiss);
-                self.status.clear();
-            }
-            return false;
-        }
-        if key.code == KeyCode::Char('c')
-            && !key.modifiers.contains(KeyModifiers::ALT)
-            && !in_lib_search
-        {
-            if self.tab_idx == 1 && self.visible_queue_scope() == QueueScope::Remote {
-                self.flash_status_high("Remote queue is controlled by the daemon".into());
-                return false;
-            }
-            if self.player_tab.items.is_empty() {
-                return false;
-            }
-            self.notify_with_actions(
-                "mbv",
-                "Clear queue?",
-                &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
-            );
-            self.status = "Clear queue? (Y/n)".into();
-            self.confirm_clear_queue = true;
-            return false;
-        }
-        if let Some(r) = self.handle_key_context_menu(key) {
-            return r;
-        }
+        self.notify_with_actions(
+            "mbv",
+            "Clear queue?",
+            &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
+        );
+        self.status = "Clear queue? (Y/n)".into();
+        self.confirm_clear_queue = true;
+        Some(false)
+    }
+
+    pub(super) fn handle_key_power_queue_alt_m(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::Char('m')
             && key.modifiers.contains(KeyModifiers::ALT)
             && !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -393,26 +441,38 @@ impl App {
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab > 0
         {
-            return self.handle_queue_key(key);
+            Some(self.handle_queue_key(key))
+        } else {
+            None
         }
-        if let Some(quit) = self.handle_playback_key(key) {
-            return quit;
-        }
+    }
+
+    pub(super) fn handle_key_ctrl_l(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;
-            return false;
+            Some(false)
+        } else {
+            None
         }
+    }
+
+    pub(super) fn handle_key_f5_refresh(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::F(5) {
             self.refresh_current_view();
-            return false;
+            Some(false)
+        } else {
+            None
         }
-        if self.tab_idx == 0 {
-            return self.handle_combined_key(key);
-        }
-        if self.tab_idx == 1 {
-            return self.handle_queue_key(key);
-        }
-        self.handle_lib_key(key)
+    }
+
+    pub(super) fn handle_key_view_dispatch(&mut self, key: KeyEvent) -> Option<bool> {
+        Some(if self.tab_idx == 0 {
+            self.handle_combined_key(key)
+        } else if self.tab_idx == 1 {
+            self.handle_queue_key(key)
+        } else {
+            self.handle_lib_key(key)
+        })
     }
 
     fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
@@ -456,7 +516,7 @@ impl App {
         self.tab_idx = saved;
     }
 
-    fn handle_key_save_modal(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_save_modal(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_save_playlist_modal {
             return None;
         }
@@ -502,7 +562,7 @@ impl App {
         Some(false)
     }
 
-    fn handle_key_settings(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_settings(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_settings {
             return None;
         }
@@ -591,16 +651,11 @@ impl App {
         Some(false)
     }
 
-    fn handle_key_help(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_help(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_help {
             return None;
         }
-        let snapshot = self.input_snapshot();
-        match super::input_resolver::resolve_key(
-            super::input_resolver::InputContext::Help,
-            &snapshot,
-            super::input_resolver::KeyChord::from_key(key),
-        ) {
+        match super::input_resolver::help_resolve(super::input_resolver::KeyChord::from_key(key)) {
             super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
             // Help swallows unknown keys; FallThrough is unreachable for this
             // context but treated identically (still consumed) to preserve today's
@@ -610,7 +665,7 @@ impl App {
         }
     }
 
-    fn handle_key_sessions(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_sessions(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_sessions {
             return None;
         }
@@ -659,7 +714,7 @@ impl App {
         Some(false)
     }
 
-    fn handle_key_playlists(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_playlists(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_playlists {
             return None;
         }
@@ -815,7 +870,7 @@ impl App {
         Some(false)
     }
 
-    fn handle_key_context_menu(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_context_menu(&mut self, key: KeyEvent) -> Option<bool> {
         self.context_menu.as_ref()?;
         match key.code {
             KeyCode::Esc => {
@@ -1109,7 +1164,7 @@ impl App {
         self.save_prefs();
     }
 
-    fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
         let snapshot = self.input_snapshot();
         match super::input_resolver::resolve_key(
             super::input_resolver::InputContext::Playback,
