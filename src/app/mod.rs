@@ -2505,20 +2505,16 @@ impl App {
                 if self.status.starts_with("Next up:") {
                     self.status.clear();
                 }
-                let adjusted = if let Some((slot_id, was_audio)) = self.pending_queue_removal.take()
-                {
-                    // `idx` is the player's report from *before* it was told
-                    // (via the QueueRemove sent by the consume below) that
-                    // the completed slot was removed, so it still lines up
-                    // with the queue's current, pre-removal shape. Resolve
-                    // it against that shape now, then translate to the
-                    // post-removal index via the resolved slot's new
-                    // position — order-independent, unlike the old raw
-                    // index arithmetic, so it stays correct regardless of
-                    // where the removed slot sat relative to `idx`.
-                    self.playback_queue_mut()
-                        .sync_queue_model_from_items_if_needed();
-                    let target_slot_id = self.playback_queue().resolve_slot_at(idx);
+                // Resolve the incoming index to a slot *before* draining any
+                // deferred consume: `idx` is the player's report from
+                // before it was told (via the QueueRemove sent below) that
+                // the completed slot was removed, so it still lines up with
+                // the queue's current, pre-removal shape.
+                self.playback_queue_mut()
+                    .sync_queue_model_from_items_if_needed();
+                let target_slot_id = self.playback_queue().resolve_slot_at(idx);
+
+                if let Some((slot_id, was_audio)) = self.pending_queue_removal.take() {
                     let len_before = self.playback_queue().items.len();
                     let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
                     let len_after = len_before - removed_id.is_some() as usize;
@@ -2533,11 +2529,26 @@ impl App {
                     } else {
                         self.on_video_consumed();
                     }
-                    target_slot_id
-                        .and_then(|slot_id| self.playback_queue().queue.slot_index(slot_id))
-                        .unwrap_or(idx)
-                } else {
-                    idx
+                }
+
+                // Activate the resolved slot by identity (order-independent,
+                // unlike raw index arithmetic) and derive the display
+                // cursor from its post-removal position — this stays
+                // correct regardless of where the just-consumed slot sat
+                // relative to `idx`.
+                let adjusted = match target_slot_id {
+                    Some(slot_id) => {
+                        let _ = self.playback_queue_mut().queue.set_active_slot(slot_id);
+                        self.playback_queue()
+                            .queue
+                            .slot_index(slot_id)
+                            .unwrap_or(idx)
+                    }
+                    None => {
+                        log::warn!(target: "player", "TrackChanged: idx={idx} maps to no live \
+                            slot; skipping activation");
+                        idx
+                    }
                 };
                 self.player.status.lock().unwrap().current_idx = adjusted;
                 self.playback_queue_mut().queue_cursor = adjusted;
@@ -5112,6 +5123,47 @@ pub(crate) mod tests {
             .map(|s| s.slot_id)
             .collect();
         assert_eq!(ids_before, ids_after);
+        assert!(app.pending_queue_removal.is_none());
+    }
+
+    #[test]
+    fn track_changed_activates_the_current_slot() {
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(3);
+        app.player_tab.sync_queue_model_from_items_if_needed();
+        let slot_b = app.player_tab.queue.slots()[1].slot_id;
+
+        app.handle_player_event(PlayerEvent::TrackChanged(1));
+
+        assert_eq!(
+            app.player_tab.queue.active_slot_id(),
+            Some(slot_b),
+            "TrackChanged must set the model's active slot by identity, not just move the raw cursor"
+        );
+    }
+
+    #[test]
+    fn track_changed_activates_slot_and_consumes_deferred_slot() {
+        // [a, b, c]; complete+consume a (deferred), then TrackChanged to b.
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(3);
+        app.player_tab.sync_queue_model_from_items_if_needed();
+        let slot_b = app.player_tab.queue.slots()[1].slot_id;
+        app.client.lock().unwrap().config.consume_videos = true;
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+        });
+        assert!(app.pending_queue_removal.is_some());
+
+        app.handle_player_event(PlayerEvent::TrackChanged(1)); // player reports b at old idx 1
+
+        // a was consumed; queue is [b, c]; b is active.
+        assert_eq!(app.player_tab.queue.slots().len(), 2);
+        assert_eq!(app.player_tab.queue.active_slot_id(), Some(slot_b));
         assert!(app.pending_queue_removal.is_none());
     }
 
