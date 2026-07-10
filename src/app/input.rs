@@ -1,3 +1,4 @@
+use super::input_resolver::KeyChord;
 use super::settings::settings_total_rows;
 use super::ui_util::item_text_and_style;
 use super::{
@@ -592,7 +593,7 @@ impl App {
     }
 
     // Thin adapter over the `Action` seam (issue #78, 2nd increment): translate
-    // the key into an `Action` via the pure `help_action_for_key`, then hand it
+    // the key into an `Action` via the pure `help_command_for_key`, then hand it
     // to `dispatch`. Unlike `handle_playback_key`, an unrecognized key here is
     // still swallowed (`Some(false)`), not left to fall through (`None`) — the
     // help overlay consumes every key while open.
@@ -600,7 +601,7 @@ impl App {
         if !self.show_help {
             return None;
         }
-        if let Some(action) = super::action::help_action_for_key(key) {
+        if let Some(action) = super::action::help_command_for_key(KeyChord::from_key(key)) {
             return Some(self.dispatch(action));
         }
         Some(false)
@@ -1106,13 +1107,17 @@ impl App {
     }
 
     // Thin adapter over the `Action` seam (issue #78 pilot): translate the key
-    // into an `Action` via the pure `playback_action_for_key`, then hand it to
+    // into an `Action` via the pure `playback_command_for_key`, then hand it to
     // `dispatch`, which owns the session-vs-local branching. See
     // `src/app/action.rs` for the translation table and state transitions.
     fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
         let active = self.player.status.lock().unwrap().active;
         let has_remote_session = self.connected_session_id.is_some();
-        let action = super::action::playback_action_for_key(key, active, has_remote_session)?;
+        let action = super::action::playback_command_for_key(
+            KeyChord::from_key(key),
+            active,
+            has_remote_session,
+        )?;
         // Propagate dispatch's should-quit bool rather than hardcoding
         // `Some(false)`: no playback action currently resolves to
         // `Action::Quit`, but this way that invariant doesn't need to be

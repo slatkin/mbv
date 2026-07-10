@@ -2,6 +2,7 @@ mod action;
 mod actions;
 pub(crate) mod images;
 mod input;
+mod input_resolver;
 pub(crate) mod layout;
 pub(crate) mod palette;
 pub mod render;

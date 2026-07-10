@@ -1,7 +1,7 @@
 //! Action seam between key-event translation (`input.rs`) and effects
 //! (`actions.rs`, `player.rs`). See issue #78.
 //!
-//! `playback_action_for_key` is a pure function: given a key event and two
+//! `playback_command_for_key` is a pure function: given a key event and two
 //! booleans describing playback state, it decides *whether* a key should be
 //! intercepted and *what* it means, without touching `App` at all. `dispatch`
 //! then owns the state transitions for each `Action` variant.
@@ -11,8 +11,9 @@
 //! speak directly to `App` and are expected to migrate to this same `Action`
 //! enum over time, one handler at a time.
 
+use super::input_resolver::KeyChord;
 use super::App;
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::player::PlayerCommand;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,14 +85,14 @@ pub(super) enum Command {
 /// | `z` (sub cycle/toggle) | unconditionally |
 /// | `m` (mute) | unconditionally, no session check |
 /// | `-`/`+` (volume) | unconditionally |
-pub(super) fn playback_action_for_key(
-    key: KeyEvent,
+pub(super) fn playback_command_for_key(
+    chord: KeyChord,
     active: bool,
     has_remote_session: bool,
 ) -> Option<Command> {
-    let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
+    let ctrl = chord.mods.contains(KeyModifiers::CONTROL);
     let gated = has_remote_session || active;
-    match key.code {
+    match chord.code {
         KeyCode::Char(' ') if gated => Some(Command::TogglePlayPause),
         KeyCode::Esc if gated => Some(Command::Stop),
         KeyCode::Char('<') if gated => Some(Command::SeekRelative(-5.0)),
@@ -110,16 +111,16 @@ pub(super) fn playback_action_for_key(
 /// Translate a key event into a help-overlay `Action`, or `None` if this key
 /// isn't bound. Pure function; no `App` access.
 ///
-/// Unlike `playback_action_for_key`, gating is not per-key here: the caller
+/// Unlike `playback_command_for_key`, gating is not per-key here: the caller
 /// (`handle_key_help`) only calls this after confirming `self.show_help`, so
 /// this function does no gating of its own. Also note: unlike the playback
 /// seam, `None` from this function does NOT mean "let the key fall through to
 /// other handlers" — the thin adapter in `input.rs` still swallows the key
 /// (`Some(false)`), matching the old code's `_ => {}` arm followed by an
 /// unconditional `Some(false)`.
-pub(super) fn help_action_for_key(key: KeyEvent) -> Option<Command> {
-    match key.code {
-        KeyCode::Char('q') if key.modifiers.is_empty() => Some(Command::Quit),
+pub(super) fn help_command_for_key(chord: KeyChord) -> Option<Command> {
+    match chord.code {
+        KeyCode::Char('q') if chord.mods.is_empty() => Some(Command::Quit),
         KeyCode::Esc | KeyCode::F(1) => Some(Command::CloseHelp),
         KeyCode::F(2) => Some(Command::ShowSettings),
         KeyCode::F(3) => Some(Command::ShowSessions),
@@ -250,20 +251,20 @@ mod tests {
     use super::*;
     use crate::app::tests::make_app_stub;
 
-    fn key(code: KeyCode) -> KeyEvent {
-        KeyEvent::new(code, KeyModifiers::NONE)
+    fn key(code: KeyCode) -> KeyChord {
+        KeyChord::new(code, KeyModifiers::NONE)
     }
 
-    fn key_ctrl(code: KeyCode) -> KeyEvent {
-        KeyEvent::new(code, KeyModifiers::CONTROL)
+    fn key_ctrl(code: KeyCode) -> KeyChord {
+        KeyChord::new(code, KeyModifiers::CONTROL)
     }
 
-    // ── playback_action_for_key: gated on (active OR has_remote_session) ────
+    // ── playback_command_for_key: gated on (active OR has_remote_session) ────
 
     #[test]
     fn space_fires_when_active_only() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char(' ')), true, false),
+            playback_command_for_key(key(KeyCode::Char(' ')), true, false),
             Some(Command::TogglePlayPause)
         );
     }
@@ -271,7 +272,7 @@ mod tests {
     #[test]
     fn space_fires_when_remote_session_only() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char(' ')), false, true),
+            playback_command_for_key(key(KeyCode::Char(' ')), false, true),
             Some(Command::TogglePlayPause)
         );
     }
@@ -279,7 +280,7 @@ mod tests {
     #[test]
     fn space_does_not_fire_when_neither_active_nor_remote() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char(' ')), false, false),
+            playback_command_for_key(key(KeyCode::Char(' ')), false, false),
             None
         );
     }
@@ -287,11 +288,11 @@ mod tests {
     #[test]
     fn esc_stops_when_gated() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Esc), true, false),
+            playback_command_for_key(key(KeyCode::Esc), true, false),
             Some(Command::Stop)
         );
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Esc), false, true),
+            playback_command_for_key(key(KeyCode::Esc), false, true),
             Some(Command::Stop)
         );
     }
@@ -299,7 +300,7 @@ mod tests {
     #[test]
     fn esc_does_not_stop_when_ungated() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Esc), false, false),
+            playback_command_for_key(key(KeyCode::Esc), false, false),
             None
         );
     }
@@ -307,11 +308,11 @@ mod tests {
     #[test]
     fn enter_never_stops() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Enter), true, true),
+            playback_command_for_key(key(KeyCode::Enter), true, true),
             None
         );
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Enter), false, false),
+            playback_command_for_key(key(KeyCode::Enter), false, false),
             None
         );
     }
@@ -319,11 +320,11 @@ mod tests {
     #[test]
     fn seek_keys_fire_when_gated() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('<')), true, false),
+            playback_command_for_key(key(KeyCode::Char('<')), true, false),
             Some(Command::SeekRelative(-5.0))
         );
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('>')), false, true),
+            playback_command_for_key(key(KeyCode::Char('>')), false, true),
             Some(Command::SeekRelative(5.0))
         );
     }
@@ -331,11 +332,11 @@ mod tests {
     #[test]
     fn seek_keys_do_not_fire_when_ungated() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('<')), false, false),
+            playback_command_for_key(key(KeyCode::Char('<')), false, false),
             None
         );
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('>')), false, false),
+            playback_command_for_key(key(KeyCode::Char('>')), false, false),
             None
         );
     }
@@ -343,11 +344,11 @@ mod tests {
     #[test]
     fn track_nav_keys_fire_when_gated() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('N')), true, false),
+            playback_command_for_key(key(KeyCode::Char('N')), true, false),
             Some(Command::NextTrack)
         );
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('P')), false, true),
+            playback_command_for_key(key(KeyCode::Char('P')), false, true),
             Some(Command::PreviousTrack)
         );
     }
@@ -355,11 +356,11 @@ mod tests {
     #[test]
     fn track_nav_keys_do_not_fire_when_ungated() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('N')), false, false),
+            playback_command_for_key(key(KeyCode::Char('N')), false, false),
             None
         );
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('P')), false, false),
+            playback_command_for_key(key(KeyCode::Char('P')), false, false),
             None
         );
     }
@@ -370,7 +371,7 @@ mod tests {
         for active in [false, true] {
             for remote in [false, true] {
                 assert_eq!(
-                    playback_action_for_key(key(code), active, remote),
+                    playback_command_for_key(key(code), active, remote),
                     Some(expected.clone()),
                     "code={code:?} active={active} remote={remote}"
                 );
@@ -388,7 +389,7 @@ mod tests {
     #[test]
     fn ctrl_z_does_not_fire() {
         assert_eq!(
-            playback_action_for_key(key_ctrl(KeyCode::Char('z')), true, true),
+            playback_command_for_key(key_ctrl(KeyCode::Char('z')), true, true),
             None
         );
     }
@@ -415,7 +416,7 @@ mod tests {
     #[test]
     fn a_fires_when_active_only() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('a')), true, false),
+            playback_command_for_key(key(KeyCode::Char('a')), true, false),
             Some(Command::ToggleMuteOrCycleAudio)
         );
     }
@@ -423,7 +424,7 @@ mod tests {
     #[test]
     fn a_fires_when_active_and_remote_session() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('a')), true, true),
+            playback_command_for_key(key(KeyCode::Char('a')), true, true),
             Some(Command::ToggleMuteOrCycleAudio)
         );
     }
@@ -431,7 +432,7 @@ mod tests {
     #[test]
     fn a_fires_when_remote_session_only() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('a')), false, true),
+            playback_command_for_key(key(KeyCode::Char('a')), false, true),
             Some(Command::ToggleMuteOrCycleAudio)
         );
     }
@@ -439,7 +440,7 @@ mod tests {
     #[test]
     fn a_does_not_fire_when_neither_active_nor_remote() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('a')), false, false),
+            playback_command_for_key(key(KeyCode::Char('a')), false, false),
             None
         );
     }
@@ -447,30 +448,30 @@ mod tests {
     #[test]
     fn unrelated_key_does_not_fire() {
         assert_eq!(
-            playback_action_for_key(key(KeyCode::Char('q')), true, true),
+            playback_command_for_key(key(KeyCode::Char('q')), true, true),
             None
         );
     }
 
-    // ── help_action_for_key: no gating (caller already checked show_help) ───
+    // ── help_command_for_key: no gating (caller already checked show_help) ───
 
     #[test]
     fn help_q_fires_quit() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::Char('q'))),
+            help_command_for_key(key(KeyCode::Char('q'))),
             Some(Command::Quit)
         );
     }
 
     #[test]
     fn help_ctrl_q_does_not_fire() {
-        assert_eq!(help_action_for_key(key_ctrl(KeyCode::Char('q'))), None);
+        assert_eq!(help_command_for_key(key_ctrl(KeyCode::Char('q'))), None);
     }
 
     #[test]
     fn help_esc_fires_close_help() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::Esc)),
+            help_command_for_key(key(KeyCode::Esc)),
             Some(Command::CloseHelp)
         );
     }
@@ -478,7 +479,7 @@ mod tests {
     #[test]
     fn help_f1_fires_close_help() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::F(1))),
+            help_command_for_key(key(KeyCode::F(1))),
             Some(Command::CloseHelp)
         );
     }
@@ -486,7 +487,7 @@ mod tests {
     #[test]
     fn help_f2_fires_show_settings() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::F(2))),
+            help_command_for_key(key(KeyCode::F(2))),
             Some(Command::ShowSettings)
         );
     }
@@ -494,7 +495,7 @@ mod tests {
     #[test]
     fn help_f3_fires_show_sessions() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::F(3))),
+            help_command_for_key(key(KeyCode::F(3))),
             Some(Command::ShowSessions)
         );
     }
@@ -502,7 +503,7 @@ mod tests {
     #[test]
     fn help_f4_fires_show_playlists() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::F(4))),
+            help_command_for_key(key(KeyCode::F(4))),
             Some(Command::ShowPlaylists)
         );
     }
@@ -510,7 +511,7 @@ mod tests {
     #[test]
     fn help_up_fires_scroll_by_negative_one() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::Up)),
+            help_command_for_key(key(KeyCode::Up)),
             Some(Command::ScrollBy(-1))
         );
     }
@@ -518,7 +519,7 @@ mod tests {
     #[test]
     fn help_down_fires_scroll_by_one() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::Down)),
+            help_command_for_key(key(KeyCode::Down)),
             Some(Command::ScrollBy(1))
         );
     }
@@ -526,7 +527,7 @@ mod tests {
     #[test]
     fn help_page_up_fires_scroll_by_negative_ten() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::PageUp)),
+            help_command_for_key(key(KeyCode::PageUp)),
             Some(Command::ScrollBy(-10))
         );
     }
@@ -534,7 +535,7 @@ mod tests {
     #[test]
     fn help_page_down_fires_scroll_by_ten() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::PageDown)),
+            help_command_for_key(key(KeyCode::PageDown)),
             Some(Command::ScrollBy(10))
         );
     }
@@ -542,14 +543,14 @@ mod tests {
     #[test]
     fn help_home_fires_scroll_home() {
         assert_eq!(
-            help_action_for_key(key(KeyCode::Home)),
+            help_command_for_key(key(KeyCode::Home)),
             Some(Command::ScrollHome)
         );
     }
 
     #[test]
     fn help_unrelated_key_does_not_fire() {
-        assert_eq!(help_action_for_key(key(KeyCode::Char('x'))), None);
+        assert_eq!(help_command_for_key(key(KeyCode::Char('x'))), None);
     }
 
     // ── dispatch: state-mutating variants ────────────────────────────────────
