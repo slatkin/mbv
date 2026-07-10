@@ -137,7 +137,7 @@ impl App {
         None
     }
 
-    pub(super) fn handle_key_legacy_tail(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_legacy_tail_pre_confirms(&mut self, key: KeyEvent) -> Option<bool> {
         if self.handle_power_left_width_key(key) {
             return Some(false);
         }
@@ -293,78 +293,94 @@ impl App {
             }
             return Some(false);
         }
+        None
+    }
+
+    pub(super) fn handle_key_confirm_clear_queue(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.confirm_clear_queue {
+            return None;
+        }
+        self.confirm_clear_queue = false;
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
+        } else {
+            self.status.clear();
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_confirm_rescan(&mut self, key: KeyEvent) -> Option<bool> {
+        if !self.confirm_rescan {
+            return None;
+        }
+        self.confirm_rescan = false;
+        self.status.clear();
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            self.trigger_lib_rescan(lib_idx);
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_confirm_skip_intro(&mut self, key: KeyEvent) -> Option<bool> {
+        self.skip_intro_end_ticks?;
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
+                let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
+                self.player.send_command(PlayerCommand::SeekAbsolute(secs));
+                self.player.send_command(PlayerCommand::SkipIntroDismiss);
+                self.status.clear();
+            }
+        } else {
+            self.skip_intro_end_ticks = None;
+            self.player.send_command(PlayerCommand::SkipIntroDismiss);
+            self.status.clear();
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_confirm_next_up(&mut self, key: KeyEvent) -> Option<bool> {
+        self.next_up_item.as_ref()?;
+        if matches!(
+            key.code,
+            KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
+        ) {
+            if let Some(item) = self.next_up_item.take() {
+                if let Some(idx) = self
+                    .playback_queue()
+                    .items
+                    .iter()
+                    .position(|i| i.id == item.id)
+                {
+                    let label = item.playback_label();
+                    self.player.send_command(PlayerCommand::JumpTo(idx));
+                    self.playback_queue_mut().queue_cursor = idx;
+                    self.flash_status(label);
+                }
+            }
+        } else {
+            self.next_up_item = None;
+            self.player.send_command(PlayerCommand::NextUpDismiss);
+            self.status.clear();
+        }
+        Some(false)
+    }
+
+    pub(super) fn handle_key_legacy_tail_post_confirms(&mut self, key: KeyEvent) -> Option<bool> {
         let in_lib_search = self.tab_idx > 1
             && self
                 .libs
                 .get(self.tab_idx - self.lib_tab_offset())
                 .is_some_and(|l| l.search.is_some());
-        if self.confirm_clear_queue {
-            self.confirm_clear_queue = false;
-            if matches!(
-                key.code,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-            ) {
-                self.replace_queue_or_prompt(PendingQueueAction::ClearQueue);
-            } else {
-                self.status.clear();
-            }
-            return Some(false);
-        }
-        if self.confirm_rescan {
-            self.confirm_rescan = false;
-            self.status.clear();
-            if matches!(
-                key.code,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-            ) {
-                let lib_idx = self.tab_idx - self.lib_tab_offset();
-                self.trigger_lib_rescan(lib_idx);
-            }
-            return Some(false);
-        }
-        if self.skip_intro_end_ticks.is_some() {
-            if matches!(
-                key.code,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-            ) {
-                if let Some(end_ticks) = self.skip_intro_end_ticks.take() {
-                    let secs = end_ticks as f64 / mbv_core::api::TICKS_PER_SECOND as f64;
-                    self.player.send_command(PlayerCommand::SeekAbsolute(secs));
-                    self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                    self.status.clear();
-                }
-            } else {
-                self.skip_intro_end_ticks = None;
-                self.player.send_command(PlayerCommand::SkipIntroDismiss);
-                self.status.clear();
-            }
-            return Some(false);
-        }
-        if self.next_up_item.is_some() {
-            if matches!(
-                key.code,
-                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
-            ) {
-                if let Some(item) = self.next_up_item.take() {
-                    if let Some(idx) = self
-                        .playback_queue()
-                        .items
-                        .iter()
-                        .position(|i| i.id == item.id)
-                    {
-                        let label = item.playback_label();
-                        self.player.send_command(PlayerCommand::JumpTo(idx));
-                        self.playback_queue_mut().queue_cursor = idx;
-                        self.flash_status(label);
-                    }
-                }
-            } else {
-                self.next_up_item = None;
-                self.player.send_command(PlayerCommand::NextUpDismiss);
-                self.status.clear();
-            }
-            return Some(false);
-        }
         if key.code == KeyCode::Char('c')
             && !key.modifiers.contains(KeyModifiers::ALT)
             && !in_lib_search

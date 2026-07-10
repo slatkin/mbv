@@ -159,8 +159,28 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_global_overlay_open,
     },
     ContextEntry {
-        name: "legacy_tail",
-        handler: App::handle_key_legacy_tail,
+        name: "legacy_tail_pre_confirms",
+        handler: App::handle_key_legacy_tail_pre_confirms,
+    },
+    ContextEntry {
+        name: "confirm_clear_queue",
+        handler: App::handle_key_confirm_clear_queue,
+    },
+    ContextEntry {
+        name: "confirm_rescan",
+        handler: App::handle_key_confirm_rescan,
+    },
+    ContextEntry {
+        name: "confirm_skip_intro",
+        handler: App::handle_key_confirm_skip_intro,
+    },
+    ContextEntry {
+        name: "confirm_next_up",
+        handler: App::handle_key_confirm_next_up,
+    },
+    ContextEntry {
+        name: "legacy_tail_post_confirms",
+        handler: App::handle_key_legacy_tail_post_confirms,
     },
     ContextEntry {
         name: "context_menu",
@@ -353,6 +373,41 @@ mod app_level_tests {
     }
 
     #[test]
+    fn confirm_clear_queue_yes_dispatches_clear_via_handle_key() {
+        let mut app = make_app_stub();
+        app.confirm_clear_queue = true;
+        app.handle_key(ev(KeyCode::Char('y'), KeyModifiers::NONE));
+        assert!(
+            !app.confirm_clear_queue,
+            "confirm flag clears regardless of answer"
+        );
+    }
+
+    #[test]
+    fn confirm_rescan_no_clears_flag_without_rescan_via_handle_key() {
+        let mut app = make_app_stub();
+        app.confirm_rescan = true;
+        app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
+        assert!(!app.confirm_rescan);
+    }
+
+    #[test]
+    fn skip_intro_confirm_no_dismisses_via_handle_key() {
+        let mut app = make_app_stub();
+        app.skip_intro_end_ticks = Some(1000);
+        app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
+        assert!(app.skip_intro_end_ticks.is_none());
+    }
+
+    #[test]
+    fn next_up_confirm_no_dismisses_via_handle_key() {
+        let mut app = make_app_stub();
+        app.next_up_item = Some(crate::app::tests::make_item("item", "Movie"));
+        app.handle_key(ev(KeyCode::Char('n'), KeyModifiers::NONE));
+        assert!(app.next_up_item.is_none());
+    }
+
+    #[test]
     fn context_stack_order_is_pinned() {
         let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
         assert_eq!(
@@ -365,7 +420,12 @@ mod app_level_tests {
                 "sessions",
                 "playlists",
                 "global_overlay_open",
-                "legacy_tail",
+                "legacy_tail_pre_confirms",
+                "confirm_clear_queue",
+                "confirm_rescan",
+                "confirm_skip_intro",
+                "confirm_next_up",
+                "legacy_tail_post_confirms",
                 "context_menu",
                 "power_queue_alt_m",
                 "playback",
