@@ -67,9 +67,9 @@ Tracked as separate issues under a GitHub Project.
 1. **Vocabulary + resolver skeleton** — `Command`, `KeyChord` (incl. "any printable
    char"), `InputContext`, `KeyResolution`, `InputSnapshot`. Pure, unit-tested. No
    behavior change.
-2. **Done (#131). Keyboard spine** — move the context-priority stack into the resolver;
-   `handle_key` becomes build-snapshot -> resolve -> dispatch. Golden-equivalence test
-   vs. the old behavior, existing quirks preserved verbatim.
+2. **Done (#131). Keyboard spine** — centralize keyboard precedence as a
+   `CONTEXT_STACK` loop over the existing imperative handlers; characterization tests
+   lock current behavior and quirks in place.
 3. **Migrate view handlers** — collapse duplicated global keys; dissolve the
    `tab_idx`-swap and `is_lib_key` mirror. Behavior-preserving.
 4. **Help from the registry** — render covered sections from binding data; converges as
@@ -98,5 +98,5 @@ is precisely why it is safe to defer until the internal model is stable.
 - The `Command` vocabulary grows large (~40–50 commands) — that is the real surface area
   of the work, spread across phases.
 - Full mouse and full help coverage *converge* across phases rather than landing at once;
-  the provable-refactor guarantee is strongest on the keyboard path (phase 2's golden
-  test), with mouse verified per-region.
+  keyboard behavior has the strongest coverage so far (phase 2's characterization
+  tests), with mouse verified per-region.
