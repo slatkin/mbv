@@ -3,6 +3,7 @@ pub mod applog;
 pub mod config;
 pub mod ctrl;
 pub mod daemon;
+pub mod playback_queue;
 pub mod player;
 pub mod remote_player;
 pub mod ws;
