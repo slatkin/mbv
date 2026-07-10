@@ -452,14 +452,15 @@ mod tests {
 
     fn render_power_library_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
         // Height is one row taller than the banner's own reserved footprint
-        // (1 selected row + 14 banner/gap rows) to also leave room for the
-        // " N items" header row that `render_power_list` now draws unconditionally
-        // for a focused library panel -- there's no separate top-pinned title
-        // row to absorb it now that this goes through the shared catch-all path.
-        let backend = TestBackend::new(60, 17);
+        // (1 selected row + 15 rule/content/gap rows: 1 opening rule + 13
+        // content + 1 closing rule) to also leave room for the " N items"
+        // header row that `render_power_list` now draws unconditionally for a
+        // focused library panel -- there's no separate top-pinned title row
+        // to absorb it now that this goes through the shared catch-all path.
+        let backend = TestBackend::new(60, 18);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_power_library(f, Rect::new(0, 0, 60, 17), true, layout);
+            app.render_power_library(f, Rect::new(0, 0, 60, 18), true, layout);
         })
         .unwrap();
         buffer_to_string(&term)
@@ -542,20 +543,30 @@ mod tests {
             "expected compact overview text:\n{out}"
         );
         assert!(
-            lines[16].contains("Second Movie"),
+            lines[17].contains("Second Movie"),
             "expected remaining movie list below banner:\n{out}"
         );
         assert!(
             !out.contains("Director: Director Hidden"),
             "compact banner must hide director:\n{out}"
         );
-        assert_eq!(
-            lines[15].trim(),
-            "",
-            "expected spacer row between banner and list:\n{out}"
+        // Row 2 opens the banner with a horizontal rule (bracketing it off from
+        // the selected row above); row 16 closes it with another rule before
+        // the next list item.
+        assert!(
+            lines[2].contains('\u{2500}'),
+            "expected opening rule above banner content:\n{out}"
         );
         assert!(
-            !lines[16].contains("Focused Movie"),
+            lines[16].contains('\u{2500}'),
+            "expected closing rule below banner content:\n{out}"
+        );
+        assert!(
+            !lines[2].contains("Focused Movie") && !lines[16].contains("Focused Movie"),
+            "expected selected row's title to appear only once, not repeated on a rule row:\n{out}"
+        );
+        assert!(
+            !lines[17].contains("Focused Movie"),
             "expected selected row to stay above banner, not repeat below it:\n{out}"
         );
     }

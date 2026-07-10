@@ -10,14 +10,18 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-/// Rows the compact movie banner occupies inline in the library list: the
-/// banner's own content (title/meta/overview/poster, rendered by
-/// `render_power_compact_detail`) plus a 1-row blank separator before the
-/// next list row — matching the spacing the banner already used when it was
-/// pinned to the top of the panel.
+/// Rows the compact movie banner occupies inline in the library list: a
+/// horizontal rule, the banner's own content (meta/overview/poster, rendered
+/// by `render_power_compact_detail`), and a closing horizontal rule that also
+/// acts as the 1-row separator before the next list row — matching the
+/// spacing the banner already used when it was pinned to the top of the
+/// panel. The rules make the banner read as a distinct, boxed-off region
+/// instead of blending into the surrounding list.
+const COMPACT_BANNER_RULE_ROWS: usize = 1;
 const COMPACT_BANNER_CONTENT_ROWS: usize = 13;
 const COMPACT_BANNER_GAP_ROWS: usize = 1;
-const COMPACT_BANNER_TOTAL_ROWS: usize = COMPACT_BANNER_CONTENT_ROWS + COMPACT_BANNER_GAP_ROWS;
+const COMPACT_BANNER_TOTAL_ROWS: usize =
+    COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_CONTENT_ROWS + COMPACT_BANNER_GAP_ROWS;
 
 impl App {
     /// Filler-row count to reserve immediately after the selected movie's row
@@ -450,13 +454,37 @@ impl App {
                 });
             }
 
+            // Absolute display-row indices of the banner's opening and closing
+            // horizontal rules (only meaningful when banner_rows > 0). The
+            // rules bracket the banner so it reads as a distinct region
+            // rather than blending into the surrounding list.
+            let banner_start = display_cursor + 1;
+            let banner_rule_bottom = banner_start + banner_rows.saturating_sub(1);
+            let show_scrollbar = focused && total_display > visible;
+
             let avail = (area.width as usize).saturating_sub(2);
             let list_items: Vec<ListItem> = display_rows
                 .iter()
+                .enumerate()
                 .skip(offset)
                 .take(visible)
-                .map(|row| match row {
-                    DisplayRow::Spacer | DisplayRow::BannerFiller => ListItem::new(Line::default()),
+                .map(|(abs_idx, row)| match row {
+                    DisplayRow::Spacer => ListItem::new(Line::default()),
+                    DisplayRow::BannerFiller => {
+                        if banner_rows > 0
+                            && (abs_idx == banner_start || abs_idx == banner_rule_bottom)
+                        {
+                            ListItem::new(Line::from(vec![
+                                Span::raw(" "),
+                                Span::styled(
+                                    "\u{2500}".repeat(avail),
+                                    Style::default().fg(palette::OVERLAY),
+                                ),
+                            ]))
+                        } else {
+                            ListItem::new(Line::default())
+                        }
+                    }
                     DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                         Span::raw(" "),
                         Span::styled(
@@ -528,17 +556,26 @@ impl App {
             );
 
             if banner_rows > 0 {
-                let banner_start = display_cursor + 1;
-                if banner_start >= offset && banner_start < offset + visible {
-                    let banner_y = content_area.y + (banner_start - offset) as u16;
+                // Content starts one row after the opening rule (banner_start).
+                let content_start = banner_start + COMPACT_BANNER_RULE_ROWS;
+                if content_start >= offset && content_start < offset + visible {
+                    let banner_y = content_area.y + (content_start - offset) as u16;
                     let bottom = content_area.y + content_area.height;
+                    // Reserve the rightmost column for the scrollbar (drawn over
+                    // content_area's last column below) so the poster image,
+                    // which is right-anchored, doesn't render underneath it.
+                    let banner_w = if show_scrollbar {
+                        content_area.width.saturating_sub(1)
+                    } else {
+                        content_area.width
+                    };
                     let banner_h =
                         (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
                     if banner_h > 0 {
                         let banner_rect = Rect {
                             x: content_area.x,
                             y: banner_y,
-                            width: content_area.width,
+                            width: banner_w,
                             height: banner_h,
                         };
                         let want_cursor_y = layout.cursor_screen_y;
@@ -554,7 +591,7 @@ impl App {
                 }
             }
 
-            if focused && total_display > visible {
+            if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
                 let mut sb = ScrollbarState::new(max_off + 1).position(offset);
                 f.render_stateful_widget(
@@ -599,12 +636,36 @@ impl App {
             let offset = stored_scroll.clamp(lower_bound, display_cursor);
             final_offset = offset;
 
+            // Absolute display-row indices of the banner's opening and closing
+            // horizontal rules (only meaningful when banner_rows > 0). The
+            // rules bracket the banner so it reads as a distinct region
+            // rather than blending into the surrounding list.
+            let banner_start = display_cursor + 1;
+            let banner_rule_bottom = banner_start + banner_rows.saturating_sub(1);
+            let show_scrollbar = focused && total_display > visible;
+
             let list_items: Vec<ListItem> = display_rows
                 .iter()
+                .enumerate()
                 .skip(offset)
                 .take(visible)
-                .map(|row| match row {
-                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
+                .map(|(abs_idx, row)| match row {
+                    DisplayRow::BannerFiller => {
+                        if banner_rows > 0
+                            && (abs_idx == banner_start || abs_idx == banner_rule_bottom)
+                        {
+                            let avail = (area.width as usize).saturating_sub(2);
+                            ListItem::new(Line::from(vec![
+                                Span::raw(" "),
+                                Span::styled(
+                                    "\u{2500}".repeat(avail),
+                                    Style::default().fg(palette::OVERLAY),
+                                ),
+                            ]))
+                        } else {
+                            ListItem::new(Line::default())
+                        }
+                    }
                     DisplayRow::Item(idx) => {
                         let item = &items[*idx];
                         let selected = *idx == cursor;
@@ -683,17 +744,26 @@ impl App {
             );
 
             if banner_rows > 0 {
-                let banner_start = display_cursor + 1;
-                if banner_start >= offset && banner_start < offset + visible {
-                    let banner_y = content_area.y + (banner_start - offset) as u16;
+                // Content starts one row after the opening rule (banner_start).
+                let content_start = banner_start + COMPACT_BANNER_RULE_ROWS;
+                if content_start >= offset && content_start < offset + visible {
+                    let banner_y = content_area.y + (content_start - offset) as u16;
                     let bottom = content_area.y + content_area.height;
+                    // Reserve the rightmost column for the scrollbar (drawn over
+                    // content_area's last column below) so the poster image,
+                    // which is right-anchored, doesn't render underneath it.
+                    let banner_w = if show_scrollbar {
+                        content_area.width.saturating_sub(1)
+                    } else {
+                        content_area.width
+                    };
                     let banner_h =
                         (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
                     if banner_h > 0 {
                         let banner_rect = Rect {
                             x: content_area.x,
                             y: banner_y,
-                            width: content_area.width,
+                            width: banner_w,
                             height: banner_h,
                         };
                         // render_power_compact_detail overwrites layout.cursor_screen_y with
@@ -713,7 +783,7 @@ impl App {
                 }
             }
 
-            if focused && total_display > visible {
+            if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
                 let mut sb = ScrollbarState::new(max_off + 1).position(offset);
                 f.render_stateful_widget(
