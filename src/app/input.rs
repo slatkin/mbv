@@ -137,22 +137,34 @@ impl App {
         None
     }
 
-    pub(super) fn handle_key_legacy_tail_power_width_and_h(
-        &mut self,
-        key: KeyEvent,
-    ) -> Option<bool> {
+    pub(super) fn handle_key_legacy_tail_power_width(&mut self, key: KeyEvent) -> Option<bool> {
         if self.handle_power_left_width_key(key) {
-            return Some(false);
+            Some(false)
+        } else {
+            None
         }
-        if key.code == KeyCode::Char('h') {
-            let active = self.player.status.lock().unwrap().active;
-            let show_controls = active || self.connected_session_id.is_some();
-            if show_controls {
-                self.panel_mode = self.panel_mode.next();
-            }
-            return Some(false);
+    }
+
+    // Correctness note: in the pre-phase-2 source, this check ran *after*
+    // home-search/power-lib-search/lib-search (source order: power-left-width,
+    // home-search Alt-cycle, home-search char-capture, power-lib-search,
+    // lib-search, `h`-toggle, confirms...). It must stay positioned after
+    // `lib_search` in CONTEXT_STACK — not bundled with power-left-width above
+    // — otherwise `h` would win over an active search box typing the literal
+    // character 'h', which is a real behavior change, not just a structural
+    // one. (Caught during Task 4's self-review; fixed here rather than left
+    // for Task 5, since leaving it in the wrong slot even temporarily would
+    // ship a regression.)
+    pub(super) fn handle_key_panel_toggle(&mut self, key: KeyEvent) -> Option<bool> {
+        if key.code != KeyCode::Char('h') {
+            return None;
         }
-        None
+        let active = self.player.status.lock().unwrap().active;
+        let show_controls = active || self.connected_session_id.is_some();
+        if show_controls {
+            self.panel_mode = self.panel_mode.next();
+        }
+        Some(false)
     }
 
     pub(super) fn handle_key_home_search(&mut self, key: KeyEvent) -> Option<bool> {

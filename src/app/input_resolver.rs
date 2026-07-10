@@ -159,8 +159,8 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_global_overlay_open,
     },
     ContextEntry {
-        name: "legacy_tail_power_width_and_h",
-        handler: App::handle_key_legacy_tail_power_width_and_h,
+        name: "legacy_tail_power_width",
+        handler: App::handle_key_legacy_tail_power_width,
     },
     ContextEntry {
         name: "home_search",
@@ -173,6 +173,10 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry {
         name: "lib_search",
         handler: App::handle_key_lib_search,
+    },
+    ContextEntry {
+        name: "panel_toggle_h",
+        handler: App::handle_key_panel_toggle,
     },
     ContextEntry {
         name: "confirm_clear_queue",
@@ -488,6 +492,36 @@ mod app_level_tests {
     }
 
     #[test]
+    fn home_search_char_capture_wins_over_h_panel_toggle_via_handle_key() {
+        // Regression guard: `panel_toggle_h` must stay ordered after
+        // `home_search` in CONTEXT_STACK (matching the pre-phase-2 source,
+        // where the h-toggle ran after all three search blocks). If it were
+        // ever reordered ahead of home_search, pressing the literal 'h'
+        // character while a search box is focused would toggle the panel
+        // instead of typing 'h' into the query — a real behavior change.
+        let mut app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true; // show_controls == true, so panel_toggle_h would fire if reached
+        }
+        app.home_search = Some(test_home_search());
+        if let Some(hs) = app.home_search.as_mut() {
+            hs.input_focused = true;
+        }
+        let panel_mode_before = app.panel_mode;
+        app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+        assert_eq!(
+            app.home_search.as_ref().unwrap().query,
+            "h",
+            "home search must capture the literal 'h' character"
+        );
+        assert_eq!(
+            app.panel_mode, panel_mode_before,
+            "panel mode must not toggle while home search captures 'h'"
+        );
+    }
+
+    #[test]
     fn power_lib_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
         app.tab_idx = 1;
@@ -521,10 +555,11 @@ mod app_level_tests {
                 "sessions",
                 "playlists",
                 "global_overlay_open",
-                "legacy_tail_power_width_and_h",
+                "legacy_tail_power_width",
                 "home_search",
                 "power_lib_search",
                 "lib_search",
+                "panel_toggle_h",
                 "confirm_clear_queue",
                 "confirm_rescan",
                 "confirm_skip_intro",
