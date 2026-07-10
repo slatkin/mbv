@@ -159,8 +159,20 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_global_overlay_open,
     },
     ContextEntry {
-        name: "legacy_tail_pre_confirms",
-        handler: App::handle_key_legacy_tail_pre_confirms,
+        name: "legacy_tail_power_width_and_h",
+        handler: App::handle_key_legacy_tail_power_width_and_h,
+    },
+    ContextEntry {
+        name: "home_search",
+        handler: App::handle_key_home_search,
+    },
+    ContextEntry {
+        name: "power_lib_search",
+        handler: App::handle_key_power_lib_search,
+    },
+    ContextEntry {
+        name: "lib_search",
+        handler: App::handle_key_lib_search,
     },
     ContextEntry {
         name: "confirm_clear_queue",
@@ -407,6 +419,95 @@ mod app_level_tests {
         assert!(app.next_up_item.is_none());
     }
 
+    fn test_home_search() -> crate::app::HomeSearch {
+        crate::app::HomeSearch {
+            query: String::new(),
+            last_query: String::new(),
+            results: Vec::new(),
+            cursor: 0,
+            loading: false,
+            scroll: 0,
+            type_filter: 0,
+            input_focused: false,
+        }
+    }
+
+    fn test_lib_with_search() -> crate::app::LibraryTab {
+        use crate::app::tests::make_item;
+        use crate::app::{BrowseLevel, LibSearch, LibraryTab};
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: Vec::new(),
+                total_count: 0,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: Some(LibSearch {
+                query: String::new(),
+                items: Vec::new(),
+                results: Vec::new(),
+                cursor: 0,
+                scroll: 0,
+                loading: false,
+            }),
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        }
+    }
+
+    #[test]
+    fn home_search_captures_char_via_handle_key() {
+        let mut app = make_app_stub();
+        app.home_search = Some(test_home_search());
+        if let Some(hs) = app.home_search.as_mut() {
+            hs.input_focused = true;
+        }
+        app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert_eq!(app.home_search.as_ref().unwrap().query, "x");
+    }
+
+    #[test]
+    fn home_search_esc_closes_via_handle_key() {
+        let mut app = make_app_stub();
+        app.home_search = Some(test_home_search());
+        app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.home_search.is_none());
+    }
+
+    #[test]
+    fn power_lib_search_esc_closes_via_handle_key() {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = crate::app::QUEUE_VIEW_POWER;
+        app.power_focus = crate::app::PowerFocus::Left;
+        app.power_left_tab = 1;
+        app.libs.push(test_lib_with_search());
+        app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.libs[0].search.is_none());
+    }
+
+    #[test]
+    fn lib_search_esc_closes_via_handle_key() {
+        let mut app = make_app_stub();
+        app.tab_idx = 2;
+        app.libs.push(test_lib_with_search());
+        app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(app.libs[0].search.is_none());
+    }
+
     #[test]
     fn context_stack_order_is_pinned() {
         let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
@@ -420,7 +521,10 @@ mod app_level_tests {
                 "sessions",
                 "playlists",
                 "global_overlay_open",
-                "legacy_tail_pre_confirms",
+                "legacy_tail_power_width_and_h",
+                "home_search",
+                "power_lib_search",
+                "lib_search",
                 "confirm_clear_queue",
                 "confirm_rescan",
                 "confirm_skip_intro",

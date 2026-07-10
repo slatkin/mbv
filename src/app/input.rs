@@ -137,21 +137,38 @@ impl App {
         None
     }
 
-    pub(super) fn handle_key_legacy_tail_pre_confirms(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_legacy_tail_power_width_and_h(
+        &mut self,
+        key: KeyEvent,
+    ) -> Option<bool> {
         if self.handle_power_left_width_key(key) {
             return Some(false);
         }
-        // Alt+Left/Right cycle type filter when home search is active
-        if (self.tab_idx == 0 || self.tab_idx == 1)
-            && key.modifiers.contains(KeyModifiers::ALT)
+        if key.code == KeyCode::Char('h') {
+            let active = self.player.status.lock().unwrap().active;
+            let show_controls = active || self.connected_session_id.is_some();
+            if show_controls {
+                self.panel_mode = self.panel_mode.next();
+            }
+            return Some(false);
+        }
+        None
+    }
+
+    pub(super) fn handle_key_home_search(&mut self, key: KeyEvent) -> Option<bool> {
+        if !(self.tab_idx == 0 || self.tab_idx == 1)
+            || self.home_search.is_none()
+            || self.context_menu.is_some()
+        {
+            return None;
+        }
+        if key.modifiers.contains(KeyModifiers::ALT)
             && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self.home_search.is_some()
-            && self.context_menu.is_none()
         {
             match key.code {
                 KeyCode::Left | KeyCode::Right => {
                     if let Some(ref mut hs) = self.home_search {
-                        let n = hs.available_types().len() + 1; // +1 for "All"
+                        let n = hs.available_types().len() + 1;
                         if n > 1 {
                             hs.type_filter = if key.code == KeyCode::Right {
                                 (hs.type_filter + 1) % n
@@ -164,136 +181,135 @@ impl App {
                     }
                     return Some(false);
                 }
-                _ => {}
+                _ => return None,
             }
         }
-        // When home search is active, unmodified keys feed the search input
-        if (self.tab_idx == 0 || self.tab_idx == 1)
-            && !key.modifiers.contains(KeyModifiers::ALT)
-            && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self.home_search.is_some()
-            && self.context_menu.is_none()
+        if key.modifiers.contains(KeyModifiers::ALT)
+            || key.modifiers.contains(KeyModifiers::CONTROL)
         {
-            let input_focused = self.home_search.as_ref().is_none_or(|s| s.input_focused);
-            match key.code {
-                KeyCode::Esc => {
+            return None;
+        }
+        let input_focused = self.home_search.as_ref().is_none_or(|s| s.input_focused);
+        match key.code {
+            KeyCode::Esc => {
+                self.home_search = None;
+            }
+            KeyCode::Tab => {
+                if let Some(ref mut hs) = self.home_search {
+                    hs.input_focused = !hs.input_focused;
+                }
+            }
+            KeyCode::Backspace if input_focused => {
+                let empty = self.home_search.as_ref().is_none_or(|s| s.query.is_empty());
+                if empty {
                     self.home_search = None;
+                } else {
+                    self.home_search.as_mut().unwrap().query.pop();
                 }
-                KeyCode::Tab => {
-                    if let Some(ref mut hs) = self.home_search {
-                        hs.input_focused = !hs.input_focused;
-                    }
-                }
-                KeyCode::Backspace if input_focused => {
-                    let empty = self.home_search.as_ref().is_none_or(|s| s.query.is_empty());
-                    if empty {
-                        self.home_search = None;
-                    } else {
-                        self.home_search.as_mut().unwrap().query.pop();
+            }
+            KeyCode::Up => {
+                if let Some(ref mut hs) = self.home_search {
+                    hs.cursor = hs.cursor.saturating_sub(1);
+                    if hs.cursor < hs.scroll {
+                        hs.scroll = hs.cursor;
                     }
                 }
-                KeyCode::Up => {
-                    if let Some(ref mut hs) = self.home_search {
-                        hs.cursor = hs.cursor.saturating_sub(1);
-                        if hs.cursor < hs.scroll {
-                            hs.scroll = hs.cursor;
-                        }
-                    }
+            }
+            KeyCode::Down => {
+                if let Some(ref mut hs) = self.home_search {
+                    let max = hs.filtered_count().saturating_sub(1);
+                    hs.cursor = (hs.cursor + 1).min(max);
                 }
-                KeyCode::Down => {
-                    if let Some(ref mut hs) = self.home_search {
-                        let max = hs.filtered_count().saturating_sub(1);
-                        hs.cursor = (hs.cursor + 1).min(max);
-                    }
+            }
+            KeyCode::Enter => {
+                let (query, last_query, loading, has_results) = self
+                    .home_search
+                    .as_ref()
+                    .map(|hs| {
+                        (
+                            hs.query.clone(),
+                            hs.last_query.clone(),
+                            hs.loading,
+                            !hs.results.is_empty(),
+                        )
+                    })
+                    .unwrap_or_default();
+                if loading {
+                    return Some(false);
                 }
-                KeyCode::Enter => {
-                    let (query, last_query, loading, has_results) = self
-                        .home_search
-                        .as_ref()
-                        .map(|hs| {
-                            (
-                                hs.query.clone(),
-                                hs.last_query.clone(),
-                                hs.loading,
-                                !hs.results.is_empty(),
-                            )
-                        })
-                        .unwrap_or_default();
-                    if loading {
-                        return Some(false);
-                    }
-                    if !input_focused {
-                        if has_results {
-                            self.select_home();
-                        }
-                        return Some(false);
-                    }
-                    if query.is_empty() {
-                        return Some(false);
-                    }
-                    if query != last_query {
-                        if let Some(ref mut hs) = self.home_search {
-                            hs.last_query = query.clone();
-                            hs.loading = true;
-                            hs.results.clear();
-                            hs.cursor = 0;
-                            hs.scroll = 0;
-                        }
-                        self.spawn_global_search(query);
-                    } else if has_results {
+                if !input_focused {
+                    if has_results {
                         self.select_home();
                     }
+                    return Some(false);
                 }
-                KeyCode::Char('q') if !input_focused && key.modifiers.is_empty() => {
-                    return Some(self.try_quit());
+                if query.is_empty() {
+                    return Some(false);
                 }
-                KeyCode::Char(c) => {
+                if query != last_query {
                     if let Some(ref mut hs) = self.home_search {
-                        hs.input_focused = true;
-                        hs.query.push(c);
+                        hs.last_query = query.clone();
+                        hs.loading = true;
+                        hs.results.clear();
+                        hs.cursor = 0;
+                        hs.scroll = 0;
                     }
+                    self.spawn_global_search(query);
+                } else if has_results {
+                    self.select_home();
                 }
-                _ => {}
             }
-            return Some(false);
-        }
-        // Power-view: when the left panel is focused on a library with active search, intercept keys
-        if self.queue_view == QUEUE_VIEW_POWER
-            && !key.modifiers.contains(KeyModifiers::ALT)
-            && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self.context_menu.is_none()
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab > 0
-        {
-            let lib_idx = self.power_left_tab - 1;
-            if self.libs[lib_idx].search.is_some() {
-                self.handle_lib_search_key(lib_idx, key);
-                return Some(false);
+            KeyCode::Char('q') if !input_focused && key.modifiers.is_empty() => {
+                return Some(self.try_quit());
             }
+            KeyCode::Char(c) => {
+                if let Some(ref mut hs) = self.home_search {
+                    hs.input_focused = true;
+                    hs.query.push(c);
+                }
+            }
+            _ => {}
         }
-        // When library search is active, unmodified keys feed the search
-        if self.tab_idx > 1
-            && !key.modifiers.contains(KeyModifiers::ALT)
-            && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self
-                .libs
-                .get(self.tab_idx - self.lib_tab_offset())
-                .is_some_and(|l| l.search.is_some())
-            && self.context_menu.is_none()
+        Some(false)
+    }
+
+    pub(super) fn handle_key_power_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
+        if self.queue_view != QUEUE_VIEW_POWER
+            || key.modifiers.contains(KeyModifiers::ALT)
+            || key.modifiers.contains(KeyModifiers::CONTROL)
+            || self.context_menu.is_some()
+            || !matches!(self.power_focus, PowerFocus::Left)
+            || self.power_left_tab == 0
         {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            return None;
+        }
+        let lib_idx = self.power_left_tab - 1;
+        if self.libs[lib_idx].search.is_some() {
             self.handle_lib_search_key(lib_idx, key);
-            return Some(false);
+            Some(false)
+        } else {
+            None
         }
-        if key.code == KeyCode::Char('h') {
-            let active = self.player.status.lock().unwrap().active;
-            let show_controls = active || self.connected_session_id.is_some();
-            if show_controls {
-                self.panel_mode = self.panel_mode.next();
-            }
-            return Some(false);
+    }
+
+    pub(super) fn handle_key_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
+        if self.tab_idx <= 1
+            || key.modifiers.contains(KeyModifiers::ALT)
+            || key.modifiers.contains(KeyModifiers::CONTROL)
+            || self.context_menu.is_some()
+        {
+            return None;
         }
-        None
+        if self
+            .libs
+            .get(self.tab_idx - self.lib_tab_offset())
+            .is_none_or(|l| l.search.is_none())
+        {
+            return None;
+        }
+        let lib_idx = self.tab_idx - self.lib_tab_offset();
+        self.handle_lib_search_key(lib_idx, key);
+        Some(false)
     }
 
     pub(super) fn handle_key_confirm_clear_queue(&mut self, key: KeyEvent) -> Option<bool> {
