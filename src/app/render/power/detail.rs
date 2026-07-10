@@ -44,7 +44,7 @@ impl App {
         layout: &mut LayoutPower,
     ) {
         const IMG_COLS: u16 = 18;
-        const IMG_ROWS: u16 = 10;
+        const IMG_ROWS: u16 = 12;
 
         let Some(item) = self.power_selected_movie_item(lib_idx) else {
             return;
@@ -100,11 +100,12 @@ impl App {
         };
 
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        let img_end_row = area.y + img_height;
+        let img_y = area.y.saturating_add(1).min(area.y + area.height.saturating_sub(1));
+        let img_end_row = img_y + img_height;
         layout.inline_image_rect = if img_height > 0 {
             Some(Rect {
                 x: img_x,
-                y: area.y,
+                y: img_y,
                 width: img_actual_w,
                 height: img_height,
             })
@@ -123,16 +124,15 @@ impl App {
         };
 
         if row < max_y {
-            let (tw, tw16) = text_dims(row);
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    trunc_str(&item.name, tw),
+                    trunc_str(&item.name, inner_w),
                     Style::default().fg(title_color),
                 ))),
                 Rect {
                     x: inner_x,
                     y: row,
-                    width: tw16,
+                    width: inner_w16,
                     height: 1,
                 },
             );
@@ -261,7 +261,7 @@ impl App {
                     ))),
                     Rect {
                         x: img_x,
-                        y: area.y,
+                        y: img_y,
                         width: img_actual_w,
                         height: img_height,
                     },

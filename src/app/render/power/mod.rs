@@ -389,15 +389,19 @@ impl App {
         if has_detail {
             self.render_power_detail(f, area, lib_idx, focused, layout);
         } else if show_compact_movie_detail {
-            const COMPACT_DETAIL_H: u16 = 10;
-            let banner_h = COMPACT_DETAIL_H.min(area.height.saturating_sub(1)).max(1);
+            const COMPACT_DETAIL_H: u16 = 13;
+            const COMPACT_DETAIL_GAP: u16 = 1;
+            let reserved_h = COMPACT_DETAIL_H.saturating_add(COMPACT_DETAIL_GAP);
+            let banner_h = COMPACT_DETAIL_H
+                .min(area.height.saturating_sub(COMPACT_DETAIL_GAP).max(1))
+                .max(1);
             let banner_area = Rect {
                 height: banner_h,
                 ..area
             };
             let list_area = Rect {
-                y: area.y + banner_h,
-                height: area.height.saturating_sub(banner_h),
+                y: area.y + reserved_h.min(area.height),
+                height: area.height.saturating_sub(reserved_h),
                 ..area
             };
             self.render_power_compact_detail(f, banner_area, lib_idx, focused, layout);
@@ -539,6 +543,7 @@ mod tests {
         let mut layout = LayoutPower::default();
 
         let out = render_power_library_to_string(&mut app, &mut layout);
+        let lines: Vec<&str> = out.lines().collect();
 
         assert!(app.libs[0].power_detail_item.is_none());
         assert!(
@@ -556,6 +561,11 @@ mod tests {
         assert!(
             !out.contains("Director: Director Hidden"),
             "compact banner must hide director:\n{out}"
+        );
+        assert_eq!(lines[13].trim(), "", "expected spacer row between banner and list:\n{out}");
+        assert!(
+            lines[14].contains("Focused Movie"),
+            "expected movie list below banner spacer:\n{out}"
         );
     }
 
