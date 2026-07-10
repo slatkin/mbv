@@ -256,23 +256,25 @@ impl App {
             }
 
             Command::QueuePlayCursor => {
-                let scope = self.visible_queue_scope();
                 let queue = self.displayed_queue();
                 let t = queue.queue_cursor;
                 let n = queue.items.len();
                 if t < n {
-                    if let Some(ref conn_id) = self.connected_session_id.clone() {
+                    if let Some(conn_id) = self.connected_session_id.clone() {
                         let item = queue.items[t].clone();
-                        let id = conn_id.clone();
                         let item_ids: Vec<String> =
                             queue.items.iter().map(|i| i.id.clone()).collect();
                         let start_ticks = item.playback_position_ticks;
                         let label = item.playback_label();
                         self.flash_status(format!("Playing on remote: {label}"));
                         self.do_session_command(move |c| {
-                            c.session_play_items(&id, &item_ids, t, start_ticks)
+                            c.session_play_items(&conn_id, &item_ids, t, start_ticks)
                         });
                     } else {
+                        // Only read once we know we're not handing off to a
+                        // session -- `queue_scope_is_playback` is the one
+                        // reader below.
+                        let scope = self.visible_queue_scope();
                         let st = self.player.status.lock().unwrap();
                         let active = st.active;
                         let current_idx = st.current_idx;
@@ -285,7 +287,14 @@ impl App {
                             } else if t != current_idx {
                                 self.player.send_command(PlayerCommand::JumpTo(t));
                             }
-                        } else if !queue.items.is_empty() {
+                        } else {
+                            // `t < n` above already guarantees the queue is
+                            // non-empty, so no `is_empty()` re-check here.
+                            //
+                            // `replace_playback_queue` and `play_queue` each
+                            // take ownership of their own `Vec<MediaItem>`
+                            // and both run, so two clones of `queue.items`
+                            // are the minimum here, not a redundant third.
                             let items = queue.items.clone();
                             let c = Arc::new(self.client.lock().unwrap().clone());
                             self.replace_playback_queue(items.clone(), t);
