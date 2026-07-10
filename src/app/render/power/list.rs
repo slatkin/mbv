@@ -449,7 +449,10 @@ impl App {
             // extra row to clear the rule too.
             if visible > 1
                 && offset > 0
-                && matches!(display_rows.get(offset), Some(DisplayRow::Item(_)))
+                && matches!(
+                    display_rows.get(offset),
+                    Some(DisplayRow::Item(_) | DisplayRow::BannerFiller)
+                )
             {
                 if matches!(
                     display_rows.get(offset - 1),
@@ -1163,6 +1166,63 @@ mod tests {
             !header_line.is_empty() && !header_line.contains(target_title.as_str()),
             "expected the bucket header directly above the opening rule, not stranded \
              off-screen by the nudge:\n{out}"
+        );
+    }
+
+    #[test]
+    fn letter_group_backs_up_from_banner_filler_row_to_keep_header_visible() {
+        // Same reachable state as the previous regression, but with a taller
+        // viewport so stale scroll clamps to the banner's opening filler row
+        // rather than the selected item row itself. The header should still be
+        // nudged back into view.
+        let titles: Vec<String> = (0..60)
+            .map(|i| {
+                let letter = (b'A' + (i % 26) as u8) as char;
+                format!("{letter} Movie {i:02}")
+            })
+            .collect();
+        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
+        let mut app = make_power_movie_list_app(title_refs);
+
+        let target_idx = 3;
+        let target_title = titles[target_idx].clone();
+
+        let mut layout = LayoutPower::default();
+
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.cursor = 55;
+        }
+        let _ = render_power_list_to_string_sized(&mut app, &mut layout, 60, 16);
+
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.cursor = target_idx;
+        }
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 16);
+        let lines: Vec<&str> = out.lines().collect();
+
+        let title_line_idx = lines
+            .iter()
+            .position(|l| l.contains(target_title.as_str()))
+            .expect("selected item's row should render");
+        let rule_line_idx = lines
+            .iter()
+            .position(|l| l.contains('\u{2500}'))
+            .expect("expected the banner's opening rule to be visible");
+        assert!(
+            rule_line_idx < title_line_idx,
+            "expected the opening rule to render above the selected item:\n{out}"
+        );
+        assert!(
+            rule_line_idx > 0,
+            "expected a header row above the opening rule, not scrolled to the very top:\n{out}"
+        );
+        let header_line = lines[rule_line_idx - 1].trim();
+        assert!(
+            !header_line.is_empty() && !header_line.contains(target_title.as_str()),
+            "expected the bucket header directly above the opening rule, not stranded \
+             off-screen when scroll lands on the banner filler row:\n{out}"
         );
     }
 
