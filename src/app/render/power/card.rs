@@ -1,6 +1,49 @@
+use crate::app::images::POWER_CARD_PLACEHOLDER_KEY;
 use crate::app::{App, PowerFocus};
 use ratatui::layout::Rect;
 use ratatui::Frame;
+
+/// Which source drives the Power View media card's content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PowerCardSource {
+    /// The queue-cursor item's artwork.
+    QueueCursor,
+    /// The focused library item's artwork (library browser drilled below the
+    /// top level).
+    LibraryFocused,
+    /// A fixed steady-state placeholder (never the transient "Loading…" state).
+    Placeholder,
+}
+
+/// Pure derivation of the Power View media card's content, re-derived every
+/// frame from current Power View state — no persisted "last shown" stickiness:
+///
+/// - Queue (left column) focused, queue non-empty -> queue-cursor item's art.
+/// - Library browser drilled below the top level -> focused library item's art.
+/// - Top level / startup, queue non-empty -> queue-cursor item's art (default).
+/// - Top level / startup, queue empty -> a fixed steady-state placeholder.
+///
+/// `library_drilled_below_top` takes priority over queue focus being merely
+/// "possible but empty": an empty queue never has a cursor item to show, so
+/// that combination falls through to the placeholder rather than indexing
+/// into an empty queue.
+pub(super) fn power_card_source(
+    focus: PowerFocus,
+    library_drilled_below_top: bool,
+    queue_len: usize,
+) -> PowerCardSource {
+    if focus == PowerFocus::Queue && queue_len > 0 {
+        return PowerCardSource::QueueCursor;
+    }
+    if library_drilled_below_top {
+        return PowerCardSource::LibraryFocused;
+    }
+    if queue_len > 0 {
+        PowerCardSource::QueueCursor
+    } else {
+        PowerCardSource::Placeholder
+    }
+}
 
 impl App {
     fn render_card_image(
@@ -202,8 +245,20 @@ impl App {
             (queue.queue_cursor, queue.items.clone())
         };
         let n = items.len();
-        if n == 0 {
-            return (0, false);
+        // By this point every "library browser drilled below top level" branch
+        // above has already returned, so this is always the default derivation:
+        // queue-cursor art when the queue has items, else the steady placeholder.
+        if matches!(
+            power_card_source(self.power_focus, false, n),
+            PowerCardSource::Placeholder
+        ) {
+            self.ensure_placeholder_card_image();
+            return self.render_card_image(
+                f,
+                area,
+                POWER_CARD_PLACEHOLDER_KEY,
+                area.height.min(18),
+            );
         }
         let item = &items[cursor];
         let img_types: &[&str] = match item.item_type.as_str() {
@@ -258,5 +313,65 @@ impl App {
             }
         }
         self.render_card_image(f, area, &cache_key, area.height)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{power_card_source, PowerCardSource};
+    use crate::app::PowerFocus;
+
+    #[test]
+    fn queue_focused_with_items_shows_queue_cursor() {
+        assert_eq!(
+            power_card_source(PowerFocus::Queue, false, 3),
+            PowerCardSource::QueueCursor
+        );
+        // Drilled-in library state is irrelevant once the queue itself is focused.
+        assert_eq!(
+            power_card_source(PowerFocus::Queue, true, 3),
+            PowerCardSource::QueueCursor
+        );
+    }
+
+    #[test]
+    fn queue_focused_but_empty_falls_back_to_placeholder() {
+        // Should not happen in practice (UI shouldn't let you focus an empty
+        // queue), but the derivation must stay safe rather than indexing into
+        // an empty queue.
+        assert_eq!(
+            power_card_source(PowerFocus::Queue, false, 0),
+            PowerCardSource::Placeholder
+        );
+    }
+
+    #[test]
+    fn library_drilled_below_top_shows_focused_library_item() {
+        assert_eq!(
+            power_card_source(PowerFocus::Left, true, 0),
+            PowerCardSource::LibraryFocused
+        );
+        // Still true with a non-empty queue: drilled-in library wins over the
+        // queue default.
+        assert_eq!(
+            power_card_source(PowerFocus::Left, true, 5),
+            PowerCardSource::LibraryFocused
+        );
+    }
+
+    #[test]
+    fn top_level_with_nonempty_queue_defaults_to_queue_cursor() {
+        assert_eq!(
+            power_card_source(PowerFocus::Left, false, 1),
+            PowerCardSource::QueueCursor
+        );
+    }
+
+    #[test]
+    fn top_level_with_empty_queue_shows_placeholder() {
+        assert_eq!(
+            power_card_source(PowerFocus::Left, false, 0),
+            PowerCardSource::Placeholder
+        );
     }
 }

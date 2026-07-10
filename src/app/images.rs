@@ -12,6 +12,17 @@ use textwrap::wrap;
 const MAX_IMAGE_FETCHES: usize = 6;
 const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 
+/// Cache key under which the bundled Power View card placeholder is stored in
+/// `card_image_states`. Never touches `card_image_loading`, so it never triggers
+/// the transient "Loading…" treatment — it is decoded synchronously from the
+/// bundled bytes the first time it's needed and then just sits in the cache.
+pub(super) const POWER_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
+
+/// Fixed steady-state placeholder shown in the Power View media card when the
+/// queue is empty and the library browser hasn't drilled below the top level.
+static POWER_CARD_PLACEHOLDER_BYTES: &[u8] =
+    include_bytes!("../../assets/power-card-placeholder.jpg");
+
 /// A pending card-image fetch, queued when the in-flight limit is reached.
 pub(super) struct ImageFetchReq {
     pub cache_key: String,
@@ -160,6 +171,28 @@ impl App {
             return;
         }
         self.spawn_image_fetch(req);
+    }
+
+    /// Decodes and caches the bundled Power View placeholder image, through the
+    /// same `image_picker` -> `StatefulProtocol` path used for fetched Emby
+    /// images, so it renders via the same `render_card_image` code. Idempotent:
+    /// only decodes once, on first use. Does not touch `card_image_loading`, so
+    /// it never presents as an in-flight fetch.
+    pub(super) fn ensure_placeholder_card_image(&mut self) {
+        if self
+            .card_image_states
+            .contains_key(POWER_CARD_PLACEHOLDER_KEY)
+        {
+            return;
+        }
+        let Some(picker) = self.image_picker.as_ref() else {
+            return;
+        };
+        let state = image::load_from_memory(POWER_CARD_PLACEHOLDER_BYTES)
+            .ok()
+            .map(|img| picker.new_resize_protocol(img));
+        self.card_image_states
+            .insert(POWER_CARD_PLACEHOLDER_KEY.to_string(), state);
     }
 
     /// Spawn queued image fetches until the in-flight limit is reached. Called
