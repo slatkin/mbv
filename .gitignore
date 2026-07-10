@@ -4,3 +4,6 @@
 *.png
 !assets/*.png
 !assets/*.jpg
+
+# AI assistant artifacts
+context-snapshot.json
