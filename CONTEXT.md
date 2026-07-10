@@ -182,7 +182,7 @@ _Avoid_: introducing a separate notification surface for routine in-app feedback
 
 ## Input handling
 
-The subsystem that turns key and mouse events into app behavior. Today it is decentralized across `App::handle_key` and `App::handle_mouse` in `src/app/input.rs`; the terms below are the **target shape** from #129 (see `docs/adr/0002-centralized-input-handling.md`), partially present as the existing `Action`/`dispatch` seam in `src/app/action.rs`.
+The subsystem that turns key and mouse events into app behavior. Keyboard precedence is centralized: `App::handle_key` (`src/app/input.rs`) is a loop over the `CONTEXT_STACK` context-priority registry in `src/app/input_resolver.rs` (#129, see `docs/adr/0002-centralized-input-handling.md`). Mouse (`App::handle_mouse`) routes command-like clicks through the same `Command`/`dispatch` seam but keeps genuinely spatial logic (hit-testing, drag-seek, hover) local, by design. Help (`render/overlays/help.rs`) renders its `[playback]` section from the registry's binding data; other sections are still hand-written pending further migration.
 
 **Guardrail**: new shortcuts go through this registry, not through a new raw key/click check in view or panel code — see AGENTS.md's "Rules" section for the enforceable version and its exceptions (text entry, external setup).
 
@@ -193,11 +193,11 @@ A semantic input intent (e.g. `TogglePlayPause`, `QueuePlayCursor`, `LibrarySear
 _Avoid_: treating a `Command` as a keybinding — the same command can be bound to a chord, a mouse region, or (future) a user override; the binding is data, the command is the intent.
 
 **Context priority stack**:
-The ordered, first-match list of active input contexts (overlays, confirms, text entry, context menu, playback, view) that decides which handler consumes a given event. It is today's implicit `handle_key` branch order (and `handle_mouse`'s spatial equivalent) made explicit and assertable. Contexts share one taxonomy across keyboard and mouse.
+The ordered, first-match list of active input contexts (overlays, confirms, text entry, context menu, playback, view) that decides which handler consumes a given event. For keyboard this is the `CONTEXT_STACK` table in `src/app/input_resolver.rs` — the old implicit `handle_key` branch order, made explicit and assertable; mouse has the spatial equivalent in `handle_mouse`. Contexts share one taxonomy across keyboard and mouse.
 _Avoid_: modeling input as a flat global shortcut table — that loses precedence; and avoid computing a single "active context" — contexts stack, and some (e.g. settings) have their own ordered sub-stack.
 
 **Key resolution** (`Command` / `Swallow` / `FallThrough`):
-The three outcomes of resolving a chord in a context. `Command` dispatches an intent; `Swallow` consumes the key with no action (e.g. an overlay eating unknown keys); `FallThrough` defers to a lower-priority context (today only the playback layer genuinely falls through). This trichotomy is latent in the current code and made explicit by the resolver.
+The three outcomes of resolving a chord in a context. `Command` dispatches an intent; `Swallow` consumes the key with no action (e.g. an overlay eating unknown keys); `FallThrough` defers to a lower-priority context (today only the playback layer genuinely falls through). This trichotomy is made explicit by the resolver's return type, `KeyResolution`, in `src/app/input_resolver.rs`.
 _Avoid_: conflating `Swallow` and `FallThrough` — an overlay swallowing a key is not the same as a gated playback key declining it.
 
 **Input snapshot**:
