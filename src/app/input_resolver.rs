@@ -522,6 +522,22 @@ mod app_level_tests {
     }
 
     #[test]
+    fn h_toggles_panel_mode_when_active_via_handle_key() {
+        // Positive counterpart to the precedence test above: with no search
+        // active, 'h' must actually reach `handle_key_panel_toggle` and
+        // advance `panel_mode`, not just correctly decline to fire when a
+        // higher-priority context claims the key.
+        let mut app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+        }
+        let before = app.panel_mode;
+        app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+        assert_ne!(app.panel_mode, before);
+    }
+
+    #[test]
     fn power_lib_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
         app.tab_idx = 1;
