@@ -250,14 +250,16 @@ impl PlaybackQueue {
     }
 
     pub fn merge_refresh(&mut self, fetched_items: Vec<MediaItem>) -> RefreshMergeResult {
-        let fetched_by_item_id = group_fetched_items_by_item_id(fetched_items);
+        let mut fetched_by_item_id = group_fetched_items_by_item_id(fetched_items);
         let old_slots = std::mem::take(&mut self.slots);
         let mut result = RefreshMergeResult::default();
         let mut merged_slots = Vec::with_capacity(old_slots.len());
         let active_slot_id = self.active_slot_id;
 
         for mut slot in old_slots {
-            let fetched = fetched_by_item_id.get(&slot.item.id).cloned();
+            let fetched = fetched_by_item_id
+                .get_mut(&slot.item.id)
+                .map(FetchedItemMatches::next_match);
             match fetched {
                 Some(fetched_item) => {
                     self.merge_fetched_slot(&mut slot, fetched_item, active_slot_id, &mut result);
@@ -348,10 +350,38 @@ impl PlaybackQueue {
     }
 }
 
-fn group_fetched_items_by_item_id(items: Vec<MediaItem>) -> HashMap<String, MediaItem> {
+#[derive(Debug)]
+struct FetchedItemMatches {
+    items: Vec<MediaItem>,
+    next_index: usize,
+}
+
+impl FetchedItemMatches {
+    fn new(item: MediaItem) -> Self {
+        Self {
+            items: vec![item],
+            next_index: 0,
+        }
+    }
+
+    fn push(&mut self, item: MediaItem) {
+        self.items.push(item);
+    }
+
+    fn next_match(&mut self) -> MediaItem {
+        let index = self.next_index.min(self.items.len() - 1);
+        self.next_index = self.next_index.saturating_add(1);
+        self.items[index].clone()
+    }
+}
+
+fn group_fetched_items_by_item_id(items: Vec<MediaItem>) -> HashMap<String, FetchedItemMatches> {
     let mut grouped = HashMap::new();
     for item in items {
-        grouped.insert(item.id.clone(), item);
+        grouped
+            .entry(item.id.clone())
+            .and_modify(|matches: &mut FetchedItemMatches| matches.push(item.clone()))
+            .or_insert_with(|| FetchedItemMatches::new(item));
     }
     grouped
 }
@@ -572,6 +602,28 @@ mod tests {
         assert_eq!(
             queue.slot(duplicate).unwrap().item.playback_position_ticks,
             5 * TICKS_PER_SECOND
+        );
+    }
+
+    #[test]
+    fn refresh_matches_duplicate_fetched_items_in_queue_order() {
+        let mut queue = PlaybackQueue::from_items(vec![item("same"), item("same")], None);
+        let first = queue.slots()[0].slot_id;
+        let second = queue.slots()[1].slot_id;
+
+        let result = queue.merge_refresh(vec![
+            item_with_progress("same", 5, false),
+            item_with_progress("same", 9, false),
+        ]);
+
+        assert!(result.pruned_slots.is_empty());
+        assert_eq!(
+            queue.slot(first).unwrap().item.playback_position_ticks,
+            5 * TICKS_PER_SECOND
+        );
+        assert_eq!(
+            queue.slot(second).unwrap().item.playback_position_ticks,
+            9 * TICKS_PER_SECOND
         );
     }
 
