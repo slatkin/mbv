@@ -156,7 +156,13 @@ impl App {
     // for Task 5, since leaving it in the wrong slot even temporarily would
     // ship a regression.)
     pub(super) fn handle_key_panel_toggle(&mut self, key: KeyEvent) -> Option<bool> {
-        if key.code != KeyCode::Char('h') {
+        // Behavior change (phase 6, #135): gate on an open context menu. Before
+        // this fix, `h` sat above `context_menu` in CONTEXT_STACK with no guard,
+        // so pressing 'h' while a context menu was open silently toggled the
+        // panel instead of being swallowed by the menu (which has no 'h'
+        // binding of its own). See docs/adr/0002-centralized-input-handling.md
+        // phase 6 and phase-2's `home_search`, which already guards the same way.
+        if key.code != KeyCode::Char('h') || self.context_menu.is_some() {
             return None;
         }
         let active = self.player.status.lock().unwrap().active;

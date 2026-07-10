@@ -594,6 +594,32 @@ mod app_level_tests {
     }
 
     #[test]
+    fn h_does_not_toggle_panel_mode_while_context_menu_is_open_via_handle_key() {
+        // Behavior change (phase 6, #135): before this fix, `panel_toggle_h`
+        // had no `context_menu` guard and sat above `context_menu` in
+        // CONTEXT_STACK, so 'h' bled through an open context menu and
+        // silently toggled the panel. It must now fall through to (and be
+        // swallowed by) the context-menu layer instead.
+        let mut app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true; // show_controls == true, so panel_toggle_h would fire if reached
+        }
+        app.context_menu = Some(crate::app::ContextMenu {
+            x: 0,
+            y: 0,
+            entries: Vec::new(),
+            cursor: 0,
+        });
+        let before = app.panel_mode;
+        app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+        assert_eq!(
+            app.panel_mode, before,
+            "panel mode must not toggle while a context menu is open"
+        );
+    }
+
+    #[test]
     fn power_lib_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
         app.tab_idx = 1;
