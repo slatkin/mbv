@@ -116,7 +116,7 @@ impl App {
         }
     }
 
-    pub(super) fn handle_key_legacy_tail(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_global_overlay_open(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::F(1) {
             self.show_help = true;
             return Some(false);
@@ -134,6 +134,10 @@ impl App {
             self.open_playlists_panel();
             return Some(false);
         }
+        None
+    }
+
+    pub(super) fn handle_key_legacy_tail(&mut self, key: KeyEvent) -> Option<bool> {
         if self.handle_power_left_width_key(key) {
             return Some(false);
         }

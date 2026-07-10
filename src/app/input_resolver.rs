@@ -154,6 +154,10 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_playlists,
     },
     ContextEntry {
+        name: "global_overlay_open",
+        handler: App::handle_key_global_overlay_open,
+    },
+    ContextEntry {
         name: "legacy_tail",
         handler: App::handle_key_legacy_tail,
     },
@@ -305,6 +309,33 @@ mod app_level_tests {
     }
 
     #[test]
+    fn f1_opens_help_via_handle_key() {
+        let mut app = make_app_stub();
+        app.handle_key(ev(KeyCode::F(1), KeyModifiers::NONE));
+        assert!(app.show_help);
+    }
+
+    #[test]
+    fn f2_opens_settings_via_handle_key() {
+        let mut app = make_app_stub();
+        assert!(!app.show_settings);
+        app.handle_key(ev(KeyCode::F(2), KeyModifiers::NONE));
+        assert!(app.show_settings);
+        // PRESERVED QUIRK: a second F2 press does not close settings. Once
+        // `show_settings` is true, `handle_key_settings` (ordered ahead of
+        // `global_overlay_open`/`legacy_tail` in CONTEXT_STACK, matching the
+        // pre-phase-2 branch order) claims F2 first and its match has no
+        // `F(2)` arm, so it falls to `_ => {}` and swallows the key. This
+        // predates phase 2 (verified against commit 2147343) — not a
+        // regression introduced by this extraction.
+        app.handle_key(ev(KeyCode::F(2), KeyModifiers::NONE));
+        assert!(
+            app.show_settings,
+            "F2 does not toggle settings closed once open; only Esc/F1/F3/F4/q do"
+        );
+    }
+
+    #[test]
     fn context_stack_order_is_pinned() {
         let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
         assert_eq!(
@@ -316,6 +347,7 @@ mod app_level_tests {
                 "help",
                 "sessions",
                 "playlists",
+                "global_overlay_open",
                 "legacy_tail",
                 "context_menu",
                 "power_queue_alt_m",
