@@ -492,6 +492,15 @@ mod app_level_tests {
         }
     }
 
+    fn test_empty_context_menu() -> crate::app::ContextMenu {
+        crate::app::ContextMenu {
+            x: 0,
+            y: 0,
+            entries: Vec::new(),
+            cursor: 0,
+        }
+    }
+
     fn test_lib_with_search() -> crate::app::LibraryTab {
         use crate::app::tests::make_item;
         use crate::app::{BrowseLevel, LibSearch, LibraryTab};
@@ -594,6 +603,27 @@ mod app_level_tests {
     }
 
     #[test]
+    fn h_does_not_toggle_panel_mode_while_context_menu_is_open_via_handle_key() {
+        // Behavior change (phase 6, #135): before this fix, `panel_toggle_h`
+        // had no `context_menu` guard and sat above `context_menu` in
+        // CONTEXT_STACK, so 'h' bled through an open context menu and
+        // silently toggled the panel. It must now fall through to (and be
+        // swallowed by) the context-menu layer instead.
+        let mut app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true; // show_controls == true, so panel_toggle_h would fire if reached
+        }
+        app.context_menu = Some(test_empty_context_menu());
+        let before = app.panel_mode;
+        app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+        assert_eq!(
+            app.panel_mode, before,
+            "panel mode must not toggle while a context menu is open"
+        );
+    }
+
+    #[test]
     fn power_lib_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
         app.tab_idx = 1;
@@ -622,6 +652,26 @@ mod app_level_tests {
             .push(crate::app::tests::make_item("1", "Track"));
         app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
         assert!(app.confirm_clear_queue);
+    }
+
+    #[test]
+    fn c_does_not_prompt_clear_queue_while_context_menu_is_open_via_handle_key() {
+        // Behavior change (phase 6, #135): before this fix,
+        // `clear_queue_prompt_c` had no `context_menu` guard and sat above
+        // `context_menu` in CONTEXT_STACK, so 'c' bled through an open
+        // context menu and silently opened the clear-queue confirmation. It
+        // must now fall through to (and be swallowed by) the context-menu
+        // layer instead.
+        let mut app = make_app_stub();
+        app.player_tab
+            .items
+            .push(crate::app::tests::make_item("1", "Track"));
+        app.context_menu = Some(test_empty_context_menu());
+        app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert!(
+            !app.confirm_clear_queue,
+            "clear-queue confirmation must not open while a context menu is open"
+        );
     }
 
     #[test]

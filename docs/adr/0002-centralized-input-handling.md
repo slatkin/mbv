@@ -76,8 +76,10 @@ Tracked as separate issues under a GitHub Project.
    handlers migrate.
 5. **Mouse onto shared `Command`** — region resolver emits shared `Command`s; fixes the
    queue `Enter`/double-click divergence. Spatial mechanics stay local.
-6. **Quirk-fix pass** — each accidental precedence bleed-through (e.g. `c`/`h` reaching
-   past an open context menu) fixed as a separate, labeled behavior change.
+6. **In progress (#135). Quirk-fix pass** — each accidental precedence bleed-through
+   fixed as a separate, labeled behavior change. Done so far: `c`/`h` reaching past an
+   open context menu, each gated with its own `context_menu.is_some()` check and a
+   dedicated regression test (matching the guard `home_search` already used).
 7. **Guardrail docs** — no raw shortcut handling outside the registry except text entry
    and external setup (e.g. login).
 
