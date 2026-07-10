@@ -3083,7 +3083,7 @@ impl App {
                     // be a harmless no-op and would otherwise start silently
                     // cycling that session's audio track instead of muting
                     // anything.
-                    self.dispatch(super::action::Action::ToggleMute);
+                    self.dispatch(super::action::Command::ToggleMute);
                     return;
                 }
                 if self
@@ -3092,12 +3092,12 @@ impl App {
                     .play_pause_area
                     .contains((col, row).into())
                 {
-                    self.dispatch(super::action::Action::TogglePlayPause);
+                    self.dispatch(super::action::Command::TogglePlayPause);
                     return;
                 }
                 if self.layout.playback.next_area.contains((col, row).into()) {
                     if self.transport_prev_next_available().1 {
-                        self.dispatch(super::action::Action::NextTrack);
+                        self.dispatch(super::action::Command::NextTrack);
                     }
                     return;
                 }

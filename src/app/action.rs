@@ -16,7 +16,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::player::PlayerCommand;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(super) enum Action {
+pub(super) enum Command {
     TogglePlayPause,
     Stop,
     /// Relative seek in seconds; negative rewinds, positive fast-forwards.
@@ -88,21 +88,21 @@ pub(super) fn playback_action_for_key(
     key: KeyEvent,
     active: bool,
     has_remote_session: bool,
-) -> Option<Action> {
+) -> Option<Command> {
     let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
     let gated = has_remote_session || active;
     match key.code {
-        KeyCode::Char(' ') if gated => Some(Action::TogglePlayPause),
-        KeyCode::Esc if gated => Some(Action::Stop),
-        KeyCode::Char('<') if gated => Some(Action::SeekRelative(-5.0)),
-        KeyCode::Char('>') if gated => Some(Action::SeekRelative(5.0)),
-        KeyCode::Char('N') if gated => Some(Action::NextTrack),
-        KeyCode::Char('P') if gated => Some(Action::PreviousTrack),
-        KeyCode::Char('z') if !ctrl => Some(Action::CycleOrToggleSubtitle),
-        KeyCode::Char('m') => Some(Action::ToggleMute),
-        KeyCode::Char('-') => Some(Action::AdjustVolume(-5)),
-        KeyCode::Char('+') | KeyCode::Char('=') => Some(Action::AdjustVolume(5)),
-        KeyCode::Char('a') if gated => Some(Action::ToggleMuteOrCycleAudio),
+        KeyCode::Char(' ') if gated => Some(Command::TogglePlayPause),
+        KeyCode::Esc if gated => Some(Command::Stop),
+        KeyCode::Char('<') if gated => Some(Command::SeekRelative(-5.0)),
+        KeyCode::Char('>') if gated => Some(Command::SeekRelative(5.0)),
+        KeyCode::Char('N') if gated => Some(Command::NextTrack),
+        KeyCode::Char('P') if gated => Some(Command::PreviousTrack),
+        KeyCode::Char('z') if !ctrl => Some(Command::CycleOrToggleSubtitle),
+        KeyCode::Char('m') => Some(Command::ToggleMute),
+        KeyCode::Char('-') => Some(Command::AdjustVolume(-5)),
+        KeyCode::Char('+') | KeyCode::Char('=') => Some(Command::AdjustVolume(5)),
+        KeyCode::Char('a') if gated => Some(Command::ToggleMuteOrCycleAudio),
         _ => None,
     }
 }
@@ -117,18 +117,18 @@ pub(super) fn playback_action_for_key(
 /// other handlers" — the thin adapter in `input.rs` still swallows the key
 /// (`Some(false)`), matching the old code's `_ => {}` arm followed by an
 /// unconditional `Some(false)`.
-pub(super) fn help_action_for_key(key: KeyEvent) -> Option<Action> {
+pub(super) fn help_action_for_key(key: KeyEvent) -> Option<Command> {
     match key.code {
-        KeyCode::Char('q') if key.modifiers.is_empty() => Some(Action::Quit),
-        KeyCode::Esc | KeyCode::F(1) => Some(Action::CloseHelp),
-        KeyCode::F(2) => Some(Action::ShowSettings),
-        KeyCode::F(3) => Some(Action::ShowSessions),
-        KeyCode::F(4) => Some(Action::ShowPlaylists),
-        KeyCode::Up => Some(Action::ScrollBy(-1)),
-        KeyCode::Down => Some(Action::ScrollBy(1)),
-        KeyCode::PageUp => Some(Action::ScrollBy(-10)),
-        KeyCode::PageDown => Some(Action::ScrollBy(10)),
-        KeyCode::Home => Some(Action::ScrollHome),
+        KeyCode::Char('q') if key.modifiers.is_empty() => Some(Command::Quit),
+        KeyCode::Esc | KeyCode::F(1) => Some(Command::CloseHelp),
+        KeyCode::F(2) => Some(Command::ShowSettings),
+        KeyCode::F(3) => Some(Command::ShowSessions),
+        KeyCode::F(4) => Some(Command::ShowPlaylists),
+        KeyCode::Up => Some(Command::ScrollBy(-1)),
+        KeyCode::Down => Some(Command::ScrollBy(1)),
+        KeyCode::PageUp => Some(Command::ScrollBy(-10)),
+        KeyCode::PageDown => Some(Command::ScrollBy(10)),
+        KeyCode::Home => Some(Command::ScrollHome),
         _ => None,
     }
 }
@@ -142,25 +142,25 @@ impl App {
     /// command vs. a local `Player` command, matching the divergent behavior
     /// `handle_playback_key` had inline (including its known bugs — see issue
     /// #78 follow-up).
-    pub(super) fn dispatch(&mut self, action: Action) -> bool {
-        match action {
-            Action::Quit => return self.try_quit(),
+    pub(super) fn dispatch(&mut self, command: Command) -> bool {
+        match command {
+            Command::Quit => return self.try_quit(),
 
-            Action::TogglePlayPause => {
+            Command::TogglePlayPause => {
                 if let Some(id) = self.connected_session_id.clone() {
                     self.do_session_command(move |c| c.session_transport(&id, "PlayPause"));
                 } else {
                     self.player.send_command(PlayerCommand::TogglePause);
                 }
             }
-            Action::Stop => {
+            Command::Stop => {
                 if let Some(id) = self.connected_session_id.clone() {
                     self.do_session_command(move |c| c.session_transport(&id, "Stop"));
                 } else {
                     self.player.stop();
                 }
             }
-            Action::SeekRelative(delta) => {
+            Command::SeekRelative(delta) => {
                 if let Some(id) = self.connected_session_id.clone() {
                     let pos_s = self
                         .connected_session_state
@@ -173,31 +173,31 @@ impl App {
                     self.player.send_command(PlayerCommand::Seek(delta));
                 }
             }
-            Action::NextTrack => {
+            Command::NextTrack => {
                 if let Some(id) = self.connected_session_id.clone() {
                     self.session_jump_track(&id, 1, "NextTrack");
                 } else {
                     self.player.next();
                 }
             }
-            Action::PreviousTrack => {
+            Command::PreviousTrack => {
                 if let Some(id) = self.connected_session_id.clone() {
                     self.session_jump_track(&id, -1, "PreviousTrack");
                 } else {
                     self.player.previous();
                 }
             }
-            Action::CycleOrToggleSubtitle => {
+            Command::CycleOrToggleSubtitle => {
                 // cycle_sub() branches internally on connected_session_id,
                 // and falls back to the idle subtitle-mode cycle itself when
                 // local playback has no active player (see #86).
                 self.cycle_sub();
             }
-            Action::AdjustVolume(delta) => {
+            Command::AdjustVolume(delta) => {
                 // adjust_volume already branches session vs. local internally.
                 self.adjust_volume(delta);
             }
-            Action::ToggleMute => {
+            Command::ToggleMute => {
                 if self.connected_session_id.is_some() {
                     self.session_toggle_mute();
                 } else {
@@ -207,7 +207,7 @@ impl App {
                     self.save_prefs();
                 }
             }
-            Action::ToggleMuteOrCycleAudio => {
+            Command::ToggleMuteOrCycleAudio => {
                 if self.is_audio_item() {
                     self.toggle_mute();
                 } else {
@@ -215,19 +215,19 @@ impl App {
                 }
             }
 
-            Action::CloseHelp => {
+            Command::CloseHelp => {
                 self.show_help = false;
             }
-            Action::ShowSettings | Action::ShowSessions | Action::ShowPlaylists => {
+            Command::ShowSettings | Command::ShowSessions | Command::ShowPlaylists => {
                 self.show_help = false;
-                match action {
-                    Action::ShowSettings => self.show_settings = true,
-                    Action::ShowSessions => self.show_sessions = true,
-                    Action::ShowPlaylists => self.open_playlists_panel(),
+                match command {
+                    Command::ShowSettings => self.show_settings = true,
+                    Command::ShowSessions => self.show_sessions = true,
+                    Command::ShowPlaylists => self.open_playlists_panel(),
                     _ => unreachable!(),
                 }
             }
-            Action::ScrollBy(delta) => {
+            Command::ScrollBy(delta) => {
                 if delta < 0 {
                     self.help_scroll = self.help_scroll.saturating_sub((-delta) as u16);
                 } else {
@@ -237,7 +237,7 @@ impl App {
                     self.help_scroll += delta as u16;
                 }
             }
-            Action::ScrollHome => {
+            Command::ScrollHome => {
                 self.help_scroll = 0;
             }
         }
@@ -264,7 +264,7 @@ mod tests {
     fn space_fires_when_active_only() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char(' ')), true, false),
-            Some(Action::TogglePlayPause)
+            Some(Command::TogglePlayPause)
         );
     }
 
@@ -272,7 +272,7 @@ mod tests {
     fn space_fires_when_remote_session_only() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char(' ')), false, true),
-            Some(Action::TogglePlayPause)
+            Some(Command::TogglePlayPause)
         );
     }
 
@@ -288,11 +288,11 @@ mod tests {
     fn esc_stops_when_gated() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Esc), true, false),
-            Some(Action::Stop)
+            Some(Command::Stop)
         );
         assert_eq!(
             playback_action_for_key(key(KeyCode::Esc), false, true),
-            Some(Action::Stop)
+            Some(Command::Stop)
         );
     }
 
@@ -320,11 +320,11 @@ mod tests {
     fn seek_keys_fire_when_gated() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('<')), true, false),
-            Some(Action::SeekRelative(-5.0))
+            Some(Command::SeekRelative(-5.0))
         );
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('>')), false, true),
-            Some(Action::SeekRelative(5.0))
+            Some(Command::SeekRelative(5.0))
         );
     }
 
@@ -344,11 +344,11 @@ mod tests {
     fn track_nav_keys_fire_when_gated() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('N')), true, false),
-            Some(Action::NextTrack)
+            Some(Command::NextTrack)
         );
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('P')), false, true),
-            Some(Action::PreviousTrack)
+            Some(Command::PreviousTrack)
         );
     }
 
@@ -366,7 +366,7 @@ mod tests {
 
     /// Assert that `code` produces `expected` for every (active, has_remote_session)
     /// combination — i.e. it fires unconditionally, with no gating at all.
-    fn assert_fires_unconditionally(code: KeyCode, expected: Action) {
+    fn assert_fires_unconditionally(code: KeyCode, expected: Command) {
         for active in [false, true] {
             for remote in [false, true] {
                 assert_eq!(
@@ -382,7 +382,7 @@ mod tests {
 
     #[test]
     fn z_fires_unconditionally() {
-        assert_fires_unconditionally(KeyCode::Char('z'), Action::CycleOrToggleSubtitle);
+        assert_fires_unconditionally(KeyCode::Char('z'), Command::CycleOrToggleSubtitle);
     }
 
     #[test]
@@ -397,16 +397,16 @@ mod tests {
 
     #[test]
     fn m_fires_unconditionally() {
-        assert_fires_unconditionally(KeyCode::Char('m'), Action::ToggleMute);
+        assert_fires_unconditionally(KeyCode::Char('m'), Command::ToggleMute);
     }
 
     // ── `-`/`+`: unconditional volume ────────────────────────────────────────
 
     #[test]
     fn volume_keys_fire_unconditionally() {
-        assert_fires_unconditionally(KeyCode::Char('-'), Action::AdjustVolume(-5));
-        assert_fires_unconditionally(KeyCode::Char('+'), Action::AdjustVolume(5));
-        assert_fires_unconditionally(KeyCode::Char('='), Action::AdjustVolume(5));
+        assert_fires_unconditionally(KeyCode::Char('-'), Command::AdjustVolume(-5));
+        assert_fires_unconditionally(KeyCode::Char('+'), Command::AdjustVolume(5));
+        assert_fires_unconditionally(KeyCode::Char('='), Command::AdjustVolume(5));
     }
 
     // ── `a`: gated on (active OR has_remote_session), same as the other
@@ -416,7 +416,7 @@ mod tests {
     fn a_fires_when_active_only() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), true, false),
-            Some(Action::ToggleMuteOrCycleAudio)
+            Some(Command::ToggleMuteOrCycleAudio)
         );
     }
 
@@ -424,7 +424,7 @@ mod tests {
     fn a_fires_when_active_and_remote_session() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), true, true),
-            Some(Action::ToggleMuteOrCycleAudio)
+            Some(Command::ToggleMuteOrCycleAudio)
         );
     }
 
@@ -432,7 +432,7 @@ mod tests {
     fn a_fires_when_remote_session_only() {
         assert_eq!(
             playback_action_for_key(key(KeyCode::Char('a')), false, true),
-            Some(Action::ToggleMuteOrCycleAudio)
+            Some(Command::ToggleMuteOrCycleAudio)
         );
     }
 
@@ -458,7 +458,7 @@ mod tests {
     fn help_q_fires_quit() {
         assert_eq!(
             help_action_for_key(key(KeyCode::Char('q'))),
-            Some(Action::Quit)
+            Some(Command::Quit)
         );
     }
 
@@ -471,7 +471,7 @@ mod tests {
     fn help_esc_fires_close_help() {
         assert_eq!(
             help_action_for_key(key(KeyCode::Esc)),
-            Some(Action::CloseHelp)
+            Some(Command::CloseHelp)
         );
     }
 
@@ -479,7 +479,7 @@ mod tests {
     fn help_f1_fires_close_help() {
         assert_eq!(
             help_action_for_key(key(KeyCode::F(1))),
-            Some(Action::CloseHelp)
+            Some(Command::CloseHelp)
         );
     }
 
@@ -487,7 +487,7 @@ mod tests {
     fn help_f2_fires_show_settings() {
         assert_eq!(
             help_action_for_key(key(KeyCode::F(2))),
-            Some(Action::ShowSettings)
+            Some(Command::ShowSettings)
         );
     }
 
@@ -495,7 +495,7 @@ mod tests {
     fn help_f3_fires_show_sessions() {
         assert_eq!(
             help_action_for_key(key(KeyCode::F(3))),
-            Some(Action::ShowSessions)
+            Some(Command::ShowSessions)
         );
     }
 
@@ -503,7 +503,7 @@ mod tests {
     fn help_f4_fires_show_playlists() {
         assert_eq!(
             help_action_for_key(key(KeyCode::F(4))),
-            Some(Action::ShowPlaylists)
+            Some(Command::ShowPlaylists)
         );
     }
 
@@ -511,7 +511,7 @@ mod tests {
     fn help_up_fires_scroll_by_negative_one() {
         assert_eq!(
             help_action_for_key(key(KeyCode::Up)),
-            Some(Action::ScrollBy(-1))
+            Some(Command::ScrollBy(-1))
         );
     }
 
@@ -519,7 +519,7 @@ mod tests {
     fn help_down_fires_scroll_by_one() {
         assert_eq!(
             help_action_for_key(key(KeyCode::Down)),
-            Some(Action::ScrollBy(1))
+            Some(Command::ScrollBy(1))
         );
     }
 
@@ -527,7 +527,7 @@ mod tests {
     fn help_page_up_fires_scroll_by_negative_ten() {
         assert_eq!(
             help_action_for_key(key(KeyCode::PageUp)),
-            Some(Action::ScrollBy(-10))
+            Some(Command::ScrollBy(-10))
         );
     }
 
@@ -535,7 +535,7 @@ mod tests {
     fn help_page_down_fires_scroll_by_ten() {
         assert_eq!(
             help_action_for_key(key(KeyCode::PageDown)),
-            Some(Action::ScrollBy(10))
+            Some(Command::ScrollBy(10))
         );
     }
 
@@ -543,7 +543,7 @@ mod tests {
     fn help_home_fires_scroll_home() {
         assert_eq!(
             help_action_for_key(key(KeyCode::Home)),
-            Some(Action::ScrollHome)
+            Some(Command::ScrollHome)
         );
     }
 
@@ -591,7 +591,7 @@ mod tests {
 
         let mut app = make_app_stub();
         assert!(!app.mute_on);
-        app.dispatch(Action::ToggleMute);
+        app.dispatch(Command::ToggleMute);
         assert!(app.mute_on);
 
         let prefs_path = crate::config::prefs_path();
@@ -599,7 +599,7 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&saved).unwrap();
         assert_eq!(v["mute_on"], serde_json::json!(true));
 
-        app.dispatch(Action::ToggleMute);
+        app.dispatch(Command::ToggleMute);
         assert!(!app.mute_on);
     }
 
@@ -613,7 +613,7 @@ mod tests {
         sess.muted = false;
         app.connected_session_state = Some(sess);
 
-        app.dispatch(Action::ToggleMute);
+        app.dispatch(Command::ToggleMute);
 
         assert!(
             app.connected_session_state.as_ref().unwrap().muted,
@@ -636,7 +636,7 @@ mod tests {
         sess.muted = true;
         app.connected_session_state = Some(sess);
 
-        app.dispatch(Action::ToggleMute);
+        app.dispatch(Command::ToggleMute);
 
         assert!(!app.connected_session_state.as_ref().unwrap().muted);
     }
@@ -650,7 +650,7 @@ mod tests {
         app.connected_session_id = Some("session-1".into());
         app.connected_session_state = None;
 
-        app.dispatch(Action::ToggleMute);
+        app.dispatch(Command::ToggleMute);
 
         assert!(!app.mute_on);
     }
@@ -661,7 +661,7 @@ mod tests {
     fn dispatch_close_help_clears_show_help() {
         let mut app = make_app_stub();
         app.show_help = true;
-        assert!(!app.dispatch(Action::CloseHelp));
+        assert!(!app.dispatch(Command::CloseHelp));
         assert!(!app.show_help);
     }
 
@@ -669,7 +669,7 @@ mod tests {
     fn dispatch_show_settings_switches_panels() {
         let mut app = make_app_stub();
         app.show_help = true;
-        assert!(!app.dispatch(Action::ShowSettings));
+        assert!(!app.dispatch(Command::ShowSettings));
         assert!(!app.show_help);
         assert!(app.show_settings);
     }
@@ -678,7 +678,7 @@ mod tests {
     fn dispatch_show_sessions_switches_panels() {
         let mut app = make_app_stub();
         app.show_help = true;
-        assert!(!app.dispatch(Action::ShowSessions));
+        assert!(!app.dispatch(Command::ShowSessions));
         assert!(!app.show_help);
         assert!(app.show_sessions);
     }
@@ -691,7 +691,7 @@ mod tests {
         // `playlists.is_empty() && !playlists_loading` guard is false and it
         // never spawns the background network-loading thread.
         app.playlists = vec![crate::app::tests::make_item("Playlist", "Playlist")];
-        assert!(!app.dispatch(Action::ShowPlaylists));
+        assert!(!app.dispatch(Command::ShowPlaylists));
         assert!(!app.show_help);
         assert!(app.show_playlists);
     }
@@ -700,7 +700,7 @@ mod tests {
     fn dispatch_scroll_home_resets_to_zero() {
         let mut app = make_app_stub();
         app.help_scroll = 7;
-        assert!(!app.dispatch(Action::ScrollHome));
+        assert!(!app.dispatch(Command::ScrollHome));
         assert_eq!(app.help_scroll, 0);
     }
 
@@ -708,7 +708,7 @@ mod tests {
     fn dispatch_scroll_by_negative_one_saturates_at_zero() {
         let mut app = make_app_stub();
         app.help_scroll = 0;
-        app.dispatch(Action::ScrollBy(-1));
+        app.dispatch(Command::ScrollBy(-1));
         assert_eq!(app.help_scroll, 0);
     }
 
@@ -716,7 +716,7 @@ mod tests {
     fn dispatch_scroll_by_negative_ten_saturates_at_zero() {
         let mut app = make_app_stub();
         app.help_scroll = 3;
-        app.dispatch(Action::ScrollBy(-10));
+        app.dispatch(Command::ScrollBy(-10));
         assert_eq!(app.help_scroll, 0);
     }
 
@@ -724,7 +724,7 @@ mod tests {
     fn dispatch_scroll_by_one_increments() {
         let mut app = make_app_stub();
         app.help_scroll = 5;
-        app.dispatch(Action::ScrollBy(1));
+        app.dispatch(Command::ScrollBy(1));
         assert_eq!(app.help_scroll, 6);
     }
 
@@ -732,7 +732,7 @@ mod tests {
     fn dispatch_scroll_by_ten_increments() {
         let mut app = make_app_stub();
         app.help_scroll = 5;
-        app.dispatch(Action::ScrollBy(10));
+        app.dispatch(Command::ScrollBy(10));
         assert_eq!(app.help_scroll, 15);
     }
 
@@ -743,7 +743,7 @@ mod tests {
 
         let mut app = make_app_stub();
         assert!(!app.queue_dirty);
-        assert!(app.dispatch(Action::Quit));
+        assert!(app.dispatch(Command::Quit));
 
         let prefs_path = crate::config::prefs_path();
         assert!(
