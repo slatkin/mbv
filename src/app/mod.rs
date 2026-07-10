@@ -2417,11 +2417,39 @@ impl App {
                 self.status.clear();
                 if is_delete {
                     let allow_undo = !self.player.is_remote();
-                    let item = {
-                        let queue = self.playback_queue_mut();
-                        queue.remove_slot_at(idx)
+                    // This IS the confirmed stop-and-remove of the now-playing
+                    // slot, so it must go through the model's confirmed-removal
+                    // API — the gated `remove_slot` (used by `remove_slot_at`)
+                    // now refuses the active slot, which TrackChanged marks
+                    // active in real playback. `remove_active_slot_confirmed`
+                    // removes by index lookup and also clears `active_slot_id`,
+                    // and is safe even if the slot happens to be non-active.
+                    let item = match slot_id {
+                        Some(slot_id) => {
+                            match self
+                                .playback_queue_mut()
+                                .queue
+                                .remove_active_slot_confirmed(slot_id)
+                            {
+                                RemoveSlotResult::Removed(slot) => {
+                                    self.playback_queue_mut().sync_items_from_queue_model();
+                                    self.player.send_command(PlayerCommand::QueueRemove(idx));
+                                    Some(slot.item)
+                                }
+                                RemoveSlotResult::RequiresActiveConfirmation(_)
+                                | RemoveSlotResult::NotFound => None,
+                            }
+                        }
+                        None => None,
                     };
                     if let Some(item) = item {
+                        let queue = self.playback_queue_mut();
+                        if queue.items.is_empty() {
+                            queue.queue_cursor = 0;
+                        } else {
+                            queue.queue_cursor =
+                                queue.queue_cursor.min(queue.items.len().saturating_sub(1));
+                        }
                         if allow_undo {
                             self.queue_undo_stack
                                 .push(UndoEntry::Remove(idx, Box::new(item)));
@@ -5016,6 +5044,47 @@ pub(crate) mod tests {
 
         assert!(app.player_tab.queue.slot(first_dup).is_some());
         assert!(app.player_tab.queue.slot(second_dup).is_none());
+    }
+
+    #[test]
+    fn stopped_delete_removes_the_active_now_playing_slot() {
+        // The confirmed "remove now-playing item and stop playback" flow:
+        // pending_delete_idx marks the active slot for removal, then a Stopped
+        // event drives it. Now that TrackChanged populates the model's
+        // active_slot_id in real playback, the gated remove_slot path would
+        // refuse the active slot — the confirmed delete must bypass that gate.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(3);
+        app.player_tab.sync_queue_model_from_items_if_needed();
+        // TrackChanged(0) activates slot 0, mirroring real playback where the
+        // model's active_slot_id becomes Some before the delete.
+        app.handle_player_event(PlayerEvent::TrackChanged(0));
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 0;
+        }
+        app.pending_delete_idx = Some(0);
+
+        app.handle_player_event(PlayerEvent::Stopped {
+            idx: 0,
+            position_ticks: 0,
+            played: false,
+            consume: false,
+            error: None,
+        });
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            2,
+            "the confirmed delete must remove the active now-playing slot"
+        );
+        assert_eq!(
+            app.queue_undo_stack.len(),
+            1,
+            "delete must push an undo entry"
+        );
     }
 
     #[test]
