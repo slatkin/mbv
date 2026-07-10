@@ -115,6 +115,12 @@ pub struct PlaybackQueue {
     next_slot_id: u64,
 }
 
+impl Default for PlaybackQueue {
+    fn default() -> Self {
+        Self::from_items(Vec::new(), None)
+    }
+}
+
 impl PlaybackQueue {
     pub fn from_items(items: Vec<MediaItem>, active_index: Option<usize>) -> Self {
         let mut queue = Self {

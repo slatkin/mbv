@@ -93,6 +93,7 @@ use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
 
 use mbv_core::api::{parse_mbv_direct_tcp_port, EmbyClient, MediaItem};
+use mbv_core::playback_queue::{PlaybackQueue, QueueMutationResult, QueueSlotId, RemoveSlotResult};
 use mbv_core::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
 
@@ -382,6 +383,125 @@ enum SessionEvent {
 struct PlayerTab {
     items: Vec<MediaItem>,
     queue_cursor: usize,
+    queue: PlaybackQueue,
+}
+
+impl PlayerTab {
+    fn new(items: Vec<MediaItem>, queue_cursor: usize) -> Self {
+        let queue_cursor = queue_cursor.min(items.len().saturating_sub(1));
+        let queue = PlaybackQueue::from_items(items.clone(), None);
+        Self {
+            items,
+            queue_cursor,
+            queue,
+        }
+    }
+
+    fn set_items(&mut self, items: Vec<MediaItem>, queue_cursor: usize) {
+        *self = Self::new(items, queue_cursor);
+    }
+
+    fn queue_model_matches_items(&self) -> bool {
+        self.queue.slots().len() == self.items.len()
+            && self
+                .queue
+                .slots()
+                .iter()
+                .zip(&self.items)
+                .all(|(slot, item)| same_queue_occurrence(&slot.item, item))
+    }
+
+    fn sync_queue_model_from_items_if_needed(&mut self) {
+        if !self.queue_model_matches_items() {
+            self.queue = PlaybackQueue::from_items(self.items.clone(), None);
+        }
+    }
+
+    fn sync_items_from_queue_model(&mut self) {
+        self.items = self
+            .queue
+            .slots()
+            .iter()
+            .map(|slot| slot.item.clone())
+            .collect();
+        self.clamp_cursor();
+    }
+
+    fn clamp_cursor(&mut self) {
+        if self.items.is_empty() {
+            self.queue_cursor = 0;
+        } else {
+            self.queue_cursor = self.queue_cursor.min(self.items.len() - 1);
+        }
+    }
+
+    fn slot_id_at(&mut self, index: usize) -> Option<QueueSlotId> {
+        self.sync_queue_model_from_items_if_needed();
+        self.queue.slots().get(index).map(|slot| slot.slot_id)
+    }
+
+    fn slot_id_matches_at(&self, index: usize, slot_id: QueueSlotId) -> bool {
+        self.queue_model_matches_items()
+            && self
+                .queue
+                .slots()
+                .get(index)
+                .is_some_and(|slot| slot.slot_id == slot_id)
+    }
+
+    fn remove_slot_at(&mut self, index: usize) -> Option<MediaItem> {
+        let slot_id = self.slot_id_at(index)?;
+        let removed = match self.queue.remove_slot(slot_id) {
+            RemoveSlotResult::Removed(slot) => slot.item,
+            RemoveSlotResult::RequiresActiveConfirmation(_) | RemoveSlotResult::NotFound => {
+                return None;
+            }
+        };
+        self.sync_items_from_queue_model();
+        Some(removed)
+    }
+
+    fn insert_item_at(&mut self, index: usize, item: MediaItem) {
+        self.sync_queue_model_from_items_if_needed();
+        self.queue.insert(index, item);
+        self.sync_items_from_queue_model();
+        self.queue_cursor = index.min(self.items.len().saturating_sub(1));
+    }
+
+    fn append_item(&mut self, item: MediaItem) {
+        self.sync_queue_model_from_items_if_needed();
+        self.queue.append(item);
+        self.sync_items_from_queue_model();
+    }
+
+    fn append_items(&mut self, items: Vec<MediaItem>) {
+        self.sync_queue_model_from_items_if_needed();
+        for item in items {
+            self.queue.append(item);
+        }
+        self.sync_items_from_queue_model();
+    }
+
+    fn move_slot(&mut self, slot_id: QueueSlotId, to: usize) -> bool {
+        self.sync_queue_model_from_items_if_needed();
+        if !matches!(
+            self.queue.move_slot(slot_id, to),
+            QueueMutationResult::Applied(())
+        ) {
+            return false;
+        }
+        self.sync_items_from_queue_model();
+        self.queue_cursor = to.min(self.items.len().saturating_sub(1));
+        true
+    }
+
+    fn clear(&mut self) {
+        self.set_items(Vec::new(), 0);
+    }
+}
+
+fn same_queue_occurrence(left: &MediaItem, right: &MediaItem) -> bool {
+    left.id == right.id && left.playlist_item_id == right.playlist_item_id
 }
 
 struct LocalDaemonBootstrap {
@@ -406,10 +526,7 @@ fn bootstrap_local_daemon_queue(
 ) -> LocalDaemonBootstrap {
     if !remote_items.is_empty() {
         return LocalDaemonBootstrap {
-            player_tab: PlayerTab {
-                items: remote_items,
-                queue_cursor: remote_cursor,
-            },
+            player_tab: PlayerTab::new(remote_items, remote_cursor),
             queue_source: remote_source,
             last_played_item_id: None,
             last_played_completed: false,
@@ -420,10 +537,7 @@ fn bootstrap_local_daemon_queue(
 
     let Some(state) = saved_state.filter(|state| !state.items.is_empty()) else {
         return LocalDaemonBootstrap {
-            player_tab: PlayerTab {
-                items: remote_items,
-                queue_cursor: remote_cursor,
-            },
+            player_tab: PlayerTab::new(remote_items, remote_cursor),
             queue_source: remote_source,
             last_played_item_id: None,
             last_played_completed: false,
@@ -439,10 +553,7 @@ fn bootstrap_local_daemon_queue(
         state.last_played_completed,
     );
     LocalDaemonBootstrap {
-        player_tab: PlayerTab {
-            items: state.items.clone(),
-            queue_cursor: cursor,
-        },
+        player_tab: PlayerTab::new(state.items.clone(), cursor),
         queue_source: state.source.clone(),
         last_played_item_id: state.last_played_item_id.clone(),
         last_played_completed: state.last_played_completed,
@@ -518,17 +629,16 @@ impl QueueScopeResolution {
 }
 
 /// A reversible queue edit. `Remove` re-inserts the item at its old position;
-/// `Move` swaps the item back from `to` to `from`. `item_id` is the id of the
-/// item that landed at `to`, checked at undo time so a queue edit made after
-/// the move (which could shift what's actually sitting at `to`) is refused
-/// instead of swapping the wrong items.
+/// `Move` swaps the slot back from `to` to `from`. `slot_id` is the runtime
+/// queue occurrence that landed at `to`, checked at undo time so a queue edit
+/// made after the move is refused instead of swapping the wrong items.
 #[derive(Debug)]
 enum UndoEntry {
     Remove(usize, Box<MediaItem>),
     Move {
         from: usize,
         to: usize,
-        item_id: String,
+        slot_id: QueueSlotId,
     },
 }
 
@@ -1147,10 +1257,7 @@ impl App {
             player_rx,
             ws_rx,
             ws_send_tx: Some(ws_send_tx_app),
-            player_tab: PlayerTab {
-                items: Vec::new(),
-                queue_cursor: 0,
-            },
+            player_tab: PlayerTab::default(),
             remote_player_tab: None,
             system_notifications,
             image_protocol,
@@ -1252,10 +1359,7 @@ impl App {
             // user can browse locally while the daemon plays elsewhere.
             (
                 PlayerTab::default(),
-                Some(PlayerTab {
-                    items: remote_items,
-                    queue_cursor: remote_cursor,
-                }),
+                Some(PlayerTab::new(remote_items, remote_cursor)),
             )
         };
         let mut app = Self::build(AppInit {
@@ -1381,8 +1485,7 @@ impl App {
                 start_idx: cursor,
             });
         if let Some(queue) = self.remote_player_tab.as_mut() {
-            queue.items = items;
-            queue.queue_cursor = cursor;
+            queue.set_items(items, cursor);
         }
     }
 
@@ -1407,16 +1510,14 @@ impl App {
         let cursor = cursor.min(items.len().saturating_sub(1));
         match self.playback_target_queue_scope() {
             QueueScope::Local => {
-                self.player_tab.items = items;
-                self.player_tab.queue_cursor = cursor;
+                self.player_tab.set_items(items, cursor);
             }
             QueueScope::Remote => {
                 let queue = self
                     .remote_player_tab
                     .as_mut()
                     .expect("direct remote playback queue requires remote queue");
-                queue.items = items;
-                queue.queue_cursor = cursor;
+                queue.set_items(items, cursor);
             }
         }
     }
@@ -1494,7 +1595,7 @@ impl App {
         if idx >= queue.items.len() {
             return None;
         }
-        let removed_id = queue.items.remove(idx).id;
+        let removed_id = queue.remove_slot_at(idx)?.id;
         self.player.send_command(PlayerCommand::QueueRemove(idx));
         Some(removed_id)
     }
@@ -1564,10 +1665,7 @@ impl App {
             self.player_rx = remote_rx;
         }
 
-        self.remote_player_tab = Some(PlayerTab {
-            items: initial_items,
-            queue_cursor: initial_cursor,
-        });
+        self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.session_miss_count = 0;
@@ -2252,17 +2350,13 @@ impl App {
                     let allow_undo = !self.player.is_remote();
                     let item = {
                         let queue = self.playback_queue_mut();
-                        let item = queue.items.remove(idx);
-                        queue.queue_cursor = if queue.items.is_empty() {
-                            0
-                        } else {
-                            idx.min(queue.items.len() - 1)
-                        };
-                        item
+                        queue.remove_slot_at(idx)
                     };
-                    if allow_undo {
-                        self.queue_undo_stack
-                            .push(UndoEntry::Remove(idx, Box::new(item)));
+                    if let Some(item) = item {
+                        if allow_undo {
+                            self.queue_undo_stack
+                                .push(UndoEntry::Remove(idx, Box::new(item)));
+                        }
                     }
                 } else {
                     let (should_consume, is_audio) = self.should_consume_item(idx, consume);
@@ -2424,8 +2518,7 @@ impl App {
                     cursor
                 };
                 let queue = self.playback_queue_mut();
-                queue.items = items;
-                queue.queue_cursor = cursor;
+                queue.set_items(items, cursor);
                 if !self.has_direct_remote_queue() {
                     self.queue_source = source;
                 }
@@ -2750,10 +2843,7 @@ pub(crate) mod tests {
             hidden_libraries: Vec::new(),
             hidden_latest: Vec::new(),
             music_levels: Vec::new(),
-            player_tab: PlayerTab {
-                items: Vec::new(),
-                queue_cursor: 0,
-            },
+            player_tab: PlayerTab::default(),
             remote_player_tab: None,
             home: HomePane {
                 continue_items: Vec::new(),
@@ -4406,10 +4496,7 @@ pub(crate) mod tests {
     #[test]
     fn stale_remote_queue_scope_falls_back_to_local_when_not_in_direct_remote_mode() {
         let mut app = make_app_stub();
-        app.remote_player_tab = Some(PlayerTab {
-            items: make_items(2),
-            queue_cursor: 1,
-        });
+        app.remote_player_tab = Some(PlayerTab::new(make_items(2), 1));
         app.queue_scope = QueueScope::Remote;
 
         assert_eq!(app.visible_queue_scope(), QueueScope::Local);
@@ -4434,10 +4521,7 @@ pub(crate) mod tests {
     #[test]
     fn queue_scope_resolution_matrix_stale_remote_scope_without_direct_remote() {
         let mut app = make_app_stub();
-        app.remote_player_tab = Some(PlayerTab {
-            items: make_items(2),
-            queue_cursor: 0,
-        });
+        app.remote_player_tab = Some(PlayerTab::new(make_items(2), 0));
         app.queue_scope = QueueScope::Remote;
 
         assert!(!app.has_direct_remote_queue());
@@ -5566,6 +5650,39 @@ pub(crate) mod tests {
                 .map(|i| i.id.as_str())
                 .collect::<Vec<_>>(),
             vec![items[1].id.as_str(), items[2].id.as_str()]
+        );
+    }
+
+    #[test]
+    fn undo_of_move_is_refused_when_duplicate_id_masks_changed_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut items = make_items(3);
+        items[0].id = "duplicate".into();
+        items[0].name = "First duplicate".into();
+        items[0].playlist_item_id = "slot-a".into();
+        items[1].id = "duplicate".into();
+        items[1].name = "Second duplicate".into();
+        items[1].playlist_item_id = "slot-b".into();
+        let mut app = make_app_stub();
+        app.player_tab.items = items.clone();
+        app.player_tab.queue_cursor = 0;
+
+        app.move_queue_item_down(); // First duplicate now sits at index 1.
+        assert_eq!(app.queue_undo_stack.len(), 1);
+
+        app.player_tab.items.remove(1);
+        app.player_tab.items.insert(1, items[1].clone());
+
+        app.undo_last_queue_edit(QueueScope::Local);
+
+        assert_eq!(app.status, "Can't undo move: queue changed since then");
+        assert_eq!(
+            app.player_tab
+                .items
+                .iter()
+                .map(|i| i.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Second duplicate", "Second duplicate", "Item 2"]
         );
     }
 

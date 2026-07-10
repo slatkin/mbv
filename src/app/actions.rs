@@ -1520,11 +1520,7 @@ impl App {
         }
         if pos >= self.queue_for_scope(scope).items.len() {
             let queue = self.queue_for_scope_mut(scope);
-            if !queue.items.is_empty() {
-                queue.queue_cursor = queue.queue_cursor.min(queue.items.len() - 1);
-            } else {
-                queue.queue_cursor = 0;
-            }
+            queue.clamp_cursor();
             return;
         }
         if controls_playback_queue && active && current_idx == pos {
@@ -1533,7 +1529,9 @@ impl App {
             self.status_expires = None;
             return;
         }
-        let item = self.queue_for_scope_mut(scope).items.remove(pos);
+        let Some(item) = self.queue_for_scope_mut(scope).remove_slot_at(pos) else {
+            return;
+        };
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
         }
@@ -1547,11 +1545,7 @@ impl App {
             // and can cause index mismatches during rapid removals.
         }
         let queue = self.queue_for_scope_mut(scope);
-        if !queue.items.is_empty() {
-            queue.queue_cursor = queue.queue_cursor.min(queue.items.len() - 1);
-        } else {
-            queue.queue_cursor = 0;
-        }
+        queue.clamp_cursor();
     }
 
     /// Moves the item at the displayed queue's cursor one position earlier.
@@ -1588,13 +1582,15 @@ impl App {
             }
             t
         };
-        if self.apply_queue_move(scope, from, to) {
-            let item_id = self.queue_for_scope(scope).items[to].id.clone();
+        let Some(slot_id) = self.queue_for_scope_mut(scope).slot_id_at(from) else {
+            return;
+        };
+        if self.apply_queue_move_by_slot(scope, slot_id, from, to) {
             if scope == QueueScope::Remote {
                 self.pending_remote_move_cursor = Some(to);
             }
             self.undo_stack_for_scope_mut(scope)
-                .push(UndoEntry::Move { from, to, item_id });
+                .push(UndoEntry::Move { from, to, slot_id });
         }
     }
 
@@ -1605,17 +1601,27 @@ impl App {
     /// sync; see `remove_from_active_playback_queue`'s doc comment). Returns
     /// `false` (no-op) if `from`/`to` are out of bounds or equal.
     pub(super) fn apply_queue_move(&mut self, scope: QueueScope, from: usize, to: usize) -> bool {
+        let Some(slot_id) = self.queue_for_scope_mut(scope).slot_id_at(from) else {
+            return false;
+        };
+        self.apply_queue_move_by_slot(scope, slot_id, from, to)
+    }
+
+    fn apply_queue_move_by_slot(
+        &mut self,
+        scope: QueueScope,
+        slot_id: mbv_core::playback_queue::QueueSlotId,
+        from: usize,
+        to: usize,
+    ) -> bool {
         let len = self.queue_for_scope(scope).items.len();
         if from >= len || to >= len || from == to {
             return false;
         }
         let controls_playback_queue = self.queue_scope_is_playback(scope);
         let active = self.player.status.lock().unwrap().active;
-        {
-            let queue = self.queue_for_scope_mut(scope);
-            let item = queue.items.remove(from);
-            queue.items.insert(to, item);
-            queue.queue_cursor = to;
+        if !self.queue_for_scope_mut(scope).move_slot(slot_id, to) {
+            return false;
         }
         if self.local_queue_metadata_applies(scope) {
             self.queue_dirty = true;
@@ -1638,19 +1644,14 @@ impl App {
             UndoEntry::Remove(idx, item) => {
                 let queue = self.queue_for_scope_mut(scope);
                 let idx = idx.min(queue.items.len());
-                queue.items.insert(idx, *item);
-                queue.queue_cursor = idx;
+                queue.insert_item_at(idx, *item);
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
                 }
                 self.persist_local_queue_state_if_needed(scope);
             }
-            UndoEntry::Move { from, to, item_id } => {
-                let still_in_place = self
-                    .queue_for_scope(scope)
-                    .items
-                    .get(to)
-                    .is_some_and(|item| item.id == item_id);
+            UndoEntry::Move { from, to, slot_id } => {
+                let still_in_place = self.queue_for_scope(scope).slot_id_matches_at(to, slot_id);
                 if !still_in_place || !self.apply_queue_move(scope, to, from) {
                     self.flash_status_high("Can't undo move: queue changed since then".into());
                     return;
@@ -1859,7 +1860,7 @@ impl App {
             let name = item.display_name();
             let scope = self.visible_queue_scope();
             {
-                self.queue_for_scope_mut(scope).items.push(item);
+                self.queue_for_scope_mut(scope).append_item(item);
             }
             if self.local_queue_metadata_applies(scope) {
                 self.queue_dirty = true;
@@ -1881,7 +1882,7 @@ impl App {
             let name = item.display_name();
             let scope = self.visible_queue_scope();
             {
-                self.queue_for_scope_mut(scope).items.push(item);
+                self.queue_for_scope_mut(scope).append_item(item);
             }
             if self.local_queue_metadata_applies(scope) {
                 self.queue_dirty = true;
@@ -1907,7 +1908,7 @@ impl App {
                 let scope = self.visible_queue_scope();
                 {
                     let queue = self.queue_for_scope_mut(scope);
-                    queue.items.extend(items);
+                    queue.append_items(items);
                 }
                 if self.local_queue_metadata_applies(scope) {
                     self.queue_dirty = true;
@@ -3775,8 +3776,7 @@ impl App {
                 }
                 if scope != QueueScope::Remote {
                     let queue = self.queue_for_scope_mut(scope);
-                    queue.items.clear();
-                    queue.queue_cursor = 0;
+                    queue.clear();
                 }
                 self.persist_local_queue_state_if_needed(scope);
                 self.flash_status("Queue cleared".into());
@@ -4232,8 +4232,7 @@ impl App {
         self.last_played_item_id = state.last_played_item_id;
         self.last_played_completed = state.last_played_completed;
         self.queue_source = state.source;
-        self.player_tab.queue_cursor = cursor;
-        self.player_tab.items = state.items;
+        self.player_tab.set_items(state.items, cursor);
         self.queue_dirty = false;
         if self.client.lock().unwrap().config.start_on_queue {
             self.tab_idx = 1;
@@ -4525,16 +4524,14 @@ impl App {
                     if start_position_ticks > 0 {
                         item.playback_position_ticks = start_position_ticks;
                     }
-                    self.player_tab.items = vec![item.clone()];
-                    self.player_tab.queue_cursor = 0;
+                    self.player_tab.set_items(vec![item.clone()], 0);
                     self.flash_status(item.playback_label());
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     self.player
                         .play(&item, self.queue_source.clone(), c, self.ui_volume);
                 } else {
                     let count = items.len();
-                    self.player_tab.items = items.clone();
-                    self.player_tab.queue_cursor = start_idx;
+                    self.player_tab.set_items(items.clone(), start_idx);
                     self.flash_status(format!("Playing {count} items"));
                     let c = Arc::new(self.client.lock().unwrap().clone());
                     log::info!(target: "ws", "Play multi: count={count}, start_idx={start_idx}");
