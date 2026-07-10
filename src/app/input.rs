@@ -2985,7 +2985,11 @@ impl App {
                                 let current_idx = st.current_idx;
                                 drop(st);
                                 if active && self.queue_scope_is_playback(scope) {
-                                    if t != current_idx {
+                                    let is_audio =
+                                        queue.items.get(t).map(|i| i.is_audio()).unwrap_or(false);
+                                    if t == current_idx && is_audio {
+                                        self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
+                                    } else if t != current_idx {
                                         self.player.send_command(PlayerCommand::JumpTo(t));
                                     }
                                 } else {
