@@ -403,33 +403,33 @@ impl App {
         Some(false)
     }
 
-    pub(super) fn handle_key_legacy_tail_post_confirms(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_clear_queue_prompt(&mut self, key: KeyEvent) -> Option<bool> {
+        if key.code != KeyCode::Char('c') || key.modifiers.contains(KeyModifiers::ALT) {
+            return None;
+        }
         let in_lib_search = self.tab_idx > 1
             && self
                 .libs
                 .get(self.tab_idx - self.lib_tab_offset())
                 .is_some_and(|l| l.search.is_some());
-        if key.code == KeyCode::Char('c')
-            && !key.modifiers.contains(KeyModifiers::ALT)
-            && !in_lib_search
-        {
-            if self.tab_idx == 1 && self.visible_queue_scope() == QueueScope::Remote {
-                self.flash_status_high("Remote queue is controlled by the daemon".into());
-                return Some(false);
-            }
-            if self.player_tab.items.is_empty() {
-                return Some(false);
-            }
-            self.notify_with_actions(
-                "mbv",
-                "Clear queue?",
-                &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
-            );
-            self.status = "Clear queue? (Y/n)".into();
-            self.confirm_clear_queue = true;
+        if in_lib_search {
+            return None;
+        }
+        if self.tab_idx == 1 && self.visible_queue_scope() == QueueScope::Remote {
+            self.flash_status_high("Remote queue is controlled by the daemon".into());
             return Some(false);
         }
-        None
+        if self.player_tab.items.is_empty() {
+            return Some(false);
+        }
+        self.notify_with_actions(
+            "mbv",
+            "Clear queue?",
+            &[("clear:yes", "Clear"), ("clear:no", "Cancel")],
+        );
+        self.status = "Clear queue? (Y/n)".into();
+        self.confirm_clear_queue = true;
+        Some(false)
     }
 
     pub(super) fn handle_key_power_queue_alt_m(&mut self, key: KeyEvent) -> Option<bool> {

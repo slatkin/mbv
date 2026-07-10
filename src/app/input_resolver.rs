@@ -195,8 +195,8 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_confirm_next_up,
     },
     ContextEntry {
-        name: "legacy_tail_post_confirms",
-        handler: App::handle_key_legacy_tail_post_confirms,
+        name: "clear_queue_prompt_c",
+        handler: App::handle_key_clear_queue_prompt,
     },
     ContextEntry {
         name: "context_menu",
@@ -559,6 +559,16 @@ mod app_level_tests {
     }
 
     #[test]
+    fn c_prompts_clear_queue_confirmation_via_handle_key() {
+        let mut app = make_app_stub();
+        app.player_tab
+            .items
+            .push(crate::app::tests::make_item("1", "Track"));
+        app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert!(app.confirm_clear_queue);
+    }
+
+    #[test]
     fn context_stack_order_is_pinned() {
         let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
         assert_eq!(
@@ -580,7 +590,7 @@ mod app_level_tests {
                 "confirm_rescan",
                 "confirm_skip_intro",
                 "confirm_next_up",
-                "legacy_tail_post_confirms",
+                "clear_queue_prompt_c",
                 "context_menu",
                 "power_queue_alt_m",
                 "playback",
