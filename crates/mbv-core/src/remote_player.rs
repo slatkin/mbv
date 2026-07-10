@@ -740,4 +740,17 @@ mod tests {
             _ => panic!("expected CommandRejected"),
         }
     }
+
+    #[test]
+    fn adopt_queue_returns_false_when_ctrl_socket_is_dead() {
+        // #119 task 5: `adopt_queue`'s return value is the only signal that
+        // the daemon never actually received the adoption — the call site
+        // must not discard it and silently carry on with optimistic state.
+        let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(Vec::new(), 0);
+        drop(cmd_rx);
+
+        let adopted = remote.adopt_queue(vec![make_media_item("1")], 0, QueueSource::Unknown);
+
+        assert!(!adopted);
+    }
 }
