@@ -170,3 +170,29 @@ The subsystem that divides terminal space between mbv's browsing, queue, playbac
 The left column in Power View: the column that contains the media card at the top and the queue below it. This is the "left panel" meant by #111's user-resizable panel-width work. Its width is a persistent user layout preference, not a transient per-session adjustment.
 Its resize controls are active only while Power View itself is active; they are not global shortcuts that invisibly change a later Power View layout from another tab.
 _Avoid_: using "left panel" without qualification when discussing #111, since other views also have left/right areas; the resize target is specifically the Power View left column, not the normal library table split or any modal/sidebar.
+
+## Input handling
+
+The subsystem that turns key and mouse events into app behavior. Today it is decentralized across `App::handle_key` and `App::handle_mouse` in `src/app/input.rs`; the terms below are the **target shape** from #129 (see `docs/adr/0002-centralized-input-handling.md`), partially present as the existing `Action`/`dispatch` seam in `src/app/action.rs`.
+
+### Language
+
+**Command**:
+A semantic input intent (e.g. `TogglePlayPause`, `QueuePlayCursor`, `LibrarySearchStart`), decoupled from the physical key or mouse region that triggered it. The target superset of today's `Action` enum. Both keyboard and mouse resolve to `Command`s and share one executor (`dispatch`), which keeps the stateful/branchy execution (session-vs-local, scope/empty checks).
+_Avoid_: treating a `Command` as a keybinding — the same command can be bound to a chord, a mouse region, or (future) a user override; the binding is data, the command is the intent.
+
+**Context priority stack**:
+The ordered, first-match list of active input contexts (overlays, confirms, text entry, context menu, playback, view) that decides which handler consumes a given event. It is today's implicit `handle_key` branch order (and `handle_mouse`'s spatial equivalent) made explicit and assertable. Contexts share one taxonomy across keyboard and mouse.
+_Avoid_: modeling input as a flat global shortcut table — that loses precedence; and avoid computing a single "active context" — contexts stack, and some (e.g. settings) have their own ordered sub-stack.
+
+**Key resolution** (`Command` / `Swallow` / `FallThrough`):
+The three outcomes of resolving a chord in a context. `Command` dispatches an intent; `Swallow` consumes the key with no action (e.g. an overlay eating unknown keys); `FallThrough` defers to a lower-priority context (today only the playback layer genuinely falls through). This trichotomy is latent in the current code and made explicit by the resolver.
+_Avoid_: conflating `Swallow` and `FallThrough` — an overlay swallowing a key is not the same as a gated playback key declining it.
+
+**Input snapshot**:
+The plain-data view of app state the pure resolver reads (~20 fields, one behind a lock), rather than borrowing `&App`. Keeping it a data snapshot is what makes the resolver unit-testable and doubles as the written-down answer to "what does input depend on?".
+_Avoid_: passing `&App` into resolution or reaching into `App` fields mid-resolve — that defeats the pure, testable seam.
+
+**Text-entry context**:
+An input context (search boxes, the save-name dialog) that owns local state and captures printable characters via a catch-all `Char` binding, plus a small set of editing keys (`Esc`, `Backspace`, `Enter`, arrows). The registry *routes to* these contexts but does not express their internals as bindings.
+_Avoid_: trying to model text entry or modal state machines (save-playlist stages, settings sub-modes) as chord-to-command rows — they are local state machines behind a context.
