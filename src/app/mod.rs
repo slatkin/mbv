@@ -1377,12 +1377,14 @@ impl App {
                 crate::config::load_queue_state(),
             )
         });
-        if let Some((items, cursor, source)) = local_daemon_bootstrap
+        // `adopt_queue` returns false when the ctrl socket is already dead
+        // (the command send failed); tracked so construction doesn't
+        // silently carry on with a queue the daemon never actually adopted
+        // (#119 task 5) — see `handle_failed_local_daemon_adoption` below.
+        let local_daemon_adoption_failed = local_daemon_bootstrap
             .as_ref()
             .and_then(|bootstrap| bootstrap.adopt_queue.clone())
-        {
-            remote.adopt_queue(items, cursor, source);
-        }
+            .is_some_and(|(items, cursor, source)| !remote.adopt_queue(items, cursor, source));
         let player = PlayerProxy::remote(remote, always_play_next);
         let (player_tab, remote_player_tab) = if is_local_daemon {
             // Local daemon: one unified queue, exactly like plain local
@@ -1439,7 +1441,21 @@ impl App {
         } else {
             app.queue_source = remote_queue_source;
         }
+        if local_daemon_adoption_failed {
+            app.handle_failed_local_daemon_adoption();
+        }
         app
+    }
+
+    /// Routes a local-daemon queue adoption whose command send failed (dead
+    /// ctrl socket, see `new_remote`) through the same disconnect handling a
+    /// live `PlayerEvent::RemoteDisconnected` uses, instead of silently
+    /// continuing to build on optimistic queue state the daemon never
+    /// actually received (#119 task 5).
+    fn handle_failed_local_daemon_adoption(&mut self) {
+        self.handle_player_event(PlayerEvent::RemoteDisconnected(
+            "local daemon connection lost while restoring the saved queue".to_string(),
+        ));
     }
 
     fn has_remote_queue(&self) -> bool {
@@ -3331,6 +3347,22 @@ pub(crate) mod tests {
             bootstrap.adopt_queue,
             Some((_, 1, crate::config::QueueSource::Playlist { ref name, .. })) if name == "Saved"
         ));
+    }
+
+    #[test]
+    fn failed_local_daemon_adoption_routes_through_remote_disconnected() {
+        // #119 task 5: a swallowed `adopt_queue()` send-failure must not
+        // leave the app silently sitting on optimistic queue state the
+        // daemon never received — it routes through the same handling a
+        // live `PlayerEvent::RemoteDisconnected` uses.
+        let mut app = make_local_daemon_app_stub(Vec::new());
+        assert_eq!(app.queue_scope, QueueScope::Local);
+
+        app.handle_failed_local_daemon_adoption();
+
+        assert!(app.remote_player_tab.is_none());
+        assert_eq!(app.queue_scope, QueueScope::Local);
+        assert!(app.status.contains("daemon connection lost"));
     }
 
     #[test]

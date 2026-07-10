@@ -207,8 +207,6 @@ impl CtrlClients {
     }
 }
 
-
-
 fn evict_ctrl_driver_for_emby_remote(ctrl_clients: &ClientRegistry) {
     ctrl_clients
         .lock()
@@ -1115,8 +1113,8 @@ fn all_audio(items: &[MediaItem]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws, CtrlClients,
-        CtrlEvent, CtrlOutbound, CtrlRequest, SharedQueueState,
+        all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws, CtrlClients, CtrlEvent,
+        CtrlOutbound, CtrlRequest, SharedQueueState,
     };
     use crate::api::MediaItem;
     use crate::config::{Config, QueueSource};
