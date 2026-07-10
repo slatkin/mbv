@@ -1673,7 +1673,7 @@ impl App {
     /// A connected remote session exposes no queue-position/length fields in
     /// `SessionInfo` (see `mbv_core::api::SessionInfo`), so there is no way to
     /// tell whether it's at a queue boundary; both remain available there,
-    /// mirroring `Action::PreviousTrack`/`Action::NextTrack`'s dispatch, which
+    /// mirroring `Command::PreviousTrack`/`Command::NextTrack`'s dispatch, which
     /// calls `session_jump_track` unconditionally for a connected session with
     /// no boundary check. Local playback uses `PlayerStatus::previous_idx`/
     /// `next_idx`, which already fold in `active` and `queue_len`.

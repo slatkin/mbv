@@ -1,14 +1,14 @@
-//! Action seam between key-event translation (`input.rs`) and effects
+//! Command seam between key-event translation (`input.rs`) and effects
 //! (`actions.rs`, `player.rs`). See issue #78.
 //!
 //! `playback_command_for_key` is a pure function: given a key event and two
 //! booleans describing playback state, it decides *whether* a key should be
 //! intercepted and *what* it means, without touching `App` at all. `dispatch`
-//! then owns the state transitions for each `Action` variant.
+//! then owns the state transitions for each `Command` variant.
 //!
 //! Converted so far: `handle_playback_key` (the issue #78 pilot) and
 //! `handle_key_help` (see `src/app/input.rs`). Other modal handlers still
-//! speak directly to `App` and are expected to migrate to this same `Action`
+//! speak directly to `App` and are expected to migrate to this same `Command`
 //! enum over time, one handler at a time.
 
 use super::input_resolver::KeyChord;
@@ -42,7 +42,7 @@ pub(super) enum Command {
     ToggleMute,
     /// The `a` key: `dispatch` replicates the `is_audio_item()` branch,
     /// calling `toggle_mute()` (the `ui_volume`/`pre_mute_volume`/`SetVolume`
-    /// mechanism, *not* `Action::ToggleMute`'s `mute_on`/`SetMute`) if the
+    /// mechanism, *not* `Command::ToggleMute`'s `mute_on`/`SetMute`) if the
     /// current item is audio-only, otherwise `cycle_audio()`. Gated the same
     /// way as the other transport keys (`active OR has_remote_session`) —
     /// see #88. `is_audio_item()` and `toggle_mute()` each own the
@@ -72,7 +72,7 @@ pub(super) enum Command {
     ScrollHome,
 }
 
-/// Translate a key event into a playback `Action`, or `None` if this handler
+/// Translate a key event into a playback `Command`, or `None` if this handler
 /// doesn't intercept the key. Pure function: no `App`/`Player` access, so it's
 /// testable without constructing either.
 ///
@@ -108,7 +108,7 @@ pub(super) fn playback_command_for_key(
     }
 }
 
-/// Translate a key event into a help-overlay `Action`, or `None` if this key
+/// Translate a key event into a help-overlay `Command`, or `None` if this key
 /// isn't bound. Pure function; no `App` access.
 ///
 /// Unlike `playback_command_for_key`, gating is not per-key here: the caller
@@ -135,8 +135,8 @@ pub(super) fn help_command_for_key(chord: KeyChord) -> Option<Command> {
 }
 
 impl App {
-    /// Own the state transitions for an `Action`. Returns whether the app
-    /// should quit (`true` only for `Action::Quit`'s non-prompting path;
+    /// Own the state transitions for a `Command`. Returns whether the app
+    /// should quit (`true` only for `Command::Quit`'s non-prompting path;
     /// `false` for every other variant).
     ///
     /// For most playback variants this means picking a remote-session
