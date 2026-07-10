@@ -188,6 +188,7 @@ impl App {
             let avail = max_y.saturating_sub(row) as usize;
             let shadow_lines = img_end_row.saturating_sub(row) as usize;
             let mut all_lines: Vec<String> = Vec::new();
+            let overview_start = row;
 
             for paragraph in overview.lines() {
                 let paragraph = if paragraph.trim().is_empty() {
@@ -233,6 +234,28 @@ impl App {
                     }
                 }
             }
+            if row < max_y && row > overview_start && !item.director.is_empty() {
+                row += 1;
+            }
+        }
+
+        if row < max_y && !item.director.is_empty() {
+            let (tw, tw16) = text_dims(row);
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled("Director: ", Style::default().fg(palette::SUBTLE)),
+                    Span::styled(
+                        trunc_str(&item.director, tw),
+                        Style::default().fg(palette::TEXT),
+                    ),
+                ])),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: tw16,
+                    height: 1,
+                },
+            );
         }
 
         if img_height > 0 {

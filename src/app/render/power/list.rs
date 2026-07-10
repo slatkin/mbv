@@ -447,7 +447,9 @@ impl App {
             // When that item is also the selected/bannered one, the banner's
             // opening rule sits between the header and the item, so back up an
             // extra row to clear the rule too.
-            if visible > 1 && offset > 0 && matches!(display_rows.get(offset), Some(DisplayRow::Item(_)))
+            if visible > 1
+                && offset > 0
+                && matches!(display_rows.get(offset), Some(DisplayRow::Item(_)))
             {
                 if matches!(
                     display_rows.get(offset - 1),
@@ -609,6 +611,29 @@ impl App {
                         layout,
                     );
                     layout.cursor_screen_y = want_cursor_y;
+                }
+            }
+
+            if banner_rows > 0 && display_cursor >= offset && display_cursor < offset + visible {
+                let selected_y = content_area.y + (display_cursor - offset) as u16;
+                let bottom = content_area.y + content_area.height;
+                let bar_h =
+                    (1 + COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(selected_y));
+                if bar_h > 0 {
+                    let selection_bar =
+                        vec![
+                            Line::from(Span::styled("▌", Style::default().fg(palette::PINE)));
+                            bar_h as usize
+                        ];
+                    f.render_widget(
+                        Paragraph::new(selection_bar),
+                        Rect {
+                            x: content_area.x,
+                            y: selected_y,
+                            width: 1,
+                            height: bar_h,
+                        },
+                    );
                 }
             }
 
@@ -808,6 +833,29 @@ impl App {
                         layout,
                     );
                     layout.cursor_screen_y = want_cursor_y;
+                }
+            }
+
+            if banner_rows > 0 && display_cursor >= offset && display_cursor < offset + visible {
+                let selected_y = content_area.y + (display_cursor - offset) as u16;
+                let bottom = content_area.y + content_area.height;
+                let bar_h =
+                    (1 + COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(selected_y));
+                if bar_h > 0 {
+                    let selection_bar =
+                        vec![
+                            Line::from(Span::styled("▌", Style::default().fg(palette::PINE)));
+                            bar_h as usize
+                        ];
+                    f.render_widget(
+                        Paragraph::new(selection_bar),
+                        Rect {
+                            x: content_area.x,
+                            y: selected_y,
+                            width: 1,
+                            height: bar_h,
+                        },
+                    );
                 }
             }
 
@@ -1120,8 +1168,7 @@ mod tests {
 
     #[test]
     fn compact_banner_appears_under_selected_row_not_pinned_to_top() {
-        let mut app =
-            make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
+        let mut app = make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
         // Select the second item (index 1) — banner must render after ITS row, not row 0.
         app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
 

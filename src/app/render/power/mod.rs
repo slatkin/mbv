@@ -544,21 +544,47 @@ mod tests {
             lines[2].contains("Focused Movie"),
             "expected selected movie row directly below the opening rule:\n{out}"
         );
+        assert_eq!(
+            lines[2].chars().next(),
+            Some('▌'),
+            "expected the selected-row indicator at the banner edge:\n{out}"
+        );
         assert!(
             out.contains("compact movie banner"),
             "expected compact overview text:\n{out}"
+        );
+        assert_eq!(
+            lines[3].chars().next(),
+            Some('▌'),
+            "expected the selection indicator to continue through the banner:\n{out}"
         );
         assert!(
             lines[17].contains("Second Movie"),
             "expected remaining movie list below banner:\n{out}"
         );
         assert!(
-            !out.contains("Director: Director Hidden"),
-            "compact banner must hide director:\n{out}"
+            out.contains("Director: Director Hidden"),
+            "compact banner must show director:\n{out}"
+        );
+        let director_line = lines
+            .iter()
+            .position(|l| l.contains("Director: Director Hidden"))
+            .expect("expected compact director line to render");
+        assert!(
+            lines
+                .get(director_line.saturating_sub(1))
+                .map(|l| { l.chars().next() == Some('▌') && l.chars().skip(1).all(|c| c == ' ') })
+                .unwrap_or(false),
+            "expected a spacer row before the director line:\n{out}"
         );
         assert!(
             lines[16].contains('\u{2500}'),
             "expected closing rule below banner content:\n{out}"
+        );
+        assert_ne!(
+            lines[16].chars().next(),
+            Some('▌'),
+            "expected the selection indicator to stop before the banner's closing rule:\n{out}"
         );
         assert!(
             !lines[1].contains("Focused Movie") && !lines[16].contains("Focused Movie"),

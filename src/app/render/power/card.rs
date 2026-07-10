@@ -478,10 +478,7 @@ mod tests {
         // The fetch is still in flight (never completed in this test), so the
         // cache key must not have been marked as "no image" — that only
         // happens once the fetch resolves to nothing.
-        assert!(!matches!(
-            app.card_image_states.get(&cache_key),
-            Some(None)
-        ));
+        assert!(!matches!(app.card_image_states.get(&cache_key), Some(None)));
     }
 
     #[test]
