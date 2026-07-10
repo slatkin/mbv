@@ -8,11 +8,10 @@ mod music;
 mod queue;
 
 use super::super::layout::LayoutPower;
-use super::super::ui_util::{fmt_duration_approx, natural_sort_key, trunc_str};
+use super::super::ui_util::{natural_sort_key, trunc_str};
 use super::super::{palette, App, PowerFocus};
-use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -385,107 +384,8 @@ impl App {
         let is_album = self.power_left_tab > 0 && self.is_album_level(lib_idx);
         let is_series = self.power_left_tab > 0 && self.is_series_view(lib_idx);
         let is_home_video = self.power_left_tab > 0 && self.is_home_video_view(lib_idx);
-        let show_compact_movie_detail =
-            !has_detail && self.power_selected_movie_item(lib_idx).is_some();
         if has_detail {
             self.render_power_detail(f, area, lib_idx, focused, layout);
-        } else if show_compact_movie_detail {
-            const TOP_ITEM_ROW_H: u16 = 1;
-            const COMPACT_DETAIL_H: u16 = 13;
-            const COMPACT_DETAIL_GAP: u16 = 1;
-            let top_area = Rect {
-                height: TOP_ITEM_ROW_H.min(area.height),
-                ..area
-            };
-            let content_area = Rect {
-                y: area.y + top_area.height,
-                height: area.height.saturating_sub(top_area.height),
-                ..area
-            };
-            let reserved_h = COMPACT_DETAIL_H.saturating_add(COMPACT_DETAIL_GAP);
-            let banner_h = COMPACT_DETAIL_H
-                .min(
-                    content_area
-                        .height
-                        .saturating_sub(COMPACT_DETAIL_GAP)
-                        .max(1),
-                )
-                .max(1);
-            let banner_area = Rect {
-                y: content_area.y,
-                height: banner_h,
-                ..content_area
-            };
-            let list_area = Rect {
-                y: content_area.y + reserved_h.min(content_area.height),
-                height: content_area.height.saturating_sub(reserved_h),
-                ..content_area
-            };
-            if let Some(item) = self.power_selected_movie_item(lib_idx) {
-                let dur_str = if item.runtime_ticks > 0 {
-                    format!(
-                        " {}",
-                        fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-                    )
-                } else {
-                    String::new()
-                };
-                let avail = (top_area.width as usize).saturating_sub(2);
-                let name_w = avail.saturating_sub(dur_str.width());
-                let title = trunc_str(&item.display_name(), name_w);
-                let mut spans = vec![
-                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                    Span::styled(
-                        title,
-                        Style::default()
-                            .fg(palette::IRIS)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ];
-                if !dur_str.is_empty() {
-                    spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
-                }
-                f.render_widget(Paragraph::new(Line::from(spans)), top_area);
-                layout.cursor_screen_y = Some(top_area.y);
-            }
-            self.render_power_compact_detail(f, banner_area, lib_idx, focused, layout);
-            if list_area.height > 0 {
-                let mut restore_search = None;
-                let mut restore_nav = None;
-                if let Some(search) = self.libs[lib_idx].search.as_mut() {
-                    let original = search.cursor;
-                    let next = if original + 1 < search.results.len() {
-                        original + 1
-                    } else {
-                        original.saturating_sub(1)
-                    };
-                    search.cursor = next;
-                    restore_search = Some(original);
-                } else if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                    let original = level.cursor;
-                    let next = if original + 1 < level.items.len() {
-                        original + 1
-                    } else {
-                        original.saturating_sub(1)
-                    };
-                    level.cursor = next;
-                    restore_nav = Some(original);
-                }
-
-                self.render_power_list(f, list_area, false, layout);
-                layout.cursor_screen_y = Some(top_area.y);
-
-                if let Some(original) = restore_search {
-                    if let Some(search) = self.libs[lib_idx].search.as_mut() {
-                        search.cursor = original;
-                    }
-                }
-                if let Some(original) = restore_nav {
-                    if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
-                        level.cursor = original;
-                    }
-                }
-            }
         } else if is_feed_group {
             self.render_power_feed_home_video_group_view(f, area, lib_idx, focused, layout);
         } else if is_music_group {
@@ -551,10 +451,15 @@ mod tests {
     }
 
     fn render_power_library_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
-        let backend = TestBackend::new(60, 16);
+        // Height is one row taller than the banner's own reserved footprint
+        // (1 selected row + 14 banner/gap rows) to also leave room for the
+        // " N items" header row that `render_power_list` now draws unconditionally
+        // for a focused library panel -- there's no separate top-pinned title
+        // row to absorb it now that this goes through the shared catch-all path.
+        let backend = TestBackend::new(60, 17);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_power_library(f, Rect::new(0, 0, 60, 16), true, layout);
+            app.render_power_library(f, Rect::new(0, 0, 60, 17), true, layout);
         })
         .unwrap();
         buffer_to_string(&term)
@@ -624,8 +529,12 @@ mod tests {
         let lines: Vec<&str> = out.lines().collect();
 
         assert!(app.libs[0].power_detail_item.is_none());
+        // Row 0 is now the " N items" header that `render_power_list` always draws
+        // for a focused, non-search library panel; the selected movie's own row
+        // is row 1 (previously row 0, back when the deleted special case drew a
+        // custom title line with no item-count header above it).
         assert!(
-            lines[0].contains("Focused Movie"),
+            lines[1].contains("Focused Movie"),
             "expected selected movie row above banner:\n{out}"
         );
         assert!(
@@ -633,7 +542,7 @@ mod tests {
             "expected compact overview text:\n{out}"
         );
         assert!(
-            lines[15].contains("Second Movie"),
+            lines[16].contains("Second Movie"),
             "expected remaining movie list below banner:\n{out}"
         );
         assert!(
@@ -641,12 +550,12 @@ mod tests {
             "compact banner must hide director:\n{out}"
         );
         assert_eq!(
-            lines[14].trim(),
+            lines[15].trim(),
             "",
             "expected spacer row between banner and list:\n{out}"
         );
         assert!(
-            !lines[15].contains("Focused Movie"),
+            !lines[16].contains("Focused Movie"),
             "expected selected row to stay above banner, not repeat below it:\n{out}"
         );
     }
