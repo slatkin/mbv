@@ -157,6 +157,7 @@ pub enum PlayerEvent {
         position_ticks: i64,
         played: bool,
         consume: bool,
+        #[serde(default)]
         progress_report_accepted: bool,
         error: Option<String>,
     },
@@ -166,6 +167,7 @@ pub enum PlayerEvent {
         position_ticks: i64,
         played: bool,
         consume: bool,
+        #[serde(default)]
         progress_report_accepted: bool,
     },
     NextUpThreshold {
