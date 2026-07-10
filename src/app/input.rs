@@ -591,19 +591,23 @@ impl App {
         Some(false)
     }
 
-    // Thin adapter over the `Action` seam (issue #78, 2nd increment): translate
-    // the key into an `Action` via the pure `help_action_for_key`, then hand it
-    // to `dispatch`. Unlike `handle_playback_key`, an unrecognized key here is
-    // still swallowed (`Some(false)`), not left to fall through (`None`) — the
-    // help overlay consumes every key while open.
     fn handle_key_help(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_help {
             return None;
         }
-        if let Some(action) = super::action::help_action_for_key(key) {
-            return Some(self.dispatch(action));
+        let snapshot = self.input_snapshot();
+        match super::input_resolver::resolve_key(
+            super::input_resolver::InputContext::Help,
+            &snapshot,
+            super::input_resolver::KeyChord::from_key(key),
+        ) {
+            super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
+            // Help swallows unknown keys; FallThrough is unreachable for this
+            // context but treated identically (still consumed) to preserve today's
+            // "help eats every key" behavior.
+            super::input_resolver::KeyResolution::Swallow
+            | super::input_resolver::KeyResolution::FallThrough => Some(false),
         }
-        Some(false)
     }
 
     fn handle_key_sessions(&mut self, key: KeyEvent) -> Option<bool> {
@@ -1105,20 +1109,19 @@ impl App {
         self.save_prefs();
     }
 
-    // Thin adapter over the `Action` seam (issue #78 pilot): translate the key
-    // into an `Action` via the pure `playback_action_for_key`, then hand it to
-    // `dispatch`, which owns the session-vs-local branching. See
-    // `src/app/action.rs` for the translation table and state transitions.
     fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
-        let active = self.player.status.lock().unwrap().active;
-        let has_remote_session = self.connected_session_id.is_some();
-        let action = super::action::playback_action_for_key(key, active, has_remote_session)?;
-        // Propagate dispatch's should-quit bool rather than hardcoding
-        // `Some(false)`: no playback action currently resolves to
-        // `Action::Quit`, but this way that invariant doesn't need to be
-        // relied on silently — if it's ever violated, the quit signal still
-        // reaches the caller correctly instead of being swallowed here.
-        Some(self.dispatch(action))
+        let snapshot = self.input_snapshot();
+        match super::input_resolver::resolve_key(
+            super::input_resolver::InputContext::Playback,
+            &snapshot,
+            super::input_resolver::KeyChord::from_key(key),
+        ) {
+            super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
+            // Swallow is unreachable for Playback today; both non-command outcomes
+            // mean "not a playback key" → let it fall through (`None`).
+            super::input_resolver::KeyResolution::FallThrough
+            | super::input_resolver::KeyResolution::Swallow => None,
+        }
     }
 
     /// Handle a key for the focused power-view home list (all groups: CW + library latest).
@@ -3072,10 +3075,10 @@ impl App {
                 if self.layout.playback.ind_mu.contains((col, row).into()) {
                     // The "m" pill renders `self.mute_on` (see
                     // render_control_pill) and the `m` key flips it via
-                    // `Action::ToggleMute` -- dispatch the same action here
+                    // `Command::ToggleMute` -- dispatch the same action here
                     // rather than calling `toggle_mute()` (the *other*,
                     // ui_volume-based mechanism used by the `a` key; see
-                    // `Action::ToggleMute`'s doc comment in action.rs).
+                    // `Command::ToggleMute`'s doc comment in action.rs).
                     // Calling the wrong one here predates #88, but #88 makes
                     // it worse: `toggle_mute()` now falls back to
                     // `cycle_audio()` for a connected remote session, so
@@ -3083,7 +3086,7 @@ impl App {
                     // be a harmless no-op and would otherwise start silently
                     // cycling that session's audio track instead of muting
                     // anything.
-                    self.dispatch(super::action::Action::ToggleMute);
+                    self.dispatch(super::action::Command::ToggleMute);
                     return;
                 }
                 if self
@@ -3092,12 +3095,12 @@ impl App {
                     .play_pause_area
                     .contains((col, row).into())
                 {
-                    self.dispatch(super::action::Action::TogglePlayPause);
+                    self.dispatch(super::action::Command::TogglePlayPause);
                     return;
                 }
                 if self.layout.playback.next_area.contains((col, row).into()) {
                     if self.transport_prev_next_available().1 {
-                        self.dispatch(super::action::Action::NextTrack);
+                        self.dispatch(super::action::Command::NextTrack);
                     }
                     return;
                 }
