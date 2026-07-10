@@ -157,6 +157,7 @@ pub enum PlayerEvent {
         position_ticks: i64,
         played: bool,
         consume: bool,
+        progress_report_accepted: bool,
         error: Option<String>,
     },
     TrackChanged(usize),
@@ -165,6 +166,7 @@ pub enum PlayerEvent {
         position_ticks: i64,
         played: bool,
         consume: bool,
+        progress_report_accepted: bool,
     },
     NextUpThreshold {
         series_id: String,
@@ -1031,6 +1033,7 @@ struct SingleSession {
     // loop state
     quit_at: Option<Instant>,
     stop_reported: bool,
+    stop_report_accepted: bool,
     stopped_event_sent: bool,
     mark_played_id: Option<String>,
     pending_load: bool,
@@ -1096,6 +1099,7 @@ impl SingleSession {
             ext_sub_urls,
             quit_at: None,
             stop_reported: false,
+            stop_report_accepted: false,
             stopped_event_sent: false,
             mark_played_id: None,
             pending_load: false,
@@ -1228,6 +1232,7 @@ impl SingleSession {
                 }
                 self.tracks_initialized = false;
                 self.stop_reported = false;
+                self.stop_report_accepted = false;
                 self.pending_load = true;
                 self.next_up_fired = false;
                 self.next_up_armed = false;
@@ -1403,7 +1408,7 @@ impl SingleSession {
             reason == mpv_end_file_reason::Eof && self.status.lock().unwrap().runtime_ticks > 0;
 
         progress.stop_and_join();
-        self.reporter.report_stopped(self.last_valid_pos);
+        self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
         self.stop_reported = true;
 
         if natural_end {
@@ -1421,6 +1426,7 @@ impl SingleSession {
                 position_ticks: 0,
                 played: !self.reporter.is_audio.load(Ordering::Relaxed),
                 consume: false,
+                progress_report_accepted: self.stop_report_accepted,
                 error: None,
             });
             self.stopped_event_sent = true;
@@ -1431,7 +1437,7 @@ impl SingleSession {
     fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
         if !self.stop_reported {
             progress.stop_and_join();
-            self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             self.stop_reported = true;
         }
         let client = self.reporter.client.clone();
@@ -1453,6 +1459,7 @@ impl SingleSession {
                 position_ticks: self.last_valid_pos,
                 played: near_end,
                 consume: false,
+                progress_report_accepted: self.stop_report_accepted,
                 error: None,
             });
         }
@@ -1491,7 +1498,9 @@ impl SingleSession {
                 {
                     if !self.stop_reported {
                         progress.stop_and_join();
-                        self.reporter.report_stopped(self.last_valid_pos);
+                        self.stop_report_accepted =
+                            self.reporter.report_stopped(self.last_valid_pos);
+                        self.stop_reported = true;
                     }
                     let runtime = self.status.lock().unwrap().runtime_ticks;
                     let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
@@ -1503,6 +1512,7 @@ impl SingleSession {
                         position_ticks: self.last_valid_pos,
                         played: near_end,
                         consume: false,
+                        progress_report_accepted: self.stop_report_accepted,
                         error: None,
                     });
                     return;
@@ -1653,6 +1663,7 @@ impl SingleSession {
                 position_ticks: 0,
                 played: false,
                 consume: false,
+                progress_report_accepted: false,
                 error: Some(msg),
             });
         }
@@ -1697,6 +1708,7 @@ struct QueueSession {
     pending_load: u8,
     pending_initial_jump: bool,
     stop_reported: bool,
+    stop_report_accepted: bool,
     osd_title: String,
     last_mouse_osd: Option<Instant>,
     pending_resume_secs: Option<f64>,
@@ -1770,6 +1782,7 @@ impl QueueSession {
             pending_load: 0,
             pending_initial_jump: start_idx > 0,
             stop_reported: false,
+            stop_report_accepted: false,
             last_mouse_osd: None,
             queue_next_up_fired: false,
             queue_next_up_armed: false,
@@ -1967,7 +1980,7 @@ impl QueueSession {
         progress: &mut ProgressGuard,
     ) {
         if new_items.is_empty() {
-            self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             self.stop_reported = true;
             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             let _ = mpv.command("playlist-clear", &[]);
@@ -1988,7 +2001,7 @@ impl QueueSession {
             return;
         }
         // report_stopped for current item; is_audio zeroing handled inside.
-        self.reporter.report_stopped(self.last_valid_pos);
+        self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
         self.stop_reported = true;
         // Replacing the playlist should always start playing it, even if mpv
         // was left paused on the previous item (reused-window fast path).
@@ -2083,6 +2096,7 @@ impl QueueSession {
         self.last_valid_pos = item.playback_position_ticks;
         self.tracks_initialized = false;
         self.stop_reported = false;
+        self.stop_report_accepted = false;
         self.pending_load = 1;
 
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
@@ -2299,6 +2313,7 @@ impl QueueSession {
             // lifecycle begins — reset stop_reported so on_end_file/on_shutdown can report it.
             if self.pending_load == 0 {
                 self.stop_reported = false;
+                self.stop_report_accepted = false;
             }
             return true;
         }
@@ -2320,7 +2335,7 @@ impl QueueSession {
                 self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_reported);
             if !self.stop_reported {
                 progress.stop_and_join();
-                self.reporter.report_stopped(self.last_valid_pos);
+                self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
                 self.stop_reported = true;
             }
             if (natural_end || near_end) && !completed_is_audio {
@@ -2344,12 +2359,13 @@ impl QueueSession {
                 self.items.len());
             progress.stop_and_join();
             self.status.lock().unwrap().active = false;
-            self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             let _ = self.event_tx.send(PlayerEvent::Stopped {
                 idx: completed_idx.min(self.items.len().saturating_sub(1)),
                 position_ticks: self.last_valid_pos,
                 played: false,
                 consume: false,
+                progress_report_accepted: self.stop_report_accepted,
                 error: None,
             });
             return false;
@@ -2382,7 +2398,7 @@ impl QueueSession {
         if next_idx >= self.n {
             progress.stop_and_join();
             self.status.lock().unwrap().active = false;
-            self.reporter.report_stopped(completed_pos);
+            self.stop_report_accepted = self.reporter.report_stopped(completed_pos);
             if played_out {
                 let id = self.items[completed_idx].id.clone();
                 if let Err(e) = self.reporter.client.mark_played(&id) {
@@ -2395,6 +2411,7 @@ impl QueueSession {
                 position_ticks: completed_pos,
                 played: played_out,
                 consume: consume_track,
+                progress_report_accepted: self.stop_report_accepted,
                 error: None,
             });
             return false; // signals run() to return
@@ -2413,7 +2430,7 @@ impl QueueSession {
             s.title = self.items[self.current_idx].display_name();
         }
 
-        self.reporter.report_stopped(completed_pos);
+        let stop_report_accepted = self.reporter.report_stopped(completed_pos);
         if played_out {
             let id = self.items[completed_idx].id.clone();
             if let Err(e) = self.reporter.client.mark_played(&id) {
@@ -2451,6 +2468,7 @@ impl QueueSession {
             position_ticks: completed_pos,
             played: played_out,
             consume: consume_track,
+            progress_report_accepted: stop_report_accepted,
         });
         let _ = self
             .event_tx
@@ -2463,7 +2481,7 @@ impl QueueSession {
             self.last_valid_pos, self.stop_reported, self.pending_resume_secs.is_some());
         if !self.stop_reported {
             progress.stop_and_join();
-            self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             self.stop_reported = true;
         }
         self.status.lock().unwrap().active = false;
@@ -2476,6 +2494,7 @@ impl QueueSession {
             position_ticks: self.last_valid_pos,
             played: self.stopped_near_end,
             consume: self.stopped_near_end,
+            progress_report_accepted: self.stop_report_accepted,
             error: None,
         });
         // mpv exited on its own (not via our stop command) — tell the app to quit.
@@ -2511,7 +2530,9 @@ impl QueueSession {
                 {
                     if !self.stop_reported {
                         progress.stop_and_join();
-                        self.reporter.report_stopped(self.last_valid_pos);
+                        self.stop_report_accepted =
+                            self.reporter.report_stopped(self.last_valid_pos);
+                        self.stop_reported = true;
                     }
                     self.status.lock().unwrap().active = false;
                     let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -2519,6 +2540,7 @@ impl QueueSession {
                         position_ticks: self.last_valid_pos,
                         played: self.stopped_near_end,
                         consume: self.stopped_near_end,
+                        progress_report_accepted: self.stop_report_accepted,
                         error: None,
                     });
                     return;
@@ -2695,6 +2717,7 @@ impl QueueSession {
                 position_ticks: 0,
                 played: false,
                 consume: false,
+                progress_report_accepted: false,
                 error: Some(msg),
             });
         }

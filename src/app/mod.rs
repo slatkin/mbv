@@ -93,7 +93,9 @@ use ratatui_image::picker::Picker;
 use ratatui_image::protocol::StatefulProtocol;
 
 use mbv_core::api::{parse_mbv_direct_tcp_port, EmbyClient, MediaItem};
-use mbv_core::playback_queue::{PlaybackQueue, QueueMutationResult, QueueSlotId, RemoveSlotResult};
+use mbv_core::playback_queue::{
+    PlaybackQueue, QueueMutationResult, QueueSlotId, RefreshMergeResult, RemoveSlotResult,
+};
 use mbv_core::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
 
@@ -436,6 +438,23 @@ impl PlayerTab {
             .map(|slot| slot.item.clone())
             .collect();
         self.clamp_cursor();
+    }
+
+    fn sync_active_slot(&mut self, active_index: Option<usize>) {
+        self.sync_queue_model_from_items_if_needed();
+        let active_slot_id = active_index.and_then(|index| self.resolve_slot_at(index));
+        if let Some(slot_id) = active_slot_id {
+            let _ = self.queue.set_active_slot(slot_id);
+        } else {
+            self.queue.clear_active_slot();
+        }
+    }
+
+    fn merge_refresh(&mut self, fetched_items: Vec<MediaItem>) -> RefreshMergeResult {
+        self.sync_queue_model_from_items_if_needed();
+        let result = self.queue.merge_refresh(fetched_items);
+        self.sync_items_from_queue_model();
+        result
     }
 
     fn clamp_cursor(&mut self) {
@@ -1560,6 +1579,48 @@ impl App {
         self.queue_for_scope_mut(self.playback_target_queue_scope())
     }
 
+    fn merge_refreshed_queue(
+        &mut self,
+        scope: QueueScope,
+        fetched_items: Vec<MediaItem>,
+    ) -> RefreshMergeResult {
+        let queue_len = self.queue_for_scope(scope).items.len();
+        let sync_player_prunes =
+            scope == self.playback_target_queue_scope() && !self.has_direct_remote_queue();
+        let active_index = if scope == self.playback_target_queue_scope() {
+            let st = self.player.status.lock().unwrap();
+            (st.active && st.current_idx < queue_len).then_some(st.current_idx)
+        } else {
+            None
+        };
+        let (result, pre_refresh_indices) = {
+            let queue = self.queue_for_scope_mut(scope);
+            queue.sync_active_slot(active_index);
+            let pre_refresh_indices = sync_player_prunes.then(|| {
+                queue
+                    .queue
+                    .slots()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, slot)| (slot.slot_id, index))
+                    .collect::<std::collections::HashMap<_, _>>()
+            });
+            (queue.merge_refresh(fetched_items), pre_refresh_indices)
+        };
+        if let Some(pre_refresh_indices) = pre_refresh_indices {
+            let mut pruned_indices: Vec<_> = result
+                .pruned_slots
+                .iter()
+                .filter_map(|slot_id| pre_refresh_indices.get(slot_id).copied())
+                .collect();
+            pruned_indices.sort_unstable_by(|left, right| right.cmp(left));
+            for index in pruned_indices {
+                self.player.send_command(PlayerCommand::QueueRemove(index));
+            }
+        }
+        result
+    }
+
     /// Whether the previous/next transport controls (playback-header mouse
     /// buttons and, implicitly, the `P`/`N` keys) are currently at a usable
     /// queue position: `(prev_available, next_available)`.
@@ -1602,10 +1663,8 @@ impl App {
     }
 
     /// Removes the given slot from the currently active playback queue by
-    /// identity (order-independent, unlike `remove_from_active_playback_queue`)
-    /// and, if something was actually removed, tells the player to drop the
-    /// slot's current index from its own internal queue copy — see
-    /// `remove_from_active_playback_queue` for why that notification matters.
+    /// identity and, if something was actually removed, tells the player to
+    /// drop the slot's current index from its own internal queue copy.
     /// Uses `consume_slot` rather than `remove_slot` so a slot that is
     /// currently marked active in the model (set via `set_active_slot`) can
     /// still be consumed; the active-confirmation gate on `remove_slot` only
@@ -1620,25 +1679,6 @@ impl App {
         self.playback_queue_mut().sync_items_from_queue_model();
         self.player.send_command(PlayerCommand::QueueRemove(idx));
         Some(removed.item.id)
-    }
-
-    /// Removes `idx` from the currently active playback queue and, if
-    /// something was actually removed, tells the player to drop the same
-    /// index from its own internal queue copy. `QueueSession` (or its
-    /// remote equivalent) keeps that copy independently of `PlayerTab.items`
-    /// above — without this, the two silently diverge after the first
-    /// removal, and any later index-based command (Enter on a queue row,
-    /// JumpTo, the next natural advance) lands on the wrong item. Returns the
-    /// removed item's id, or `None` if `idx` was out of bounds (nothing
-    /// removed, nothing sent).
-    fn remove_from_active_playback_queue(&mut self, idx: usize) -> Option<String> {
-        let queue = self.playback_queue_mut();
-        if idx >= queue.items.len() {
-            return None;
-        }
-        let removed_id = queue.remove_slot_at(idx)?.id;
-        self.player.send_command(PlayerCommand::QueueRemove(idx));
-        Some(removed_id)
     }
 
     fn set_queue_scope(&mut self, scope: QueueScope) {
@@ -2353,6 +2393,7 @@ impl App {
                 position_ticks,
                 played,
                 consume,
+                progress_report_accepted,
                 error,
             } => {
                 log::info!(target: "player", "Stopped event: idx={idx} position_ticks={}s played={played} error={error:?}",
@@ -2387,11 +2428,12 @@ impl App {
                             } else {
                                 0
                             };
-                            let _ = self
-                                .playback_queue_mut()
-                                .queue
-                                .apply_progress(slot_id, position, played);
-                            self.playback_queue_mut().sync_items_from_queue_model();
+                            let queue = self.playback_queue_mut();
+                            let _ = queue.queue.apply_progress(slot_id, position, played);
+                            if progress_report_accepted {
+                                let _ = queue.queue.mark_progress_sync_pending(slot_id);
+                            }
+                            queue.sync_items_from_queue_model();
                             if played {
                                 log::info!(target: "player", "Stopped: marked played, position reset to 0");
                             } else if position_ticks > 0 {
@@ -2483,6 +2525,7 @@ impl App {
                         }
                     }
                 }
+                self.playback_queue_mut().queue.clear_active_slot();
                 self.refresh_after_stop();
                 if !self.has_direct_remote_queue() {
                     self.save_queue_state();
@@ -2493,6 +2536,7 @@ impl App {
                 position_ticks,
                 played,
                 consume,
+                progress_report_accepted,
             } => {
                 // Resolve the raw mpv index to a slot right away, against the
                 // queue exactly as it stands now — the shadow (`items`) may
@@ -2517,11 +2561,12 @@ impl App {
                 } else {
                     return false;
                 };
-                let _ = self
-                    .playback_queue_mut()
-                    .queue
-                    .apply_progress(slot_id, position, played);
-                self.playback_queue_mut().sync_items_from_queue_model();
+                let queue = self.playback_queue_mut();
+                let _ = queue.queue.apply_progress(slot_id, position, played);
+                if progress_report_accepted {
+                    let _ = queue.queue.mark_progress_sync_pending(slot_id);
+                }
+                queue.sync_items_from_queue_model();
                 let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
                 if should_consume {
                     self.pending_queue_removal = Some((slot_id, is_audio));
@@ -5009,6 +5054,7 @@ pub(crate) mod tests {
             position_ticks: 600_000_000,
             played: false,
             consume: false,
+            progress_report_accepted: false,
             error: None,
         });
 
@@ -5017,6 +5063,39 @@ pub(crate) mod tests {
             slot.item.playback_position_ticks, 600_000_000,
             "progress must be applied to the queue model, not only the display shadow"
         );
+    }
+
+    #[test]
+    fn stopped_with_accepted_report_marks_pending_sync_and_clears_active_slot() {
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(1);
+        app.player_tab.sync_queue_model_from_items_if_needed();
+        let slot_id = app.player_tab.queue.slots()[0].slot_id;
+        app.handle_player_event(PlayerEvent::TrackChanged(0));
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 0;
+        }
+
+        app.handle_player_event(PlayerEvent::Stopped {
+            idx: 0,
+            position_ticks: 600_000_000,
+            played: false,
+            consume: false,
+            progress_report_accepted: true,
+            error: None,
+        });
+
+        let slot = app.player_tab.queue.slot(slot_id).unwrap();
+        assert_eq!(
+            slot.progress_state
+                .pending_sync
+                .as_ref()
+                .map(|progress| progress.position_ticks),
+            Some(600_000_000)
+        );
+        assert_eq!(app.player_tab.queue.active_slot_id(), None);
     }
 
     #[test]
@@ -5039,6 +5118,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
             error: None,
         });
 
@@ -5072,6 +5152,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: false,
             consume: false,
+            progress_report_accepted: false,
             error: None,
         });
 
@@ -5104,6 +5185,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: false,
             consume: true,
+            progress_report_accepted: false,
             error: None,
         });
 
@@ -5126,6 +5208,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: false,
             consume: true,
+            progress_report_accepted: false,
             error: None,
         });
 
@@ -5157,6 +5240,7 @@ pub(crate) mod tests {
             position_ticks: 600_000_000,
             played: false,
             consume: false,
+            progress_report_accepted: false,
         });
 
         let slot = app.player_tab.queue.slot(slot_b).unwrap();
@@ -5182,6 +5266,7 @@ pub(crate) mod tests {
             position_ticks: 600_000_000,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
 
         let ids_after: Vec<_> = app
@@ -5225,6 +5310,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
         assert!(app.pending_queue_removal.is_some());
 
@@ -5255,6 +5341,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
         app.handle_player_event(PlayerEvent::TrackChanged(1));
 
@@ -5291,6 +5378,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
         app.handle_player_event(PlayerEvent::TrackChanged(1));
 
@@ -5322,6 +5410,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
         app.handle_player_event(PlayerEvent::TrackChanged(1));
 
@@ -5360,6 +5449,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
         app.handle_player_event(PlayerEvent::TrackChanged(1));
 
@@ -5402,6 +5492,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: false,
             consume: true,
+            progress_report_accepted: false,
         });
         app.handle_player_event(PlayerEvent::TrackChanged(1));
 
@@ -5440,6 +5531,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: false,
             consume: true,
+            progress_report_accepted: false,
         });
         app.handle_player_event(PlayerEvent::TrackChanged(1));
 
@@ -5469,6 +5561,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: false,
             consume: true,
+            progress_report_accepted: false,
         });
         app.handle_player_event(PlayerEvent::TrackChanged(1));
 
@@ -5493,6 +5586,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
         app.handle_player_event(PlayerEvent::TrackChanged(1));
 
@@ -6397,6 +6491,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
         {
             let mut status = app.player.status.lock().unwrap();
@@ -6436,6 +6531,7 @@ pub(crate) mod tests {
             position_ticks: 0,
             played: true,
             consume: true,
+            progress_report_accepted: false,
         });
         {
             let mut status = app.player.status.lock().unwrap();

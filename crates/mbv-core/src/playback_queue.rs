@@ -156,6 +156,10 @@ impl PlaybackQueue {
         self.active_slot_id.and_then(|slot_id| self.slot(slot_id))
     }
 
+    pub fn clear_active_slot(&mut self) {
+        self.active_slot_id = None;
+    }
+
     pub fn slot(&self, slot_id: QueueSlotId) -> Option<&QueueSlot> {
         self.slots.iter().find(|slot| slot.slot_id == slot_id)
     }

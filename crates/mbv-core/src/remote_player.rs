@@ -356,6 +356,7 @@ impl RemotePlayer {
                     position_ticks: 0,
                     played: false,
                     consume: false,
+                    progress_report_accepted: false,
                     error: None,
                 });
             }
