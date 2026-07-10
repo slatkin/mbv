@@ -11,6 +11,7 @@ use std::{
 };
 
 use crate::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
+use crate::playback_queue::{PlaybackQueue, QueueSlotId};
 use libmpv2::{
     events::{Event, PropertyData},
     mpv_end_file_reason, EndFileReason, Format, Mpv,
@@ -1023,656 +1024,7 @@ fn handle_intro(
     }
 }
 
-// ── SingleSession ─────────────────────────────────────────────────────────────
-
-struct SingleSession {
-    config: MpvSessionConfig,
-    reporter: SessionReporter,
-    event_tx: mpsc::Sender<PlayerEvent>,
-    status: Arc<Mutex<PlayerStatus>>,
-    subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-    ext_sub_urls: Vec<String>,
-    // loop state
-    quit_at: Option<Instant>,
-    stop_reported: bool,
-    stop_report_accepted: bool,
-    stopped_event_sent: bool,
-    mark_played_id: Option<String>,
-    pending_load: bool,
-    pending_resume_secs: Option<f64>,
-    last_seek_at: Option<Instant>,
-    tracks_initialized: bool,
-    osd_title: String,
-    last_mouse_osd: Option<Instant>,
-    last_valid_pos: i64,
-    // next-up
-    series_id: String,
-    season: i64,
-    episode: i64,
-    next_up_fired: bool,
-    next_up_armed: bool,
-    startup_pause_release_pending: bool,
-    startup_pause_events_to_skip: u8,
-    // intro
-    intro_start: i64,
-    intro_end: i64,
-    intro_show: bool,
-    intro_hide: bool,
-}
-
-impl SingleSession {
-    fn new(
-        item: &MediaItem,
-        reporter: SessionReporter,
-        config: MpvSessionConfig,
-        startup_pause_for_pipe: bool,
-        status: Arc<Mutex<PlayerStatus>>,
-        event_tx: mpsc::Sender<PlayerEvent>,
-        subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
-        ext_sub_urls: Vec<String>,
-    ) -> Self {
-        let is_audio = item.is_audio();
-        let last_valid_pos = if is_audio {
-            0
-        } else {
-            item.playback_position_ticks
-        };
-        let (intro_start, intro_end) = load_intro_times(&reporter.client, &item.id);
-        let past = intro_end > 0 && last_valid_pos >= intro_end;
-        SingleSession {
-            osd_title: item.display_name(),
-            series_id: if item.item_type == "Episode" {
-                item.series_id.clone()
-            } else {
-                String::new()
-            },
-            season: item.parent_index_number,
-            episode: item.index_number,
-            last_valid_pos,
-            intro_start,
-            intro_end,
-            intro_show: past,
-            intro_hide: past,
-            config,
-            reporter,
-            event_tx,
-            status,
-            subtitle_prefs,
-            ext_sub_urls,
-            quit_at: None,
-            stop_reported: false,
-            stop_report_accepted: false,
-            stopped_event_sent: false,
-            mark_played_id: None,
-            pending_load: false,
-            pending_resume_secs: None,
-            last_seek_at: None,
-            tracks_initialized: false,
-            last_mouse_osd: None,
-            next_up_fired: false,
-            next_up_armed: false,
-            startup_pause_release_pending: startup_pause_for_pipe,
-            startup_pause_events_to_skip: if startup_pause_for_pipe { 2 } else { 0 },
-        }
-    }
-
-    fn set_intro(&mut self, start: i64, end: i64, pos: i64) {
-        self.intro_start = start;
-        self.intro_end = end;
-        let past = end > 0 && pos >= end;
-        self.intro_show = past;
-        self.intro_hide = past;
-    }
-
-    // Returns true if a pending quit should be cancelled (LoadNew arrived).
-    fn handle_command(
-        &mut self,
-        cmd: PlayerCommand,
-        mpv: &Mpv,
-        progress: &mut ProgressGuard,
-    ) -> bool {
-        let mut cancel_stop = false;
-        match cmd {
-            PlayerCommand::NextUpShow {
-                item_id,
-                show_title,
-                ep_title,
-                artist,
-            } => {
-                log::warn!(target: "player", "next-up: sending script-message mbv-next-up id={item_id} show={show_title} ep={ep_title}");
-                let r = mpv.command(
-                    "script-message",
-                    &["mbv-next-up", &item_id, &show_title, &ep_title, &artist],
-                );
-                log::warn!(target: "player", "next-up: script-message result={r:?}");
-            }
-            PlayerCommand::TogglePause => {
-                let p = self.status.lock().unwrap().paused;
-                let _ = mpv.set_property("pause", !p);
-            }
-            PlayerCommand::SetVolume(v) => {
-                let vol_max = self.status.lock().unwrap().volume_max;
-                let v = v.clamp(0, vol_max);
-                let raw = (10.0 * (v as f64).sqrt()).round() as i64;
-                let _ = mpv.set_property("volume", raw as f64);
-                self.status.lock().unwrap().volume = v;
-                let _ = mpv.command("show-text", &[&format!("Volume: {v}%"), "1500"]);
-            }
-            PlayerCommand::NextUpDismiss => {
-                let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
-            }
-            PlayerCommand::SkipIntroDismiss => {
-                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-            }
-            PlayerCommand::Seek(secs) => {
-                let _ = mpv.command("seek", &[&secs.to_string(), "relative"]);
-                self.last_seek_at = Some(Instant::now());
-            }
-            PlayerCommand::SeekAbsolute(secs) => {
-                let _ = mpv.command("seek", &[&secs.to_string(), "absolute"]);
-                self.last_seek_at = Some(Instant::now());
-            }
-            PlayerCommand::SetAudio(id) => {
-                if id > 0 {
-                    let _ = mpv.set_property("aid", id);
-                } else {
-                    let _ = mpv.set_property("aid", "no".to_string());
-                }
-                self.status.lock().unwrap().audio_id = id;
-                refresh_tracks(mpv, &self.status);
-            }
-            PlayerCommand::SetSub(id) => {
-                if id == 0 {
-                    let _ = mpv.set_property("sid", "no".to_string());
-                } else {
-                    let _ = mpv.set_property("sid", id);
-                }
-                refresh_tracks(mpv, &self.status);
-                self.status.lock().unwrap().sub_id = id;
-            }
-            PlayerCommand::SetSubtitlePrefs {
-                mode,
-                subtitle_lang,
-                audio_lang,
-            } => {
-                {
-                    let mut p = self.subtitle_prefs.lock().unwrap();
-                    p.mode = mode;
-                    p.subtitle_lang = subtitle_lang;
-                    p.audio_lang = audio_lang;
-                }
-                let prefs = self.subtitle_prefs.lock().unwrap().clone();
-                auto_select_tracks(mpv, &self.status, &prefs);
-            }
-            PlayerCommand::SetMute(m) => {
-                let _ = mpv.set_property("mute", m);
-                self.status.lock().unwrap().muted = m;
-            }
-            PlayerCommand::LoadNew {
-                url,
-                start_pos,
-                item,
-            } => {
-                // Cancel any pending quit so the new file loads in the same window.
-                cancel_stop = true;
-                self.quit_at = None;
-                // Loading a new item should always start playing it, even if mpv
-                // was left paused on the previous item (reused-window fast path).
-                let _ = mpv.set_property("pause", false);
-                // Stop progress reporter during transition to prevent stale reports.
-                progress.stop_and_join();
-                self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
-                *progress = spawn_progress_reporter(self.reporter.clone());
-
-                self.last_valid_pos = item.playback_position_ticks;
-                self.osd_title = item.display_name();
-                {
-                    let mut st = self.status.lock().unwrap();
-                    st.runtime_ticks = item.runtime_ticks;
-                    st.position_ticks = item.playback_position_ticks;
-                    st.title = self.osd_title.clone();
-                }
-                self.tracks_initialized = false;
-                self.stop_reported = false;
-                self.stop_report_accepted = false;
-                self.pending_load = true;
-                self.next_up_fired = false;
-                self.next_up_armed = false;
-                if item.item_type == "Episode" {
-                    self.series_id = item.series_id.clone();
-                    self.season = item.parent_index_number;
-                    self.episode = item.index_number;
-                } else {
-                    self.series_id = String::new();
-                }
-                let (s, e) = load_intro_times(&self.reporter.client, &item.id);
-                self.set_intro(s, e, item.playback_position_ticks);
-
-                if start_pos > 0.0 {
-                    let _ = mpv.set_property("start", format!("{:.0}", start_pos));
-                } else {
-                    let _ = mpv.set_property("start", "0");
-                }
-                let title_opt = mpv_title_opt(&item.display_name());
-                log::info!(target: "player", "loadfile url={url} opts={title_opt:?}");
-                if let Err(e) = mpv.command(
-                    "loadfile",
-                    &[url.as_str(), "replace", "-1", title_opt.as_str()],
-                ) {
-                    log::warn!(target: "player", "loadfile error: {} | opts={title_opt:?}", mpv_err_str(&e));
-                }
-                send_ep_info(mpv, &item);
-                let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
-                let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-            }
-            // Not applicable in single-item mode
-            PlayerCommand::JumpTo(_)
-            | PlayerCommand::QueueRemove(_)
-            | PlayerCommand::QueueMove(_, _)
-            | PlayerCommand::ReplaceQueue { .. } => {}
-        }
-        cancel_stop
-    }
-
-    fn on_time_pos(&mut self, pos_secs: f64, mpv: &Mpv) {
-        let ticks = (pos_secs * TICKS_PER_SECOND as f64) as i64;
-        {
-            let mut st = self.status.lock().unwrap();
-            st.position_ticks = ticks;
-            if pos_secs > 0.0 {
-                if self.last_valid_pos == 0 {
-                    log::info!(target: "player", "last_valid_pos first non-zero: {}s", ticks / TICKS_PER_SECOND);
-                }
-                self.last_valid_pos = ticks;
-                st.last_valid_pos = ticks;
-            }
-        }
-
-        const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
-        if !self.next_up_fired {
-            if self.series_id.is_empty() {
-                if !self.next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                    self.next_up_armed = true;
-                    log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
-                }
-            } else {
-                let runtime = self.status.lock().unwrap().runtime_ticks;
-                if runtime > NEXT_UP_TICKS && ticks > runtime - NEXT_UP_TICKS {
-                    self.next_up_fired = true;
-                    log::warn!(target: "player", "next-up: threshold reached series={}", self.series_id);
-                    let _ = self.event_tx.send(PlayerEvent::NextUpThreshold {
-                        series_id: self.series_id.clone(),
-                        season: self.season,
-                        episode: self.episode,
-                    });
-                } else if !self.next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
-                    self.next_up_armed = true;
-                    log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
-                }
-            }
-        }
-
-        handle_intro(
-            ticks,
-            self.intro_start,
-            self.intro_end,
-            &mut self.intro_show,
-            &mut self.intro_hide,
-            self.config.always_skip_intro,
-            mpv,
-            &self.event_tx,
-        );
-    }
-
-    fn on_playback_restart(&mut self, mpv: &Mpv) {
-        if self.startup_pause_release_pending {
-            self.startup_pause_release_pending = false;
-            log::info!(
-                target: "player",
-                "audio pipe: startup gate cleared on PlaybackRestart"
-            );
-            let _ = mpv.set_property("pause", false);
-        }
-        {
-            let h: i64 = mpv.get_property("video-params/h").unwrap_or(0);
-            let is_img: bool = mpv
-                .get_property("current-tracks/video/image")
-                .unwrap_or(false);
-            let codec: String = mpv.get_property("audio-codec-name").unwrap_or_default();
-            let mut st = self.status.lock().unwrap();
-            st.video_height = h;
-            st.audio_codec = codec.to_lowercase();
-            st.video_is_image = is_img;
-        }
-        let event_name: &str;
-        if !self.tracks_initialized {
-            let prefs = self.subtitle_prefs.lock().unwrap().clone();
-            for url in &self.ext_sub_urls {
-                if let Err(e) = mpv.command("sub-add", &[url.as_str()]) {
-                    log::warn!(target: "player", "sub-add failed: {url}: {e:?}");
-                }
-            }
-            auto_select_tracks(mpv, &self.status, &prefs);
-            log::info!(target: "player", "after auto_select_tracks: sub_id={}", self.status.lock().unwrap().sub_id);
-            self.tracks_initialized = true;
-            let val = if self.season > 0 && self.episode > 0 {
-                format!("Season {}  Episode {}", self.season, self.episode)
-            } else {
-                String::new()
-            };
-            let _ = mpv.set_property("user-data/mbv/ep-tag", val.as_str());
-            let _ = mpv.set_property("start", "0");
-            if let Some(secs) = self.pending_resume_secs.take() {
-                if secs > 0.0 {
-                    let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
-                    self.last_seek_at = Some(Instant::now());
-                }
-            }
-            if self.config.use_mpv_config {
-                let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);
-            }
-            event_name = "TimeUpdate";
-        } else {
-            // Any restart after init means a seek happened (via TUI or mpv OSC).
-            // Re-arm so a seek into/out-of the threshold is handled correctly.
-            self.next_up_fired = false;
-            self.next_up_armed = false;
-            if self.last_seek_at.take().is_some() && self.config.use_mpv_config {
-                let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
-            }
-            event_name = "Seek";
-        }
-        let seek_settled = self
-            .last_seek_at
-            .is_none_or(|t| t.elapsed() > Duration::from_millis(500));
-        if self.quit_at.is_none() && seek_settled {
-            self.last_seek_at = None;
-            self.reporter.report_progress(event_name);
-        }
-    }
-
-    // Returns true if the event loop should `continue` (skip the rest of this iteration).
-    fn on_end_file(&mut self, reason: EndFileReason, progress: &mut ProgressGuard) -> bool {
-        if self.quit_at.is_some() {
-            return true;
-        }
-        if self.pending_load {
-            self.pending_load = false;
-            return true;
-        }
-
-        if reason == mpv_end_file_reason::Error {
-            log::warn!(target: "player", "EndFile: playback error (file may be unreadable or format unsupported)");
-        }
-
-        let id = self.reporter.ids.lock().unwrap().0.clone();
-        let natural_end =
-            reason == mpv_end_file_reason::Eof && self.status.lock().unwrap().runtime_ticks > 0;
-
-        progress.stop_and_join();
-        self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
-        self.stop_reported = true;
-
-        if natural_end {
-            if !self.reporter.is_audio.load(Ordering::Relaxed) {
-                match self.reporter.client.mark_played(&id) {
-                    Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
-                    Err(e) => {
-                        log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
-                        self.mark_played_id = Some(id.clone());
-                    }
-                }
-            }
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: 0,
-                position_ticks: 0,
-                played: !self.reporter.is_audio.load(Ordering::Relaxed),
-                consume: false,
-                progress_report_accepted: self.stop_report_accepted,
-                error: None,
-            });
-            self.stopped_event_sent = true;
-        }
-        false
-    }
-
-    fn on_shutdown(&mut self, progress: &mut ProgressGuard) {
-        if !self.stop_reported {
-            progress.stop_and_join();
-            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
-            self.stop_reported = true;
-        }
-        let client = self.reporter.client.clone();
-        // Retry mark_played in a detached thread so Shutdown never blocks.
-        if let Some(mid) = self.mark_played_id.take() {
-            retry_mark_played(client.clone(), mid);
-        }
-        let runtime = self.status.lock().unwrap().runtime_ticks;
-        let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
-        let near_end = !is_audio && runtime > 0 && self.last_valid_pos * 20 / runtime >= 19;
-        if near_end {
-            let id = self.reporter.ids.lock().unwrap().0.clone();
-            retry_mark_played(client.clone(), id);
-        }
-        self.status.lock().unwrap().active = false;
-        if !self.stopped_event_sent {
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: 0,
-                position_ticks: self.last_valid_pos,
-                played: near_end,
-                consume: false,
-                progress_report_accepted: self.stop_report_accepted,
-                error: None,
-            });
-        }
-        // mpv exited on its own (not via our stop command) — tell the app to quit.
-        if self.quit_at.is_none() {
-            let _ = self.event_tx.send(PlayerEvent::MpvQuit);
-        }
-    }
-
-    fn run(
-        mut self,
-        mpv: Mpv,
-        stop_rx: mpsc::Receiver<()>,
-        cmd_rx: mpsc::Receiver<PlayerCommand>,
-        mut progress: ProgressGuard,
-    ) {
-        let event_tx_panic = self.event_tx.clone();
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            loop {
-                // Process commands before checking the stop signal so that a LoadNew
-                // arriving in the same iteration (e.g. WS Stop then Play) can cancel
-                // the quit instead of fighting with it.
-                let mut cancel_stop = false;
-                while let Ok(cmd) = cmd_rx.try_recv() {
-                    cancel_stop |= self.handle_command(cmd, &mpv, &mut progress);
-                }
-
-                if !cancel_stop && self.quit_at.is_none() && stop_rx.try_recv().is_ok() {
-                    let _ = mpv.command("quit", &[]);
-                    self.quit_at = Some(Instant::now());
-                }
-
-                if self
-                    .quit_at
-                    .is_some_and(|t| t.elapsed() > Duration::from_secs(2))
-                {
-                    if !self.stop_reported {
-                        progress.stop_and_join();
-                        self.stop_report_accepted =
-                            self.reporter.report_stopped(self.last_valid_pos);
-                        self.stop_reported = true;
-                    }
-                    let runtime = self.status.lock().unwrap().runtime_ticks;
-                    let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
-                    let near_end =
-                        !is_audio && runtime > 0 && self.last_valid_pos * 20 / runtime >= 19;
-                    self.status.lock().unwrap().active = false;
-                    let _ = self.event_tx.send(PlayerEvent::Stopped {
-                        idx: 0,
-                        position_ticks: self.last_valid_pos,
-                        played: near_end,
-                        consume: false,
-                        progress_report_accepted: self.stop_report_accepted,
-                        error: None,
-                    });
-                    return;
-                }
-
-                match mpv.wait_event(0.5) {
-                    Some(Ok(Event::PropertyChange {
-                        name: "volume",
-                        change: PropertyData::Double(vol),
-                        ..
-                    })) => {
-                        self.status.lock().unwrap().volume = (vol * vol / 100.0) as i64;
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        change: PropertyData::Double(pos_secs),
-                        ..
-                    })) => {
-                        self.on_time_pos(pos_secs, &mpv);
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        name: "pause",
-                        change: PropertyData::Flag(paused),
-                        ..
-                    })) => {
-                        self.status.lock().unwrap().paused = paused;
-                        if self.startup_pause_events_to_skip > 0 {
-                            self.startup_pause_events_to_skip -= 1;
-                            continue;
-                        }
-                        if self.quit_at.is_none() {
-                            let event_name = if paused { "Pause" } else { "Unpause" };
-                            self.reporter.report_progress(event_name);
-                        }
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        name: "sid",
-                        change: PropertyData::Str(s),
-                        ..
-                    })) => {
-                        self.status.lock().unwrap().sub_id = s.parse::<i64>().unwrap_or(0);
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        name: "aid",
-                        change: PropertyData::Str(_),
-                        ..
-                    })) => {
-                        refresh_tracks(&mpv, &self.status);
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        name: "mute",
-                        change: PropertyData::Flag(m),
-                        ..
-                    })) => {
-                        self.status.lock().unwrap().muted = m;
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        name: "video-params/h",
-                        change: PropertyData::Int64(h),
-                        ..
-                    })) => {
-                        log::info!(target: "player", "video-params/h: h={h}");
-                        self.status.lock().unwrap().video_height = h;
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        name: "video-params/h",
-                        change,
-                        ..
-                    })) => {
-                        log::warn!(target: "player", "video-params/h unexpected type: {:?}", change);
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        name: "audio-codec-name",
-                        change: PropertyData::Str(s),
-                        ..
-                    })) => {
-                        self.status.lock().unwrap().audio_codec = s.to_lowercase();
-                    }
-                    Some(Ok(Event::PropertyChange {
-                        name: "current-tracks/video/image",
-                        change: PropertyData::Flag(is_img),
-                        ..
-                    })) => {
-                        log::info!(target: "player", "video/image: is_img={is_img}");
-                        self.status.lock().unwrap().video_is_image = is_img;
-                    }
-                    Some(Ok(Event::PlaybackRestart)) => {
-                        self.on_playback_restart(&mpv);
-                    }
-                    Some(Ok(Event::EndFile(reason))) => {
-                        if self.on_end_file(reason, &mut progress) {
-                            continue;
-                        }
-                    }
-                    Some(Ok(Event::LogMessage {
-                        prefix,
-                        level,
-                        text,
-                        ..
-                    })) => {
-                        let t = text.trim_end();
-                        if !t.is_empty() {
-                            log::warn!(target: "mpv", "[{}/{}] {}", prefix, level, t);
-                        }
-                    }
-                    Some(Ok(Event::ClientMessage(args)))
-                        if args.first().copied() == Some("mbv-next-up-play") =>
-                    {
-                        log::info!(target: "player", "next-up: mbv-next-up-play received from Lua");
-                        let _ = self.event_tx.send(PlayerEvent::NextUpPlay);
-                    }
-                    Some(Ok(Event::ClientMessage(args)))
-                        if args.first().copied() == Some("mbv-skip-intro-play") =>
-                    {
-                        let _ = self.event_tx.send(PlayerEvent::SkipIntroPlay);
-                    }
-                    Some(Ok(Event::ClientMessage(args)))
-                        if self.config.use_mpv_config
-                            && args.first().copied() == Some("mouse-moved") =>
-                    {
-                        let show = self
-                            .last_mouse_osd
-                            .is_none_or(|t: Instant| t.elapsed() > Duration::from_secs(3));
-                        if show {
-                            let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
-                            self.last_mouse_osd = Some(Instant::now());
-                        }
-                    }
-                    Some(Ok(Event::Shutdown)) => {
-                        self.on_shutdown(&mut progress);
-                        return;
-                    }
-                    Some(Err(e)) => {
-                        log::warn!(target: "player", "event error: {}", mpv_err_str(&e));
-                    }
-                    _ => {}
-                }
-            }
-        })); // end catch_unwind
-        if let Err(panic) = result {
-            let msg = panic
-                .downcast_ref::<&str>()
-                .map(|s| s.to_string())
-                .or_else(|| panic.downcast_ref::<String>().cloned())
-                .unwrap_or_else(|| "unknown panic".to_string());
-            log::error!(target: "player", "SingleSession panicked: {msg}");
-            let _ = event_tx_panic.send(PlayerEvent::Stopped {
-                idx: 0,
-                position_ticks: 0,
-                played: false,
-                consume: false,
-                progress_report_accepted: false,
-                error: Some(msg),
-            });
-        }
-    }
-}
-
-// ── QueueSession ───────────────────────────────────────────────────────────
+// ── PlaybackSession ────────────────────────────────────────────────────────
 
 /// Where index `idx` ends up after moving the entry at `from` to `to`
 /// (both 0-based positions in the same list, `from != to`).
@@ -1688,32 +1040,45 @@ pub(crate) fn shift_index_for_move(idx: usize, from: usize, to: usize) -> usize 
     }
 }
 
-struct QueueSession {
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum PlaybackOrigin {
+    Standalone,
+    Queue,
+}
+
+struct PlaybackSession {
+    origin: PlaybackOrigin,
     config: MpvSessionConfig,
     reporter: SessionReporter,
     event_tx: mpsc::Sender<PlayerEvent>,
     status: Arc<Mutex<PlayerStatus>>,
     subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
+    is_queue_mode: Arc<AtomicBool>,
     server_url: String,
     token: String,
-    items: Vec<MediaItem>,
-    n: usize,
+    queue: PlaybackQueue,
     ext_sub_urls: Vec<String>,
     // loop state
     current_idx: usize,
-    forced_idx: Option<usize>,
+    forced_slot_id: Option<QueueSlotId>,
     quit_at: Option<Instant>,
     last_seek_at: Option<Instant>,
     last_valid_pos: i64,
     tracks_initialized: bool,
-    queue_cancelled: bool,
     pending_load: u8,
     pending_initial_jump: bool,
     stop_reported: bool,
     stop_report_accepted: bool,
+    stopped_event_sent: bool,
+    mark_played_id: Option<String>,
     osd_title: String,
     last_mouse_osd: Option<Instant>,
     pending_resume_secs: Option<f64>,
+    series_id: String,
+    season: i64,
+    episode: i64,
+    next_up_fired: bool,
+    next_up_armed: bool,
     queue_next_up_fired: bool,
     queue_next_up_armed: bool,
     next_up_jump: bool,
@@ -1727,11 +1092,111 @@ struct QueueSession {
     intro_hide: bool,
 }
 
-impl QueueSession {
+impl PlaybackSession {
+    fn queue_len(&self) -> usize {
+        self.queue.slots().len()
+    }
+
+    fn slot_id_at(&self, idx: usize) -> Option<QueueSlotId> {
+        self.queue.slots().get(idx).map(|slot| slot.slot_id)
+    }
+
+    fn item_at(&self, idx: usize) -> Option<&MediaItem> {
+        self.queue.slots().get(idx).map(|slot| &slot.item)
+    }
+
+    fn active_item(&self) -> Option<&MediaItem> {
+        self.queue.active_slot().map(|slot| &slot.item)
+    }
+
+    fn active_slot_id(&self) -> Option<QueueSlotId> {
+        self.queue.active_slot_id()
+    }
+
+    fn set_origin(&self, origin: PlaybackOrigin) {
+        self.is_queue_mode
+            .store(origin == PlaybackOrigin::Queue, Ordering::Relaxed);
+    }
+
     fn sync_status_position(&self) {
         let mut s = self.status.lock().unwrap();
         s.current_idx = self.current_idx;
-        s.queue_len = self.items.len();
+        s.queue_len = self.queue_len();
+    }
+
+    fn refresh_current_idx_from_queue(&mut self) {
+        if let Some(slot_id) = self.active_slot_id() {
+            if let Some(idx) = self.queue.slot_index(slot_id) {
+                self.current_idx = idx;
+            }
+        } else if self.queue_len() == 0 {
+            self.current_idx = 0;
+        } else {
+            self.current_idx = self.current_idx.min(self.queue_len() - 1);
+        }
+        self.sync_status_position();
+    }
+
+    fn set_active_index(&mut self, idx: usize) -> bool {
+        let Some(slot_id) = self.slot_id_at(idx) else {
+            return false;
+        };
+        if !matches!(
+            self.queue.set_active_slot(slot_id),
+            crate::playback_queue::QueueMutationResult::Applied(())
+        ) {
+            return false;
+        }
+        self.current_idx = idx;
+        self.sync_status_position();
+        true
+    }
+
+    fn reset_next_up_state(&mut self) {
+        self.next_up_fired = false;
+        self.next_up_armed = false;
+        self.queue_next_up_fired = false;
+        self.queue_next_up_armed = false;
+        self.next_up_jump = false;
+    }
+
+    fn load_active_item_state(&mut self) {
+        let Some(item) = self.active_item().cloned() else {
+            self.osd_title.clear();
+            self.pending_resume_secs = None;
+            self.last_valid_pos = 0;
+            self.series_id.clear();
+            self.season = 0;
+            self.episode = 0;
+            self.intro_start = 0;
+            self.intro_end = 0;
+            self.intro_show = false;
+            self.intro_hide = false;
+            return;
+        };
+
+        self.osd_title = item.display_name();
+        self.last_valid_pos = if item.is_audio() {
+            0
+        } else {
+            item.playback_position_ticks
+        };
+        self.pending_resume_secs = if !item.is_audio() && item.should_resume() {
+            Some(item.resume_seconds())
+        } else {
+            None
+        };
+        if item.item_type == "Episode" {
+            self.series_id = item.series_id.clone();
+            self.season = item.parent_index_number;
+            self.episode = item.index_number;
+        } else {
+            self.series_id.clear();
+            self.season = 0;
+            self.episode = 0;
+        }
+        let (intro_start, intro_end) = load_intro_times(&self.reporter.client, &item.id);
+        self.set_intro(intro_start, intro_end, item.playback_position_ticks);
     }
 
     // `startup_pause_for_pipe` (added for audio-pipe startup-pause handling)
@@ -1741,51 +1206,77 @@ impl QueueSession {
     fn new(
         items: Vec<MediaItem>,
         start_idx: usize,
+        origin: PlaybackOrigin,
         reporter: SessionReporter,
         config: MpvSessionConfig,
         startup_pause_for_pipe: bool,
         status: Arc<Mutex<PlayerStatus>>,
         event_tx: mpsc::Sender<PlayerEvent>,
         subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
+        is_queue_mode: Arc<AtomicBool>,
         server_url: String,
         token: String,
         ext_sub_urls: Vec<String>,
     ) -> Self {
-        let n = items.len();
-        let initial_pos = items[start_idx].playback_position_ticks;
-        let (intro_start, intro_end) = load_intro_times(&reporter.client, &items[start_idx].id);
+        let start_idx = start_idx.min(items.len().saturating_sub(1));
+        let queue = PlaybackQueue::from_items(items, Some(start_idx));
+        let initial_item = queue
+            .active_slot()
+            .map(|slot| slot.item.clone())
+            .expect("PlaybackSession::new requires at least one item");
+        let initial_pos = if initial_item.is_audio() {
+            0
+        } else {
+            initial_item.playback_position_ticks
+        };
+        let (intro_start, intro_end) = load_intro_times(&reporter.client, &initial_item.id);
         let past = intro_end > 0 && initial_pos >= intro_end;
-        let pending_resume_secs =
-            if !items[start_idx].is_audio() && items[start_idx].should_resume() {
-                Some(items[start_idx].resume_seconds())
-            } else {
-                None
-            };
-        log::info!(target: "player", "queue init idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
-            initial_pos / crate::api::TICKS_PER_SECOND);
-        let osd_title = items[start_idx].display_name();
-        QueueSession {
+        let pending_resume_secs = if !initial_item.is_audio() && initial_item.should_resume() {
+            Some(initial_item.resume_seconds())
+        } else {
+            None
+        };
+        log::info!(
+            target: "player",
+            "playback init origin={origin:?} idx={start_idx} item_pos={}s pending_resume={pending_resume_secs:?}s",
+            initial_pos / crate::api::TICKS_PER_SECOND
+        );
+        let osd_title = initial_item.display_name();
+        let series_id = if initial_item.item_type == "Episode" {
+            initial_item.series_id.clone()
+        } else {
+            String::new()
+        };
+        let session = PlaybackSession {
+            origin,
             config,
             reporter,
             event_tx,
             status,
             subtitle_prefs,
+            is_queue_mode,
             server_url,
             token,
-            n,
+            queue,
             ext_sub_urls,
             current_idx: start_idx,
-            forced_idx: None,
+            forced_slot_id: None,
             quit_at: None,
             last_seek_at: None,
             last_valid_pos: initial_pos,
             tracks_initialized: false,
-            queue_cancelled: false,
             pending_load: 0,
             pending_initial_jump: start_idx > 0,
             stop_reported: false,
             stop_report_accepted: false,
+            stopped_event_sent: false,
+            mark_played_id: None,
             last_mouse_osd: None,
+            series_id,
+            season: initial_item.parent_index_number,
+            episode: initial_item.index_number,
+            next_up_fired: false,
+            next_up_armed: false,
             queue_next_up_fired: false,
             queue_next_up_armed: false,
             next_up_jump: false,
@@ -1798,8 +1289,9 @@ impl QueueSession {
             intro_hide: past,
             osd_title,
             pending_resume_secs,
-            items,
-        }
+        };
+        session.set_origin(origin);
+        session
     }
 
     fn set_intro(&mut self, start: i64, end: i64, pos: i64) {
@@ -1836,11 +1328,12 @@ impl QueueSession {
                 let _ = mpv.set_property("pause", !p);
             }
             PlayerCommand::JumpTo(idx) => {
-                if idx < self.n {
-                    // mpv playlist indices match items indices directly.
-                    self.forced_idx = Some(idx);
+                if let Some(slot_id) = self.slot_id_at(idx) {
+                    // mpv playlist indices are adapter coordinates; pin the
+                    // target slot identity before asking mpv to move.
+                    self.forced_slot_id = Some(slot_id);
                     if let Err(e) = mpv.set_property("playlist-pos", idx as i64) {
-                        self.forced_idx = None;
+                        self.forced_slot_id = None;
                         log::warn!(target: "player", "jump-to idx={idx} failed: {}", mpv_err_str(&e));
                     } else {
                         // Selecting a track should always start it playing, even if
@@ -1852,24 +1345,19 @@ impl QueueSession {
                 }
             }
             PlayerCommand::QueueRemove(idx) => {
-                if idx < self.n {
+                if let Some(slot_id) = self.slot_id_at(idx) {
+                    let active_slot_id = self.active_slot_id();
                     let _ = mpv.command("playlist-remove", &[&idx.to_string()]);
-                    self.items.remove(idx);
-                    self.n -= 1;
-                    if idx < self.current_idx {
-                        self.current_idx -= 1;
+                    if active_slot_id == Some(slot_id) {
+                        let _ = self.queue.remove_active_slot_confirmed(slot_id);
+                    } else {
+                        let _ = self.queue.remove_slot(slot_id);
                     }
-                    self.sync_status_position();
-                    if let Some(fi) = self.forced_idx {
-                        self.forced_idx = if idx == fi {
-                            None
-                        } else if idx < fi {
-                            Some(fi - 1)
-                        } else {
-                            Some(fi)
-                        };
+                    self.refresh_current_idx_from_queue();
+                    if self.forced_slot_id == Some(slot_id) {
+                        self.forced_slot_id = None;
                     }
-                    if idx == self.current_idx {
+                    if active_slot_id == Some(slot_id) {
                         // Currently playing track removed — clear reporter item_id to prevent
                         // stale progress reports until on_end_file transitions to the next track.
                         let mut ids = self.reporter.ids.lock().unwrap();
@@ -1878,7 +1366,7 @@ impl QueueSession {
                 }
             }
             PlayerCommand::QueueMove(from, to) => {
-                if from < self.n && to < self.n && from != to {
+                if from < self.queue_len() && to < self.queue_len() && from != to {
                     // mpv's playlist-move index2 names the *pre-move* slot the
                     // entry should end up next to, not its post-move index: for
                     // from < to the entry actually lands at to - 1, not to (mpv
@@ -1888,12 +1376,15 @@ impl QueueSession {
                     // match this struct's from/to bookkeeping below.
                     let mpv_to = if from < to { to + 1 } else { to };
                     let _ = mpv.command("playlist-move", &[&from.to_string(), &mpv_to.to_string()]);
-                    let item = self.items.remove(from);
-                    self.items.insert(to, item);
-                    self.current_idx = shift_index_for_move(self.current_idx, from, to);
-                    self.sync_status_position();
-                    if let Some(fi) = self.forced_idx {
-                        self.forced_idx = Some(shift_index_for_move(fi, from, to));
+                    if let Some(slot_id) = self.slot_id_at(from) {
+                        let had_active_slot = self.active_slot_id().is_some();
+                        let _ = self.queue.move_slot(slot_id, to);
+                        if had_active_slot {
+                            self.refresh_current_idx_from_queue();
+                        } else {
+                            self.current_idx = shift_index_for_move(self.current_idx, from, to);
+                            self.sync_status_position();
+                        }
                     }
                 }
             }
@@ -1986,20 +1477,25 @@ impl QueueSession {
             self.stop_reported = true;
             let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
             let _ = mpv.command("playlist-clear", &[]);
-            self.items.clear();
-            self.n = 0;
+            self.origin = PlaybackOrigin::Queue;
+            self.set_origin(self.origin);
+            self.queue = PlaybackQueue::default();
             self.current_idx = 0;
             self.sync_status_position();
             self.last_valid_pos = 0;
             self.pending_initial_jump = false;
             self.pending_load = 0;
             self.tracks_initialized = false;
-            self.queue_cancelled = true;
-            self.forced_idx = None;
-            self.queue_next_up_fired = false;
-            self.queue_next_up_armed = false;
-            self.next_up_jump = false;
+            self.forced_slot_id = None;
+            self.reset_next_up_state();
+            self.stopped_event_sent = false;
+            self.mark_played_id = None;
+            self.stopped_near_end = false;
             self.osd_title.clear();
+            self.pending_resume_secs = None;
+            self.series_id.clear();
+            self.season = 0;
+            self.episode = 0;
             return;
         }
         // report_stopped for current item; is_audio zeroing handled inside.
@@ -2030,8 +1526,9 @@ impl QueueSession {
                 log::warn!(target: "player", "ReplaceQueue loadfile error: {}", mpv_err_str(&e));
             }
         }
+        let active_item = new_items[start_idx].clone();
         let _ = mpv.set_property("start", "0");
-        send_ep_info(mpv, &new_items[start_idx]);
+        send_ep_info(mpv, &active_item);
         // loadfile "replace" displaces the current file (EndFile #1).
         // If start_idx > 0 we also set playlist-pos which displaces item[0] (EndFile #2).
         // Use = not += so a stale pending_load from a prior operation never stacks.
@@ -2042,38 +1539,38 @@ impl QueueSession {
             let _ = mpv.set_property("playlist-pos", start_idx as i64);
         }
 
-        self.last_valid_pos = new_items[start_idx].playback_position_ticks;
+        self.origin = PlaybackOrigin::Queue;
+        self.set_origin(self.origin);
+        self.queue = PlaybackQueue::from_items(new_items, Some(start_idx));
+        self.current_idx = start_idx;
+        self.load_active_item_state();
         self.tracks_initialized = false;
         // stop_reported stays true until pending_load drains to 0 in on_end_file,
         // preventing a duplicate report_stopped for the displaced file's EndFile(Quit).
-        self.queue_cancelled = false;
-        self.forced_idx = None;
-        self.queue_next_up_fired = false;
-        self.queue_next_up_armed = false;
-        self.next_up_jump = false;
-        self.osd_title = new_items[start_idx].display_name();
-        self.pending_resume_secs =
-            if !new_items[start_idx].is_audio() && new_items[start_idx].should_resume() {
-                Some(new_items[start_idx].resume_seconds())
-            } else {
-                None
-            };
+        self.forced_slot_id = None;
+        self.reset_next_up_state();
+        self.stopped_event_sent = false;
+        self.mark_played_id = None;
+        self.stopped_near_end = false;
         log::info!(target: "player", "playlist queue-replace idx={start_idx} pending_resume={:?}s", self.pending_resume_secs);
-        let (s, e) = load_intro_times(&self.reporter.client, &new_items[start_idx].id);
-        self.set_intro(s, e, new_items[start_idx].playback_position_ticks);
+        {
+            let mut s = self.status.lock().unwrap();
+            s.position_ticks = active_item.playback_position_ticks;
+            s.runtime_ticks = active_item.runtime_ticks;
+            s.current_idx = self.current_idx;
+            s.queue_len = self.queue_len();
+            s.title = active_item.display_name();
+        }
 
         // Stop progress reporter during transition to prevent stale reports,
         // then restart for the new item.
         progress.stop_and_join();
-        let (_urls, ok) = self.reporter.start_item(&new_items[start_idx]);
+        let (urls, ok) = self.reporter.start_item(&active_item);
+        self.ext_sub_urls = urls;
         if !ok {
-            log::warn!(target: "player", "start_item failed for playlist replace item={}", new_items[start_idx].id);
+            log::warn!(target: "player", "start_item failed for playlist replace item={}", active_item.id);
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
-        self.n = new_items.len();
-        self.current_idx = start_idx;
-        self.items = new_items;
-        self.sync_status_position();
     }
 
     fn cmd_load_new(
@@ -2085,7 +1582,8 @@ impl QueueSession {
         progress: &mut ProgressGuard,
     ) {
         self.quit_at = None;
-        self.queue_cancelled = true;
+        self.origin = PlaybackOrigin::Standalone;
+        self.set_origin(self.origin);
         // Loading a new item should always start playing it, even if mpv
         // was left paused on the previous item (reused-window fast path).
         let _ = mpv.set_property("pause", false);
@@ -2095,18 +1593,33 @@ impl QueueSession {
         self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
         *progress = spawn_progress_reporter(self.reporter.clone());
 
-        self.last_valid_pos = item.playback_position_ticks;
+        self.queue = PlaybackQueue::from_items(vec![item.as_ref().clone()], Some(0));
+        self.current_idx = 0;
+        self.load_active_item_state();
         self.tracks_initialized = false;
         self.stop_reported = false;
         self.stop_report_accepted = false;
         self.pending_load = 1;
+        self.pending_initial_jump = false;
+        self.forced_slot_id = None;
+        self.reset_next_up_state();
+        self.stopped_event_sent = false;
+        self.mark_played_id = None;
+        self.stopped_near_end = false;
+        {
+            let mut st = self.status.lock().unwrap();
+            st.runtime_ticks = item.runtime_ticks;
+            st.position_ticks = item.playback_position_ticks;
+            st.title = item.display_name();
+            st.current_idx = 0;
+            st.queue_len = 1;
+        }
 
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
-        let (s, e) = load_intro_times(&self.reporter.client, &item.id);
-        self.set_intro(s, e, item.playback_position_ticks);
+        let _ = mpv.command("script-message", &["mbv-next-up-dismiss"]);
 
         if start_pos > 0.0 {
-            let _ = mpv.set_property("start", format!("{:.0}", start_pos));
+            let _ = mpv.set_property("start", format!("{start_pos:.0}"));
         } else {
             let _ = mpv.set_property("start", "0");
         }
@@ -2137,30 +1650,56 @@ impl QueueSession {
             }
         }
 
-        // Playlist next-up: match Emby Web's timing from videoosd.js.
-        // 60 s before end. Minimum episode: 10 min. Minimum remaining when shown: 20 s.
-        const MIN_RUNTIME_TICKS: i64 = 600 * TICKS_PER_SECOND;
-        const MIN_REMAIN_TICKS: i64 = 20 * TICKS_PER_SECOND;
-        if self.current_idx + 1 < self.items.len() {
-            let runtime = self.status.lock().unwrap().runtime_ticks;
-            if runtime > 0 {
-                let show_at = runtime - 60 * TICKS_PER_SECOND;
-                let remaining = runtime - ticks;
-                if self.queue_next_up_fired && ticks < show_at {
-                    self.queue_next_up_fired = false;
-                    self.queue_next_up_armed = false;
-                }
-                if !self.queue_next_up_fired && runtime >= MIN_RUNTIME_TICKS {
-                    if remaining >= MIN_REMAIN_TICKS && ticks >= show_at {
-                        self.queue_next_up_fired = true;
-                        let _ = self.event_tx.send(PlayerEvent::QueueNextUp {
-                            next_idx: self.current_idx + 1,
-                        });
-                    } else if !self.queue_next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5
-                    {
-                        self.queue_next_up_armed = true;
-                        log::info!(target: "player", "queue next-up armed idx={}", self.current_idx + 1);
+        if self.origin == PlaybackOrigin::Queue {
+            // Playlist next-up: match Emby Web's timing from videoosd.js.
+            // 60 s before end. Minimum episode: 10 min. Minimum remaining when shown: 20 s.
+            const MIN_RUNTIME_TICKS: i64 = 600 * TICKS_PER_SECOND;
+            const MIN_REMAIN_TICKS: i64 = 20 * TICKS_PER_SECOND;
+            if self.current_idx + 1 < self.queue_len() {
+                let runtime = self.status.lock().unwrap().runtime_ticks;
+                if runtime > 0 {
+                    let show_at = runtime - 60 * TICKS_PER_SECOND;
+                    let remaining = runtime - ticks;
+                    if self.queue_next_up_fired && ticks < show_at {
+                        self.queue_next_up_fired = false;
+                        self.queue_next_up_armed = false;
                     }
+                    if !self.queue_next_up_fired && runtime >= MIN_RUNTIME_TICKS {
+                        if remaining >= MIN_REMAIN_TICKS && ticks >= show_at {
+                            self.queue_next_up_fired = true;
+                            let _ = self.event_tx.send(PlayerEvent::QueueNextUp {
+                                next_idx: self.current_idx + 1,
+                            });
+                        } else if !self.queue_next_up_armed
+                            && ticks > 0
+                            && ticks < TICKS_PER_SECOND * 5
+                        {
+                            self.queue_next_up_armed = true;
+                            log::info!(target: "player", "queue next-up armed idx={}", self.current_idx + 1);
+                        }
+                    }
+                }
+            }
+        } else if !self.next_up_fired {
+            const NEXT_UP_TICKS: i64 = 60 * TICKS_PER_SECOND;
+            if self.series_id.is_empty() {
+                if !self.next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                    self.next_up_armed = true;
+                    log::warn!(target: "player", "next-up disabled: no series_id (Episode item without SeriesId in fetch)");
+                }
+            } else {
+                let runtime = self.status.lock().unwrap().runtime_ticks;
+                if runtime > NEXT_UP_TICKS && ticks > runtime - NEXT_UP_TICKS {
+                    self.next_up_fired = true;
+                    log::warn!(target: "player", "next-up: threshold reached series={}", self.series_id);
+                    let _ = self.event_tx.send(PlayerEvent::NextUpThreshold {
+                        series_id: self.series_id.clone(),
+                        season: self.season,
+                        episode: self.episode,
+                    });
+                } else if !self.next_up_armed && ticks > 0 && ticks < TICKS_PER_SECOND * 5 {
+                    self.next_up_armed = true;
+                    log::info!(target: "player", "next-up: armed series={} runtime={}s", self.series_id, runtime / TICKS_PER_SECOND);
                 }
             }
         }
@@ -2182,41 +1721,47 @@ impl QueueSession {
             return;
         }
         let pos = pos as usize;
-        if self.pending_initial_jump || self.pending_load > 0 || self.forced_idx.is_some() {
+        if self.pending_initial_jump || self.pending_load > 0 || self.forced_slot_id.is_some() {
             log::debug!(
                 target: "player",
                 "ignoring transient playlist-pos={pos} while queue transition is pending"
             );
             return;
         }
-        if pos >= self.n {
+        if pos >= self.queue_len() {
             log::warn!(
                 target: "player",
                 "ignoring out-of-range playlist-pos={pos} for queue len {}",
-                self.n
+                self.queue_len()
             );
             return;
         }
-        self.current_idx = pos;
-        self.sync_status_position();
+        let _ = self.set_active_index(pos);
     }
 
     fn on_playlist_count_changed(&mut self, count: usize) {
-        if count == self.n {
+        if count == self.queue_len() {
             return;
         }
-        let old_n = self.n;
+        let old_n = self.queue_len();
         if count < old_n {
             let removed = old_n - count;
             log::warn!(target: "player", "playlist-count dropped from {} to {}: {} item(s) removed externally", old_n, count, removed);
-            self.items.truncate(count);
-            self.n = self.items.len();
-            if self.current_idx >= self.n && self.n > 0 {
-                self.current_idx = self.n - 1;
-            } else if self.n == 0 {
-                self.current_idx = 0;
+            let removed_slot_ids: Vec<_> = self
+                .queue
+                .slots()
+                .iter()
+                .skip(count)
+                .map(|slot| slot.slot_id)
+                .collect();
+            for slot_id in removed_slot_ids {
+                if self.active_slot_id() == Some(slot_id) {
+                    let _ = self.queue.remove_active_slot_confirmed(slot_id);
+                } else {
+                    let _ = self.queue.remove_slot(slot_id);
+                }
             }
-            self.sync_status_position();
+            self.refresh_current_idx_from_queue();
             let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
                 "Queue desynced: {removed} item(s) removed externally"
             )));
@@ -2224,10 +1769,10 @@ impl QueueSession {
             let added = count - old_n;
             log::warn!(target: "player", "playlist-count increased from {} to {}: {} item(s) added externally", old_n, count, added);
             // We cannot reconstruct the added MediaItems from mpv's playlist,
-            // so we keep the items vector as-is. Clamp current_idx to the last
+            // so we keep the queue as-is. Clamp current_idx to the last
             // known item in case the external tool also changed position.
-            if self.current_idx >= self.n && self.n > 0 {
-                self.current_idx = self.n - 1;
+            if self.current_idx >= self.queue_len() && self.queue_len() > 0 {
+                self.current_idx = self.queue_len() - 1;
             }
             self.sync_status_position();
             let _ = self.event_tx.send(PlayerEvent::QueueDesynced(format!(
@@ -2265,6 +1810,7 @@ impl QueueSession {
             );
             let _ = mpv.set_property("pause", false);
         }
+        let mut event_name = "TimeUpdate";
         if !self.tracks_initialized {
             let prefs = self.subtitle_prefs.lock().unwrap().clone();
             for url in &self.ext_sub_urls {
@@ -2274,7 +1820,9 @@ impl QueueSession {
             }
             auto_select_tracks(mpv, &self.status, &prefs);
             self.tracks_initialized = true;
-            send_ep_info(mpv, &self.items[self.current_idx]);
+            if let Some(item) = self.active_item().cloned() {
+                send_ep_info(mpv, &item);
+            }
             if let Some(secs) = self.pending_resume_secs.take() {
                 log::info!(target: "player", "playlist pending_resume cleared: seeking to {secs:.0}s idx={}", self.current_idx);
                 let _ = mpv.command("seek", &[&format!("{secs:.0}"), "absolute"]);
@@ -2285,15 +1833,24 @@ impl QueueSession {
             if self.config.use_mpv_config {
                 let _ = mpv.command("show-text", &[&self.osd_title, "3000"]);
             }
-        } else if self.last_seek_at.take().is_some() && self.config.use_mpv_config {
-            let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+        } else {
+            if self.origin == PlaybackOrigin::Standalone {
+                self.next_up_fired = false;
+                self.next_up_armed = false;
+                event_name = "Seek";
+            }
+            if self.last_seek_at.take().is_some() && self.config.use_mpv_config {
+                let _ = mpv.command("show-text", &[&self.osd_title, "2000"]);
+            }
         }
         let seek_settled = self
             .last_seek_at
             .is_none_or(|t| t.elapsed() > Duration::from_millis(500));
         if self.quit_at.is_none() && seek_settled {
             self.last_seek_at = None;
-            if !self.reporter.is_audio.load(Ordering::Relaxed) {
+            if self.origin == PlaybackOrigin::Standalone {
+                self.reporter.report_progress(event_name);
+            } else if !self.reporter.is_audio.load(Ordering::Relaxed) {
                 self.reporter.report_progress("TimeUpdate");
             }
         }
@@ -2327,7 +1884,7 @@ impl QueueSession {
         let completed_is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
         let runtime = self.status.lock().unwrap().runtime_ticks;
 
-        if self.queue_cancelled || reason == mpv_end_file_reason::Quit {
+        if self.origin == PlaybackOrigin::Queue && reason == mpv_end_file_reason::Quit {
             let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
             let near_end = !natural_end
                 && !completed_is_audio
@@ -2351,19 +1908,50 @@ impl QueueSession {
             return true; // wait for Shutdown to fire PlayerEvent::Stopped
         }
 
+        if self.origin == PlaybackOrigin::Standalone {
+            let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
+
+            progress.stop_and_join();
+            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_reported = true;
+
+            if natural_end {
+                let id = self.reporter.ids.lock().unwrap().0.clone();
+                if !completed_is_audio {
+                    match self.reporter.client.mark_played(&id) {
+                        Ok(()) => log::info!(target: "player", "mark_played ok id={id}"),
+                        Err(e) => {
+                            log::warn!(target: "player", "mark_played failed id={id}: {e}; will retry");
+                            self.mark_played_id = Some(id.clone());
+                        }
+                    }
+                }
+                let _ = self.event_tx.send(PlayerEvent::Stopped {
+                    idx: 0,
+                    position_ticks: 0,
+                    played: !completed_is_audio,
+                    consume: false,
+                    progress_report_accepted: self.stop_report_accepted,
+                    error: None,
+                });
+                self.stopped_event_sent = true;
+            }
+            return false;
+        }
+
         let completed_idx = self.current_idx;
         log::warn!(target: "player", "advance path: reason={reason:?} last_valid_pos={} runtime={} pending_resume={}",
             self.last_valid_pos, self.status.lock().unwrap().runtime_ticks, self.pending_resume_secs.is_some());
         // H11: bounds-check completed_idx — QueueRemove can shrink the list
         // while the current track is finishing.
-        if completed_idx >= self.items.len() {
+        let Some(completed_item) = self.item_at(completed_idx).cloned() else {
             log::warn!(target: "player", "on_end_file: completed_idx={completed_idx} out of bounds (len={}), stopping",
-                self.items.len());
+                self.queue_len());
             progress.stop_and_join();
             self.status.lock().unwrap().active = false;
             self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: completed_idx.min(self.items.len().saturating_sub(1)),
+                idx: completed_idx.min(self.queue_len().saturating_sub(1)),
                 position_ticks: self.last_valid_pos,
                 played: false,
                 consume: false,
@@ -2371,14 +1959,13 @@ impl QueueSession {
                 error: None,
             });
             return false;
-        }
-        let natural =
-            reason == mpv_end_file_reason::Eof && self.items[completed_idx].runtime_ticks > 0;
+        };
+        let natural = reason == mpv_end_file_reason::Eof && completed_item.runtime_ticks > 0;
         let near_end = is_near_end(
             completed_is_audio,
             natural,
             self.last_valid_pos,
-            self.items[completed_idx].runtime_ticks,
+            completed_item.runtime_ticks,
         );
         let was_next_up = std::mem::replace(&mut self.next_up_jump, false);
         let track_finished = natural || near_end || was_next_up;
@@ -2391,18 +1978,22 @@ impl QueueSession {
             natural={natural} near_end={near_end} was_next_up={was_next_up} \
             completed_is_audio={completed_is_audio} last_valid_pos={} runtime={} \
             => played_out={played_out} consume_track={consume_track}",
-            self.last_valid_pos, self.items[completed_idx].runtime_ticks);
+            self.last_valid_pos, completed_item.runtime_ticks);
         let completed_pos =
             queue_completed_pos(completed_is_audio, natural, near_end, self.last_valid_pos);
 
-        let next_idx = self.forced_idx.take().unwrap_or(self.current_idx + 1);
+        let next_idx = self
+            .forced_slot_id
+            .take()
+            .and_then(|slot_id| self.queue.slot_index(slot_id))
+            .unwrap_or(self.current_idx + 1);
 
-        if next_idx >= self.n {
+        if next_idx >= self.queue_len() {
             progress.stop_and_join();
             self.status.lock().unwrap().active = false;
             self.stop_report_accepted = self.reporter.report_stopped(completed_pos);
             if played_out {
-                let id = self.items[completed_idx].id.clone();
+                let id = completed_item.id.clone();
                 if let Err(e) = self.reporter.client.mark_played(&id) {
                     log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
                     retry_mark_played(self.reporter.client.clone(), id);
@@ -2420,21 +2011,38 @@ impl QueueSession {
         }
 
         // Update UI to the next track immediately, before slow network calls.
-        self.current_idx = next_idx;
-        self.last_valid_pos = self.items[self.current_idx].playback_position_ticks;
+        if !self.set_active_index(next_idx) {
+            progress.stop_and_join();
+            self.status.lock().unwrap().active = false;
+            self.stop_report_accepted = self.reporter.report_stopped(completed_pos);
+            let _ = self.event_tx.send(PlayerEvent::Stopped {
+                idx: completed_idx,
+                position_ticks: completed_pos,
+                played: played_out,
+                consume: consume_track,
+                progress_report_accepted: self.stop_report_accepted,
+                error: None,
+            });
+            return false;
+        }
+        let next_item = self
+            .active_item()
+            .cloned()
+            .expect("active item must exist after successful set_active_index");
+        self.load_active_item_state();
         self.tracks_initialized = false;
         {
             let mut s = self.status.lock().unwrap();
             s.position_ticks = 0;
-            s.runtime_ticks = self.items[self.current_idx].runtime_ticks;
+            s.runtime_ticks = next_item.runtime_ticks;
             s.current_idx = self.current_idx;
-            s.queue_len = self.items.len();
-            s.title = self.items[self.current_idx].display_name();
+            s.queue_len = self.queue_len();
+            s.title = next_item.display_name();
         }
 
         let stop_report_accepted = self.reporter.report_stopped(completed_pos);
         if played_out {
-            let id = self.items[completed_idx].id.clone();
+            let id = completed_item.id.clone();
             if let Err(e) = self.reporter.client.mark_played(&id) {
                 log::warn!(target: "player", "mark_played failed id={id}: {e}; scheduling retry");
                 retry_mark_played(self.reporter.client.clone(), id);
@@ -2444,25 +2052,18 @@ impl QueueSession {
         let _ = mpv.set_property("start", "0");
         self.queue_next_up_fired = false;
         self.queue_next_up_armed = false;
-        send_ep_info(mpv, &self.items[self.current_idx]);
+        send_ep_info(mpv, &next_item);
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
         // Stop progress reporter during transition to prevent stale reports.
         progress.stop_and_join();
-        let (_urls, ok) = self.reporter.start_item(&self.items[self.current_idx]);
+        let (urls, ok) = self.reporter.start_item(&next_item);
+        self.ext_sub_urls = urls;
         if !ok {
-            log::warn!(target: "player", "start_item failed for playlist track-transition item={}", self.items[self.current_idx].id);
+            log::warn!(target: "player", "start_item failed for playlist track-transition item={}", next_item.id);
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
 
-        let (s, e) = load_intro_times(&self.reporter.client, &self.items[self.current_idx].id);
-        self.set_intro(s, e, self.items[self.current_idx].playback_position_ticks);
-
-        self.osd_title = self.items[self.current_idx].display_name();
-        if !self.items[self.current_idx].is_audio() && self.items[self.current_idx].should_resume()
-        {
-            self.pending_resume_secs = Some(self.items[self.current_idx].resume_seconds());
-        }
         log::info!(target: "player", "playlist track-transition idx={} pending_resume={:?}s", self.current_idx, self.pending_resume_secs);
 
         let _ = self.event_tx.send(PlayerEvent::TrackCompleted {
@@ -2485,6 +2086,36 @@ impl QueueSession {
             progress.stop_and_join();
             self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             self.stop_reported = true;
+        }
+        let client = self.reporter.client.clone();
+        if self.origin == PlaybackOrigin::Standalone {
+            // Retry mark_played in a detached thread so Shutdown never blocks.
+            if let Some(mid) = self.mark_played_id.take() {
+                retry_mark_played(client.clone(), mid);
+            }
+            let runtime = self.status.lock().unwrap().runtime_ticks;
+            let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
+            let near_end = !is_audio && runtime > 0 && self.last_valid_pos * 20 / runtime >= 19;
+            if near_end {
+                let id = self.reporter.ids.lock().unwrap().0.clone();
+                retry_mark_played(client.clone(), id);
+            }
+            self.status.lock().unwrap().active = false;
+            if !self.stopped_event_sent {
+                let _ = self.event_tx.send(PlayerEvent::Stopped {
+                    idx: 0,
+                    position_ticks: self.last_valid_pos,
+                    played: near_end,
+                    consume: false,
+                    progress_report_accepted: self.stop_report_accepted,
+                    error: None,
+                });
+            }
+            // mpv exited on its own (not via our stop command) — tell the app to quit.
+            if self.quit_at.is_none() {
+                let _ = self.event_tx.send(PlayerEvent::MpvQuit);
+            }
+            return;
         }
         self.status.lock().unwrap().active = false;
         // played and consume are deliberately the same value here: stopped_near_end
@@ -2536,12 +2167,21 @@ impl QueueSession {
                             self.reporter.report_stopped(self.last_valid_pos);
                         self.stop_reported = true;
                     }
+                    let runtime = self.status.lock().unwrap().runtime_ticks;
+                    let is_audio = self.reporter.is_audio.load(Ordering::Relaxed);
+                    let (played, consume) = quit_timeout_stop_flags(
+                        self.origin,
+                        is_audio,
+                        self.last_valid_pos,
+                        runtime,
+                        self.stopped_near_end,
+                    );
                     self.status.lock().unwrap().active = false;
                     let _ = self.event_tx.send(PlayerEvent::Stopped {
                         idx: self.current_idx,
                         position_ticks: self.last_valid_pos,
-                        played: self.stopped_near_end,
-                        consume: self.stopped_near_end,
+                        played,
+                        consume,
                         progress_report_accepted: self.stop_report_accepted,
                         error: None,
                     });
@@ -2713,7 +2353,7 @@ impl QueueSession {
                 .map(|s| s.to_string())
                 .or_else(|| panic.downcast_ref::<String>().cloned())
                 .unwrap_or_else(|| "unknown panic".to_string());
-            log::error!(target: "player", "QueueSession panicked: {msg}");
+            log::error!(target: "player", "PlaybackSession panicked: {msg}");
             let _ = event_tx_panic.send(PlayerEvent::Stopped {
                 idx: current_idx_panic,
                 position_ticks: 0,
@@ -2963,6 +2603,8 @@ impl Player {
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
         let is_queue_mode = self.is_queue_mode.clone();
+        let server_url = self.server_url.clone();
+        let token = self.token.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
 
         {
@@ -3020,14 +2662,19 @@ impl Player {
                 status.clone(),
             );
             let progress = spawn_progress_reporter(reporter.clone());
-            let session = SingleSession::new(
-                &item,
+            let session = PlaybackSession::new(
+                vec![item.clone()],
+                0,
+                PlaybackOrigin::Standalone,
                 reporter,
                 config,
                 startup_pause_for_pipe,
                 status,
                 event_tx,
                 subtitle_prefs,
+                is_queue_mode.clone(),
+                server_url,
+                token,
                 info.external_subtitle_urls,
             );
             session.run(mpv, stop_rx, cmd_rx, progress);
@@ -3160,15 +2807,17 @@ impl Player {
                 status.clone(),
             );
             let progress = spawn_progress_reporter(reporter.clone());
-            let session = QueueSession::new(
+            let session = PlaybackSession::new(
                 items,
                 start_idx,
+                PlaybackOrigin::Queue,
                 reporter,
                 config,
                 startup_pause_for_pipe,
                 status,
                 event_tx,
                 subtitle_prefs,
+                is_queue_mode.clone(),
                 server_url,
                 token,
                 info.external_subtitle_urls,
@@ -3413,6 +3062,22 @@ pub(crate) fn queue_completed_pos(
     }
 }
 
+fn quit_timeout_stop_flags(
+    origin: PlaybackOrigin,
+    is_audio: bool,
+    last_valid_pos: i64,
+    runtime_ticks: i64,
+    stopped_near_end: bool,
+) -> (bool, bool) {
+    match origin {
+        PlaybackOrigin::Standalone => (
+            is_near_end(is_audio, false, last_valid_pos, runtime_ticks),
+            false,
+        ),
+        PlaybackOrigin::Queue => (stopped_near_end, stopped_near_end),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3641,7 +3306,7 @@ input-ipc-server=/tmp/user.sock
 
     fn make_queue_session_for_pos_tests(
         start_idx: usize,
-    ) -> (QueueSession, Arc<Mutex<PlayerStatus>>) {
+    ) -> (PlaybackSession, Arc<Mutex<PlayerStatus>>) {
         let items = vec![
             make_media_item("ep1"),
             make_media_item("ep2"),
@@ -3666,9 +3331,10 @@ input-ipc-server=/tmp/user.sock
             status.clone(),
         );
         let (event_tx, _event_rx) = mpsc::channel();
-        let session = QueueSession::new(
+        let session = PlaybackSession::new(
             items,
             start_idx,
+            PlaybackOrigin::Queue,
             reporter,
             MpvSessionConfig {
                 headless: false,
@@ -3683,6 +3349,7 @@ input-ipc-server=/tmp/user.sock
             status.clone(),
             event_tx,
             Arc::new(Mutex::new(SubtitlePrefs::default())),
+            Arc::new(AtomicBool::new(true)),
             "http://example.test".into(),
             "token".into(),
             Vec::new(),
@@ -3716,13 +3383,13 @@ input-ipc-server=/tmp/user.sock
     fn playlist_pos_does_not_clobber_in_flight_jump_to() {
         let (mut session, status) = make_queue_session_for_pos_tests(0);
         session.pending_initial_jump = false;
-        session.forced_idx = Some(1);
+        session.forced_slot_id = session.slot_id_at(1);
 
         session.on_playlist_pos_changed(1);
 
         assert_eq!(session.current_idx, 0);
         assert_eq!(status.lock().unwrap().current_idx, 0);
-        assert_eq!(session.forced_idx, Some(1));
+        assert_eq!(session.forced_slot_id, session.slot_id_at(1));
     }
 
     #[test]
@@ -3800,6 +3467,23 @@ input-ipc-server=/tmp/user.sock
     fn near_end_requires_runtime_known() {
         // If runtime_ticks is 0 (unknown), near-end must never trigger.
         assert!(!is_near_end(false, false, 1_000_000_000, 0));
+    }
+
+    #[test]
+    fn standalone_quit_timeout_marks_near_end_without_consuming() {
+        let pos = RUNTIME * 19 / 20;
+        assert_eq!(
+            quit_timeout_stop_flags(PlaybackOrigin::Standalone, false, pos, RUNTIME, false),
+            (true, false)
+        );
+        assert_eq!(
+            quit_timeout_stop_flags(PlaybackOrigin::Standalone, true, pos, RUNTIME, false),
+            (false, false)
+        );
+        assert_eq!(
+            quit_timeout_stop_flags(PlaybackOrigin::Queue, false, pos, RUNTIME, true),
+            (true, true)
+        );
     }
 
     #[test]
