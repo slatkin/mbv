@@ -100,7 +100,10 @@ impl App {
         };
 
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        let img_y = area.y.saturating_add(1).min(area.y + area.height.saturating_sub(1));
+        let img_y = area
+            .y
+            .saturating_add(1)
+            .min(area.y + area.height.saturating_sub(1));
         let img_end_row = img_y + img_height;
         layout.inline_image_rect = if img_height > 0 {
             Some(Rect {

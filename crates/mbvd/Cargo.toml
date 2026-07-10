@@ -2,6 +2,7 @@
 name = "mbvd"
 version.workspace = true
 edition.workspace = true
+description = "Daemon process for mbv media playback."
 
 [[bin]]
 name = "mbvd"
@@ -22,5 +23,5 @@ section = "video"
 priority = "optional"
 assets = [
     ["target/release/mbvd", "usr/bin/mbvd", "755"],
-    ["contrib/mbvd.service", "lib/systemd/system/mbvd.service", "644"],
+    ["../../contrib/mbvd.service", "lib/systemd/system/mbvd.service", "644"],
 ]

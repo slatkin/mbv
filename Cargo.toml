@@ -23,6 +23,7 @@ libc = "0.2"
 name = "mbv"
 version.workspace = true
 edition.workspace = true
+description = "Terminal UI client for Emby media servers."
 default-run = "mbv"
 
 [[bin]]
