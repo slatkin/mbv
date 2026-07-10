@@ -32,7 +32,18 @@ be told, not silently kept alive.
 
 - The multi-client `ctrl_clients: Vec<_>` in `daemon.rs` and `add_pending`
   (which pushes without evicting; `take_over` fires only on a *successful command*,
-  never on connect) are implementation debt to migrate: connect must evict.
+  never on connect) are implementation debt to migrate: connect must evict. Target
+  shape is a single `Option<CtrlClient>` replacing the `Vec<CtrlClient>` + separate
+  `driver: Option<CtrlClientId>` — the connection *is* the driver, so one field says
+  it all and the "two live connections" state becomes unrepresentable rather than
+  merely disallowed by discipline.
+- Disconnect must not disturb the daemon's queue or playback (the **Daemon
+  contract** in `CONTEXT.md`). Current `CtrlDisconnected` handling already only
+  removes the client from the registry and leaves the player running, so this is
+  preserved behavior, not a change.
+- Scope boundary: this covers ctrl-socket connection exclusivity only. The
+  ctrl-vs-Emby-remote-websocket *authority* axis (a WS command evicts the ctrl TUI,
+  but the Emby remote is not itself a ctrl connection) is a separate follow-up.
 - This dissolves #119 ("AdoptQueue rejection leaves RemotePlayer state permanently
   diverged"). That bug required two clients co-connected to a cold daemon so a losing
   adopter could linger with optimistic state. Under exclusive connection the loser is
