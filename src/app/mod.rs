@@ -412,7 +412,18 @@ impl PlayerTab {
     }
 
     fn sync_queue_model_from_items_if_needed(&mut self) {
-        if !self.queue_model_matches_items() {
+        if self.queue_model_matches_items() {
+            let updates: Vec<_> = self
+                .queue
+                .slots()
+                .iter()
+                .zip(&self.items)
+                .map(|(slot, item)| (slot.slot_id, item.clone()))
+                .collect();
+            for (slot_id, item) in updates {
+                let _ = self.queue.update_slot_item(slot_id, item);
+            }
+        } else {
             self.queue = PlaybackQueue::from_items(self.items.clone(), None);
         }
     }
@@ -5684,6 +5695,21 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>(),
             vec!["Second duplicate", "Second duplicate", "Item 2"]
         );
+    }
+
+    #[test]
+    fn queue_edit_preserves_updated_item_fields_after_shadow_model_was_built() {
+        let mut app = make_app_stub();
+        app.player_tab.set_items(make_items(2), 0);
+        let _slot_id = app.player_tab.slot_id_at(0).unwrap();
+
+        app.player_tab.items[0].playback_position_ticks = 42;
+        app.player_tab.items[0].played = true;
+
+        app.player_tab.append_item(make_item("new", "Movie"));
+
+        assert_eq!(app.player_tab.items[0].playback_position_ticks, 42);
+        assert!(app.player_tab.items[0].played);
     }
 
     #[test]

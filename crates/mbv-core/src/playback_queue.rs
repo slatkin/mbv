@@ -226,6 +226,19 @@ impl PlaybackQueue {
         QueueMutationResult::Applied(())
     }
 
+    pub fn update_slot_item(
+        &mut self,
+        slot_id: QueueSlotId,
+        item: MediaItem,
+    ) -> QueueMutationResult<()> {
+        let Some(slot) = self.slots.iter_mut().find(|slot| slot.slot_id == slot_id) else {
+            return QueueMutationResult::NotFound;
+        };
+        slot.item = item;
+        slot.progress_state.local = SlotProgress::from_item(&slot.item);
+        QueueMutationResult::Applied(())
+    }
+
     pub fn apply_progress(
         &mut self,
         slot_id: QueueSlotId,
