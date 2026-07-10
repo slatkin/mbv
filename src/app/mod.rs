@@ -451,6 +451,13 @@ impl PlayerTab {
         self.queue.slots().get(index).map(|slot| slot.slot_id)
     }
 
+    /// Read-only resolution of a display index to the slot currently at that
+    /// position. Unlike `slot_id_at`, this does not rebuild the shadow; callers
+    /// in the event path want the queue exactly as it stands now.
+    fn resolve_slot_at(&self, index: usize) -> Option<QueueSlotId> {
+        self.queue.slots().get(index).map(|slot| slot.slot_id)
+    }
+
     fn slot_id_matches_at(&self, index: usize, slot_id: QueueSlotId) -> bool {
         self.queue_model_matches_items()
             && self
@@ -5695,6 +5702,16 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>(),
             vec!["Second duplicate", "Second duplicate", "Item 2"]
         );
+    }
+
+    #[test]
+    fn resolve_slot_at_maps_index_to_slot_and_rejects_out_of_range() {
+        let tab = PlayerTab::new(make_items(3), 0);
+        let s0 = tab.queue.slots()[0].slot_id;
+        let s2 = tab.queue.slots()[2].slot_id;
+        assert_eq!(tab.resolve_slot_at(0), Some(s0));
+        assert_eq!(tab.resolve_slot_at(2), Some(s2));
+        assert_eq!(tab.resolve_slot_at(3), None);
     }
 
     #[test]
