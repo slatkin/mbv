@@ -1579,29 +1579,12 @@ impl App {
         (st.previous_idx().is_some(), st.next_idx().is_some())
     }
 
-    /// Whether the item at `idx` in the playback queue should be consumed, given a
-    /// player-reported completion (`consume`) and the type-specific consume flags.
-    /// Returns `(should_consume, is_audio)` — callers that act on the removal need
-    /// `is_audio` afterward to route to `on_video_consumed`/`on_audio_consumed`.
-    fn should_consume_item(&self, idx: usize, consume: bool) -> (bool, bool) {
-        let item = self.playback_queue().items.get(idx);
-        let is_video = item.is_some_and(|i| i.is_video());
-        let is_audio = item.is_some_and(|i| i.is_audio());
-        let (consume_videos, consume_audio) = {
-            let cfg = &self.client.lock().unwrap().config;
-            (cfg.consume_videos, cfg.consume_audio)
-        };
-        let should_consume =
-            consume && ((is_video && consume_videos) || (is_audio && consume_audio));
-        log::info!(target: "consume", "consume check: idx={idx} consume={consume} \
-            is_video={is_video} consume_videos={consume_videos} \
-            is_audio={is_audio} consume_audio={consume_audio} => {should_consume}");
-        (should_consume, is_audio)
-    }
-
-    /// Slot-keyed counterpart of `should_consume_item`, used by the
-    /// slot-targeted playback event handling. Resolves the audio/video flag
-    /// from the queue model by slot identity instead of raw index.
+    /// Slot-keyed check of whether a completed/stopped queue slot should be
+    /// consumed, given a player-reported completion (`consume`) and the
+    /// type-specific consume flags. Returns `(should_consume, is_audio)` —
+    /// callers that act on the removal need `is_audio` afterward to route to
+    /// `on_video_consumed`/`on_audio_consumed`. Resolves the audio/video
+    /// flag from the queue model by slot identity instead of raw index.
     fn should_consume_slot(&self, slot_id: QueueSlotId, consume: bool) -> (bool, bool) {
         let item = self.playback_queue().queue.slot(slot_id).map(|s| &s.item);
         let is_video = item.is_some_and(|i| i.is_video());
@@ -2383,22 +2366,50 @@ impl App {
                 }
                 let is_delete = self.pending_delete_idx.take() == Some(idx);
                 let preserve_local_state = !self.has_direct_remote_queue();
-                if let Some(item) = self.playback_queue_mut().items.get_mut(idx) {
-                    if !is_delete {
-                        if played {
-                            item.playback_position_ticks = 0;
-                            item.played = true;
-                            log::info!(target: "player", "Stopped: marked played, position reset to 0");
-                        } else if position_ticks > 0 && !item.is_audio() {
-                            item.playback_position_ticks = position_ticks;
-                            log::info!(target: "player", "Stopped: saved position={}s", position_ticks / mbv_core::api::TICKS_PER_SECOND);
-                        } else {
-                            log::info!(target: "player", "Stopped: position not saved (position_ticks={} is_audio={})", position_ticks, item.is_audio());
+                // Resolve the raw mpv index to a slot right away, against
+                // the queue exactly as it stands now (syncing the shadow
+                // first for callers — tests, mainly — that assign `items`
+                // directly without building the model).
+                self.playback_queue_mut()
+                    .sync_queue_model_from_items_if_needed();
+                let slot_id = self.playback_queue().resolve_slot_at(idx);
+                match slot_id {
+                    Some(slot_id) => {
+                        if !is_delete {
+                            let position = if played {
+                                0
+                            } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+                                if position_ticks > 0 && !slot.item.is_audio() {
+                                    position_ticks
+                                } else {
+                                    slot.item.playback_position_ticks
+                                }
+                            } else {
+                                0
+                            };
+                            let _ = self
+                                .playback_queue_mut()
+                                .queue
+                                .apply_progress(slot_id, position, played);
+                            self.playback_queue_mut().sync_items_from_queue_model();
+                            if played {
+                                log::info!(target: "player", "Stopped: marked played, position reset to 0");
+                            } else if position_ticks > 0 {
+                                log::info!(target: "player", "Stopped: saved position={}s", position_ticks / mbv_core::api::TICKS_PER_SECOND);
+                            } else {
+                                log::info!(target: "player", "Stopped: position not saved (position_ticks={position_ticks})");
+                            }
+                        }
+                        if preserve_local_state {
+                            if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+                                self.last_played_item_id = Some(slot.item.id.clone());
+                                self.last_played_completed = played;
+                            }
                         }
                     }
-                    if preserve_local_state {
-                        self.last_played_item_id = Some(item.id.clone());
-                        self.last_played_completed = played;
+                    None => {
+                        log::warn!(target: "player", "Stopped: idx={idx} maps to no live slot; \
+                            skipping progress update");
                     }
                 }
                 self.next_up_item = None;
@@ -2417,11 +2428,13 @@ impl App {
                         }
                     }
                 } else {
-                    let (should_consume, is_audio) = self.should_consume_item(idx, consume);
+                    let (should_consume, is_audio) = match slot_id {
+                        Some(slot_id) => self.should_consume_slot(slot_id, consume),
+                        None => (false, false),
+                    };
                     if should_consume {
-                        let len_before = self.playback_queue().items.len();
-                        let removed_id = self.remove_from_active_playback_queue(idx);
-                        let len_after = len_before - removed_id.is_some() as usize;
+                        let slot_id = slot_id.expect("should_consume implies a resolved slot");
+                        let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
                         let queue = self.playback_queue_mut();
                         if queue.items.is_empty() {
                             queue.queue_cursor = 0;
@@ -2429,11 +2442,11 @@ impl App {
                             queue.queue_cursor =
                                 queue.queue_cursor.min(queue.items.len().saturating_sub(1));
                         }
-                        log::info!(target: "consume", "Stopped-path: removed idx={idx} from queue \
-                            len_before={len_before} len_after={len_after} removed_id={removed_id:?}");
+                        log::info!(target: "consume", "Stopped-path: removed slot_id={slot_id:?} \
+                            removed_id={removed_id:?}");
                         if removed_id.is_none() {
-                            log::warn!(target: "consume", "Stopped-path: idx={idx} out of bounds \
-                                (len={len_before}), removal SKIPPED");
+                            log::warn!(target: "consume", "Stopped-path: slot_id={slot_id:?} not \
+                                found, removal SKIPPED");
                         }
                         if is_audio {
                             self.on_audio_consumed();
@@ -4943,6 +4956,55 @@ pub(crate) mod tests {
             app.status,
             "Daemon is running in audio-only mode; can't play video items"
         );
+    }
+
+    #[test]
+    fn stopped_progress_updates_the_queue_model_not_just_the_shadow() {
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(2);
+        app.player_tab.sync_queue_model_from_items_if_needed();
+        let slot_id = app.player_tab.queue.slots()[0].slot_id;
+
+        app.handle_player_event(PlayerEvent::Stopped {
+            idx: 0,
+            position_ticks: 600_000_000,
+            played: false,
+            consume: false,
+            error: None,
+        });
+
+        let slot = app.player_tab.queue.slot(slot_id).unwrap();
+        assert_eq!(
+            slot.item.playback_position_ticks, 600_000_000,
+            "progress must be applied to the queue model, not only the display shadow"
+        );
+    }
+
+    #[test]
+    fn stopped_consume_removes_the_right_slot_occurrence() {
+        // Duplicate item ids: two occurrences of the same underlying item.
+        // Stopping+consuming the second occurrence must remove that slot
+        // specifically — never the first, which happens to share an id.
+        let mut app = make_app_stub();
+        let mut items = make_items(3);
+        items[0].id = "dup".into();
+        items[2].id = "dup".into();
+        app.player_tab.items = items;
+        app.player_tab.sync_queue_model_from_items_if_needed();
+        let first_dup = app.player_tab.queue.slots()[0].slot_id;
+        let second_dup = app.player_tab.queue.slots()[2].slot_id;
+        app.client.lock().unwrap().config.consume_videos = true;
+
+        app.handle_player_event(PlayerEvent::Stopped {
+            idx: 2,
+            position_ticks: 0,
+            played: true,
+            consume: true,
+            error: None,
+        });
+
+        assert!(app.player_tab.queue.slot(first_dup).is_some());
+        assert!(app.player_tab.queue.slot(second_dup).is_none());
     }
 
     #[test]
