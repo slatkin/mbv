@@ -901,23 +901,52 @@ mod tests {
     #[test]
     fn compact_banner_appears_inline_in_letter_grouped_movie_list() {
         // 60 movies triggers use_letter_groups (total_count >= 50, collection_type
-        // != "music"); the selected item sits partway through so the banner must
-        // render inline after its row, not pinned to the top.
-        let mut titles: Vec<String> = (0..60).map(|i| format!("Movie {i:02}")).collect();
-        titles[30] = "Selected Movie Thirty".into();
-        let title_refs: Vec<&str> = titles.iter().map(|s| s.as_str()).collect();
+        // != "music"). Titles are spread across many starting letters (cycling
+        // A..Z) so the selected item's letter bucket is followed by several more
+        // buckets -- this is what exercises the riskiest part of the interleaving
+        // logic: filler rows must land between the selected item and the NEXT
+        // bucket's header, not get scattered or appended after the whole list.
+        let titles: Vec<String> = (0..60)
+            .map(|i| {
+                let letter = (b'A' + (i % 26) as u8) as char;
+                format!("{letter} Movie {i:02}")
+            })
+            .collect();
+        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
         let mut app = make_power_movie_list_app(title_refs);
 
-        let selected_idx = 30;
-        app.libs[0].nav_stack.last_mut().unwrap().cursor = selected_idx;
+        // Select an early-alphabet item (letter 'K') so later letter buckets --
+        // e.g. the 'Z' item -- must sort, and therefore render, after it.
+        let selected_idx = 10; // letter (b'A' + 10) as char == 'K'
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.items[selected_idx].overview =
+                "This is the compact movie banner overview text.".into();
+            lvl.cursor = selected_idx;
+        }
+        let selected_title = titles[selected_idx].clone();
+        let later_title = titles[25].clone(); // letter (b'A' + 25) as char == 'Z'
 
         let mut layout = LayoutPower::default();
-        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 40);
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 60);
 
+        let selected_pos = out
+            .find(selected_title.as_str())
+            .expect("selected item's row should render");
+        let banner_pos = out
+            .find("compact movie banner")
+            .expect("expected banner overview text to appear in letter-grouped list render");
         assert!(
-            out.contains("compact movie banner"),
-            "expected banner overview text to appear in letter-grouped list render:\n{out}"
+            selected_pos < banner_pos,
+            "banner should render after the selected row, not before it:\n{out}"
         );
+        if let Some(later_pos) = out.find(later_title.as_str()) {
+            assert!(
+                banner_pos < later_pos,
+                "banner must land inline between the selected item and later alphabet \
+                 buckets, not scattered after the whole list:\n{out}"
+            );
+        }
     }
 
     #[test]
