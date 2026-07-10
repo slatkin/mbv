@@ -42,7 +42,6 @@ use super::App;
 /// priority stack that selects among them.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum InputContext {
-    Help,
     Playback,
 }
 
@@ -67,18 +66,20 @@ pub(super) struct InputSnapshot {
 }
 
 /// Resolve a chord within a single context. Pure: no `App`/`Player` access.
+pub(super) fn help_resolve(chord: KeyChord) -> KeyResolution {
+    match super::action::help_command_for_key(chord) {
+        Some(cmd) => KeyResolution::Command(cmd),
+        None => KeyResolution::Swallow,
+    }
+}
+
+/// Resolve a chord within a single context. Pure: no `App`/`Player` access.
 pub(super) fn resolve_key(
     context: InputContext,
     snapshot: &InputSnapshot,
     chord: KeyChord,
 ) -> KeyResolution {
     match context {
-        // The help overlay consumes every key: bound keys become commands,
-        // everything else is swallowed (never falls through).
-        InputContext::Help => match super::action::help_command_for_key(chord) {
-            Some(cmd) => KeyResolution::Command(cmd),
-            None => KeyResolution::Swallow,
-        },
         // Playback keys are gated; an unbound or gate-closed key falls through
         // to the handlers below it in `handle_key`.
         InputContext::Playback => {
@@ -238,23 +239,33 @@ mod tests {
 
     #[test]
     fn help_context_maps_bound_key_to_command() {
-        let r = resolve_key(
-            InputContext::Help,
-            &snap(false, false),
-            KeyChord::new(KeyCode::Esc, KeyModifiers::NONE),
-        );
+        let r = help_resolve(KeyChord::new(KeyCode::Esc, KeyModifiers::NONE));
         assert_eq!(r, KeyResolution::Command(Command::CloseHelp));
     }
 
     #[test]
     fn help_context_swallows_unbound_key() {
         // The help overlay consumes every key while open.
-        let r = resolve_key(
-            InputContext::Help,
-            &snap(false, false),
-            KeyChord::new(KeyCode::Char('x'), KeyModifiers::NONE),
-        );
+        let r = help_resolve(KeyChord::new(KeyCode::Char('x'), KeyModifiers::NONE));
         assert_eq!(r, KeyResolution::Swallow);
+    }
+
+    #[test]
+    fn help_context_resolution_ignores_snapshot_fields() {
+        let a = InputSnapshot {
+            player_active: true,
+            has_remote_session: true,
+        };
+        let b = InputSnapshot {
+            player_active: false,
+            has_remote_session: false,
+        };
+        assert_ne!(a, b, "the snapshots must differ to prove Help ignores them");
+        let chord = KeyChord::new(KeyCode::Esc, KeyModifiers::NONE);
+        assert_eq!(
+            help_resolve(chord),
+            KeyResolution::Command(Command::CloseHelp)
+        );
     }
 
     #[test]
@@ -321,6 +332,21 @@ mod app_level_tests {
     }
 
     #[test]
+    fn help_overlay_blocks_home_search_char_capture_via_handle_key() {
+        let mut app = make_app_stub();
+        app.show_help = true;
+        app.home_search = Some(test_home_search());
+        if let Some(hs) = app.home_search.as_mut() {
+            hs.input_focused = true;
+        }
+        app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert!(
+            app.home_search.as_ref().unwrap().query.is_empty(),
+            "help sits above home_search in CONTEXT_STACK and must swallow 'x'"
+        );
+    }
+
+    #[test]
     fn space_toggles_pause_when_active_via_handle_key() {
         let mut app = make_app_stub();
         {
@@ -373,11 +399,41 @@ mod app_level_tests {
     }
 
     #[test]
+    fn settings_overlay_blocks_home_search_char_capture_via_handle_key() {
+        let mut app = make_app_stub();
+        app.show_settings = true;
+        app.home_search = Some(test_home_search());
+        if let Some(hs) = app.home_search.as_mut() {
+            hs.input_focused = true;
+        }
+        app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert!(
+            app.home_search.as_ref().unwrap().query.is_empty(),
+            "settings sits above home_search in CONTEXT_STACK and must swallow 'x'"
+        );
+    }
+
+    #[test]
     fn f3_opens_sessions_via_handle_key() {
         let mut app = make_app_stub();
         assert!(!app.show_sessions);
         app.handle_key(ev(KeyCode::F(3), KeyModifiers::NONE));
         assert!(app.show_sessions);
+    }
+
+    #[test]
+    fn sessions_overlay_blocks_home_search_char_capture_via_handle_key() {
+        let mut app = make_app_stub();
+        app.show_sessions = true;
+        app.home_search = Some(test_home_search());
+        if let Some(hs) = app.home_search.as_mut() {
+            hs.input_focused = true;
+        }
+        app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
+        assert!(
+            app.home_search.as_ref().unwrap().query.is_empty(),
+            "sessions sits above home_search in CONTEXT_STACK and must swallow 'x'"
+        );
     }
 
     #[test]

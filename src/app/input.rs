@@ -655,12 +655,7 @@ impl App {
         if !self.show_help {
             return None;
         }
-        let snapshot = self.input_snapshot();
-        match super::input_resolver::resolve_key(
-            super::input_resolver::InputContext::Help,
-            &snapshot,
-            super::input_resolver::KeyChord::from_key(key),
-        ) {
+        match super::input_resolver::help_resolve(super::input_resolver::KeyChord::from_key(key)) {
             super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
             // Help swallows unknown keys; FallThrough is unreachable for this
             // context but treated identically (still consumed) to preserve today's
