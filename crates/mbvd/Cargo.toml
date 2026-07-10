@@ -22,4 +22,5 @@ section = "video"
 priority = "optional"
 assets = [
     ["target/release/mbvd", "usr/bin/mbvd", "755"],
+    ["contrib/mbvd.service", "lib/systemd/system/mbvd.service", "644"],
 ]

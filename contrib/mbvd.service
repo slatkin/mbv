@@ -1,5 +1,5 @@
 [Unit]
-Description=mbv Emby media player daemon
+Description=mbvd Emby media player daemon
 After=network-online.target
 Wants=network-online.target
 
