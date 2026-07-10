@@ -651,6 +651,31 @@ mod app_level_tests {
     }
 
     #[test]
+    fn c_does_not_prompt_clear_queue_while_context_menu_is_open_via_handle_key() {
+        // Behavior change (phase 6, #135): before this fix,
+        // `clear_queue_prompt_c` had no `context_menu` guard and sat above
+        // `context_menu` in CONTEXT_STACK, so 'c' bled through an open
+        // context menu and silently opened the clear-queue confirmation. It
+        // must now fall through to (and be swallowed by) the context-menu
+        // layer instead.
+        let mut app = make_app_stub();
+        app.player_tab
+            .items
+            .push(crate::app::tests::make_item("1", "Track"));
+        app.context_menu = Some(crate::app::ContextMenu {
+            x: 0,
+            y: 0,
+            entries: Vec::new(),
+            cursor: 0,
+        });
+        app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
+        assert!(
+            !app.confirm_clear_queue,
+            "clear-queue confirmation must not open while a context menu is open"
+        );
+    }
+
+    #[test]
     fn context_stack_order_is_pinned() {
         let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
         assert_eq!(

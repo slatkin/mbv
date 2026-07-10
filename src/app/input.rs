@@ -410,7 +410,17 @@ impl App {
     }
 
     pub(super) fn handle_key_clear_queue_prompt(&mut self, key: KeyEvent) -> Option<bool> {
-        if key.code != KeyCode::Char('c') || key.modifiers.contains(KeyModifiers::ALT) {
+        // Behavior change (phase 6, #135): gate on an open context menu. Before
+        // this fix, `clear_queue_prompt_c` sat above `context_menu` in
+        // CONTEXT_STACK with no guard, so pressing 'c' while a context menu was
+        // open silently opened the clear-queue confirmation instead of being
+        // swallowed by the menu (which has no 'c' binding of its own). See
+        // docs/adr/0002-centralized-input-handling.md phase 6 and phase-2's
+        // `home_search`, which already guards the same way.
+        if key.code != KeyCode::Char('c')
+            || key.modifiers.contains(KeyModifiers::ALT)
+            || self.context_menu.is_some()
+        {
             return None;
         }
         let in_lib_search = self.tab_idx > 1
