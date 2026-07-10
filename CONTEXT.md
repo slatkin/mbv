@@ -184,6 +184,8 @@ _Avoid_: introducing a separate notification surface for routine in-app feedback
 
 The subsystem that turns key and mouse events into app behavior. Today it is decentralized across `App::handle_key` and `App::handle_mouse` in `src/app/input.rs`; the terms below are the **target shape** from #129 (see `docs/adr/0002-centralized-input-handling.md`), partially present as the existing `Action`/`dispatch` seam in `src/app/action.rs`.
 
+**Guardrail**: new shortcuts go through this registry, not through a new raw key/click check in view or panel code — see AGENTS.md's "Rules" section for the enforceable version and its exceptions (text entry, external setup).
+
 ### Language
 
 **Command**:

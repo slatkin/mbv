@@ -70,18 +70,20 @@ Tracked as separate issues under a GitHub Project.
 2. **Done (#131). Keyboard spine** — centralize keyboard precedence as a
    `CONTEXT_STACK` loop over the existing imperative handlers; characterization tests
    lock current behavior and quirks in place.
-3. **Migrate view handlers** — collapse duplicated global keys; dissolve the
-   `tab_idx`-swap and `is_lib_key` mirror. Behavior-preserving.
+3. **Done (#132). Migrate view handlers** — collapse duplicated global keys; dissolve
+   the `tab_idx`-swap and `is_lib_key` mirror. Behavior-preserving.
 4. **Help from the registry** — render covered sections from binding data; converges as
    handlers migrate.
-5. **Mouse onto shared `Command`** — region resolver emits shared `Command`s; fixes the
-   queue `Enter`/double-click divergence. Spatial mechanics stay local.
-6. **In progress (#135). Quirk-fix pass** — each accidental precedence bleed-through
-   fixed as a separate, labeled behavior change. Done so far: `c`/`h` reaching past an
-   open context menu, each gated with its own `context_menu.is_some()` check and a
-   dedicated regression test (matching the guard `home_search` already used).
-7. **Guardrail docs** — no raw shortcut handling outside the registry except text entry
-   and external setup (e.g. login).
+5. **Done (#134). Mouse onto shared `Command`** — region resolver emits shared
+   `Command`s; fixes the queue `Enter`/double-click divergence. Spatial mechanics stay
+   local.
+6. **Done (#135). Quirk-fix pass** — each accidental precedence bleed-through fixed as
+   a separate, labeled behavior change: `c`/`h` reaching past an open context menu,
+   each gated with its own `context_menu.is_some()` check and a dedicated regression
+   test (matching the guard `home_search` already used).
+7. **Done (#136). Guardrail docs** — no raw shortcut handling outside the registry
+   except text entry and external setup (e.g. login); see AGENTS.md's "Rules" and
+   CONTEXT.md's "Input handling" section.
 
 ## Roadmap (not scheduled): user-configurable keybindings
 
