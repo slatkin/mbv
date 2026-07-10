@@ -110,12 +110,13 @@ impl App {
 /// `None` to fall through to the next-lower-priority context. Phase 2 (#131)
 /// makes `handle_key`'s branch order into this explicit, ordered, testable
 /// list instead of implicit control flow.
-#[derive(Clone, Copy)]
+///
 /// A stack-entry handler is only meant to be invoked through `CONTEXT_STACK`
 /// via `handle_key`'s loop, never called directly — direct calls would bypass
 /// the explicit precedence order this stack exists to make assertable. The
 /// `pub(super)` visibility on these handlers is required for the fn-pointer
 /// table below, not an invitation to call them from elsewhere in `app`.
+#[derive(Clone, Copy)]
 pub(super) struct ContextEntry {
     // Only read by the `context_stack_order_is_pinned` characterization test
     // today; kept outside `#[cfg(test)]` since it's part of the type's
