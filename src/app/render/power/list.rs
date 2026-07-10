@@ -580,37 +580,35 @@ impl App {
                 &mut state,
             );
 
-            if banner_rows > 0 {
-                if content_start >= offset && content_start < offset + visible {
-                    let banner_y = content_area.y + (content_start - offset) as u16;
-                    let bottom = content_area.y + content_area.height;
-                    // Reserve the rightmost column for the scrollbar (drawn over
-                    // content_area's last column below) so the poster image,
-                    // which is right-anchored, doesn't render underneath it.
-                    let banner_w = if show_scrollbar {
-                        content_area.width.saturating_sub(1)
-                    } else {
-                        content_area.width
+            if banner_rows > 0 && content_start >= offset && content_start < offset + visible {
+                let banner_y = content_area.y + (content_start - offset) as u16;
+                let bottom = content_area.y + content_area.height;
+                // Reserve the rightmost column for the scrollbar (drawn over
+                // content_area's last column below) so the poster image,
+                // which is right-anchored, doesn't render underneath it.
+                let banner_w = if show_scrollbar {
+                    content_area.width.saturating_sub(1)
+                } else {
+                    content_area.width
+                };
+                let banner_h =
+                    (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
+                if banner_h > 0 {
+                    let banner_rect = Rect {
+                        x: content_area.x,
+                        y: banner_y,
+                        width: banner_w,
+                        height: banner_h,
                     };
-                    let banner_h =
-                        (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
-                    if banner_h > 0 {
-                        let banner_rect = Rect {
-                            x: content_area.x,
-                            y: banner_y,
-                            width: banner_w,
-                            height: banner_h,
-                        };
-                        let want_cursor_y = layout.cursor_screen_y;
-                        self.render_power_compact_detail(
-                            f,
-                            banner_rect,
-                            self.power_left_tab - 1,
-                            focused,
-                            layout,
-                        );
-                        layout.cursor_screen_y = want_cursor_y;
-                    }
+                    let want_cursor_y = layout.cursor_screen_y;
+                    self.render_power_compact_detail(
+                        f,
+                        banner_rect,
+                        self.power_left_tab - 1,
+                        focused,
+                        layout,
+                    );
+                    layout.cursor_screen_y = want_cursor_y;
                 }
             }
 
@@ -777,41 +775,39 @@ impl App {
                 &mut state,
             );
 
-            if banner_rows > 0 {
-                if content_start >= offset && content_start < offset + visible {
-                    let banner_y = content_area.y + (content_start - offset) as u16;
-                    let bottom = content_area.y + content_area.height;
-                    // Reserve the rightmost column for the scrollbar (drawn over
-                    // content_area's last column below) so the poster image,
-                    // which is right-anchored, doesn't render underneath it.
-                    let banner_w = if show_scrollbar {
-                        content_area.width.saturating_sub(1)
-                    } else {
-                        content_area.width
+            if banner_rows > 0 && content_start >= offset && content_start < offset + visible {
+                let banner_y = content_area.y + (content_start - offset) as u16;
+                let bottom = content_area.y + content_area.height;
+                // Reserve the rightmost column for the scrollbar (drawn over
+                // content_area's last column below) so the poster image,
+                // which is right-anchored, doesn't render underneath it.
+                let banner_w = if show_scrollbar {
+                    content_area.width.saturating_sub(1)
+                } else {
+                    content_area.width
+                };
+                let banner_h =
+                    (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
+                if banner_h > 0 {
+                    let banner_rect = Rect {
+                        x: content_area.x,
+                        y: banner_y,
+                        width: banner_w,
+                        height: banner_h,
                     };
-                    let banner_h =
-                        (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
-                    if banner_h > 0 {
-                        let banner_rect = Rect {
-                            x: content_area.x,
-                            y: banner_y,
-                            width: banner_w,
-                            height: banner_h,
-                        };
-                        // render_power_compact_detail overwrites layout.cursor_screen_y with
-                        // the banner's own top row; restore the selected list row's y after,
-                        // since that row (not the banner) is what should host the blinking
-                        // cursor / mouse hit target.
-                        let want_cursor_y = layout.cursor_screen_y;
-                        self.render_power_compact_detail(
-                            f,
-                            banner_rect,
-                            self.power_left_tab - 1,
-                            focused,
-                            layout,
-                        );
-                        layout.cursor_screen_y = want_cursor_y;
-                    }
+                    // render_power_compact_detail overwrites layout.cursor_screen_y with
+                    // the banner's own top row; restore the selected list row's y after,
+                    // since that row (not the banner) is what should host the blinking
+                    // cursor / mouse hit target.
+                    let want_cursor_y = layout.cursor_screen_y;
+                    self.render_power_compact_detail(
+                        f,
+                        banner_rect,
+                        self.power_left_tab - 1,
+                        focused,
+                        layout,
+                    );
+                    layout.cursor_screen_y = want_cursor_y;
                 }
             }
 
@@ -1049,6 +1045,77 @@ mod tests {
                  buckets, not scattered after the whole list:\n{out}"
             );
         }
+    }
+
+    #[test]
+    fn letter_group_backs_up_two_rows_to_reveal_header_when_banner_opening_rule_intervenes() {
+        // Cursor lands on the first item of a non-initial letter bucket, with the
+        // compact banner active (it's a leaf movie) inserting an opening-rule
+        // filler row directly above the item. A stale scroll that would
+        // otherwise clamp exactly onto the item's own row would strand that
+        // rule with no header visible above it -- this exercises the extended
+        // nudge (back up 2 rows instead of 1) added specifically for the case
+        // where a BannerFiller row sits between a LetterHeader and the selected
+        // item, which the older "back up one row" nudge alone doesn't cover.
+        let titles: Vec<String> = (0..60)
+            .map(|i| {
+                let letter = (b'A' + (i % 26) as u8) as char;
+                format!("{letter} Movie {i:02}")
+            })
+            .collect();
+        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
+        let mut app = make_power_movie_list_app(title_refs);
+
+        // "D Movie 03" is the first D-lettered item (smallest index, smallest
+        // number among D items), so it's the first item of its bucket -- and
+        // it's preceded by real A/B/C-bucket content, so there's room for the
+        // offset to legitimately land >= 2 while still clamping onto this
+        // item's own row.
+        let target_idx = 3;
+        let target_title = titles[target_idx].clone();
+
+        let mut layout = LayoutPower::default();
+
+        // Scroll deep into the list first so a large `scroll` value persists.
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.cursor = 55;
+        }
+        let _ = render_power_list_to_string_sized(&mut app, &mut layout, 60, 10);
+
+        // Jump the cursor back to the bucket-first item without resetting
+        // scroll -- the stale deep scroll clamps down to exactly the item's
+        // own display-row index, the scenario needing the extended nudge.
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.cursor = target_idx;
+        }
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 10);
+        let lines: Vec<&str> = out.lines().collect();
+
+        let title_line_idx = lines
+            .iter()
+            .position(|l| l.contains(target_title.as_str()))
+            .expect("selected item's row should render");
+        let rule_line_idx = lines
+            .iter()
+            .position(|l| l.contains('\u{2500}'))
+            .expect("expected the banner's opening rule to be visible");
+        assert!(
+            rule_line_idx < title_line_idx,
+            "expected the opening rule to render above the selected item:\n{out}"
+        );
+        assert!(
+            rule_line_idx > 0,
+            "expected a header row above the opening rule, not scrolled to the very top \
+             (the extended back-up-2 nudge should have kept it visible):\n{out}"
+        );
+        let header_line = lines[rule_line_idx - 1].trim();
+        assert!(
+            !header_line.is_empty() && !header_line.contains(target_title.as_str()),
+            "expected the bucket header directly above the opening rule, not stranded \
+             off-screen by the nudge:\n{out}"
+        );
     }
 
     #[test]
