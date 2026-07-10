@@ -1181,7 +1181,15 @@ impl PlaybackSession {
         } else {
             item.playback_position_ticks
         };
-        self.pending_resume_secs = if !item.is_audio() && item.should_resume() {
+        self.pending_resume_secs = if self.origin == PlaybackOrigin::Standalone {
+            // Standalone fresh-start (cmd_load_new) already sets the mpv `start`
+            // property to the resume position before calling this; setting
+            // pending_resume_secs too would trigger a redundant absolute seek
+            // in on_playback_restart that also suppresses the first progress
+            // report for ~500ms. Queue playback and mid-session slot activation
+            // always run with Queue origin, so they are unaffected.
+            None
+        } else if !item.is_audio() && item.should_resume() {
             Some(item.resume_seconds())
         } else {
             None
@@ -2011,20 +2019,14 @@ impl PlaybackSession {
         }
 
         // Update UI to the next track immediately, before slow network calls.
-        if !self.set_active_index(next_idx) {
-            progress.stop_and_join();
-            self.status.lock().unwrap().active = false;
-            self.stop_report_accepted = self.reporter.report_stopped(completed_pos);
-            let _ = self.event_tx.send(PlayerEvent::Stopped {
-                idx: completed_idx,
-                position_ticks: completed_pos,
-                played: played_out,
-                consume: consume_track,
-                progress_report_accepted: self.stop_report_accepted,
-                error: None,
-            });
-            return false;
-        }
+        // next_idx < queue_len() was already checked above, so set_active_index
+        // (which only fails when the index is out of bounds) cannot fail here.
+        let advanced = self.set_active_index(next_idx);
+        debug_assert!(
+            advanced,
+            "set_active_index({next_idx}) must succeed: already bounds-checked against queue_len={}",
+            self.queue_len()
+        );
         let next_item = self
             .active_item()
             .cloned()
@@ -3484,6 +3486,56 @@ input-ipc-server=/tmp/user.sock
             quit_timeout_stop_flags(PlaybackOrigin::Queue, false, pos, RUNTIME, true),
             (true, true)
         );
+    }
+
+    #[test]
+    fn standalone_fresh_start_does_not_set_pending_resume_secs() {
+        // Mirrors cmd_load_new's mutation sequence for a fresh one-slot standalone
+        // load of a resumable video: origin becomes Standalone, the queue is
+        // replaced with the single new item, then load_active_item_state() runs.
+        // mpv's `start` property (set separately by cmd_load_new, not exercised
+        // here since it requires a live mpv) already seeks to the resume position,
+        // so pending_resume_secs must stay None to avoid a redundant absolute
+        // seek in on_playback_restart that would also suppress the first
+        // progress report for ~500ms.
+        let (mut session, _status) = make_queue_session_for_pos_tests(0);
+
+        let mut item = make_media_item("resumable");
+        item.playback_position_ticks = item.runtime_ticks / 2; // 50% watched
+        assert!(item.should_resume(), "test item must actually be resumable");
+
+        session.origin = PlaybackOrigin::Standalone;
+        session.queue = PlaybackQueue::from_items(vec![item], Some(0));
+        session.current_idx = 0;
+
+        session.load_active_item_state();
+
+        assert_eq!(
+            session.pending_resume_secs, None,
+            "standalone fresh-start must rely on mpv's `start` property, not a redundant seek"
+        );
+    }
+
+    #[test]
+    fn queue_slot_activation_still_sets_pending_resume_secs() {
+        // Sibling case to the standalone fix above: mid-session slot activation
+        // (Queue origin) has no mpv `start`-property shortcut, so
+        // load_active_item_state() must still arm pending_resume_secs for a
+        // resumable item.
+        let (mut session, _status) = make_queue_session_for_pos_tests(0);
+
+        let mut item = make_media_item("resumable");
+        item.playback_position_ticks = item.runtime_ticks / 2; // 50% watched
+        let resume_secs = item.resume_seconds();
+        assert!(item.should_resume(), "test item must actually be resumable");
+
+        session.origin = PlaybackOrigin::Queue;
+        session.queue = PlaybackQueue::from_items(vec![item], Some(0));
+        session.current_idx = 0;
+
+        session.load_active_item_state();
+
+        assert_eq!(session.pending_resume_secs, Some(resume_secs));
     }
 
     #[test]
