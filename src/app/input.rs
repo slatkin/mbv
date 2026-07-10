@@ -1,4 +1,3 @@
-use super::input_resolver::KeyChord;
 use super::settings::settings_total_rows;
 use super::ui_util::item_text_and_style;
 use super::{
@@ -592,19 +591,23 @@ impl App {
         Some(false)
     }
 
-    // Thin adapter over the `Action` seam (issue #78, 2nd increment): translate
-    // the key into an `Action` via the pure `help_command_for_key`, then hand it
-    // to `dispatch`. Unlike `handle_playback_key`, an unrecognized key here is
-    // still swallowed (`Some(false)`), not left to fall through (`None`) — the
-    // help overlay consumes every key while open.
     fn handle_key_help(&mut self, key: KeyEvent) -> Option<bool> {
         if !self.show_help {
             return None;
         }
-        if let Some(action) = super::action::help_command_for_key(KeyChord::from_key(key)) {
-            return Some(self.dispatch(action));
+        let snapshot = self.input_snapshot();
+        match super::input_resolver::resolve_key(
+            super::input_resolver::InputContext::Help,
+            &snapshot,
+            super::input_resolver::KeyChord::from_key(key),
+        ) {
+            super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
+            // Help swallows unknown keys; FallThrough is unreachable for this
+            // context but treated identically (still consumed) to preserve today's
+            // "help eats every key" behavior.
+            super::input_resolver::KeyResolution::Swallow
+            | super::input_resolver::KeyResolution::FallThrough => Some(false),
         }
-        Some(false)
     }
 
     fn handle_key_sessions(&mut self, key: KeyEvent) -> Option<bool> {
@@ -1106,24 +1109,19 @@ impl App {
         self.save_prefs();
     }
 
-    // Thin adapter over the `Action` seam (issue #78 pilot): translate the key
-    // into an `Action` via the pure `playback_command_for_key`, then hand it to
-    // `dispatch`, which owns the session-vs-local branching. See
-    // `src/app/action.rs` for the translation table and state transitions.
     fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
-        let active = self.player.status.lock().unwrap().active;
-        let has_remote_session = self.connected_session_id.is_some();
-        let action = super::action::playback_command_for_key(
-            KeyChord::from_key(key),
-            active,
-            has_remote_session,
-        )?;
-        // Propagate dispatch's should-quit bool rather than hardcoding
-        // `Some(false)`: no playback action currently resolves to
-        // `Action::Quit`, but this way that invariant doesn't need to be
-        // relied on silently — if it's ever violated, the quit signal still
-        // reaches the caller correctly instead of being swallowed here.
-        Some(self.dispatch(action))
+        let snapshot = self.input_snapshot();
+        match super::input_resolver::resolve_key(
+            super::input_resolver::InputContext::Playback,
+            &snapshot,
+            super::input_resolver::KeyChord::from_key(key),
+        ) {
+            super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
+            // Swallow is unreachable for Playback today; both non-command outcomes
+            // mean "not a playback key" → let it fall through (`None`).
+            super::input_resolver::KeyResolution::FallThrough
+            | super::input_resolver::KeyResolution::Swallow => None,
+        }
     }
 
     /// Handle a key for the focused power-view home list (all groups: CW + library latest).
