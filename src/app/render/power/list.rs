@@ -534,82 +534,152 @@ impl App {
                 );
             }
         } else {
-            let offset =
-                stored_scroll.clamp(cursor.saturating_sub(visible.saturating_sub(1)), cursor);
+            enum DisplayRow {
+                Item(usize),
+                BannerFiller,
+            }
+
+            let mut display_rows: Vec<DisplayRow> = Vec::with_capacity(n + banner_rows);
+            for i in 0..n {
+                display_rows.push(DisplayRow::Item(i));
+                if banner_rows > 0 && i == cursor {
+                    for _ in 0..banner_rows {
+                        display_rows.push(DisplayRow::BannerFiller);
+                    }
+                }
+            }
+            let total_display = display_rows.len();
+            let display_cursor = display_rows
+                .iter()
+                .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
+                .unwrap_or(0);
+
+            // Lower bound normally just keeps the cursor row visible; when a
+            // banner follows it, extend the lower bound so scrolling keeps
+            // pulling up until the whole banner is visible too (clamped to
+            // display_cursor itself if the viewport could never fit both).
+            let lower_bound = (display_cursor + banner_rows)
+                .saturating_sub(visible.saturating_sub(1))
+                .min(display_cursor);
+            let offset = stored_scroll.clamp(lower_bound, display_cursor);
             final_offset = offset;
 
-            let list_items: Vec<ListItem> = items
+            let list_items: Vec<ListItem> = display_rows
                 .iter()
                 .skip(offset)
                 .take(visible)
-                .enumerate()
-                .map(|(i, item)| {
-                    let abs = offset + i;
-                    let selected = abs == cursor;
+                .map(|row| match row {
+                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
+                    DisplayRow::Item(idx) => {
+                        let item = &items[*idx];
+                        let selected = *idx == cursor;
 
-                    // Compute name and duration as separate strings so they can be styled
-                    // independently: name in the normal fg, duration in OVERLAY (no parens).
-                    let (item_name, dur_str) = if item.is_folder {
-                        let name = if item.item_type == "Folder" && item.total_count > 0 {
-                            format!("{} \u{b7} {} items", item.display_name(), item.total_count)
-                        } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
-                            format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                        // Compute name and duration as separate strings so they can be styled
+                        // independently: name in the normal fg, duration in OVERLAY (no parens).
+                        let (item_name, dur_str) = if item.is_folder {
+                            let name = if item.item_type == "Folder" && item.total_count > 0 {
+                                format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+                            } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
+                                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                            } else {
+                                item.display_name()
+                            };
+                            (name, String::new())
                         } else {
-                            item.display_name()
+                            let dur = if item.runtime_ticks > 0 {
+                                format!(
+                                    " {}",
+                                    fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
+                                )
+                            } else {
+                                String::new()
+                            };
+                            (item.display_name(), dur)
                         };
-                        (name, String::new())
-                    } else {
-                        let dur = if item.runtime_ticks > 0 {
-                            format!(
-                                " {}",
-                                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-                            )
+
+                        let avail = (area.width as usize).saturating_sub(2);
+                        let name_w = avail.saturating_sub(dur_str.width());
+                        let title = trunc_str(&item_name, name_w);
+                        let fg = if focused {
+                            palette::WHITE
                         } else {
-                            String::new()
+                            palette::SUBTLE
                         };
-                        (item.display_name(), dur)
-                    };
 
-                    let avail = (area.width as usize).saturating_sub(2);
-                    let name_w = avail.saturating_sub(dur_str.width());
-                    let title = trunc_str(&item_name, name_w);
-                    let fg = if focused {
-                        palette::WHITE
-                    } else {
-                        palette::SUBTLE
-                    };
-
-                    let mut spans: Vec<Span> = if selected && focused {
-                        vec![
-                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                            Span::styled(
-                                title,
-                                Style::default()
-                                    .fg(palette::IRIS)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ]
-                    } else {
-                        vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
-                    };
-                    if !dur_str.is_empty() {
-                        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+                        let mut spans: Vec<Span> = if selected && focused {
+                            vec![
+                                Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                                Span::styled(
+                                    title,
+                                    Style::default()
+                                        .fg(palette::IRIS)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                            ]
+                        } else {
+                            vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                        };
+                        if !dur_str.is_empty() {
+                            spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+                        }
+                        ListItem::new(Line::from(spans))
                     }
-                    ListItem::new(Line::from(spans))
+                })
+                .collect();
+
+            layout.left_row_map = display_rows
+                .iter()
+                .skip(offset)
+                .take(visible)
+                .map(|row| match row {
+                    DisplayRow::BannerFiller => None,
+                    DisplayRow::Item(idx) => Some(*idx),
                 })
                 .collect();
 
             let mut state = ListState::default();
-            state.select(Some(cursor.saturating_sub(offset)));
-            layout.cursor_screen_y = Some(content_area.y + (cursor.saturating_sub(offset)) as u16);
+            state.select(Some(display_cursor.saturating_sub(offset)));
+            layout.cursor_screen_y =
+                Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
             f.render_stateful_widget(
                 List::new(list_items).highlight_style(Style::default()),
                 content_area,
                 &mut state,
             );
 
-            if focused && n > visible {
-                let max_off = n.saturating_sub(visible);
+            if banner_rows > 0 {
+                let banner_start = display_cursor + 1;
+                if banner_start >= offset && banner_start < offset + visible {
+                    let banner_y = content_area.y + (banner_start - offset) as u16;
+                    let bottom = content_area.y + content_area.height;
+                    let banner_h =
+                        (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
+                    if banner_h > 0 {
+                        let banner_rect = Rect {
+                            x: content_area.x,
+                            y: banner_y,
+                            width: content_area.width,
+                            height: banner_h,
+                        };
+                        // render_power_compact_detail overwrites layout.cursor_screen_y with
+                        // the banner's own top row; restore the selected list row's y after,
+                        // since that row (not the banner) is what should host the blinking
+                        // cursor / mouse hit target.
+                        let want_cursor_y = layout.cursor_screen_y;
+                        self.render_power_compact_detail(
+                            f,
+                            banner_rect,
+                            self.power_left_tab - 1,
+                            focused,
+                            layout,
+                        );
+                        layout.cursor_screen_y = want_cursor_y;
+                    }
+                }
+            }
+
+            if focused && total_display > visible {
+                let max_off = total_display.saturating_sub(visible);
                 let mut sb = ScrollbarState::new(max_off + 1).position(offset);
                 f.render_stateful_widget(
                     Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -670,6 +740,69 @@ mod tests {
         buffer_to_string(&term)
     }
 
+    fn render_power_list_to_string_sized(
+        app: &mut App,
+        layout: &mut LayoutPower,
+        width: u16,
+        height: u16,
+    ) -> String {
+        let backend = TestBackend::new(width, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_power_list(f, Rect::new(0, 0, width, height), true, layout);
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
+    fn make_power_movie_list_app(titles: Vec<&str>) -> App {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let items: Vec<_> = titles
+            .into_iter()
+            .enumerate()
+            .map(|(i, title)| {
+                let mut m = make_item(title, "Movie");
+                m.id = format!("movie-{i}");
+                if title.contains("Selected") {
+                    m.overview = "This is the compact movie banner overview text.".into();
+                }
+                m
+            })
+            .collect();
+        let total = items.len();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items,
+                total_count: total,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app
+    }
+
     #[test]
     fn letter_group_keeps_top_bucket_header_after_scrolling_back_to_top() {
         let mut app = make_app_stub();
@@ -728,5 +861,49 @@ mod tests {
             "expected bucket header above first item:\n{out}"
         );
         assert_eq!(app.libs[0].nav_stack[0].scroll, 0);
+    }
+
+    #[test]
+    fn compact_banner_appears_under_selected_row_not_pinned_to_top() {
+        let mut app =
+            make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
+        // Select the second item (index 1) — banner must render after ITS row, not row 0.
+        app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 40, 20);
+        let lines: Vec<&str> = out.lines().collect();
+
+        let first_pos = out.find("First").expect("row above cursor unaffected");
+        let selected_row_line = lines
+            .iter()
+            .position(|l| l.contains("Second Selected"))
+            .expect("selected row itself, unaffected by banner");
+        let selected_row_pos = out.find("Second Selected").unwrap();
+        assert!(
+            first_pos < selected_row_pos,
+            "row for First expected before the selected row:\n{out}"
+        );
+        let banner_pos = out
+            .find("compact movie banner")
+            .expect("banner content expected somewhere after the selected row");
+        assert!(
+            banner_pos > selected_row_pos,
+            "banner content expected after the selected row:\n{out}"
+        );
+        // Third item pushed down by the 14 reserved banner rows (13 content + 1 gap),
+        // so it should not appear on the row immediately after the selected row.
+        assert!(
+            !lines[selected_row_line + 1].contains("Third"),
+            "Third should not appear immediately after Second Selected:\n{out}"
+        );
+        let third_line = lines
+            .iter()
+            .position(|l| l.contains("Third"))
+            .expect("Third item expected further down, pushed below the banner");
+        assert!(
+            third_line >= selected_row_line + COMPACT_BANNER_TOTAL_ROWS,
+            "Third expected pushed below the reserved banner rows (row {third_line}, selected row {selected_row_line}):\n{out}"
+        );
     }
 }
