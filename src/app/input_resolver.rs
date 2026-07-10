@@ -105,6 +105,79 @@ impl App {
     }
 }
 
+/// One layer of the keyboard precedence stack: a name for assertions/debugging
+/// and a handler that returns `Some(quit)` if this context claimed the key, or
+/// `None` to fall through to the next-lower-priority context. Phase 2 (#131)
+/// makes `handle_key`'s branch order into this explicit, ordered, testable
+/// list instead of implicit control flow.
+#[derive(Clone, Copy)]
+pub(super) struct ContextEntry {
+    // Only read by the `context_stack_order_is_pinned` characterization test
+    // today; kept outside `#[cfg(test)]` since it's part of the type's
+    // intended (debugging/assertion) purpose, not test-only scaffolding.
+    #[allow(dead_code)]
+    pub name: &'static str,
+    pub handler: fn(&mut App, KeyEvent) -> Option<bool>,
+}
+
+/// The full keyboard context-priority stack, first-match-wins, in the exact
+/// order `handle_key` checked them before phase 2. See
+/// `docs/adr/0002-centralized-input-handling.md`.
+pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
+    ContextEntry {
+        name: "save_modal",
+        handler: App::handle_key_save_modal,
+    },
+    ContextEntry {
+        name: "save_playlist",
+        handler: App::handle_key_save_playlist_entry,
+    },
+    ContextEntry {
+        name: "settings",
+        handler: App::handle_key_settings,
+    },
+    ContextEntry {
+        name: "help",
+        handler: App::handle_key_help,
+    },
+    ContextEntry {
+        name: "sessions",
+        handler: App::handle_key_sessions,
+    },
+    ContextEntry {
+        name: "playlists",
+        handler: App::handle_key_playlists,
+    },
+    ContextEntry {
+        name: "legacy_tail",
+        handler: App::handle_key_legacy_tail,
+    },
+    ContextEntry {
+        name: "context_menu",
+        handler: App::handle_key_context_menu,
+    },
+    ContextEntry {
+        name: "power_queue_alt_m",
+        handler: App::handle_key_power_queue_alt_m,
+    },
+    ContextEntry {
+        name: "playback",
+        handler: App::handle_playback_key,
+    },
+    ContextEntry {
+        name: "ctrl_l_force_clear",
+        handler: App::handle_key_ctrl_l,
+    },
+    ContextEntry {
+        name: "f5_refresh",
+        handler: App::handle_key_f5_refresh,
+    },
+    ContextEntry {
+        name: "view_dispatch",
+        handler: App::handle_key_view_dispatch,
+    },
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,6 +296,31 @@ mod app_level_tests {
         assert!(
             !matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)),
             "Space is inert while nothing plays"
+        );
+    }
+
+    #[test]
+    fn context_stack_order_is_pinned() {
+        let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
+        assert_eq!(
+            names,
+            vec![
+                "save_modal",
+                "save_playlist",
+                "settings",
+                "help",
+                "sessions",
+                "playlists",
+                "legacy_tail",
+                "context_menu",
+                "power_queue_alt_m",
+                "playback",
+                "ctrl_l_force_clear",
+                "f5_refresh",
+                "view_dispatch",
+            ],
+            "precedence order must match handle_key's pre-phase-2 branch order; \
+             if this intentionally changes, update docs/adr/0002-centralized-input-handling.md too"
         );
     }
 }
