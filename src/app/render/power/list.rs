@@ -10,7 +10,31 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+/// Rows the compact movie banner occupies inline in the library list: the
+/// banner's own content (title/meta/overview/poster, rendered by
+/// `render_power_compact_detail`) plus a 1-row blank separator before the
+/// next list row — matching the spacing the banner already used when it was
+/// pinned to the top of the panel.
+const COMPACT_BANNER_CONTENT_ROWS: usize = 13;
+const COMPACT_BANNER_GAP_ROWS: usize = 1;
+const COMPACT_BANNER_TOTAL_ROWS: usize = COMPACT_BANNER_CONTENT_ROWS + COMPACT_BANNER_GAP_ROWS;
+
 impl App {
+    /// Filler-row count to reserve immediately after the selected movie's row
+    /// in `lib_idx`'s display-row sequence: `COMPACT_BANNER_TOTAL_ROWS` when a
+    /// leaf movie is selected and expanded detail is not open, else 0 (no
+    /// banner — ordinary list rendering, unchanged from before this feature).
+    fn compact_banner_rows(&self, lib_idx: usize) -> usize {
+        if self.libs[lib_idx].power_detail_item.is_some() {
+            return 0;
+        }
+        if self.power_selected_movie_item(lib_idx).is_some() {
+            COMPACT_BANNER_TOTAL_ROWS
+        } else {
+            0
+        }
+    }
+
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar by `render_power_view`.
     pub(super) fn render_power_list(
@@ -65,6 +89,14 @@ impl App {
                 }
             };
             (items, cur, scroll, total)
+        };
+
+        // Reserved filler-row count for the compact movie banner, 0 for every
+        // library type/state except "leaf movie selected, detail not pinned".
+        let banner_rows: usize = if self.power_left_tab > 0 {
+            self.compact_banner_rows(self.power_left_tab - 1)
+        } else {
+            0
         };
 
         // When at the album level of a music library, group albums under artist headers.
