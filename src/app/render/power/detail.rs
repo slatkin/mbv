@@ -7,9 +7,270 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
+use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
 impl App {
+    pub(crate) fn power_selected_movie_item(
+        &self,
+        lib_idx: usize,
+    ) -> Option<mbv_core::api::MediaItem> {
+        let lib = self.libs.get(lib_idx)?;
+        if lib.library.collection_type != "movies" {
+            return None;
+        }
+
+        let item = if let Some(search) = &lib.search {
+            let &idx = search.results.get(search.cursor)?;
+            search.items.get(idx)?.clone()
+        } else {
+            let level = lib.nav_stack.last()?;
+            level.items.get(level.cursor)?.clone()
+        };
+
+        if item.is_folder || item.item_type != "Movie" {
+            None
+        } else {
+            Some(item)
+        }
+    }
+
+    pub(crate) fn render_power_compact_detail(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        focused: bool,
+        layout: &mut LayoutPower,
+    ) {
+        const IMG_COLS: u16 = 18;
+        const IMG_ROWS: u16 = 10;
+
+        let Some(item) = self.power_selected_movie_item(lib_idx) else {
+            return;
+        };
+        if area.height == 0 || area.width < 3 {
+            return;
+        }
+
+        layout.cursor_screen_y = Some(area.y);
+        layout.detail_max_scroll = 0;
+        layout.detail_page_h = 0;
+
+        let inner_x = area.x + 1;
+        let inner_w = (area.width as usize).saturating_sub(2);
+        let inner_w16 = area.width.saturating_sub(2);
+        let mut row = area.y;
+        let max_y = area.y + area.height;
+
+        let title_color = if focused {
+            palette::YELLOW
+        } else {
+            palette::SUBTLE
+        };
+        let text_color = if focused {
+            palette::WHITE
+        } else {
+            palette::SUBTLE
+        };
+
+        let primary_cache_key = format!("{}:cmp_primary", item.id);
+        if self.images_enabled() {
+            self.fetch_card_image(
+                primary_cache_key.clone(),
+                item.id.clone(),
+                item.series_id.clone(),
+                &["Primary"],
+            );
+        }
+
+        let (img_actual_w, img_height): (u16, u16) = {
+            if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
+                let actual = state.size_for(
+                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)),
+                    ratatui::layout::Size {
+                        width: IMG_COLS,
+                        height: IMG_ROWS,
+                    },
+                );
+                (actual.width, actual.height)
+            } else {
+                (0, 0)
+            }
+        };
+
+        let img_x = area.x + area.width.saturating_sub(img_actual_w);
+        let img_end_row = area.y + img_height;
+        layout.inline_image_rect = if img_height > 0 {
+            Some(Rect {
+                x: img_x,
+                y: area.y,
+                width: img_actual_w,
+                height: img_height,
+            })
+        } else {
+            None
+        };
+
+        let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
+        let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
+        let text_dims = |r: u16| -> (usize, u16) {
+            if img_height > 0 && r < img_end_row {
+                (narrow_w, narrow_w16)
+            } else {
+                (inner_w, inner_w16)
+            }
+        };
+
+        if row < max_y {
+            let (tw, tw16) = text_dims(row);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&item.name, tw),
+                    Style::default().fg(title_color),
+                ))),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: tw16,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
+
+        if row < max_y {
+            let dur_str = if item.runtime_ticks > 0 {
+                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
+            } else {
+                String::new()
+            };
+            let year_str = if item.production_year > 0 {
+                item.production_year.to_string()
+            } else {
+                String::new()
+            };
+            let meta = [item.genre.as_str(), year_str.as_str(), dur_str.as_str()]
+                .iter()
+                .filter(|s| !s.is_empty())
+                .copied()
+                .collect::<Vec<_>>()
+                .join("  ");
+            let (tw, tw16) = text_dims(row);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&meta, tw),
+                    Style::default().fg(palette::SUBTLE),
+                ))),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: tw16,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
+
+        let playback = self.effective_playback_state();
+        let now_playing_id: Option<String> = if playback.active {
+            self.playback_queue()
+                .items
+                .get(playback.active_idx)
+                .map(|i| i.id.clone())
+        } else {
+            None
+        };
+        if now_playing_id.as_deref() == Some(item.id.as_str()) && row < max_y {
+            let (_tw, tw16) = text_dims(row);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "Playing",
+                    Style::default()
+                        .fg(palette::FOAM)
+                        .add_modifier(Modifier::BOLD),
+                ))),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: tw16,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
+
+        if row < max_y && !item.overview.is_empty() {
+            let overview = trunc_overview(&item.overview);
+            let avail = max_y.saturating_sub(row) as usize;
+            let shadow_lines = img_end_row.saturating_sub(row) as usize;
+            let mut all_lines: Vec<String> = Vec::new();
+
+            for paragraph in overview.lines() {
+                let paragraph = if paragraph.trim().is_empty() {
+                    " "
+                } else {
+                    paragraph.trim()
+                };
+                let line_idx = all_lines.len();
+                let wrap_w = if line_idx < shadow_lines {
+                    narrow_w.max(1)
+                } else {
+                    inner_w.max(1)
+                };
+                for wrapped in wrap(paragraph, wrap_w) {
+                    all_lines.push(wrapped.into_owned());
+                }
+            }
+
+            if avail > 0 {
+                let clipped = all_lines.len() > avail;
+                for (disp_idx, line_text) in all_lines.iter().take(avail).enumerate() {
+                    let mut line = line_text.clone();
+                    let (tw, tw16) = text_dims(row);
+                    if clipped && disp_idx + 1 == avail {
+                        let base = trunc_str(&line, tw.saturating_sub(1)).to_string();
+                        line = format!("{base}\u{2026}");
+                    }
+                    f.render_widget(
+                        Paragraph::new(Line::from(Span::styled(
+                            trunc_str(&line, tw),
+                            Style::default().fg(text_color),
+                        ))),
+                        Rect {
+                            x: inner_x,
+                            y: row,
+                            width: tw16,
+                            height: 1,
+                        },
+                    );
+                    row += 1;
+                    if row >= max_y {
+                        break;
+                    }
+                }
+            }
+        }
+
+        if img_height > 0 {
+            if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
+                type SImg = ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(
+                        ratatui_image::FilterType::Lanczos3,
+                    ))),
+                    Rect {
+                        x: img_x,
+                        y: area.y,
+                        width: img_actual_w,
+                        height: img_height,
+                    },
+                    state,
+                );
+            }
+        }
+    }
+
     /// Renders the movie detail panel (title, metadata, overview, director) into `area`.
     /// Called instead of `render_power_list` when `power_detail_item` is Some.
     pub(super) fn render_power_detail(
@@ -187,69 +448,32 @@ impl App {
             }
         }
 
-        // — Play status block: blank / status / blank —
-        {
-            let playback = self.effective_playback_state();
-            let now_playing_id: Option<String> = if playback.active {
-                self.playback_queue()
-                    .items
-                    .get(playback.active_idx)
-                    .map(|i| i.id.clone())
-            } else {
-                None
-            };
-            let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
-
-            // blank row above
-            if row < max_y {
-                row += 1;
-            }
-
-            // status row
-            if row < max_y {
-                let (_tw, tw16) = text_dims(row);
-                if is_playing {
-                    f.render_widget(
-                        Paragraph::new(Line::from(Span::styled(
-                            "Playing",
-                            Style::default()
-                                .fg(palette::FOAM)
-                                .add_modifier(Modifier::BOLD),
-                        ))),
-                        Rect {
-                            x: inner_x,
-                            y: row,
-                            width: tw16,
-                            height: 1,
-                        },
-                    );
-                } else {
-                    f.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            Span::styled("Press ", Style::default().fg(palette::SUBTLE)),
-                            Span::styled(
-                                "[ENTER]",
-                                Style::default()
-                                    .fg(palette::IRIS)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                            Span::styled(" to play", Style::default().fg(palette::SUBTLE)),
-                        ])),
-                        Rect {
-                            x: inner_x,
-                            y: row,
-                            width: tw16,
-                            height: 1,
-                        },
-                    );
-                }
-                row += 1;
-            }
-
-            // blank row below
-            if row < max_y {
-                row += 1;
-            }
+        let playback = self.effective_playback_state();
+        let now_playing_id: Option<String> = if playback.active {
+            self.playback_queue()
+                .items
+                .get(playback.active_idx)
+                .map(|i| i.id.clone())
+        } else {
+            None
+        };
+        if now_playing_id.as_deref() == Some(item.id.as_str()) && row < max_y {
+            let (_tw, tw16) = text_dims(row);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "Playing",
+                    Style::default()
+                        .fg(palette::FOAM)
+                        .add_modifier(Modifier::BOLD),
+                ))),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: tw16,
+                    height: 1,
+                },
+            );
+            row += 1;
         }
 
         // — Overview + Director (single scrollable block) —
@@ -388,5 +612,90 @@ impl App {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{BrowseLevel, LibraryTab};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    fn render_power_detail_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
+        let backend = TestBackend::new(60, 16);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_power_detail(f, Rect::new(0, 0, 60, 16), 0, true, layout);
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
+    #[test]
+    fn expanded_movie_detail_shows_director_without_enter_prompt() {
+        let mut app = make_app_stub();
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let mut movie = make_item("Focused Movie", "Movie");
+        movie.id = "movie-1".into();
+        movie.overview = "A long-form overview for the expanded movie detail panel.".into();
+        movie.director = "Jane Director".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![movie.clone()],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: Some(movie),
+            power_detail_scroll: 0,
+        });
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_detail_to_string(&mut app, &mut layout);
+
+        assert!(
+            out.contains("Director: Jane Director"),
+            "expected director:\n{out}"
+        );
+        assert!(
+            !out.contains("Press"),
+            "enter prompt should be removed:\n{out}"
+        );
+        assert!(
+            !out.contains("[ENTER]"),
+            "enter prompt should be removed:\n{out}"
+        );
     }
 }

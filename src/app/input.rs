@@ -382,6 +382,16 @@ impl App {
         if let Some(r) = self.handle_key_context_menu(key) {
             return r;
         }
+        if key.code == KeyCode::Char('m')
+            && key.modifiers.contains(KeyModifiers::ALT)
+            && !key.modifiers.contains(KeyModifiers::CONTROL)
+            && self.tab_idx == 1
+            && self.queue_view == QUEUE_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab > 0
+        {
+            return self.handle_queue_key(key);
+        }
         if let Some(quit) = self.handle_playback_key(key) {
             return quit;
         }
@@ -1281,6 +1291,13 @@ impl App {
                             self.libs[lib_idx].power_detail_item = None;
                             return false;
                         }
+                        KeyCode::Char('m')
+                            if key.modifiers.contains(KeyModifiers::ALT)
+                                && !key.modifiers.contains(KeyModifiers::CONTROL) =>
+                        {
+                            self.libs[lib_idx].power_detail_item = None;
+                            return false;
+                        }
                         KeyCode::Up => {
                             self.libs[lib_idx].power_detail_scroll =
                                 self.libs[lib_idx].power_detail_scroll.saturating_sub(1);
@@ -1314,29 +1331,15 @@ impl App {
                     }
                 }
 
-                // Enter on a leaf Movie: show detail panel instead of playing.
-                if key.code == KeyCode::Enter
-                    && !key.modifiers.contains(KeyModifiers::ALT)
+                if key.code == KeyCode::Char('m')
+                    && key.modifiers.contains(KeyModifiers::ALT)
                     && !key.modifiers.contains(KeyModifiers::CONTROL)
                 {
-                    let maybe_movie: Option<mbv_core::api::MediaItem> =
-                        self.libs.get(lib_idx).and_then(|lib| {
-                            if let Some(s) = &lib.search {
-                                let &idx = s.results.get(s.cursor)?;
-                                s.items.get(idx).cloned()
-                            } else {
-                                lib.nav_stack
-                                    .last()
-                                    .and_then(|lvl| lvl.items.get(lvl.cursor).cloned())
-                            }
-                        });
-                    if let Some(item) = maybe_movie {
-                        if !item.is_folder && item.item_type == "Movie" {
-                            self.libs[lib_idx].power_detail_item = Some(item);
-                            self.libs[lib_idx].power_detail_scroll = 0;
-                            return false;
-                        }
+                    if let Some(item) = self.power_selected_movie_item(lib_idx) {
+                        self.libs[lib_idx].power_detail_item = Some(item);
+                        self.libs[lib_idx].power_detail_scroll = 0;
                     }
+                    return false;
                 }
 
                 // Season switching: [ = previous season, ] = next season.
@@ -3274,5 +3277,93 @@ mod playback_header_mouse_tests {
             rx.try_recv().is_err(),
             "single-item queue: next must not fire"
         );
+    }
+}
+
+#[cfg(test)]
+mod power_movie_detail_tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn make_power_movie_app() -> App {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let mut first = make_item("First Movie", "Movie");
+        first.id = "movie-1".into();
+        first.overview =
+            "A compact banner overview that should not require the expanded detail mode.".into();
+        first.director = "Jane Director".into();
+
+        let mut second = make_item("Second Movie", "Movie");
+        second.id = "movie-2".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![first, second],
+                total_count: 2,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app
+    }
+
+    #[test]
+    fn enter_on_power_view_movie_plays_without_opening_detail() {
+        let mut app = make_power_movie_app();
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert!(app.libs[0].power_detail_item.is_none());
+        assert_eq!(app.player_tab.items.len(), 1);
+        assert_eq!(app.player_tab.items[0].id, "movie-1");
+    }
+
+    #[test]
+    fn alt_m_toggles_power_movie_detail() {
+        let mut app = make_power_movie_app();
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::ALT));
+
+        assert!(!handled);
+        assert_eq!(
+            app.libs[0]
+                .power_detail_item
+                .as_ref()
+                .map(|item| item.id.as_str()),
+            Some("movie-1")
+        );
+        assert_eq!(app.libs[0].power_detail_scroll, 0);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::ALT));
+
+        assert!(!handled);
+        assert!(app.libs[0].power_detail_item.is_none());
     }
 }

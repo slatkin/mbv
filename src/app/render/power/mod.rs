@@ -384,8 +384,26 @@ impl App {
         let is_album = self.power_left_tab > 0 && self.is_album_level(lib_idx);
         let is_series = self.power_left_tab > 0 && self.is_series_view(lib_idx);
         let is_home_video = self.power_left_tab > 0 && self.is_home_video_view(lib_idx);
+        let show_compact_movie_detail =
+            !has_detail && self.power_selected_movie_item(lib_idx).is_some();
         if has_detail {
             self.render_power_detail(f, area, lib_idx, focused, layout);
+        } else if show_compact_movie_detail {
+            const COMPACT_DETAIL_H: u16 = 10;
+            let banner_h = COMPACT_DETAIL_H.min(area.height.saturating_sub(1)).max(1);
+            let banner_area = Rect {
+                height: banner_h,
+                ..area
+            };
+            let list_area = Rect {
+                y: area.y + banner_h,
+                height: area.height.saturating_sub(banner_h),
+                ..area
+            };
+            self.render_power_compact_detail(f, banner_area, lib_idx, focused, layout);
+            if list_area.height > 0 {
+                self.render_power_list(f, list_area, focused, layout);
+            }
         } else if is_feed_group {
             self.render_power_feed_home_video_group_view(f, area, lib_idx, focused, layout);
         } else if is_music_group {
@@ -425,5 +443,108 @@ impl App {
             return artist;
         }
         "Unknown Artist".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::layout::LayoutPower;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{BrowseLevel, LibraryTab};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    fn render_power_library_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
+        let backend = TestBackend::new(60, 16);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_power_library(f, Rect::new(0, 0, 60, 16), true, layout);
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
+    fn make_power_movie_app() -> App {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let mut focused = make_item("Focused Movie", "Movie");
+        focused.id = "movie-focused".into();
+        focused.overview = "This overview should appear in the compact movie banner while the list remains visible underneath.".into();
+        focused.director = "Director Hidden".into();
+        focused.production_year = 1988;
+        focused.genre = "Action".into();
+
+        let mut second = make_item("Second Movie", "Movie");
+        second.id = "movie-second".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![focused, second],
+                total_count: 2,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app
+    }
+
+    #[test]
+    fn movie_library_renders_compact_banner_without_opening_expanded_detail() {
+        let mut app = make_power_movie_app();
+        let mut layout = LayoutPower::default();
+
+        let out = render_power_library_to_string(&mut app, &mut layout);
+
+        assert!(app.libs[0].power_detail_item.is_none());
+        assert!(
+            out.contains("Focused Movie"),
+            "expected banner title:\n{out}"
+        );
+        assert!(
+            out.contains("compact movie banner"),
+            "expected compact overview text:\n{out}"
+        );
+        assert!(
+            out.contains("Second Movie"),
+            "expected list to remain visible:\n{out}"
+        );
+        assert!(
+            !out.contains("Director: Director Hidden"),
+            "compact banner must hide director:\n{out}"
+        );
     }
 }
