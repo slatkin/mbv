@@ -730,7 +730,7 @@ pub struct App {
     last_drag_seek: Instant,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
-    pending_queue_removal: Option<(usize, bool)>, // deferred removal (idx, is_audio) after TrackChanged index-shifts
+    pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
     confirm_clear_queue: bool,
     queue_undo_stack: Vec<UndoEntry>,
     remote_queue_undo_stack: Vec<UndoEntry>,
@@ -1599,6 +1599,46 @@ impl App {
         (should_consume, is_audio)
     }
 
+    /// Slot-keyed counterpart of `should_consume_item`, used by the
+    /// slot-targeted playback event handling. Resolves the audio/video flag
+    /// from the queue model by slot identity instead of raw index.
+    fn should_consume_slot(&self, slot_id: QueueSlotId, consume: bool) -> (bool, bool) {
+        let item = self.playback_queue().queue.slot(slot_id).map(|s| &s.item);
+        let is_video = item.is_some_and(|i| i.is_video());
+        let is_audio = item.is_some_and(|i| i.is_audio());
+        let (consume_videos, consume_audio) = {
+            let cfg = &self.client.lock().unwrap().config;
+            (cfg.consume_videos, cfg.consume_audio)
+        };
+        let should_consume =
+            consume && ((is_video && consume_videos) || (is_audio && consume_audio));
+        log::info!(target: "consume", "consume check: slot_id={slot_id:?} consume={consume} \
+            is_video={is_video} consume_videos={consume_videos} \
+            is_audio={is_audio} consume_audio={consume_audio} => {should_consume}");
+        (should_consume, is_audio)
+    }
+
+    /// Removes the given slot from the currently active playback queue by
+    /// identity (order-independent, unlike `remove_from_active_playback_queue`)
+    /// and, if something was actually removed, tells the player to drop the
+    /// slot's current index from its own internal queue copy — see
+    /// `remove_from_active_playback_queue` for why that notification matters.
+    /// Uses `consume_slot` rather than `remove_slot` so a slot that is
+    /// currently marked active in the model (set via `set_active_slot`) can
+    /// still be consumed; the active-confirmation gate on `remove_slot` only
+    /// applies to explicit user-initiated removal. Returns the removed
+    /// item's id, or `None` if the slot no longer exists.
+    fn consume_slot_from_active_playback_queue(&mut self, slot_id: QueueSlotId) -> Option<String> {
+        let idx = self.playback_queue().queue.slot_index(slot_id)?;
+        let removed = match self.playback_queue_mut().queue.consume_slot(slot_id) {
+            QueueMutationResult::Applied(slot) => slot,
+            QueueMutationResult::NotFound => return None,
+        };
+        self.playback_queue_mut().sync_items_from_queue_model();
+        self.player.send_command(PlayerCommand::QueueRemove(idx));
+        Some(removed.item.id)
+    }
+
     /// Removes `idx` from the currently active playback queue and, if
     /// something was actually removed, tells the player to drop the same
     /// index from its own internal queue copy. `QueueSession` (or its
@@ -2413,19 +2453,37 @@ impl App {
                 played,
                 consume,
             } => {
-                if let Some(item) = self.playback_queue_mut().items.get_mut(idx) {
-                    if played {
-                        item.playback_position_ticks = 0;
-                        item.played = true;
-                    } else if position_ticks >= 300_000_000 && !item.is_audio() {
-                        // Only update local position for meaningful progress (≥ 30 s).
-                        // Startup noise from mpv (< 30 s) keeps the previous value intact.
-                        item.playback_position_ticks = position_ticks;
+                // Resolve the raw mpv index to a slot right away, against the
+                // queue exactly as it stands now — the shadow (`items`) may
+                // still need building for tests/older callers that assign
+                // `items` directly, so sync first.
+                self.playback_queue_mut()
+                    .sync_queue_model_from_items_if_needed();
+                let Some(slot_id) = self.playback_queue().resolve_slot_at(idx) else {
+                    log::warn!(target: "consume", "TrackCompleted: idx={idx} maps to no live slot; dropping");
+                    return false;
+                };
+                let position = if played {
+                    0
+                } else if let Some(slot) = self.playback_queue().queue.slot(slot_id) {
+                    // Only record meaningful progress (≥ 30 s) for video;
+                    // audio and startup noise keep the prior value.
+                    if position_ticks >= 300_000_000 && !slot.item.is_audio() {
+                        position_ticks
+                    } else {
+                        slot.item.playback_position_ticks
                     }
-                }
-                let (should_consume, is_audio) = self.should_consume_item(idx, consume);
+                } else {
+                    return false;
+                };
+                let _ = self
+                    .playback_queue_mut()
+                    .queue
+                    .apply_progress(slot_id, position, played);
+                self.playback_queue_mut().sync_items_from_queue_model();
+                let (should_consume, is_audio) = self.should_consume_slot(slot_id, consume);
                 if should_consume {
-                    self.pending_queue_removal = Some((idx, is_audio));
+                    self.pending_queue_removal = Some((slot_id, is_audio));
                 }
             }
             PlayerEvent::TrackChanged(idx) => {
@@ -2434,26 +2492,37 @@ impl App {
                 if self.status.starts_with("Next up:") {
                     self.status.clear();
                 }
-                let adjusted = if let Some((remove_idx, was_audio)) =
-                    self.pending_queue_removal.take()
+                let adjusted = if let Some((slot_id, was_audio)) = self.pending_queue_removal.take()
                 {
+                    // `idx` is the player's report from *before* it was told
+                    // (via the QueueRemove sent by the consume below) that
+                    // the completed slot was removed, so it still lines up
+                    // with the queue's current, pre-removal shape. Resolve
+                    // it against that shape now, then translate to the
+                    // post-removal index via the resolved slot's new
+                    // position — order-independent, unlike the old raw
+                    // index arithmetic, so it stays correct regardless of
+                    // where the removed slot sat relative to `idx`.
+                    self.playback_queue_mut()
+                        .sync_queue_model_from_items_if_needed();
+                    let target_slot_id = self.playback_queue().resolve_slot_at(idx);
                     let len_before = self.playback_queue().items.len();
-                    let removed_id = self.remove_from_active_playback_queue(remove_idx);
+                    let removed_id = self.consume_slot_from_active_playback_queue(slot_id);
                     let len_after = len_before - removed_id.is_some() as usize;
-                    let adjusted = if remove_idx < idx { idx - 1 } else { idx };
-                    log::info!(target: "consume", "TrackChanged: consuming pending removal remove_idx={remove_idx} \
-                        new_idx={idx} adjusted={adjusted} len_before={len_before} len_after={len_after} \
-                        removed_id={removed_id:?}");
+                    log::info!(target: "consume", "TrackChanged: consuming pending removal slot_id={slot_id:?} \
+                        new_idx={idx} len_before={len_before} len_after={len_after} removed_id={removed_id:?}");
                     if removed_id.is_none() {
-                        log::warn!(target: "consume", "TrackChanged: remove_idx={remove_idx} out of bounds \
-                            (len={len_before}), removal SKIPPED");
+                        log::warn!(target: "consume", "TrackChanged: slot_id={slot_id:?} not found, \
+                            removal SKIPPED");
                     }
                     if was_audio {
                         self.on_audio_consumed();
                     } else {
                         self.on_video_consumed();
                     }
-                    adjusted
+                    target_slot_id
+                        .and_then(|slot_id| self.playback_queue().queue.slot_index(slot_id))
+                        .unwrap_or(idx)
                 } else {
                     idx
                 };
@@ -4923,6 +4992,65 @@ pub(crate) mod tests {
             1,
             "consume_audio is off, so the item must stay in the queue"
         );
+    }
+
+    #[test]
+    fn track_completed_progress_follows_slot_after_earlier_removal() {
+        // queue: [a, b, c]; a is removed (indices shift: b now at 0, c at 1),
+        // then a completion event for the player's post-removal index of b
+        // (0) arrives. Progress must land on slot b regardless of the churn.
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(3);
+        app.player_tab.sync_queue_model_from_items_if_needed();
+        let slot_b = app.player_tab.queue.slots()[1].slot_id;
+        let slot_a = app.player_tab.queue.slots()[0].slot_id;
+        assert!(matches!(
+            app.player_tab.queue.remove_slot(slot_a),
+            RemoveSlotResult::Removed(_)
+        ));
+        app.player_tab.sync_items_from_queue_model();
+
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 0,
+            position_ticks: 600_000_000,
+            played: false,
+            consume: false,
+        });
+
+        let slot = app.player_tab.queue.slot(slot_b).unwrap();
+        assert_eq!(slot.item.playback_position_ticks, 600_000_000);
+    }
+
+    #[test]
+    fn track_completed_for_removed_slot_does_not_mutate_queue() {
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(2);
+        app.player_tab.sync_queue_model_from_items_if_needed();
+        let ids_before: Vec<_> = app
+            .player_tab
+            .queue
+            .slots()
+            .iter()
+            .map(|s| s.slot_id)
+            .collect();
+
+        // index 5 does not exist
+        app.handle_player_event(PlayerEvent::TrackCompleted {
+            idx: 5,
+            position_ticks: 600_000_000,
+            played: true,
+            consume: true,
+        });
+
+        let ids_after: Vec<_> = app
+            .player_tab
+            .queue
+            .slots()
+            .iter()
+            .map(|s| s.slot_id)
+            .collect();
+        assert_eq!(ids_before, ids_after);
+        assert!(app.pending_queue_removal.is_none());
     }
 
     #[test]
