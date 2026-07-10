@@ -492,6 +492,15 @@ mod app_level_tests {
         }
     }
 
+    fn test_empty_context_menu() -> crate::app::ContextMenu {
+        crate::app::ContextMenu {
+            x: 0,
+            y: 0,
+            entries: Vec::new(),
+            cursor: 0,
+        }
+    }
+
     fn test_lib_with_search() -> crate::app::LibraryTab {
         use crate::app::tests::make_item;
         use crate::app::{BrowseLevel, LibSearch, LibraryTab};
@@ -605,12 +614,7 @@ mod app_level_tests {
             let mut st = app.player.status.lock().unwrap();
             st.active = true; // show_controls == true, so panel_toggle_h would fire if reached
         }
-        app.context_menu = Some(crate::app::ContextMenu {
-            x: 0,
-            y: 0,
-            entries: Vec::new(),
-            cursor: 0,
-        });
+        app.context_menu = Some(test_empty_context_menu());
         let before = app.panel_mode;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
         assert_eq!(
@@ -662,12 +666,7 @@ mod app_level_tests {
         app.player_tab
             .items
             .push(crate::app::tests::make_item("1", "Track"));
-        app.context_menu = Some(crate::app::ContextMenu {
-            x: 0,
-            y: 0,
-            entries: Vec::new(),
-            cursor: 0,
-        });
+        app.context_menu = Some(test_empty_context_menu());
         app.handle_key(ev(KeyCode::Char('c'), KeyModifiers::NONE));
         assert!(
             !app.confirm_clear_queue,

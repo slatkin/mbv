@@ -16,6 +16,15 @@ use std::time::{Duration, Instant};
 use textwrap::wrap;
 
 impl App {
+    /// Whether a context menu is currently open. Shared by every
+    /// CONTEXT_STACK layer above `context_menu` that must yield to it
+    /// (`panel_toggle_h`, `home_search`, `power_lib_search`, `lib_search`,
+    /// `clear_queue_prompt_c`, `legacy_tail_power_width`) — see
+    /// docs/adr/0002-centralized-input-handling.md phase 6 (#135).
+    fn context_menu_open(&self) -> bool {
+        self.context_menu.is_some()
+    }
+
     fn context_menu_play_state(&self, item: &MediaItem) -> bool {
         if item.is_folder {
             item.unplayed_item_count == 0
@@ -162,7 +171,7 @@ impl App {
         // panel instead of being swallowed by the menu (which has no 'h'
         // binding of its own). See docs/adr/0002-centralized-input-handling.md
         // phase 6 and phase-2's `home_search`, which already guards the same way.
-        if key.code != KeyCode::Char('h') || self.context_menu.is_some() {
+        if key.code != KeyCode::Char('h') || self.context_menu_open() {
             return None;
         }
         let active = self.player.status.lock().unwrap().active;
@@ -176,7 +185,7 @@ impl App {
     pub(super) fn handle_key_home_search(&mut self, key: KeyEvent) -> Option<bool> {
         if !(self.tab_idx == 0 || self.tab_idx == 1)
             || self.home_search.is_none()
-            || self.context_menu.is_some()
+            || self.context_menu_open()
         {
             return None;
         }
@@ -295,7 +304,7 @@ impl App {
         if self.queue_view != QUEUE_VIEW_POWER
             || key.modifiers.contains(KeyModifiers::ALT)
             || key.modifiers.contains(KeyModifiers::CONTROL)
-            || self.context_menu.is_some()
+            || self.context_menu_open()
             || !matches!(self.power_focus, PowerFocus::Left)
             || self.power_left_tab == 0
         {
@@ -314,7 +323,7 @@ impl App {
         if self.tab_idx <= 1
             || key.modifiers.contains(KeyModifiers::ALT)
             || key.modifiers.contains(KeyModifiers::CONTROL)
-            || self.context_menu.is_some()
+            || self.context_menu_open()
         {
             return None;
         }
@@ -419,7 +428,7 @@ impl App {
         // `home_search`, which already guards the same way.
         if key.code != KeyCode::Char('c')
             || key.modifiers.contains(KeyModifiers::ALT)
-            || self.context_menu.is_some()
+            || self.context_menu_open()
         {
             return None;
         }
@@ -1324,7 +1333,7 @@ impl App {
 
     fn handle_power_left_width_key(&mut self, key: KeyEvent) -> bool {
         if !self.power_view_active()
-            || self.context_menu.is_some()
+            || self.context_menu_open()
             || !Self::is_power_left_width_resize_key(key)
         {
             return false;
