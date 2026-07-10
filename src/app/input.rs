@@ -11,7 +11,6 @@ use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
 use ratatui::layout::Rect;
 use ratatui::widgets::{Block, BorderType, Borders};
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 use textwrap::wrap;
 
@@ -1625,49 +1624,7 @@ impl App {
                 }
             }
             KeyCode::Enter => {
-                let scope = self.visible_queue_scope();
-                let queue = self.displayed_queue();
-                let t = queue.queue_cursor;
-                let n = queue.items.len();
-                if t < n {
-                    if let Some(ref conn_id) = self.connected_session_id.clone() {
-                        let item = queue.items[t].clone();
-                        let id = conn_id.clone();
-                        let item_ids: Vec<String> =
-                            queue.items.iter().map(|i| i.id.clone()).collect();
-                        let start_ticks = item.playback_position_ticks;
-                        let label = item.playback_label();
-                        self.flash_status(format!("Playing on remote: {label}"));
-                        self.do_session_command(move |c| {
-                            c.session_play_items(&id, &item_ids, t, start_ticks)
-                        });
-                    } else {
-                        let st = self.player.status.lock().unwrap();
-                        let active = st.active;
-                        let current_idx = st.current_idx;
-                        drop(st);
-                        if active && self.queue_scope_is_playback(scope) {
-                            let is_audio =
-                                queue.items.get(t).map(|i| i.is_audio()).unwrap_or(false);
-                            if t == current_idx && is_audio {
-                                self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
-                            } else if t != current_idx {
-                                self.player.send_command(PlayerCommand::JumpTo(t));
-                            }
-                        } else if !queue.items.is_empty() {
-                            let items = queue.items.clone();
-                            let c = Arc::new(self.client.lock().unwrap().clone());
-                            self.replace_playback_queue(items.clone(), t);
-                            self.player.play_queue(
-                                items,
-                                t,
-                                self.queue_source.clone(),
-                                c,
-                                self.ui_volume,
-                            );
-                        }
-                    }
-                }
+                self.dispatch(super::action::Command::QueuePlayCursor);
             }
             KeyCode::Delete => {
                 let queue = self.displayed_queue();
@@ -2881,7 +2838,10 @@ impl App {
                     -1
                 };
                 if self.layout.tabbar_vol_area.contains((col, row).into()) {
-                    self.adjust_volume(-delta * 5);
+                    // Same `Command` the `-`/`+` keys dispatch (issue #134);
+                    // only the hit-test and the wheel-to-delta mapping are
+                    // mouse-specific.
+                    self.dispatch(super::action::Command::AdjustVolume(-delta * 5));
                     return;
                 }
                 if self.tab_idx == 0 {
@@ -3078,47 +3038,15 @@ impl App {
                     } else if self.tab_idx == 1 {
                         let queue = self.displayed_queue();
                         let t = queue.queue_cursor;
+                        // Spatial hit-test stays local (issue #134); the
+                        // activation itself is the same `Command` the queue
+                        // tab's `Enter` key dispatches, so double-click and
+                        // `Enter` can't drift again the way they did before
+                        // a70ad7a.
                         if t < queue.items.len()
                             && self.layout.queue.inner.contains((col, row).into())
                         {
-                            let scope = self.visible_queue_scope();
-                            if let Some(ref conn_id) = self.connected_session_id.clone() {
-                                let item = queue.items[t].clone();
-                                let id = conn_id.clone();
-                                let item_ids: Vec<String> =
-                                    queue.items.iter().map(|i| i.id.clone()).collect();
-                                let start_ticks = item.playback_position_ticks;
-                                let label = item.playback_label();
-                                self.flash_status(format!("Playing on remote: {label}"));
-                                self.do_session_command(move |c| {
-                                    c.session_play_items(&id, &item_ids, t, start_ticks)
-                                });
-                            } else {
-                                let st = self.player.status.lock().unwrap();
-                                let active = st.active;
-                                let current_idx = st.current_idx;
-                                drop(st);
-                                if active && self.queue_scope_is_playback(scope) {
-                                    let is_audio =
-                                        queue.items.get(t).map(|i| i.is_audio()).unwrap_or(false);
-                                    if t == current_idx && is_audio {
-                                        self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
-                                    } else if t != current_idx {
-                                        self.player.send_command(PlayerCommand::JumpTo(t));
-                                    }
-                                } else {
-                                    let items = queue.items.clone();
-                                    let c = Arc::new(self.client.lock().unwrap().clone());
-                                    self.replace_playback_queue(items.clone(), t);
-                                    self.player.play_queue(
-                                        items,
-                                        t,
-                                        self.queue_source.clone(),
-                                        c,
-                                        self.ui_volume,
-                                    );
-                                }
-                            }
+                            self.dispatch(super::action::Command::QueuePlayCursor);
                         }
                     } else if self
                         .current_lib_item()
@@ -3388,6 +3316,74 @@ mod playback_header_mouse_tests {
             rx.try_recv().is_err(),
             "single-item queue: next must not fire"
         );
+    }
+
+    // ── issue #134: mouse regions onto the shared `Command` vocabulary ──────
+
+    #[test]
+    fn double_click_on_queue_row_dispatches_the_same_command_as_enter() {
+        use crate::app::tests::make_item;
+
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.player_tab.set_items(
+            vec![
+                make_item("Track One", "Audio"),
+                make_item("Track Two", "Audio"),
+            ],
+            1, // cursor already on the second item, as if arrow-keyed there
+        );
+        app.layout.queue.inner = Rect {
+            x: 0,
+            y: 0,
+            width: 20,
+            height: 10,
+        };
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 0;
+        }
+        // Prime the double-click detector: a prior click already landed at
+        // this exact cell within the timing window.
+        app.last_click_time = Instant::now();
+        app.last_click_pos = (2, 2);
+
+        let rx = app.player.spy_on_commands();
+        app.handle_mouse(left_down(2, 2));
+
+        assert!(
+            matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))),
+            "double-click on a queue row must dispatch Command::QueuePlayCursor, \
+             the same command the queue tab's Enter key uses"
+        );
+    }
+
+    #[test]
+    fn scroll_wheel_on_volume_pill_dispatches_the_same_command_as_the_keys() {
+        use crossterm::event::MouseEventKind;
+
+        let mut app = make_app_stub();
+        app.layout.tabbar_vol_area = Rect {
+            x: 0,
+            y: 0,
+            width: 5,
+            height: 1,
+        };
+        let before = app.ui_volume;
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::ScrollUp,
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        // ScrollUp maps to a +5 volume delta (mirrors the `+`/`=` keys, which
+        // the scroll-wheel path now shares `Command::AdjustVolume` with).
+        // Idle (`active == false`) clamps at 200, matching `adjust_volume`'s
+        // existing idle-vs-active clamp split -- unrelated to this issue.
+        assert_eq!(app.ui_volume, (before as i64 + 5).clamp(0, 200) as u8);
     }
 }
 
