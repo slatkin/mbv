@@ -141,8 +141,8 @@ impl App {
             self.power_left_tab = 0;
         }
 
-        // Left panel (fixed 40 cols, card + queue) | Right panel (library, remaining).
-        let left_w: u16 = 40;
+        // Left panel (card + queue) | Right panel (library, remaining).
+        let left_w = self.power_left_width;
         let right_w = area.width.saturating_sub(left_w);
 
         // Full-width header: FOAM line + breadcrumb pill right-aligned.
@@ -478,6 +478,17 @@ mod tests {
         buffer_to_string(&term)
     }
 
+    fn render_power_view(app: &mut App, width: u16, height: u16) -> LayoutPower {
+        let backend = TestBackend::new(width, height);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPower::default();
+        term.draw(|f| {
+            app.render_power_view(f, Rect::new(0, 0, width, height), &mut layout);
+        })
+        .unwrap();
+        layout
+    }
+
     fn make_power_movie_app() -> App {
         let mut app = make_app_stub();
         app.power_left_tab = 1;
@@ -546,5 +557,15 @@ mod tests {
             !out.contains("Director: Director Hidden"),
             "compact banner must hide director:\n{out}"
         );
+    }
+
+    #[test]
+    fn power_view_uses_configured_left_column_width() {
+        let mut app = make_power_movie_app();
+        app.power_left_width = 55;
+
+        let layout = render_power_view(&mut app, 100, 28);
+
+        assert_eq!(layout.queue_area.width, 55);
     }
 }

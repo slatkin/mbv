@@ -32,6 +32,9 @@ impl App {
         }
         self.terminal_width = area.width;
         self.terminal_height = area.height;
+        if self.clamp_power_left_width() {
+            self.save_prefs();
+        }
 
         // Every render sub-call below writes into this fresh, local value
         // instead of `self.layout` directly. It's swapped into `self.layout`

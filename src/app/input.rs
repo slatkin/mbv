@@ -3,7 +3,7 @@ use super::ui_util::item_text_and_style;
 use super::{
     App, ContextAction, ContextMenu, HomeSearch, LibSearch, PendingQueueAction, QueueScope,
     SavePlaylistDialog, SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
-    SESSIONS_PANEL_W, SETTINGS_PANEL_W,
+    POWER_LEFT_WIDTH_DEFAULT, POWER_LEFT_WIDTH_STEP, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
 use super::{PowerFocus, QUEUE_VIEW_COUNT, QUEUE_VIEW_POWER};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
@@ -133,6 +133,9 @@ impl App {
         }
         if key.code == KeyCode::F(4) {
             self.open_playlists_panel();
+            return false;
+        }
+        if self.handle_power_left_width_key(key) {
             return false;
         }
         // Alt+Left/Right cycle type filter when home search is active
@@ -1207,6 +1210,45 @@ impl App {
         (self.layout.power.left_area.height as usize).max(1)
     }
 
+    fn is_power_left_width_resize_key(key: KeyEvent) -> bool {
+        matches!(key.code, KeyCode::Left | KeyCode::Right) && key.modifiers == KeyModifiers::SHIFT
+    }
+
+    fn power_view_active(&self) -> bool {
+        self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER
+    }
+
+    fn handle_power_left_width_key(&mut self, key: KeyEvent) -> bool {
+        if !self.power_view_active()
+            || self.context_menu.is_some()
+            || !Self::is_power_left_width_resize_key(key)
+        {
+            return false;
+        }
+
+        let max_width = Self::power_left_width_max_for_terminal(self.terminal_width);
+        let next_width = if key.code == KeyCode::Left {
+            self.power_left_width.saturating_sub(POWER_LEFT_WIDTH_STEP)
+        } else {
+            self.power_left_width.saturating_add(POWER_LEFT_WIDTH_STEP)
+        };
+        let normalized = Self::normalize_power_left_width(next_width, self.terminal_width);
+        if normalized == self.power_left_width {
+            let limit = if key.code == KeyCode::Left {
+                format!("Power view width already at minimum ({POWER_LEFT_WIDTH_DEFAULT} cols)")
+            } else {
+                format!("Power view width already at maximum ({max_width} cols)")
+            };
+            self.flash_status(limit);
+            return true;
+        }
+
+        self.power_left_width = normalized;
+        self.save_prefs();
+        self.flash_status(format!("Power view width: {} cols", self.power_left_width));
+        true
+    }
+
     fn handle_queue_key(&mut self, key: KeyEvent) -> bool {
         if let Some(t) = self.confirm_remove_idx {
             self.confirm_remove_idx = None;
@@ -1226,7 +1268,7 @@ impl App {
 
         // In power view, bare Left/Right switch focus between the two panels.
         // Queue is on the left; library is on the right.
-        if self.queue_view == QUEUE_VIEW_POWER && !key.modifiers.contains(KeyModifiers::ALT) {
+        if self.queue_view == QUEUE_VIEW_POWER && key.modifiers.is_empty() {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
                 self.power_focus = PowerFocus::Left;
                 self.last_card_height = 0; // reset stale image height for new view
@@ -2183,6 +2225,7 @@ impl App {
             "tab_idx": self.tab_idx,
             "playlist_view": self.queue_view,
             "power_left_tab": self.power_left_tab,
+            "power_left_width": self.power_left_width,
         });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
@@ -3284,8 +3327,12 @@ mod playback_header_mouse_tests {
 mod power_movie_detail_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+    use crate::app::{
+        BrowseLevel, LibraryTab, PowerFocus, POWER_LEFT_WIDTH_DEFAULT, QUEUE_VIEW_POWER,
+    };
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
 
     fn make_power_movie_app() -> App {
         let mut app = make_app_stub();
@@ -3333,6 +3380,10 @@ mod power_movie_detail_tests {
         app
     }
 
+    fn shift(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::SHIFT)
+    }
+
     #[test]
     fn enter_on_power_view_movie_plays_without_opening_detail() {
         let mut app = make_power_movie_app();
@@ -3365,5 +3416,86 @@ mod power_movie_detail_tests {
 
         assert!(!handled);
         assert!(app.libs[0].power_detail_item.is_none());
+    }
+
+    #[test]
+    fn shift_right_resizes_power_view_without_switching_focus() {
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+        app.terminal_width = 100;
+
+        let handled = app.handle_key(shift(KeyCode::Right));
+
+        assert!(!handled);
+        assert!(matches!(app.power_focus, PowerFocus::Queue));
+        assert_eq!(app.power_left_width, 45);
+        assert!(app.status.contains("45"), "status was {:?}", app.status);
+        assert_eq!(App::load_prefs()["power_left_width"].as_u64(), Some(45));
+    }
+
+    #[test]
+    fn shift_resize_is_ignored_outside_power_view() {
+        let mut app = make_app_stub();
+
+        let handled = app.handle_key(shift(KeyCode::Right));
+
+        assert!(!handled);
+        assert_eq!(app.power_left_width, POWER_LEFT_WIDTH_DEFAULT);
+        assert!(app.status.is_empty(), "status was {:?}", app.status);
+    }
+
+    #[test]
+    fn help_overlay_blocks_power_resize_shortcuts() {
+        let mut app = make_power_movie_app();
+        app.show_help = true;
+        app.terminal_width = 100;
+
+        let handled = app.handle_key(shift(KeyCode::Right));
+
+        assert!(!handled);
+        assert_eq!(app.power_left_width, POWER_LEFT_WIDTH_DEFAULT);
+    }
+
+    #[test]
+    fn shift_resize_clamps_at_min_and_max_without_resaving_on_noop() {
+        let mut app = make_power_movie_app();
+        app.terminal_width = 80;
+
+        app.handle_key(shift(KeyCode::Left));
+        assert_eq!(app.power_left_width, POWER_LEFT_WIDTH_DEFAULT);
+        assert!(
+            app.status.contains("minimum"),
+            "expected minimum toast, got {:?}",
+            app.status
+        );
+
+        app.handle_key(shift(KeyCode::Right));
+        assert_eq!(app.power_left_width, 45);
+        app.handle_key(shift(KeyCode::Right));
+        assert_eq!(app.power_left_width, 48);
+        let saved = App::load_prefs()["power_left_width"].as_u64();
+        assert_eq!(saved, Some(48));
+
+        app.handle_key(shift(KeyCode::Right));
+        assert_eq!(app.power_left_width, 48);
+        assert!(
+            app.status.contains("maximum"),
+            "expected maximum toast, got {:?}",
+            app.status
+        );
+        assert_eq!(App::load_prefs()["power_left_width"].as_u64(), saved);
+    }
+
+    #[test]
+    fn render_normalizes_oversized_saved_power_width_and_persists_it() {
+        let mut app = make_power_movie_app();
+        app.power_left_width = 80;
+
+        let backend = TestBackend::new(70, 24);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.render(f)).unwrap();
+
+        assert_eq!(app.power_left_width, 42);
+        assert_eq!(App::load_prefs()["power_left_width"].as_u64(), Some(42));
     }
 }

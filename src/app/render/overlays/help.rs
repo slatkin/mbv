@@ -81,6 +81,7 @@ impl App {
             mk("Ctrl+Z", "Undo removal"),
             mk("v", "Toggle view"),
             mk("g", "Toggle grouping"),
+            mk("Shift+← / →", "Resize Power View left column"),
             mk("Ctrl+S", "Save playlist"),
             blank(),
         ];

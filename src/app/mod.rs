@@ -19,6 +19,8 @@ static TERMINAL_GONE: AtomicBool = AtomicBool::new(false);
 
 pub(super) const QUEUE_VIEW_POWER: u8 = 1;
 pub(super) const QUEUE_VIEW_COUNT: u8 = 2;
+pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
+pub(super) const POWER_LEFT_WIDTH_STEP: u16 = 5;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
 /// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
@@ -760,6 +762,7 @@ pub struct App {
     queue_group: bool, // list view: group audio by album / episodes by series
     power_focus: PowerFocus,
     power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
+    power_left_width: u16,
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
     power_queue_scroll: usize,
     // Whether the power-view queue is currently relocated to the bottom of the
@@ -898,7 +901,7 @@ enum PendingQueueAction {
     Quit,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub(super) enum PowerFocus {
     Queue, // left panel (queue list below the card)
     #[default]
@@ -986,6 +989,27 @@ const SETTINGS_PANEL_W: u16 = 40;
 const PLAYLISTS_PANEL_W: u16 = 40;
 const HOME_MIN_SECTION_H: u16 = 7; // 1 header row + 6 content rows (3 two-line items)
 impl App {
+    pub(super) fn power_left_width_max_for_terminal(terminal_width: u16) -> u16 {
+        POWER_LEFT_WIDTH_DEFAULT.max(terminal_width.saturating_mul(3) / 5)
+    }
+
+    pub(super) fn normalize_power_left_width(width: u16, terminal_width: u16) -> u16 {
+        width.clamp(
+            POWER_LEFT_WIDTH_DEFAULT,
+            Self::power_left_width_max_for_terminal(terminal_width),
+        )
+    }
+
+    pub(super) fn clamp_power_left_width(&mut self) -> bool {
+        let normalized =
+            Self::normalize_power_left_width(self.power_left_width, self.terminal_width);
+        if normalized == self.power_left_width {
+            return false;
+        }
+        self.power_left_width = normalized;
+        true
+    }
+
     fn remote_slot_state(&self) -> RemoteSlotState {
         if self.connected_session_id.is_some() {
             RemoteSlotState::AttachedSession
@@ -1139,6 +1163,10 @@ impl App {
             queue_group: true,
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
+            power_left_width: prefs["power_left_width"]
+                .as_u64()
+                .map(|v| (v as u16).max(POWER_LEFT_WIDTH_DEFAULT))
+                .unwrap_or(POWER_LEFT_WIDTH_DEFAULT),
             power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
             power_queue_scroll: 0,
             power_queue_relocated: false,
@@ -3087,6 +3115,7 @@ pub(crate) mod tests {
             queue_group: true,
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
+            power_left_width: POWER_LEFT_WIDTH_DEFAULT,
             power_left_tab_pending: 0,
             power_queue_scroll: 0,
             power_queue_relocated: false,
@@ -4921,6 +4950,128 @@ pub(crate) mod tests {
 
         assert!(!handled);
         assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn power_view_shift_resize_grows_from_queue_focus_and_persists_pref() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Queue;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
+
+        assert!(!handled);
+        assert_eq!(app.status, "Power view width: 45 cols");
+        let prefs: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
+        )
+        .expect("prefs json");
+        assert_eq!(prefs["power_left_width"].as_u64(), Some(45));
+    }
+
+    #[test]
+    fn power_view_shift_resize_is_ignored_outside_power_view() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = 0;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
+
+        assert!(!handled);
+        assert!(app.status.is_empty());
+        assert!(!crate::config::prefs_path().exists());
+    }
+
+    #[test]
+    fn power_view_shift_resize_is_blocked_by_help_overlay() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.show_help = true;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
+
+        assert!(!handled);
+        assert!(app.show_help);
+        assert!(app.status.is_empty());
+        assert!(!crate::config::prefs_path().exists());
+    }
+
+    #[test]
+    fn power_view_shift_resize_clamps_and_reports_minimum_and_maximum() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
+        assert!(!handled);
+        assert_eq!(app.status, "Power view width already at minimum (40 cols)");
+        assert!(!crate::config::prefs_path().exists());
+
+        assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
+        assert_eq!(app.status, "Power view width: 45 cols");
+
+        assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
+        assert_eq!(app.status, "Power view width: 48 cols");
+
+        assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
+        assert_eq!(app.status, "Power view width already at maximum (48 cols)");
+
+        let prefs: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
+        )
+        .expect("prefs json");
+        assert_eq!(prefs["power_left_width"].as_u64(), Some(48));
+    }
+
+    #[test]
+    fn power_view_render_normalizes_saved_left_width_and_updates_layout() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let prefs = serde_json::json!({
+            "playlist_view": QUEUE_VIEW_POWER,
+            "tab_idx": 1,
+            "power_left_width": 70,
+        });
+        std::fs::write(
+            crate::config::prefs_path(),
+            serde_json::to_string(&prefs).expect("prefs json"),
+        )
+        .expect("write prefs");
+
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+
+        let _ = render_app_to_string(&mut app, 70, 28);
+
+        assert_eq!(app.layout.power.queue_area.width, 42);
+        let saved: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
+        )
+        .expect("prefs json");
+        assert_eq!(saved["power_left_width"].as_u64(), Some(42));
+    }
+
+    #[test]
+    fn power_view_render_uses_resized_width_on_next_frame() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+
+        let _ = render_app_to_string(&mut app, 100, 28);
+        assert_eq!(app.layout.power.queue_area.width, 40);
+
+        assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
+        assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
+
+        let _ = render_app_to_string(&mut app, 100, 28);
+        assert_eq!(app.layout.power.queue_area.width, 50);
     }
 
     #[test]
