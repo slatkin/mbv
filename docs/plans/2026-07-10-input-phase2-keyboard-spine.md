@@ -1022,23 +1022,35 @@ git commit -m "Peel home and library search routing out of the legacy tail"
 
 ---
 
-### Task 5: Peel out `c` clear-queue-prompt; delete the legacy tail
-
-> **Revised after Task 4.** Task 4's self-review caught an ordering bug baked into this task's original text (see below): the `h`-toggle had been grouped with `handle_power_left_width_key` into one `legacy_tail_power_width_and_h` fragment positioned *before* `home_search`/`power_lib_search`/`lib_search` in `CONTEXT_STACK`. But in the actual pre-phase-2 source, the `h`-toggle ran *after* all three search blocks (source order: power-left-width, home-search Alt-cycle, home-search char-capture, power-lib-search, lib-search, `h`-toggle, confirms...). Leaving `h` misplaced — even temporarily, between tasks — would ship a real behavior change (pressing 'h' while a search box is focused would toggle the panel instead of being captured as a character), so it was fixed immediately as part of Task 4 rather than carried forward: `handle_key_legacy_tail_power_width_and_h` was split into `handle_key_legacy_tail_power_width` (stays before `home_search`) and a standalone `handle_key_panel_toggle` (moved to its correct source-order slot, after `lib_search`), with a regression test (`home_search_char_capture_wins_over_h_panel_toggle_via_handle_key`) pinning the precedence. **`h` is therefore already done — this task now covers only `c`.**
+### Task 5: Peel out `h` panel-toggle and `c` clear-queue-prompt; delete the legacy tail
 
 **Files:**
 - Modify: `src/app/input.rs`
-- Modify: `src/app/input_resolver.rs`
 
 **Security flag:** `none`
 
-- [ ] **Step 1: Write a characterization test**
+- [ ] **Step 1: Write characterization tests**
 
 ```rust
 #[test]
+fn h_toggles_panel_mode_when_active_via_handle_key() {
+    let mut app = crate::app::tests::make_app_stub();
+    {
+        let mut st = app.player.status.lock().unwrap();
+        st.active = true;
+    }
+    let before = app.panel_mode;
+    app.handle_key(crossterm::event::KeyEvent::new(
+        crossterm::event::KeyCode::Char('h'),
+        crossterm::event::KeyModifiers::NONE,
+    ));
+    assert_ne!(app.panel_mode, before);
+}
+
+#[test]
 fn c_prompts_clear_queue_confirmation_via_handle_key() {
     let mut app = crate::app::tests::make_app_stub();
-    app.player_tab.items.push(crate::app::tests::make_item("1", "Track"));
+    app.player_tab.items.push(mbv_core::api::MediaItem::default());
     app.handle_key(crossterm::event::KeyEvent::new(
         crossterm::event::KeyCode::Char('c'),
         crossterm::event::KeyModifiers::NONE,
@@ -1047,16 +1059,28 @@ fn c_prompts_clear_queue_confirmation_via_handle_key() {
 }
 ```
 
-Use whatever `MediaItem` test-fixture helper Tasks 3/4 already established in this file (Task 3 used `crate::app::tests::make_item`) rather than assuming `MediaItem` derives `Default` — verify the exact helper name/signature already in use in this worktree before finalizing this step, since it may differ slightly from the placeholder call above.
+(If `MediaItem` does not derive `Default`, check its actual constructor via `find_symbol` first rather than guessing — the existing `player_tab.items` tests elsewhere in the file will show the pattern used.)
 
-- [ ] **Step 2: Run to confirm it passes today**
+- [ ] **Step 2: Run to confirm they pass today**
 
-Run: `cargo test c_prompts_clear_queue_confirmation_via_handle_key`
+Run: `cargo test h_toggles_panel_mode_when_active_via_handle_key c_prompts_clear_queue_confirmation_via_handle_key`
 Expected: PASS.
 
-- [ ] **Step 3: Extract `handle_key_clear_queue_prompt`; delete `handle_key_legacy_tail_post_confirms`**
+- [ ] **Step 3: Extract `handle_key_panel_toggle` and `handle_key_clear_queue_prompt`; delete `handle_key_legacy_tail_power_width_and_h` and `handle_key_legacy_tail_post_confirms`**
 
 ```rust
+fn handle_key_panel_toggle(&mut self, key: KeyEvent) -> Option<bool> {
+    if key.code != KeyCode::Char('h') {
+        return None;
+    }
+    let active = self.player.status.lock().unwrap().active;
+    let show_controls = active || self.connected_session_id.is_some();
+    if show_controls {
+        self.panel_mode = self.panel_mode.next();
+    }
+    Some(false)
+}
+
 fn handle_key_clear_queue_prompt(&mut self, key: KeyEvent) -> Option<bool> {
     if key.code != KeyCode::Char('c') || key.modifiers.contains(KeyModifiers::ALT) {
         return None;
@@ -1087,7 +1111,19 @@ fn handle_key_clear_queue_prompt(&mut self, key: KeyEvent) -> Option<bool> {
 }
 ```
 
-This is the entire remaining body of `handle_key_legacy_tail_post_confirms` (the `in_lib_search` binding plus the `c`-clear-queue-prompt block) — after this extraction, `handle_key_legacy_tail_post_confirms` has nothing left in it and is deleted entirely, along with its `CONTEXT_STACK` entry.
+`handle_power_left_width_key` (already a standalone method from before phase 2) becomes its own top-level entry directly, wrapped the same way as Task 1 Step 2 wrapped `handle_save_playlist_key`:
+
+```rust
+fn handle_key_power_left_width(&mut self, key: KeyEvent) -> Option<bool> {
+    if self.handle_power_left_width_key(key) {
+        Some(false)
+    } else {
+        None
+    }
+}
+```
+
+Both now-empty legacy-tail wrapper functions are deleted entirely.
 
 - [ ] **Step 4: Final `CONTEXT_STACK`**
 
@@ -1100,11 +1136,11 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
     ContextEntry { name: "sessions", handler: App::handle_key_sessions },
     ContextEntry { name: "playlists", handler: App::handle_key_playlists },
     ContextEntry { name: "global_overlay_open", handler: App::handle_key_global_overlay_open },
-    ContextEntry { name: "legacy_tail_power_width", handler: App::handle_key_legacy_tail_power_width },
+    ContextEntry { name: "power_left_width", handler: App::handle_key_power_left_width },
+    ContextEntry { name: "panel_toggle_h", handler: App::handle_key_panel_toggle },
     ContextEntry { name: "home_search", handler: App::handle_key_home_search },
     ContextEntry { name: "power_lib_search", handler: App::handle_key_power_lib_search },
     ContextEntry { name: "lib_search", handler: App::handle_key_lib_search },
-    ContextEntry { name: "panel_toggle_h", handler: App::handle_key_panel_toggle },
     ContextEntry { name: "confirm_clear_queue", handler: App::handle_key_confirm_clear_queue },
     ContextEntry { name: "confirm_rescan", handler: App::handle_key_confirm_rescan },
     ContextEntry { name: "confirm_skip_intro", handler: App::handle_key_confirm_skip_intro },
@@ -1119,20 +1155,20 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
 ];
 ```
 
-Note `legacy_tail_power_width` (renamed from the mid-Task-4-fix `handle_key_legacy_tail_power_width`, wrapping only `handle_power_left_width_key` now) and `panel_toggle_h` are already in place from Task 4's fix, in their correct (source-verified) relative positions — this task only adds `clear_queue_prompt_c` and removes `legacy_tail_post_confirms`. Optionally rename `legacy_tail_power_width` to a non-"legacy_tail"-prefixed name (e.g. `power_left_width`) as part of this task's cleanup, since it's no longer a strangler-fig remnant sharing space with anything else — it's already a clean, single-purpose wrapper.
+Wait — `panel_toggle_h` must run **before** `home_search`/`power_lib_search`/`lib_search` per Task 4 Step 5's note (the `h`-toggle was checked ahead of home-search in the pre-Task-4 tail), which the order above already reflects. Double-check against Task 3/4's notes before finalizing this array; if any ordering note above conflicts, the source line numbers in Task 1 Step 4 (the original verbatim body) are the ground truth — re-derive the order from there, not from this task's summary.
 
 - [ ] **Step 5: Update the pinned-order test to this final 23-entry list**
 
 - [ ] **Step 6: Run the full gate**
 
 Run: `cargo fmt --all -- --check && cargo clippy --all-targets -- -D warnings && cargo test`
-Expected: PASS. `handle_key_legacy_tail_post_confirms` no longer exists anywhere (`grep -rn "legacy_tail_post_confirms" src/` returns nothing). `legacy_tail_power_width` (or its renamed equivalent) is the only survivor of the original `legacy_tail` split, and it wraps exactly one call (`handle_power_left_width_key`) — confirm this is intentional and not a further-splittable remnant before moving to Task 6.
+Expected: PASS. `handle_key_legacy_tail*` no longer exists anywhere (`grep -rn "legacy_tail" src/` returns nothing).
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add src/app/input.rs src/app/input_resolver.rs
-git commit -m "Peel c clear-queue-prompt out; delete the last legacy tail fragment"
+git commit -m "Peel h/c handlers out and delete the legacy tail; stack is now complete"
 ```
 
 ---

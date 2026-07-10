@@ -8,3 +8,5 @@
 # AI assistant artifacts
 context-snapshot.json
 .worktrees/
+state.md
+session-log.md

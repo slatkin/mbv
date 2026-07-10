@@ -63,11 +63,6 @@ impl App {
         let mut row = area.y;
         let max_y = area.y + area.height;
 
-        let title_color = if focused {
-            palette::YELLOW
-        } else {
-            palette::SUBTLE
-        };
         let text_color = if focused {
             palette::WHITE
         } else {
@@ -100,10 +95,11 @@ impl App {
         };
 
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        let img_y = area
-            .y
-            .saturating_add(1)
-            .min(area.y + area.height.saturating_sub(1));
+        // No title row is drawn here anymore (it duplicated the selected list
+        // row's title, already shown in green just above the banner), so the
+        // poster starts flush with the banner's own top row instead of being
+        // pushed down a row to make room for a redundant title.
+        let img_y = area.y.min(area.y + area.height.saturating_sub(1));
         let img_end_row = img_y + img_height;
         layout.inline_image_rect = if img_height > 0 {
             Some(Rect {
@@ -125,22 +121,6 @@ impl App {
                 (inner_w, inner_w16)
             }
         };
-
-        if row < max_y {
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    trunc_str(&item.name, inner_w),
-                    Style::default().fg(title_color),
-                ))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: inner_w16,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
 
         if row < max_y {
             let dur_str = if item.runtime_ticks > 0 {
@@ -208,6 +188,7 @@ impl App {
             let avail = max_y.saturating_sub(row) as usize;
             let shadow_lines = img_end_row.saturating_sub(row) as usize;
             let mut all_lines: Vec<String> = Vec::new();
+            let overview_start = row;
 
             for paragraph in overview.lines() {
                 let paragraph = if paragraph.trim().is_empty() {
@@ -253,6 +234,28 @@ impl App {
                     }
                 }
             }
+            if row < max_y && row > overview_start && !item.director.is_empty() {
+                row += 1;
+            }
+        }
+
+        if row < max_y && !item.director.is_empty() {
+            let (tw, tw16) = text_dims(row);
+            f.render_widget(
+                Paragraph::new(Line::from(vec![
+                    Span::styled("Director: ", Style::default().fg(palette::SUBTLE)),
+                    Span::styled(
+                        trunc_str(&item.director, tw),
+                        Style::default().fg(palette::TEXT),
+                    ),
+                ])),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: tw16,
+                    height: 1,
+                },
+            );
         }
 
         if img_height > 0 {

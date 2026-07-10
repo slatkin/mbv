@@ -10,7 +10,40 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+/// Rows the compact movie banner occupies inline in the library list: an
+/// opening horizontal rule directly above the selected item's own row (so the
+/// selected title reads as visually set off from the row above it), the
+/// banner's own content (meta/overview/poster, rendered by
+/// `render_power_compact_detail`) directly below the selected row, and a
+/// closing horizontal rule that also acts as the 1-row separator before the
+/// next list row — matching the spacing the banner already used when it was
+/// pinned to the top of the panel. The rules make the selected row + banner
+/// read as a distinct, boxed-off region instead of blending into the
+/// surrounding list.
+const COMPACT_BANNER_RULE_ROWS: usize = 1;
+const COMPACT_BANNER_CONTENT_ROWS: usize = 13;
+const COMPACT_BANNER_GAP_ROWS: usize = 1;
+const COMPACT_BANNER_TOTAL_ROWS: usize =
+    COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_CONTENT_ROWS + COMPACT_BANNER_GAP_ROWS;
+
 impl App {
+    /// Filler-row count to reserve around the selected movie's row in
+    /// `lib_idx`'s display-row sequence: `COMPACT_BANNER_TOTAL_ROWS` when a
+    /// leaf movie is selected and expanded detail is not open, else 0 (no
+    /// banner — ordinary list rendering, unchanged from before this feature).
+    /// One of those rows is the opening rule placed immediately *before* the
+    /// selected item's row; the rest (content + closing rule) follow it.
+    fn compact_banner_rows(&self, lib_idx: usize) -> usize {
+        if self.libs[lib_idx].power_detail_item.is_some() {
+            return 0;
+        }
+        if self.power_selected_movie_item(lib_idx).is_some() {
+            COMPACT_BANNER_TOTAL_ROWS
+        } else {
+            0
+        }
+    }
+
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar by `render_power_view`.
     pub(super) fn render_power_list(
@@ -65,6 +98,14 @@ impl App {
                 }
             };
             (items, cur, scroll, total)
+        };
+
+        // Reserved filler-row count for the compact movie banner, 0 for every
+        // library type/state except "leaf movie selected, detail not pinned".
+        let banner_rows: usize = if self.power_left_tab > 0 {
+            self.compact_banner_rows(self.power_left_tab - 1)
+        } else {
+            0
         };
 
         // When at the album level of a music library, group albums under artist headers.
@@ -353,6 +394,7 @@ impl App {
                 Spacer,
                 LetterHeader(String),
                 Item(usize),
+                BannerFiller,
             }
 
             // Sort item indices by the same effective key used for bucketing so that
@@ -374,7 +416,18 @@ impl App {
                     display_rows.push(DisplayRow::LetterHeader(bucket.clone()));
                     last_bucket = bucket;
                 }
+                // The opening rule sits directly above the selected item's own
+                // row (not after it), so the selected title reads as set off
+                // from the row above it.
+                if banner_rows > 0 && idx == cursor {
+                    display_rows.push(DisplayRow::BannerFiller);
+                }
                 display_rows.push(DisplayRow::Item(idx));
+                if banner_rows > 0 && idx == cursor {
+                    for _ in 0..banner_rows.saturating_sub(1) {
+                        display_rows.push(DisplayRow::BannerFiller);
+                    }
+                }
             }
             let total_display = display_rows.len();
 
@@ -383,40 +436,85 @@ impl App {
                 .iter()
                 .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
                 .unwrap_or(0);
-            let mut offset = stored_scroll.clamp(
-                display_cursor.saturating_sub(visible.saturating_sub(1)),
-                display_cursor,
-            );
+            // Only `banner_rows - 1` rows sit *below* the cursor now (the
+            // opening rule sits above it), hence the `- 1`.
+            let lower_bound = (display_cursor + banner_rows.saturating_sub(1))
+                .saturating_sub(visible.saturating_sub(1))
+                .min(display_cursor);
+            let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
             // If stale scroll state would put the first item of a bucket at the
-            // top of the viewport, back up one row so its letter header remains
-            // visible.
+            // top of the viewport, back up so its letter header remains visible.
+            // When that item is also the selected/bannered one, the banner's
+            // opening rule sits between the header and the item, so back up an
+            // extra row to clear the rule too.
             if visible > 1
                 && offset > 0
-                && matches!(display_rows.get(offset), Some(DisplayRow::Item(_)))
                 && matches!(
-                    display_rows.get(offset.saturating_sub(1)),
-                    Some(DisplayRow::LetterHeader(_))
+                    display_rows.get(offset),
+                    Some(DisplayRow::Item(_) | DisplayRow::BannerFiller)
                 )
             {
-                offset -= 1;
+                if matches!(
+                    display_rows.get(offset - 1),
+                    Some(DisplayRow::LetterHeader(_))
+                ) {
+                    offset -= 1;
+                } else if offset >= 2
+                    && matches!(display_rows.get(offset - 1), Some(DisplayRow::BannerFiller))
+                    && matches!(
+                        display_rows.get(offset - 2),
+                        Some(DisplayRow::LetterHeader(_))
+                    )
+                {
+                    offset -= 2;
+                }
             }
             final_offset = offset;
 
             // Build row map so mouse clicks can map visual row → item index.
             for row in display_rows.iter().skip(offset).take(visible) {
                 layout.left_row_map.push(match row {
-                    DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
+                    DisplayRow::Spacer | DisplayRow::LetterHeader(_) | DisplayRow::BannerFiller => {
+                        None
+                    }
                     DisplayRow::Item(idx) => Some(*idx),
                 });
             }
 
+            // Absolute display-row indices of the banner's opening and closing
+            // horizontal rules (only meaningful when banner_rows > 0). The
+            // opening rule sits directly above the selected item's row; the
+            // closing rule sits after the banner content, before the next
+            // list row. Together they bracket the selected row + banner as a
+            // distinct region rather than blending into the surrounding list.
+            let banner_rule_top = display_cursor.saturating_sub(1);
+            let content_start = display_cursor + 1;
+            let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
+            let show_scrollbar = focused && total_display > visible;
+
             let avail = (area.width as usize).saturating_sub(2);
             let list_items: Vec<ListItem> = display_rows
                 .iter()
+                .enumerate()
                 .skip(offset)
                 .take(visible)
-                .map(|row| match row {
+                .map(|(abs_idx, row)| match row {
                     DisplayRow::Spacer => ListItem::new(Line::default()),
+                    DisplayRow::BannerFiller => {
+                        if banner_rows > 0
+                            && (abs_idx == banner_rule_top || abs_idx == banner_rule_bottom)
+                        {
+                            ListItem::new(Line::from(vec![
+                                Span::raw(" "),
+                                Span::styled(
+                                    "\u{2500}".repeat(avail),
+                                    Style::default().fg(palette::OVERLAY),
+                                ),
+                            ]))
+                        } else {
+                            ListItem::new(Line::default())
+                        }
+                    }
                     DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                         Span::raw(" "),
                         Span::styled(
@@ -487,7 +585,62 @@ impl App {
                 &mut state,
             );
 
-            if focused && total_display > visible {
+            if banner_rows > 0 && content_start >= offset && content_start < offset + visible {
+                let banner_y = content_area.y + (content_start - offset) as u16;
+                let bottom = content_area.y + content_area.height;
+                // Reserve the rightmost column for the scrollbar (drawn over
+                // content_area's last column below) so the poster image,
+                // which is right-anchored, doesn't render underneath it.
+                let banner_w = if show_scrollbar {
+                    content_area.width.saturating_sub(1)
+                } else {
+                    content_area.width
+                };
+                let banner_h =
+                    (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
+                if banner_h > 0 {
+                    let banner_rect = Rect {
+                        x: content_area.x,
+                        y: banner_y,
+                        width: banner_w,
+                        height: banner_h,
+                    };
+                    let want_cursor_y = layout.cursor_screen_y;
+                    self.render_power_compact_detail(
+                        f,
+                        banner_rect,
+                        self.power_left_tab - 1,
+                        focused,
+                        layout,
+                    );
+                    layout.cursor_screen_y = want_cursor_y;
+                }
+            }
+
+            if banner_rows > 0 && display_cursor >= offset && display_cursor < offset + visible {
+                let selected_y = content_area.y + (display_cursor - offset) as u16;
+                let bottom = content_area.y + content_area.height;
+                let bar_h =
+                    (1 + COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(selected_y));
+                if bar_h > 0 {
+                    let selection_bar =
+                        vec![
+                            Line::from(Span::styled("▌", Style::default().fg(palette::PINE)));
+                            bar_h as usize
+                        ];
+                    f.render_widget(
+                        Paragraph::new(selection_bar),
+                        Rect {
+                            x: content_area.x,
+                            y: selected_y,
+                            width: 1,
+                            height: bar_h,
+                        },
+                    );
+                }
+            }
+
+            if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
                 let mut sb = ScrollbarState::new(max_off + 1).position(offset);
                 f.render_stateful_widget(
@@ -502,82 +655,215 @@ impl App {
                 );
             }
         } else {
-            let offset =
-                stored_scroll.clamp(cursor.saturating_sub(visible.saturating_sub(1)), cursor);
+            enum DisplayRow {
+                Item(usize),
+                BannerFiller,
+            }
+
+            let mut display_rows: Vec<DisplayRow> = Vec::with_capacity(n + banner_rows);
+            for i in 0..n {
+                // The opening rule sits directly above the selected item's own
+                // row (not after it), so the selected title reads as set off
+                // from the row above it.
+                if banner_rows > 0 && i == cursor {
+                    display_rows.push(DisplayRow::BannerFiller);
+                }
+                display_rows.push(DisplayRow::Item(i));
+                if banner_rows > 0 && i == cursor {
+                    for _ in 0..banner_rows.saturating_sub(1) {
+                        display_rows.push(DisplayRow::BannerFiller);
+                    }
+                }
+            }
+            let total_display = display_rows.len();
+            let display_cursor = display_rows
+                .iter()
+                .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
+                .unwrap_or(0);
+
+            // Lower bound normally just keeps the cursor row visible; when a
+            // banner follows it, extend the lower bound so scrolling keeps
+            // pulling up until the whole banner is visible too (clamped to
+            // display_cursor itself if the viewport could never fit both).
+            // Only `banner_rows - 1` rows sit *below* the cursor now (the
+            // opening rule sits above it), hence the `- 1`.
+            let lower_bound = (display_cursor + banner_rows.saturating_sub(1))
+                .saturating_sub(visible.saturating_sub(1))
+                .min(display_cursor);
+            let offset = stored_scroll.clamp(lower_bound, display_cursor);
             final_offset = offset;
 
-            let list_items: Vec<ListItem> = items
+            // Absolute display-row indices of the banner's opening and closing
+            // horizontal rules (only meaningful when banner_rows > 0). The
+            // opening rule sits directly above the selected item's row; the
+            // closing rule sits after the banner content, before the next
+            // list row. Together they bracket the selected row + banner as a
+            // distinct region rather than blending into the surrounding list.
+            let banner_rule_top = display_cursor.saturating_sub(1);
+            let content_start = display_cursor + 1;
+            let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
+            let show_scrollbar = focused && total_display > visible;
+
+            let list_items: Vec<ListItem> = display_rows
+                .iter()
+                .enumerate()
+                .skip(offset)
+                .take(visible)
+                .map(|(abs_idx, row)| match row {
+                    DisplayRow::BannerFiller => {
+                        if banner_rows > 0
+                            && (abs_idx == banner_rule_top || abs_idx == banner_rule_bottom)
+                        {
+                            let avail = (area.width as usize).saturating_sub(2);
+                            ListItem::new(Line::from(vec![
+                                Span::raw(" "),
+                                Span::styled(
+                                    "\u{2500}".repeat(avail),
+                                    Style::default().fg(palette::OVERLAY),
+                                ),
+                            ]))
+                        } else {
+                            ListItem::new(Line::default())
+                        }
+                    }
+                    DisplayRow::Item(idx) => {
+                        let item = &items[*idx];
+                        let selected = *idx == cursor;
+
+                        // Compute name and duration as separate strings so they can be styled
+                        // independently: name in the normal fg, duration in OVERLAY (no parens).
+                        let (item_name, dur_str) = if item.is_folder {
+                            let name = if item.item_type == "Folder" && item.total_count > 0 {
+                                format!("{} \u{b7} {} items", item.display_name(), item.total_count)
+                            } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
+                                format!("{} [{}]", item.display_name(), item.unplayed_item_count)
+                            } else {
+                                item.display_name()
+                            };
+                            (name, String::new())
+                        } else {
+                            let dur = if item.runtime_ticks > 0 {
+                                format!(
+                                    " {}",
+                                    fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
+                                )
+                            } else {
+                                String::new()
+                            };
+                            (item.display_name(), dur)
+                        };
+
+                        let avail = (area.width as usize).saturating_sub(2);
+                        let name_w = avail.saturating_sub(dur_str.width());
+                        let title = trunc_str(&item_name, name_w);
+                        let fg = if focused {
+                            palette::WHITE
+                        } else {
+                            palette::SUBTLE
+                        };
+
+                        let mut spans: Vec<Span> = if selected && focused {
+                            vec![
+                                Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                                Span::styled(
+                                    title,
+                                    Style::default()
+                                        .fg(palette::IRIS)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                            ]
+                        } else {
+                            vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                        };
+                        if !dur_str.is_empty() {
+                            spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+                        }
+                        ListItem::new(Line::from(spans))
+                    }
+                })
+                .collect();
+
+            layout.left_row_map = display_rows
                 .iter()
                 .skip(offset)
                 .take(visible)
-                .enumerate()
-                .map(|(i, item)| {
-                    let abs = offset + i;
-                    let selected = abs == cursor;
-
-                    // Compute name and duration as separate strings so they can be styled
-                    // independently: name in the normal fg, duration in OVERLAY (no parens).
-                    let (item_name, dur_str) = if item.is_folder {
-                        let name = if item.item_type == "Folder" && item.total_count > 0 {
-                            format!("{} \u{b7} {} items", item.display_name(), item.total_count)
-                        } else if item.unplayed_item_count > 0 && item.item_type != "Series" {
-                            format!("{} [{}]", item.display_name(), item.unplayed_item_count)
-                        } else {
-                            item.display_name()
-                        };
-                        (name, String::new())
-                    } else {
-                        let dur = if item.runtime_ticks > 0 {
-                            format!(
-                                " {}",
-                                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-                            )
-                        } else {
-                            String::new()
-                        };
-                        (item.display_name(), dur)
-                    };
-
-                    let avail = (area.width as usize).saturating_sub(2);
-                    let name_w = avail.saturating_sub(dur_str.width());
-                    let title = trunc_str(&item_name, name_w);
-                    let fg = if focused {
-                        palette::WHITE
-                    } else {
-                        palette::SUBTLE
-                    };
-
-                    let mut spans: Vec<Span> = if selected && focused {
-                        vec![
-                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                            Span::styled(
-                                title,
-                                Style::default()
-                                    .fg(palette::IRIS)
-                                    .add_modifier(Modifier::BOLD),
-                            ),
-                        ]
-                    } else {
-                        vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
-                    };
-                    if !dur_str.is_empty() {
-                        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
-                    }
-                    ListItem::new(Line::from(spans))
+                .map(|row| match row {
+                    DisplayRow::BannerFiller => None,
+                    DisplayRow::Item(idx) => Some(*idx),
                 })
                 .collect();
 
             let mut state = ListState::default();
-            state.select(Some(cursor.saturating_sub(offset)));
-            layout.cursor_screen_y = Some(content_area.y + (cursor.saturating_sub(offset)) as u16);
+            state.select(Some(display_cursor.saturating_sub(offset)));
+            layout.cursor_screen_y =
+                Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
             f.render_stateful_widget(
                 List::new(list_items).highlight_style(Style::default()),
                 content_area,
                 &mut state,
             );
 
-            if focused && n > visible {
-                let max_off = n.saturating_sub(visible);
+            if banner_rows > 0 && content_start >= offset && content_start < offset + visible {
+                let banner_y = content_area.y + (content_start - offset) as u16;
+                let bottom = content_area.y + content_area.height;
+                // Reserve the rightmost column for the scrollbar (drawn over
+                // content_area's last column below) so the poster image,
+                // which is right-anchored, doesn't render underneath it.
+                let banner_w = if show_scrollbar {
+                    content_area.width.saturating_sub(1)
+                } else {
+                    content_area.width
+                };
+                let banner_h =
+                    (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
+                if banner_h > 0 {
+                    let banner_rect = Rect {
+                        x: content_area.x,
+                        y: banner_y,
+                        width: banner_w,
+                        height: banner_h,
+                    };
+                    // render_power_compact_detail overwrites layout.cursor_screen_y with
+                    // the banner's own top row; restore the selected list row's y after,
+                    // since that row (not the banner) is what should host the blinking
+                    // cursor / mouse hit target.
+                    let want_cursor_y = layout.cursor_screen_y;
+                    self.render_power_compact_detail(
+                        f,
+                        banner_rect,
+                        self.power_left_tab - 1,
+                        focused,
+                        layout,
+                    );
+                    layout.cursor_screen_y = want_cursor_y;
+                }
+            }
+
+            if banner_rows > 0 && display_cursor >= offset && display_cursor < offset + visible {
+                let selected_y = content_area.y + (display_cursor - offset) as u16;
+                let bottom = content_area.y + content_area.height;
+                let bar_h =
+                    (1 + COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(selected_y));
+                if bar_h > 0 {
+                    let selection_bar =
+                        vec![
+                            Line::from(Span::styled("▌", Style::default().fg(palette::PINE)));
+                            bar_h as usize
+                        ];
+                    f.render_widget(
+                        Paragraph::new(selection_bar),
+                        Rect {
+                            x: content_area.x,
+                            y: selected_y,
+                            width: 1,
+                            height: bar_h,
+                        },
+                    );
+                }
+            }
+
+            if show_scrollbar {
+                let max_off = total_display.saturating_sub(visible);
                 let mut sb = ScrollbarState::new(max_off + 1).position(offset);
                 f.render_stateful_widget(
                     Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -638,6 +924,69 @@ mod tests {
         buffer_to_string(&term)
     }
 
+    fn render_power_list_to_string_sized(
+        app: &mut App,
+        layout: &mut LayoutPower,
+        width: u16,
+        height: u16,
+    ) -> String {
+        let backend = TestBackend::new(width, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_power_list(f, Rect::new(0, 0, width, height), true, layout);
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
+    fn make_power_movie_list_app(titles: Vec<&str>) -> App {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let items: Vec<_> = titles
+            .into_iter()
+            .enumerate()
+            .map(|(i, title)| {
+                let mut m = make_item(title, "Movie");
+                m.id = format!("movie-{i}");
+                if title.contains("Selected") {
+                    m.overview = "This is the compact movie banner overview text.".into();
+                }
+                m
+            })
+            .collect();
+        let total = items.len();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items,
+                total_count: total,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app
+    }
+
     #[test]
     fn letter_group_keeps_top_bucket_header_after_scrolling_back_to_top() {
         let mut app = make_app_stub();
@@ -696,5 +1045,227 @@ mod tests {
             "expected bucket header above first item:\n{out}"
         );
         assert_eq!(app.libs[0].nav_stack[0].scroll, 0);
+    }
+
+    #[test]
+    fn compact_banner_appears_inline_in_letter_grouped_movie_list() {
+        // 60 movies triggers use_letter_groups (total_count >= 50, collection_type
+        // != "music"). Titles are spread across many starting letters (cycling
+        // A..Z) so the selected item's letter bucket is followed by several more
+        // buckets -- this is what exercises the riskiest part of the interleaving
+        // logic: filler rows must land between the selected item and the NEXT
+        // bucket's header, not get scattered or appended after the whole list.
+        let titles: Vec<String> = (0..60)
+            .map(|i| {
+                let letter = (b'A' + (i % 26) as u8) as char;
+                format!("{letter} Movie {i:02}")
+            })
+            .collect();
+        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
+        let mut app = make_power_movie_list_app(title_refs);
+
+        // Select an early-alphabet item (letter 'K') so later letter buckets --
+        // e.g. the 'Z' item -- must sort, and therefore render, after it.
+        let selected_idx = 10; // letter (b'A' + 10) as char == 'K'
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.items[selected_idx].overview =
+                "This is the compact movie banner overview text.".into();
+            lvl.cursor = selected_idx;
+        }
+        let selected_title = titles[selected_idx].clone();
+        let later_title = titles[25].clone(); // letter (b'A' + 25) as char == 'Z'
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 60);
+
+        let selected_pos = out
+            .find(selected_title.as_str())
+            .expect("selected item's row should render");
+        let banner_pos = out
+            .find("compact movie banner")
+            .expect("expected banner overview text to appear in letter-grouped list render");
+        assert!(
+            selected_pos < banner_pos,
+            "banner should render after the selected row, not before it:\n{out}"
+        );
+        if let Some(later_pos) = out.find(later_title.as_str()) {
+            assert!(
+                banner_pos < later_pos,
+                "banner must land inline between the selected item and later alphabet \
+                 buckets, not scattered after the whole list:\n{out}"
+            );
+        }
+    }
+
+    #[test]
+    fn letter_group_backs_up_two_rows_to_reveal_header_when_banner_opening_rule_intervenes() {
+        // Cursor lands on the first item of a non-initial letter bucket, with the
+        // compact banner active (it's a leaf movie) inserting an opening-rule
+        // filler row directly above the item. A stale scroll that would
+        // otherwise clamp exactly onto the item's own row would strand that
+        // rule with no header visible above it -- this exercises the extended
+        // nudge (back up 2 rows instead of 1) added specifically for the case
+        // where a BannerFiller row sits between a LetterHeader and the selected
+        // item, which the older "back up one row" nudge alone doesn't cover.
+        let titles: Vec<String> = (0..60)
+            .map(|i| {
+                let letter = (b'A' + (i % 26) as u8) as char;
+                format!("{letter} Movie {i:02}")
+            })
+            .collect();
+        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
+        let mut app = make_power_movie_list_app(title_refs);
+
+        // "D Movie 03" is the first D-lettered item (smallest index, smallest
+        // number among D items), so it's the first item of its bucket -- and
+        // it's preceded by real A/B/C-bucket content, so there's room for the
+        // offset to legitimately land >= 2 while still clamping onto this
+        // item's own row.
+        let target_idx = 3;
+        let target_title = titles[target_idx].clone();
+
+        let mut layout = LayoutPower::default();
+
+        // Scroll deep into the list first so a large `scroll` value persists.
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.cursor = 55;
+        }
+        let _ = render_power_list_to_string_sized(&mut app, &mut layout, 60, 10);
+
+        // Jump the cursor back to the bucket-first item without resetting
+        // scroll -- the stale deep scroll clamps down to exactly the item's
+        // own display-row index, the scenario needing the extended nudge.
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.cursor = target_idx;
+        }
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 10);
+        let lines: Vec<&str> = out.lines().collect();
+
+        let title_line_idx = lines
+            .iter()
+            .position(|l| l.contains(target_title.as_str()))
+            .expect("selected item's row should render");
+        let rule_line_idx = lines
+            .iter()
+            .position(|l| l.contains('\u{2500}'))
+            .expect("expected the banner's opening rule to be visible");
+        assert!(
+            rule_line_idx < title_line_idx,
+            "expected the opening rule to render above the selected item:\n{out}"
+        );
+        assert!(
+            rule_line_idx > 0,
+            "expected a header row above the opening rule, not scrolled to the very top \
+             (the extended back-up-2 nudge should have kept it visible):\n{out}"
+        );
+        let header_line = lines[rule_line_idx - 1].trim();
+        assert!(
+            !header_line.is_empty() && !header_line.contains(target_title.as_str()),
+            "expected the bucket header directly above the opening rule, not stranded \
+             off-screen by the nudge:\n{out}"
+        );
+    }
+
+    #[test]
+    fn letter_group_backs_up_from_banner_filler_row_to_keep_header_visible() {
+        // Same reachable state as the previous regression, but with a taller
+        // viewport so stale scroll clamps to the banner's opening filler row
+        // rather than the selected item row itself. The header should still be
+        // nudged back into view.
+        let titles: Vec<String> = (0..60)
+            .map(|i| {
+                let letter = (b'A' + (i % 26) as u8) as char;
+                format!("{letter} Movie {i:02}")
+            })
+            .collect();
+        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
+        let mut app = make_power_movie_list_app(title_refs);
+
+        let target_idx = 3;
+        let target_title = titles[target_idx].clone();
+
+        let mut layout = LayoutPower::default();
+
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.cursor = 55;
+        }
+        let _ = render_power_list_to_string_sized(&mut app, &mut layout, 60, 16);
+
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.cursor = target_idx;
+        }
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 16);
+        let lines: Vec<&str> = out.lines().collect();
+
+        let title_line_idx = lines
+            .iter()
+            .position(|l| l.contains(target_title.as_str()))
+            .expect("selected item's row should render");
+        let rule_line_idx = lines
+            .iter()
+            .position(|l| l.contains('\u{2500}'))
+            .expect("expected the banner's opening rule to be visible");
+        assert!(
+            rule_line_idx < title_line_idx,
+            "expected the opening rule to render above the selected item:\n{out}"
+        );
+        assert!(
+            rule_line_idx > 0,
+            "expected a header row above the opening rule, not scrolled to the very top:\n{out}"
+        );
+        let header_line = lines[rule_line_idx - 1].trim();
+        assert!(
+            !header_line.is_empty() && !header_line.contains(target_title.as_str()),
+            "expected the bucket header directly above the opening rule, not stranded \
+             off-screen when scroll lands on the banner filler row:\n{out}"
+        );
+    }
+
+    #[test]
+    fn compact_banner_appears_under_selected_row_not_pinned_to_top() {
+        let mut app = make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
+        // Select the second item (index 1) — banner must render after ITS row, not row 0.
+        app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 40, 20);
+        let lines: Vec<&str> = out.lines().collect();
+
+        let first_pos = out.find("First").expect("row above cursor unaffected");
+        let selected_row_line = lines
+            .iter()
+            .position(|l| l.contains("Second Selected"))
+            .expect("selected row itself, unaffected by banner");
+        let selected_row_pos = out.find("Second Selected").unwrap();
+        assert!(
+            first_pos < selected_row_pos,
+            "row for First expected before the selected row:\n{out}"
+        );
+        let banner_pos = out
+            .find("compact movie banner")
+            .expect("banner content expected somewhere after the selected row");
+        assert!(
+            banner_pos > selected_row_pos,
+            "banner content expected after the selected row:\n{out}"
+        );
+        // Third item pushed down by the 14 reserved banner rows (13 content + 1 gap),
+        // so it should not appear on the row immediately after the selected row.
+        assert!(
+            !lines[selected_row_line + 1].contains("Third"),
+            "Third should not appear immediately after Second Selected:\n{out}"
+        );
+        let third_line = lines
+            .iter()
+            .position(|l| l.contains("Third"))
+            .expect("Third item expected further down, pushed below the banner");
+        assert!(
+            third_line >= selected_row_line + COMPACT_BANNER_TOTAL_ROWS,
+            "Third expected pushed below the reserved banner rows (row {third_line}, selected row {selected_row_line}):\n{out}"
+        );
     }
 }

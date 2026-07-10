@@ -110,7 +110,15 @@ impl App {
             && self.libs[self.power_left_tab - 1]
                 .power_detail_item
                 .is_some();
-        if power_detail_pinned {
+        // Compact banner active: a leaf movie is selected in the library list but the
+        // expanded detail view isn't pinned, so the compact banner is what's showing.
+        let compact_banner_active = lib_focused
+            && !power_detail_pinned
+            && self.power_left_tab > 0
+            && self
+                .power_selected_movie_item(self.power_left_tab - 1)
+                .is_some();
+        if power_detail_pinned || compact_banner_active {
             // (handled below)
         } else if lib_focused
             && self.power_left_tab > 0
@@ -226,6 +234,28 @@ impl App {
             return self.render_card_image(f, area, &cache_key, area.height.min(18));
         }
 
+        if compact_banner_active {
+            if let Some(item) = self.power_selected_movie_item(self.power_left_tab - 1) {
+                let img_types: &[&str] = &["Backdrop", "Primary", "Logo"];
+                let cache_key = format!("{}:P", item.id);
+                if self.images_enabled() {
+                    self.fetch_card_image(
+                        cache_key.clone(),
+                        item.id.clone(),
+                        item.series_id.clone(),
+                        img_types,
+                    );
+                }
+                let has_no_image = matches!(self.card_image_states.get(&cache_key), Some(None));
+                if !has_no_image {
+                    return self.render_card_image(f, area, &cache_key, area.height.min(18));
+                }
+                // Movie has no Backdrop/Primary/Logo image at all (fetch completed,
+                // nothing found) — fall through to the default queue-cursor-art
+                // code below instead of returning a blank card.
+            }
+        }
+
         if power_detail_pinned {
             let (detail_id, series_id) = {
                 let lib_idx = self.power_left_tab - 1;
@@ -319,7 +349,61 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::{power_card_source, PowerCardSource};
-    use crate::app::PowerFocus;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{App, BrowseLevel, LibraryTab, PowerFocus};
+    use ratatui::backend::TestBackend;
+    use ratatui::layout::Rect;
+    use ratatui::Terminal;
+
+    /// Builds an App with a "movies" library whose only leaf item is a selected
+    /// movie (compact banner active: lib focused, no pinned detail).
+    fn make_compact_banner_movie_app() -> App {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let mut movie = make_item("Focused Movie", "Movie");
+        movie.id = "movie-focused".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![movie],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app
+    }
+
+    fn render_power_card(app: &mut App) -> (u16, bool) {
+        let backend = TestBackend::new(30, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut result = (0u16, false);
+        term.draw(|f| {
+            result = app.render_power_card(f, Rect::new(0, 0, 30, 20));
+        })
+        .unwrap();
+        result
+    }
 
     #[test]
     fn queue_focused_with_items_shows_queue_cursor() {
@@ -372,6 +456,54 @@ mod tests {
         assert_eq!(
             power_card_source(PowerFocus::Left, false, 0),
             PowerCardSource::Placeholder
+        );
+    }
+
+    #[test]
+    fn compact_banner_active_fetches_movie_image_and_does_not_fall_through_to_queue() {
+        let mut app = make_compact_banner_movie_app();
+        app.image_protocol_enabled = true;
+        // No queue item set up: if the render fell through to the default
+        // queue-cursor-art path it would index into an empty queue and panic
+        // (or at least never populate the movie's cache key), so a clean
+        // render here proves the compact-banner branch handled it directly.
+        render_power_card(&mut app);
+
+        let cache_key = "movie-focused:P".to_string();
+        assert!(
+            app.card_image_loading.contains(&cache_key)
+                || app.card_image_states.contains_key(&cache_key),
+            "expected the selected movie's image fetch to be requested under its own cache key"
+        );
+        // The fetch is still in flight (never completed in this test), so the
+        // cache key must not have been marked as "no image" — that only
+        // happens once the fetch resolves to nothing.
+        assert!(!matches!(app.card_image_states.get(&cache_key), Some(None)));
+    }
+
+    #[test]
+    fn compact_banner_active_with_no_movie_image_falls_back_to_queue_art() {
+        use crate::app::tests::make_items;
+
+        let mut app = make_compact_banner_movie_app();
+        app.image_protocol_enabled = true;
+        // Simulate the fetch having already completed with no image found.
+        app.card_image_states.insert("movie-focused:P".into(), None);
+
+        // Give the queue an item so the fallback path has something to render.
+        let queue_items = make_items(1);
+        let queue_cache_key = format!("{}:P", queue_items[0].id);
+        app.player_tab.set_items(queue_items, 0);
+
+        render_power_card(&mut app);
+
+        // The compact-banner branch fell through to the default queue-cursor-art
+        // code, which fetches/renders the queue item under its own cache key
+        // rather than returning early on the movie's (imageless) cache key.
+        assert!(
+            app.card_image_loading.contains(&queue_cache_key)
+                || app.card_image_states.contains_key(&queue_cache_key),
+            "expected fallback to fetch the queue-cursor item's image"
         );
     }
 }
