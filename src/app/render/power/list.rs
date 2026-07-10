@@ -385,6 +385,7 @@ impl App {
                 Spacer,
                 LetterHeader(String),
                 Item(usize),
+                BannerFiller,
             }
 
             // Sort item indices by the same effective key used for bucketing so that
@@ -407,6 +408,11 @@ impl App {
                     last_bucket = bucket;
                 }
                 display_rows.push(DisplayRow::Item(idx));
+                if banner_rows > 0 && idx == cursor {
+                    for _ in 0..banner_rows {
+                        display_rows.push(DisplayRow::BannerFiller);
+                    }
+                }
             }
             let total_display = display_rows.len();
 
@@ -415,10 +421,10 @@ impl App {
                 .iter()
                 .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
                 .unwrap_or(0);
-            let mut offset = stored_scroll.clamp(
-                display_cursor.saturating_sub(visible.saturating_sub(1)),
-                display_cursor,
-            );
+            let lower_bound = (display_cursor + banner_rows)
+                .saturating_sub(visible.saturating_sub(1))
+                .min(display_cursor);
+            let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
             // If stale scroll state would put the first item of a bucket at the
             // top of the viewport, back up one row so its letter header remains
             // visible.
@@ -437,7 +443,9 @@ impl App {
             // Build row map so mouse clicks can map visual row → item index.
             for row in display_rows.iter().skip(offset).take(visible) {
                 layout.left_row_map.push(match row {
-                    DisplayRow::Spacer | DisplayRow::LetterHeader(_) => None,
+                    DisplayRow::Spacer | DisplayRow::LetterHeader(_) | DisplayRow::BannerFiller => {
+                        None
+                    }
                     DisplayRow::Item(idx) => Some(*idx),
                 });
             }
@@ -448,7 +456,7 @@ impl App {
                 .skip(offset)
                 .take(visible)
                 .map(|row| match row {
-                    DisplayRow::Spacer => ListItem::new(Line::default()),
+                    DisplayRow::Spacer | DisplayRow::BannerFiller => ListItem::new(Line::default()),
                     DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                         Span::raw(" "),
                         Span::styled(
@@ -518,6 +526,33 @@ impl App {
                 content_area,
                 &mut state,
             );
+
+            if banner_rows > 0 {
+                let banner_start = display_cursor + 1;
+                if banner_start >= offset && banner_start < offset + visible {
+                    let banner_y = content_area.y + (banner_start - offset) as u16;
+                    let bottom = content_area.y + content_area.height;
+                    let banner_h =
+                        (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
+                    if banner_h > 0 {
+                        let banner_rect = Rect {
+                            x: content_area.x,
+                            y: banner_y,
+                            width: content_area.width,
+                            height: banner_h,
+                        };
+                        let want_cursor_y = layout.cursor_screen_y;
+                        self.render_power_compact_detail(
+                            f,
+                            banner_rect,
+                            self.power_left_tab - 1,
+                            focused,
+                            layout,
+                        );
+                        layout.cursor_screen_y = want_cursor_y;
+                    }
+                }
+            }
 
             if focused && total_display > visible {
                 let max_off = total_display.saturating_sub(visible);
@@ -861,6 +896,28 @@ mod tests {
             "expected bucket header above first item:\n{out}"
         );
         assert_eq!(app.libs[0].nav_stack[0].scroll, 0);
+    }
+
+    #[test]
+    fn compact_banner_appears_inline_in_letter_grouped_movie_list() {
+        // 60 movies triggers use_letter_groups (total_count >= 50, collection_type
+        // != "music"); the selected item sits partway through so the banner must
+        // render inline after its row, not pinned to the top.
+        let mut titles: Vec<String> = (0..60).map(|i| format!("Movie {i:02}")).collect();
+        titles[30] = "Selected Movie Thirty".into();
+        let title_refs: Vec<&str> = titles.iter().map(|s| s.as_str()).collect();
+        let mut app = make_power_movie_list_app(title_refs);
+
+        let selected_idx = 30;
+        app.libs[0].nav_stack.last_mut().unwrap().cursor = selected_idx;
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 40);
+
+        assert!(
+            out.contains("compact movie banner"),
+            "expected banner overview text to appear in letter-grouped list render:\n{out}"
+        );
     }
 
     #[test]
