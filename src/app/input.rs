@@ -2349,15 +2349,25 @@ impl App {
                     let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
                     let lib = &mut self.libs[lib_idx];
                     if let Some(s) = &mut lib.search {
-                        let visible = la.height as usize;
-                        let offset = if s.cursor >= visible {
-                            s.cursor - visible + 1
+                        if use_row_map {
+                            // Letter-grouped or banner-adjacent mode: row map gives the
+                            // result index directly (None = header/banner-filler row).
+                            if let Some(Some(item_idx)) = row_map_item {
+                                if item_idx < s.results.len() {
+                                    s.cursor = item_idx;
+                                }
+                            }
                         } else {
-                            0
-                        };
-                        let clicked = offset + click_y;
-                        if clicked < s.results.len() {
-                            s.cursor = clicked;
+                            let visible = la.height as usize;
+                            let offset = if s.cursor >= visible {
+                                s.cursor - visible + 1
+                            } else {
+                                0
+                            };
+                            let clicked = offset + click_y;
+                            if clicked < s.results.len() {
+                                s.cursor = clicked;
+                            }
                         }
                     } else if is_feed_group {
                         let visible = la.height as usize;
@@ -3500,5 +3510,71 @@ mod power_movie_detail_tests {
 
         assert_eq!(app.power_left_width, 42);
         assert_eq!(App::load_prefs()["power_left_width"].as_u64(), Some(42));
+    }
+
+    #[test]
+    fn search_result_click_uses_left_row_map_past_banner_filler_rows() {
+        let mut app = make_power_movie_app();
+
+        // Replace the plain nav-stack browsing state with an active search
+        // over three leaf movies, cursor on the first result -- this is what
+        // triggers the inline compact banner (and its filler rows) in the
+        // plain (non-grouped) render_power_list branch.
+        let mut movie1 = make_item("First Movie", "Movie");
+        movie1.id = "movie-1".into();
+        let mut movie2 = make_item("Second Movie", "Movie");
+        movie2.id = "movie-2".into();
+        let mut movie3 = make_item("Third Movie", "Movie");
+        movie3.id = "movie-3".into();
+        let items = vec![movie1, movie2, movie3];
+        app.libs[0].search = Some(LibSearch {
+            query: "movie".into(),
+            items,
+            results: vec![0, 1, 2],
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+
+        // Render for real so layout.power.left_row_map / left_area reflect the
+        // actual banner-filler rows inserted after the selected (cursor=0) row.
+        let backend = TestBackend::new(100, 40);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.render(f)).unwrap();
+
+        let row_map = app.layout.power.left_row_map.clone();
+        assert!(
+            row_map.iter().any(|r| r.is_none()),
+            "expected banner filler (None) rows in left_row_map, got {:?}",
+            row_map
+        );
+
+        // Find a row mapping to search result index 1 (the "Second Movie"
+        // row) that sits after at least one filler row -- this is the row
+        // whose click target would be computed wrong by the old naive
+        // offset + click_y arithmetic, which ignored the banner filler rows
+        // entirely.
+        let click_row_idx = row_map
+            .iter()
+            .position(|r| *r == Some(1))
+            .expect("expected a row mapping to search result index 1");
+        assert!(
+            click_row_idx > 1,
+            "expected the row for result index 1 to be pushed down by filler rows, got index {}",
+            click_row_idx
+        );
+
+        let la = app.layout.power.left_area;
+        let row = la.y + click_row_idx as u16;
+        let col = la.x + 1;
+
+        let handled = app.click_set_cursor(col, row);
+
+        assert!(handled);
+        assert_eq!(
+            app.libs[0].search.as_ref().unwrap().cursor,
+            1,
+            "click should select the row-map item index, not a naive offset + click_y index"
+        );
     }
 }
