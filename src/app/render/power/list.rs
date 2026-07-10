@@ -10,13 +10,16 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-/// Rows the compact movie banner occupies inline in the library list: a
-/// horizontal rule, the banner's own content (meta/overview/poster, rendered
-/// by `render_power_compact_detail`), and a closing horizontal rule that also
-/// acts as the 1-row separator before the next list row — matching the
-/// spacing the banner already used when it was pinned to the top of the
-/// panel. The rules make the banner read as a distinct, boxed-off region
-/// instead of blending into the surrounding list.
+/// Rows the compact movie banner occupies inline in the library list: an
+/// opening horizontal rule directly above the selected item's own row (so the
+/// selected title reads as visually set off from the row above it), the
+/// banner's own content (meta/overview/poster, rendered by
+/// `render_power_compact_detail`) directly below the selected row, and a
+/// closing horizontal rule that also acts as the 1-row separator before the
+/// next list row — matching the spacing the banner already used when it was
+/// pinned to the top of the panel. The rules make the selected row + banner
+/// read as a distinct, boxed-off region instead of blending into the
+/// surrounding list.
 const COMPACT_BANNER_RULE_ROWS: usize = 1;
 const COMPACT_BANNER_CONTENT_ROWS: usize = 13;
 const COMPACT_BANNER_GAP_ROWS: usize = 1;
@@ -24,10 +27,12 @@ const COMPACT_BANNER_TOTAL_ROWS: usize =
     COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_CONTENT_ROWS + COMPACT_BANNER_GAP_ROWS;
 
 impl App {
-    /// Filler-row count to reserve immediately after the selected movie's row
-    /// in `lib_idx`'s display-row sequence: `COMPACT_BANNER_TOTAL_ROWS` when a
+    /// Filler-row count to reserve around the selected movie's row in
+    /// `lib_idx`'s display-row sequence: `COMPACT_BANNER_TOTAL_ROWS` when a
     /// leaf movie is selected and expanded detail is not open, else 0 (no
     /// banner — ordinary list rendering, unchanged from before this feature).
+    /// One of those rows is the opening rule placed immediately *before* the
+    /// selected item's row; the rest (content + closing rule) follow it.
     fn compact_banner_rows(&self, lib_idx: usize) -> usize {
         if self.libs[lib_idx].power_detail_item.is_some() {
             return 0;
@@ -411,9 +416,15 @@ impl App {
                     display_rows.push(DisplayRow::LetterHeader(bucket.clone()));
                     last_bucket = bucket;
                 }
+                // The opening rule sits directly above the selected item's own
+                // row (not after it), so the selected title reads as set off
+                // from the row above it.
+                if banner_rows > 0 && idx == cursor {
+                    display_rows.push(DisplayRow::BannerFiller);
+                }
                 display_rows.push(DisplayRow::Item(idx));
                 if banner_rows > 0 && idx == cursor {
-                    for _ in 0..banner_rows {
+                    for _ in 0..banner_rows.saturating_sub(1) {
                         display_rows.push(DisplayRow::BannerFiller);
                     }
                 }
@@ -425,22 +436,33 @@ impl App {
                 .iter()
                 .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
                 .unwrap_or(0);
-            let lower_bound = (display_cursor + banner_rows)
+            // Only `banner_rows - 1` rows sit *below* the cursor now (the
+            // opening rule sits above it), hence the `- 1`.
+            let lower_bound = (display_cursor + banner_rows.saturating_sub(1))
                 .saturating_sub(visible.saturating_sub(1))
                 .min(display_cursor);
             let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
             // If stale scroll state would put the first item of a bucket at the
-            // top of the viewport, back up one row so its letter header remains
-            // visible.
-            if visible > 1
-                && offset > 0
-                && matches!(display_rows.get(offset), Some(DisplayRow::Item(_)))
-                && matches!(
-                    display_rows.get(offset.saturating_sub(1)),
-                    Some(DisplayRow::LetterHeader(_))
-                )
+            // top of the viewport, back up so its letter header remains visible.
+            // When that item is also the selected/bannered one, the banner's
+            // opening rule sits between the header and the item, so back up an
+            // extra row to clear the rule too.
+            if visible > 1 && offset > 0 && matches!(display_rows.get(offset), Some(DisplayRow::Item(_)))
             {
-                offset -= 1;
+                if matches!(
+                    display_rows.get(offset - 1),
+                    Some(DisplayRow::LetterHeader(_))
+                ) {
+                    offset -= 1;
+                } else if offset >= 2
+                    && matches!(display_rows.get(offset - 1), Some(DisplayRow::BannerFiller))
+                    && matches!(
+                        display_rows.get(offset - 2),
+                        Some(DisplayRow::LetterHeader(_))
+                    )
+                {
+                    offset -= 2;
+                }
             }
             final_offset = offset;
 
@@ -456,10 +478,13 @@ impl App {
 
             // Absolute display-row indices of the banner's opening and closing
             // horizontal rules (only meaningful when banner_rows > 0). The
-            // rules bracket the banner so it reads as a distinct region
-            // rather than blending into the surrounding list.
-            let banner_start = display_cursor + 1;
-            let banner_rule_bottom = banner_start + banner_rows.saturating_sub(1);
+            // opening rule sits directly above the selected item's row; the
+            // closing rule sits after the banner content, before the next
+            // list row. Together they bracket the selected row + banner as a
+            // distinct region rather than blending into the surrounding list.
+            let banner_rule_top = display_cursor.saturating_sub(1);
+            let content_start = display_cursor + 1;
+            let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
             let show_scrollbar = focused && total_display > visible;
 
             let avail = (area.width as usize).saturating_sub(2);
@@ -472,7 +497,7 @@ impl App {
                     DisplayRow::Spacer => ListItem::new(Line::default()),
                     DisplayRow::BannerFiller => {
                         if banner_rows > 0
-                            && (abs_idx == banner_start || abs_idx == banner_rule_bottom)
+                            && (abs_idx == banner_rule_top || abs_idx == banner_rule_bottom)
                         {
                             ListItem::new(Line::from(vec![
                                 Span::raw(" "),
@@ -556,8 +581,6 @@ impl App {
             );
 
             if banner_rows > 0 {
-                // Content starts one row after the opening rule (banner_start).
-                let content_start = banner_start + COMPACT_BANNER_RULE_ROWS;
                 if content_start >= offset && content_start < offset + visible {
                     let banner_y = content_area.y + (content_start - offset) as u16;
                     let bottom = content_area.y + content_area.height;
@@ -613,9 +636,15 @@ impl App {
 
             let mut display_rows: Vec<DisplayRow> = Vec::with_capacity(n + banner_rows);
             for i in 0..n {
+                // The opening rule sits directly above the selected item's own
+                // row (not after it), so the selected title reads as set off
+                // from the row above it.
+                if banner_rows > 0 && i == cursor {
+                    display_rows.push(DisplayRow::BannerFiller);
+                }
                 display_rows.push(DisplayRow::Item(i));
                 if banner_rows > 0 && i == cursor {
-                    for _ in 0..banner_rows {
+                    for _ in 0..banner_rows.saturating_sub(1) {
                         display_rows.push(DisplayRow::BannerFiller);
                     }
                 }
@@ -630,7 +659,9 @@ impl App {
             // banner follows it, extend the lower bound so scrolling keeps
             // pulling up until the whole banner is visible too (clamped to
             // display_cursor itself if the viewport could never fit both).
-            let lower_bound = (display_cursor + banner_rows)
+            // Only `banner_rows - 1` rows sit *below* the cursor now (the
+            // opening rule sits above it), hence the `- 1`.
+            let lower_bound = (display_cursor + banner_rows.saturating_sub(1))
                 .saturating_sub(visible.saturating_sub(1))
                 .min(display_cursor);
             let offset = stored_scroll.clamp(lower_bound, display_cursor);
@@ -638,10 +669,13 @@ impl App {
 
             // Absolute display-row indices of the banner's opening and closing
             // horizontal rules (only meaningful when banner_rows > 0). The
-            // rules bracket the banner so it reads as a distinct region
-            // rather than blending into the surrounding list.
-            let banner_start = display_cursor + 1;
-            let banner_rule_bottom = banner_start + banner_rows.saturating_sub(1);
+            // opening rule sits directly above the selected item's row; the
+            // closing rule sits after the banner content, before the next
+            // list row. Together they bracket the selected row + banner as a
+            // distinct region rather than blending into the surrounding list.
+            let banner_rule_top = display_cursor.saturating_sub(1);
+            let content_start = display_cursor + 1;
+            let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
             let show_scrollbar = focused && total_display > visible;
 
             let list_items: Vec<ListItem> = display_rows
@@ -652,7 +686,7 @@ impl App {
                 .map(|(abs_idx, row)| match row {
                     DisplayRow::BannerFiller => {
                         if banner_rows > 0
-                            && (abs_idx == banner_start || abs_idx == banner_rule_bottom)
+                            && (abs_idx == banner_rule_top || abs_idx == banner_rule_bottom)
                         {
                             let avail = (area.width as usize).saturating_sub(2);
                             ListItem::new(Line::from(vec![
@@ -744,8 +778,6 @@ impl App {
             );
 
             if banner_rows > 0 {
-                // Content starts one row after the opening rule (banner_start).
-                let content_start = banner_start + COMPACT_BANNER_RULE_ROWS;
                 if content_start >= offset && content_start < offset + visible {
                     let banner_y = content_area.y + (content_start - offset) as u16;
                     let bottom = content_area.y + content_area.height;

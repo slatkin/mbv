@@ -530,13 +530,19 @@ mod tests {
         let lines: Vec<&str> = out.lines().collect();
 
         assert!(app.libs[0].power_detail_item.is_none());
-        // Row 0 is now the " N items" header that `render_power_list` always draws
-        // for a focused, non-search library panel; the selected movie's own row
-        // is row 1 (previously row 0, back when the deleted special case drew a
-        // custom title line with no item-count header above it).
+        // Row 0 is the " N items" header that `render_power_list` always draws
+        // for a focused, non-search library panel. Row 1 is the banner's
+        // opening horizontal rule -- placed directly *above* the selected
+        // movie's own row (row 2) so the selected title reads as set off from
+        // the row above it. Row 16 closes the banner with another rule before
+        // the next list item (row 17).
         assert!(
-            lines[1].contains("Focused Movie"),
-            "expected selected movie row above banner:\n{out}"
+            lines[1].contains('\u{2500}'),
+            "expected opening rule directly above the selected movie row:\n{out}"
+        );
+        assert!(
+            lines[2].contains("Focused Movie"),
+            "expected selected movie row directly below the opening rule:\n{out}"
         );
         assert!(
             out.contains("compact movie banner"),
@@ -550,19 +556,12 @@ mod tests {
             !out.contains("Director: Director Hidden"),
             "compact banner must hide director:\n{out}"
         );
-        // Row 2 opens the banner with a horizontal rule (bracketing it off from
-        // the selected row above); row 16 closes it with another rule before
-        // the next list item.
-        assert!(
-            lines[2].contains('\u{2500}'),
-            "expected opening rule above banner content:\n{out}"
-        );
         assert!(
             lines[16].contains('\u{2500}'),
             "expected closing rule below banner content:\n{out}"
         );
         assert!(
-            !lines[2].contains("Focused Movie") && !lines[16].contains("Focused Movie"),
+            !lines[1].contains("Focused Movie") && !lines[16].contains("Focused Movie"),
             "expected selected row's title to appear only once, not repeated on a rule row:\n{out}"
         );
         assert!(
