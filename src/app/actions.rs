@@ -2206,44 +2206,12 @@ impl App {
                 } else if self.tab_idx == 0 {
                     self.select_home();
                 } else if self.tab_idx == 1 {
-                    let scope = self.visible_queue_scope();
-                    let queue = self.displayed_queue();
-                    let t = queue.queue_cursor;
-                    if t < queue.items.len() {
-                        if let Some(ref conn_id) = self.connected_session_id.clone() {
-                            let item = queue.items[t].clone();
-                            let id = conn_id.clone();
-                            let item_ids: Vec<String> =
-                                queue.items.iter().map(|i| i.id.clone()).collect();
-                            let start_ticks = item.playback_position_ticks;
-                            let label = item.playback_label();
-                            self.flash_status(format!("Playing on remote: {label}"));
-                            self.do_session_command(move |c| {
-                                c.session_play_items(&id, &item_ids, t, start_ticks)
-                            });
-                        } else {
-                            let st = self.player.status.lock().unwrap();
-                            let active = st.active;
-                            let current_idx = st.current_idx;
-                            drop(st);
-                            if active && self.queue_scope_is_playback(scope) {
-                                if t != current_idx {
-                                    self.player.send_command(PlayerCommand::JumpTo(t));
-                                }
-                            } else {
-                                let items = queue.items.clone();
-                                let c = Arc::new(self.client.lock().unwrap().clone());
-                                self.replace_playback_queue(items.clone(), t);
-                                self.player.play_queue(
-                                    items,
-                                    t,
-                                    self.queue_source.clone(),
-                                    c,
-                                    self.ui_volume,
-                                );
-                            }
-                        }
-                    }
+                    // Was its own third copy of queue-cursor activation, with
+                    // a subtly narrower `else` branch than the keyboard/mouse
+                    // paths (no seek-to-start for an already-playing audio
+                    // item) -- now the same seam as Enter on the queue tab
+                    // and a queue-row double-click (see #134's follow-up).
+                    self.dispatch(super::action::Command::QueuePlayCursor);
                 } else {
                     self.select();
                 }
@@ -4646,6 +4614,35 @@ mod tests {
         // pos_s plus a large forward delta simply goes wherever the math
         // says, same as rewind's clamp being absent here.
         assert_eq!(App::remote_seek_ticks(3, 5.0), 8 * TICKS_PER_SECOND);
+    }
+
+    // ── execute_context_action(Play) on the queue tab (issue #134 follow-up) ─
+    // This used to be a third, independent copy of queue-cursor activation
+    // that had drifted from the keyboard `Enter`/mouse double-click paths
+    // (no seek-to-start for an already-playing audio item); it now shares
+    // `Command::QueuePlayCursor` with both of them.
+
+    #[test]
+    fn context_menu_play_on_queue_tab_seeks_to_start_for_current_playing_audio_item() {
+        use crate::app::tests::make_item;
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.tab_idx = 1;
+        app.player_tab
+            .set_items(vec![make_item("Track One", "Audio")], 0);
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 0;
+        }
+        let rx = app.player.spy_on_commands();
+
+        app.execute_context_action(Some(ContextAction::Play));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(PlayerCommand::SeekAbsolute(pos)) if pos == 0.0
+        ));
     }
 
     // ── next_subtitle_entry: shared cycling math (remote/local parity, #86) ─

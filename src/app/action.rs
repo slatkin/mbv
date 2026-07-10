@@ -15,6 +15,7 @@ use super::input_resolver::KeyChord;
 use super::App;
 use crossterm::event::{KeyCode, KeyModifiers};
 use mbv_core::player::PlayerCommand;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Command {
@@ -70,6 +71,18 @@ pub(super) enum Command {
     /// pre-existing unclamped-scroll-down quirk — see `dispatch`).
     ScrollBy(i64),
     ScrollHome,
+
+    // ── queue activation (issue #134) ───────────────────────────────────
+    /// Activate the item at the visible queue's cursor: `Enter` on the queue
+    /// tab, or a double-click on a queue row (`handle_mouse`'s
+    /// `is_double`/queue branch — the two were already made to match in
+    /// a70ad7a, before either went through `Command`; this variant is the
+    /// single implementation both now share). Session-attached: hands the
+    /// item off to the remote session. Otherwise: seeks to the top if it's
+    /// the already-playing audio item, jumps to it if it's elsewhere in the
+    /// active playback queue, or replaces the local playback queue and plays
+    /// from this index if the visible queue isn't the one currently playing.
+    QueuePlayCursor,
 }
 
 /// Translate a key event into a playback `Command`, or `None` if this handler
@@ -363,6 +376,61 @@ impl App {
             }
             Command::ScrollHome => {
                 self.help_scroll = 0;
+            }
+
+            Command::QueuePlayCursor => {
+                let queue = self.displayed_queue();
+                let t = queue.queue_cursor;
+                let n = queue.items.len();
+                if t < n {
+                    if let Some(conn_id) = self.connected_session_id.clone() {
+                        let item = queue.items[t].clone();
+                        let item_ids: Vec<String> =
+                            queue.items.iter().map(|i| i.id.clone()).collect();
+                        let start_ticks = item.playback_position_ticks;
+                        let label = item.playback_label();
+                        self.flash_status(format!("Playing on remote: {label}"));
+                        self.do_session_command(move |c| {
+                            c.session_play_items(&conn_id, &item_ids, t, start_ticks)
+                        });
+                    } else {
+                        // Only read once we know we're not handing off to a
+                        // session -- `queue_scope_is_playback` is the one
+                        // reader below.
+                        let scope = self.visible_queue_scope();
+                        let st = self.player.status.lock().unwrap();
+                        let active = st.active;
+                        let current_idx = st.current_idx;
+                        drop(st);
+                        if active && self.queue_scope_is_playback(scope) {
+                            let is_audio =
+                                queue.items.get(t).map(|i| i.is_audio()).unwrap_or(false);
+                            if t == current_idx && is_audio {
+                                self.player.send_command(PlayerCommand::SeekAbsolute(0.0));
+                            } else if t != current_idx {
+                                self.player.send_command(PlayerCommand::JumpTo(t));
+                            }
+                        } else {
+                            // `t < n` above already guarantees the queue is
+                            // non-empty, so no `is_empty()` re-check here.
+                            //
+                            // `replace_playback_queue` and `play_queue` each
+                            // take ownership of their own `Vec<MediaItem>`
+                            // and both run, so two clones of `queue.items`
+                            // are the minimum here, not a redundant third.
+                            let items = queue.items.clone();
+                            let c = Arc::new(self.client.lock().unwrap().clone());
+                            self.replace_playback_queue(items.clone(), t);
+                            self.player.play_queue(
+                                items,
+                                t,
+                                self.queue_source.clone(),
+                                c,
+                                self.ui_volume,
+                            );
+                        }
+                    }
+                }
             }
         }
         false
@@ -919,6 +987,91 @@ mod tests {
             std::fs::read_to_string(&prefs_path).is_ok(),
             "try_quit's non-dirty path should have called save_prefs()"
         );
+    }
+
+    // ── dispatch: QueuePlayCursor (issue #134) ───────────────────────────────
+    // Shared by the queue tab's `Enter` key and a double-click on a queue row
+    // (`handle_mouse`); see the `Command::QueuePlayCursor` doc comment.
+
+    use crate::app::tests::make_item;
+
+    fn set_local_queue(
+        app: &mut crate::app::App,
+        items: Vec<mbv_core::api::MediaItem>,
+        cursor: usize,
+    ) {
+        app.player_tab.set_items(items, cursor);
+    }
+
+    #[test]
+    fn queue_play_cursor_on_empty_queue_is_a_no_op() {
+        let mut app = make_app_stub();
+        assert!(!app.dispatch(Command::QueuePlayCursor));
+        assert!(app.status.is_empty());
+    }
+
+    #[test]
+    fn queue_play_cursor_while_attached_to_session_hands_off_to_session() {
+        let mut app = make_app_stub();
+        set_local_queue(
+            &mut app,
+            vec![
+                make_item("Track One", "Audio"),
+                make_item("Track Two", "Audio"),
+            ],
+            1,
+        );
+        app.connected_session_id = Some("session-1".into());
+
+        app.dispatch(Command::QueuePlayCursor);
+
+        assert!(
+            app.status.contains("Playing on remote"),
+            "expected a remote-handoff status flash, got {:?}",
+            app.status
+        );
+    }
+
+    #[test]
+    fn queue_play_cursor_jumps_to_cursor_when_active_and_playback_scope() {
+        let mut app = make_app_stub();
+        set_local_queue(
+            &mut app,
+            vec![
+                make_item("Track One", "Audio"),
+                make_item("Track Two", "Audio"),
+            ],
+            1,
+        );
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 0;
+        }
+        let rx = app.player.spy_on_commands();
+
+        app.dispatch(Command::QueuePlayCursor);
+
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
+    }
+
+    #[test]
+    fn queue_play_cursor_seeks_to_start_when_cursor_is_the_current_playing_audio_item() {
+        let mut app = make_app_stub();
+        set_local_queue(&mut app, vec![make_item("Track One", "Audio")], 0);
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 0;
+        }
+        let rx = app.player.spy_on_commands();
+
+        app.dispatch(Command::QueuePlayCursor);
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(PlayerCommand::SeekAbsolute(pos)) if pos == 0.0
+        ));
     }
 
     // Same unique-tempdir convention as api.rs's test-only `make_temp_data_dir`

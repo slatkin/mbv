@@ -675,6 +675,36 @@ mod app_level_tests {
     }
 
     #[test]
+    fn enter_on_queue_tab_dispatches_queue_play_cursor_via_handle_key() {
+        // Issue #134: the queue tab's `Enter` key and a double-click on a
+        // queue row both go through `Command::QueuePlayCursor` now. This
+        // pins the keyboard side of that shared seam end-to-end through
+        // `handle_key`.
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.player_tab.set_items(
+            vec![
+                crate::app::tests::make_item("1", "Audio"),
+                crate::app::tests::make_item("2", "Audio"),
+            ],
+            1,
+        );
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 0;
+        }
+        let rx = app.player.spy_on_commands();
+
+        app.handle_key(ev(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(mbv_core::player::PlayerCommand::JumpTo(1))
+        ));
+    }
+
+    #[test]
     fn context_stack_order_is_pinned() {
         let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
         assert_eq!(
