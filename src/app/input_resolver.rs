@@ -337,6 +337,22 @@ mod app_level_tests {
     }
 
     #[test]
+    fn f3_opens_sessions_via_handle_key() {
+        let mut app = make_app_stub();
+        assert!(!app.show_sessions);
+        app.handle_key(ev(KeyCode::F(3), KeyModifiers::NONE));
+        assert!(app.show_sessions);
+    }
+
+    #[test]
+    fn f4_opens_playlists_via_handle_key() {
+        let mut app = make_app_stub();
+        assert!(!app.show_playlists);
+        app.handle_key(ev(KeyCode::F(4), KeyModifiers::NONE));
+        assert!(app.show_playlists);
+    }
+
+    #[test]
     fn context_stack_order_is_pinned() {
         let names: Vec<&str> = super::CONTEXT_STACK.iter().map(|e| e.name).collect();
         assert_eq!(
