@@ -466,13 +466,75 @@ impl App {
     }
 
     pub(super) fn handle_key_view_dispatch(&mut self, key: KeyEvent) -> Option<bool> {
-        Some(if self.tab_idx == 0 {
-            self.handle_combined_key(key)
+        if self.tab_idx == 0 {
+            Some(self.handle_combined_key(key))
         } else if self.tab_idx == 1 {
-            self.handle_queue_key(key)
+            Some(self.handle_queue_key(key))
         } else {
-            self.handle_lib_key(key)
-        })
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            Some(self.handle_lib_key(lib_idx, key).unwrap_or(false))
+        }
+    }
+
+    /// Global view keys shared by all three top-level view handlers
+    /// (`handle_combined_key`, `handle_lib_key`, `handle_queue_key`): quit,
+    /// tab cycling (incl. the power-queue-view override, since `self.tab_idx`
+    /// and `self.queue_view` are read directly instead of being faked by the
+    /// caller), digit tab-jump, and the context-menu key. Each handler calls
+    /// this at the point in its own precedence order where these keys used
+    /// to be independently matched; genuinely per-view behavior (`/` search,
+    /// `Ctrl+q`/`Alt+q` enqueue) stays local. See
+    /// docs/adr/0002-centralized-input-handling.md, phase 3 (#132).
+    fn handle_global_view_key(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
+            KeyCode::Char('q') if key.modifiers.is_empty() => Some(self.try_quit()),
+            KeyCode::Tab => {
+                if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
+                    self.power_left_tab_next();
+                } else {
+                    let n = (self.tab_idx + 1) % self.tab_count();
+                    self.set_tab(n);
+                }
+                Some(false)
+            }
+            KeyCode::BackTab => {
+                if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
+                    self.power_left_tab_prev();
+                } else {
+                    let n = self.tab_count();
+                    self.set_tab((self.tab_idx + n - 1) % n);
+                }
+                Some(false)
+            }
+            KeyCode::Char(c @ '1'..='9') => {
+                let idx = (c as usize) - ('1' as usize);
+                if idx < self.tab_count() {
+                    self.set_tab(idx);
+                }
+                Some(false)
+            }
+            KeyCode::Char('.') => {
+                self.open_context_menu();
+                Some(false)
+            }
+            _ => None,
+        }
+    }
+
+    /// `Ctrl+q`/`Alt+q`: enqueue the current selection. Shared by
+    /// `handle_combined_key` and `handle_lib_key` — the queue view has no
+    /// "enqueue selected" concept, so `handle_queue_key` does not call this.
+    fn handle_enqueue_selected_key(&mut self, key: KeyEvent) -> Option<bool> {
+        match key.code {
+            KeyCode::Char('q')
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    || key.modifiers == KeyModifiers::ALT =>
+            {
+                self.enqueue_selected();
+                Some(false)
+            }
+            _ => None,
+        }
     }
 
     fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
@@ -902,25 +964,15 @@ impl App {
         Some(false)
     }
 
-    fn handle_lib_key(&mut self, key: KeyEvent) -> bool {
-        let lib_idx = self.tab_idx - self.lib_tab_offset();
+    fn handle_lib_key(&mut self, lib_idx: usize, key: KeyEvent) -> Option<bool> {
+        if let Some(quit) = self.handle_enqueue_selected_key(key) {
+            return Some(quit);
+        }
+        if let Some(quit) = self.handle_global_view_key(key) {
+            return Some(quit);
+        }
 
         match key.code {
-            KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.enqueue_selected()
-            }
-            KeyCode::Char('q') if key.modifiers == KeyModifiers::ALT => self.enqueue_selected(),
-            KeyCode::Char('q') if key.modifiers.is_empty() => {
-                return self.try_quit();
-            }
-            KeyCode::Tab => {
-                let n = (self.tab_idx + 1) % self.tab_count();
-                self.set_tab(n);
-            }
-            KeyCode::BackTab => {
-                let n = self.tab_count();
-                self.set_tab((self.tab_idx + n - 1) % n);
-            }
             KeyCode::Esc | KeyCode::Backspace => self.go_back(),
             KeyCode::Up => self.move_lib_cursor(if self.is_viewing_season_grid(lib_idx) {
                 -4
@@ -948,10 +1000,7 @@ impl App {
                 let item = self.current_lib_item();
                 if let Some(item) = item {
                     if item.is_folder {
-                        let ct = self.libs[self.tab_idx - self.lib_tab_offset()]
-                            .library
-                            .collection_type
-                            .clone();
+                        let ct = self.libs[lib_idx].library.collection_type.clone();
                         self.queue_source = crate::config::QueueSource::Collection {
                             collection_type: ct,
                         };
@@ -975,13 +1024,6 @@ impl App {
                 self.confirm_rescan = true;
             }
             KeyCode::Char('r') => self.refresh_lib(),
-            KeyCode::Char('.') => self.open_context_menu(),
-            KeyCode::Char(c @ '1'..='9') => {
-                let idx = (c as usize) - ('1' as usize);
-                if idx < self.tab_count() {
-                    self.set_tab(idx);
-                }
-            }
             KeyCode::Char('/') => {
                 let (items, needs_full_load) = if self.is_feed_home_video_group_view(lib_idx) {
                     (self.feed_home_video_selected_items(lib_idx), false)
@@ -1010,32 +1052,34 @@ impl App {
                 }
                 self.update_lib_search(lib_idx);
             }
+            // Any other Ctrl/Alt-modified character is claimed here as a
+            // no-op. This mirrors the pre-phase-3 `is_lib_key` mirror's
+            // broad catch-all in `handle_queue_key`'s power-left-panel
+            // routing: unmapped Ctrl/Alt combos are swallowed while a
+            // library sub-panel is focused, rather than leaking through to
+            // an unrelated queue-view shortcut with the same bare key
+            // (e.g. `Ctrl+z` must not trigger queue-undo while the library
+            // panel has focus). Harmless at the other call site
+            // (`handle_key_view_dispatch`), which already swallows any
+            // unmatched key as the last entry in `CONTEXT_STACK`.
+            KeyCode::Char(_)
+                if key.modifiers.contains(KeyModifiers::CONTROL)
+                    || key.modifiers.contains(KeyModifiers::ALT) => {}
             _ => {
-                return false;
+                return None;
             }
         }
-        false
+        Some(false)
     }
 
     fn handle_combined_key(&mut self, key: KeyEvent) -> bool {
+        if let Some(quit) = self.handle_enqueue_selected_key(key) {
+            return quit;
+        }
+        if let Some(quit) = self.handle_global_view_key(key) {
+            return quit;
+        }
         match key.code {
-            KeyCode::Char('q') if key.modifiers == KeyModifiers::ALT => {
-                self.enqueue_selected();
-                return false;
-            }
-            KeyCode::Char('q') if key.modifiers.is_empty() => {
-                return self.try_quit();
-            }
-            KeyCode::Tab => {
-                let n = (self.tab_idx + 1) % self.tab_count();
-                self.set_tab(n);
-                return false;
-            }
-            KeyCode::BackTab => {
-                let n = self.tab_count();
-                self.set_tab((self.tab_idx + n - 1) % n);
-                return false;
-            }
             KeyCode::Left | KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
                 let n = 1 + self.home.latest.len();
                 self.home.section = (self.home.section + n - 1) % n;
@@ -1063,10 +1107,6 @@ impl App {
                 }
                 return false;
             }
-            KeyCode::Char('.') => {
-                self.open_context_menu();
-                return false;
-            }
             KeyCode::Char('/') => {
                 self.home_search = Some(HomeSearch {
                     query: String::new(),
@@ -1078,13 +1118,6 @@ impl App {
                     type_filter: 0,
                     input_focused: true,
                 });
-                return false;
-            }
-            KeyCode::Char(c @ '1'..='9') => {
-                let idx = (c as usize) - ('1' as usize);
-                if idx < self.tab_count() {
-                    self.set_tab(idx);
-                }
                 return false;
             }
             _ => {}
@@ -1129,9 +1162,6 @@ impl App {
             KeyCode::Enter => self.select_home(),
             KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.toggle_watched_home()
-            }
-            KeyCode::Char('q') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.enqueue_selected()
             }
             KeyCode::Delete if self.home.section == 0 => self.remove_from_continue_watching(),
             _ => {}
@@ -1478,47 +1508,29 @@ impl App {
                     key.code,
                     KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
                 ) && key.modifiers.contains(KeyModifiers::ALT);
-                let is_lib_key = !is_power_nav
-                    && match key.code {
-                        KeyCode::Up
-                        | KeyCode::Down
-                        | KeyCode::Left
-                        | KeyCode::Right
-                        | KeyCode::PageUp
-                        | KeyCode::PageDown
-                        | KeyCode::Home
-                        | KeyCode::End
-                        | KeyCode::Enter
-                        | KeyCode::Esc
-                        | KeyCode::Backspace => true,
-                        KeyCode::Char('/') => true,
-                        KeyCode::Char('q') => {
-                            key.modifiers.is_empty()
-                                || key.modifiers == KeyModifiers::CONTROL
-                                || key.modifiers == KeyModifiers::ALT
-                        }
-                        KeyCode::Char('.') => true,
-                        KeyCode::Char('r') => true,
-                        KeyCode::Char('1'..='9') => true,
-                        KeyCode::Char(_)
-                            if key.modifiers.contains(KeyModifiers::CONTROL)
-                                || key.modifiers.contains(KeyModifiers::ALT) =>
-                        {
-                            true
-                        }
-                        _ => false,
-                    };
-                if is_lib_key {
-                    let is_quit_key =
-                        matches!(key.code, KeyCode::Char('q') if key.modifiers.is_empty());
+                // Route non-power-nav keys to the library handler for this
+                // panel. `handle_lib_key`'s own `Some`/`None` is now the
+                // single source of truth for "did the library view claim
+                // this key" — no more hand-maintained mirror of its key set.
+                //
+                // The `tab_idx` swap stays: many action methods
+                // `handle_lib_key` calls into (`current_lib_item`, `select`,
+                // `move_lib_cursor`, `refresh_lib`, `shuffle_play`,
+                // `play_folder`, `go_back`, ...) derive their own lib index
+                // from `self.tab_idx` rather than taking it as a parameter.
+                // Impact analysis on `current_lib_item` alone showed 6
+                // affected symbols across `execute_context_action`,
+                // `enqueue_selected`, `select`, and `toggle_watched`
+                // (HIGH risk) — parameterizing all of them is a separate,
+                // larger follow-up, not in scope for #132.
+                if !is_power_nav {
                     let saved = self.tab_idx;
                     self.tab_idx = self.lib_tab_offset() + lib_idx;
-                    let result = self.handle_lib_key(key);
+                    let outcome = self.handle_lib_key(lib_idx, key);
                     self.tab_idx = saved;
-                    if is_quit_key {
-                        return result;
+                    if let Some(quit) = outcome {
+                        return quit;
                     }
-                    return false;
                 }
             }
         }
@@ -1567,27 +1579,11 @@ impl App {
             }
         }
 
-        match key.code {
-            KeyCode::Char('q') if key.modifiers.is_empty() => {
-                return self.try_quit();
-            }
-            KeyCode::Tab => {
-                if self.queue_view == QUEUE_VIEW_POWER {
-                    self.power_left_tab_next();
-                } else {
-                    let n = (self.tab_idx + 1) % self.tab_count();
-                    self.set_tab(n);
-                }
-            }
-            KeyCode::BackTab => {
-                if self.queue_view == QUEUE_VIEW_POWER {
-                    self.power_left_tab_prev();
-                } else {
-                    let n = self.tab_count();
-                    self.set_tab((self.tab_idx + n - 1) % n);
-                }
-            }
+        if let Some(quit) = self.handle_global_view_key(key) {
+            return quit;
+        }
 
+        match key.code {
             KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 self.move_queue_item_up();
             }
@@ -1684,12 +1680,6 @@ impl App {
                 }
                 self.undo_last_queue_edit(scope);
             }
-            KeyCode::Char(c @ '1'..='9') => {
-                let idx = (c as usize) - ('1' as usize);
-                if idx < self.tab_count() {
-                    self.set_tab(idx);
-                }
-            }
             KeyCode::Char('i') => {
                 let queue = self.displayed_queue();
                 let cursor = queue.queue_cursor;
@@ -1710,9 +1700,6 @@ impl App {
                         .collect();
                     self.spawn_navigate_to_item(item_id, item_type, libs);
                 }
-            }
-            KeyCode::Char('.') => {
-                self.open_context_menu();
             }
             KeyCode::Char('/') => {
                 self.home_search = Some(HomeSearch {
@@ -3630,6 +3617,148 @@ mod power_movie_detail_tests {
             app.libs[0].search.as_ref().unwrap().cursor,
             1,
             "click should select the row-map item index, not a naive offset + click_y index"
+        );
+    }
+
+    // ── Phase 3 (#132) view-routing boundary tests ─────────────────────
+    // These exercise the shared `handle_global_view_key` /
+    // `handle_enqueue_selected_key` front doors and the queue view's
+    // `handle_lib_key(lib_idx, key)` routing (no more `is_lib_key` mirror).
+
+    #[test]
+    fn period_key_opens_context_menu_from_all_three_view_handlers() {
+        // Home (combined), library, and queue views all route '.' through
+        // the shared `handle_global_view_key`.
+        let mut home = make_app_stub();
+        home.home
+            .continue_items
+            .push(crate::app::tests::make_item("Continuing", "Movie"));
+        assert!(home.context_menu.is_none());
+        home.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
+        assert!(home.context_menu.is_some(), "combined (home) view");
+
+        let mut lib = make_app_stub();
+        lib.tab_idx = 2;
+        let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        lib.libs.push(crate::app::LibraryTab {
+            library,
+            nav_stack: vec![crate::app::BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![crate::app::tests::make_item("A Movie", "Movie")],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+        lib.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
+        assert!(lib.context_menu.is_some(), "library view");
+
+        let mut queue = make_power_movie_app();
+        queue.power_focus = PowerFocus::Queue;
+        queue
+            .player_tab
+            .items
+            .push(crate::app::tests::make_item("Queued", "Movie"));
+        queue.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
+        assert!(queue.context_menu.is_some(), "queue view");
+    }
+
+    #[test]
+    fn alt_q_enqueues_selected_from_library_view() {
+        // `Ctrl+q`/`Alt+q` enqueue is shared by combined and library views
+        // via `handle_enqueue_selected_key` (the queue view has no
+        // "enqueue selected" concept and does not wire this in).
+        let mut app = make_app_stub();
+        app.tab_idx = 2;
+        let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        let mut movie = crate::app::tests::make_item("A Movie", "Movie");
+        movie.id = "movie-1".into();
+        app.libs.push(crate::app::LibraryTab {
+            library,
+            nav_stack: vec![crate::app::BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![movie],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+
+        assert_eq!(
+            app.player_tab.items.len(),
+            1,
+            "Alt+q enqueues from library view"
+        );
+        assert_eq!(app.player_tab.items[0].id, "movie-1");
+    }
+
+    #[test]
+    fn ctrl_z_while_power_library_panel_focused_does_not_leak_to_queue_undo() {
+        // Preserved quirk from the pre-phase-3 `is_lib_key` mirror: while a
+        // library sub-panel has focus in power view, an unmapped
+        // Ctrl/Alt-modified key (library has no Ctrl+z binding) must be
+        // swallowed by the library routing, not fall through to the
+        // queue's own Ctrl+z undo binding below it in `handle_queue_key`.
+        let mut app = make_power_movie_app();
+        app.queue_undo_stack.push(crate::app::UndoEntry::Remove(
+            0,
+            Box::new(crate::app::tests::make_item("removed", "Movie")),
+        ));
+        let stack_len_before = app.queue_undo_stack.len();
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL));
+
+        assert_eq!(
+            app.queue_undo_stack.len(),
+            stack_len_before,
+            "Ctrl+z must not pop the queue undo stack while the library panel is focused"
+        );
+    }
+
+    #[test]
+    fn ctrl_z_while_power_queue_panel_focused_does_trigger_undo() {
+        // Positive counterpart: with queue focus (not library focus), the
+        // same Ctrl+z reaches `handle_queue_key`'s own binding.
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+        app.queue_undo_stack.push(crate::app::UndoEntry::Remove(
+            0,
+            Box::new(crate::app::tests::make_item("removed", "Movie")),
+        ));
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('z'), KeyModifiers::CONTROL));
+
+        assert!(
+            app.queue_undo_stack.is_empty(),
+            "Ctrl+z pops the queue undo stack when the queue panel is focused"
         );
     }
 }
