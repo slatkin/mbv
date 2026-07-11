@@ -1,4 +1,5 @@
 use super::super::super::ui_util::*;
+use super::POWER_RENDER_FILTER;
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -83,7 +84,7 @@ impl App {
             if self.list_image_renders_allowed() {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
                     let actual = state.size_for(
-                        ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)),
+                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
                         ratatui::layout::Size {
                             width: IMG_COLS,
                             height: IMG_ROWS,
@@ -266,9 +267,7 @@ impl App {
             if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
                 type SImg = ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
                 f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(
-                        ratatui_image::FilterType::Lanczos3,
-                    ))),
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
                     Rect {
                         x: img_x,
                         y: img_y,
@@ -346,7 +345,7 @@ impl App {
                     height: IMG_MAX_ROWS,
                 };
                 let actual = state.size_for(
-                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)),
+                    ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
                     avail,
                 );
                 (actual.width, actual.height)
@@ -614,9 +613,7 @@ impl App {
                     height: img_height,
                 };
                 f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(
-                        ratatui_image::FilterType::Lanczos3,
-                    ))),
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
                     img_rect,
                     state,
                 );

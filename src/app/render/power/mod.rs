@@ -17,6 +17,11 @@ use ratatui::widgets::Paragraph;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+// Power View re-renders frequently while scrolling; prefer a cheaper filter in
+// these hot paths to reduce terminal image preparation stalls.
+pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
+    ratatui_image::FilterType::Triangle;
+
 /// For folder-based music libraries where albums are stored as directories named
 /// "Artist (YYYY) Album Title", parse out the three components.
 /// Returns `(artist, year, album_title)` on success.
@@ -436,6 +441,11 @@ mod tests {
     use crate::app::{BrowseLevel, LibraryTab};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
+
+    #[test]
+    fn power_view_uses_triangle_resampling() {
+        assert_eq!(POWER_RENDER_FILTER, ratatui_image::FilterType::Triangle);
+    }
 
     fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
         let buf = term.backend().buffer();
