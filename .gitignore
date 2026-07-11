@@ -8,6 +8,5 @@
 # AI assistant artifacts
 context-snapshot.json
 .worktrees/
-.codex/
 state.md
 session-log.md
