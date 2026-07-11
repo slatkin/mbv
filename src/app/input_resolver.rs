@@ -335,13 +335,13 @@ mod app_level_tests {
     fn help_overlay_blocks_home_search_char_capture_via_handle_key() {
         let mut app = make_app_stub();
         app.show_help = true;
-        app.home_search = Some(test_home_search());
-        if let Some(hs) = app.home_search.as_mut() {
+        app.search.set_state_for_test(Some(test_home_search()));
+        if let Some(hs) = app.search.state_mut() {
             hs.input_focused = true;
         }
         app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
         assert!(
-            app.home_search.as_ref().unwrap().query.is_empty(),
+            app.search.state().unwrap().query.is_empty(),
             "help sits above home_search in CONTEXT_STACK and must swallow 'x'"
         );
     }
@@ -402,13 +402,13 @@ mod app_level_tests {
     fn settings_overlay_blocks_home_search_char_capture_via_handle_key() {
         let mut app = make_app_stub();
         app.show_settings = true;
-        app.home_search = Some(test_home_search());
-        if let Some(hs) = app.home_search.as_mut() {
+        app.search.set_state_for_test(Some(test_home_search()));
+        if let Some(hs) = app.search.state_mut() {
             hs.input_focused = true;
         }
         app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
         assert!(
-            app.home_search.as_ref().unwrap().query.is_empty(),
+            app.search.state().unwrap().query.is_empty(),
             "settings sits above home_search in CONTEXT_STACK and must swallow 'x'"
         );
     }
@@ -425,13 +425,13 @@ mod app_level_tests {
     fn sessions_overlay_blocks_home_search_char_capture_via_handle_key() {
         let mut app = make_app_stub();
         app.show_sessions = true;
-        app.home_search = Some(test_home_search());
-        if let Some(hs) = app.home_search.as_mut() {
+        app.search.set_state_for_test(Some(test_home_search()));
+        if let Some(hs) = app.search.state_mut() {
             hs.input_focused = true;
         }
         app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
         assert!(
-            app.home_search.as_ref().unwrap().query.is_empty(),
+            app.search.state().unwrap().query.is_empty(),
             "sessions sits above home_search in CONTEXT_STACK and must swallow 'x'"
         );
     }
@@ -479,8 +479,8 @@ mod app_level_tests {
         assert!(app.next_up_item.is_none());
     }
 
-    fn test_home_search() -> crate::app::HomeSearch {
-        crate::app::HomeSearch {
+    fn test_home_search() -> crate::app::search::HomeSearch {
+        crate::app::search::HomeSearch {
             query: String::new(),
             last_query: String::new(),
             results: Vec::new(),
@@ -540,20 +540,20 @@ mod app_level_tests {
     #[test]
     fn home_search_captures_char_via_handle_key() {
         let mut app = make_app_stub();
-        app.home_search = Some(test_home_search());
-        if let Some(hs) = app.home_search.as_mut() {
+        app.search.set_state_for_test(Some(test_home_search()));
+        if let Some(hs) = app.search.state_mut() {
             hs.input_focused = true;
         }
         app.handle_key(ev(KeyCode::Char('x'), KeyModifiers::NONE));
-        assert_eq!(app.home_search.as_ref().unwrap().query, "x");
+        assert_eq!(app.search.state().unwrap().query, "x");
     }
 
     #[test]
     fn home_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
-        app.home_search = Some(test_home_search());
+        app.search.set_state_for_test(Some(test_home_search()));
         app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
-        assert!(app.home_search.is_none());
+        assert!(!app.search.is_open());
     }
 
     #[test]
@@ -569,14 +569,14 @@ mod app_level_tests {
             let mut st = app.player.status.lock().unwrap();
             st.active = true; // show_controls == true, so panel_toggle_h would fire if reached
         }
-        app.home_search = Some(test_home_search());
-        if let Some(hs) = app.home_search.as_mut() {
+        app.search.set_state_for_test(Some(test_home_search()));
+        if let Some(hs) = app.search.state_mut() {
             hs.input_focused = true;
         }
         let panel_mode_before = app.panel_mode;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
         assert_eq!(
-            app.home_search.as_ref().unwrap().query,
+            app.search.state().unwrap().query,
             "h",
             "home search must capture the literal 'h' character"
         );

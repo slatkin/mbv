@@ -17,7 +17,7 @@ impl App {
         // at the top of this frame's render pass (see `App::render`), so they
         // already start at their default (unset) values on every frame.
         layout.home_rect = area;
-        if self.home_search.is_some() {
+        if self.search.is_open() {
             self.render_home_search(f, area);
         } else if self.home_card_view {
             self.render_home_cards(f, area, layout);
@@ -32,7 +32,7 @@ impl App {
         area: Rect,
         layout: &mut LayoutQueue,
     ) {
-        if self.home_search.is_some() {
+        if self.search.is_open() {
             self.render_home_search(f, area);
             return;
         }

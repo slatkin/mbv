@@ -659,13 +659,13 @@ impl App {
             Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
         };
 
-        if self.home_search.is_none() {
+        if !self.search.is_open() {
             return;
         }
 
         // Compute layout parameters from an immutable borrow, then drop it
         let (show_filter, filter_height, filtered_total) = {
-            let hs = self.home_search.as_ref().unwrap();
+            let hs = self.search.state().unwrap();
             let types = hs.available_types();
             let show = !hs.results.is_empty() && types.len() > 1;
             let total = hs.filtered_count();
@@ -684,7 +684,7 @@ impl App {
         let visible = results_area.height as usize;
 
         // Mutable scroll sync
-        if let Some(ref mut hs) = self.home_search {
+        if let Some(hs) = self.search.state_mut() {
             if hs.cursor < hs.scroll {
                 hs.scroll = hs.cursor;
             } else if visible > 0 && hs.cursor >= hs.scroll + visible {
@@ -692,7 +692,7 @@ impl App {
             }
         }
 
-        let hs = self.home_search.as_ref().unwrap();
+        let hs = self.search.state().unwrap();
 
         // Cursor position (computed before the borrow ends)
         let input_focused = hs.input_focused;
