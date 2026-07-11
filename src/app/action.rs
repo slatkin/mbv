@@ -46,13 +46,10 @@ pub(super) enum Command {
     /// mechanism, *not* `Command::ToggleMute`'s `mute_on`/`SetMute`) if the
     /// current item is audio-only, otherwise `cycle_audio()`. Gated the same
     /// way as the other transport keys (`active OR has_remote_session`) —
-    /// see #88. `is_audio_item()` and `toggle_mute()` each own the
-    /// session-vs-local branch internally: `is_audio_item()` reads the
-    /// connected session's `media_info.audio_only` flag when there's no
-    /// local player, and `toggle_mute()` falls back to `cycle_audio()` for a
-    /// connected session, since there's no session-level mute primitive to
-    /// drive instead (see issue #88's "out of scope" decision, to avoid
-    /// inventing new session-command plumbing).
+    /// see #88. The shared `PlaybackTarget` seam owns the local-vs-remote
+    /// split underneath `is_audio_item()`, `toggle_mute()`, and
+    /// `cycle_audio()`, so this action layer no longer re-derives it in each
+    /// helper.
     ToggleMuteOrCycleAudio,
 
     // ── handle_key_help variants ────────────────────────────────────────
@@ -334,45 +331,19 @@ impl App {
             Command::Quit => return self.try_quit(),
 
             Command::TogglePlayPause => {
-                if let Some(id) = self.connected_session_id.clone() {
-                    self.do_session_command(move |c| c.session_transport(&id, "PlayPause"));
-                } else {
-                    self.player.send_command(PlayerCommand::TogglePause);
-                }
+                self.playback_target().toggle_play_pause(self);
             }
             Command::Stop => {
-                if let Some(id) = self.connected_session_id.clone() {
-                    self.do_session_command(move |c| c.session_transport(&id, "Stop"));
-                } else {
-                    self.player.stop();
-                }
+                self.playback_target().stop(self);
             }
             Command::SeekRelative(delta) => {
-                if let Some(id) = self.connected_session_id.clone() {
-                    let pos_s = self
-                        .connected_session_state
-                        .as_ref()
-                        .map(|s| s.position_s)
-                        .unwrap_or(0);
-                    let t = Self::remote_seek_ticks(pos_s, delta);
-                    self.do_session_command(move |c| c.session_seek(&id, t));
-                } else {
-                    self.player.send_command(PlayerCommand::Seek(delta));
-                }
+                self.playback_target().seek_relative(self, delta);
             }
             Command::NextTrack => {
-                if let Some(id) = self.connected_session_id.clone() {
-                    self.session_jump_track(&id, 1, "NextTrack");
-                } else {
-                    self.player.next();
-                }
+                self.playback_target().jump_track(self, 1, "NextTrack");
             }
             Command::PreviousTrack => {
-                if let Some(id) = self.connected_session_id.clone() {
-                    self.session_jump_track(&id, -1, "PreviousTrack");
-                } else {
-                    self.player.previous();
-                }
+                self.playback_target().jump_track(self, -1, "PreviousTrack");
             }
             Command::CycleOrToggleSubtitle => {
                 // cycle_sub() branches internally on connected_session_id,
@@ -385,14 +356,7 @@ impl App {
                 self.adjust_volume(delta);
             }
             Command::ToggleMute => {
-                if self.connected_session_id.is_some() {
-                    self.session_toggle_mute();
-                } else {
-                    self.mute_on = !self.mute_on;
-                    self.player
-                        .send_command(PlayerCommand::SetMute(self.mute_on));
-                    self.save_prefs();
-                }
+                self.playback_target().toggle_command_mute(self);
             }
             Command::ToggleMuteOrCycleAudio => {
                 if self.is_audio_item() {
@@ -947,6 +911,30 @@ mod tests {
         app.dispatch(Command::ToggleMute);
 
         assert!(!app.mute_on);
+    }
+
+    #[test]
+    fn dispatch_toggle_play_pause_local_sends_player_command() {
+        let mut app = make_app_stub();
+        let rx = app.player.spy_on_commands();
+
+        app.dispatch(Command::TogglePlayPause);
+
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
+    }
+
+    #[test]
+    fn dispatch_toggle_play_pause_remote_does_not_touch_local_player() {
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("session-1".into());
+        let rx = app.player.spy_on_commands();
+
+        app.dispatch(Command::TogglePlayPause);
+
+        assert!(
+            !matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)),
+            "the remote playback target must not leak transport commands into the local player"
+        );
     }
 
     // ── dispatch: handle_key_help variants ───────────────────────────────────

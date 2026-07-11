@@ -1,9 +1,10 @@
-use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes};
+use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes, take_chars};
 use super::{
     App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent,
-    PendingQueueAction, PowerFocus, QueueScope, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD,
-    QUEUE_VIEW_POWER,
+    LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
+    RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD, QUEUE_VIEW_POWER,
 };
+use crate::app::render::indicators::IndicatorData;
 use mbv_core::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
 use mbv_core::ws::WsEvent;
@@ -38,6 +39,475 @@ pub(crate) fn queue_restore_cursor(
         (idx + 1).min(items.len().saturating_sub(1))
     } else {
         idx
+    }
+}
+
+impl App {
+    pub(super) fn playback_target(&self) -> PlaybackTarget {
+        match self.connected_session_id.clone() {
+            Some(session_id) => PlaybackTarget::Remote(RemotePlaybackTarget { session_id }),
+            None => PlaybackTarget::Local(LocalPlaybackTarget),
+        }
+    }
+
+    pub(super) fn playback_display_target(&self) -> PlaybackTarget {
+        if self.connected_session_state.is_some() {
+            self.playback_target()
+        } else {
+            PlaybackTarget::Local(LocalPlaybackTarget)
+        }
+    }
+
+    pub(super) fn playback_indicator_target(&self) -> PlaybackTarget {
+        let local_active = self.player.status.lock().unwrap().active;
+        if local_active {
+            PlaybackTarget::Local(LocalPlaybackTarget)
+        } else {
+            self.playback_display_target()
+        }
+    }
+}
+
+impl PlaybackTarget {
+    pub(super) fn toggle_play_pause(&self, app: &mut App) {
+        match self {
+            Self::Local(target) => target.toggle_play_pause(app),
+            Self::Remote(target) => target.toggle_play_pause(app),
+        }
+    }
+
+    pub(super) fn stop(&self, app: &mut App) {
+        match self {
+            Self::Local(target) => target.stop(app),
+            Self::Remote(target) => target.stop(app),
+        }
+    }
+
+    pub(super) fn seek_relative(&self, app: &mut App, delta: f64) {
+        match self {
+            Self::Local(target) => target.seek_relative(app, delta),
+            Self::Remote(target) => target.seek_relative(app, delta),
+        }
+    }
+
+    pub(super) fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
+        match self {
+            Self::Local(target) => target.jump_track(app, step),
+            Self::Remote(target) => target.jump_track(app, step, transport),
+        }
+    }
+
+    pub(super) fn toggle_command_mute(&self, app: &mut App) {
+        match self {
+            Self::Local(target) => target.toggle_command_mute(app),
+            Self::Remote(target) => target.toggle_command_mute(app),
+        }
+    }
+
+    pub(super) fn is_audio_item(&self, app: &App) -> bool {
+        match self {
+            Self::Local(target) => target.is_audio_item(app),
+            Self::Remote(target) => target.is_audio_item(app),
+        }
+    }
+
+    pub(super) fn toggle_soft_mute(&self, app: &mut App) {
+        match self {
+            Self::Local(target) => target.toggle_soft_mute(app),
+            Self::Remote(target) => target.toggle_soft_mute(app),
+        }
+    }
+
+    pub(super) fn cycle_audio(&self, app: &mut App) {
+        match self {
+            Self::Local(target) => target.cycle_audio(app),
+            Self::Remote(target) => target.cycle_audio(app),
+        }
+    }
+
+    pub(super) fn adjust_volume(&self, app: &mut App, delta: i64) {
+        match self {
+            Self::Local(target) => target.adjust_volume(app, delta),
+            Self::Remote(target) => target.adjust_volume(app, delta),
+        }
+    }
+
+    pub(super) fn cycle_sub(&self, app: &mut App) {
+        match self {
+            Self::Local(target) => target.cycle_sub(app),
+            Self::Remote(target) => target.cycle_sub(app),
+        }
+    }
+
+    pub(super) fn displayed_volume(&self, app: &App) -> i64 {
+        match self {
+            Self::Local(target) => target.displayed_volume(app),
+            Self::Remote(target) => target.displayed_volume(app),
+        }
+    }
+
+    pub(super) fn displayed_mute(&self, app: &App) -> bool {
+        match self {
+            Self::Local(target) => target.displayed_mute(app),
+            Self::Remote(target) => target.displayed_mute(app),
+        }
+    }
+
+    pub(super) fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
+        match self {
+            Self::Local(target) => target.indicator_data(app),
+            Self::Remote(target) => target.indicator_data(app),
+        }
+    }
+}
+
+impl LocalPlaybackTarget {
+    fn toggle_play_pause(&self, app: &mut App) {
+        app.player.send_command(PlayerCommand::TogglePause);
+    }
+
+    fn stop(&self, app: &mut App) {
+        app.player.stop();
+    }
+
+    fn seek_relative(&self, app: &mut App, delta: f64) {
+        app.player.send_command(PlayerCommand::Seek(delta));
+    }
+
+    fn jump_track(&self, app: &mut App, step: i64) {
+        if step >= 0 {
+            app.player.next();
+        } else {
+            app.player.previous();
+        }
+    }
+
+    fn toggle_command_mute(&self, app: &mut App) {
+        app.mute_on = !app.mute_on;
+        app.player.send_command(PlayerCommand::SetMute(app.mute_on));
+        app.save_prefs();
+    }
+
+    fn is_audio_item(&self, app: &App) -> bool {
+        let idx = app.player_tab.queue_cursor;
+        app.player_tab
+            .items
+            .get(idx)
+            .map(|i| i.media_type == "Audio" || i.item_type == "Audio")
+            .unwrap_or(false)
+    }
+
+    fn toggle_soft_mute(&self, app: &mut App) {
+        if app.ui_volume == 0 {
+            if let Some(v) = app.pre_mute_volume.take() {
+                app.player.send_command(PlayerCommand::SetVolume(v as i64));
+                app.ui_volume = v;
+            }
+        } else {
+            app.pre_mute_volume = Some(app.ui_volume);
+            app.player.send_command(PlayerCommand::SetVolume(0));
+            app.ui_volume = 0;
+        }
+        app.save_prefs();
+    }
+
+    fn cycle_audio(&self, app: &mut App) {
+        let (tracks, current_id) = {
+            let s = app.player.status.lock().unwrap();
+            (s.audio_tracks.clone(), s.audio_id)
+        };
+        if tracks.is_empty() {
+            return;
+        }
+        let mut entries: Vec<i64> = vec![0];
+        entries.extend(tracks.iter().map(|(id, _)| *id));
+        let cur = entries.iter().position(|&id| id == current_id).unwrap_or(0);
+        let next = (cur + 1) % entries.len();
+        let next_id = entries[next];
+        if next_id == 0 {
+            app.pre_mute_volume = Some(app.ui_volume);
+            app.player.send_command(PlayerCommand::SetVolume(0));
+            app.ui_volume = 0;
+        } else if current_id == 0 {
+            if let Some(v) = app.pre_mute_volume.take() {
+                app.player.send_command(PlayerCommand::SetVolume(v as i64));
+                app.ui_volume = v;
+            }
+        }
+        app.player.send_command(PlayerCommand::SetAudio(next_id));
+    }
+
+    fn adjust_volume(&self, app: &mut App, delta: i64) {
+        let active = app.player.status.lock().unwrap().active;
+        if active {
+            let st = app.player.status.lock().unwrap();
+            let v = (st.volume + delta).clamp(0, st.volume_max) as u8;
+            drop(st);
+            app.player.send_command(PlayerCommand::SetVolume(v as i64));
+            app.ui_volume = v;
+        } else {
+            app.ui_volume = (app.ui_volume as i64 + delta).clamp(0, 200) as u8;
+        }
+        app.save_prefs();
+    }
+
+    fn cycle_sub(&self, app: &mut App) {
+        let (active, tracks, current_id) = {
+            let s = app.player.status.lock().unwrap();
+            (s.active, s.sub_tracks.clone(), s.sub_id)
+        };
+        if !active {
+            app.cycle_subtitle_mode();
+            return;
+        }
+        if tracks.is_empty() {
+            return;
+        }
+        let mut entries: Vec<i64> = vec![0];
+        entries.extend(tracks.iter().map(|(id, _, _)| *id));
+        let next_id = App::next_subtitle_entry(&entries, current_id);
+        app.player.send_command(PlayerCommand::SetSub(next_id));
+        app.save_prefs();
+    }
+
+    fn displayed_volume(&self, app: &App) -> i64 {
+        let s = app.player.status.lock().unwrap();
+        if s.active {
+            if s.muted {
+                0
+            } else {
+                s.volume
+            }
+        } else {
+            app.ui_volume as i64
+        }
+    }
+
+    fn displayed_mute(&self, app: &App) -> bool {
+        app.mute_on
+    }
+
+    fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
+        let pst = app.player.status.lock().unwrap();
+        if !pst.active {
+            return None;
+        }
+        let video_is_image = pst.video_is_image;
+        let res_h = pst.video_height;
+        let is_audio_only = video_is_image;
+        let res_str = if video_is_image || res_h == 0 {
+            if pst.audio_codec.is_empty() {
+                "--".to_string()
+            } else {
+                pst.audio_codec.to_uppercase()
+            }
+        } else {
+            format!("{}p", res_h)
+        };
+        let res_dim = res_str == "--";
+        let raw_lang = pst.audio_lang.to_lowercase();
+        let (audio_label, audio_dim): (String, bool) = if raw_lang.is_empty() {
+            ("x".into(), true)
+        } else {
+            (take_chars(&raw_lang, 2), false)
+        };
+        let sub_id = pst.sub_id;
+        let raw_sub_lang = pst.sub_lang.to_lowercase();
+        drop(pst);
+        let sub_label = if sub_id == 0 {
+            "off".into()
+        } else if !raw_sub_lang.is_empty() {
+            take_chars(&raw_sub_lang, 3)
+        } else {
+            "CC".into()
+        };
+        Some(IndicatorData {
+            res_label: res_str,
+            res_dim,
+            audio_label,
+            audio_dim,
+            audio_only: is_audio_only,
+            sub_label,
+        })
+    }
+}
+
+impl RemotePlaybackTarget {
+    fn toggle_play_pause(&self, app: &mut App) {
+        let session_id = self.session_id.clone();
+        app.do_session_command(move |c| c.session_transport(&session_id, "PlayPause"));
+    }
+
+    fn stop(&self, app: &mut App) {
+        let session_id = self.session_id.clone();
+        app.do_session_command(move |c| c.session_transport(&session_id, "Stop"));
+    }
+
+    fn seek_relative(&self, app: &mut App, delta: f64) {
+        let pos_s = app
+            .connected_session_state
+            .as_ref()
+            .map(|s| s.position_s)
+            .unwrap_or(0);
+        let target = App::remote_seek_ticks(pos_s, delta);
+        let session_id = self.session_id.clone();
+        app.do_session_command(move |c| c.session_seek(&session_id, target));
+    }
+
+    fn jump_track(&self, app: &mut App, step: i64, transport: &'static str) {
+        app.session_jump_track(&self.session_id, step, transport);
+    }
+
+    fn toggle_command_mute(&self, app: &mut App) {
+        app.session_toggle_mute();
+    }
+
+    fn is_audio_item(&self, app: &App) -> bool {
+        app.connected_session_state
+            .as_ref()
+            .map(|s| s.media_info.audio_only)
+            .unwrap_or(false)
+    }
+
+    fn toggle_soft_mute(&self, app: &mut App) {
+        // No session-level mute primitive exists for `a`, so keep routing the
+        // remote path through the audio-track cycle behavior.
+        self.cycle_audio(app);
+    }
+
+    fn cycle_audio(&self, app: &mut App) {
+        let remote_indexes = app.remote_audio_indexes();
+        let cur = app
+            .connected_session_state
+            .as_ref()
+            .map(|s| s.audio_index)
+            .unwrap_or(1);
+        let next = if remote_indexes.is_empty() {
+            if cur <= 1 {
+                2
+            } else {
+                1
+            }
+        } else {
+            let cur_pos = remote_indexes
+                .iter()
+                .position(|&idx| idx == cur)
+                .unwrap_or(0);
+            remote_indexes[(cur_pos + 1) % remote_indexes.len()]
+        };
+        if let Some(ref mut state) = app.connected_session_state {
+            state.audio_index = next;
+        }
+        let session_id = self.session_id.clone();
+        app.do_session_command(move |c| c.session_set_audio_index(&session_id, next));
+    }
+
+    fn adjust_volume(&self, app: &mut App, delta: i64) {
+        let vol = app
+            .connected_session_state
+            .as_ref()
+            .map(|s| s.volume)
+            .unwrap_or(50);
+        let new_vol = (vol + delta).clamp(0, 100);
+        let session_id = self.session_id.clone();
+        app.do_session_command(move |c| c.session_set_volume(&session_id, new_vol));
+    }
+
+    fn cycle_sub(&self, app: &mut App) {
+        let remote_indexes = app.remote_subtitle_indexes();
+        if remote_indexes.is_empty() {
+            app.toggle_sub();
+            return;
+        }
+        let current = app
+            .connected_session_state
+            .as_ref()
+            .map(|s| s.sub_index)
+            .unwrap_or(-1);
+        let mut entries = Vec::with_capacity(remote_indexes.len() + 1);
+        entries.push(-1);
+        entries.extend(remote_indexes);
+        let next = App::next_subtitle_entry(&entries, current);
+        if let Some(ref mut state) = app.connected_session_state {
+            state.sub_index = next;
+        }
+        let session_id = self.session_id.clone();
+        app.do_session_command(move |c| c.session_set_subtitle_index(&session_id, next));
+    }
+
+    fn displayed_volume(&self, app: &App) -> i64 {
+        app.connected_session_state
+            .as_ref()
+            .map(|s| s.volume)
+            .unwrap_or_else(|| LocalPlaybackTarget.displayed_volume(app))
+    }
+
+    fn displayed_mute(&self, app: &App) -> bool {
+        app.connected_session_state
+            .as_ref()
+            .map(|s| s.muted)
+            .unwrap_or_else(|| LocalPlaybackTarget.displayed_mute(app))
+    }
+
+    fn indicator_data(&self, app: &App) -> Option<IndicatorData> {
+        let remote = app.connected_session_state.as_ref()?;
+        let audio_label = remote
+            .media_info
+            .audio_streams
+            .iter()
+            .find(|stream| stream.index == remote.audio_index)
+            .map(|stream| {
+                if !stream.language.is_empty() {
+                    take_chars(&stream.language.to_lowercase(), 2)
+                } else {
+                    take_chars(&stream.label.to_lowercase(), 2)
+                }
+            })
+            .unwrap_or_else(|| "---".to_string());
+        let sub_label = if remote.sub_index < 0 {
+            "off".to_string()
+        } else {
+            remote
+                .media_info
+                .subtitle_streams
+                .iter()
+                .find(|stream| stream.index == remote.sub_index)
+                .map(|stream| {
+                    if !stream.language.is_empty() {
+                        take_chars(&stream.language.to_lowercase(), 3)
+                    } else {
+                        take_chars(&stream.label.to_lowercase(), 3)
+                    }
+                })
+                .unwrap_or_else(|| "CC".to_string())
+        };
+        let res_label = if remote.media_info.video_label.is_empty() {
+            "---".to_string()
+        } else if remote.media_info.audio_only {
+            remote
+                .media_info
+                .video_label
+                .split("  |  ")
+                .next()
+                .unwrap_or(&remote.media_info.video_label)
+                .to_string()
+        } else {
+            remote
+                .media_info
+                .video_label
+                .split_whitespace()
+                .next()
+                .unwrap_or(&remote.media_info.video_label)
+                .to_string()
+        };
+        Some(IndicatorData {
+            res_label: res_label.clone(),
+            res_dim: res_label == "---",
+            audio_label: audio_label.clone(),
+            audio_dim: audio_label == "---",
+            audio_only: remote.media_info.audio_only,
+            sub_label,
+        })
     }
 }
 
@@ -1284,41 +1754,11 @@ impl App {
     /// playlist/cursor state, which doesn't reflect what the session is
     /// playing.
     pub(super) fn is_audio_item(&self) -> bool {
-        if self.connected_session_id.is_some() {
-            return self
-                .connected_session_state
-                .as_ref()
-                .map(|s| s.media_info.audio_only)
-                .unwrap_or(false);
-        }
-        let idx = self.player_tab.queue_cursor;
-        self.player_tab
-            .items
-            .get(idx)
-            .map(|i| i.media_type == "Audio" || i.item_type == "Audio")
-            .unwrap_or(false)
+        self.playback_target().is_audio_item(self)
     }
 
     pub(super) fn toggle_mute(&mut self) {
-        if self.connected_session_id.is_some() {
-            // No session-level mute primitive exists (see #88's "out of
-            // scope" decision, to avoid inventing new session-command
-            // plumbing), so fall back to cycling the session's audio
-            // stream via `cycle_audio()`'s existing session-aware branch.
-            self.cycle_audio();
-            return;
-        }
-        if self.ui_volume == 0 {
-            if let Some(v) = self.pre_mute_volume.take() {
-                self.player.send_command(PlayerCommand::SetVolume(v as i64));
-                self.ui_volume = v;
-            }
-        } else {
-            self.pre_mute_volume = Some(self.ui_volume);
-            self.player.send_command(PlayerCommand::SetVolume(0));
-            self.ui_volume = 0;
-        }
-        self.save_prefs();
+        self.playback_target().toggle_soft_mute(self);
     }
 
     /// Session-aware mute toggle for `Action::ToggleMute` (the `m` key) when
@@ -1345,56 +1785,7 @@ impl App {
     }
 
     pub(super) fn cycle_audio(&mut self) {
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let remote_indexes = self.remote_audio_indexes();
-            let cur = self
-                .connected_session_state
-                .as_ref()
-                .map(|s| s.audio_index)
-                .unwrap_or(1);
-            let next = if remote_indexes.is_empty() {
-                if cur <= 1 {
-                    2
-                } else {
-                    1
-                }
-            } else {
-                let cur_pos = remote_indexes
-                    .iter()
-                    .position(|&idx| idx == cur)
-                    .unwrap_or(0);
-                remote_indexes[(cur_pos + 1) % remote_indexes.len()]
-            };
-            let id = conn_id.clone();
-            if let Some(ref mut state) = self.connected_session_state {
-                state.audio_index = next;
-            }
-            self.do_session_command(move |c| c.session_set_audio_index(&id, next));
-            return;
-        }
-        let (tracks, current_id) = {
-            let s = self.player.status.lock().unwrap();
-            (s.audio_tracks.clone(), s.audio_id)
-        };
-        if tracks.is_empty() {
-            return;
-        }
-        let mut entries: Vec<i64> = vec![0];
-        entries.extend(tracks.iter().map(|(id, _)| *id));
-        let cur = entries.iter().position(|&id| id == current_id).unwrap_or(0);
-        let next = (cur + 1) % entries.len();
-        let next_id = entries[next];
-        if next_id == 0 {
-            self.pre_mute_volume = Some(self.ui_volume);
-            self.player.send_command(PlayerCommand::SetVolume(0));
-            self.ui_volume = 0;
-        } else if current_id == 0 {
-            if let Some(v) = self.pre_mute_volume.take() {
-                self.player.send_command(PlayerCommand::SetVolume(v as i64));
-                self.ui_volume = v;
-            }
-        }
-        self.player.send_command(PlayerCommand::SetAudio(next_id));
+        self.playback_target().cycle_audio(self);
     }
 
     /// Clone the current subtitle prefs from the shared Arc and notify the player thread.
@@ -1465,46 +1856,7 @@ impl App {
     }
 
     pub(super) fn cycle_sub(&mut self) {
-        if self.connected_session_id.is_some() {
-            let remote_indexes = self.remote_subtitle_indexes();
-            if remote_indexes.is_empty() {
-                self.toggle_sub();
-                return;
-            }
-            let current = self
-                .connected_session_state
-                .as_ref()
-                .map(|s| s.sub_index)
-                .unwrap_or(-1);
-            let mut entries = Vec::with_capacity(remote_indexes.len() + 1);
-            entries.push(-1);
-            entries.extend(remote_indexes);
-            let next = Self::next_subtitle_entry(&entries, current);
-            let id = self.connected_session_id.clone().unwrap();
-            if let Some(ref mut state) = self.connected_session_state {
-                state.sub_index = next;
-            }
-            self.do_session_command(move |c| c.session_set_subtitle_index(&id, next));
-            return;
-        }
-        // When idle: cycle the default subtitle mode instead of a track --
-        // there's no session equivalent to unify this fallback with (#86).
-        let (active, tracks, current_id) = {
-            let s = self.player.status.lock().unwrap();
-            (s.active, s.sub_tracks.clone(), s.sub_id)
-        };
-        if !active {
-            self.cycle_subtitle_mode();
-            return;
-        }
-        if tracks.is_empty() {
-            return;
-        }
-        let mut entries: Vec<i64> = vec![0];
-        entries.extend(tracks.iter().map(|(id, _, _)| *id));
-        let next_id = Self::next_subtitle_entry(&entries, current_id);
-        self.player.send_command(PlayerCommand::SetSub(next_id));
-        self.save_prefs();
+        self.playback_target().cycle_sub(self);
     }
 
     pub(super) fn remove_from_queue(&mut self, pos: usize) {

@@ -1194,28 +1194,7 @@ impl App {
     }
 
     pub(super) fn adjust_volume(&mut self, delta: i64) {
-        if let Some(ref conn_id) = self.connected_session_id.clone() {
-            let vol = self
-                .connected_session_state
-                .as_ref()
-                .map(|s| s.volume)
-                .unwrap_or(50);
-            let new_vol = (vol + delta).clamp(0, 100);
-            let id = conn_id.clone();
-            self.do_session_command(move |c| c.session_set_volume(&id, new_vol));
-            return;
-        }
-        let active = self.player.status.lock().unwrap().active;
-        if active {
-            let st = self.player.status.lock().unwrap();
-            let v = (st.volume + delta).clamp(0, st.volume_max) as u8;
-            drop(st);
-            self.player.send_command(PlayerCommand::SetVolume(v as i64));
-            self.ui_volume = v;
-        } else {
-            self.ui_volume = (self.ui_volume as i64 + delta).clamp(0, 200) as u8;
-        }
-        self.save_prefs();
+        self.playback_target().adjust_volume(self, delta);
     }
 
     pub(super) fn handle_playback_key(&mut self, key: KeyEvent) -> Option<bool> {
