@@ -1,12 +1,12 @@
 # mbv
 
-A terminal UI client for [Emby](https://emby.media) media servers that uses mpv (and controls/communicates it with via libmpv) as its media player.
+A terminal UI for Emby. It plays media through mpv.
 
-This was made because I use Niri and the beta client does not officially support that. The old official Linux client is increasingly problematic. The browser is a bit slow and problematic as well for me, and I find launching things directly in mpv to be much snappier and able to play more without error. In addition, I'm super old and my eyes are inconsistent, and so I often just watch videos on my monitor while I work because the TV is so far away and require a completely different set of glasses (old). This workflow works really well for me. I'm not crazy.
+I use Niri. The beta client doesn't support it. The old Linux client is falling apart. The browser is slow. mpv is fast and rarely errors. My eyes are old, so I watch on my monitor while I work instead of walking to the TV. This client fits that life.
 
-This allows one to browse libraries, build a queue, and play media from their library in a way that syncs playback with the Emby server. A person can leverage the standard Emby remote control API to control playback from any Emby remote app on their phone or browser. It can also run headless as a background daemon to provide a purely remote-controlled mpv launcher lol.
+You can browse libraries, build a queue, and play from your server. Playback stays in sync with Emby, so any Emby remote app can control it. It can also run headless, as a daemon, and take commands with nothing on screen.
 
-This was built with AI because I am lazy and I already have a job (for now). You can tell because there's a lot of unnecessary images in a TUI app.
+AI wrote most of this. That's why the TUI has more pictures than it needs.
 
 <img src="assets/screenshot-power.png" width="49%" alt="mbv power view: library browser, video preview, and queue" /> <img src="assets/screenshot-music.png" width="49%" alt="mbv music tab: grouped browsing by decade/artist with album art" />
 
@@ -14,58 +14,67 @@ This was built with AI because I am lazy and I already have a job (for now). You
 
 - Rust toolchain (for building)
 - [mpv](https://mpv.io) libraries (`libmpv`)
-- `notify-send` (from `libnotify`) — only needed if `system_notifications = true`
+- OpenSSL (TLS to your Emby server)
+- `notify-send` (from `libnotify`) — only if `system_notifications = true`
 
 ## Installation
 
-```sh
-make install
-```
-Or if you are on Arch just use AUR.
+On Arch, use the AUR. It installs `mbv`, the `mbvd` daemon, and the `mbvd.service` systemd unit.
 
 ```sh
 paru -Syu mbv
 ```
 
-Installs the binary to `~/.local/bin/mbv`.
+Otherwise, build from source.
+
+```sh
+cargo build --release
+```
+
+The binaries land in `target/release/`. Copy `mbv` (and `mbvd`, if you want the daemon) onto your `$PATH` yourself — there's no `make install`.
 
 ## Usage
 
 ```sh
-mbv           # launch with terminal UI
-mbv -a        # stay-alive: keep playing in the background after closing the terminal
-mbv           # reattach to a running stay-alive session
-mbv -q        # stop a running session (foreground or stay-alive)
+mbv                              # launch with terminal UI
+mbv -a                           # stay-alive: keep playing after the terminal closes
+mbv                              # reattach to a running stay-alive session
+mbv -q                           # stop a running session (foreground or stay-alive)
+mbv --connect-daemon <endpoint>  # connect as a thin client to a running mbvd
+mbv -V, --version                # print the version and exit
+mbv -h, --help                   # print this help
 ```
 
 ## Configuration
 
-On first run a login screen prompts for server URL, username, and password. Credentials are saved after a successful login. You don't need to touch a config file to use mbv — nearly every setting is editable live from the in-app Settings panel (`F2`).
+On first run, mbv asks for a server URL, username, and password. It saves your credentials after login. You won't need to touch a config file — almost everything lives in the in-app Settings panel (`F2`).
 
-Press `F1` at any time to open the help and keybindings reference.
+Press `F1` for help and keybindings.
 
 ### In-app settings (`F2`)
 
-- **Start on queue** — start on the Queue tab instead of Home on launch.
-- **Always play next** — always play the next queue item automatically, even for videos.
-- **Consume videos** / **Consume audio** — remove an item from the queue and mpv's playlist once it finishes playing.
-- **Save playlist on consume** / **Save playlist on consume (audio)** — push the queue back to its saved Emby playlist immediately after each consume.
-- **Always skip intro** — skip intros automatically without prompting.
-- **Image protocol** — album art and card image rendering: halfblocks, sixel, kitty, iterm2, or auto.
+- **Stay alive** — keep playing in the background after the terminal closes. Same effect as `-a`, but takes hold from the next launch on.
+- **Start on queue** — start on the Queue tab instead of Home.
+- **Always play next** — auto-play the next queue item, even for videos.
+- **Consume videos** / **Consume audio** — drop an item from the queue and mpv's playlist once it finishes.
+- **Save playlist on consume** / **Save playlist on consume (audio)** — push the queue to its saved Emby playlist after each consume.
+- **Save playlist on quit** — on quit, push a dirty queue's edits to Emby. Off discards them instead; the local queue state still saves either way.
+- **Always skip intro** — skip intros without asking.
+- **Image protocol** — how album art and card images render: halfblocks, sixel, kitty, iterm2, or auto.
 - **Hidden libraries** — hide libraries from the tab bar (case-insensitive).
-- **Hidden latest** — hide the Latest block for specific libraries on the Home tab (case-insensitive); doesn't affect the library tab itself.
-- **Show audio window** — show an mpv window for audio playback instead of running headless.
-- **Use mpv config** — use your own `~/.config/mpv/` setup (scripts, OSC, mpv.conf) instead of mbv's bundled OSC.
-- **No scripts** / **autoload** — disable mpv's default scripts / enable mpv's autoload script for adjacent files.
-- **Show systray icon** — show a system tray icon when running in stay-alive mode (`-a` / `stay_alive`).
-- **System notifications** — send desktop notifications (via `notify-send`) for toasts and interactive prompts (Skip Intro, Next Up, queue prompts) instead of in-TUI toasts; prompts include action buttons.
-- **My languages**, **Subtitle mode**, **Subtitle language**, **Audio language** — client-only playback language preferences.
-- **Feed view** — libraries to treat as feed views (unplayed/date-sorted defaults).
+- **Hidden latest** — hide the Latest block for chosen libraries on Home (case-insensitive); the library tab itself is unaffected.
+- **Show audio window** — show an mpv window for audio instead of running headless.
+- **Use mpv config** — use your own `~/.config/mpv/` setup instead of mbv's bundled OSC.
+- **No scripts** / **autoload** — disable mpv's default scripts, or enable its autoload script for adjacent files.
+- **Show systray icon** — show a tray icon in stay-alive mode.
+- **System notifications** — send desktop notifications (via `notify-send`) for toasts and prompts (Skip Intro, Next Up, queue) instead of in-TUI ones; prompts get action buttons.
+- **My languages**, **Subtitle mode**, **Subtitle language**, **Audio language** — client-only language preferences.
+- **Feed view** — libraries to treat as feed views (unplayed, date-sorted).
 - **Log out**.
 
 ### File-only options (`~/.config/mbv/config.toml`)
 
-A handful of knobs have no live UI and only take effect via a hand-edited config file:
+A few knobs have no UI. Edit the file by hand.
 
 ```toml
 [server]
@@ -86,29 +95,49 @@ audio_pipe_bitdepth = 32
 # Each entry names one level of nesting; the track/file level is always implied
 # and should not be included. See "Special music library handling" under Features.
 levels = ["group", "album"]
+
+[daemon.client]
+# Auto-connect to a running mbvd instead of owning a local player.
+# Overridden by `mbv --connect-daemon <endpoint>`. Empty = don't connect.
+endpoint = ""
+
+[daemon.server]
+# mbvd's own listen address (used when mbvd, not mbv, reads this file).
+tcp_listen = ""
 ```
+
+## mbvd — the headless daemon
+
+`mbvd` is a second binary: mbv's player with no terminal attached. Point a `mbv` at it with `--connect-daemon <endpoint>` or `[daemon.client].endpoint`, and that mbv becomes a thin client — Emby session sync and remote control all still work.
+
+```sh
+mbvd                # run the daemon
+mbvd --audio-only   # audio only, no video window
+mbvd -q             # stop it
+mbvd --version
+```
+
+The AUR package installs a systemd unit, `mbvd.service`, that runs it as a system service: config in `/etc/mbv/config.toml`, state in `/var/lib/mbv/`, sockets in `/run/mbv/`.
 
 ## Features
 
 ### Emby-Parity Features
 
-- **Library browsing and search** — navigate folders and series, jump to seasons and episodes, and fuzzy-search within libraries.
-- **Resume and watched-state sync** — videos resume from saved position and watched status is reported back to Emby.
-- **Standard remote control compatibility** — any normal Emby remote app on your phone or browser can control mbv in real time.
-- **Session control from mbv** — connect to another active Emby session and drive it from mbv's controls and keyboard. `F3` opens the session list.
-- **Playlist integration** — browse Emby playlists, enqueue them, and save the current queue back to Emby with `Ctrl+S`.
-- **Normal playback controls** — seek, pause, adjust volume, cycle audio tracks, and enable subtitles from the keyboard.
-- **Home / continue-watching views** — see Continue Watching items and recent additions across libraries.
+- **Library browsing and search** — navigate folders and series, jump to seasons and episodes, fuzzy-search within a library.
+- **Resume and watched-state sync** — videos resume where you left off; watched status reports back to Emby.
+- **Standard remote control compatibility** — any Emby remote app on phone or browser can drive mbv.
+- **Session control from mbv** — connect to another active Emby session and control it from mbv. `F3` opens the session list.
+- **Playlist integration** — browse Emby playlists, enqueue them, save the current queue back with `Ctrl+S`.
+- **Normal playback controls** — seek, pause, adjust volume, cycle audio tracks, toggle subtitles.
+- **Home / continue-watching views** — Continue Watching and recent additions across libraries.
 
 ### mbv-Only Features
 
-- **Dedicated persistent queue** — mbv keeps its own queue model instead of relying on Emby's simpler play-next/play-later behavior. It supports queue-source tracking, undo delete, direct jump-to-library from queue items, and queue-first workflows.
-- **mbv-to-mbv remote control** — mbv can connect directly to another mbv daemon over its own control protocol rather than only through standard Emby session control.
-- **Headless daemon mode** — run mbv as a background playback service with no terminal required, then drive it remotely.
-- **mpv-first playback model** — playback runs through embedded mpv, including headless audio playback and optional PCM pipe output.
-  Configure PCM pipe compatibility with `[mpv].audio_pipe_samplerate` and `[mpv].audio_pipe_bitdepth` (`16`, `24`, or `32`). Snapserver's `sampleformat` must match both values exactly. The pipe itself is config-only; there is no live UI toggle.
-- **Opinionated playback defaults** — mbv prefers English audio, starts with subtitles off, and hides image-based subtitle tracks that do not work in headless mpv playback.
-- **Special music library handling** — mbv can understand folder-shaped music libraries via `[music].levels`, including grouped music browsing that standard Emby clients do not provide.
-- **Feed-library defaults** — selected libraries can behave like feed views with unplayed/date-sorted defaults, which is useful for YouTube/channel-style libraries.
-- **Extra local control surfaces** — MPRIS integration lets desktop widgets, `playerctl`, and media keys control mbv directly.
-- **Desktop-integrated prompts** — with `system_notifications = true`, Skip Intro, Next Up, and queue prompts can be surfaced as actionable desktop notifications.
+- **Dedicated persistent queue** — its own queue model, not Emby's play-next/play-later. Queue-source tracking, undo delete, jump-to-library from a queue item, queue-first workflows.
+- **Headless daemon mode** — `mbvd` runs the player with no terminal attached, as a background service or systemd unit; any `mbv` can connect to it as a thin client over its own protocol, not just standard Emby session control. See "mbvd" above.
+- **mpv-first playback model** — playback runs through embedded mpv, including headless audio and optional PCM pipe output. Configure pipe compatibility with `[mpv].audio_pipe_samplerate` and `[mpv].audio_pipe_bitdepth` (`16`, `24`, or `32`) — Snapserver's `sampleformat` must match both exactly. The pipe is config-only; there's no live toggle.
+- **Opinionated playback defaults** — English audio preferred, subtitles start off, image-based subtitle tracks hidden because they don't work in headless mpv.
+- **Special music library handling** — folder-shaped music libraries via `[music].levels`, with grouped browsing standard Emby clients don't offer.
+- **Feed-library defaults** — chosen libraries behave like feeds, unplayed and date-sorted — good for YouTube-style libraries.
+- **Extra local control surfaces** — MPRIS lets desktop widgets, `playerctl`, and media keys control mbv.
+- **Desktop-integrated prompts** — with `system_notifications = true`, Skip Intro, Next Up, and queue prompts show as actionable desktop notifications.
