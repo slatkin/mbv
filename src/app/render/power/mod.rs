@@ -573,7 +573,7 @@ mod tests {
         assert!(
             lines
                 .get(director_line.saturating_sub(1))
-                .map(|l| { l.chars().next() == Some('▌') && l.chars().skip(1).all(|c| c == ' ') })
+                .map(|l| l.starts_with('▌') && l.chars().skip(1).all(|c| c == ' '))
                 .unwrap_or(false),
             "expected a spacer row before the director line:\n{out}"
         );

@@ -27,6 +27,21 @@ pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
 /// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
 pub(super) const TABBAR_LEFT_RESERVE: u16 = 10;
 
+/// Shared local-vs-remote playback seam for the TUI action layer.
+#[derive(Clone, Copy)]
+struct LocalPlaybackTarget;
+
+#[derive(Clone)]
+struct RemotePlaybackTarget {
+    session_id: String,
+}
+
+#[derive(Clone)]
+enum PlaybackTarget {
+    Local(LocalPlaybackTarget),
+    Remote(RemotePlaybackTarget),
+}
+
 extern "C" fn handle_quit_signal(signum: i32) {
     QUIT_REQUESTED.store(true, Ordering::Relaxed);
     if signum == 1 {

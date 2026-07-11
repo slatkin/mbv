@@ -5,7 +5,7 @@ mod overlays;
 mod playlist;
 pub(crate) mod power;
 
-use super::ui_util::{fmt_duration, take_chars, trunc_str};
+use super::ui_util::{fmt_duration, trunc_str};
 use super::{layout::AppLayout, palette, App};
 use crate::app::layout::LayoutPlayback;
 use mbv_core::api::TICKS_PER_SECOND;
@@ -122,20 +122,7 @@ impl App {
 
             // Volume badge (right-aligned), in the key·value badge style:
             // dim "VOL" key + bold value colored by level.
-            let volume = if let Some(ref remote) = self.connected_session_state {
-                remote.volume
-            } else {
-                let s = self.player.status.lock().unwrap();
-                if s.active {
-                    if s.muted {
-                        0
-                    } else {
-                        s.volume
-                    }
-                } else {
-                    self.ui_volume as i64
-                }
-            };
+            let volume = self.playback_display_target().displayed_volume(self);
             let vol_color = if volume > 100 {
                 palette::RED
             } else if volume > 60 {
@@ -588,112 +575,7 @@ impl App {
     /// Returns None if the local player is not active.
     /// Callers wrap these in [ ... ] with whatever surrounding style they need.
     pub(super) fn build_status_indicator_spans(&self) -> Option<Vec<Span<'static>>> {
-        let pst = self.player.status.lock().unwrap();
-        if !pst.active {
-            if let Some(ref remote) = self.connected_session_state {
-                drop(pst);
-                let audio_label = remote
-                    .media_info
-                    .audio_streams
-                    .iter()
-                    .find(|stream| stream.index == remote.audio_index)
-                    .map(|stream| {
-                        if !stream.language.is_empty() {
-                            take_chars(&stream.language.to_lowercase(), 2)
-                        } else {
-                            take_chars(&stream.label.to_lowercase(), 2)
-                        }
-                    })
-                    .unwrap_or_else(|| "---".to_string());
-                let sub_label = if remote.sub_index < 0 {
-                    "off".to_string()
-                } else {
-                    remote
-                        .media_info
-                        .subtitle_streams
-                        .iter()
-                        .find(|stream| stream.index == remote.sub_index)
-                        .map(|stream| {
-                            if !stream.language.is_empty() {
-                                take_chars(&stream.language.to_lowercase(), 3)
-                            } else {
-                                take_chars(&stream.label.to_lowercase(), 3)
-                            }
-                        })
-                        .unwrap_or_else(|| "CC".to_string())
-                };
-                let res_label = if remote.media_info.video_label.is_empty() {
-                    "---".to_string()
-                } else if remote.media_info.audio_only {
-                    remote
-                        .media_info
-                        .video_label
-                        .split("  |  ")
-                        .next()
-                        .unwrap_or(&remote.media_info.video_label)
-                        .to_string()
-                } else {
-                    remote
-                        .media_info
-                        .video_label
-                        .split_whitespace()
-                        .next()
-                        .unwrap_or(&remote.media_info.video_label)
-                        .to_string()
-                };
-                let data = indicators::IndicatorData {
-                    res_label: res_label.clone(),
-                    res_dim: res_label == "---",
-                    audio_label: audio_label.clone(),
-                    audio_dim: audio_label == "---",
-                    audio_only: remote.media_info.audio_only,
-                    sub_label,
-                };
-                return Some(indicators::indicator_spans(
-                    self.indicator_style,
-                    &data,
-                    self.use_nerd_fonts,
-                ));
-            }
-            return None;
-        }
-        let video_is_image = pst.video_is_image;
-        let res_h = pst.video_height;
-        let is_audio_only = video_is_image;
-        let res_str = if video_is_image || res_h == 0 {
-            if pst.audio_codec.is_empty() {
-                "--".to_string()
-            } else {
-                pst.audio_codec.to_uppercase()
-            }
-        } else {
-            format!("{}p", res_h)
-        };
-        let res_dim = res_str == "--";
-        let raw_lang = pst.audio_lang.to_lowercase();
-        let (au_text, audio_dim): (String, bool) = if raw_lang.is_empty() {
-            ("x".into(), true)
-        } else {
-            (take_chars(&raw_lang, 2), false)
-        };
-        let sub_id = pst.sub_id;
-        let raw_sub_lang = pst.sub_lang.to_lowercase();
-        drop(pst);
-        let sub_label: String = if sub_id == 0 {
-            "off".into()
-        } else if !raw_sub_lang.is_empty() {
-            take_chars(&raw_sub_lang, 3)
-        } else {
-            "CC".into()
-        };
-        let data = indicators::IndicatorData {
-            res_label: res_str,
-            res_dim,
-            audio_label: au_text,
-            audio_dim,
-            audio_only: is_audio_only,
-            sub_label,
-        };
+        let data = self.playback_indicator_target().indicator_data(self)?;
         Some(indicators::indicator_spans(
             self.indicator_style,
             &data,
@@ -858,11 +740,7 @@ impl App {
     /// (dark on green) when OFF. `m` mute and `⇌` remote are clickable.
     fn render_control_pill(&mut self, f: &mut Frame, tabs_area: Rect, layout: &mut LayoutPlayback) {
         let bg = palette::PILL_BG;
-        let mute_on = self
-            .connected_session_state
-            .as_ref()
-            .map(|s| s.muted)
-            .unwrap_or(self.mute_on);
+        let mute_on = self.playback_display_target().displayed_mute(self);
         let is_playlist = matches!(
             &self.queue_source,
             crate::config::QueueSource::Playlist { .. }
