@@ -349,7 +349,7 @@ mod tests {
     #[test]
     fn has_flag_matches_exact_flag() {
         assert!(has_flag(
-            &["-d".into(), "--audio-only".into()],
+            &["-a".into(), "--audio-only".into()],
             "--audio-only"
         ));
         assert!(!has_flag(

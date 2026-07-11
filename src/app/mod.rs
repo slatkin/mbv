@@ -1885,12 +1885,12 @@ impl App {
 
         // Stay-alive tray (T7, issue #156): the minimal head that makes an
         // alive session attended. Driven over the existing in-process
-        // Player mpsc, not a ctrl socket -- ADR 0004's daemon-owned tray is
-        // a separate surface (`daemon_inner`, mbvd's tray). Only present
-        // when running as the inferior under a relay; persists across
-        // detach/reattach since it lives in the app, not the terminal-client.
-        // Kept alive for the whole function (dropped only when `run`
-        // returns, i.e. on real quit).
+        // Player mpsc, not a ctrl socket -- ADR 0004's daemon-owned tray
+        // (mbvd's own tray, `mbv_core::daemon::run_with_options`) is a
+        // separate surface entirely. Only present when running as the
+        // inferior under a relay; persists across detach/reattach since it
+        // lives in the app, not the terminal-client. Kept alive for the
+        // whole function (dropped only when `run` returns, i.e. on real quit).
         let _tray_handle = if self.stay_alive_ctrl.is_some() {
             let show_systray_icon = self.client.lock().unwrap().config.show_systray_icon;
             if show_systray_icon {
