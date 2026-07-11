@@ -326,7 +326,9 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
             if TERM_REQUESTED.swap(false, Ordering::SeqCst) {
                 let pid = inferior_pid.load(Ordering::SeqCst);
                 if pid > 0 {
-                    log(&format!("SIGTERM received: forwarding to inferior pid={pid}"));
+                    log(&format!(
+                        "SIGTERM received: forwarding to inferior pid={pid}"
+                    ));
                     let _ = nix::sys::signal::kill(
                         nix::unistd::Pid::from_raw(pid),
                         nix::sys::signal::Signal::SIGTERM,
@@ -499,8 +501,10 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
                     // bump can at worst skip a harmless cleanup, and can
                     // never clobber a newcomer's `current_winsz` entry.
                     let my_gen = gen.load(Ordering::SeqCst);
-                    if let Some(old) =
-                        current_winsz.lock().unwrap().replace(stream.try_clone().unwrap())
+                    if let Some(old) = current_winsz
+                        .lock()
+                        .unwrap()
+                        .replace(stream.try_clone().unwrap())
                     {
                         let _ = old.shutdown(std::net::Shutdown::Both);
                     }
