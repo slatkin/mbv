@@ -81,10 +81,19 @@ impl CtrlStream for TcpStream {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum AuthorityHolder {
+    #[default]
+    None,
+    Ctrl(CtrlClientId),
+    EmbyRemote,
+}
+
 #[derive(Default)]
 struct CtrlClients {
     next_id: CtrlClientId,
     connection: Option<CtrlClient>,
+    authority: AuthorityHolder,
 }
 
 struct CtrlClient {
@@ -165,12 +174,16 @@ impl CtrlClients {
         let id = self.next_id;
         self.next_id += 1;
         self.connection = Some(CtrlClient { id, tx });
+        self.authority = AuthorityHolder::Ctrl(id);
         id
     }
 
     fn remove(&mut self, id: CtrlClientId) {
         if self.has_client(id) {
             self.connection = None;
+            if self.authority == AuthorityHolder::Ctrl(id) {
+                self.authority = AuthorityHolder::None;
+            }
         }
     }
 
@@ -187,6 +200,9 @@ impl CtrlClients {
             return;
         };
         if conn.tx.send(CtrlOutbound::Event(json)).is_err() {
+            if self.authority == AuthorityHolder::Ctrl(conn.id) {
+                self.authority = AuthorityHolder::None;
+            }
             self.connection = None;
         }
     }
@@ -194,6 +210,9 @@ impl CtrlClients {
     fn disconnect(&mut self, id: CtrlClientId, reason: DisconnectReason) {
         if !self.has_client(id) {
             return;
+        }
+        if self.authority == AuthorityHolder::Ctrl(id) {
+            self.authority = AuthorityHolder::None;
         }
         let client = self.connection.take().unwrap();
         send_to(&client.tx, &CtrlEvent::Disconnected { reason });
@@ -205,13 +224,18 @@ impl CtrlClients {
             self.disconnect(id, reason);
         }
     }
+
+    fn take_authority_for_emby_remote(&mut self) {
+        self.disconnect_driver(DisconnectReason::TakenOverByEmbyRemote);
+        self.authority = AuthorityHolder::EmbyRemote;
+    }
 }
 
-fn evict_ctrl_driver_for_emby_remote(ctrl_clients: &ClientRegistry) {
+fn take_authority_for_emby_remote(ctrl_clients: &ClientRegistry) {
     ctrl_clients
         .lock()
         .unwrap()
-        .disconnect_driver(DisconnectReason::TakenOverByEmbyRemote);
+        .take_authority_for_emby_remote();
 }
 
 /// A reason a ctrl-socket command is not acted on, computed server-side.
@@ -980,7 +1004,7 @@ fn handle_ws(
             *items = fetched.clone();
             *cursor = start_idx;
             *source = crate::config::QueueSource::Remote;
-            evict_ctrl_driver_for_emby_remote(ctrl_clients);
+            take_authority_for_emby_remote(ctrl_clients);
             broadcast_queue_state(
                 ctrl_clients,
                 player,
@@ -1011,27 +1035,27 @@ fn handle_ws(
         WsEvent::Stop => {
             player.stop();
             if !items.is_empty() {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::Pause => {
             if player.set_paused(true) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::Unpause => {
             if player.set_paused(false) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::NextTrack => {
             if player.next() {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::PreviousTrack => {
             if player.previous() {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::Seek(ticks) => {
@@ -1039,23 +1063,23 @@ fn handle_ws(
             if player.send_command(PlayerCommand::SeekAbsolute(
                 ticks as f64 / TICKS_PER_SECOND as f64,
             )) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::TogglePause => {
             if player.send_command(PlayerCommand::TogglePause) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::SeekRelative(secs) => {
             if player.send_command(PlayerCommand::Seek(secs)) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::SetVolume(v) => {
             let vol_max = player.status.lock().unwrap().volume_max;
             if player.send_command(PlayerCommand::SetVolume(v.clamp(0, vol_max))) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::VolumeUp => {
@@ -1063,29 +1087,29 @@ fn handle_ws(
             let v = (st.volume + 5).min(st.volume_max);
             drop(st);
             if player.send_command(PlayerCommand::SetVolume(v)) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::VolumeDown => {
             let v = (player.status.lock().unwrap().volume - 5).max(0);
             if player.send_command(PlayerCommand::SetVolume(v)) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::SetMute(muted) => {
             if player.send_command(PlayerCommand::SetMute(muted)) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::ToggleMute => {
             let muted = !player.status.lock().unwrap().muted;
             if player.send_command(PlayerCommand::SetMute(muted)) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::SetAudio(index) => {
             if player.send_command(PlayerCommand::SetAudio(index)) {
-                evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                take_authority_for_emby_remote(ctrl_clients);
             }
         }
         WsEvent::SetSub(index) => {
@@ -1096,7 +1120,7 @@ fn handle_ws(
                 .subtitle_stream_index_to_mpv_id(index);
             if let Some(sid) = sid {
                 if player.send_command(PlayerCommand::SetSub(sid)) {
-                    evict_ctrl_driver_for_emby_remote(ctrl_clients);
+                    take_authority_for_emby_remote(ctrl_clients);
                 }
             } else {
                 log::warn!(target: "daemon", "subtitle stream index {index} did not match any mpv subtitle track");
@@ -1113,8 +1137,9 @@ fn all_audio(items: &[MediaItem]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws, CtrlClients, CtrlEvent,
-        CtrlOutbound, CtrlRequest, SharedQueueState,
+        all_audio, audio_only_rejection, broadcast, handle_ctrl, handle_ws,
+        take_authority_for_emby_remote, AuthorityHolder, CtrlClients, CtrlEvent, CtrlOutbound,
+        CtrlRequest, SharedQueueState,
     };
     use crate::api::MediaItem;
     use crate::config::{Config, QueueSource};
@@ -1315,7 +1340,7 @@ mod tests {
         let (driver_id, driver_rx) = connect_client(&mut clients);
         assert!(clients.has_client(driver_id));
 
-        clients.disconnect_driver(DisconnectReason::TakenOverByEmbyRemote);
+        clients.take_authority_for_emby_remote();
 
         match recv_event(&driver_rx) {
             CtrlEvent::Disconnected { reason } => {
@@ -1325,6 +1350,51 @@ mod tests {
         }
         assert_close(&driver_rx);
         assert!(!clients.has_driver());
+        assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
+    }
+
+    #[test]
+    fn ctrl_reconnect_after_emby_remote_takeover_becomes_driver_and_receives_broadcasts() {
+        let mut clients = CtrlClients::default();
+        let (_old_id, old_rx) = connect_client(&mut clients);
+        clients.take_authority_for_emby_remote();
+
+        match recv_event(&old_rx) {
+            CtrlEvent::Disconnected { reason } => {
+                assert_eq!(reason, DisconnectReason::TakenOverByEmbyRemote);
+            }
+            _ => panic!("expected structured disconnect"),
+        }
+        assert_close(&old_rx);
+        assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
+
+        let (new_id, new_rx) = connect_client(&mut clients);
+        assert!(clients.has_client(new_id));
+        assert_eq!(clients.authority, AuthorityHolder::Ctrl(new_id));
+
+        let registry = Arc::new(Mutex::new(clients));
+        broadcast(
+            &registry,
+            &CtrlEvent::StatusOnly(PlayerStatus {
+                volume: 66,
+                ..PlayerStatus::default()
+            }),
+        );
+
+        match recv_event(&new_rx) {
+            CtrlEvent::StatusOnly(status) => assert_eq!(status.volume, 66),
+            _ => panic!("expected status update"),
+        }
+    }
+
+    #[test]
+    fn emby_remote_takeover_without_ctrl_client_still_records_authority() {
+        let mut clients = CtrlClients::default();
+
+        clients.take_authority_for_emby_remote();
+
+        assert!(!clients.has_driver());
+        assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
     }
 
     #[test]
@@ -1607,5 +1677,16 @@ mod tests {
         assert!(clients.has_client(driver_id));
         drop(clients);
         assert!(driver_rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn websocket_takeover_helper_records_emby_remote_authority() {
+        let registry = Arc::new(Mutex::new(CtrlClients::default()));
+
+        take_authority_for_emby_remote(&registry);
+
+        let clients = registry.lock().unwrap();
+        assert!(!clients.has_driver());
+        assert_eq!(clients.authority, AuthorityHolder::EmbyRemote);
     }
 }
