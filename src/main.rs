@@ -285,11 +285,11 @@ fn main() {
                         std::process::exit(1);
                     }
                 };
-                // Inferior argv = this same invocation, minus -a/--alive
-                // (it must not try to spawn a second relay) and minus any
-                // --connect-daemon (already handled above; stay-alive never
-                // applies to thin clients, so this branch never runs when
-                // one was given, but strip defensively for future-proofing).
+                // Inferior argv = this same invocation, minus -a/--alive (it
+                // must not try to spawn a second relay). No --connect-daemon
+                // can be present here: that always returns above, before
+                // this branch is reached, so stay-alive never applies to
+                // thin clients.
                 let inferior_argv: Vec<String> =
                     std::iter::once(exe.to_string_lossy().into_owned())
                         .chain(
