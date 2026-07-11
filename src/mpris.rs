@@ -67,6 +67,24 @@ fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> 
             let length_us = s.runtime_ticks * 1_000_000 / TICKS_PER_SECOND;
             m.insert("mpris:length".to_string(), zvariant::Value::new(length_us));
         }
+        if !s.art_url.is_empty() {
+            m.insert(
+                "mpris:artUrl".to_string(),
+                zvariant::Value::new(s.art_url.clone()),
+            );
+        }
+        if !s.artist.is_empty() {
+            m.insert(
+                "xesam:artist".to_string(),
+                zvariant::Value::new(vec![s.artist.clone()]),
+            );
+        }
+        if !s.album.is_empty() {
+            m.insert(
+                "xesam:album".to_string(),
+                zvariant::Value::new(s.album.clone()),
+            );
+        }
     }
     m
 }
@@ -259,7 +277,8 @@ pub fn start(
             };
 
             let mut last_status = String::new();
-            let mut last_title = String::new();
+            let mut last_metadata_key =
+                (String::new(), String::new(), String::new(), String::new());
             let mut last_pos_s: i64 = -1;
             let mut last_vol: i64 = -1;
 
@@ -268,7 +287,7 @@ pub fn start(
 
                 // Snapshot PlayerStatus once per poll cycle so all property
                 // reads see consistent state.
-                let (cur_status, cur_title, cur_pos_us, cur_vol) = {
+                let (cur_status, cur_metadata_key, cur_pos_us, cur_vol) = {
                     let s = status_poll.lock().unwrap();
                     *snapshot_poll.lock().unwrap() = s.clone();
                     let st = if !s.active {
@@ -279,7 +298,17 @@ pub fn start(
                         "Playing".to_string()
                     };
                     let pos_us = s.position_ticks * 1_000_000 / TICKS_PER_SECOND;
-                    (st, s.title.clone(), pos_us, s.volume)
+                    (
+                        st,
+                        (
+                            s.title.clone(),
+                            s.artist.clone(),
+                            s.album.clone(),
+                            s.art_url.clone(),
+                        ),
+                        pos_us,
+                        s.volume,
+                    )
                 };
 
                 let Ok(iface_ref) = conn
@@ -298,8 +327,8 @@ pub fn start(
                     let _ = iface.playback_status_changed(ctxt).await;
                 }
 
-                if cur_title != last_title {
-                    last_title = cur_title;
+                if cur_metadata_key != last_metadata_key {
+                    last_metadata_key = cur_metadata_key;
                     let _ = iface.metadata_changed(ctxt).await;
                 }
 
@@ -317,4 +346,50 @@ pub fn start(
             }
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn string_value(metadata: &HashMap<String, zvariant::Value<'static>>, key: &str) -> String {
+        metadata
+            .get(key)
+            .unwrap_or_else(|| panic!("missing metadata key {key}"))
+            .downcast_ref::<String>()
+            .unwrap_or_else(|_| panic!("metadata key {key} is not a string"))
+    }
+
+    #[test]
+    fn active_metadata_includes_cover_artist_and_album() {
+        let metadata = make_metadata(&PlayerStatus {
+            active: true,
+            title: "Song".to_string(),
+            artist: "Artist".to_string(),
+            album: "Album".to_string(),
+            art_url: "https://emby.example/Items/track/Images/Primary".to_string(),
+            ..PlayerStatus::default()
+        });
+
+        assert_eq!(
+            string_value(&metadata, "mpris:artUrl"),
+            "https://emby.example/Items/track/Images/Primary"
+        );
+        assert!(metadata.contains_key("xesam:artist"));
+        assert_eq!(string_value(&metadata, "xesam:album"), "Album");
+    }
+
+    #[test]
+    fn inactive_metadata_omits_track_details() {
+        let metadata = make_metadata(&PlayerStatus {
+            artist: "Artist".to_string(),
+            album: "Album".to_string(),
+            art_url: "https://emby.example/art.jpg".to_string(),
+            ..PlayerStatus::default()
+        });
+
+        assert!(!metadata.contains_key("mpris:artUrl"));
+        assert!(!metadata.contains_key("xesam:artist"));
+        assert!(!metadata.contains_key("xesam:album"));
+    }
 }
