@@ -1725,6 +1725,7 @@ impl App {
         remote_rx: mpsc::Receiver<PlayerEvent>,
     ) {
         let initial_items = remote.items.lock().unwrap().clone();
+        let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let always_play_next = self.client.lock().unwrap().config.always_play_next;
 
@@ -1758,7 +1759,11 @@ impl App {
         self.runtime_zero_since = None;
         self.next_up_item = None;
         self.skip_intro_end_ticks = None;
-        self.set_queue_scope(QueueScope::Remote);
+        if has_initial_items {
+            self.set_queue_scope(QueueScope::Remote);
+        } else {
+            self.set_queue_scope(QueueScope::Local);
+        }
         self.show_sessions = false;
         self.flash_status(format!("Connected directly to {}", sess.device_name));
     }
@@ -6541,6 +6546,41 @@ pub(crate) mod tests {
             app.sessions_overlay_footer(),
             "[↵]conn [d]disc [r]refresh [Esc]close"
         );
+    }
+
+    #[test]
+    fn direct_remote_connect_keeps_local_scope_when_remote_queue_is_empty() {
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(2);
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+        let sess = make_session("remote-host", "mbv");
+
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+
+        assert_eq!(app.queue_scope, QueueScope::Local);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+        assert!(app.remote_player_tab.as_ref().unwrap().items.is_empty());
+        assert_eq!(app.player_tab.items.len(), 2);
+    }
+
+    #[test]
+    fn direct_remote_connect_switches_to_remote_scope_when_remote_queue_has_items() {
+        let mut app = make_app_stub();
+        app.player_tab.items = make_items(2);
+        let remote_items = make_items(1);
+        let (remote, remote_rx) =
+            mbv_core::remote_player::RemotePlayer::stub(remote_items.clone(), 0);
+        let sess = make_session("remote-host", "mbv");
+
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+
+        assert_eq!(app.queue_scope, QueueScope::Remote);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
+        assert_eq!(
+            app.remote_player_tab.as_ref().unwrap().items[0].id,
+            remote_items[0].id
+        );
+        assert_eq!(app.player_tab.items.len(), 2);
     }
 
     #[test]
