@@ -8,6 +8,7 @@ pub(crate) mod palette;
 pub mod render;
 mod search;
 mod settings;
+pub(crate) mod stay_alive;
 pub(crate) mod ui_util;
 
 use self::search::SearchSubsystem;
@@ -813,6 +814,10 @@ pub struct App {
     image_protocol_enabled: bool,
     confirm_rescan: bool,
     queue_scope: QueueScope,
+    /// The relay's out-of-band control channel (ADR 0005), present only
+    /// when running as a stay-alive inferior under a relay. `None` in bare
+    /// mode and for `new_remote` (thin client to `mbvd`).
+    stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
     #[cfg(test)]
     _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
@@ -846,6 +851,7 @@ struct AppInit {
     notif_action_rx: mpsc::Receiver<String>,
     search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
     search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
+    stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
 }
 
 enum PendingQueueAction {
@@ -855,7 +861,6 @@ enum PendingQueueAction {
         source: crate::config::QueueSource,
     },
     ClearQueue,
-    Quit,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -867,7 +872,8 @@ pub(super) enum PowerFocus {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingKey {
-    DaemonModeOnExit,
+    StayAlive,
+    SavePlaylistOnQuit,
     StartOnQueue,
     AlwaysPlayNext,
     ConsumeVideos,
@@ -898,7 +904,8 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     (
         "[general]",
         &[
-            SettingKey::DaemonModeOnExit,
+            SettingKey::StayAlive,
+            SettingKey::SavePlaylistOnQuit,
             SettingKey::AlwaysSkipIntro,
             SettingKey::SystemNotifications,
             SettingKey::ImageProtocol,
@@ -1192,6 +1199,7 @@ impl App {
             image_fetches_active: 0,
             confirm_rescan: false,
             queue_scope: init.initial_queue_scope,
+            stay_alive_ctrl: init.stay_alive_ctrl,
         }
     }
 
@@ -1295,6 +1303,7 @@ impl App {
             notif_action_rx,
             search_tx,
             search_rx,
+            stay_alive_ctrl: stay_alive::StayAliveCtrl::from_env(),
         })
     }
 
@@ -1414,6 +1423,7 @@ impl App {
             notif_action_rx,
             search_tx,
             search_rx,
+            stay_alive_ctrl: None,
         });
         if is_local_daemon {
             let bootstrap = local_daemon_bootstrap.unwrap();
@@ -1494,13 +1504,11 @@ impl App {
         match action {
             PendingQueueAction::PlayItems { .. } => self.playback_target_queue_scope(),
             PendingQueueAction::ClearQueue => self.visible_queue_scope(),
-            PendingQueueAction::Quit => QueueScope::Local,
         }
     }
 
     fn action_touches_local_queue(&self, action: &PendingQueueAction) -> bool {
-        matches!(action, PendingQueueAction::Quit)
-            || self.local_queue_metadata_applies(self.action_queue_scope(action))
+        self.local_queue_metadata_applies(self.action_queue_scope(action))
     }
 
     fn clear_local_queue_metadata(&mut self) {
@@ -1874,6 +1882,37 @@ impl App {
 
         install_signal_handlers();
         start_quit_watchdog(self.player.quit_handle());
+
+        // Stay-alive tray (T7, issue #156): the minimal head that makes an
+        // alive session attended. Driven over the existing in-process
+        // Player mpsc, not a ctrl socket -- ADR 0004's daemon-owned tray is
+        // a separate surface (`daemon_inner`, mbvd's tray). Only present
+        // when running as the inferior under a relay; persists across
+        // detach/reattach since it lives in the app, not the terminal-client.
+        // Kept alive for the whole function (dropped only when `run`
+        // returns, i.e. on real quit).
+        let _tray_handle = if self.stay_alive_ctrl.is_some() {
+            let show_systray_icon = self.client.lock().unwrap().config.show_systray_icon;
+            if show_systray_icon {
+                let (shutdown_tx, shutdown_rx) = std::sync::mpsc::sync_channel::<()>(1);
+                let handle = crate::tray::spawn(shutdown_tx);
+                // Tray Quit -> the same graceful-quit path as `mbv -q` /
+                // SIGTERM (T3): self-SIGTERM reuses all of QUIT_REQUESTED's
+                // existing save/stop/exit plumbing instead of duplicating it.
+                std::thread::spawn(move || {
+                    if shutdown_rx.recv().is_ok() {
+                        unsafe {
+                            libc::raise(libc::SIGTERM);
+                        }
+                    }
+                });
+                handle
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         let mut last_render = Instant::now() - Duration::from_secs(2);
 
@@ -2262,8 +2301,61 @@ impl App {
                             }
                         }
                     }
+                    // Terminal resize (SIGWINCH via pty winsize, or a real
+                    // terminal resize in bare mode): reflow + re-emit images
+                    // only. Distinct from the `client attached` handler
+                    // below — a resize must not re-detect capabilities or
+                    // re-capture the mouse, and (unlike attach) only fires
+                    // when the size actually changed. Also fixes the
+                    // standalone (non-stay-alive) resize-corruption bug:
+                    // ratatui's diffing alone left stale content on-screen
+                    // after a size change, since raw image escape sequences
+                    // aren't tracked in its buffer.
+                    Event::Resize(_, _) => {
+                        self.force_clear = true;
+                        self.card_image_states.clear();
+                        self.card_image_loading.clear();
+                    }
                     _ => {}
                 }
+            }
+
+            // `client attached` (T5 reattach-refresh, ADR 0005): the
+            // superset of a resize, fired on EVERY attach regardless of
+            // size — a stay-alive reattach in a different terminal (e.g.
+            // kitty -> foot) must show correct art with no manual resize.
+            // Re-run capability detection (DA1/XTGETTCAP round-trips
+            // through the pty to whatever real terminal is now attached),
+            // rebuild the image picker, re-capture the mouse (capture is
+            // otherwise only ever set once, at `init_terminal`), and force
+            // a full repaint with every visible image re-emitted.
+            if stay_alive::StayAliveCtrl::take_attach_pending() {
+                had_events = true;
+                let protocol_override = self.image_protocol.clone();
+                let mut new_picker =
+                    Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
+                let proto =
+                    protocol_override
+                        .as_deref()
+                        .and_then(|s| match s.to_lowercase().as_str() {
+                            "sixel" => Some(ProtocolType::Sixel),
+                            "kitty" => Some(ProtocolType::Kitty),
+                            "iterm2" => Some(ProtocolType::Iterm2),
+                            "halfblocks" => Some(ProtocolType::Halfblocks),
+                            _ => None,
+                        });
+                if let Some(proto) = proto {
+                    new_picker.set_protocol_type(proto);
+                }
+                self.image_picker = Some(new_picker);
+                self.card_image_states.clear();
+                self.card_image_loading.clear();
+                let _ = crossterm::execute!(
+                    terminal.backend_mut(),
+                    crossterm::event::EnableMouseCapture
+                );
+                self.force_clear = true;
+                log::info!(target: "stay_alive", "reattach-refresh: capabilities re-detected, images invalidated");
             }
 
             self.sync_volume_from_player();
@@ -3154,6 +3246,7 @@ pub(crate) mod tests {
             image_protocol_enabled: false,
             confirm_rescan: false,
             queue_scope: QueueScope::Local,
+            stay_alive_ctrl: None,
         }
     }
 
