@@ -88,7 +88,7 @@ impl App {
             let img_start_row = area.y + 1; // row after title
             let primary_cache_key = format!("{}:ser_primary", item.series_id);
             if !item.series_id.is_empty() && self.images_enabled() {
-                self.fetch_card_image(
+                self.fetch_list_card_image_when_idle(
                     primary_cache_key.clone(),
                     item.series_id.clone(),
                     String::new(),
@@ -520,7 +520,12 @@ impl App {
                 })
                 .collect();
             for (cache_key, ep_id, series_id) in prefetch {
-                self.fetch_card_image(cache_key, ep_id, series_id, &["Primary", "Backdrop"]);
+                self.fetch_list_card_image_when_idle(
+                    cache_key,
+                    ep_id,
+                    series_id,
+                    &["Primary", "Backdrop"],
+                );
             }
             // Prefetch adjacent seasons' posters under the same key format so the
             // card shows something immediately when the user switches seasons.
@@ -533,7 +538,7 @@ impl App {
                 if adj >= 0 && (adj as usize) < seasons.len() {
                     let s = &seasons[adj as usize];
                     let ck = format!("{}:pwr_ep", s.id);
-                    self.fetch_card_image(
+                    self.fetch_list_card_image_when_idle(
                         ck,
                         s.id.clone(),
                         series_id_adj.clone(),

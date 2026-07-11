@@ -241,7 +241,7 @@ impl App {
                     "Movie" => &["Backdrop", "Primary", "Logo"],
                     _ => &["Primary", "Backdrop", "Logo"],
                 };
-                self.fetch_card_image(
+                self.fetch_list_card_image_when_idle(
                     format!("{}:A", item_id.clone()),
                     item_id.clone(),
                     series_id.clone(),
@@ -253,7 +253,12 @@ impl App {
                         "Audio" => &["Primary"],
                         _ => &["Logo", "Primary", "Backdrop"],
                     };
-                    self.fetch_card_image(format!("{}:S", item_id), item_id, series_id, types_s);
+                    self.fetch_list_card_image_when_idle(
+                        format!("{}:S", item_id),
+                        item_id,
+                        series_id,
+                        types_s,
+                    );
                 }
             }
         }
@@ -301,7 +306,12 @@ impl App {
                 (format!("{}:S", item_id), types)
             };
             if self.images_enabled() {
-                self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+                self.fetch_list_card_image_when_idle(
+                    cache_key.clone(),
+                    item_id,
+                    series_id,
+                    img_types,
+                );
             }
 
             let count_label = if *is_center {

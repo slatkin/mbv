@@ -5,7 +5,6 @@ use super::meta::{library_is_audio, library_is_episode_like};
 use super::{LibraryTableContext, LIB_AUDIO_IMG_W, LIB_EPISODE_IMG_W, LIB_SELECTED_IMG_W};
 use mbv_core::api::MediaItem;
 use ratatui::layout::{Rect, Size};
-use std::time::Duration;
 use textwrap::wrap;
 
 impl App {
@@ -237,7 +236,7 @@ impl App {
         cursor: usize,
         ctx: &LibraryTableContext,
     ) {
-        if self.last_nav_at.elapsed() < Duration::from_millis(150) {
+        if !self.list_image_fetches_allowed() {
             return;
         }
         let prefetch_start = cursor.saturating_sub(3);
@@ -253,7 +252,12 @@ impl App {
                     } else {
                         &["Primary"]
                     };
-                    self.fetch_card_image(cache_key, item.id.clone(), String::new(), img_types);
+                    self.fetch_list_card_image_when_idle(
+                        cache_key,
+                        item.id.clone(),
+                        String::new(),
+                        img_types,
+                    );
                 }
                 if is_album_folder && item.production_year == 0 {
                     self.fetch_album_year(item.id.clone());

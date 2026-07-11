@@ -82,7 +82,7 @@ impl App {
             let ids: Vec<String> = items[first..last].iter().map(|i| i.id.clone()).collect();
             for id in ids {
                 let key = format!("{}:lib", id);
-                self.fetch_card_image(key, id, String::new(), &["Primary"]);
+                self.fetch_list_card_image_when_idle(key, id, String::new(), &["Primary"]);
             }
         }
 

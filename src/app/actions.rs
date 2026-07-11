@@ -4,6 +4,7 @@ use super::{
     LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
     RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD, QUEUE_VIEW_POWER,
 };
+use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::indicators::IndicatorData;
 use mbv_core::api::{EmbyClient, MediaItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
@@ -851,7 +852,7 @@ impl App {
 
     pub(super) fn move_lib_cursor(&mut self, delta: i64) {
         let now = Instant::now();
-        let idle = now.duration_since(self.last_nav_at) >= Duration::from_millis(150);
+        let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;

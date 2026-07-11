@@ -141,7 +141,7 @@ impl App {
                 fallback_id
             };
             let cache_key = format!("{}:pwr_al", album_id);
-            self.fetch_card_image(
+            self.fetch_list_card_image_when_idle(
                 cache_key.clone(),
                 fetch_id,
                 String::new(),
@@ -197,7 +197,7 @@ impl App {
                     None => return (0, false),
                 }
             };
-            self.fetch_card_image(
+            self.fetch_list_card_image_when_idle(
                 cache_key.clone(),
                 item_id,
                 series_id,
@@ -225,7 +225,7 @@ impl App {
             };
             let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
             let cache_key = format!("{}:pwr_hv", item_id);
-            self.fetch_card_image(
+            self.fetch_list_card_image_when_idle(
                 cache_key.clone(),
                 item_id,
                 series_id,
@@ -239,7 +239,7 @@ impl App {
                 let img_types: &[&str] = &["Backdrop", "Primary", "Logo"];
                 let cache_key = format!("{}:P", item.id);
                 if self.images_enabled() {
-                    self.fetch_card_image(
+                    self.fetch_list_card_image_when_idle(
                         cache_key.clone(),
                         item.id.clone(),
                         item.series_id.clone(),
@@ -265,7 +265,12 @@ impl App {
             let img_types: &[&str] = &["Backdrop", "Primary", "Logo"];
             let cache_key = format!("{}:P", detail_id);
             if self.images_enabled() {
-                self.fetch_card_image(cache_key.clone(), detail_id, series_id, img_types);
+                self.fetch_list_card_image_when_idle(
+                    cache_key.clone(),
+                    detail_id,
+                    series_id,
+                    img_types,
+                );
             }
             return self.render_card_image(f, area, &cache_key, area.height.min(18));
         }
@@ -308,7 +313,7 @@ impl App {
         };
         let is_music_item = matches!(img_types, &["Primary"] | &["AudioChild"]);
         if self.images_enabled() || is_music_item {
-            self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
+            self.fetch_list_card_image_when_idle(cache_key.clone(), item_id, series_id, img_types);
         }
 
         // Prefetch images for nearby items so they are ready before the cursor reaches them.
@@ -339,7 +344,7 @@ impl App {
             };
             let is_music = matches!(ptypes, &["Primary"] | &["AudioChild"]);
             if self.images_enabled() || is_music {
-                self.fetch_card_image(pkey, pid, psid, ptypes);
+                self.fetch_list_card_image_when_idle(pkey, pid, psid, ptypes);
             }
         }
         self.render_card_image(f, area, &cache_key, area.height)
@@ -354,6 +359,7 @@ mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
+    use std::time::Instant;
 
     /// Builds an App with a "movies" library whose only leaf item is a selected
     /// movie (compact banner active: lib focused, no pinned detail).
@@ -479,6 +485,22 @@ mod tests {
         // cache key must not have been marked as "no image" — that only
         // happens once the fetch resolves to nothing.
         assert!(!matches!(app.card_image_states.get(&cache_key), Some(None)));
+    }
+
+    #[test]
+    fn compact_banner_recent_navigation_does_not_fetch_skipped_movie_image() {
+        let mut app = make_compact_banner_movie_app();
+        app.image_protocol_enabled = true;
+        app.last_nav_at = Instant::now();
+
+        render_power_card(&mut app);
+
+        let cache_key = "movie-focused:P".to_string();
+        assert!(
+            !app.card_image_loading.contains(&cache_key)
+                && !app.card_image_states.contains_key(&cache_key),
+            "rapid navigation should not reserve a loading slot for a skipped movie"
+        );
     }
 
     #[test]

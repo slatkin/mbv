@@ -71,7 +71,7 @@ impl App {
 
         let primary_cache_key = format!("{}:cmp_primary", item.id);
         if self.images_enabled() {
-            self.fetch_card_image(
+            self.fetch_list_card_image_when_idle(
                 primary_cache_key.clone(),
                 item.id.clone(),
                 item.series_id.clone(),
@@ -80,15 +80,19 @@ impl App {
         }
 
         let (img_actual_w, img_height): (u16, u16) = {
-            if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
-                let actual = state.size_for(
-                    ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)),
-                    ratatui::layout::Size {
-                        width: IMG_COLS,
-                        height: IMG_ROWS,
-                    },
-                );
-                (actual.width, actual.height)
+            if self.list_image_renders_allowed() {
+                if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
+                    let actual = state.size_for(
+                        ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)),
+                        ratatui::layout::Size {
+                            width: IMG_COLS,
+                            height: IMG_ROWS,
+                        },
+                    );
+                    (actual.width, actual.height)
+                } else {
+                    (0, 0)
+                }
             } else {
                 (0, 0)
             }
@@ -323,7 +327,7 @@ impl App {
         // Fetch the Primary image using a key distinct from the backdrop key.
         let primary_cache_key = format!("{}:det_primary", item.id);
         if self.images_enabled() {
-            self.fetch_card_image(
+            self.fetch_list_card_image_when_idle(
                 primary_cache_key.clone(),
                 item.id.clone(),
                 item.series_id.clone(),

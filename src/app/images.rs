@@ -7,7 +7,10 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use ratatui::Frame;
 use std::io::Read as IoRead;
+use std::time::Duration;
 use textwrap::wrap;
+
+pub(super) const NAV_IMAGE_FETCH_IDLE_DELAY: Duration = Duration::from_millis(150);
 
 const MAX_IMAGE_FETCHES: usize = 6;
 const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
@@ -171,6 +174,27 @@ impl App {
             return;
         }
         self.spawn_image_fetch(req);
+    }
+
+    pub(super) fn list_image_fetches_allowed(&self) -> bool {
+        self.last_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
+    }
+
+    pub(super) fn list_image_renders_allowed(&self) -> bool {
+        self.list_image_fetches_allowed()
+    }
+
+    pub(super) fn fetch_list_card_image_when_idle(
+        &mut self,
+        cache_key: String,
+        item_id: String,
+        series_id: String,
+        types: &[&str],
+    ) {
+        if !self.list_image_fetches_allowed() {
+            return;
+        }
+        self.fetch_card_image(cache_key, item_id, series_id, types);
     }
 
     /// Decodes and caches the bundled Power View placeholder image, through the
@@ -722,5 +746,62 @@ impl App {
             text_y += 1;
         }
         Some(text_y)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NAV_IMAGE_FETCH_IDLE_DELAY;
+    use crate::app::tests::make_app_stub;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn recent_navigation_blocks_list_card_image_fetch() {
+        let mut app = make_app_stub();
+        app.last_nav_at = Instant::now();
+
+        app.fetch_list_card_image_when_idle(
+            "recent-nav:P".into(),
+            "recent-nav".into(),
+            String::new(),
+            &["Primary"],
+        );
+
+        assert!(!app.card_image_loading.contains("recent-nav:P"));
+        assert!(!app.card_image_states.contains_key("recent-nav:P"));
+    }
+
+    #[test]
+    fn idle_navigation_allows_list_card_image_fetch() {
+        let mut app = make_app_stub();
+        app.last_nav_at = Instant::now() - NAV_IMAGE_FETCH_IDLE_DELAY - Duration::from_millis(1);
+
+        app.fetch_list_card_image_when_idle(
+            "idle-nav:P".into(),
+            "idle-nav".into(),
+            String::new(),
+            &["Primary"],
+        );
+
+        assert!(
+            app.card_image_loading.contains("idle-nav:P")
+                || app.card_image_states.contains_key("idle-nav:P")
+        );
+    }
+
+    #[test]
+    fn recent_navigation_blocks_list_image_render() {
+        let mut app = make_app_stub();
+        app.last_nav_at = Instant::now();
+
+        assert!(!app.list_image_renders_allowed());
+    }
+
+    #[test]
+    fn idle_navigation_allows_list_image_render() {
+        let mut app = make_app_stub();
+        app.last_nav_at = Instant::now() - NAV_IMAGE_FETCH_IDLE_DELAY - Duration::from_millis(1);
+
+        assert!(app.list_image_renders_allowed());
     }
 }

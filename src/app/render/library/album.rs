@@ -57,7 +57,7 @@ impl App {
         };
 
         let cache_key = format!("{}:lib", album_id);
-        self.fetch_card_image(
+        self.fetch_list_card_image_when_idle(
             cache_key.clone(),
             album_id,
             String::new(),
