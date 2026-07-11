@@ -74,4 +74,4 @@ jobs:
         run: test -x ~/.cargo/bin/cargo-audit || cargo install cargo-audit --locked
 
       - name: Run cargo audit
-        run: ~/.cargo/bin/cargo-audit
+        run: cargo audit

@@ -217,6 +217,12 @@ fn main() {
                 }
             }
             None => {
+                // Relay may be gated on first attach; check socket connectability
+                // before reporting "no running instance".
+                if std::os::unix::net::UnixStream::connect(single_instance::socket_path()).is_ok() {
+                    eprintln!("mbv: stay-alive relay is starting up but not yet attachable; try again in a moment");
+                    std::process::exit(1);
+                }
                 eprintln!("mbv: no running instance found");
                 std::process::exit(1);
             }

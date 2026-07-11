@@ -818,6 +818,24 @@ pub struct App {
     /// when running as a stay-alive inferior under a relay. `None` in bare
     /// mode and for `new_remote` (thin client to `mbvd`).
     stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>,
+    /// Whether a terminal-client is currently attached to the pty. Always
+    /// `true` outside stay-alive mode (`stay_alive_ctrl` is `None` there, so
+    /// this field is never consulted). Set `false` by `try_quit`'s detach
+    /// path right after a successful `send_detach()`, and back to `true` by
+    /// the T5 reattach-refresh (`take_attach_pending()`).
+    ///
+    /// Exists because `Terminal::clear()` unconditionally queries the
+    /// cursor position over the pty (crossterm `get_cursor_position()`,
+    /// a blocking DSR round-trip) even for a fullscreen viewport. The
+    /// run loop keeps ticking and taking input while detached (that's the
+    /// point of stay-alive), so without this guard, the very next
+    /// `force_clear` — triggered by any number of ordinary UI actions,
+    /// unrelated to detach — blocks for several seconds with no
+    /// terminal-client left to answer, then errors out and kills the whole
+    /// process: a silent `exit(1)` if idle, or a SIGSEGV if it races a live
+    /// mpv Vulkan render thread during the resulting early-return teardown
+    /// (issue #156).
+    attached: bool,
     #[cfg(test)]
     _test_state_dir_guard: Option<crate::config::TestStateDirGuard>,
 }
@@ -1200,6 +1218,7 @@ impl App {
             confirm_rescan: false,
             queue_scope: init.initial_queue_scope,
             stay_alive_ctrl: init.stay_alive_ctrl,
+            attached: true,
         }
     }
 
@@ -1868,6 +1887,22 @@ impl App {
         picker
     }
 
+    /// Whether the run loop should touch the terminal this tick. `false`
+    /// only while a stay-alive session is detached (`self.attached ==
+    /// false`) — see the `attached` field doc for why `Terminal::clear()`
+    /// must never be called in that state (issue #156). Skipping renders
+    /// while detached loses nothing: the next attach's reattach-refresh
+    /// (`take_attach_pending()`) forces `force_clear` and a full repaint.
+    fn wants_terminal_render(
+        &self,
+        had_events: bool,
+        last_render: Instant,
+        render_interval: Duration,
+    ) -> bool {
+        self.attached
+            && (had_events || self.force_clear || last_render.elapsed() >= render_interval)
+    }
+
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut terminal = init_terminal()?;
         terminal.clear()?;
@@ -2362,6 +2397,10 @@ impl App {
             // a full repaint with every visible image re-emitted.
             if stay_alive::StayAliveCtrl::take_attach_pending() {
                 had_events = true;
+                self.attached = true;
+                // build_image_picker runs Picker::from_query_stdio() on the run-loop thread
+                // and relies on being the sole stdin consumer at this moment; the kitty→foot
+                // reattach case in the manual test matrix exercises this.
                 self.image_picker = Some(self.build_image_picker());
                 self.card_image_states.clear();
                 self.card_image_loading.clear();
@@ -2387,12 +2426,18 @@ impl App {
                     Duration::from_secs(1)
                 }
             };
-            if had_events || self.force_clear || last_render.elapsed() >= render_interval {
+            if self.wants_terminal_render(had_events, last_render, render_interval) {
                 if self.force_clear {
                     self.force_clear = false;
-                    terminal.clear()?;
+                    if let Err(e) = terminal.clear() {
+                        log::error!(target: "run_loop", "terminal.clear() failed: {e:?} (kind={:?})", e.kind());
+                        return Err(e.into());
+                    }
                 }
-                terminal.draw(|f| self.render(f))?;
+                if let Err(e) = terminal.draw(|f| self.render(f)) {
+                    log::error!(target: "run_loop", "terminal.draw() failed: {e:?} (kind={:?})", e.kind());
+                    return Err(e.into());
+                }
                 last_render = Instant::now();
             }
         }
@@ -3262,7 +3307,80 @@ pub(crate) mod tests {
             confirm_rescan: false,
             queue_scope: QueueScope::Local,
             stay_alive_ctrl: None,
+            attached: true,
         }
+    }
+
+    // ── wants_terminal_render (#156: detached stay-alive must not touch
+    // the terminal — Terminal::clear() blocks on a cursor-position DSR
+    // query nobody answers once the terminal-client has detached) ────────
+
+    #[test]
+    fn wants_terminal_render_true_when_attached_and_due() {
+        let mut app = make_app_stub();
+        app.attached = true;
+        let stale = Instant::now() - Duration::from_secs(10);
+        assert!(app.wants_terminal_render(false, stale, Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn wants_terminal_render_false_when_detached_even_with_events_and_force_clear() {
+        let mut app = make_app_stub();
+        app.attached = false;
+        app.force_clear = true;
+        let stale = Instant::now() - Duration::from_secs(10);
+        // had_events, force_clear, and an elapsed render_interval would all
+        // independently demand a render while attached -- none of them may
+        // override `attached == false`, or the run loop calls
+        // Terminal::clear()/draw() with nobody left to answer the pty.
+        assert!(!app.wants_terminal_render(true, stale, Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn wants_terminal_render_false_when_detached_and_idle() {
+        let app = make_app_stub();
+        let mut app = app;
+        app.attached = false;
+        let recent = Instant::now();
+        assert!(!app.wants_terminal_render(false, recent, Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn try_quit_bare_mode_does_not_touch_attached() {
+        let mut app = make_app_stub();
+        app.attached = true;
+        // No `stay_alive_ctrl` -> bare mode -> `attached` is irrelevant and
+        // must stay untouched (it's never consulted outside stay-alive).
+        let _ = app.try_quit();
+        assert!(app.attached);
+    }
+
+    #[test]
+    fn try_quit_stay_alive_detach_clears_attached_and_notifies_relay() {
+        let (app_end, relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        let mut app = make_app_stub();
+        app.attached = true;
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+
+        let quit_loop_should_exit = app.try_quit();
+
+        assert!(
+            !quit_loop_should_exit,
+            "stay-alive `q` must detach, never quit the run loop"
+        );
+        assert!(
+            !app.attached,
+            "detach must clear `attached` so the run loop skips terminal I/O \
+             until the next reattach (#156)"
+        );
+
+        // And it must have actually told the relay to detach, not just
+        // flipped local state.
+        use std::io::Read;
+        relay_end.set_nonblocking(true).unwrap();
+        let mut buf = [0u8; 32];
+        let n = relay_end.take(32).read(&mut buf).unwrap_or(0);
+        assert_eq!(&buf[..n], b"DETACH\n");
     }
 
     fn left_down(col: u16, row: u16) -> MouseEvent {

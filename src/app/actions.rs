@@ -4002,6 +4002,11 @@ impl App {
             match ctrl.send_detach() {
                 Ok(()) => {
                     self.flash_status("Detached — mbv keeps playing in the background".into());
+                    // #156: no terminal-client left to answer the run loop's
+                    // terminal.clear()/draw() calls until the next reattach
+                    // sets this back via take_attach_pending(); see the
+                    // `attached` field doc for why that matters.
+                    self.attached = false;
                 }
                 Err(e) => {
                     self.flash_status_high(format!(
@@ -4014,6 +4019,7 @@ impl App {
         if self.queue_dirty && self.queue_is_saved_playlist() {
             let save_on_quit = self.client.lock().unwrap().config.save_playlist_on_quit;
             if save_on_quit {
+                // non-blocking: enqueues save in a spawned thread, does not block quit
                 self.save_playlist_to_emby();
             }
             self.on_queue_replace_silent();
