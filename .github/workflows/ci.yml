@@ -22,7 +22,7 @@ jobs:
       - name: Update system and install build dependencies
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed rust cargo rustfmt clippy nasm mpv openssl
+          pacman -S --noconfirm --needed rust cargo nasm mpv openssl
 
       - name: Cache Rust build
         uses: actions/cache@v6
