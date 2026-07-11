@@ -20,5 +20,8 @@
       "mcp__serena__get_symbols_overview",
       "mcp__serena__initial_instructions"
     ]
+  },
+  "enabledPlugins": {
+    "agent-skills@addy-agent-skills": true
   }
 }
