@@ -156,6 +156,14 @@ _Avoid_: equating an alive session with a **Cold daemon** or any daemon state �
 The head-off / head-on transitions of a stay-alive session, performed by the pty relay. With the **owned relay**, mbv can initiate a detach itself (e.g. `q` → a detach command over a control channel) — something stock `abduco`/`dtach` cannot do, which is the reason for owning the relay (#156). Detach = the real terminal is released (or its window closed) while mbv keeps running against the relay's pty; reattach = a terminal-client binds a real terminal back to it. On reattach mbv must force a full repaint, re-enable mouse capture, and re-emit already-drawn images (mbv currently drops the `Event::Resize` that would trigger this — #156).
 _Avoid_: modeling detach/reattach as a control client connecting to a daemon — the relay carries raw terminal bytes between the ephemeral terminal-client and the persistent mbv process; it is not the ctrl/queue protocol of the **Daemon/TUI control seam**, and the terminal-client is not a `Thin client`.
 
+**Owned relay**:
+The thin, persistent process mbv spawns to provide **Stay alive** persistence: it creates the pty, holds the master fd, serves a unix socket, relays raw terminal bytes to a **Terminal-client**, and runs the mbv app under it on the pty slave. "Owned" because mbv writes it rather than shelling out to `abduco`/`dtach` — only an owned relay can offer both graphics passthrough and program-initiated detach (see ADR 0005). It is a dumb byte pipe plus a two-message out-of-band control channel (`client attached`, `detach now`), never a `Player`-holding daemon.
+_Avoid_: calling it a daemon or attributing queue/playback ownership to it — it owns a pty and a socket, nothing about mbv's state; mbv (the app) remains the single owner.
+
+**Terminal-client**:
+The ephemeral process a bare `mbv` becomes when it attaches to an alive session: it raw-modes the real terminal and relays real-terminal↔relay-socket bytes, exiting on detach. A pure *terminal relay*, deliberately dumb so an mbv/libmpv crash can't wedge the terminal it owns.
+_Avoid_: conflating it with a `Thin client` — it speaks raw terminal bytes over the relay socket, not the `RemotePlayer`/queue ctrl protocol, and it holds no queue or player state.
+
 ## Library browsing
 
 The subsystem that fetches, sorts, and displays Emby library contents — artists, albums, tracks — in navigable list views.
