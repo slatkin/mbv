@@ -3185,233 +3185,328 @@ impl App {
         });
     }
 
+    fn update_current_browse_level(
+        &mut self,
+        lib_idx: usize,
+        parent_id: &str,
+        require_loading: bool,
+        mut update: impl FnMut(&mut BrowseLevel),
+    ) -> bool {
+        let Some(lib) = self.libs.get_mut(lib_idx) else {
+            return false;
+        };
+        let Some(last) = lib.nav_stack.last_mut() else {
+            return false;
+        };
+        if last.parent_id != parent_id || (require_loading && !last.loading) {
+            return false;
+        }
+        update(last);
+        true
+    }
+
+    fn normalize_current_browse_level_items(&mut self, lib_idx: usize, log_album_entry: bool) {
+        let is_album = self.is_album_level(lib_idx);
+        if is_album && log_album_entry {
+            let title = self
+                .libs
+                .get(lib_idx)
+                .and_then(|lib| lib.nav_stack.last())
+                .map(|level| level.title.clone())
+                .unwrap_or_default();
+            log::debug!(target: "app", "album: entered «{title}»");
+        }
+        if let Some(last) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+        {
+            if is_album {
+                sort_audio_tracks(&mut last.items);
+            }
+            if last
+                .items
+                .first()
+                .map(|item| item.item_type == "Episode")
+                .unwrap_or(false)
+            {
+                sort_episodes(&mut last.items);
+            }
+        }
+    }
+
+    fn snap_grouped_album_cursor_to_display_order(&mut self, lib_idx: usize) {
+        if !self.is_viewing_album_folders(lib_idx) {
+            return;
+        }
+        // The grouped-by-artist album views (music.rs/list.rs) display albums
+        // sorted by artist, not in the raw SortName-by-album-title order the
+        // API returns them in — so the freshly-loaded default cursor (index 0
+        // in raw order) can land on an arbitrary album instead of the first one
+        // the user actually sees on screen. Snap it to the first album in (a
+        // synchronous best-effort guess at) display order. Mirrors
+        // `App::resolve_group_album_artist`'s fallback chain via
+        // `initial_group_artist_sort_key`.
+        if let Some(last) = self
+            .libs
+            .get_mut(lib_idx)
+            .and_then(|lib| lib.nav_stack.last_mut())
+        {
+            if !last.items.is_empty() {
+                let mut order: Vec<usize> = (0..last.items.len()).collect();
+                order.sort_by_key(|&i| {
+                    super::render::power::initial_group_artist_sort_key(&last.items[i])
+                });
+                last.cursor = order[0];
+            }
+        }
+    }
+
+    fn handle_loaded_level(&mut self, lib_idx: usize, parent_id: String, level: BrowseLevel) {
+        let mut level = Some(level);
+        self.update_current_browse_level(lib_idx, &parent_id, true, |last| {
+            *last = level.take().unwrap();
+        });
+        self.normalize_current_browse_level_items(lib_idx, true);
+        self.snap_grouped_album_cursor_to_display_order(lib_idx);
+    }
+
+    fn maybe_auto_push_power_tv_season_level(&mut self, lib_idx: usize) {
+        // In the power view: when a season list arrives for a TV library,
+        // automatically push a loading placeholder and fetch the first season's
+        // episodes so the user lands directly in the combined series view.
+        let should_auto_push = self.queue_view == QUEUE_VIEW_POWER
+            && self.power_left_tab == lib_idx + 1
+            && self
+                .libs
+                .get(lib_idx)
+                .map(|lib| {
+                    lib.library.collection_type == "tvshows"
+                        && lib
+                            .nav_stack
+                            .last()
+                            .map(|l| {
+                                l.items
+                                    .first()
+                                    .map(|i| i.item_type == "Season")
+                                    .unwrap_or(false)
+                            })
+                            .unwrap_or(false)
+                })
+                .unwrap_or(false);
+
+        if should_auto_push {
+            let (season_id, season_name) = self
+                .libs
+                .get(lib_idx)
+                .and_then(|lib| lib.nav_stack.last())
+                .and_then(|l| l.items.get(l.cursor))
+                .map(|s| (s.id.clone(), s.name.clone()))
+                .unwrap_or_default();
+            if !season_id.is_empty() {
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    lib.nav_stack.push(BrowseLevel {
+                        parent_id: season_id.clone(),
+                        title: season_name.clone(),
+                        items: vec![],
+                        total_count: 0,
+                        cursor: 0,
+                        item_types: Some("Episode".into()),
+                        unplayed_only: false,
+                        sort_by: "SortName".into(),
+                        sort_order: "Ascending".into(),
+                        loading: true,
+                        scroll: 0,
+                        all_items: None,
+                    });
+                }
+                self.spawn_browse(
+                    lib_idx,
+                    season_id,
+                    season_name,
+                    Some("Episode".into()),
+                    false,
+                    "SortName".into(),
+                    "Ascending".into(),
+                );
+            }
+        }
+    }
+
+    fn maybe_auto_push_power_music_group_level(&mut self, lib_idx: usize) {
+        // In the power view: when the group list loads for a music library with
+        // levels = ["group", …], automatically push the first group's album
+        // level so the user lands directly in the combined group view.
+        let should_auto_push_music = self.queue_view == QUEUE_VIEW_POWER
+            && self.power_left_tab == lib_idx + 1
+            && self
+                .libs
+                .get(lib_idx)
+                .map(|lib| {
+                    lib.library.collection_type == "music"
+                        && self
+                            .music_levels
+                            .first()
+                            .map(|s| s == "group")
+                            .unwrap_or(false)
+                        && lib.nav_stack.len() == 1
+                        && !lib.nav_stack[0].items.is_empty()
+                })
+                .unwrap_or(false);
+
+        if should_auto_push_music {
+            let (group_id, group_name) = self
+                .libs
+                .get(lib_idx)
+                .and_then(|lib| lib.nav_stack.last())
+                .and_then(|l| l.items.get(l.cursor))
+                .map(|g| (g.id.clone(), g.name.clone()))
+                .unwrap_or_default();
+            if !group_id.is_empty() {
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    lib.nav_stack.push(BrowseLevel {
+                        parent_id: group_id.clone(),
+                        title: group_name.clone(),
+                        items: vec![],
+                        total_count: 0,
+                        cursor: 0,
+                        item_types: None,
+                        unplayed_only: false,
+                        sort_by: "SortName".into(),
+                        sort_order: "Ascending".into(),
+                        loading: true,
+                        scroll: 0,
+                        all_items: None,
+                    });
+                }
+                self.spawn_browse(
+                    lib_idx,
+                    group_id,
+                    group_name,
+                    None,
+                    false,
+                    "SortName".into(),
+                    "Ascending".into(),
+                );
+            }
+        }
+    }
+
+    fn maybe_aggregate_feed_after_loaded(&self, lib_idx: usize) {
+        let should_aggregate_feed = self.should_aggregate_feed(lib_idx, |root| {
+            root.item_types.is_none() && !root.unplayed_only
+        });
+        if should_aggregate_feed {
+            self.log_feed_home_video_state(lib_idx, "loaded_before_aggregate");
+            self.spawn_feed_home_video_aggregate(lib_idx);
+            self.spawn_podcast_aggregate(lib_idx);
+        }
+    }
+
+    fn maybe_aggregate_feed_after_page_append(&self, lib_idx: usize, parent_id: &str) {
+        let should_aggregate_feed =
+            self.should_aggregate_feed(lib_idx, |root| root.parent_id == parent_id);
+        if should_aggregate_feed {
+            self.log_feed_home_video_state(lib_idx, "page_appended_before_aggregate");
+            self.spawn_feed_home_video_aggregate(lib_idx);
+            self.spawn_podcast_aggregate(lib_idx);
+        }
+    }
+
+    fn maybe_refresh_feed_groups_after_refresh(&mut self, lib_idx: usize) {
+        let should_refresh_feed_groups = self
+            .libs
+            .get(lib_idx)
+            .map(|lib| {
+                self.queue_view == QUEUE_VIEW_POWER
+                    && self.power_left_tab == lib_idx + 1
+                    && (self.is_feed_home_video_library(lib_idx)
+                        || self.is_podcast_library(lib_idx))
+                    && lib
+                        .nav_stack
+                        .first()
+                        .is_some_and(BrowseLevel::is_fully_loaded)
+            })
+            .unwrap_or(false);
+        if should_refresh_feed_groups {
+            if let Some(state) = self
+                .libs
+                .get_mut(lib_idx)
+                .and_then(|lib| lib.feed_home_video.as_mut())
+            {
+                state.loading = true;
+            }
+            self.log_feed_home_video_state(lib_idx, "refreshed_before_aggregate");
+            self.spawn_feed_home_video_aggregate(lib_idx);
+            self.spawn_podcast_aggregate(lib_idx);
+        }
+    }
+
+    fn handle_lib_loaded(&mut self, lib_idx: usize, parent_id: String, level: BrowseLevel) {
+        self.handle_loaded_level(lib_idx, parent_id, level);
+        self.maybe_auto_push_power_tv_season_level(lib_idx);
+        self.maybe_auto_push_power_music_group_level(lib_idx);
+        self.maybe_aggregate_feed_after_loaded(lib_idx);
+        self.maybe_fetch_next_page(lib_idx);
+        self.spawn_all_items_prefetch(lib_idx);
+    }
+
+    fn handle_lib_page_appended(
+        &mut self,
+        lib_idx: usize,
+        parent_id: String,
+        items: Vec<MediaItem>,
+        total_count: usize,
+    ) {
+        let mut items = Some(items);
+        self.update_current_browse_level(lib_idx, &parent_id, true, |last| {
+            last.items.extend(items.take().unwrap());
+            last.total_count = total_count;
+            last.loading = false;
+        });
+        self.normalize_current_browse_level_items(lib_idx, false);
+        self.maybe_aggregate_feed_after_page_append(lib_idx, &parent_id);
+        self.maybe_fetch_next_page(lib_idx);
+    }
+
+    fn handle_lib_refreshed(
+        &mut self,
+        lib_idx: usize,
+        parent_id: String,
+        item_types: Option<String>,
+        unplayed_only: bool,
+        items: Vec<MediaItem>,
+        total_count: usize,
+    ) {
+        let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
+            && item_types.as_deref() == Some("Video")
+            && unplayed_only;
+        if !is_feed_video_refresh {
+            let mut items = Some(items);
+            self.update_current_browse_level(lib_idx, &parent_id, false, |last| {
+                last.items = items.take().unwrap();
+                last.total_count = total_count;
+                last.loading = false;
+            });
+        }
+        self.normalize_current_browse_level_items(lib_idx, false);
+        self.maybe_refresh_feed_groups_after_refresh(lib_idx);
+        self.spawn_all_items_prefetch(lib_idx);
+    }
+
     pub(super) fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
             LibEvent::Loaded {
                 lib_idx,
                 parent_id,
                 level,
-            } => {
-                let is_album = self.is_album_level(lib_idx);
-                let is_grouped_albums = self.is_viewing_album_folders(lib_idx);
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if let Some(last) = lib.nav_stack.last_mut() {
-                        if last.parent_id == parent_id && last.loading {
-                            *last = level;
-                        }
-                    }
-                    if is_album {
-                        let title = lib
-                            .nav_stack
-                            .last()
-                            .map(|l| l.title.clone())
-                            .unwrap_or_default();
-                        log::debug!(target: "app", "album: entered «{title}»");
-                        if let Some(last) = lib.nav_stack.last_mut() {
-                            sort_audio_tracks(&mut last.items);
-                        }
-                    }
-                    // The grouped-by-artist album views (music.rs/list.rs) display
-                    // albums sorted by artist, not in the raw SortName-by-album-title
-                    // order the API returns them in — so the freshly-loaded default
-                    // cursor (index 0 in raw order) can land on an arbitrary album
-                    // instead of the first one the user actually sees on screen. Snap
-                    // it to the first album in (a synchronous best-effort guess at)
-                    // display order. Mirrors `App::resolve_group_album_artist`'s
-                    // fallback chain via `initial_group_artist_sort_key`.
-                    if is_grouped_albums {
-                        if let Some(last) = lib.nav_stack.last_mut() {
-                            if !last.items.is_empty() {
-                                let mut order: Vec<usize> = (0..last.items.len()).collect();
-                                order.sort_by_key(|&i| {
-                                    super::render::power::initial_group_artist_sort_key(
-                                        &last.items[i],
-                                    )
-                                });
-                                last.cursor = order[0];
-                            }
-                        }
-                    }
-                    if let Some(last) = lib.nav_stack.last_mut() {
-                        if last
-                            .items
-                            .first()
-                            .map(|i| i.item_type == "Episode")
-                            .unwrap_or(false)
-                        {
-                            sort_episodes(&mut last.items);
-                        }
-                    }
-                }
-                // In the power view: when a season list arrives for a TV library,
-                // automatically push a loading placeholder and fetch the first season's
-                // episodes so the user lands directly in the combined series view.
-                let should_auto_push = self.queue_view == QUEUE_VIEW_POWER
-                    && self.power_left_tab == lib_idx + 1
-                    && self
-                        .libs
-                        .get(lib_idx)
-                        .map(|lib| {
-                            lib.library.collection_type == "tvshows"
-                                && lib
-                                    .nav_stack
-                                    .last()
-                                    .map(|l| {
-                                        l.items
-                                            .first()
-                                            .map(|i| i.item_type == "Season")
-                                            .unwrap_or(false)
-                                    })
-                                    .unwrap_or(false)
-                        })
-                        .unwrap_or(false);
-
-                if should_auto_push {
-                    let (season_id, season_name) = self
-                        .libs
-                        .get(lib_idx)
-                        .and_then(|lib| lib.nav_stack.last())
-                        .and_then(|l| l.items.get(l.cursor))
-                        .map(|s| (s.id.clone(), s.name.clone()))
-                        .unwrap_or_default();
-                    if !season_id.is_empty() {
-                        if let Some(lib) = self.libs.get_mut(lib_idx) {
-                            lib.nav_stack.push(BrowseLevel {
-                                parent_id: season_id.clone(),
-                                title: season_name.clone(),
-                                items: vec![],
-                                total_count: 0,
-                                cursor: 0,
-                                item_types: Some("Episode".into()),
-                                unplayed_only: false,
-                                sort_by: "SortName".into(),
-                                sort_order: "Ascending".into(),
-                                loading: true,
-                                scroll: 0,
-                                all_items: None,
-                            });
-                        }
-                        self.spawn_browse(
-                            lib_idx,
-                            season_id,
-                            season_name,
-                            Some("Episode".into()),
-                            false,
-                            "SortName".into(),
-                            "Ascending".into(),
-                        );
-                    }
-                }
-
-                // In the power view: when the group list loads for a music library
-                // with levels = ["group", …], automatically push the first group's
-                // album level so the user lands directly in the combined group view.
-                let should_auto_push_music = self.queue_view == QUEUE_VIEW_POWER
-                    && self.power_left_tab == lib_idx + 1
-                    && self
-                        .libs
-                        .get(lib_idx)
-                        .map(|lib| {
-                            lib.library.collection_type == "music"
-                                && self
-                                    .music_levels
-                                    .first()
-                                    .map(|s| s == "group")
-                                    .unwrap_or(false)
-                                && lib.nav_stack.len() == 1
-                                && !lib.nav_stack[0].items.is_empty()
-                        })
-                        .unwrap_or(false);
-
-                if should_auto_push_music {
-                    let (group_id, group_name) = self
-                        .libs
-                        .get(lib_idx)
-                        .and_then(|lib| lib.nav_stack.last())
-                        .and_then(|l| l.items.get(l.cursor))
-                        .map(|g| (g.id.clone(), g.name.clone()))
-                        .unwrap_or_default();
-                    if !group_id.is_empty() {
-                        if let Some(lib) = self.libs.get_mut(lib_idx) {
-                            lib.nav_stack.push(BrowseLevel {
-                                parent_id: group_id.clone(),
-                                title: group_name.clone(),
-                                items: vec![],
-                                total_count: 0,
-                                cursor: 0,
-                                item_types: None,
-                                unplayed_only: false,
-                                sort_by: "SortName".into(),
-                                sort_order: "Ascending".into(),
-                                loading: true,
-                                scroll: 0,
-                                all_items: None,
-                            });
-                        }
-                        self.spawn_browse(
-                            lib_idx,
-                            group_id,
-                            group_name,
-                            None,
-                            false,
-                            "SortName".into(),
-                            "Ascending".into(),
-                        );
-                    }
-                }
-
-                let should_aggregate_feed = self.should_aggregate_feed(lib_idx, |root| {
-                    root.item_types.is_none() && !root.unplayed_only
-                });
-                if should_aggregate_feed {
-                    self.log_feed_home_video_state(lib_idx, "loaded_before_aggregate");
-                    self.spawn_feed_home_video_aggregate(lib_idx);
-                    self.spawn_podcast_aggregate(lib_idx);
-                }
-
-                self.maybe_fetch_next_page(lib_idx);
-                self.spawn_all_items_prefetch(lib_idx);
-            }
+            } => self.handle_lib_loaded(lib_idx, parent_id, level),
             LibEvent::PageAppended {
                 lib_idx,
                 parent_id,
                 items,
                 total_count,
-            } => {
-                let is_album = self.is_album_level(lib_idx);
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if let Some(last) = lib.nav_stack.last_mut() {
-                        if last.parent_id == parent_id && last.loading {
-                            last.items.extend(items);
-                            last.total_count = total_count;
-                            last.loading = false;
-                        }
-                    }
-                    if is_album {
-                        if let Some(last) = lib.nav_stack.last_mut() {
-                            sort_audio_tracks(&mut last.items);
-                        }
-                    }
-                    if let Some(last) = lib.nav_stack.last_mut() {
-                        if last
-                            .items
-                            .first()
-                            .map(|i| i.item_type == "Episode")
-                            .unwrap_or(false)
-                        {
-                            sort_episodes(&mut last.items);
-                        }
-                    }
-                }
-                let should_aggregate_feed =
-                    self.should_aggregate_feed(lib_idx, |root| root.parent_id == parent_id);
-                if should_aggregate_feed {
-                    self.log_feed_home_video_state(lib_idx, "page_appended_before_aggregate");
-                    self.spawn_feed_home_video_aggregate(lib_idx);
-                    self.spawn_podcast_aggregate(lib_idx);
-                }
-                self.maybe_fetch_next_page(lib_idx);
-            }
+            } => self.handle_lib_page_appended(lib_idx, parent_id, items, total_count),
             LibEvent::Refreshed {
                 lib_idx,
                 parent_id,
@@ -3419,63 +3514,14 @@ impl App {
                 unplayed_only,
                 items,
                 total_count,
-            } => {
-                let is_album = self.is_album_level(lib_idx);
-                let is_feed_video_refresh = self.is_feed_home_video_library(lib_idx)
-                    && item_types.as_deref() == Some("Video")
-                    && unplayed_only;
-                if let Some(lib) = self.libs.get_mut(lib_idx) {
-                    if let Some(last) = lib.nav_stack.last_mut() {
-                        if last.parent_id == parent_id && !is_feed_video_refresh {
-                            last.items = items;
-                            last.total_count = total_count;
-                            last.loading = false;
-                        }
-                    }
-                    if is_album {
-                        if let Some(last) = lib.nav_stack.last_mut() {
-                            sort_audio_tracks(&mut last.items);
-                        }
-                    }
-                    if let Some(last) = lib.nav_stack.last_mut() {
-                        if last
-                            .items
-                            .first()
-                            .map(|i| i.item_type == "Episode")
-                            .unwrap_or(false)
-                        {
-                            sort_episodes(&mut last.items);
-                        }
-                    }
-                }
-                let should_refresh_feed_groups = self
-                    .libs
-                    .get(lib_idx)
-                    .map(|lib| {
-                        self.queue_view == QUEUE_VIEW_POWER
-                            && self.power_left_tab == lib_idx + 1
-                            && (self.is_feed_home_video_library(lib_idx)
-                                || self.is_podcast_library(lib_idx))
-                            && lib
-                                .nav_stack
-                                .first()
-                                .is_some_and(BrowseLevel::is_fully_loaded)
-                    })
-                    .unwrap_or(false);
-                if should_refresh_feed_groups {
-                    if let Some(state) = self
-                        .libs
-                        .get_mut(lib_idx)
-                        .and_then(|lib| lib.feed_home_video.as_mut())
-                    {
-                        state.loading = true;
-                    }
-                    self.log_feed_home_video_state(lib_idx, "refreshed_before_aggregate");
-                    self.spawn_feed_home_video_aggregate(lib_idx);
-                    self.spawn_podcast_aggregate(lib_idx);
-                }
-                self.spawn_all_items_prefetch(lib_idx);
-            }
+            } => self.handle_lib_refreshed(
+                lib_idx,
+                parent_id,
+                item_types,
+                unplayed_only,
+                items,
+                total_count,
+            ),
             LibEvent::SearchItemsLoaded {
                 lib_idx,
                 parent_id,
@@ -4594,6 +4640,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::LibraryTab;
 
     // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
 
@@ -4843,6 +4890,100 @@ mod tests {
              leave a stale dirty flag that could trigger an unwanted \
              save_playlist_to_emby() push on the next consume"
         );
+    }
+
+    #[test]
+    fn handle_loaded_level_replaces_the_matching_loading_level() {
+        let mut app = crate::app::tests::make_app_stub();
+        let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "parent".into(),
+                title: "Loading".into(),
+                items: vec![],
+                total_count: 0,
+                cursor: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: true,
+                scroll: 0,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        let level = BrowseLevel {
+            parent_id: "parent".into(),
+            title: "Loaded".into(),
+            items: crate::app::tests::make_items(2),
+            total_count: 2,
+            cursor: 1,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "DateCreated".into(),
+            sort_order: "Descending".into(),
+            loading: false,
+            scroll: 3,
+            all_items: None,
+        };
+
+        app.handle_loaded_level(0, "parent".into(), level);
+
+        let last = app.libs[0].nav_stack.last().unwrap();
+        assert_eq!(last.title, "Loaded");
+        assert_eq!(last.items.len(), 2);
+        assert_eq!(last.total_count, 2);
+        assert_eq!(last.cursor, 1);
+        assert_eq!(last.sort_by, "DateCreated");
+        assert_eq!(last.sort_order, "Descending");
+        assert!(!last.loading);
+    }
+
+    #[test]
+    fn normalize_current_browse_level_items_sorts_episode_lists() {
+        let mut app = crate::app::tests::make_app_stub();
+        let mut second = crate::app::tests::make_item("Episode 2", "Episode");
+        second.index_number = 2;
+        let mut first = crate::app::tests::make_item("Episode 1", "Episode");
+        first.index_number = 1;
+        let mut library = crate::app::tests::make_item("TV", "CollectionFolder");
+        library.id = "lib-tv".into();
+        library.is_folder = true;
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "series".into(),
+                title: "Season 1".into(),
+                items: vec![second, first],
+                total_count: 2,
+                cursor: 0,
+                item_types: Some("Episode".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                scroll: 0,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+        });
+
+        app.normalize_current_browse_level_items(0, false);
+
+        let last = app.libs[0].nav_stack.last().unwrap();
+        let names: Vec<&str> = last.items.iter().map(|item| item.name.as_str()).collect();
+        assert_eq!(names, vec!["Episode 1", "Episode 2"]);
     }
 
     #[test]
