@@ -1,8 +1,8 @@
 use super::settings::settings_total_rows;
 use super::ui_util::item_text_and_style;
 use super::{
-    App, ContextAction, ContextMenu, HomeSearch, LibSearch, PendingQueueAction, QueueScope,
-    SavePlaylistDialog, SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
+    App, ContextAction, ContextMenu, LibSearch, PendingQueueAction, QueueScope, SavePlaylistDialog,
+    SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
     POWER_LEFT_WIDTH_DEFAULT, POWER_LEFT_WIDTH_STEP, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
 use super::{PowerFocus, QUEUE_VIEW_COUNT, QUEUE_VIEW_POWER};
@@ -183,7 +183,7 @@ impl App {
 
     pub(super) fn handle_key_home_search(&mut self, key: KeyEvent) -> Option<bool> {
         if !(self.tab_idx == 0 || self.tab_idx == 1)
-            || self.home_search.is_none()
+            || !self.search.is_open()
             || self.context_menu_open()
         {
             return None;
@@ -193,7 +193,7 @@ impl App {
         {
             match key.code {
                 KeyCode::Left | KeyCode::Right => {
-                    if let Some(ref mut hs) = self.home_search {
+                    if let Some(hs) = self.search.state_mut() {
                         let n = hs.available_types().len() + 1;
                         if n > 1 {
                             hs.type_filter = if key.code == KeyCode::Right {
@@ -215,26 +215,26 @@ impl App {
         {
             return None;
         }
-        let input_focused = self.home_search.as_ref().is_none_or(|s| s.input_focused);
+        let input_focused = self.search.state().is_none_or(|s| s.input_focused);
         match key.code {
             KeyCode::Esc => {
-                self.home_search = None;
+                self.search.close();
             }
             KeyCode::Tab => {
-                if let Some(ref mut hs) = self.home_search {
+                if let Some(hs) = self.search.state_mut() {
                     hs.input_focused = !hs.input_focused;
                 }
             }
             KeyCode::Backspace if input_focused => {
-                let empty = self.home_search.as_ref().is_none_or(|s| s.query.is_empty());
+                let empty = self.search.state().is_none_or(|s| s.query.is_empty());
                 if empty {
-                    self.home_search = None;
+                    self.search.close();
                 } else {
-                    self.home_search.as_mut().unwrap().query.pop();
+                    self.search.state_mut().unwrap().query.pop();
                 }
             }
             KeyCode::Up => {
-                if let Some(ref mut hs) = self.home_search {
+                if let Some(hs) = self.search.state_mut() {
                     hs.cursor = hs.cursor.saturating_sub(1);
                     if hs.cursor < hs.scroll {
                         hs.scroll = hs.cursor;
@@ -242,14 +242,15 @@ impl App {
                 }
             }
             KeyCode::Down => {
-                if let Some(ref mut hs) = self.home_search {
+                if let Some(hs) = self.search.state_mut() {
                     let max = hs.filtered_count().saturating_sub(1);
                     hs.cursor = (hs.cursor + 1).min(max);
                 }
             }
             KeyCode::Enter => {
                 let (query, last_query, loading, has_results) = self
-                    .home_search
+                    .search
+                    .state()
                     .as_ref()
                     .map(|hs| {
                         (
@@ -273,13 +274,7 @@ impl App {
                     return Some(false);
                 }
                 if query != last_query {
-                    if let Some(ref mut hs) = self.home_search {
-                        hs.last_query = query.clone();
-                        hs.loading = true;
-                        hs.results.clear();
-                        hs.cursor = 0;
-                        hs.scroll = 0;
-                    }
+                    self.search.prepare_query(&query);
                     self.spawn_global_search(query);
                 } else if has_results {
                     self.select_home();
@@ -289,7 +284,7 @@ impl App {
                 return Some(self.try_quit());
             }
             KeyCode::Char(c) => {
-                if let Some(ref mut hs) = self.home_search {
+                if let Some(hs) = self.search.state_mut() {
                     hs.input_focused = true;
                     hs.query.push(c);
                 }
@@ -1132,16 +1127,7 @@ impl App {
                 return false;
             }
             KeyCode::Char('/') => {
-                self.home_search = Some(HomeSearch {
-                    query: String::new(),
-                    last_query: String::new(),
-                    results: Vec::new(),
-                    cursor: 0,
-                    loading: false,
-                    scroll: 0,
-                    type_filter: 0,
-                    input_focused: true,
-                });
+                self.search.open(true);
                 return false;
             }
             _ => {}
@@ -1684,16 +1670,7 @@ impl App {
                 }
             }
             KeyCode::Char('/') => {
-                self.home_search = Some(HomeSearch {
-                    query: String::new(),
-                    last_query: String::new(),
-                    results: Vec::new(),
-                    cursor: 0,
-                    loading: false,
-                    scroll: 0,
-                    type_filter: 0,
-                    input_focused: true,
-                });
+                self.search.open(true);
                 return false;
             }
             KeyCode::Char('v') => {
@@ -2003,7 +1980,7 @@ impl App {
             let item = self.current_lib_item();
             self.tab_idx = saved;
             item
-        } else if self.home_search.is_some() || self.tab_idx == 0 {
+        } else if self.search.is_open() || self.tab_idx == 0 {
             self.current_home_item()
         } else if self.tab_idx == 1 {
             let queue = self.displayed_queue();
@@ -2049,7 +2026,7 @@ impl App {
                         ContextAction::MarkPlayed(item.id.clone()),
                     );
                 }
-                if self.home_search.is_some() {
+                if self.search.is_open() {
                     Self::push_context_action(
                         &mut entries,
                         "Go to Library",
@@ -2060,7 +2037,7 @@ impl App {
                 Self::push_context_action(&mut entries, "Play", ContextAction::Play);
                 if cw_focused
                     || power_lib_idx.is_some()
-                    || self.home_search.is_some()
+                    || self.search.is_open()
                     || self.tab_idx != 1
                 {
                     Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
@@ -2090,7 +2067,7 @@ impl App {
                     }
                 }
                 if cw_focused
-                    || (self.home_search.is_none() && self.tab_idx == 0 && self.home.section == 0)
+                    || (!self.search.is_open() && self.tab_idx == 0 && self.home.section == 0)
                 {
                     Self::push_context_action(
                         &mut entries,
@@ -2098,7 +2075,7 @@ impl App {
                         ContextAction::RemoveFromContinueWatching,
                     );
                 }
-                if !cw_focused && self.home_search.is_none() && self.tab_idx == 1 {
+                if !cw_focused && !self.search.is_open() && self.tab_idx == 1 {
                     let pos = self.displayed_queue().queue_cursor;
                     Self::push_context_action(
                         &mut entries,
@@ -2106,7 +2083,7 @@ impl App {
                         ContextAction::RemoveFromQueue(pos),
                     );
                 }
-                if self.home_search.is_some() || self.tab_idx == 1 {
+                if self.search.is_open() || self.tab_idx == 1 {
                     Self::push_context_action(
                         &mut entries,
                         "Go to Library",

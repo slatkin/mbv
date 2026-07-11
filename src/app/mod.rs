@@ -6,9 +6,11 @@ mod input_resolver;
 pub(crate) mod layout;
 pub(crate) mod palette;
 pub mod render;
+mod search;
 mod settings;
 pub(crate) mod ui_util;
 
+use self::search::SearchSubsystem;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -178,66 +180,6 @@ struct LibSearch {
     cursor: usize,       // position within results
     scroll: usize,       // viewport scroll offset for the results list
     loading: bool,       // true while full-library fetch is in flight
-}
-
-struct HomeSearch {
-    query: String,
-    last_query: String, // query string that produced current results
-    results: Vec<mbv_core::api::MediaItem>,
-    cursor: usize,
-    loading: bool,
-    scroll: usize,
-    type_filter: usize,  // 0 = All; 1..N index into sorted type list
-    input_focused: bool, // true = typing into box; false = browsing results
-}
-
-impl HomeSearch {
-    fn type_sort_key(t: &str) -> u8 {
-        match t {
-            "Movie" => 0,
-            "Series" => 1,
-            "Episode" => 2,
-            "Audio" => 3,
-            "MusicAlbum" => 4,
-            "MusicArtist" => 5,
-            _ => 6,
-        }
-    }
-
-    pub(super) fn available_types(&self) -> Vec<&str> {
-        let mut seen = std::collections::HashSet::new();
-        let mut types: Vec<&str> = self
-            .results
-            .iter()
-            .filter_map(|r| {
-                let t = r.item_type.as_str();
-                if seen.insert(t) {
-                    Some(t)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        types.sort_by_key(|t| Self::type_sort_key(t));
-        types
-    }
-
-    pub(super) fn filtered_results(&self) -> Vec<&mbv_core::api::MediaItem> {
-        let types = self.available_types();
-        let filter = if self.type_filter == 0 {
-            None
-        } else {
-            types.get(self.type_filter - 1).copied()
-        };
-        self.results
-            .iter()
-            .filter(|r| filter.is_none_or(|t| r.item_type == t))
-            .collect()
-    }
-
-    pub(super) fn filtered_count(&self) -> usize {
-        self.filtered_results().len()
-    }
 }
 
 struct BrowseLevel {
@@ -800,9 +742,7 @@ pub struct App {
     notif_action_rx: mpsc::Receiver<String>,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
-    home_search: Option<HomeSearch>,
-    search_tx: mpsc::Sender<Result<Vec<MediaItem>, String>>,
-    search_rx: mpsc::Receiver<Result<Vec<MediaItem>, String>>,
+    search: SearchSubsystem,
     sessions: Vec<mbv_core::api::SessionInfo>,
     sessions_cursor: usize,
     sessions_scroll: usize,
@@ -1113,9 +1053,7 @@ impl App {
             },
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
-            home_search: None,
-            search_tx: init.search_tx,
-            search_rx: init.search_rx,
+            search: SearchSubsystem::new(init.search_tx, init.search_rx),
             sessions_tx: init.sessions_tx,
             sessions_rx: init.sessions_rx,
             card_image_tx: init.card_image_tx,
@@ -1978,22 +1916,11 @@ impl App {
                 self.handle_lib_event(ev);
             }
 
-            while let Ok(result) = self.search_rx.try_recv() {
+            let search_outcome = self.search.drain_results();
+            if search_outcome.received > 0 {
                 had_events = true;
-                if let Some(ref mut hs) = self.home_search {
-                    hs.loading = false;
-                    hs.cursor = 0;
-                    hs.scroll = 0;
-                    hs.type_filter = 0;
-                    match result {
-                        Ok(items) => {
-                            hs.results = items;
-                        }
-                        Err(e) => {
-                            hs.results = Vec::new();
-                            self.flash_status_high(format!("Search error: {e}"));
-                        }
-                    }
+                for error in search_outcome.errors {
+                    self.flash_status_high(format!("Search error: {error}"));
                 }
             }
 
@@ -3144,9 +3071,7 @@ pub(crate) mod tests {
             context_menu: None,
             lib_tx,
             lib_rx,
-            home_search: None,
-            search_tx,
-            search_rx,
+            search: SearchSubsystem::new(search_tx, search_rx),
             force_clear: false,
             tab_scroll: 0,
             ui_volume: 100,

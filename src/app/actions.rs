@@ -606,7 +606,7 @@ impl App {
     }
 
     pub(super) fn current_home_item(&self) -> Option<MediaItem> {
-        if let Some(ref hs) = self.home_search {
+        if let Some(hs) = self.search.state() {
             return hs.filtered_results().get(hs.cursor).copied().cloned();
         }
         let sec = self.home.section;
@@ -623,10 +623,7 @@ impl App {
 
     pub(super) fn spawn_global_search(&mut self, query: String) {
         let client = self.client.lock().unwrap().clone();
-        let tx = self.search_tx.clone();
-        std::thread::spawn(move || {
-            let _ = tx.send(client.search_items(&query, 100));
-        });
+        self.search.spawn_global_search(client, query);
     }
 
     pub(super) fn current_lib_item(&self) -> Option<MediaItem> {
@@ -3605,7 +3602,7 @@ impl App {
                     lib.search = None;
                 }
                 if switch_tab {
-                    self.home_search = None;
+                    self.search.close();
                     let target_tab = lib_idx + self.lib_tab_offset();
                     self.set_tab(target_tab);
                 }
