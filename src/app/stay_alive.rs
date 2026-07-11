@@ -68,4 +68,15 @@ impl StayAliveCtrl {
     pub fn take_attach_pending() -> bool {
         ATTACH_PENDING.swap(false, Ordering::SeqCst)
     }
+
+    /// Test-only constructor: wraps an already-open `UnixStream` (e.g. one
+    /// half of `UnixStream::pair()`) instead of reading `CTRL_FD_ENV` and
+    /// taking ownership of a raw fd, so tests can exercise the stay-alive
+    /// branches of `try_quit`/`send_detach` without a real relay.
+    #[cfg(test)]
+    pub(crate) fn for_test(stream: UnixStream) -> Self {
+        Self {
+            writer: Arc::new(Mutex::new(stream)),
+        }
+    }
 }

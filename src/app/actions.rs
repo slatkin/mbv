@@ -4002,6 +4002,11 @@ impl App {
             match ctrl.send_detach() {
                 Ok(()) => {
                     self.flash_status("Detached — mbv keeps playing in the background".into());
+                    // #156: no terminal-client left to answer the run loop's
+                    // terminal.clear()/draw() calls until the next reattach
+                    // sets this back via take_attach_pending(); see the
+                    // `attached` field doc for why that matters.
+                    self.attached = false;
                 }
                 Err(e) => {
                     self.flash_status_high(format!(
