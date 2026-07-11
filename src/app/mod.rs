@@ -1841,11 +1841,15 @@ impl App {
         self.spawn_sessions_load();
     }
 
-    pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut terminal = init_terminal()?;
-        terminal.clear()?;
-
-        // Initialise image picker after terminal is in raw mode.
+    /// Query the terminal for its image protocol (sixel/kitty/iterm2/etc,
+    /// via `Picker::from_query_stdio`, falling back to halfblocks), then
+    /// apply `self.image_protocol`'s override if it names one of the known
+    /// protocols. Shared by the startup init in `run` and the reattach
+    /// -refresh handler (T5) below, which both need to (re)detect the
+    /// attached terminal's capabilities the same way -- at startup, and
+    /// again on every stay-alive reattach since a different terminal may
+    /// now be attached.
+    fn build_image_picker(&self) -> Picker {
         use ratatui_image::picker::ProtocolType;
         let protocol_override = self.image_protocol.clone();
         let mut picker = Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
@@ -1861,7 +1865,15 @@ impl App {
         if let Some(proto) = proto {
             picker.set_protocol_type(proto);
         }
-        self.image_picker = Some(picker);
+        picker
+    }
+
+    pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut terminal = init_terminal()?;
+        terminal.clear()?;
+
+        // Initialise image picker after terminal is in raw mode.
+        self.image_picker = Some(self.build_image_picker());
 
         self.status = "Loading...".into();
         self.home_loading = true;
@@ -1880,6 +1892,25 @@ impl App {
         self.restore_queue_state();
         terminal.draw(|f| self.render(f))?;
 
+        // Installed unconditionally, even when this process is a stay-alive
+        // inferior under a relay (`self.stay_alive_ctrl.is_some()`). That is
+        // intentional, not incidental: the relay is the SIGHUP *firewall*
+        // for the launching shell (it ignores SIGHUP and setsid()s so
+        // closing the terminal that ran `mbv -a` can't kill it), but it is
+        // NOT a firewall against the relay process itself dying. The relay
+        // keeps its own extra fd on `pty.slave` open for its whole
+        // lifetime specifically so the pty master never EOFs during normal
+        // attach/detach/reattach cycling (`relay.rs::start_inferior`) --
+        // under that normal operation this inferior's tty fds (0/1/2, its
+        // controlling terminal per `become_pty_slave`'s setsid+TIOCSCTTY)
+        // never see a real HUP condition, so this watchdog is a no-op.
+        // But if the relay process itself crashes, every fd it held onto
+        // the pty master closes with it, and the kernel delivers a real
+        // SIGHUP to this inferior as the pty's session leader -- at that
+        // point nothing else is left to supervise the player, so falling
+        // back to this watchdog's normal "terminal is gone, stop and exit"
+        // behavior is the correct fail-safe rather than something to gate
+        // off for stay-alive.
         install_signal_handlers();
         start_quit_watchdog(self.player.quit_handle());
 
@@ -2331,23 +2362,7 @@ impl App {
             // a full repaint with every visible image re-emitted.
             if stay_alive::StayAliveCtrl::take_attach_pending() {
                 had_events = true;
-                let protocol_override = self.image_protocol.clone();
-                let mut new_picker =
-                    Picker::from_query_stdio().unwrap_or_else(|_| Picker::halfblocks());
-                let proto =
-                    protocol_override
-                        .as_deref()
-                        .and_then(|s| match s.to_lowercase().as_str() {
-                            "sixel" => Some(ProtocolType::Sixel),
-                            "kitty" => Some(ProtocolType::Kitty),
-                            "iterm2" => Some(ProtocolType::Iterm2),
-                            "halfblocks" => Some(ProtocolType::Halfblocks),
-                            _ => None,
-                        });
-                if let Some(proto) = proto {
-                    new_picker.set_protocol_type(proto);
-                }
-                self.image_picker = Some(new_picker);
+                self.image_picker = Some(self.build_image_picker());
                 self.card_image_states.clear();
                 self.card_image_loading.clear();
                 let _ = crossterm::execute!(

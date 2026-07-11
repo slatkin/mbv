@@ -31,6 +31,13 @@ static ORIG_TERMIOS: OnceLock<libc::termios> = OnceLock::new();
 static TTY_FD: AtomicI32 = AtomicI32::new(-1);
 static RESTORED: AtomicBool = AtomicBool::new(false);
 static RESIZE_PENDING: AtomicBool = AtomicBool::new(false);
+// Self-pipe so the resize-propagation thread can block on read() instead of
+// busy-polling for SIGWINCH; write() of a single byte to a pipe is
+// async-signal-safe, unlike condvar notification. -1 = not set up (pipe()
+// failed); the resize thread falls back to polling RESIZE_PENDING in that
+// case so resize still works, just less efficiently.
+static WINCH_PIPE_READ: AtomicI32 = AtomicI32::new(-1);
+static WINCH_PIPE_WRITE: AtomicI32 = AtomicI32::new(-1);
 
 /// Async-signal-safe-ish restore: only a termios ioctl + raw writes, no
 /// allocation. Idempotent (safe to call from Drop, panic hook, AND a signal
@@ -60,6 +67,13 @@ extern "C" fn on_fatal_signal(_sig: libc::c_int) {
 
 extern "C" fn on_sigwinch(_sig: libc::c_int) {
     RESIZE_PENDING.store(true, Ordering::SeqCst);
+    let wfd = WINCH_PIPE_WRITE.load(Ordering::SeqCst);
+    if wfd >= 0 {
+        let byte: [u8; 1] = [1];
+        unsafe {
+            libc::write(wfd, byte.as_ptr() as *const _, 1);
+        }
+    }
 }
 
 struct RestoreGuard;
@@ -78,6 +92,15 @@ fn install_hooks(tty_fd: i32, orig: Termios) {
         restore_terminal();
         default_hook(info);
     }));
+
+    // Self-pipe for the SIGWINCH-notified resize thread (see WINCH_PIPE_*).
+    // Best-effort: if this fails, WINCH_PIPE_READ stays -1 and the resize
+    // thread falls back to its old busy-poll behavior.
+    let mut pipe_fds: [i32; 2] = [-1, -1];
+    if unsafe { libc::pipe(pipe_fds.as_mut_ptr()) } == 0 {
+        WINCH_PIPE_READ.store(pipe_fds[0], Ordering::SeqCst);
+        WINCH_PIPE_WRITE.store(pipe_fds[1], Ordering::SeqCst);
+    }
 
     unsafe {
         let sa = SigAction::new(
@@ -188,14 +211,37 @@ pub fn run_terminal_client(socket_path: &str) -> i32 {
         });
     }
 
-    // resize poller: SIGWINCH sets a flag; this thread notices and sends new size
+    // resize propagation: SIGWINCH's handler writes a byte to the self-pipe
+    // (async-signal-safe); this thread blocks on read() of it and sends the
+    // new size, rather than busy-polling. Falls back to polling
+    // RESIZE_PENDING if the self-pipe wasn't set up (pipe() failed).
     {
         let mut winsz = winsz;
-        std::thread::spawn(move || loop {
-            if RESIZE_PENDING.swap(false, Ordering::SeqCst) {
+        std::thread::spawn(move || {
+            let rfd = WINCH_PIPE_READ.load(Ordering::SeqCst);
+            if rfd < 0 {
+                loop {
+                    if RESIZE_PENDING.swap(false, Ordering::SeqCst) {
+                        send_winsize(&mut winsz, tty_fd);
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+            }
+            let mut trash = [0u8; 64];
+            loop {
+                let n = unsafe { libc::read(rfd, trash.as_mut_ptr() as *mut _, trash.len()) };
+                if n < 0 {
+                    if std::io::Error::last_os_error().kind() == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    break;
+                }
+                if n == 0 {
+                    break; // write end closed
+                }
+                RESIZE_PENDING.store(false, Ordering::SeqCst);
                 send_winsize(&mut winsz, tty_fd);
             }
-            std::thread::sleep(std::time::Duration::from_millis(20));
         });
     }
 

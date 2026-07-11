@@ -26,7 +26,7 @@ use std::os::fd::{AsRawFd, FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::os::unix::process::CommandExt;
 use std::process::Command;
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Env var the relay sets on the inferior so it knows the out-of-band
@@ -55,6 +55,15 @@ fn to_io(e: nix::Error) -> io::Error {
 
 fn log(msg: &str) {
     log::info!(target: "relay", "{msg}");
+}
+
+/// Set by `on_relay_sigterm` (async-signal-safe: only an atomic store), and
+/// polled by a plain thread in `run_relay_main` which does the actual
+/// (non-signal-safe) work of forwarding SIGTERM to the inferior.
+static TERM_REQUESTED: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn on_relay_sigterm(_sig: libc::c_int) {
+    TERM_REQUESTED.store(true, Ordering::SeqCst);
 }
 
 pub fn open_pty() -> nix::Result<nix::pty::OpenptyResult> {
@@ -149,7 +158,9 @@ fn start_inferior(
     slave: OwnedFd,
     app_ctrl: OwnedFd,
     current_data: Arc<Mutex<Option<UnixStream>>>,
+    current_winsz: Arc<Mutex<Option<UnixStream>>>,
     socket_path: Arc<String>,
+    inferior_pid: Arc<AtomicI32>,
 ) {
     let slave_raw = slave.as_raw_fd();
     let app_ctrl_raw = app_ctrl.as_raw_fd();
@@ -185,6 +196,7 @@ fn start_inferior(
         }
     };
     let pid = child.id();
+    inferior_pid.store(pid as i32, Ordering::SeqCst);
     drop(slave);
     drop(app_ctrl);
     log(&format!("inferior forked: pid={pid} argv={inferior:?}"));
@@ -208,6 +220,9 @@ fn start_inferior(
         if let Some(s) = current_data.lock().unwrap().take() {
             let _ = s.shutdown(std::net::Shutdown::Both);
         }
+        if let Some(s) = current_winsz.lock().unwrap().take() {
+            let _ = s.shutdown(std::net::Shutdown::Both);
+        }
         let _ = std::fs::remove_file(&*socket_path);
         std::process::exit(0);
     });
@@ -227,6 +242,25 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
             nix::sys::signal::SigSet::empty(),
         );
         let _ = nix::sys::signal::sigaction(nix::sys::signal::Signal::SIGHUP, &sa);
+    }
+
+    // Best-effort graceful teardown on SIGTERM: rather than let the default
+    // disposition abruptly kill the relay (orphaning/abruptly killing the
+    // inferior), install a handler that just sets a flag (the only thing
+    // safe to do inside a signal handler); a plain thread below polls it
+    // and forwards SIGTERM to the inferior so it gets its own chance to run
+    // its normal graceful-quit path (see `src/app/mod.rs` handle_quit_signal
+    // for the app-level SIGTERM path this is deliberately mirroring the
+    // intent of, though it's a different process). The reaper thread in
+    // `start_inferior` remains the sole teardown authority for the relay
+    // itself once the inferior actually exits.
+    unsafe {
+        let sa_term = nix::sys::signal::SigAction::new(
+            nix::sys::signal::SigHandler::Handler(on_relay_sigterm),
+            nix::sys::signal::SaFlags::empty(),
+            nix::sys::signal::SigSet::empty(),
+        );
+        let _ = nix::sys::signal::sigaction(nix::sys::signal::Signal::SIGTERM, &sa_term);
     }
 
     let _ = std::fs::remove_file(&socket_path);
@@ -272,8 +306,40 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
     })));
 
     let current_data: Arc<Mutex<Option<UnixStream>>> = Arc::new(Mutex::new(None));
+    // TAG_WINSZ mirror of `current_data`: tracks the incumbent resize
+    // connection so it can be evicted the same way on newcomer-attach,
+    // rather than staying live (and racing the newcomer to set winsize)
+    // until the evicted client's process eventually exits.
+    let current_winsz: Arc<Mutex<Option<UnixStream>>> = Arc::new(Mutex::new(None));
     let socket_path_arc = Arc::new(socket_path.clone());
     let generation = Arc::new(AtomicI32::new(0));
+    let inferior_pid = Arc::new(AtomicI32::new(0));
+
+    // --- thread: poll TERM_REQUESTED (set by the SIGTERM handler) and
+    // forward SIGTERM to the inferior, if one is running. If no inferior
+    // has been forked yet (still gated on first attach), there is nothing
+    // to forward to -- just tear the relay itself down. ---
+    {
+        let inferior_pid = Arc::clone(&inferior_pid);
+        let socket_path_arc = Arc::clone(&socket_path_arc);
+        std::thread::spawn(move || loop {
+            if TERM_REQUESTED.swap(false, Ordering::SeqCst) {
+                let pid = inferior_pid.load(Ordering::SeqCst);
+                if pid > 0 {
+                    log(&format!("SIGTERM received: forwarding to inferior pid={pid}"));
+                    let _ = nix::sys::signal::kill(
+                        nix::unistd::Pid::from_raw(pid),
+                        nix::sys::signal::Signal::SIGTERM,
+                    );
+                } else {
+                    log("SIGTERM received: no inferior running yet; relay exiting");
+                    let _ = std::fs::remove_file(&*socket_path_arc);
+                    std::process::exit(0);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        });
+    }
 
     // --- thread: read relay_ctrl for "DETACH" lines from the app ---
     {
@@ -345,10 +411,12 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
         };
         let master_file = Arc::clone(&master_file);
         let current_data = Arc::clone(&current_data);
+        let current_winsz = Arc::clone(&current_winsz);
         let pending = Arc::clone(&pending);
         let socket_path_arc = Arc::clone(&socket_path_arc);
         let mut ctrl_writer = relay_ctrl_stream.try_clone().expect("clone ctrl");
         let gen = Arc::clone(&generation);
+        let inferior_pid = Arc::clone(&inferior_pid);
         std::thread::spawn(move || {
             let mut stream = stream;
             let mut tag = [0u8; 1];
@@ -371,12 +439,20 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
                         let _ = set_winsize(f.as_raw_fd(), &ws);
                     }
 
-                    // Evict any incumbent client (newcomer-evicts).
+                    // Evict any incumbent client (newcomer-evicts). Bump the
+                    // shared generation FIRST so the TAG_WINSZ handler below
+                    // (keyed off the same counter) can tell it's now stale
+                    // even if its eviction-shutdown races with its own
+                    // blocking read.
+                    let my_gen = gen.fetch_add(1, Ordering::SeqCst) + 1;
                     if let Some(old) = current_data.lock().unwrap().take() {
                         let _ = old.shutdown(std::net::Shutdown::Both);
                         log("evicted incumbent data client");
                     }
-                    let my_gen = gen.fetch_add(1, Ordering::SeqCst) + 1;
+                    if let Some(old) = current_winsz.lock().unwrap().take() {
+                        let _ = old.shutdown(std::net::Shutdown::Both);
+                        log("evicted incumbent winsz connection");
+                    }
                     *current_data.lock().unwrap() = Some(stream.try_clone().unwrap());
                     log(&format!("client ATTACHED (gen {my_gen})"));
 
@@ -387,7 +463,9 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
                             p.slave,
                             p.app_ctrl,
                             Arc::clone(&current_data),
+                            Arc::clone(&current_winsz),
                             Arc::clone(&socket_path_arc),
+                            Arc::clone(&inferior_pid),
                         );
                     }
                     // Tell the app a client attached (T5 reattach-refresh trigger).
@@ -411,14 +489,48 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
                     log(&format!("client DETACHED (gen {my_gen})"));
                 }
                 TAG_WINSZ => {
+                    // Generation-guard mirroring TAG_DATA above: associate
+                    // this winsz connection with whatever generation is
+                    // current right now (the client always opens its
+                    // TAG_DATA connection -- which bumps the generation --
+                    // before its TAG_WINSZ connection, so this reads the
+                    // generation that newcomer-eviction already assigned).
+                    // Track it in `current_winsz` so a LATER newcomer's
+                    // TAG_DATA attach can shut this connection down
+                    // immediately instead of leaving it live (and racing
+                    // the newcomer to set winsize) until this evicted
+                    // client's process eventually exits.
+                    let my_gen = gen.load(Ordering::SeqCst);
+                    if let Some(old) =
+                        current_winsz.lock().unwrap().replace(stream.try_clone().unwrap())
+                    {
+                        let _ = old.shutdown(std::net::Shutdown::Both);
+                    }
                     let mut buf = [0u8; 8];
                     loop {
+                        if gen.load(Ordering::SeqCst) != my_gen {
+                            log(&format!("winsz connection stale (gen {my_gen}), stopping"));
+                            break;
+                        }
                         if stream.read_exact(&mut buf).is_err() {
+                            break;
+                        }
+                        // Re-check after the (blocking) read: an eviction
+                        // could have shut this stream down and raced in a
+                        // final resize message right before the shutdown
+                        // took effect -- don't act on stale sizes.
+                        if gen.load(Ordering::SeqCst) != my_gen {
+                            log(&format!(
+                                "winsz connection stale post-read (gen {my_gen}), discarding"
+                            ));
                             break;
                         }
                         let ws = decode_winsize(&buf);
                         let f = master_file.lock().unwrap();
                         let _ = set_winsize(f.as_raw_fd(), &ws);
+                    }
+                    if gen.load(Ordering::SeqCst) == my_gen {
+                        *current_winsz.lock().unwrap() = None;
                     }
                 }
                 _ => {}

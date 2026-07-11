@@ -54,9 +54,14 @@ impl StayAliveCtrl {
     /// Send `detach now` to the relay: it closes the current terminal-client
     /// connection (which restores that terminal) but keeps serving the pty
     /// — the app itself must NOT stop the player or exit its run loop.
-    pub fn send_detach(&self) {
+    ///
+    /// Returns an error if the write to the control channel fails (e.g. the
+    /// relay's ctrl-reader thread has already died and the socket is
+    /// wedged/closed) so callers can tell the user detach didn't actually
+    /// happen, instead of claiming success unconditionally.
+    pub fn send_detach(&self) -> std::io::Result<()> {
         let mut w = self.writer.lock().unwrap();
-        let _ = writeln!(w, "{}", crate::relay::CTRL_DETACH);
+        writeln!(w, "{}", crate::relay::CTRL_DETACH)
     }
 
     /// True at most once per `ATTACH` line received; clears on read.

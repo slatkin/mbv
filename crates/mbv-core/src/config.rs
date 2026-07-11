@@ -712,8 +712,18 @@ pub fn save_config_settings(cfg: &Config) {
 
     // Migrate legacy [mbv] keys to new section names.
     if let Some(old) = table.get_mut("mbv").and_then(|v| v.as_table_mut()) {
+        // `daemon_mode_on_exit` has no successor: its semantics don't map
+        // cleanly onto `stay_alive` (a substantially different feature), so
+        // this is a deliberate drop, not an auto-migration -- but a user
+        // who had it on gets a breadcrumb instead of silently losing the
+        // behavior, since `stay_alive` defaults to false either way.
+        if let Some(old_value) = old.remove("daemon_mode_on_exit") {
+            log::info!(target: "config", "config migration: removed legacy [mbv] daemon_mode_on_exit (no longer supported)");
+            if old_value.as_bool() == Some(true) {
+                log::warn!(target: "config", "note: stay_alive defaults to false; if you relied on daemon-mode-on-exit, opt back in via the `-a` flag or `stay_alive = true` in config.toml");
+            }
+        }
         for key in &[
-            "daemon_mode_on_exit",
             "always_skip_intro",
             "hidden_libraries",
             "hidden_latest",

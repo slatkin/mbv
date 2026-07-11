@@ -3999,8 +3999,16 @@ impl App {
     /// ClearQueue/PlayItems cases; see issue #156).
     pub(super) fn try_quit(&mut self) -> bool {
         if let Some(ctrl) = &self.stay_alive_ctrl {
-            ctrl.send_detach();
-            self.flash_status("Detached — mbv keeps playing in the background".into());
+            match ctrl.send_detach() {
+                Ok(()) => {
+                    self.flash_status("Detached — mbv keeps playing in the background".into());
+                }
+                Err(e) => {
+                    self.flash_status_high(format!(
+                        "Detach failed ({e}) — still attached; try again or `mbv -q` from another shell"
+                    ));
+                }
+            }
             return false;
         }
         if self.queue_dirty && self.queue_is_saved_playlist() {

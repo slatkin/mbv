@@ -48,6 +48,26 @@ fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
+/// Authenticate `client`, falling back to the interactive login TUI on
+/// failure. Only called on the paths that actually go on to use the
+/// resulting client (explicit daemon endpoint, and the branch that runs
+/// `App::new(client).run()`) -- paths that discard `client` (Reattach, and
+/// the stay-alive launcher-becomes-terminal-client branch) must not pay for
+/// this network round-trip since the inferior/relay authenticates on its
+/// own.
+fn authenticate_or_login(mut client: EmbyClient, ui_config: &config::UiConfig) -> EmbyClient {
+    let t0 = std::time::Instant::now();
+    let auth_result = client.authenticate();
+    log::info!(target: "startup", "authenticate: {}ms result={}", t0.elapsed().as_millis(), if auth_result.is_ok() { "ok" } else { "err" });
+    if auth_result.is_err() {
+        client = match login::run(client, ui_config) {
+            Ok(c) => c,
+            Err(_) => std::process::exit(0),
+        };
+    }
+    client
+}
+
 fn state_dir() -> std::path::PathBuf {
     std::env::var("XDG_STATE_HOME")
         .map(std::path::PathBuf::from)
@@ -128,11 +148,32 @@ fn parse_relay_args(args: &[String]) -> Option<(String, Vec<String>)> {
     Some((socket_path, inferior))
 }
 
+fn print_usage() {
+    println!("mbv {}", env!("CARGO_PKG_VERSION"));
+    println!("Usage: mbv [OPTIONS]");
+    println!();
+    println!("Options:");
+    println!("  -a, --alive               Stay alive: keep playing in the background after the");
+    println!("                             terminal detaches, and reattach to it later by running");
+    println!("                             `mbv` again in a terminal.");
+    println!("  -q                        Quit a running mbv session (foreground or stay-alive).");
+    println!("      --connect-daemon <endpoint>");
+    println!("                             Connect as a thin client to a running mbvd daemon at");
+    println!("                             <endpoint> instead of owning a local Player.");
+    println!("  -V, --version              Print the version and exit.");
+    println!("  -h, --help                 Print this help message and exit.");
+}
+
 fn main() {
     install_panic_hook();
     install_signal_handlers();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
+
+    if has_flag(&args, "-h") || has_flag(&args, "--help") {
+        print_usage();
+        return;
+    }
 
     // Hidden relay self-spawn subcommand (T1, ADR 0005). Mirrors the
     // retired `--daemon-inner` self-spawn pattern: `mbv` re-execs itself as
@@ -217,22 +258,18 @@ fn main() {
     applog::init(log_stderr, log_path);
     log::info!(target: "startup", "mbv starting");
 
-    let mut client = EmbyClient::new(config);
-
-    let t0 = std::time::Instant::now();
-    let auth_result = client.authenticate();
-    log::info!(target: "startup", "authenticate: {}ms result={}", t0.elapsed().as_millis(), if auth_result.is_ok() { "ok" } else { "err" });
-    if auth_result.is_err() {
-        client = match login::run(client, &ui_config) {
-            Ok(c) => c,
-            Err(_) => std::process::exit(0),
-        };
-    }
+    // Construction only (no network I/O) so `client.config` can be read by
+    // the branches below regardless of whether this process ends up
+    // authenticating at all (bug: double-authentication on paths that
+    // discard `client` without ever needing a live session -- Reattach, and
+    // the stay-alive launcher-becomes-terminal-client branch).
+    let client = EmbyClient::new(config);
 
     // Explicit endpoint (`--connect-daemon` / config `daemon_client_endpoint`)
     // always wins: a thin client to `mbvd`, owning no Player and taking no
     // flock. Network/mbvd behavior is unchanged by stay-alive (issue #156).
     if let Some(endpoint) = explicit_daemon_endpoint {
+        let client = authenticate_or_login(client, &ui_config);
         log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
         let auth_token = client.token.clone();
         match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
@@ -271,12 +308,24 @@ fn main() {
             std::process::exit(1);
         }
         Ok(single_instance::Resolution::Fresh(mut guard)) => {
-            let stay_alive = alive_requested || client.config.stay_alive;
+            // Are we already the gated inferior a relay is hosting on a pty
+            // slave? Only `relay::start_inferior` ever sets this env var, on
+            // the actual inferior it execs -- so its presence is a reliable
+            // "I must not spawn a relay of my own" signal, independent of
+            // what `client.config.stay_alive` says (bug: without this check,
+            // an inferior launched because of a *config* `stay_alive = true`
+            // -- as opposed to `-a`, which is stripped from its argv -- would
+            // see the same config value, take this same branch again, and
+            // spawn an unbounded chain of nested relays).
+            let is_inferior = std::env::var(relay::CTRL_FD_ENV).is_ok();
+            let stay_alive = !is_inferior && (alive_requested || client.config.stay_alive);
             if stay_alive {
                 // This process was just a liveness probe: release the lock
                 // immediately (the inferior below reacquires it for real,
                 // becoming the actual Player-owning app) and become a
-                // terminal-client ourselves.
+                // terminal-client ourselves. We never needed a live Emby
+                // session for this -- `client` is discarded here, not
+                // handed to the inferior -- so skip authentication entirely.
                 drop(guard);
                 let exe = match std::env::current_exe() {
                     Ok(p) => p,
@@ -306,6 +355,12 @@ fn main() {
                 let code = terminal_client::run_terminal_client(&socket_path.to_string_lossy());
                 std::process::exit(code);
             }
+
+            // Only reached by a bare fresh launch, or by the inferior itself
+            // (which must always fall through here rather than re-evaluate
+            // the stay-alive branch above) -- both actually need a live,
+            // Player-owning `EmbyClient`, so authenticate now.
+            let client = authenticate_or_login(client, &ui_config);
 
             if let Err(e) = guard.write_pid() {
                 log::warn!(target: "startup", "failed to write pid into lock file: {e}");
