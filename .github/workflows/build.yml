@@ -1,12 +1,14 @@
-name: PKGBUILD
+name: Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: Release version to publish, with or without a leading v
+        required: true
 
 jobs:
   build:
@@ -37,12 +39,12 @@ jobs:
 
       - name: Set version from tag
         run: |
-          # On tag pushes, build the tagged release version.
-          # On main pushes, use the current PKGBUILD version and skip release publishing.
-          PKGVER=${GITHUB_REF_NAME#v}
-          if [[ "$PKGVER" == "main" || "$PKGVER" == "$GITHUB_REF_NAME" ]]; then
-            PKGVER=$(grep '^pkgver=' PKGBUILD | cut -d= -f2)
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            PKGVER=${{ inputs.version }}
+          else
+            PKGVER=${GITHUB_REF_NAME#v}
           fi
+          PKGVER=${PKGVER#v}
           sed -i "s/^version = \".*\"/version = \"${PKGVER}\"/" Cargo.toml
           echo "PKGVER=${PKGVER}" >> "$GITHUB_ENV"
 
@@ -74,7 +76,6 @@ jobs:
           echo "MBVD_DEB=${MBVD_DEB}" >> "$GITHUB_ENV"
 
       - name: Upload release asset
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -87,7 +88,6 @@ jobs:
           gh release edit "v${PKGVER}" --draft=false
 
       - name: Update PKGBUILD sha256 on main
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -103,7 +103,6 @@ jobs:
           git push origin main
 
       - name: Push to AUR
-        if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
         env:
           AUR_SSH_KEY: ${{ secrets.AUR_SSH_KEY }}
         run: |
