@@ -825,6 +825,7 @@ struct AppInit {
     ws_send_tx: Option<mbv_core::ws::WsSender>,
     player_tab: PlayerTab,
     remote_player_tab: Option<PlayerTab>,
+    initial_queue_scope: QueueScope,
     system_notifications: bool,
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
@@ -1041,7 +1042,6 @@ impl App {
 
     fn build(init: AppInit) -> Self {
         let prefs = Self::load_prefs();
-        let has_remote_queue = init.remote_player_tab.is_some();
         App {
             #[cfg(test)]
             _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
@@ -1191,11 +1191,7 @@ impl App {
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             confirm_rescan: false,
-            queue_scope: if has_remote_queue {
-                QueueScope::Remote
-            } else {
-                QueueScope::Local
-            },
+            queue_scope: init.initial_queue_scope,
         }
     }
 
@@ -1278,6 +1274,7 @@ impl App {
             ws_send_tx: Some(ws_send_tx_app),
             player_tab: PlayerTab::default(),
             remote_player_tab: None,
+            initial_queue_scope: QueueScope::Local,
             system_notifications,
             image_protocol,
             image_protocol_enabled,
@@ -1351,6 +1348,11 @@ impl App {
         let remote_items = remote.items.lock().unwrap().clone();
         let remote_cursor = remote.status.lock().unwrap().current_idx;
         let remote_queue_source = remote.queue_source.lock().unwrap().clone();
+        let initial_queue_scope = if !is_local_daemon && !remote_items.is_empty() {
+            QueueScope::Remote
+        } else {
+            QueueScope::Local
+        };
         let local_daemon_bootstrap = is_local_daemon.then(|| {
             bootstrap_local_daemon_queue(
                 remote_items.clone(),
@@ -1391,6 +1393,7 @@ impl App {
             ws_send_tx: None,
             player_tab,
             remote_player_tab,
+            initial_queue_scope,
             system_notifications: false,
             image_protocol,
             image_protocol_enabled,
@@ -3333,6 +3336,22 @@ pub(crate) mod tests {
         assert!(app.remote_player_tab.is_none());
         assert_eq!(app.queue_scope, QueueScope::Local);
         assert!(app.status.contains("daemon connection lost"));
+    }
+
+    #[test]
+    fn remote_app_starts_on_local_queue_when_remote_queue_is_empty() {
+        let app = make_remote_app_stub(make_items(2), Vec::new());
+
+        assert_eq!(app.queue_scope, QueueScope::Local);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn remote_app_starts_on_remote_queue_when_remote_queue_has_items() {
+        let app = make_remote_app_stub(make_items(2), make_items(1));
+
+        assert_eq!(app.queue_scope, QueueScope::Remote);
+        assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
     }
 
     #[test]
