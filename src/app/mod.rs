@@ -2362,6 +2362,9 @@ impl App {
             // a full repaint with every visible image re-emitted.
             if stay_alive::StayAliveCtrl::take_attach_pending() {
                 had_events = true;
+                // build_image_picker runs Picker::from_query_stdio() on the run-loop thread
+                // and relies on being the sole stdin consumer at this moment; the kitty→foot
+                // reattach case in the manual test matrix exercises this.
                 self.image_picker = Some(self.build_image_picker());
                 self.card_image_states.clear();
                 self.card_image_loading.clear();

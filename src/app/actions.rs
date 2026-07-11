@@ -4014,6 +4014,7 @@ impl App {
         if self.queue_dirty && self.queue_is_saved_playlist() {
             let save_on_quit = self.client.lock().unwrap().config.save_playlist_on_quit;
             if save_on_quit {
+                // non-blocking: enqueues save in a spawned thread, does not block quit
                 self.save_playlist_to_emby();
             }
             self.on_queue_replace_silent();

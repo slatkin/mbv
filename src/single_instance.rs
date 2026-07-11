@@ -73,6 +73,8 @@ pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
     let fd = file.as_raw_fd();
     let rc = unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) };
     if rc == 0 {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(lock, std::fs::Permissions::from_mode(0o600));
         return Ok(Resolution::Fresh(LockGuard { file }));
     }
     let err = io::Error::last_os_error();
@@ -88,6 +90,9 @@ pub fn resolve(socket: &Path, lock: &Path) -> io::Result<Resolution> {
 }
 
 /// Read the PID out of the lock file (best-effort, used by `mbv -q`).
+/// Returns `None` while a relay is gated (pre-first-attach), even though
+/// a stay-alive relay is live and connectable; callers may fall back to
+/// checking the relay socket for connectability.
 pub fn read_pid(lock: &Path) -> Option<u32> {
     std::fs::read_to_string(lock).ok()?.trim().parse().ok()
 }

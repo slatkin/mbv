@@ -402,6 +402,8 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
     }
 
     let listener = UnixListener::bind(&socket_path).expect("bind socket");
+    use std::os::unix::fs::PermissionsExt;
+    let _ = std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600));
     log(&format!("socket ready: {socket_path} (gated-on-attach)"));
 
     for stream in listener.incoming() {
@@ -489,17 +491,13 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
                     log(&format!("client DETACHED (gen {my_gen})"));
                 }
                 TAG_WINSZ => {
-                    // Generation-guard mirroring TAG_DATA above: associate
-                    // this winsz connection with whatever generation is
-                    // current right now (the client always opens its
-                    // TAG_DATA connection -- which bumps the generation --
-                    // before its TAG_WINSZ connection, so this reads the
-                    // generation that newcomer-eviction already assigned).
-                    // Track it in `current_winsz` so a LATER newcomer's
-                    // TAG_DATA attach can shut this connection down
-                    // immediately instead of leaving it live (and racing
-                    // the newcomer to set winsize) until this evicted
-                    // client's process eventually exits.
+                    // Staleness is handled solely by newcomer-eviction
+                    // shutting down the incumbent winsz stream (which makes
+                    // the blocking read below error out). `my_gen` is used
+                    // ONLY to guard the end-of-loop cleanup, never to break
+                    // the loop -- so a capture that races the TAG_DATA gen
+                    // bump can at worst skip a harmless cleanup, and can
+                    // never clobber a newcomer's `current_winsz` entry.
                     let my_gen = gen.load(Ordering::SeqCst);
                     if let Some(old) =
                         current_winsz.lock().unwrap().replace(stream.try_clone().unwrap())
@@ -508,27 +506,16 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
                     }
                     let mut buf = [0u8; 8];
                     loop {
-                        if gen.load(Ordering::SeqCst) != my_gen {
-                            log(&format!("winsz connection stale (gen {my_gen}), stopping"));
-                            break;
-                        }
                         if stream.read_exact(&mut buf).is_err() {
-                            break;
-                        }
-                        // Re-check after the (blocking) read: an eviction
-                        // could have shut this stream down and raced in a
-                        // final resize message right before the shutdown
-                        // took effect -- don't act on stale sizes.
-                        if gen.load(Ordering::SeqCst) != my_gen {
-                            log(&format!(
-                                "winsz connection stale post-read (gen {my_gen}), discarding"
-                            ));
                             break;
                         }
                         let ws = decode_winsize(&buf);
                         let f = master_file.lock().unwrap();
                         let _ = set_winsize(f.as_raw_fd(), &ws);
                     }
+                    // Clear our slot on a normal (non-evicted) disconnect,
+                    // but only if it's still ours -- a newcomer that already
+                    // replaced it owns the entry now.
                     if gen.load(Ordering::SeqCst) == my_gen {
                         *current_winsz.lock().unwrap() = None;
                     }

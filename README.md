@@ -32,8 +32,10 @@ Installs the binary to `~/.local/bin/mbv`.
 ## Usage
 
 ```sh
-mbv          # launch with terminal UI
-mbv --daemon # run headless, controlled via remote only
+mbv           # launch with terminal UI
+mbv -a        # stay-alive: keep playing in the background after closing the terminal
+mbv           # reattach to a running stay-alive session
+mbv -q        # stop a running session (foreground or stay-alive)
 ```
 
 ## Configuration
@@ -44,7 +46,6 @@ Press `F1` at any time to open the help and keybindings reference.
 
 ### In-app settings (`F2`)
 
-- **Daemon mode on exit** — keep mbv running as a background daemon when you close the TUI window.
 - **Start on queue** — start on the Queue tab instead of Home on launch.
 - **Always play next** — always play the next queue item automatically, even for videos.
 - **Consume videos** / **Consume audio** — remove an item from the queue and mpv's playlist once it finishes playing.
@@ -56,7 +57,7 @@ Press `F1` at any time to open the help and keybindings reference.
 - **Show audio window** — show an mpv window for audio playback instead of running headless.
 - **Use mpv config** — use your own `~/.config/mpv/` setup (scripts, OSC, mpv.conf) instead of mbv's bundled OSC.
 - **No scripts** / **autoload** — disable mpv's default scripts / enable mpv's autoload script for adjacent files.
-- **Show systray icon** — show a system tray icon when running in daemon mode.
+- **Show systray icon** — show a system tray icon when running in stay-alive mode (`-a` / `stay_alive`).
 - **System notifications** — send desktop notifications (via `notify-send`) for toasts and interactive prompts (Skip Intro, Next Up, queue prompts) instead of in-TUI toasts; prompts include action buttons.
 - **My languages**, **Subtitle mode**, **Subtitle language**, **Audio language** — client-only playback language preferences.
 - **Feed view** — libraries to treat as feed views (unplayed/date-sorted defaults).
