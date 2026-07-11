@@ -1,4 +1,5 @@
 use super::super::super::ui_util::*;
+use super::POWER_RENDER_FILTER;
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -106,7 +107,7 @@ impl App {
                         height: IMG_MAX_ROWS,
                     };
                     let actual = state.size_for(
-                        ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)),
+                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
                         avail,
                     );
                     (actual.width, actual.height, false)
@@ -345,9 +346,8 @@ impl App {
                     type SImg =
                         ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
                     f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Scale(Some(
-                            ratatui_image::FilterType::Lanczos3,
-                        ))),
+                        SImg::default()
+                            .resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
                         img_rect,
                         state,
                     );

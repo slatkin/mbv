@@ -65,6 +65,12 @@ pub struct PlayerStatus {
     pub queue_len: usize,
     pub active: bool,
     pub title: String,
+    #[serde(default)]
+    pub artist: String,
+    #[serde(default)]
+    pub album: String,
+    #[serde(default)]
+    pub art_url: String,
     pub audio_tracks: Vec<(i64, String)>,     // (mpv id, label)
     pub sub_tracks: Vec<(i64, String, bool)>, // (mpv id, label, forced)
     #[serde(default)]
@@ -82,6 +88,27 @@ pub struct PlayerStatus {
 }
 
 impl PlayerStatus {
+    pub fn set_current_item_metadata(&mut self, item: &MediaItem, server_url: &str, token: &str) {
+        self.title = item.display_name();
+        self.artist = item.artist.clone();
+        self.album = item.album.clone();
+        self.art_url = if item.id.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}",
+                server_url, item.id, token
+            )
+        };
+    }
+
+    pub fn clear_current_item_metadata(&mut self) {
+        self.title.clear();
+        self.artist.clear();
+        self.album.clear();
+        self.art_url.clear();
+    }
+
     pub fn subtitle_stream_index_to_mpv_id(&self, stream_index: i64) -> Option<i64> {
         if stream_index < 0 {
             return Some(0);
@@ -136,6 +163,9 @@ impl Default for PlayerStatus {
             queue_len: 0,
             active: false,
             title: String::new(),
+            artist: String::new(),
+            album: String::new(),
+            art_url: String::new(),
             audio_tracks: Vec::new(),
             sub_tracks: Vec::new(),
             sub_track_stream_indexes: Vec::new(),
@@ -1567,7 +1597,7 @@ impl PlaybackSession {
             s.runtime_ticks = active_item.runtime_ticks;
             s.current_idx = self.current_idx;
             s.queue_len = self.queue_len();
-            s.title = active_item.display_name();
+            s.set_current_item_metadata(&active_item, &self.server_url, &self.token);
         }
 
         // Stop progress reporter during transition to prevent stale reports,
@@ -1618,9 +1648,9 @@ impl PlaybackSession {
             let mut st = self.status.lock().unwrap();
             st.runtime_ticks = item.runtime_ticks;
             st.position_ticks = item.playback_position_ticks;
-            st.title = item.display_name();
             st.current_idx = 0;
             st.queue_len = 1;
+            st.set_current_item_metadata(&item, &self.server_url, &self.token);
         }
 
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
@@ -2039,7 +2069,7 @@ impl PlaybackSession {
             s.runtime_ticks = next_item.runtime_ticks;
             s.current_idx = self.current_idx;
             s.queue_len = self.queue_len();
-            s.title = next_item.display_name();
+            s.set_current_item_metadata(&next_item, &self.server_url, &self.token);
         }
 
         let stop_report_accepted = self.reporter.report_stopped(completed_pos);
@@ -2511,7 +2541,7 @@ impl Player {
             st.current_idx = 0;
             st.queue_len = 0;
             st.active = false;
-            st.title.clear();
+            st.clear_current_item_metadata();
             return;
         }
 
@@ -2522,7 +2552,7 @@ impl Player {
         st.current_idx = cursor;
         st.queue_len = items.len();
         st.active = false;
-        st.title = items[cursor].display_name();
+        st.set_current_item_metadata(&items[cursor], &self.server_url, &self.token);
     }
 
     // Pipe mode always forces headless (no video window), regardless of item
@@ -2558,7 +2588,7 @@ impl Player {
                 st.paused = false;
                 st.current_idx = 0;
                 st.queue_len = 1;
-                st.title = item.display_name();
+                st.set_current_item_metadata(item, &self.server_url, &self.token);
             }
             self.send_command(PlayerCommand::LoadNew {
                 url,
@@ -2617,7 +2647,7 @@ impl Player {
             st.current_idx = 0;
             st.queue_len = 1;
             st.active = true;
-            st.title = title.clone();
+            st.set_current_item_metadata(&item, &server_url, &token);
         }
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
@@ -2715,7 +2745,7 @@ impl Player {
                 st.paused = false;
                 st.current_idx = start_idx;
                 st.queue_len = items.len();
-                st.title = items[start_idx].display_name();
+                st.set_current_item_metadata(&items[start_idx], &self.server_url, &self.token);
             }
             self.send_command(PlayerCommand::ReplaceQueue { items, start_idx });
             return;
@@ -2753,7 +2783,7 @@ impl Player {
             st.current_idx = start_idx;
             st.queue_len = items.len();
             st.active = true;
-            st.title = items[start_idx].display_name();
+            st.set_current_item_metadata(&items[start_idx], &server_url, &token);
         }
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
@@ -3590,6 +3620,24 @@ input-ipc-server=/tmp/user.sock
     fn next_idx_none_when_inactive() {
         let status = make_status(0, 3, false, false);
         assert_eq!(status.next_idx(), None);
+    }
+
+    #[test]
+    fn current_item_metadata_includes_emby_primary_art_url() {
+        let mut item = make_media_item("track-1");
+        item.artist = "Artist".to_string();
+        item.album = "Album".to_string();
+
+        let mut status = PlayerStatus::default();
+        status.set_current_item_metadata(&item, "https://emby.example", "token-1");
+
+        assert_eq!(status.title, item.display_name());
+        assert_eq!(status.artist, "Artist");
+        assert_eq!(status.album, "Album");
+        assert_eq!(
+            status.art_url,
+            "https://emby.example/Items/track-1/Images/Primary?maxHeight=400&quality=80&api_key=token-1"
+        );
     }
 
     #[test]

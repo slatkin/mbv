@@ -1,3 +1,4 @@
+use super::POWER_RENDER_FILTER;
 use crate::app::images::POWER_CARD_PLACEHOLDER_KEY;
 use crate::app::{App, PowerFocus};
 use ratatui::layout::Rect;
@@ -64,7 +65,7 @@ impl App {
                 height: max_h.saturating_sub(1),
             };
             let actual = state.size_for(
-                ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)),
+                ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
                 avail,
             );
             let img_x = area.x + (area.width.saturating_sub(actual.width)) / 2;
@@ -75,9 +76,7 @@ impl App {
                 height: actual.height,
             };
             f.render_stateful_widget(
-                SImg::default().resize(ratatui_image::Resize::Scale(Some(
-                    ratatui_image::FilterType::Lanczos3,
-                ))),
+                SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
                 img_rect,
                 state,
             );
