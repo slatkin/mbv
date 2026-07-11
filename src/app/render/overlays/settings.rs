@@ -101,8 +101,9 @@ impl App {
             _ => {
                 let mut c = self.client.lock().unwrap();
                 match key {
-                    SettingKey::DaemonModeOnExit => {
-                        c.config.daemon_mode_on_exit = !c.config.daemon_mode_on_exit
+                    SettingKey::StayAlive => c.config.stay_alive = !c.config.stay_alive,
+                    SettingKey::SavePlaylistOnQuit => {
+                        c.config.save_playlist_on_quit = !c.config.save_playlist_on_quit
                     }
                     SettingKey::StartOnQueue => c.config.start_on_queue = !c.config.start_on_queue,
                     SettingKey::AlwaysPlayNext => {

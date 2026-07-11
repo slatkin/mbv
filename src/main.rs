@@ -2,12 +2,15 @@ mod app;
 mod config;
 mod login;
 mod mpris;
+mod relay;
+mod single_instance;
+mod terminal_client;
 mod tray;
 
 use app::App;
 use config::load_config;
 use mbv_core::api::EmbyClient;
-use mbv_core::{applog, daemon, player, remote_player};
+use mbv_core::{applog, player, remote_player};
 
 /// Shared by both daemon-connection call sites in `main()` below: run the
 /// TUI as a thin client of a connected daemon, exiting with an error if the
@@ -23,53 +26,6 @@ fn run_remote_app(
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
-}
-
-fn prompt_line(label: &str) -> String {
-    use std::io::Write;
-    print!("{label}");
-    let _ = std::io::stdout().flush();
-    let mut buf = String::new();
-    let _ = std::io::stdin().read_line(&mut buf);
-    buf.trim().to_string()
-}
-
-fn prompt_password(label: &str) -> String {
-    use crossterm::event::{Event, KeyCode, KeyEventKind};
-    use std::io::Write;
-    print!("{label}");
-    let _ = std::io::stdout().flush();
-    let _ = crossterm::terminal::enable_raw_mode();
-    let mut pass = String::new();
-    loop {
-        if let Ok(Event::Key(key)) = crossterm::event::read() {
-            if key.kind != KeyEventKind::Press {
-                continue;
-            }
-            match key.code {
-                KeyCode::Enter => break,
-                KeyCode::Backspace => {
-                    pass.pop();
-                }
-                KeyCode::Char(c) => pass.push(c),
-                _ => {}
-            }
-        }
-    }
-    let _ = crossterm::terminal::disable_raw_mode();
-    println!();
-    pass
-}
-
-fn daemon_running() -> bool {
-    let Ok(s) = std::fs::read_to_string(daemon::pid_file()) else {
-        return false;
-    };
-    let Ok(pid) = s.trim().parse::<u32>() else {
-        return false;
-    };
-    // Check if the process is alive via /proc (Linux-specific, no extra deps)
-    std::path::Path::new(&format!("/proc/{pid}")).exists()
 }
 
 fn connect_daemon_arg(args: &[String]) -> Result<Option<String>, String> {
@@ -92,7 +48,27 @@ fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
-fn crash_log_path() -> std::path::PathBuf {
+/// Authenticate `client`, falling back to the interactive login TUI on
+/// failure. Only called on the paths that actually go on to use the
+/// resulting client (explicit daemon endpoint, and the branch that runs
+/// `App::new(client).run()`) -- paths that discard `client` (Reattach, and
+/// the stay-alive launcher-becomes-terminal-client branch) must not pay for
+/// this network round-trip since the inferior/relay authenticates on its
+/// own.
+fn authenticate_or_login(mut client: EmbyClient, ui_config: &config::UiConfig) -> EmbyClient {
+    let t0 = std::time::Instant::now();
+    let auth_result = client.authenticate();
+    log::info!(target: "startup", "authenticate: {}ms result={}", t0.elapsed().as_millis(), if auth_result.is_ok() { "ok" } else { "err" });
+    if auth_result.is_err() {
+        client = match login::run(client, ui_config) {
+            Ok(c) => c,
+            Err(_) => std::process::exit(0),
+        };
+    }
+    client
+}
+
+fn state_dir() -> std::path::PathBuf {
     std::env::var("XDG_STATE_HOME")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| {
@@ -101,7 +77,10 @@ fn crash_log_path() -> std::path::PathBuf {
                 .join("state")
         })
         .join("mbv")
-        .join("mbv.log")
+}
+
+fn crash_log_path() -> std::path::PathBuf {
+    state_dir().join("mbv.log")
 }
 
 fn write_crash_log(msg: &str) {
@@ -157,11 +136,53 @@ extern "C" fn signal_handler(sig: libc::c_int) {
     }
 }
 
+/// Parses the hidden `--__relay <sock> -- <inferior argv...>` self-spawn
+/// form. Returns `None` if `--__relay` isn't present (the ordinary launch
+/// path). This must be checked before any other CLI parsing since its argv
+/// shape doesn't match the rest of mbv's flags.
+fn parse_relay_args(args: &[String]) -> Option<(String, Vec<String>)> {
+    let pos = args.iter().position(|a| a == "--__relay")?;
+    let socket_path = args.get(pos + 1)?.clone();
+    let sep = args.iter().position(|a| a == "--")?;
+    let inferior: Vec<String> = args[sep + 1..].to_vec();
+    Some((socket_path, inferior))
+}
+
+fn print_usage() {
+    println!("mbv {}", env!("CARGO_PKG_VERSION"));
+    println!("Usage: mbv [OPTIONS]");
+    println!();
+    println!("Options:");
+    println!("  -a, --alive               Stay alive: keep playing in the background after the");
+    println!("                             terminal detaches, and reattach to it later by running");
+    println!("                             `mbv` again in a terminal.");
+    println!("  -q                        Quit a running mbv session (foreground or stay-alive).");
+    println!("      --connect-daemon <endpoint>");
+    println!("                             Connect as a thin client to a running mbvd daemon at");
+    println!("                             <endpoint> instead of owning a local Player.");
+    println!("  -V, --version              Print the version and exit.");
+    println!("  -h, --help                 Print this help message and exit.");
+}
+
 fn main() {
     install_panic_hook();
     install_signal_handlers();
 
     let args: Vec<String> = std::env::args().skip(1).collect();
+
+    if has_flag(&args, "-h") || has_flag(&args, "--help") {
+        print_usage();
+        return;
+    }
+
+    // Hidden relay self-spawn subcommand (T1, ADR 0005). Mirrors the
+    // retired `--daemon-inner` self-spawn pattern: `mbv` re-execs itself as
+    // `mbv --__relay <sock> -- <inferior argv...>` and never returns.
+    if let Some((socket_path, inferior)) = parse_relay_args(&args) {
+        applog::init(false, Some(state_dir().join("relay.log")));
+        relay::run_relay_main(socket_path, inferior);
+    }
+
     let cli_daemon_endpoint = match connect_daemon_arg(&args) {
         Ok(endpoint) => endpoint,
         Err(e) => {
@@ -175,36 +196,35 @@ fn main() {
         return;
     }
 
-    // Kill running daemon
+    // `mbv -q`: quit a running alive session (ADR 0006). Repurposed from the
+    // retired `-d` local daemon: reads the PID out of the single-instance
+    // lock file and SIGTERMs it for a graceful, non-interactive shutdown
+    // (T3) -- works for both a bare foreground session and a stay-alive
+    // inferior (its tray Quit does the exact same thing).
     if has_flag(&args, "-q") {
-        let path = daemon::pid_file();
-        match std::fs::read_to_string(&path) {
-            Ok(s) => {
-                let pid = s.trim().to_string();
-                let ok = std::process::Command::new("kill")
-                    .arg(&pid)
-                    .status()
-                    .map(|s| s.success())
-                    .unwrap_or(false);
+        let lock = single_instance::lock_path();
+        match single_instance::read_pid(&lock) {
+            Some(pid) => {
+                let ok = unsafe { libc::kill(pid as libc::pid_t, libc::SIGTERM) } == 0;
                 if ok {
-                    let _ = std::fs::remove_file(&path);
-                    println!("mbv: daemon stopped (pid {pid})");
+                    println!("mbv: quit signal sent (pid {pid})");
                 } else {
-                    eprintln!("mbv: failed to stop daemon (pid {pid})");
+                    eprintln!(
+                        "mbv: failed to signal pid {pid}: {}",
+                        std::io::Error::last_os_error()
+                    );
                     std::process::exit(1);
                 }
             }
-            Err(_) => {
-                eprintln!("mbv: no daemon running");
+            None => {
+                eprintln!("mbv: no running instance found");
                 std::process::exit(1);
             }
         }
         return;
     }
 
-    let daemon_mode = has_flag(&args, "-d");
-    let daemon_inner = has_flag(&args, "--daemon-inner");
-    let daemon_audio_only = has_flag(&args, "--audio-only");
+    let alive_requested = has_flag(&args, "-a") || has_flag(&args, "--alive");
 
     let config = match load_config() {
         Ok(c) => c,
@@ -233,105 +253,23 @@ fn main() {
             })
         });
 
-    if daemon_mode && explicit_daemon_endpoint.is_some() {
-        eprintln!("mbv: daemon client endpoint cannot be used with -d");
-        std::process::exit(1);
-    }
-    if daemon_audio_only && !daemon_mode && !daemon_inner {
-        eprintln!("mbv: --audio-only is only supported with -d or --daemon-inner");
-        std::process::exit(1);
-    }
-
     let log_stderr = config::is_system_instance();
-    let log_path = {
-        let state_dir = std::env::var("XDG_STATE_HOME")
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|_| {
-                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default())
-                    .join(".local")
-                    .join("state")
-            })
-            .join("mbv");
-        Some(state_dir.join("mbv.log"))
-    };
+    let log_path = Some(state_dir().join("mbv.log"));
     applog::init(log_stderr, log_path);
     log::info!(target: "startup", "mbv starting");
 
-    let mut client = EmbyClient::new(config);
+    // Construction only (no network I/O) so `client.config` can be read by
+    // the branches below regardless of whether this process ends up
+    // authenticating at all (bug: double-authentication on paths that
+    // discard `client` without ever needing a live session -- Reattach, and
+    // the stay-alive launcher-becomes-terminal-client branch).
+    let client = EmbyClient::new(config);
 
-    let t0 = std::time::Instant::now();
-    let auth_result = client.authenticate();
-    log::info!(target: "startup", "authenticate: {}ms result={}", t0.elapsed().as_millis(), if auth_result.is_ok() { "ok" } else { "err" });
-    if auth_result.is_err() {
-        if daemon_inner {
-            eprintln!("mbv daemon: no cached credentials — run mbv interactively first");
-            std::process::exit(1);
-        }
-        if daemon_mode {
-            if client.config.server_url.is_empty() {
-                eprintln!("mbv: set server_url in your config file before starting the daemon");
-                std::process::exit(1);
-            }
-            client.config.username = prompt_line("Username: ");
-            client.config.password = prompt_password("Password: ");
-            if let Err(e) = client.authenticate_credentials() {
-                eprintln!("mbv: {e}");
-                std::process::exit(1);
-            }
-        } else {
-            client = match login::run(client, &ui_config) {
-                Ok(c) => c,
-                Err(_) => std::process::exit(0),
-            };
-        }
-    }
-
-    if daemon_mode {
-        if daemon_running() {
-            eprintln!("a daemon is already running, nacho");
-            std::process::exit(1);
-        }
-        // Spawn a detached copy of ourselves and exit
-        let exe = std::env::current_exe().expect("cannot locate binary");
-        #[allow(clippy::zombie_processes)]
-        let _child = std::process::Command::new(exe)
-            .arg("--daemon-inner")
-            .args(daemon_audio_only.then_some("--audio-only"))
-            .env_remove("MBV_SYSTEM")
-            .stdin(std::process::Stdio::null())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .expect("mbv: failed to spawn daemon");
-        println!("mbv: daemon started");
-        return;
-    }
-
-    if daemon_inner {
-        let show_systray_icon = client.config.show_systray_icon;
-        daemon::run_with_options(
-            client,
-            daemon_audio_only,
-            daemon::DaemonRuntimeHooks {
-                on_player_ready: Box::new(|player| {
-                    mpris::start(player.status, move |cmd| {
-                        if let Some(tx) = player.command_tx.lock().unwrap().as_ref() {
-                            let _ = tx.send(cmd);
-                        }
-                    });
-                }),
-                on_tray_ready: Box::new(move |shutdown_tx| {
-                    if show_systray_icon {
-                        tray::spawn(shutdown_tx)
-                    } else {
-                        None
-                    }
-                }),
-            },
-        ); // never returns
-    }
-
+    // Explicit endpoint (`--connect-daemon` / config `daemon_client_endpoint`)
+    // always wins: a thin client to `mbvd`, owning no Player and taking no
+    // flock. Network/mbvd behavior is unchanged by stay-alive (issue #156).
     if let Some(endpoint) = explicit_daemon_endpoint {
+        let client = authenticate_or_login(client, &ui_config);
         log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
         let auth_token = client.token.clone();
         match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
@@ -347,43 +285,97 @@ fn main() {
         }
     }
 
-    // If a local daemon is running, try to connect to it instead of standalone mode.
-    let daemon_existed = daemon_running();
-    if daemon_existed {
-        log::info!(target: "startup", "daemon detected; connecting to control socket");
-        let auth_token = client.token.clone();
-        let endpoint = remote_player::DaemonEndpoint::Local;
-        match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
-            Ok((remote, player_rx)) => {
-                log::info!(target: "startup", "daemon socket connected");
-                run_remote_app(client, remote, player_rx, endpoint.is_local());
-                return;
-            }
-            Err(e) => {
-                eprintln!(
-                    "mbv: daemon found but control socket unavailable ({e}), starting standalone"
-                );
-            }
+    // Single-instance resolution (ADR 0006): advisory flock + relay-socket
+    // connectability. Independent of stay-alive; always on.
+    let lock_path = single_instance::lock_path();
+    let socket_path = single_instance::socket_path();
+
+    match single_instance::resolve(&socket_path, &lock_path) {
+        Ok(single_instance::Resolution::Reattach) => {
+            // A live alive session exists: attach as a terminal-client.
+            // Same code path whether this is the very first attach after
+            // `mbv -a` spawned the relay moments ago, or a later reattach
+            // (ADR 0005 "uniform attach topology").
+            log::info!(target: "startup", "alive session detected; attaching");
+            let code = terminal_client::run_terminal_client(&socket_path.to_string_lossy());
+            std::process::exit(code);
         }
-    }
+        Ok(single_instance::Resolution::Refuse) => {
+            eprintln!(
+                "mbv: another mbv instance is already running in a foreground terminal (no relay to attach to)."
+            );
+            eprintln!("mbv: only one mbv instance may run at a time. Close it, or use `mbv -q` to stop it.");
+            std::process::exit(1);
+        }
+        Ok(single_instance::Resolution::Fresh(mut guard)) => {
+            // Are we already the gated inferior a relay is hosting on a pty
+            // slave? Only `relay::start_inferior` ever sets this env var, on
+            // the actual inferior it execs -- so its presence is a reliable
+            // "I must not spawn a relay of my own" signal, independent of
+            // what `client.config.stay_alive` says (bug: without this check,
+            // an inferior launched because of a *config* `stay_alive = true`
+            // -- as opposed to `-a`, which is stripped from its argv -- would
+            // see the same config value, take this same branch again, and
+            // spawn an unbounded chain of nested relays).
+            let is_inferior = std::env::var(relay::CTRL_FD_ENV).is_ok();
+            let stay_alive = !is_inferior && (alive_requested || client.config.stay_alive);
+            if stay_alive {
+                // This process was just a liveness probe: release the lock
+                // immediately (the inferior below reacquires it for real,
+                // becoming the actual Player-owning app) and become a
+                // terminal-client ourselves. We never needed a live Emby
+                // session for this -- `client` is discarded here, not
+                // handed to the inferior -- so skip authentication entirely.
+                drop(guard);
+                let exe = match std::env::current_exe() {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("mbv: cannot locate binary: {e}");
+                        std::process::exit(1);
+                    }
+                };
+                // Inferior argv = this same invocation, minus -a/--alive (it
+                // must not try to spawn a second relay). No --connect-daemon
+                // can be present here: that always returns above, before
+                // this branch is reached, so stay-alive never applies to
+                // thin clients.
+                let inferior_argv: Vec<String> =
+                    std::iter::once(exe.to_string_lossy().into_owned())
+                        .chain(
+                            args.iter()
+                                .filter(|a| a.as_str() != "-a" && a.as_str() != "--alive")
+                                .cloned(),
+                        )
+                        .collect();
+                if let Err(e) = relay::spawn_detached(&socket_path.to_string_lossy(), inferior_argv)
+                {
+                    eprintln!("mbv: failed to start stay-alive session: {e}");
+                    std::process::exit(1);
+                }
+                let code = terminal_client::run_terminal_client(&socket_path.to_string_lossy());
+                std::process::exit(code);
+            }
 
-    if let Err(e) = App::new(client).run() {
-        eprintln!("Error: {e}");
-        std::process::exit(1);
-    }
+            // Only reached by a bare fresh launch, or by the inferior itself
+            // (which must always fall through here rather than re-evaluate
+            // the stay-alive branch above) -- both actually need a live,
+            // Player-owning `EmbyClient`, so authenticate now.
+            let client = authenticate_or_login(client, &ui_config);
 
-    if let Ok(cfg) = load_config() {
-        if cfg.daemon_mode_on_exit && !daemon_existed && !daemon_running() {
-            let exe = std::env::current_exe().expect("cannot locate binary");
-            #[allow(clippy::zombie_processes)]
-            let _ = std::process::Command::new(exe)
-                .arg("--daemon-inner")
-                .env_remove("MBV_SYSTEM")
-                .stdin(std::process::Stdio::null())
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .spawn();
-            println!("mbv: daemon started");
+            if let Err(e) = guard.write_pid() {
+                log::warn!(target: "startup", "failed to write pid into lock file: {e}");
+            }
+            if let Err(e) = App::new(client).run() {
+                eprintln!("Error: {e}");
+                std::process::exit(1);
+            }
+            // `guard` drops here (end of scope) at real process exit,
+            // releasing the flock -- also happens automatically on any
+            // process death (ADR 0006).
+        }
+        Err(e) => {
+            eprintln!("mbv: single-instance check failed: {e}");
+            std::process::exit(1);
         }
     }
 }
@@ -412,12 +404,29 @@ mod tests {
     #[test]
     fn has_flag_matches_exact_flag() {
         assert!(has_flag(
-            &["-d".into(), "--audio-only".into()],
+            &["-a".into(), "--audio-only".into()],
             "--audio-only"
         ));
         assert!(!has_flag(
             &["--audio-only=false".into(), "--audio".into()],
             "--audio-only"
         ));
+    }
+
+    #[test]
+    fn parse_relay_args_extracts_socket_and_inferior() {
+        let args: Vec<String> = ["--__relay", "/tmp/x.sock", "--", "mbv", "-a"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let (sock, inferior) = parse_relay_args(&args).unwrap();
+        assert_eq!(sock, "/tmp/x.sock");
+        assert_eq!(inferior, vec!["mbv".to_string(), "-a".to_string()]);
+    }
+
+    #[test]
+    fn parse_relay_args_none_without_flag() {
+        let args: Vec<String> = vec!["-a".into()];
+        assert!(parse_relay_args(&args).is_none());
     }
 }

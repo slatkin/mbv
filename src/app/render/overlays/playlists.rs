@@ -1,7 +1,7 @@
 use super::super::super::palette;
 use super::super::super::ui_util::trunc_str;
 use super::super::super::App;
-use super::super::super::{PendingQueueAction, SavePlaylistStage, PLAYLISTS_PANEL_W};
+use super::super::super::{SavePlaylistStage, PLAYLISTS_PANEL_W};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -349,7 +349,6 @@ impl App {
 
     pub(in crate::app::render) fn render_dirty_playlist_modal(&self, f: &mut Frame) {
         let name = trunc_str(self.queue_playlist_name(), 36);
-        let is_quit = matches!(self.pending_queue_action, Some(PendingQueueAction::Quit));
         let full = f.area();
         let w: u16 = 56;
         let h: u16 = 7;
@@ -376,11 +375,7 @@ impl App {
         let inner = block.inner(rect);
         f.render_widget(block, rect);
         let line1 = format!("Save changes to \"{}\"?", name);
-        let line2 = if is_quit {
-            "[s]Save  [d]Discard & quit  [Esc]Cancel"
-        } else {
-            "[s]Save  [d]Discard  [Esc]Cancel"
-        };
+        let line2 = "[s]Save  [d]Discard  [Esc]Cancel";
         let base_y = inner.y + (inner.height.saturating_sub(3)) / 2;
         f.render_widget(
             Paragraph::new(Span::styled(line1, Style::default().fg(palette::WHITE))),

@@ -2,11 +2,11 @@ use ksni::blocking::TrayMethods;
 
 const TRAY_ICON: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tray_icon.bin"));
 
-struct MbyTray {
+struct MbvTray {
     shutdown_tx: std::sync::mpsc::SyncSender<()>,
 }
 
-impl ksni::Tray for MbyTray {
+impl ksni::Tray for MbvTray {
     fn id(&self) -> String {
         "mbv".into()
     }
@@ -38,7 +38,7 @@ impl ksni::Tray for MbyTray {
 }
 
 pub fn spawn(shutdown_tx: std::sync::mpsc::SyncSender<()>) -> Option<Box<dyn Send>> {
-    MbyTray { shutdown_tx }
+    MbvTray { shutdown_tx }
         .spawn()
         .map(|tray| Box::new(tray) as Box<dyn Send>)
         .map_err(|e| {

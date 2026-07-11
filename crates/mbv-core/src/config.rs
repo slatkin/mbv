@@ -23,7 +23,15 @@ pub struct Config {
     pub show_systray_icon: bool,
     pub no_scripts: bool,
     pub start_on_queue: bool,
-    pub daemon_mode_on_exit: bool,
+    /// Stay-alive mode (issue #156): survive the controlling terminal
+    /// closing while still playing, via an owned pty relay. Consulted only
+    /// at launch (`-a`/`--alive` forces it for one launch regardless); a
+    /// running bare session is never live-promoted. Default off.
+    pub stay_alive: bool,
+    /// On any quit with a dirty saved-playlist queue: `true` (default)
+    /// silently pushes the edits to Emby; `false` silently discards them.
+    /// `queue_state.json` local persistence is unconditional either way.
+    pub save_playlist_on_quit: bool,
     pub autoload: bool,
     pub music_levels: Vec<String>,
     pub system_notifications: bool,
@@ -66,7 +74,8 @@ impl Default for Config {
             show_systray_icon: true,
             no_scripts: false,
             start_on_queue: false,
-            daemon_mode_on_exit: false,
+            stay_alive: false,
+            save_playlist_on_quit: true,
             autoload: false,
             music_levels: vec![],
             system_notifications: false,
@@ -529,10 +538,15 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let daemon_mode_on_exit = general
-        .and_then(|m| m.get("daemon_mode_on_exit"))
+    let stay_alive = general
+        .and_then(|m| m.get("stay_alive"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+
+    let save_playlist_on_quit = general
+        .and_then(|m| m.get("save_playlist_on_quit"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
 
     let no_scripts = misc
         .and_then(|m| m.get("no_scripts"))
@@ -655,7 +669,8 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         show_systray_icon,
         no_scripts,
         start_on_queue,
-        daemon_mode_on_exit,
+        stay_alive,
+        save_playlist_on_quit,
         autoload,
         music_levels,
         system_notifications,
@@ -697,8 +712,18 @@ pub fn save_config_settings(cfg: &Config) {
 
     // Migrate legacy [mbv] keys to new section names.
     if let Some(old) = table.get_mut("mbv").and_then(|v| v.as_table_mut()) {
+        // `daemon_mode_on_exit` has no successor: its semantics don't map
+        // cleanly onto `stay_alive` (a substantially different feature), so
+        // this is a deliberate drop, not an auto-migration -- but a user
+        // who had it on gets a breadcrumb instead of silently losing the
+        // behavior, since `stay_alive` defaults to false either way.
+        if let Some(old_value) = old.remove("daemon_mode_on_exit") {
+            log::info!(target: "config", "config migration: removed legacy [mbv] daemon_mode_on_exit (no longer supported)");
+            if old_value.as_bool() == Some(true) {
+                log::warn!(target: "config", "note: stay_alive defaults to false; if you relied on daemon-mode-on-exit, opt back in via the `-a` flag or `stay_alive = true` in config.toml");
+            }
+        }
         for key in &[
-            "daemon_mode_on_exit",
             "always_skip_intro",
             "hidden_libraries",
             "hidden_latest",
@@ -720,8 +745,12 @@ pub fn save_config_settings(cfg: &Config) {
 
     let general = section!("general");
     general.insert(
-        "daemon_mode_on_exit".to_string(),
-        toml::Value::Boolean(cfg.daemon_mode_on_exit),
+        "stay_alive".to_string(),
+        toml::Value::Boolean(cfg.stay_alive),
+    );
+    general.insert(
+        "save_playlist_on_quit".to_string(),
+        toml::Value::Boolean(cfg.save_playlist_on_quit),
     );
     general.insert(
         "always_skip_intro".to_string(),

@@ -3987,17 +3987,42 @@ impl App {
         }
     }
 
+    /// `q` (and every keyboard/mouse path that routes here). In stay-alive
+    /// mode this is a **detach**, never a quit: diverted before
+    /// `player.stop()`, the player keeps running and the run loop keeps
+    /// going (returns `false`). A real quit is only `mbv -q` / tray-Quit
+    /// (see `crate::app::stay_alive` / T3's graceful SIGTERM path).
+    ///
+    /// In bare mode this is a real quit. Any dirty saved-playlist queue is
+    /// saved/discarded **silently** per `save_playlist_on_quit` — no
+    /// interactive modal (that modal is reserved for the attended
+    /// ClearQueue/PlayItems cases; see issue #156).
     pub(super) fn try_quit(&mut self) -> bool {
-        if self.queue_dirty && self.queue_is_saved_playlist() {
-            self.replace_queue_or_prompt(PendingQueueAction::Quit);
-            false
-        } else {
-            self.save_prefs();
-            if !self.player.is_remote() {
-                self.player.stop();
+        if let Some(ctrl) = &self.stay_alive_ctrl {
+            match ctrl.send_detach() {
+                Ok(()) => {
+                    self.flash_status("Detached — mbv keeps playing in the background".into());
+                }
+                Err(e) => {
+                    self.flash_status_high(format!(
+                        "Detach failed ({e}) — still attached; try again or `mbv -q` from another shell"
+                    ));
+                }
             }
-            true
+            return false;
         }
+        if self.queue_dirty && self.queue_is_saved_playlist() {
+            let save_on_quit = self.client.lock().unwrap().config.save_playlist_on_quit;
+            if save_on_quit {
+                self.save_playlist_to_emby();
+            }
+            self.on_queue_replace_silent();
+        }
+        self.save_prefs();
+        if !self.player.is_remote() {
+            self.player.stop();
+        }
+        true
     }
 
     pub(super) fn on_queue_replace_silent(&mut self) {
@@ -4082,11 +4107,6 @@ impl App {
                 }
                 self.persist_local_queue_state_if_needed(scope);
                 self.flash_status("Queue cleared".into());
-            }
-            PendingQueueAction::Quit => {
-                if !self.player.is_remote() {
-                    self.player.stop();
-                }
             }
         }
     }

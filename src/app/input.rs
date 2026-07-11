@@ -601,7 +601,6 @@ impl App {
         if !self.show_save_playlist_modal {
             return None;
         }
-        let quit_after = matches!(self.pending_queue_action, Some(PendingQueueAction::Quit));
         let play_after = matches!(
             self.pending_queue_action,
             Some(PendingQueueAction::PlayItems { .. })
@@ -617,9 +616,6 @@ impl App {
                     self.show_playlists = false;
                     self.set_tab(1);
                 }
-                if quit_after {
-                    return Some(true);
-                }
             }
             KeyCode::Char('d') | KeyCode::Char('D') => {
                 self.show_save_playlist_modal = false;
@@ -629,9 +625,6 @@ impl App {
                 if play_after {
                     self.show_playlists = false;
                     self.set_tab(1);
-                }
-                if quit_after {
-                    return Some(true);
                 }
             }
             KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
