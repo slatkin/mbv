@@ -47,17 +47,7 @@ impl MbvTray {
     }
 
     fn toggle_play_pause(&self) {
-        let target_paused = {
-            let st = self.status.lock().unwrap();
-            !(st.active && !st.paused)
-        };
-        let cmd = {
-            let st = self.status.lock().unwrap();
-            st.toggle_to_reach(target_paused)
-        };
-        if let Some(cmd) = cmd {
-            self.send_command(cmd);
-        }
+        self.send_command(PlayerCommand::TogglePause);
     }
 
     fn next(&self) {
@@ -226,5 +216,79 @@ mod tests {
         assert_eq!(play_pause_label(&status(true, false, "A Song")), "Pause");
         assert_eq!(play_pause_label(&status(true, true, "A Song")), "Play");
         assert_eq!(play_pause_label(&status(false, false, "")), "Play");
+    }
+
+    /// Builds a tray wired to a fresh command channel, so tests can assert
+    /// on what `toggle_play_pause`/`next`/`previous` actually send without a
+    /// real mpv thread. Mirrors `PlayerProxy::spy_on_commands`
+    /// (crates/mbv-core/src/player.rs).
+    fn spy_tray(st: PlayerStatus) -> (MbvTray, std::sync::mpsc::Receiver<PlayerCommand>) {
+        let (cmd_tx, cmd_rx) = std::sync::mpsc::channel();
+        let (shutdown_tx, _shutdown_rx) = std::sync::mpsc::sync_channel(1);
+        let tray = MbvTray {
+            shutdown_tx,
+            status: Arc::new(Mutex::new(st)),
+            cmd_tx: Arc::new(Mutex::new(Some(cmd_tx))),
+        };
+        (tray, cmd_rx)
+    }
+
+    // Regression test for a bug caught in review: toggle_play_pause used to
+    // compute a target-state via `toggle_to_reach`, which is meant for
+    // remote-command dedup (only send if state actually differs) but was
+    // fed an inverted target, so it was a no-op in both the "playing" and
+    // "paused" cases -- the only two states a user would ever click it in.
+    #[test]
+    fn toggle_play_pause_sends_toggle_pause_while_playing() {
+        let (tray, rx) = spy_tray(status(true, false, "A Song"));
+        tray.toggle_play_pause();
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
+    }
+
+    #[test]
+    fn toggle_play_pause_sends_toggle_pause_while_paused() {
+        let (tray, rx) = spy_tray(status(true, true, "A Song"));
+        tray.toggle_play_pause();
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
+    }
+
+    #[test]
+    fn next_sends_jump_to_when_room() {
+        let mut st = status(true, false, "A Song");
+        st.current_idx = 0;
+        st.queue_len = 2;
+        let (tray, rx) = spy_tray(st);
+        tray.next();
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
+    }
+
+    #[test]
+    fn next_is_a_clean_noop_at_end_of_queue() {
+        let mut st = status(true, false, "A Song");
+        st.current_idx = 1;
+        st.queue_len = 2;
+        let (tray, rx) = spy_tray(st);
+        tray.next();
+        assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn previous_sends_jump_to_when_available() {
+        let mut st = status(true, false, "A Song");
+        st.current_idx = 1;
+        st.queue_len = 2;
+        let (tray, rx) = spy_tray(st);
+        tray.previous();
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(0))));
+    }
+
+    #[test]
+    fn previous_is_a_clean_noop_at_start_of_queue() {
+        let mut st = status(true, false, "A Song");
+        st.current_idx = 0;
+        st.queue_len = 2;
+        let (tray, rx) = spy_tray(st);
+        tray.previous();
+        assert!(rx.try_recv().is_err());
     }
 }
