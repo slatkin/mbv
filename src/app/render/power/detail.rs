@@ -83,13 +83,17 @@ impl App {
         let (img_actual_w, img_height): (u16, u16) = {
             if self.list_image_renders_allowed() {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
-                    let actual = state.size_for(
-                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                        ratatui::layout::Size {
-                            width: IMG_COLS,
-                            height: IMG_ROWS,
-                        },
-                    );
+                    // `size_for` is `None` while resize+encode is in-flight on
+                    // the worker thread; treat that the same as no image yet.
+                    let actual = state
+                        .size_for(
+                            ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
+                            ratatui::layout::Size {
+                                width: IMG_COLS,
+                                height: IMG_ROWS,
+                            },
+                        )
+                        .unwrap_or_default();
                     (actual.width, actual.height)
                 } else {
                     (0, 0)
@@ -265,7 +269,7 @@ impl App {
 
         if img_height > 0 {
             if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
-                type SImg = ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
+                type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                 f.render_stateful_widget(
                     SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
                     Rect {
@@ -344,10 +348,14 @@ impl App {
                     width: IMG_COLS,
                     height: IMG_MAX_ROWS,
                 };
-                let actual = state.size_for(
-                    ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                    avail,
-                );
+                // `size_for` is `None` while resize+encode is in-flight on the
+                // worker thread; treat that the same as no image yet.
+                let actual = state
+                    .size_for(
+                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
+                        avail,
+                    )
+                    .unwrap_or_default();
                 (actual.width, actual.height)
             } else {
                 (0, 0)
@@ -605,7 +613,7 @@ impl App {
         // No border drawn; the 1-col left gap and 1-row bottom gap are handled via shadow math.
         if img_height > 0 {
             if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
-                type SImg = ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
+                type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                 let img_rect = Rect {
                     x: img_x,
                     y: img_start_row,

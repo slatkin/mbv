@@ -117,11 +117,14 @@ impl App {
                         width: cell_w,
                         height: img_h,
                     };
+                    // `and_then` (not `map`): `size_for` now itself returns
+                    // `Option<Size>` (ThreadProtocol may still be resizing
+                    // in-flight on the worker thread with no size yet).
                     let actual = self
                         .card_image_states
                         .get_mut(&key)
                         .and_then(|s| s.as_mut())
-                        .map(|s| {
+                        .and_then(|s| {
                             s.size_for(
                                 ratatui_image::Resize::Fit(Some(
                                     ratatui_image::FilterType::Lanczos3,
@@ -139,9 +142,8 @@ impl App {
                             height: actual.height.min((area.y + area.height).saturating_sub(iy)),
                         };
                         if let Some(Some(state)) = self.card_image_states.get_mut(&key) {
-                            type SImg = ratatui_image::StatefulImage<
-                                ratatui_image::protocol::StatefulProtocol,
-                            >;
+                            type SImg =
+                                ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                             f.render_stateful_widget(
                                 SImg::default().resize(ratatui_image::Resize::Fit(Some(
                                     ratatui_image::FilterType::Lanczos3,

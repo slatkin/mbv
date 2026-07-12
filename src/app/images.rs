@@ -6,6 +6,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use ratatui::Frame;
+use ratatui_image::picker::Picker;
 use std::io::Read as IoRead;
 use std::time::Duration;
 use textwrap::wrap;
@@ -197,11 +198,6 @@ impl App {
         self.fetch_card_image(cache_key, item_id, series_id, types);
     }
 
-    /// Decodes and caches the bundled Power View placeholder image, through the
-    /// same `image_picker` -> `StatefulProtocol` path used for fetched Emby
-    /// images, so it renders via the same `render_card_image` code. Idempotent:
-    /// only decodes once, on first use. Does not touch `card_image_loading`, so
-    /// it never presents as an in-flight fetch.
     pub(super) fn ensure_placeholder_card_image(&mut self) {
         if self
             .card_image_states
@@ -209,14 +205,33 @@ impl App {
         {
             return;
         }
-        let Some(picker) = self.image_picker.as_ref() else {
+        let Some(picker) = self.image_picker.clone() else {
             return;
         };
         let state = image::load_from_memory(POWER_CARD_PLACEHOLDER_BYTES)
             .ok()
-            .map(|img| picker.new_resize_protocol(img));
+            .map(|img| self.new_thread_protocol(&picker, img, POWER_CARD_PLACEHOLDER_KEY));
         self.card_image_states
             .insert(POWER_CARD_PLACEHOLDER_KEY.to_string(), state);
+    }
+
+    /// Builds a [`ratatui_image::thread::ThreadProtocol`] for `cache_key`,
+    /// registering a dedicated request channel with the resize worker thread
+    /// (see `spawn_resize_worker` in `mod.rs`) so responses can be routed
+    /// back to the right `card_image_states` entry. The expensive
+    /// resize+encode step (`StatefulProtocol::resize_encode`) then runs off
+    /// the render thread on first draw, instead of blocking it (#164).
+    pub(super) fn new_thread_protocol(
+        &self,
+        picker: &Picker,
+        img: image::DynamicImage,
+        cache_key: &str,
+    ) -> ratatui_image::thread::ThreadProtocol {
+        let (req_tx, req_rx) = std::sync::mpsc::channel::<ratatui_image::thread::ResizeRequest>();
+        let _ = self
+            .resize_register_tx
+            .send((cache_key.to_string(), req_rx));
+        ratatui_image::thread::ThreadProtocol::new(req_tx, Some(picker.new_resize_protocol(img)))
     }
 
     /// Spawn queued image fetches until the in-flight limit is reached. Called
@@ -446,57 +461,62 @@ impl App {
         let mut actual_img_h: u16 = 0;
         if img_h >= 2 {
             if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
-                type SImg = ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
+                type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                 if is_center {
                     let avail = ratatui::layout::Size {
                         width: inner.width.saturating_sub(2),
                         height: img_h,
                     };
-                    let actual = state.size_for(
+                    // `size_for` is `None` while resize+encode is in-flight on
+                    // the worker thread; skip drawing for this frame and try
+                    // again once the response arrives.
+                    if let Some(actual) = state.size_for(
                         ratatui_image::Resize::Scale(Some(ratatui_image::FilterType::Lanczos3)),
                         avail,
-                    );
-                    let img_x = inner.x + 1 + (avail.width.saturating_sub(actual.width)) / 2;
-                    let img_rect = Rect {
-                        x: img_x,
-                        y: img_top,
-                        width: actual.width,
-                        height: actual.height,
-                    };
-                    f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Scale(Some(
-                            ratatui_image::FilterType::Lanczos3,
-                        ))),
-                        img_rect,
-                        state,
-                    );
-                    actual_img_h = actual.height;
+                    ) {
+                        let img_x = inner.x + 1 + (avail.width.saturating_sub(actual.width)) / 2;
+                        let img_rect = Rect {
+                            x: img_x,
+                            y: img_top,
+                            width: actual.width,
+                            height: actual.height,
+                        };
+                        f.render_stateful_widget(
+                            SImg::default().resize(ratatui_image::Resize::Scale(Some(
+                                ratatui_image::FilterType::Lanczos3,
+                            ))),
+                            img_rect,
+                            state,
+                        );
+                        actual_img_h = actual.height;
+                    }
                 } else {
                     let w = (inner.width as u32 * 36 / 100) as u16;
                     let avail = ratatui::layout::Size {
                         width: w,
                         height: img_h,
                     };
-                    let actual = state.size_for(
+                    if let Some(actual) = state.size_for(
                         ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3)),
                         avail,
-                    );
-                    let img_x = inner.x + (inner.width.saturating_sub(actual.width)) / 2;
-                    let img_y = img_top + (img_h.saturating_sub(actual.height)) / 2;
-                    let img_rect = Rect {
-                        x: img_x,
-                        y: img_y,
-                        width: actual.width,
-                        height: actual.height,
-                    };
-                    f.render_stateful_widget(
-                        SImg::default().resize(ratatui_image::Resize::Fit(Some(
-                            ratatui_image::FilterType::Lanczos3,
-                        ))),
-                        img_rect,
-                        state,
-                    );
-                    actual_img_h = actual.height;
+                    ) {
+                        let img_x = inner.x + (inner.width.saturating_sub(actual.width)) / 2;
+                        let img_y = img_top + (img_h.saturating_sub(actual.height)) / 2;
+                        let img_rect = Rect {
+                            x: img_x,
+                            y: img_y,
+                            width: actual.width,
+                            height: actual.height,
+                        };
+                        f.render_stateful_widget(
+                            SImg::default().resize(ratatui_image::Resize::Fit(Some(
+                                ratatui_image::FilterType::Lanczos3,
+                            ))),
+                            img_rect,
+                            state,
+                        );
+                        actual_img_h = actual.height;
+                    }
                 }
             }
         }
