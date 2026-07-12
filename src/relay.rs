@@ -93,8 +93,8 @@ pub fn become_pty_slave(slave_fd: RawFd) -> io::Result<()> {
         return Err(last_err.unwrap());
     }
     for fd in 0..3 {
-        if fd != slave_fd {
-            nix::unistd::dup2(slave_fd, fd).map_err(to_io)?;
+        if fd != slave_fd && unsafe { libc::dup2(slave_fd, fd) } < 0 {
+            return Err(io::Error::last_os_error());
         }
     }
     if slave_fd > 2 {
@@ -106,7 +106,9 @@ pub fn become_pty_slave(slave_fd: RawFd) -> io::Result<()> {
 /// Move `src` to file descriptor `dst`, closing `src` afterward if distinct.
 pub fn dup2_fixed(src: RawFd, dst: RawFd) -> io::Result<()> {
     if src != dst {
-        nix::unistd::dup2(src, dst).map_err(to_io)?;
+        if unsafe { libc::dup2(src, dst) } < 0 {
+            return Err(io::Error::last_os_error());
+        }
         let _ = nix::unistd::close(src);
     }
     Ok(())
@@ -283,8 +285,8 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
     // the single reader thread (its read() blocks indefinitely, so it must
     // never be held behind a mutex shared with writers), one fd (behind a
     // mutex) for writers/ioctl.
-    let master_read_raw = nix::unistd::dup(pty.master.as_raw_fd()).expect("dup master for reader");
-    let mut master_file_read = unsafe { std::fs::File::from_raw_fd(master_read_raw) };
+    let master_read_owned = nix::unistd::dup(&pty.master).expect("dup master for reader");
+    let mut master_file_read = std::fs::File::from(master_read_owned);
     let master_file = unsafe { std::fs::File::from_raw_fd(pty.master.into_raw_fd()) };
     let master_file = Arc::new(Mutex::new(master_file));
 
