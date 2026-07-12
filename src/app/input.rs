@@ -1351,6 +1351,72 @@ impl App {
             }
         }
 
+        // Active inline album track-selection mode is modal across the Power
+        // View split: once a track is focused, Enter/Escape/Up/Down continue
+        // to target that inline track list until the mode is explicitly
+        // dismissed or a different album/group is selected. Entering the mode
+        // from None remains in the library-panel branch below.
+        let active_power_album_track_mode = self.tab_idx == 1
+            && self.queue_view == QUEUE_VIEW_POWER
+            && self.power_left_tab > 0
+            && {
+                let lib_idx = self.power_left_tab - 1;
+                self.libs
+                    .get(lib_idx)
+                    .map(|lib| lib.album_track_focus.is_some())
+                    .unwrap_or(false)
+                    && self.is_viewing_album_folders(lib_idx)
+            };
+        let is_power_nav = matches!(
+            key.code,
+            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
+        ) && key.modifiers.contains(KeyModifiers::ALT);
+        if active_power_album_track_mode && !is_power_nav {
+            let lib_idx = self.power_left_tab - 1;
+            match key.code {
+                KeyCode::Enter => {
+                    let has_focused_track = self
+                        .selected_album_item(lib_idx)
+                        .and_then(|album| {
+                            self.album_tracks_cache.get(&album.id).and_then(|tracks| {
+                                self.libs[lib_idx]
+                                    .album_track_focus
+                                    .and_then(|idx| tracks.get(idx))
+                            })
+                        })
+                        .is_some();
+                    if has_focused_track {
+                        let saved = self.tab_idx;
+                        self.tab_idx = self.lib_tab_offset() + lib_idx;
+                        self.select();
+                        self.tab_idx = saved;
+                    }
+                    return false;
+                }
+                KeyCode::Esc | KeyCode::Backspace => {
+                    self.libs[lib_idx].album_track_focus = None;
+                    return false;
+                }
+                KeyCode::Up | KeyCode::Down => {
+                    if let Some(idx) = self.libs[lib_idx].album_track_focus {
+                        let track_count = self
+                            .selected_album_item(lib_idx)
+                            .and_then(|item| self.album_tracks_cache.get(&item.id))
+                            .map(|tracks| tracks.len())
+                            .unwrap_or(0);
+                        if track_count > 0 {
+                            let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
+                            let new_idx =
+                                (idx as i64 + delta).clamp(0, track_count as i64 - 1) as usize;
+                            self.libs[lib_idx].album_track_focus = Some(new_idx);
+                        }
+                    }
+                    return false;
+                }
+                _ => {}
+            }
+        }
+
         // Power view bracket keys are panel-scoped; the queue panel owns
         // Local/Remote scope switching, while the left panel keeps its
         // section/season/group bracket actions.
@@ -4008,6 +4074,23 @@ mod power_music_track_focus_tests {
     }
 
     #[test]
+    fn track_mode_down_still_moves_track_focus_when_queue_panel_has_focus() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(1);
+        app.power_focus = PowerFocus::Queue;
+        let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+        assert_eq!(app.libs[0].album_track_focus, Some(2));
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            album_cursor_before
+        );
+    }
+
+    #[test]
     fn mouse_clicking_another_album_clears_track_focus() {
         let mut app = make_power_music_album_app();
         push_tracks(&mut app, "album-1", 3);
@@ -4240,6 +4323,21 @@ mod power_music_track_focus_tests {
         );
         assert_eq!(app.player_tab.queue_cursor, 1);
         assert_eq!(app.libs[0].album_track_focus, Some(1));
+        let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+        assert_eq!(
+            app.libs[0].album_track_focus,
+            Some(2),
+            "after Enter plays the focused track, the next Down key must remain in \
+             track-selection mode"
+        );
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            album_cursor_before,
+            "after Enter plays the focused track, Down must not fall back to album-list navigation"
+        );
         // Note: `app.queue_source` is not asserted here -- `play_items_routed`
         // (pre-existing, out of Task 4's scope) calls
         // `on_queue_replace_silent` as its first statement, which

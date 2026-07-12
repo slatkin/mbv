@@ -25,6 +25,7 @@ impl App {
         items: &[mbv_core::api::MediaItem],
         cursor: usize,
         focused: bool,
+        selected_region_gutter: bool,
         layout: &mut LayoutPower,
     ) {
         if area.height == 0 {
@@ -40,7 +41,8 @@ impl App {
         let album_artist = first.artist.clone();
         let album_year = first.production_year;
 
-        let inner_w = area.width as usize;
+        let gutter_w = if selected_region_gutter { 2 } else { 1 };
+        let inner_w = (area.width as usize).saturating_sub(gutter_w);
         let max_y = area.y + area.height;
         let mut row = area.y;
 
@@ -60,11 +62,18 @@ impl App {
 
         // — Album title: yellow when interactive, muted for inline preview —
         if row < max_y {
+            let title = trunc_str(&album_title, inner_w);
+            let line = if selected_region_gutter {
+                Line::from(vec![
+                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                    Span::raw(" "),
+                    Span::styled(title.to_string(), title_style),
+                ])
+            } else {
+                Line::from(Span::styled(format!(" {}", title), title_style))
+            };
             f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    format!(" {}", trunc_str(&album_title, inner_w.saturating_sub(1))),
-                    title_style,
-                ))),
+                Paragraph::new(line),
                 Rect {
                     x: area.x,
                     y: row,
@@ -77,11 +86,18 @@ impl App {
 
         // — Album artist: same colour as inactive tabs (SUBTLE) —
         if row < max_y && !album_artist.is_empty() {
+            let artist = trunc_str(&album_artist, inner_w);
+            let line = if selected_region_gutter {
+                Line::from(vec![
+                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                    Span::raw(" "),
+                    Span::styled(artist.to_string(), metadata_style),
+                ])
+            } else {
+                Line::from(Span::styled(format!(" {}", artist), metadata_style))
+            };
             f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    format!(" {}", trunc_str(&album_artist, inner_w.saturating_sub(1))),
-                    metadata_style,
-                ))),
+                Paragraph::new(line),
                 Rect {
                     x: area.x,
                     y: row,
@@ -94,11 +110,20 @@ impl App {
 
         // — Release year: same colour as the VOL label (MUTED) —
         if row < max_y && album_year > 0 {
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
+            let line = if selected_region_gutter {
+                Line::from(vec![
+                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                    Span::raw(" "),
+                    Span::styled(album_year.to_string(), Style::default().fg(palette::MUTED)),
+                ])
+            } else {
+                Line::from(Span::styled(
                     format!(" {}", album_year),
                     Style::default().fg(palette::MUTED),
-                ))),
+                ))
+            };
+            f.render_widget(
+                Paragraph::new(line),
                 Rect {
                     x: area.x,
                     y: row,
@@ -111,6 +136,20 @@ impl App {
 
         // — Blank spacer row —
         if row < max_y {
+            if selected_region_gutter {
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        "\u{258c}",
+                        Style::default().fg(palette::PINE),
+                    ))),
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+            }
             row += 1;
         }
 
@@ -138,7 +177,7 @@ impl App {
         let show_length = table_area.width > 40;
         let dur_col_w: usize = if show_length { 7 } else { 0 };
         let title_col_w = (table_area.width as usize)
-            .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
+            .saturating_sub(gutter_w + if show_length { dur_col_w + 1 } else { 0 });
 
         let rows: Vec<Row> = items
             .iter()
@@ -157,7 +196,9 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if is_cursor && focused {
+                let marker = if selected_region_gutter {
+                    Span::styled("\u{258c}", Style::default().fg(palette::PINE))
+                } else if is_cursor && focused {
                     Span::styled("\u{258c}", Style::default().fg(palette::PINE))
                 } else {
                     Span::raw(" ")
@@ -167,13 +208,26 @@ impl App {
                 } else {
                     format!("{}. ", i + 1)
                 };
+                let mut title_spans = vec![marker];
+                if selected_region_gutter {
+                    title_spans.push(Span::raw(" "));
+                    if is_cursor && focused {
+                        title_spans
+                            .push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
+                    }
+                }
                 let num_w = track_num.chars().count();
-                let title = trunc_str(&item.name, title_col_w.saturating_sub(num_w));
-                let title_cell = Cell::from(Line::from(vec![
-                    marker,
-                    Span::styled(track_num, Style::default().fg(palette::SUBTLE)),
-                    Span::raw(title),
-                ]));
+                let focus_marker_w = usize::from(selected_region_gutter && is_cursor && focused);
+                let title = trunc_str(
+                    &item.name,
+                    title_col_w.saturating_sub(num_w + focus_marker_w),
+                );
+                title_spans.push(Span::styled(
+                    track_num,
+                    Style::default().fg(palette::SUBTLE),
+                ));
+                title_spans.push(Span::raw(title));
+                let title_cell = Cell::from(Line::from(title_spans));
                 let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
                 let length = if len_secs > 0 {
                     fmt_duration_approx(len_secs)

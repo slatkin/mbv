@@ -432,10 +432,17 @@ impl App {
                     } else {
                         spans.push(Span::raw(" "));
                     }
-                    if year_str.is_empty() {
+                    if selected {
+                        spans.push(Span::raw(" "));
+                    } else if year_str.is_empty() {
                         spans.push(Span::raw("   "));
                     } else {
                         spans.push(Span::styled("   (", Style::default().fg(palette::SUBTLE)));
+                    }
+                    if selected && !year_str.is_empty() {
+                        spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
+                    }
+                    if !year_str.is_empty() {
                         spans.push(Span::styled(
                             year_str.clone(),
                             Style::default().fg(palette::PINE),
@@ -463,24 +470,25 @@ impl App {
                         .count() as u16;
                     if let Some(tracks) = self.album_tracks_cache.get(&albums[*idx].id).cloned() {
                         let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
-                        let detail_focused =
-                            focused && self.libs[lib_idx].album_track_focus.is_some();
+                        let detail_focused = self.libs[lib_idx].album_track_focus.is_some();
                         self.render_power_album_detail(
                             f,
                             Rect { height, ..row_area },
                             &tracks,
                             cursor,
                             detail_focused,
+                            true,
                             layout,
                         );
                     }
                 }
                 DisplayRow::AlbumLoading => {
                     f.render_widget(
-                        Paragraph::new(Line::from(Span::styled(
-                            " Loading\u{2026}",
-                            Style::default().fg(palette::MUTED),
-                        ))),
+                        Paragraph::new(Line::from(vec![
+                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                            Span::raw(" "),
+                            Span::styled("Loading\u{2026}", Style::default().fg(palette::MUTED)),
+                        ])),
                         row_area,
                     );
                 }

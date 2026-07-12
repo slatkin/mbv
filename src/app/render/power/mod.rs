@@ -472,7 +472,7 @@ impl App {
                     None => (Vec::new(), 0),
                 }
             };
-            self.render_power_album_detail(f, area, &items, cursor, focused, layout);
+            self.render_power_album_detail(f, area, &items, cursor, focused, false, layout);
         } else if is_series {
             self.render_power_episode_detail(f, area, lib_idx, focused, layout);
         } else if is_home_video {
@@ -556,6 +556,14 @@ mod tests {
         app: &mut App,
         layout: &mut LayoutPower,
     ) -> Terminal<TestBackend> {
+        render_power_library_to_terminal_focused(app, layout, true)
+    }
+
+    fn render_power_library_to_terminal_focused(
+        app: &mut App,
+        layout: &mut LayoutPower,
+        focused: bool,
+    ) -> Terminal<TestBackend> {
         // Height is one row taller than the banner's own reserved footprint
         // (1 selected row + 15 rule/content/gap rows: 1 opening rule + 13
         // content + 1 closing rule) to also leave room for the " N items"
@@ -565,7 +573,7 @@ mod tests {
         let backend = TestBackend::new(60, 18);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_power_library(f, Rect::new(0, 0, 60, 18), true, layout);
+            app.render_power_library(f, Rect::new(0, 0, 60, 18), focused, layout);
         })
         .unwrap();
         term
@@ -1087,12 +1095,24 @@ mod tests {
             "expected selected album row to stay in the list flow:\n{out}"
         );
         assert!(
+            lines[2].starts_with("\u{258c} ") && !lines[2].starts_with("\u{258c}   "),
+            "expected selected album row to drop the grouped indent after the gutter:\n{out}"
+        );
+        assert!(
             lines[3].contains("First Album"),
             "expected album metadata directly under the selected album row:\n{out}"
         );
         assert!(
+            lines[3].starts_with("\u{258c} First Album"),
+            "expected inline metadata to share the selected-region gutter:\n{out}"
+        );
+        assert!(
             lines[6].contains("Opening Track"),
             "expected selected album tracks inside the inline detail region:\n{out}"
+        );
+        assert!(
+            lines[6].starts_with("\u{258c} 1. Opening Track"),
+            "expected inline tracks to share the selected-region gutter:\n{out}"
         );
         assert!(
             lines[7].contains("\u{2500}"),
@@ -1191,6 +1211,10 @@ mod tests {
             "expected selected album row to stay in the flat list flow:\n{out}"
         );
         assert!(
+            lines[3].starts_with("\u{258c} First Album"),
+            "expected flat selected album title to align after a one-column gutter gap:\n{out}"
+        );
+        assert!(
             lines[4].contains("First Album"),
             "expected album metadata directly under the selected album row:\n{out}"
         );
@@ -1254,6 +1278,10 @@ mod tests {
             "expected loading row directly under the selected album row:\n{out}"
         );
         assert!(
+            lines[3].starts_with("\u{258c} Loading"),
+            "expected inline loading row to share the selected-region gutter:\n{out}"
+        );
+        assert!(
             lines[4].contains("\u{2500}"),
             "expected bottom rule directly after inline loading row:\n{out}"
         );
@@ -1309,8 +1337,8 @@ mod tests {
             .find("Opening Track")
             .expect("expected track x position");
         assert!(
-            !lines[track_y].starts_with('\u{258c}'),
-            "expected inactive inline track list to omit cursor marker:\n{out}"
+            lines[track_y].starts_with("\u{258c} 1. Opening Track"),
+            "expected inactive inline track list to keep the selected-region gutter:\n{out}"
         );
         assert_eq!(
             buf[(track_x as u16, track_y as u16)].fg,
@@ -1351,13 +1379,48 @@ mod tests {
             .expect("expected focused track row");
 
         assert!(
-            focused_line.starts_with('\u{258c}'),
-            "expected album_track_focus cursor marker on the focused inline track row:\n{out}"
+            focused_line.starts_with("\u{258c} \u{258c}"),
+            "expected focused track row to show both the selected-region gutter and \
+             a distinct track-focus cursor:\n{out}"
         );
         assert_eq!(
             layout.cursor_screen_y,
             Some(focused_y as u16),
             "expected layout cursor to follow the focused inline track row"
+        );
+    }
+
+    #[test]
+    fn album_folder_track_focus_cursor_renders_when_library_pane_unfocused() {
+        let mut app = make_power_music_group_app();
+        app.libs[0].album_track_focus = Some(1);
+
+        let mut first = make_item("Opening Track", "Audio");
+        first.id = "track-1".into();
+        first.album = "First Album".into();
+        first.artist = "Alpha".into();
+        first.index_number = 1;
+
+        let mut second = make_item("Focused Track", "Audio");
+        second.id = "track-2".into();
+        second.album = "First Album".into();
+        second.artist = "Alpha".into();
+        second.index_number = 2;
+
+        app.album_tracks_cache
+            .insert("album-1".into(), vec![first, second]);
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal_focused(&mut app, &mut layout, false);
+        let out = buffer_to_string(&term);
+        let focused_line = out
+            .lines()
+            .find(|line| line.contains("Focused Track"))
+            .expect("expected focused track to render inline");
+
+        assert!(
+            focused_line.starts_with('\u{258c}'),
+            "expected track-selection cursor to remain visible while pane is unfocused:\n{out}"
         );
     }
 
