@@ -1505,6 +1505,75 @@ impl App {
                 // `enqueue_selected`, `select`, and `toggle_watched`
                 // (HIGH risk) — parameterizing all of them is a separate,
                 // larger follow-up, not in scope for #132.
+                // Track-selection mode (#145 task 3): while the power-left
+                // panel is sitting on the album-folder-listing nav level
+                // (the level `render_power_library` shows inline album
+                // detail for, per task 2), Enter/Escape/Up/Down are
+                // reinterpreted for moving a track focus within the
+                // currently-displayed album instead of drilling into
+                // `nav_stack` (`select`) or moving the album cursor
+                // (`move_lib_cursor`). Scoped strictly to `!is_power_nav`
+                // (so Alt+arrow pane-switching is untouched) and to
+                // `is_viewing_album_folders` (so movies/series/home-video
+                // panels, non-power tabs, and the legacy drilled-in
+                // `is_album_level` state are completely unaffected).
+                if !is_power_nav && self.is_viewing_album_folders(lib_idx) {
+                    match key.code {
+                        KeyCode::Enter => {
+                            if self.libs[lib_idx].album_track_focus.is_none() {
+                                self.libs[lib_idx].album_track_focus = Some(0);
+                            } else {
+                                let has_focused_track = self
+                                    .selected_album_item(lib_idx)
+                                    .and_then(|album| {
+                                        self.album_tracks_cache.get(&album.id).and_then(|tracks| {
+                                            self.libs[lib_idx]
+                                                .album_track_focus
+                                                .and_then(|idx| tracks.get(idx))
+                                        })
+                                    })
+                                    .is_some();
+                                if !has_focused_track {
+                                    return false;
+                                }
+                                // Track already focused (#145 task 4): play
+                                // it. Reuses `select()` (now track-focus
+                                // aware via `current_lib_item()`) rather
+                                // than duplicating queue-build logic here.
+                                let saved = self.tab_idx;
+                                self.tab_idx = self.lib_tab_offset() + lib_idx;
+                                self.select();
+                                self.tab_idx = saved;
+                            }
+                            return false;
+                        }
+                        KeyCode::Esc | KeyCode::Backspace => {
+                            if self.libs[lib_idx].album_track_focus.is_some() {
+                                self.libs[lib_idx].album_track_focus = None;
+                                return false;
+                            }
+                        }
+                        KeyCode::Up | KeyCode::Down => {
+                            if let Some(idx) = self.libs[lib_idx].album_track_focus {
+                                let track_count = self
+                                    .selected_album_item(lib_idx)
+                                    .and_then(|item| self.album_tracks_cache.get(&item.id))
+                                    .map(|tracks| tracks.len())
+                                    .unwrap_or(0);
+                                if track_count > 0 {
+                                    let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
+                                    let new_idx = (idx as i64 + delta)
+                                        .clamp(0, track_count as i64 - 1)
+                                        as usize;
+                                    self.libs[lib_idx].album_track_focus = Some(new_idx);
+                                }
+                                return false;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+
                 if !is_power_nav {
                     let saved = self.tab_idx;
                     self.tab_idx = self.lib_tab_offset() + lib_idx;
@@ -2369,6 +2438,9 @@ impl App {
                             // Letter-grouped mode: row map gives item index (None = header row).
                             if let Some(Some(item_idx)) = row_map_item {
                                 if item_idx < lvl.items.len() {
+                                    if lvl.cursor != item_idx {
+                                        lib.album_track_focus = None;
+                                    }
                                     lvl.cursor = item_idx;
                                 }
                             }
@@ -2381,6 +2453,9 @@ impl App {
                             };
                             let clicked = offset + click_y;
                             if clicked < lvl.items.len() {
+                                if lvl.cursor != clicked {
+                                    lib.album_track_focus = None;
+                                }
                                 lvl.cursor = clicked;
                             }
                         }
@@ -3400,6 +3475,8 @@ mod power_movie_detail_tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app
@@ -3632,6 +3709,8 @@ mod power_movie_detail_tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
         lib.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
         assert!(lib.context_menu.is_some(), "library view");
@@ -3678,6 +3757,8 @@ mod power_movie_detail_tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
@@ -3730,5 +3811,601 @@ mod power_movie_detail_tests {
             app.queue_undo_stack.is_empty(),
             "Ctrl+z pops the queue undo stack when the queue panel is focused"
         );
+    }
+
+    // ── #145 task 5: regression coverage for other Power View shortcuts ──
+    // These paths (queue-panel PageUp/PageDown and the movie context menu)
+    // sit in the same functions the new track-focus interception lives in
+    // (the power-left key dispatch match block and `open_context_menu`), but
+    // are untouched by tasks 1-4: the queue PageUp/PageDown block is a
+    // separate `if` gated on `PowerFocus::Queue`, entirely outside the
+    // `is_viewing_album_folders`-gated block added for track-selection mode;
+    // and `open_context_menu`'s non-folder branch (which a `Movie` item
+    // takes) doesn't consult `album_track_focus` or `is_viewing_album_folders`
+    // at all -- only `current_lib_item()` does, and that new branch is
+    // itself gated on `is_viewing_album_folders`, which is always false for
+    // a movies library (`collection_type != "music"`).
+
+    #[test]
+    fn queue_page_up_and_down_move_queue_cursor_when_queue_panel_focused() {
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+        app.layout.power.queue_area = Rect::new(0, 0, 20, 11);
+
+        for i in 0..20 {
+            let mut item = make_item(&format!("Queued {i}"), "Movie");
+            item.id = format!("queued-{i}");
+            app.player_tab.items.push(item);
+        }
+        app.player_tab.queue_cursor = 15;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(
+            app.player_tab.queue_cursor, 5,
+            "PageUp should move the queue cursor back by the queue panel's page size \
+             (height.saturating_sub(1)), unaffected by #145's album-folder changes"
+        );
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(
+            app.player_tab.queue_cursor, 15,
+            "PageDown should move the queue cursor forward by the same page size"
+        );
+    }
+
+    #[test]
+    fn power_view_movie_context_menu_offers_unaffected_non_folder_verbs() {
+        let mut app = make_power_movie_app();
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
+
+        let menu = app
+            .context_menu
+            .as_ref()
+            .expect("expected a context menu for the focused movie");
+        let labels: Vec<&str> = menu.entries.iter().map(|e| e.label).collect();
+        assert_eq!(
+            labels,
+            vec!["Play", "Add to Queue", "Mark Watched"],
+            "a movie (non-folder, non-music) item's context menu must keep its \
+             original verb set, untouched by #145's album/track scoping \
+             (which only ever changes the folder branch and only for music \
+             libraries): {labels:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod power_music_track_focus_tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::layout::Rect;
+
+    /// Power-view music library sitting on the album-folder-listing nav
+    /// level (`is_viewing_album_folders` holds): a grouped `["group",
+    /// "album"]` config, mirroring `render_power_library`'s inline-detail
+    /// tests, with two albums at the album level and `album-1` selected.
+    fn make_power_music_album_app() -> App {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+        app.music_levels = vec!["group".into(), "album".into()];
+
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "lib-music".into();
+        library.is_folder = true;
+        library.collection_type = "music".into();
+
+        let mut group = make_item("Alpha", "MusicArtist");
+        group.id = "group-0".into();
+        group.is_folder = true;
+
+        let mut album1 = make_item("First Album", "MusicAlbum");
+        album1.id = "album-1".into();
+        album1.is_folder = true;
+        let mut album2 = make_item("Second Album", "MusicAlbum");
+        album2.id = "album-2".into();
+        album2.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![
+                BrowseLevel {
+                    parent_id: "lib-music".into(),
+                    title: "Music".into(),
+                    items: vec![group],
+                    total_count: 1,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+                BrowseLevel {
+                    parent_id: "group-0".into(),
+                    title: "Alpha".into(),
+                    items: vec![album1, album2],
+                    total_count: 2,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+            ],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+
+        app
+    }
+
+    fn push_tracks(app: &mut App, album_id: &str, count: usize) {
+        let tracks: Vec<_> = (0..count)
+            .map(|i| {
+                let mut t = make_item(&format!("Track {i}"), "Audio");
+                t.id = format!("{album_id}-track-{i}");
+                t
+            })
+            .collect();
+        app.album_tracks_cache.insert(album_id.to_string(), tracks);
+    }
+
+    #[test]
+    fn enter_at_album_folder_listing_enters_track_mode_without_nav_push() {
+        let mut app = make_power_music_album_app();
+        let nav_len_before = app.libs[0].nav_stack.len();
+        assert!(app.is_viewing_album_folders(0));
+        assert!(app.libs[0].album_track_focus.is_none());
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.libs[0].album_track_focus, Some(0));
+        assert_eq!(app.libs[0].nav_stack.len(), nav_len_before);
+    }
+
+    #[test]
+    fn up_down_in_track_mode_move_only_track_focus_and_clamp() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(1);
+        let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.libs[0].album_track_focus, Some(2));
+        // Clamp at the end -- no wrap.
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        assert_eq!(app.libs[0].album_track_focus, Some(2));
+
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(app.libs[0].album_track_focus, Some(0));
+        // Clamp at the start -- no wrap.
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        assert_eq!(app.libs[0].album_track_focus, Some(0));
+
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            album_cursor_before,
+            "track-mode Up/Down must not move the album cursor"
+        );
+    }
+
+    #[test]
+    fn mouse_clicking_another_album_clears_track_focus() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(1);
+        app.layout.power.left_area = Rect::new(10, 5, 30, 4);
+        app.layout.power.left_row_map = vec![Some(1)];
+
+        let handled = app.click_set_cursor(11, 5);
+
+        assert!(handled);
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+        assert!(app.libs[0].album_track_focus.is_none());
+    }
+
+    #[test]
+    fn selecting_music_group_clears_track_focus() {
+        let mut app = make_power_music_album_app();
+        let mut group2 = make_item("Beta", "MusicArtist");
+        group2.id = "group-1".into();
+        group2.is_folder = true;
+        app.libs[0].nav_stack[0].items.push(group2);
+        app.libs[0].album_track_focus = Some(1);
+
+        app.select_music_group(0, 1);
+
+        assert!(app.libs[0].album_track_focus.is_none());
+    }
+
+    #[test]
+    fn switching_music_group_clears_track_focus() {
+        let mut app = make_power_music_album_app();
+        let mut group2 = make_item("Beta", "MusicArtist");
+        group2.id = "group-1".into();
+        group2.is_folder = true;
+        app.libs[0].nav_stack[0].items.push(group2);
+        app.libs[0].album_track_focus = Some(1);
+
+        app.switch_music_group(0, 1);
+
+        assert!(app.libs[0].album_track_focus.is_none());
+    }
+
+    #[test]
+    fn up_down_in_track_mode_with_no_cached_tracks_is_noop() {
+        let mut app = make_power_music_album_app();
+        // No `push_tracks` call -- album_tracks_cache has no entry for
+        // "album-1", mirroring "not yet loaded".
+        app.libs[0].album_track_focus = Some(0);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.libs[0].album_track_focus, Some(0));
+    }
+
+    #[test]
+    fn escape_in_track_mode_clears_focus_without_go_back() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(2);
+        let nav_len_before = app.libs[0].nav_stack.len();
+        let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert!(app.libs[0].album_track_focus.is_none());
+        assert_eq!(
+            app.libs[0].nav_stack.len(),
+            nav_len_before,
+            "Escape in track mode must not pop nav_stack (not a go_back)"
+        );
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            album_cursor_before
+        );
+    }
+
+    #[test]
+    fn up_down_outside_track_mode_still_move_album_cursor() {
+        let mut app = make_power_music_album_app();
+        assert!(app.libs[0].album_track_focus.is_none());
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+        assert!(app.libs[0].album_track_focus.is_none());
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    }
+
+    #[test]
+    fn escape_outside_track_mode_still_calls_go_back_unchanged() {
+        // `make_power_music_album_app`'s grouped `["group","album"]` fixture
+        // sits at the *root* of the synthetic music-group view (nav_stack
+        // len == 2), which `go_back`'s own pre-existing guard already
+        // no-ops on ("don't pop when already at the root of a synthetic
+        // group view" -- see `go_back`'s doc comment in actions.rs). The
+        // regression this proves is narrower than "pops": Task 3 must route
+        // Escape to the exact same `go_back()` call as before when
+        // `album_track_focus` is `None`, whatever `go_back()` itself does --
+        // demonstrated by comparing `handle_key(Esc)` against calling
+        // `go_back()` directly on an identical, freshly-built app.
+        let mut via_go_back = make_power_music_album_app();
+        via_go_back.go_back();
+
+        let mut via_escape_key = make_power_music_album_app();
+        assert!(via_escape_key.libs[0].album_track_focus.is_none());
+        let handled = via_escape_key.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(
+            via_escape_key.libs[0].nav_stack.len(),
+            via_go_back.libs[0].nav_stack.len()
+        );
+        assert_eq!(
+            via_escape_key.libs[0].nav_stack.last().unwrap().cursor,
+            via_go_back.libs[0].nav_stack.last().unwrap().cursor
+        );
+    }
+
+    fn buffer_to_string(term: &ratatui::Terminal<ratatui::backend::TestBackend>) -> String {
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn render_inline_album_detail_uses_track_focus_as_cursor() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(2);
+
+        let backend = ratatui::backend::TestBackend::new(100, 40);
+        let mut term = ratatui::Terminal::new(backend).unwrap();
+        term.draw(|f| app.render(f)).unwrap();
+        let out = buffer_to_string(&term);
+
+        // The cursor marker (U+258C) must land on "Track 2"'s row -- proof
+        // that the inline call site in `render_power_library` passed
+        // `album_track_focus` (2) through as `cursor`, not a hardcoded 0.
+        let track_line = out
+            .lines()
+            .find(|l| l.contains("Track 2"))
+            .unwrap_or_else(|| panic!("no 'Track 2' row found in rendered output:\n{out}"));
+        assert!(
+            track_line.contains('\u{258c}'),
+            "expected cursor marker on the focused track's row, got: {track_line:?}\nfull output:\n{out}"
+        );
+    }
+
+    // ── Task 4: scope-correct actions (#145) ─────────────────────────────
+
+    #[test]
+    fn current_lib_item_in_list_mode_returns_album_folder_not_a_track() {
+        // Regression: album-list mode (`album_track_focus == None`) must
+        // keep resolving to the selected album folder itself, exactly as
+        // before Task 4.
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        assert!(app.libs[0].album_track_focus.is_none());
+
+        let saved = app.tab_idx;
+        app.tab_idx = app.lib_tab_offset();
+        let item = app.current_lib_item();
+        app.tab_idx = saved;
+
+        let item = item.expect("current_lib_item should resolve the selected album");
+        assert_eq!(item.id, "album-1");
+        assert!(item.is_folder, "list mode must resolve to the album folder");
+    }
+
+    #[test]
+    fn current_lib_item_in_track_mode_returns_focused_track() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(1);
+
+        let saved = app.tab_idx;
+        app.tab_idx = app.lib_tab_offset();
+        let item = app.current_lib_item();
+        app.tab_idx = saved;
+
+        let item = item.expect("current_lib_item should resolve the focused track");
+        assert_eq!(item.id, "album-1-track-1");
+        assert!(
+            !item.is_folder,
+            "track mode must resolve to the track, not the album folder"
+        );
+    }
+
+    #[test]
+    fn current_lib_item_in_track_mode_falls_back_safely_when_cache_missing() {
+        // Async fetch still in flight: `album_tracks_cache` has no entry for
+        // "album-1" yet. Must not panic and must not index out of bounds.
+        let mut app = make_power_music_album_app();
+        app.libs[0].album_track_focus = Some(0);
+        assert!(!app.album_tracks_cache.contains_key("album-1"));
+
+        let saved = app.tab_idx;
+        app.tab_idx = app.lib_tab_offset();
+        let item = app.current_lib_item();
+        app.tab_idx = saved;
+
+        let item = item.expect("must fall back to the album folder item, not None");
+        assert_eq!(item.id, "album-1");
+        assert!(item.is_folder);
+    }
+
+    #[test]
+    fn enter_again_in_track_mode_plays_focused_track_from_cached_queue() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(1);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(!handled);
+        // Queue built from the cached album tracks, starting at the focused
+        // track (index 1 -> "album-1-track-1").
+        let ids: Vec<_> = app.player_tab.items.iter().map(|i| i.id.clone()).collect();
+        assert_eq!(
+            ids,
+            vec!["album-1-track-0", "album-1-track-1", "album-1-track-2"]
+        );
+        assert_eq!(app.player_tab.queue_cursor, 1);
+        // Note: `app.queue_source` is not asserted here -- `play_items_routed`
+        // (pre-existing, out of Task 4's scope) calls
+        // `on_queue_replace_silent` as its first statement, which
+        // unconditionally resets `queue_source` to `Unknown` immediately
+        // after `select()` sets it to `Album`. That happens identically on
+        // the legacy `is_album_level` path (see the regression test below),
+        // so it is not a Task-4 regression -- the queue *contents* (ids +
+        // cursor, asserted above) are the correct observable here.
+    }
+
+    #[test]
+    fn enter_again_in_track_mode_with_missing_cache_does_not_panic() {
+        let mut app = make_power_music_album_app();
+        // No `push_tracks` -- cache miss, async fetch still in flight.
+        app.libs[0].album_track_focus = Some(0);
+        let nav_len_before = app.libs[0].nav_stack.len();
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.libs[0].album_track_focus, Some(0));
+        assert_eq!(app.libs[0].nav_stack.len(), nav_len_before);
+    }
+
+    #[test]
+    fn context_menu_in_list_mode_offers_folder_scoped_actions_for_selected_album() {
+        // Regression: album-list mode's context menu must still target the
+        // selected ALBUM's id via the folder-scoped actions.
+        let mut app = make_power_music_album_app();
+        assert!(app.libs[0].album_track_focus.is_none());
+
+        app.open_context_menu();
+
+        let menu = app.context_menu.as_ref().expect("context menu should open");
+        let actions: Vec<_> = menu
+            .entries
+            .iter()
+            .filter_map(|e| e.action.clone())
+            .collect();
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, ContextAction::PlayFolder(id) if id == "album-1")),
+            "expected PlayFolder(\"album-1\"), got: {actions:?}"
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, ContextAction::ShuffleFolder(id) if id == "album-1")),
+            "expected ShuffleFolder(\"album-1\"), got: {actions:?}"
+        );
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, ContextAction::EnqueueFolder(item) if item.id == "album-1")),
+            "expected EnqueueFolder(album-1), got: {actions:?}"
+        );
+    }
+
+    #[test]
+    fn context_menu_in_track_mode_offers_track_scoped_actions_not_folder_actions() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(1);
+
+        app.open_context_menu();
+
+        let menu = app.context_menu.as_ref().expect("context menu should open");
+        let actions: Vec<_> = menu
+            .entries
+            .iter()
+            .filter_map(|e| e.action.clone())
+            .collect();
+        assert!(
+            actions.iter().any(|a| matches!(a, ContextAction::Play)),
+            "track mode must offer the generic per-item Play action, got: {actions:?}"
+        );
+        assert!(
+            actions.iter().any(|a| matches!(a, ContextAction::Enqueue)),
+            "track mode must offer the generic per-item Enqueue action, got: {actions:?}"
+        );
+        assert!(
+            !actions.iter().any(|a| matches!(
+                a,
+                ContextAction::PlayFolder(_)
+                    | ContextAction::ShuffleFolder(_)
+                    | ContextAction::EnqueueFolder(_)
+            )),
+            "track mode must not offer album-folder-scoped actions, got: {actions:?}"
+        );
+    }
+
+    #[test]
+    fn legacy_is_album_level_drilldown_enter_to_play_is_unaffected() {
+        // The pre-#145 drilldown (`is_album_level`, reached elsewhere in the
+        // app by pushing a nav_stack level of tracks) must keep working
+        // exactly as before -- Task 4 must not change its behavior.
+        let mut app = make_app_stub();
+        app.tab_idx = 2;
+        app.music_levels = vec!["album".into()];
+
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "lib-music".into();
+        library.is_folder = true;
+        library.collection_type = "music".into();
+
+        let mut album = make_item("An Album", "MusicAlbum");
+        album.id = "album-legacy".into();
+        album.is_folder = true;
+
+        let mut track0 = make_item("Track 0", "Audio");
+        track0.id = "legacy-track-0".into();
+        let mut track1 = make_item("Track 1", "Audio");
+        track1.id = "legacy-track-1".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![
+                BrowseLevel {
+                    parent_id: "lib-music".into(),
+                    title: "Music".into(),
+                    items: vec![album],
+                    total_count: 1,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+                BrowseLevel {
+                    parent_id: "album-legacy".into(),
+                    title: "An Album".into(),
+                    items: vec![track0, track1],
+                    total_count: 2,
+                    cursor: 1,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+            ],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+
+        assert!(app.is_album_level(0));
+        assert!(!app.is_viewing_album_folders(0));
+
+        app.select();
+
+        let ids: Vec<_> = app.player_tab.items.iter().map(|i| i.id.clone()).collect();
+        assert_eq!(ids, vec!["legacy-track-0", "legacy-track-1"]);
+        assert_eq!(app.player_tab.queue_cursor, 1);
+        // See the note on `enter_again_in_track_mode_plays_focused_track_
+        // from_cached_queue` above -- `app.queue_source` gets reset to
+        // `Unknown` by `play_items_routed`'s call to
+        // `on_queue_replace_silent` regardless of what `select()` set it to
+        // just before, on both the legacy and new track-focus paths. Not a
+        // Task-4 regression; queue contents are the correct observable.
     }
 }

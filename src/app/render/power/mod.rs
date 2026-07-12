@@ -452,6 +452,7 @@ impl App {
         let has_detail = self.power_left_tab > 0 && self.libs[lib_idx].power_detail_item.is_some();
         let is_feed_group = self.power_left_tab > 0 && self.is_feed_home_video_group_view(lib_idx);
         let is_music_group = self.power_left_tab > 0 && self.is_music_group_view(lib_idx);
+        let is_album_folders = self.power_left_tab > 0 && self.is_viewing_album_folders(lib_idx);
         let is_album = self.power_left_tab > 0 && self.is_album_level(lib_idx);
         let is_series = self.power_left_tab > 0 && self.is_series_view(lib_idx);
         let is_home_video = self.power_left_tab > 0 && self.is_home_video_view(lib_idx);
@@ -459,8 +460,74 @@ impl App {
             self.render_power_detail(f, area, lib_idx, focused, layout);
         } else if is_feed_group {
             self.render_power_feed_home_video_group_view(f, area, lib_idx, focused, layout);
-        } else if is_music_group {
-            self.render_power_music_group_view(f, area, lib_idx, focused, layout);
+        } else if is_album_folders {
+            // Album-folder listing (one level shallower than the drilled-in
+            // `is_album` track-list level below): split the panel so the
+            // album list keeps the top and the currently-highlighted album's
+            // tracks render inline underneath, proactively sourced from
+            // `album_tracks_cache` (#145) instead of requiring the user to
+            // drill in first. `Enter`/`Escape` still drive the legacy
+            // drilldown (`is_album` branch) for now -- this task only adds
+            // the inline preview.
+            const MIN_LIST_ROWS: u16 = 6;
+            const MIN_DETAIL_ROWS: u16 = 5;
+            let total = area.height;
+            let min_list = MIN_LIST_ROWS.min(total);
+            let max_detail = total
+                .saturating_sub(min_list)
+                .max(MIN_DETAIL_ROWS.min(total));
+            let detail_h = (total / 3).clamp(MIN_DETAIL_ROWS.min(total), max_detail);
+            let list_h = total.saturating_sub(detail_h);
+            let list_area = Rect {
+                height: list_h,
+                ..area
+            };
+            let detail_area = Rect {
+                y: area.y + list_h,
+                height: detail_h,
+                ..area
+            };
+
+            if is_music_group {
+                self.render_power_music_group_view(f, list_area, lib_idx, focused, layout);
+            } else {
+                self.render_power_list(f, list_area, focused, layout);
+            }
+
+            if detail_area.height > 0 {
+                if let Some(album) = self.selected_album_item(lib_idx) {
+                    match self.album_tracks_cache.get(&album.id).cloned() {
+                        Some(tracks) => {
+                            // In track-selection mode (#145 task 3) highlight the
+                            // focused track instead of always the first row.
+                            let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
+                            self.render_power_album_detail(
+                                f,
+                                detail_area,
+                                &tracks,
+                                cursor,
+                                focused,
+                                layout,
+                            );
+                        }
+                        None => {
+                            self.fetch_album_tracks(album.id.clone());
+                            f.render_widget(
+                                Paragraph::new(Line::from(Span::styled(
+                                    " Loading\u{2026}",
+                                    Style::default().fg(palette::MUTED),
+                                ))),
+                                Rect {
+                                    x: detail_area.x,
+                                    y: detail_area.y,
+                                    width: detail_area.width,
+                                    height: 1,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
         } else if is_album {
             let (items, cursor) = {
                 let lvl = self.libs[lib_idx].nav_stack.last();
@@ -477,6 +544,21 @@ impl App {
         } else {
             self.render_power_list(f, area, focused, layout);
         }
+    }
+
+    /// Returns the currently cursor-selected item at the album-folder-listing
+    /// nav_stack level (i.e. the level where `is_viewing_album_folders`
+    /// holds), if any. The cursor field always indexes into the raw
+    /// `items` array in the order it was fetched (SortName-by-album-title)
+    /// -- *not* the artist-grouped display order that
+    /// `render_power_music_group_view` builds for rendering -- so a plain
+    /// `items.get(cursor)` is correct even for the grouped music view.
+    pub(in crate::app) fn selected_album_item(
+        &self,
+        lib_idx: usize,
+    ) -> Option<mbv_core::api::MediaItem> {
+        let lvl = self.libs[lib_idx].nav_stack.last()?;
+        lvl.items.get(lvl.cursor).cloned()
     }
 
     /// Resolves the display artist for an album item in the grouped power
@@ -600,6 +682,8 @@ mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app
@@ -754,6 +838,8 @@ mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app
@@ -1007,6 +1093,275 @@ mod tests {
             out.contains("Opening Track"),
             "expected the drilled-in track list to still render via the \
              refactored explicit items/cursor signature:\n{out}"
+        );
+    }
+
+    // ── inline album detail at the album-folder-listing level (#145, task 2) ──
+
+    #[test]
+    fn album_folder_listing_renders_list_and_inline_detail_together() {
+        let mut app = make_power_music_group_app();
+        // Sitting at the album-folder-listing level already (no drilldown push).
+        assert_eq!(app.libs[0].nav_stack.len(), 2);
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+
+        assert!(
+            out.contains("Alpha"),
+            "expected the album list (grouped by artist) to still render:\n{out}"
+        );
+        assert!(
+            out.contains("Opening Track"),
+            "expected the selected album's cached tracks to render inline, \
+             without any drilldown:\n{out}"
+        );
+        assert_eq!(
+            app.libs[0].nav_stack.len(),
+            2,
+            "rendering the inline preview must not push a nav_stack level"
+        );
+    }
+
+    #[test]
+    fn album_folder_listing_fetches_and_shows_loading_on_cache_miss() {
+        let mut app = make_power_music_group_app();
+        assert!(!app.album_tracks_cache.contains_key("album-1"));
+        assert!(!app.album_tracks_loading.contains("album-1"));
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+
+        assert!(
+            app.album_tracks_loading.contains("album-1"),
+            "expected a cache miss to trigger fetch_album_tracks for the \
+             selected album:\n{out}"
+        );
+        assert!(
+            out.to_lowercase().contains("loading"),
+            "expected a loading indicator in the detail pane while the \
+             fetch is in flight:\n{out}"
+        );
+    }
+
+    #[test]
+    fn selected_album_item_follows_raw_cursor_not_display_order() {
+        let mut app = make_power_music_group_app();
+
+        // A second album whose artist sorts before "Alpha" -- if the cursor
+        // were (mis)interpreted against the artist-grouped display order
+        // instead of the raw `items` array, moving the cursor to 1 would
+        // resolve to the wrong album here.
+        let mut second_album = make_item("Zero Day", "MusicAlbum");
+        second_album.id = "album-2".into();
+        second_album.artist = "Aaardvark".into();
+
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.items.push(second_album);
+            lvl.cursor = 1;
+        }
+
+        let selected = app
+            .selected_album_item(0)
+            .expect("expected a selected album at cursor 1");
+        assert_eq!(
+            selected.id, "album-2",
+            "expected the raw items[cursor] entry, not a sorted/display-order lookup"
+        );
+
+        let mut layout = LayoutPower::default();
+        let _ = render_power_library_to_string(&mut app, &mut layout);
+        assert!(
+            app.album_tracks_loading.contains("album-2"),
+            "expected the fetch triggered by rendering to target the cursor-selected \
+             album (album-2), not album-1"
+        );
+        assert!(
+            !app.album_tracks_loading.contains("album-1"),
+            "album-1 is no longer selected, so it should not be (re)fetched"
+        );
+    }
+
+    // ── #145 task 5: regression coverage for non-music Power View surfaces ──
+    // `is_viewing_album_folders`/`is_album_level` both gate on
+    // `collection_type == "music"`, so these are provably unreachable for
+    // series/home-video libraries; the tests below additionally prove the
+    // *render* path (`render_power_library`) still picks the original
+    // single-pane series/home-video renderer and never touches the new
+    // album-tracks cache/track-focus machinery added in tasks 1-4.
+
+    fn make_power_series_app() -> App {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Shows", "CollectionFolder");
+        library.id = "lib-shows".into();
+        library.is_folder = true;
+        library.collection_type = "tvshows".into();
+
+        let mut season = make_item("Season 1", "Season");
+        season.id = "season-1".into();
+
+        let mut ep1 = make_item("Pilot", "Episode");
+        ep1.id = "ep-1".into();
+        let mut ep2 = make_item("Second Episode", "Episode");
+        ep2.id = "ep-2".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![
+                BrowseLevel {
+                    parent_id: "lib-shows".into(),
+                    title: "Seasons".into(),
+                    items: vec![season],
+                    total_count: 1,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+                BrowseLevel {
+                    parent_id: "season-1".into(),
+                    title: "Episodes".into(),
+                    items: vec![ep1, ep2],
+                    total_count: 2,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+            ],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+
+            album_track_focus: None,
+        });
+
+        app
+    }
+
+    fn make_power_home_video_app() -> App {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Home Videos", "CollectionFolder");
+        library.id = "lib-homevideos".into();
+        library.is_folder = true;
+        library.collection_type = "homevideos".into();
+
+        let mut first = make_item("Birthday Clip", "Video");
+        first.id = "video-1".into();
+        let mut second = make_item("Vacation Clip", "Video");
+        second.id = "video-2".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-homevideos".into(),
+                title: "Home Videos".into(),
+                items: vec![first, second],
+                total_count: 2,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+
+            album_track_focus: None,
+        });
+
+        app
+    }
+
+    #[test]
+    fn series_library_is_never_album_folders_and_renders_via_episode_detail_path() {
+        let mut app = make_power_series_app();
+        let lib_idx = 0;
+
+        assert!(
+            !app.is_viewing_album_folders(lib_idx),
+            "a tvshows library must never satisfy is_viewing_album_folders (gated \
+             on collection_type == \"music\")"
+        );
+        assert!(
+            !app.is_album_level(lib_idx),
+            "a tvshows library must never satisfy is_album_level either"
+        );
+        assert!(app.is_series_view(lib_idx));
+        assert!(app.libs[lib_idx].album_track_focus.is_none());
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+
+        assert!(
+            out.contains("Pilot"),
+            "expected the original single-pane episode-detail renderer to fire \
+             unchanged:\n{out}"
+        );
+        assert!(
+            app.album_tracks_cache.is_empty(),
+            "series rendering must never touch the album-tracks cache added by #145"
+        );
+        assert!(
+            app.libs[lib_idx].album_track_focus.is_none(),
+            "series rendering must never set track-selection mode"
+        );
+    }
+
+    #[test]
+    fn home_video_library_is_never_album_folders_and_renders_via_original_list_path() {
+        let mut app = make_power_home_video_app();
+        let lib_idx = 0;
+
+        assert!(
+            !app.is_viewing_album_folders(lib_idx),
+            "a homevideos library must never satisfy is_viewing_album_folders"
+        );
+        assert!(!app.is_album_level(lib_idx));
+        assert!(app.is_home_video_view(lib_idx));
+        assert!(app.libs[lib_idx].album_track_focus.is_none());
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+
+        assert!(
+            out.contains("Birthday Clip"),
+            "expected the original single-pane home-video list renderer to fire \
+             unchanged:\n{out}"
+        );
+        assert!(
+            app.album_tracks_cache.is_empty(),
+            "home-video rendering must never touch the album-tracks cache added by #145"
+        );
+        assert!(
+            app.libs[lib_idx].album_track_focus.is_none(),
+            "home-video rendering must never set track-selection mode"
         );
     }
 }

@@ -265,7 +265,9 @@ impl MediaPlayer2Player {
         if runtime_us > 0 && position_us > runtime_us {
             return;
         }
-        (source.send)(PlayerCommand::SeekAbsolute(position_us as f64 / 1_000_000.0));
+        (source.send)(PlayerCommand::SeekAbsolute(
+            position_us as f64 / 1_000_000.0,
+        ));
     }
 
     fn open_uri(&self, _uri: &str) {}

@@ -120,7 +120,7 @@ use mbv_core::playback_queue::{
 use mbv_core::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ContextAction {
     Play,
     PlayFolder(String),
@@ -673,6 +673,11 @@ struct LibraryTab {
     feed_home_video: Option<FeedHomeVideoState>,
     power_detail_item: Option<MediaItem>, // movie pinned for detail view in power left panel
     power_detail_scroll: usize,           // scroll offset into the overview lines
+    /// `Some(idx)` = track-selection mode is active for the album currently
+    /// shown inline at the album-folder-listing nav level (#145 task 3);
+    /// `idx` indexes into that album's cached track list
+    /// (`App::album_tracks_cache`). `None` = normal album-list navigation.
+    album_track_focus: Option<usize>,
 }
 
 struct SuspendedLocalSession {
@@ -2619,10 +2624,10 @@ impl App {
 
             self.sync_volume_from_player();
 
-            // Animate the now-playing spinner at ~150 ms whenever a local player
-            // is active or a remote session is connected; fall back to 1 s when
-            // fully idle. Remote queue views need the fast cadence even if the
-            // active item match is temporarily unavailable.
+            // Keep active playback/progress responsive at ~150 ms whenever a
+            // local player is active or a remote session is connected; fall
+            // back to 1 s when fully idle. Remote queue views need the fast
+            // cadence even if the active item match is temporarily unavailable.
             let render_interval = {
                 let playback = self.effective_playback_state();
                 if playback.active || self.connected_session_state.is_some() {
@@ -3965,6 +3970,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
         assert!(!app.is_feed_home_video_group_view(0));
 
@@ -4029,6 +4036,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -4078,6 +4087,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.rebuild_library_tabs_from_views(&[library]);
@@ -4125,6 +4136,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         let mut folders = Vec::new();
@@ -4212,6 +4225,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.select_feed_folder_group(0, 1);
@@ -4270,6 +4285,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.select_feed_folder_group(0, 0);
@@ -4343,6 +4360,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.select_feed_folder_group(0, 2);
@@ -4417,6 +4436,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: Some(b_video.clone()),
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.select_feed_folder_group(0, 2);
@@ -4478,6 +4499,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.go_back();
@@ -4526,6 +4549,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         let mut empty = make_item("Empty Channel", "Folder");
@@ -4652,6 +4677,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.ensure_feed_home_video_group_level(0);
@@ -4714,6 +4741,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.refresh_lib();
@@ -4741,6 +4770,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         assert!(app.is_podcast_library(0));
@@ -4760,6 +4791,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         assert!(app.is_podcast_library(0));
@@ -4798,6 +4831,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -4844,6 +4879,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -4888,6 +4925,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
         app.tab_idx = 1;
         app.queue_view = QUEUE_VIEW_POWER;
@@ -4952,6 +4991,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
         app.tab_idx = 1;
         app.queue_view = QUEUE_VIEW_POWER;
@@ -5053,6 +5094,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
         app.tab_idx = 1;
         app.queue_view = QUEUE_VIEW_POWER;
@@ -5126,6 +5169,8 @@ pub(crate) mod tests {
             }),
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.handle_lib_event(LibEvent::Refreshed {
@@ -7036,11 +7081,14 @@ pub(crate) mod tests {
         // prove the wiring at the call site is actually in place.
         let mut app = make_app_stub();
         let local_status = app.player.status.clone();
-        app.mpris = Some(crate::mpris::test_handle(local_status.clone(), |_| {}, None));
+        app.mpris = Some(crate::mpris::test_handle(
+            local_status.clone(),
+            |_| {},
+            None,
+        ));
 
         let remote_items = make_items(1);
-        let (remote, remote_rx) =
-            mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
         let remote_status = remote.status.clone();
         let sess = make_session("remote-host", "mbv");
 
@@ -7063,11 +7111,14 @@ pub(crate) mod tests {
         // the now-defunct remote session.
         let mut app = make_app_stub();
         let local_status = app.player.status.clone();
-        app.mpris = Some(crate::mpris::test_handle(local_status.clone(), |_| {}, None));
+        app.mpris = Some(crate::mpris::test_handle(
+            local_status.clone(),
+            |_| {},
+            None,
+        ));
 
         let remote_items = make_items(1);
-        let (remote, remote_rx) =
-            mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
         let remote_status = remote.status.clone();
         let sess = make_session("remote-host", "mbv");
         app.switch_to_direct_remote(&sess, remote, remote_rx);
