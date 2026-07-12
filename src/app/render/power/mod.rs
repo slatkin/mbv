@@ -449,7 +449,14 @@ impl App {
         } else if is_music_group {
             self.render_power_music_group_view(f, area, lib_idx, focused, layout);
         } else if is_album {
-            self.render_power_album_detail(f, area, lib_idx, focused, layout);
+            let (items, cursor) = {
+                let lvl = self.libs[lib_idx].nav_stack.last();
+                match lvl {
+                    Some(l) => (l.items.clone(), l.cursor),
+                    None => (Vec::new(), 0),
+                }
+            };
+            self.render_power_album_detail(f, area, &items, cursor, focused, layout);
         } else if is_series {
             self.render_power_episode_detail(f, area, lib_idx, focused, layout);
         } else if is_home_video {
@@ -920,5 +927,54 @@ mod tests {
                 "expected pill hitboxes confined to the scrollable area left of Music"
             );
         }
+    }
+
+    // ── render_power_album_detail refactor (#145) ──────────────────────────
+    // `render_power_album_detail` used to read `items`/`cursor` from
+    // `nav_stack` internally; it now takes them as explicit parameters so a
+    // future inline-detail render path (not wired up yet) can feed it
+    // proactively-fetched data instead of a drilled-in nav_stack level. This
+    // locks in that the existing drilldown call site (`is_album` branch in
+    // `render_power_library`) still renders identically after the refactor.
+    #[test]
+    fn album_detail_still_renders_from_drilled_in_nav_stack_level() {
+        let mut app = make_power_music_group_app();
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.production_year = 2001;
+        track.index_number = 1;
+        track.runtime_ticks = 200 * mbv_core::api::TICKS_PER_SECOND;
+
+        app.libs[0].nav_stack.push(BrowseLevel {
+            parent_id: "album-1".into(),
+            title: "First Album".into(),
+            items: vec![track],
+            total_count: 1,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+        });
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+
+        assert!(
+            out.contains("First Album"),
+            "expected the drilled-in album title to still render via the \
+             refactored explicit items/cursor signature:\n{out}"
+        );
+        assert!(
+            out.contains("Opening Track"),
+            "expected the drilled-in track list to still render via the \
+             refactored explicit items/cursor signature:\n{out}"
+        );
     }
 }

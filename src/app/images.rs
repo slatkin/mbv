@@ -1,5 +1,5 @@
 use super::ui_util::fmt_duration;
-use super::{palette, App, LibEvent};
+use super::{palette, App, LibEvent, PAGE_SIZE};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -63,6 +63,37 @@ impl App {
                 })
                 .unwrap_or(0) as u32;
             let _ = tx.send(LibEvent::AlbumYearFetched { album_id, year });
+        });
+    }
+
+    /// Proactively fetches the full track list for `album_id` so the Power
+    /// View inline album detail pane (#145) can render it without the user
+    /// drilling in first. Mirrors `fetch_album_year`'s simple one-shot
+    /// fetch (no throttle queue) — only one album is ever highlighted at a
+    /// time, so there is no fan-out to bound.
+    pub(super) fn fetch_album_tracks(&mut self, album_id: String) {
+        if self.album_tracks_loading.contains(&album_id)
+            || self.album_tracks_cache.contains_key(&album_id)
+        {
+            return;
+        }
+        self.album_tracks_loading.insert(album_id.clone());
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let tracks = client
+                .get_items_sorted(
+                    &album_id,
+                    None,
+                    false,
+                    0,
+                    PAGE_SIZE,
+                    "ParentIndexNumber,IndexNumber",
+                    "Ascending",
+                )
+                .map(|(items, _total)| items)
+                .unwrap_or_default();
+            let _ = tx.send(LibEvent::AlbumTracksFetched { album_id, tracks });
         });
     }
 

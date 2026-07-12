@@ -3938,6 +3938,10 @@ impl App {
                 self.album_year_loading.remove(&album_id);
                 self.album_year_cache.insert(album_id, year);
             }
+            LibEvent::AlbumTracksFetched { album_id, tracks } => {
+                self.album_tracks_loading.remove(&album_id);
+                self.album_tracks_cache.insert(album_id, tracks);
+            }
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);
                 self.album_artist_cache.insert(album_id, artist);
@@ -5745,6 +5749,64 @@ mod tests {
             2,
             "toggle_mute() should have delegated to cycle_audio()'s remote branch, \
              which advances the session's audio_index"
+        );
+    }
+
+    // ── album_tracks_cache / LibEvent::AlbumTracksFetched (#145) ────────────
+    // Proactive track-list fetch/cache for the Power View inline album
+    // detail pane, mirroring the existing `album_artist_cache` pattern.
+
+    #[test]
+    fn album_tracks_fetched_event_populates_cache_and_clears_loading() {
+        use crate::app::tests::make_item;
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.album_tracks_loading.insert("album-1".into());
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        app.handle_lib_event(LibEvent::AlbumTracksFetched {
+            album_id: "album-1".into(),
+            tracks: vec![track],
+        });
+
+        assert!(
+            !app.album_tracks_loading.contains("album-1"),
+            "the loading marker must be cleared once the fetch resolves"
+        );
+        let cached = app
+            .album_tracks_cache
+            .get("album-1")
+            .expect("fetched tracks must be cached under the album id");
+        assert_eq!(cached.len(), 1);
+        assert_eq!(cached[0].id, "track-1");
+    }
+
+    #[test]
+    fn fetch_album_tracks_is_a_no_op_when_already_cached() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.album_tracks_cache.insert("album-1".into(), Vec::new());
+
+        app.fetch_album_tracks("album-1".into());
+
+        assert!(
+            !app.album_tracks_loading.contains("album-1"),
+            "a cache hit must return before marking the album as loading \
+             (and before spawning a redundant network fetch)"
+        );
+    }
+
+    #[test]
+    fn fetch_album_tracks_is_a_no_op_when_already_loading() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.album_tracks_loading.insert("album-1".into());
+
+        app.fetch_album_tracks("album-1".into());
+
+        assert!(
+            !app.album_tracks_cache.contains_key("album-1"),
+            "a duplicate call while a fetch is already in flight must not \
+             spawn a second fetch or fabricate a cache entry"
         );
     }
 }

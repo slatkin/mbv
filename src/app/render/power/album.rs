@@ -12,11 +12,18 @@ impl App {
     /// Renders the music album detail panel (track list) into `area` — the lib
     /// slot below the card. The card itself already shows the album art (handled
     /// in `render_power_card`). Mirrors `render_power_detail` for movies.
+    ///
+    /// Takes `items`/`cursor` explicitly rather than reading `nav_stack`
+    /// internally (#145) so it can render either the legacy drilled-in
+    /// nav_stack level or the inline-album-detail cache (the currently
+    /// highlighted album in the album-folder listing, fetched proactively
+    /// via `fetch_album_tracks`) with the same code path.
     pub(super) fn render_power_album_detail(
         &mut self,
         f: &mut Frame,
         area: Rect,
-        lib_idx: usize,
+        items: &[mbv_core::api::MediaItem],
+        cursor: usize,
         focused: bool,
         layout: &mut LayoutPower,
     ) {
@@ -24,14 +31,6 @@ impl App {
             return;
         }
 
-        let (items, cursor) = {
-            let lib = &self.libs[lib_idx];
-            let lvl = match lib.nav_stack.last() {
-                Some(l) => l,
-                None => return,
-            };
-            (lvl.items.clone(), lvl.cursor)
-        };
         let n = items.len();
         if items.is_empty() {
             return;

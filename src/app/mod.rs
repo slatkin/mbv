@@ -316,6 +316,13 @@ enum LibEvent {
         album_id: String,
         artist: String,
     },
+    /// Track list for the album currently highlighted in Power View's
+    /// album-folder listing, fetched proactively (#145) so the inline album
+    /// detail pane has data without a nav_stack drilldown.
+    AlbumTracksFetched {
+        album_id: String,
+        tracks: Vec<MediaItem>,
+    },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate nav_stack, stay on current tab).
     NavigateTo {
@@ -833,6 +840,13 @@ pub struct App {
     album_artist_loading: std::collections::HashSet<String>,
     pending_album_artist_fetches: std::collections::VecDeque<String>,
     album_artist_fetches_active: usize,
+    /// Track lists for the album currently highlighted in Power View's
+    /// album-folder listing, fetched proactively so the inline album detail
+    /// pane (#145) has data without requiring the user to drill in first.
+    /// Keyed by album id, mirroring `album_artist_cache`'s never-evicted
+    /// lifetime.
+    album_tracks_cache: std::collections::HashMap<String, Vec<MediaItem>>,
+    album_tracks_loading: std::collections::HashSet<String>,
     save_playlist_dialog: Option<SavePlaylistDialog>,
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
@@ -1313,6 +1327,8 @@ impl App {
             album_artist_loading: std::collections::HashSet::new(),
             pending_album_artist_fetches: std::collections::VecDeque::new(),
             album_artist_fetches_active: 0,
+            album_tracks_cache: std::collections::HashMap::new(),
+            album_tracks_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
             pending_image_fetches: std::collections::VecDeque::new(),
@@ -3494,6 +3510,8 @@ pub(crate) mod tests {
             album_artist_loading: std::collections::HashSet::new(),
             pending_album_artist_fetches: std::collections::VecDeque::new(),
             album_artist_fetches_active: 0,
+            album_tracks_cache: std::collections::HashMap::new(),
+            album_tracks_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
             pending_image_fetches: std::collections::VecDeque::new(),
