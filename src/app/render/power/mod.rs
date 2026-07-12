@@ -1095,31 +1095,27 @@ mod tests {
             "expected selected album row to stay in the list flow:\n{out}"
         );
         assert!(
-            lines[2].starts_with("\u{258c} ") && !lines[2].starts_with("\u{258c}   "),
+            lines[2].starts_with("  \u{258c} ") && !lines[2].starts_with("  \u{258c}   "),
             "expected selected album row to drop the grouped indent after the gutter:\n{out}"
         );
         assert!(
-            lines[3].contains("First Album"),
-            "expected album metadata directly under the selected album row:\n{out}"
+            lines[3].trim().is_empty() || lines[3].starts_with("  \u{258c}"),
+            "expected single spacer row after selected album title:\n{out}"
         );
         assert!(
-            lines[3].starts_with("\u{258c} First Album"),
-            "expected inline metadata to share the selected-region gutter:\n{out}"
-        );
-        assert!(
-            lines[6].contains("Opening Track"),
+            lines[4].contains("Opening Track"),
             "expected selected album tracks inside the inline detail region:\n{out}"
         );
         assert!(
-            lines[6].starts_with("\u{258c} 1. Opening Track"),
+            lines[4].starts_with("  \u{258c} 1. Opening Track"),
             "expected inline tracks to share the selected-region gutter:\n{out}"
         );
         assert!(
-            lines[7].contains("\u{2500}"),
+            lines[5].contains("\u{2500}"),
             "expected bottom rule directly after inline detail:\n{out}"
         );
         assert!(
-            lines[8].contains("Second Album"),
+            lines[6].contains("Second Album"),
             "expected following album row immediately after reserved inline detail rows:\n{out}"
         );
         assert_eq!(
@@ -1133,11 +1129,11 @@ mod tests {
             "expected selected album row to map to its album index"
         );
         assert!(
-            layout.left_row_map[3..8].iter().all(Option::is_none),
+            layout.left_row_map[3..6].iter().all(Option::is_none),
             "expected inline detail and bottom-rule rows to be non-selectable"
         );
         assert_eq!(
-            layout.left_row_map.get(8),
+            layout.left_row_map.get(6),
             Some(&Some(1)),
             "expected album row after inline detail to remain selectable"
         );
@@ -1211,29 +1207,25 @@ mod tests {
             "expected selected album row to stay in the flat list flow:\n{out}"
         );
         assert!(
-            lines[3].starts_with("\u{258c} First Album"),
+            lines[3].starts_with("  \u{258c} First Album"),
             "expected flat selected album title to align after a one-column gutter gap:\n{out}"
         );
         assert!(
-            lines[4].contains("First Album"),
-            "expected album metadata directly under the selected album row:\n{out}"
-        );
-        assert!(
-            lines[7].contains("Opening Track"),
+            lines[5].contains("Opening Track"),
             "expected tracks inside the inline detail region:\n{out}"
         );
         assert!(
-            lines[8].contains("\u{2500}"),
+            lines[6].contains("\u{2500}"),
             "expected bottom rule directly after inline detail:\n{out}"
         );
         assert!(
-            lines[9].contains("Second Album"),
+            lines[7].contains("Second Album"),
             "expected following album row immediately after inline detail:\n{out}"
         );
         assert_eq!(layout.left_row_map.get(1), Some(&None));
         assert_eq!(layout.left_row_map.get(2), Some(&Some(0)));
-        assert!(layout.left_row_map[3..8].iter().all(Option::is_none));
-        assert_eq!(layout.left_row_map.get(8), Some(&Some(1)));
+        assert!(layout.left_row_map[3..6].iter().all(Option::is_none));
+        assert_eq!(layout.left_row_map.get(6), Some(&Some(1)));
     }
 
     #[test]
@@ -1278,7 +1270,7 @@ mod tests {
             "expected loading row directly under the selected album row:\n{out}"
         );
         assert!(
-            lines[3].starts_with("\u{258c} Loading"),
+            lines[3].starts_with("  \u{258c} Loading"),
             "expected inline loading row to share the selected-region gutter:\n{out}"
         );
         assert!(
@@ -1313,20 +1305,13 @@ mod tests {
         let lines: Vec<&str> = out.lines().collect();
         let buf = term.backend().buffer();
 
-        let detail_title_y = lines
-            .iter()
-            .enumerate()
-            .filter(|(_, line)| line.contains("First Album"))
-            .nth(1)
-            .map(|(y, _)| y)
-            .expect("expected inline album title metadata row");
-        let detail_title_x = lines[detail_title_y]
-            .find("First Album")
-            .expect("expected album title x position");
         assert_eq!(
-            buf[(detail_title_x as u16, detail_title_y as u16)].fg,
-            palette::MUTED,
-            "expected inactive inline album metadata to be muted:\n{out}"
+            lines
+                .iter()
+                .filter(|line| line.contains("First Album"))
+                .count(),
+            1,
+            "expected no duplicate inline album title row:\n{out}"
         );
 
         let track_y = lines
@@ -1337,7 +1322,7 @@ mod tests {
             .find("Opening Track")
             .expect("expected track x position");
         assert!(
-            lines[track_y].starts_with("\u{258c} 1. Opening Track"),
+            lines[track_y].starts_with("  \u{258c} 1. Opening Track"),
             "expected inactive inline track list to keep the selected-region gutter:\n{out}"
         );
         assert_eq!(
@@ -1379,7 +1364,7 @@ mod tests {
             .expect("expected focused track row");
 
         assert!(
-            focused_line.starts_with("\u{258c} \u{258c}"),
+            focused_line.starts_with("  \u{258c} \u{258c}"),
             "expected focused track row to show both the selected-region gutter and \
              a distinct track-focus cursor:\n{out}"
         );
@@ -1419,7 +1404,7 @@ mod tests {
             .expect("expected focused track to render inline");
 
         assert!(
-            focused_line.starts_with('\u{258c}'),
+            focused_line.starts_with("  \u{258c}"),
             "expected track-selection cursor to remain visible while pane is unfocused:\n{out}"
         );
     }
