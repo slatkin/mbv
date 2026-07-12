@@ -92,7 +92,7 @@ impl App {
                 self.render_seekbar(f, seek_area, &mut layout.playback);
             } else {
                 layout.playback.seekbar_area = Rect::default();
-                let bar = "\u{2500}".repeat(seek_area.width as usize);
+                let bar = "\u{2594}".repeat(seek_area.width as usize);
                 f.render_widget(
                     Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
                     seek_area,
@@ -817,11 +817,11 @@ impl App {
         let gray_len = w - green_len;
         let spans = vec![
             Span::styled(
-                "\u{2500}".repeat(green_len),
+                "\u{2594}".repeat(green_len),
                 Style::default().fg(palette::PINE),
             ),
             Span::styled(
-                "\u{2500}".repeat(gray_len),
+                "\u{2594}".repeat(gray_len),
                 Style::default().fg(palette::SEEK_TRACK),
             ),
         ];
