@@ -1,3 +1,5 @@
+use super::action::power_album_track_command_for_key;
+use super::input_resolver::KeyChord;
 use super::settings::settings_total_rows;
 use super::ui_util::item_text_and_style;
 use super::{
@@ -143,6 +145,25 @@ impl App {
             return Some(false);
         }
         None
+    }
+
+    fn active_power_album_track_lib_idx(&self) -> Option<usize> {
+        if self.tab_idx != 1 || self.queue_view != QUEUE_VIEW_POWER || self.power_left_tab == 0 {
+            return None;
+        }
+        let lib_idx = self.power_left_tab - 1;
+        let lib = self.libs.get(lib_idx)?;
+        if lib.album_track_focus.is_some() && self.is_viewing_album_folders(lib_idx) {
+            Some(lib_idx)
+        } else {
+            None
+        }
+    }
+
+    pub(super) fn handle_key_power_album_track_mode(&mut self, key: KeyEvent) -> Option<bool> {
+        let lib_idx = self.active_power_album_track_lib_idx()?;
+        let command = power_album_track_command_for_key(KeyChord::from_key(key), lib_idx)?;
+        Some(self.dispatch(command))
     }
 
     pub(super) fn handle_key_power_left_width(&mut self, key: KeyEvent) -> Option<bool> {
@@ -1348,72 +1369,6 @@ impl App {
                 self.power_focus = PowerFocus::Queue;
                 self.last_card_height = 0;
                 return false;
-            }
-        }
-
-        // Active inline album track-selection mode is modal across the Power
-        // View split: once a track is focused, Enter/Escape/Up/Down continue
-        // to target that inline track list until the mode is explicitly
-        // dismissed or a different album/group is selected. Entering the mode
-        // from None remains in the library-panel branch below.
-        let active_power_album_track_mode = self.tab_idx == 1
-            && self.queue_view == QUEUE_VIEW_POWER
-            && self.power_left_tab > 0
-            && {
-                let lib_idx = self.power_left_tab - 1;
-                self.libs
-                    .get(lib_idx)
-                    .map(|lib| lib.album_track_focus.is_some())
-                    .unwrap_or(false)
-                    && self.is_viewing_album_folders(lib_idx)
-            };
-        let is_power_nav = matches!(
-            key.code,
-            KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
-        ) && key.modifiers.contains(KeyModifiers::ALT);
-        if active_power_album_track_mode && !is_power_nav {
-            let lib_idx = self.power_left_tab - 1;
-            match key.code {
-                KeyCode::Enter => {
-                    let has_focused_track = self
-                        .selected_album_item(lib_idx)
-                        .and_then(|album| {
-                            self.album_tracks_cache.get(&album.id).and_then(|tracks| {
-                                self.libs[lib_idx]
-                                    .album_track_focus
-                                    .and_then(|idx| tracks.get(idx))
-                            })
-                        })
-                        .is_some();
-                    if has_focused_track {
-                        let saved = self.tab_idx;
-                        self.tab_idx = self.lib_tab_offset() + lib_idx;
-                        self.select();
-                        self.tab_idx = saved;
-                    }
-                    return false;
-                }
-                KeyCode::Esc | KeyCode::Backspace => {
-                    self.libs[lib_idx].album_track_focus = None;
-                    return false;
-                }
-                KeyCode::Up | KeyCode::Down => {
-                    if let Some(idx) = self.libs[lib_idx].album_track_focus {
-                        let track_count = self
-                            .selected_album_item(lib_idx)
-                            .and_then(|item| self.album_tracks_cache.get(&item.id))
-                            .map(|tracks| tracks.len())
-                            .unwrap_or(0);
-                        if track_count > 0 {
-                            let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
-                            let new_idx =
-                                (idx as i64 + delta).clamp(0, track_count as i64 - 1) as usize;
-                            self.libs[lib_idx].album_track_focus = Some(new_idx);
-                        }
-                    }
-                    return false;
-                }
-                _ => {}
             }
         }
 

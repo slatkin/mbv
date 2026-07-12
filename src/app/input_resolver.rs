@@ -220,6 +220,10 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_f5_refresh,
     },
     ContextEntry {
+        name: "power_album_track_mode",
+        handler: App::handle_key_power_album_track_mode,
+    },
+    ContextEntry {
         name: "view_dispatch",
         handler: App::handle_key_view_dispatch,
     },
@@ -734,6 +738,7 @@ mod app_level_tests {
                 "playback",
                 "ctrl_l_force_clear",
                 "f5_refresh",
+                "power_album_track_mode",
                 "view_dispatch",
             ],
             "precedence order must match handle_key's pre-phase-2 branch order; \

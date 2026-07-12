@@ -1,4 +1,5 @@
 use super::super::super::ui_util::*;
+use super::{natural_sort_key, parse_album_folder_name, strip_article};
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -8,7 +9,278 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 
+enum GroupedAlbumDisplayRow {
+    ArtistHeader(String),
+    AlbumDetailRule,
+    Album(usize),
+    AlbumDetailStart(usize),
+    AlbumDetailContinuation,
+    AlbumLoading,
+}
+
 impl App {
+    pub(super) fn render_power_grouped_album_rows(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        albums: &[mbv_core::api::MediaItem],
+        cursor: usize,
+        stored_scroll: usize,
+        focused: bool,
+        layout: &mut LayoutPower,
+    ) -> usize {
+        let visible = area.height as usize;
+        let avail = (area.width as usize).saturating_sub(2);
+
+        let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
+        for item in albums {
+            let artist = self.resolve_group_album_artist(item);
+            let (year_str, album_name) = if !item.artist.is_empty() {
+                let year_str = if item.production_year > 0 {
+                    item.production_year.to_string()
+                } else {
+                    String::new()
+                };
+                (year_str, item.display_name())
+            } else if let Some((_, year, album)) = parse_album_folder_name(&item.name) {
+                let year_str = if year > 0 {
+                    year.to_string()
+                } else {
+                    String::new()
+                };
+                (year_str, album)
+            } else {
+                (String::new(), item.display_name())
+            };
+            album_info.push((artist, year_str, album_name));
+        }
+
+        let mut order: Vec<usize> = (0..album_info.len()).collect();
+        order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
+        layout.left_sorted_indices = order.clone();
+
+        let mut display_rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
+        let mut last_artist = String::new();
+        for &idx in &order {
+            let artist = &album_info[idx].0;
+            if artist != &last_artist {
+                display_rows.push(GroupedAlbumDisplayRow::ArtistHeader(artist.clone()));
+                last_artist = artist.clone();
+            }
+            if idx == cursor {
+                match self.album_tracks_cache.get(&albums[idx].id) {
+                    Some(tracks) if !tracks.is_empty() => {
+                        let first = &tracks[0];
+                        let detail_rows = 1
+                            + usize::from(!first.artist.is_empty())
+                            + usize::from(first.production_year > 0)
+                            + 1
+                            + tracks.len();
+                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        display_rows.push(GroupedAlbumDisplayRow::Album(idx));
+                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
+                        display_rows.extend(
+                            std::iter::repeat_with(|| {
+                                GroupedAlbumDisplayRow::AlbumDetailContinuation
+                            })
+                            .take(detail_rows.saturating_sub(1)),
+                        );
+                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                    }
+                    Some(_) => display_rows.push(GroupedAlbumDisplayRow::Album(idx)),
+                    None => {
+                        self.fetch_album_tracks(albums[idx].id.clone());
+                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        display_rows.push(GroupedAlbumDisplayRow::Album(idx));
+                        display_rows.push(GroupedAlbumDisplayRow::AlbumLoading);
+                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                    }
+                }
+            } else {
+                display_rows.push(GroupedAlbumDisplayRow::Album(idx));
+            }
+        }
+
+        let display_cursor = display_rows
+            .iter()
+            .position(|r| matches!(r, GroupedAlbumDisplayRow::Album(i) if *i == cursor))
+            .unwrap_or(0);
+        let top_bound = if display_cursor > 0
+            && matches!(
+                display_rows[display_cursor - 1],
+                GroupedAlbumDisplayRow::AlbumDetailRule
+            ) {
+            display_cursor - 1
+        } else {
+            display_cursor
+        };
+        let offset = stored_scroll.clamp(
+            display_cursor
+                .saturating_sub(visible.saturating_sub(1))
+                .min(top_bound),
+            top_bound,
+        );
+
+        let visible_rows: Vec<&GroupedAlbumDisplayRow> =
+            display_rows.iter().skip(offset).take(visible).collect();
+        for (row_idx, row) in visible_rows.iter().enumerate() {
+            let row_area = Rect {
+                x: area.x,
+                y: area.y + row_idx as u16,
+                width: area.width,
+                height: 1,
+            };
+            match row {
+                GroupedAlbumDisplayRow::ArtistHeader(name) => {
+                    let artist_label = trunc_str(name, avail);
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled(artist_label, Style::default().fg(palette::YELLOW)),
+                        ])),
+                        row_area,
+                    );
+                }
+                GroupedAlbumDisplayRow::AlbumDetailRule => {
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled(
+                                "\u{2500}".repeat(avail),
+                                Style::default().fg(palette::OVERLAY),
+                            ),
+                        ])),
+                        row_area,
+                    );
+                }
+                GroupedAlbumDisplayRow::Album(idx) => {
+                    let selected = *idx == cursor;
+                    let (_, year_str, album_name) = &album_info[*idx];
+                    let prefix_w = if year_str.is_empty() {
+                        3
+                    } else {
+                        year_str.len() + 6
+                    };
+                    let name_w = avail.saturating_sub(prefix_w);
+                    let trunc_name = trunc_str(album_name, name_w);
+                    let fg = if focused {
+                        palette::WHITE
+                    } else {
+                        palette::SUBTLE
+                    };
+                    let name_color = if selected && focused {
+                        palette::IRIS
+                    } else {
+                        fg
+                    };
+                    let mut spans: Vec<Span> = Vec::new();
+                    if selected && focused {
+                        spans.push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
+                    } else {
+                        spans.push(Span::raw(" "));
+                    }
+                    if selected {
+                        spans.push(Span::raw(" "));
+                    } else if year_str.is_empty() {
+                        spans.push(Span::raw("   "));
+                    } else {
+                        spans.push(Span::styled("   (", Style::default().fg(palette::SUBTLE)));
+                    }
+                    if selected && !year_str.is_empty() {
+                        spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
+                    }
+                    if !year_str.is_empty() {
+                        spans.push(Span::styled(
+                            year_str.clone(),
+                            Style::default().fg(palette::PINE),
+                        ));
+                        spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
+                    }
+                    let name_style = if selected && focused {
+                        Style::default().fg(name_color).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(name_color)
+                    };
+                    spans.push(Span::styled(trunc_name.to_string(), name_style));
+                    f.render_widget(Paragraph::new(Line::from(spans)), row_area);
+                }
+                GroupedAlbumDisplayRow::AlbumDetailStart(idx) => {
+                    let height = visible_rows[row_idx..]
+                        .iter()
+                        .take_while(|r| {
+                            matches!(
+                                r,
+                                GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                                    | GroupedAlbumDisplayRow::AlbumDetailContinuation
+                            )
+                        })
+                        .count() as u16;
+                    if let Some(tracks) = self.album_tracks_cache.get(&albums[*idx].id).cloned() {
+                        let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
+                        let detail_focused = self.libs[lib_idx].album_track_focus.is_some();
+                        self.render_power_album_detail(
+                            f,
+                            Rect { height, ..row_area },
+                            &tracks,
+                            cursor,
+                            detail_focused,
+                            true,
+                            layout,
+                        );
+                    }
+                }
+                GroupedAlbumDisplayRow::AlbumLoading => {
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                            Span::raw(" "),
+                            Span::styled("Loading\u{2026}", Style::default().fg(palette::MUTED)),
+                        ])),
+                        row_area,
+                    );
+                }
+                GroupedAlbumDisplayRow::AlbumDetailContinuation => {}
+            }
+        }
+
+        if self.libs[lib_idx].album_track_focus.is_none() {
+            layout.cursor_screen_y = Some(area.y + (display_cursor.saturating_sub(offset)) as u16);
+        }
+
+        layout.left_row_map = display_rows
+            .iter()
+            .skip(offset)
+            .take(visible)
+            .map(|dr| match dr {
+                GroupedAlbumDisplayRow::ArtistHeader(_)
+                | GroupedAlbumDisplayRow::AlbumDetailRule => None,
+                GroupedAlbumDisplayRow::Album(idx) => Some(*idx),
+                GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                | GroupedAlbumDisplayRow::AlbumDetailContinuation
+                | GroupedAlbumDisplayRow::AlbumLoading => None,
+            })
+            .collect();
+
+        let display_n = display_rows.len();
+        if focused && display_n > visible {
+            let max_off = display_n.saturating_sub(visible);
+            let mut sb = ScrollbarState::new(max_off + 1).position(offset);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("\u{2590}")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                area,
+                &mut sb,
+            );
+        }
+
+        offset
+    }
+
     /// Renders the music album detail panel (track list) into `area` — the lib
     /// slot below the card. The card itself already shows the album art (handled
     /// in `render_power_card`). Mirrors `render_power_detail` for movies.
@@ -196,9 +468,7 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if selected_region_gutter {
-                    Span::styled("\u{258c}", Style::default().fg(palette::PINE))
-                } else if is_cursor && focused {
+                let marker = if selected_region_gutter || (is_cursor && focused) {
                     Span::styled("\u{258c}", Style::default().fg(palette::PINE))
                 } else {
                     Span::raw(" ")

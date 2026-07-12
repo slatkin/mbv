@@ -80,6 +80,17 @@ pub(super) enum Command {
     /// active playback queue, or replaces the local playback queue and plays
     /// from this index if the visible queue isn't the one currently playing.
     QueuePlayCursor,
+
+    // ── Power inline album track mode ───────────────────────────────────
+    /// `Enter` while an inline album track is focused.
+    PowerAlbumTrackEnter(usize),
+    /// `Esc`/`Backspace` while an inline album track is focused.
+    PowerAlbumTrackDismiss(usize),
+    /// `Up`/`Down` while an inline album track is focused.
+    PowerAlbumTrackMove {
+        lib_idx: usize,
+        delta: i64,
+    },
 }
 
 /// Translate a key event into a playback `Command`, or `None` if this handler
@@ -317,6 +328,33 @@ pub(super) fn help_command_for_key(chord: KeyChord) -> Option<Command> {
     }
 }
 
+/// Translate a key event in active Power inline album track mode.
+///
+/// This context is only active once `album_track_focus` is already `Some`, so
+/// entering track mode from the album row remains in the Power left-panel view
+/// handler. The command keeps `lib_idx` because Power View's left panel can
+/// point at any library tab while `tab_idx` remains on the queue tab.
+pub(super) fn power_album_track_command_for_key(
+    chord: KeyChord,
+    lib_idx: usize,
+) -> Option<Command> {
+    let is_power_nav = matches!(
+        chord.code,
+        KeyCode::Left | KeyCode::Right | KeyCode::Up | KeyCode::Down
+    ) && chord.mods.contains(KeyModifiers::ALT);
+    if is_power_nav {
+        return None;
+    }
+
+    match chord.code {
+        KeyCode::Enter => Some(Command::PowerAlbumTrackEnter(lib_idx)),
+        KeyCode::Esc | KeyCode::Backspace => Some(Command::PowerAlbumTrackDismiss(lib_idx)),
+        KeyCode::Up => Some(Command::PowerAlbumTrackMove { lib_idx, delta: -1 }),
+        KeyCode::Down => Some(Command::PowerAlbumTrackMove { lib_idx, delta: 1 }),
+        _ => None,
+    }
+}
+
 impl App {
     /// Own the state transitions for a `Command`. Returns whether the app
     /// should quit (`true` only for `Command::Quit`'s non-prompting path;
@@ -443,6 +481,42 @@ impl App {
                                 self.ui_volume,
                             );
                         }
+                    }
+                }
+            }
+
+            Command::PowerAlbumTrackEnter(lib_idx) => {
+                if self
+                    .selected_album_item(lib_idx)
+                    .and_then(|album| {
+                        self.album_tracks_cache.get(&album.id).and_then(|tracks| {
+                            self.libs[lib_idx]
+                                .album_track_focus
+                                .and_then(|idx| tracks.get(idx))
+                        })
+                    })
+                    .is_some()
+                {
+                    let saved = self.tab_idx;
+                    self.tab_idx = self.lib_tab_offset() + lib_idx;
+                    self.select();
+                    self.tab_idx = saved;
+                }
+            }
+            Command::PowerAlbumTrackDismiss(lib_idx) => {
+                self.libs[lib_idx].album_track_focus = None;
+            }
+            Command::PowerAlbumTrackMove { lib_idx, delta } => {
+                if let Some(idx) = self.libs[lib_idx].album_track_focus {
+                    let track_count = self
+                        .selected_album_item(lib_idx)
+                        .and_then(|item| self.album_tracks_cache.get(&item.id))
+                        .map(|tracks| tracks.len())
+                        .unwrap_or(0);
+                    if track_count > 0 {
+                        let new_idx =
+                            (idx as i64 + delta).clamp(0, track_count as i64 - 1) as usize;
+                        self.libs[lib_idx].album_track_focus = Some(new_idx);
                     }
                 }
             }
