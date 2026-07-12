@@ -44,14 +44,26 @@ impl App {
         let max_y = area.y + area.height;
         let mut row = area.y;
 
-        // — Album title: yellow, left-aligned, no background —
+        let mut title_style = Style::default().fg(if focused {
+            palette::YELLOW
+        } else {
+            palette::MUTED
+        });
+        if focused {
+            title_style = title_style.add_modifier(Modifier::BOLD);
+        }
+        let metadata_style = Style::default().fg(if focused {
+            palette::SUBTLE
+        } else {
+            palette::MUTED
+        });
+
+        // — Album title: yellow when interactive, muted for inline preview —
         if row < max_y {
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
                     format!(" {}", trunc_str(&album_title, inner_w.saturating_sub(1))),
-                    Style::default()
-                        .fg(palette::YELLOW)
-                        .add_modifier(Modifier::BOLD),
+                    title_style,
                 ))),
                 Rect {
                     x: area.x,
@@ -68,7 +80,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
                     format!(" {}", trunc_str(&album_artist, inner_w.saturating_sub(1))),
-                    Style::default().fg(palette::SUBTLE),
+                    metadata_style,
                 ))),
                 Rect {
                     x: area.x,

@@ -87,7 +87,7 @@ impl App {
                 let left = (area.width as usize).saturating_sub(pill_w);
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
-                        Span::styled("─".repeat(left), Style::default().fg(palette::FOAM)),
+                        Span::styled("━".repeat(left), Style::default().fg(palette::FOAM)),
                         Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
                     ])),
                     Rect {

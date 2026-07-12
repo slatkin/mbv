@@ -176,7 +176,7 @@ impl App {
                 // own.
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
-                        "\u{2500}".repeat(area.width as usize),
+                        "\u{2501}".repeat(area.width as usize),
                         Style::default().fg(palette::FOAM),
                     ))),
                     Rect {
@@ -341,7 +341,7 @@ impl App {
                 layout.breadcrumbs = new_power_crumbs;
 
                 let mut line_spans = vec![Span::styled(
-                    "\u{2500}".repeat(left_line_w),
+                    "\u{2501}".repeat(left_line_w),
                     Style::default().fg(palette::FOAM),
                 )];
                 line_spans.extend(pill_spans);
@@ -460,74 +460,10 @@ impl App {
             self.render_power_detail(f, area, lib_idx, focused, layout);
         } else if is_feed_group {
             self.render_power_feed_home_video_group_view(f, area, lib_idx, focused, layout);
+        } else if is_album_folders && is_music_group {
+            self.render_power_music_group_view(f, area, lib_idx, focused, layout);
         } else if is_album_folders {
-            // Album-folder listing (one level shallower than the drilled-in
-            // `is_album` track-list level below): split the panel so the
-            // album list keeps the top and the currently-highlighted album's
-            // tracks render inline underneath, proactively sourced from
-            // `album_tracks_cache` (#145) instead of requiring the user to
-            // drill in first. `Enter`/`Escape` still drive the legacy
-            // drilldown (`is_album` branch) for now -- this task only adds
-            // the inline preview.
-            const MIN_LIST_ROWS: u16 = 6;
-            const MIN_DETAIL_ROWS: u16 = 5;
-            let total = area.height;
-            let min_list = MIN_LIST_ROWS.min(total);
-            let max_detail = total
-                .saturating_sub(min_list)
-                .max(MIN_DETAIL_ROWS.min(total));
-            let detail_h = (total / 3).clamp(MIN_DETAIL_ROWS.min(total), max_detail);
-            let list_h = total.saturating_sub(detail_h);
-            let list_area = Rect {
-                height: list_h,
-                ..area
-            };
-            let detail_area = Rect {
-                y: area.y + list_h,
-                height: detail_h,
-                ..area
-            };
-
-            if is_music_group {
-                self.render_power_music_group_view(f, list_area, lib_idx, focused, layout);
-            } else {
-                self.render_power_list(f, list_area, focused, layout);
-            }
-
-            if detail_area.height > 0 {
-                if let Some(album) = self.selected_album_item(lib_idx) {
-                    match self.album_tracks_cache.get(&album.id).cloned() {
-                        Some(tracks) => {
-                            // In track-selection mode (#145 task 3) highlight the
-                            // focused track instead of always the first row.
-                            let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
-                            self.render_power_album_detail(
-                                f,
-                                detail_area,
-                                &tracks,
-                                cursor,
-                                focused,
-                                layout,
-                            );
-                        }
-                        None => {
-                            self.fetch_album_tracks(album.id.clone());
-                            f.render_widget(
-                                Paragraph::new(Line::from(Span::styled(
-                                    " Loading\u{2026}",
-                                    Style::default().fg(palette::MUTED),
-                                ))),
-                                Rect {
-                                    x: detail_area.x,
-                                    y: detail_area.y,
-                                    width: detail_area.width,
-                                    height: 1,
-                                },
-                            );
-                        }
-                    }
-                }
-            }
+            self.render_power_list(f, area, focused, layout);
         } else if is_album {
             let (items, cursor) = {
                 let lvl = self.libs[lib_idx].nav_stack.last();
@@ -616,7 +552,10 @@ mod tests {
         out
     }
 
-    fn render_power_library_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
+    fn render_power_library_to_terminal(
+        app: &mut App,
+        layout: &mut LayoutPower,
+    ) -> Terminal<TestBackend> {
         // Height is one row taller than the banner's own reserved footprint
         // (1 selected row + 15 rule/content/gap rows: 1 opening rule + 13
         // content + 1 closing rule) to also leave room for the " N items"
@@ -629,6 +568,11 @@ mod tests {
             app.render_power_library(f, Rect::new(0, 0, 60, 18), true, layout);
         })
         .unwrap();
+        term
+    }
+
+    fn render_power_library_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
+        let term = render_power_library_to_terminal(app, layout);
         buffer_to_string(&term)
     }
 
@@ -906,7 +850,7 @@ mod tests {
         assert!(
             row0.chars()
                 .take(right_col_x as usize)
-                .all(|c| c == '\u{2500}'),
+                .all(|c| c == '\u{2501}'),
             "expected a plain dash rule over the left column, not pills:\n{out}"
         );
 
@@ -940,7 +884,7 @@ mod tests {
             .take((gap_end - gap_start) as usize)
             .collect();
         assert!(
-            between.contains('\u{2500}'),
+            between.contains('\u{2501}'),
             "expected a dash rule between adjacent pills, not blank space:\n{between:?}"
         );
 
@@ -1028,7 +972,7 @@ mod tests {
         // over the left card/queue column stays a plain dash rule.
         let right_col_x = (app.power_left_width + 1) as usize;
         assert!(
-            row0.chars().take(right_col_x).all(|c| c == '\u{2500}'),
+            row0.chars().take(right_col_x).all(|c| c == '\u{2501}'),
             "expected a plain dash rule over the left column, not pills:\n{out}"
         );
 
@@ -1104,6 +1048,16 @@ mod tests {
         // Sitting at the album-folder-listing level already (no drilldown push).
         assert_eq!(app.libs[0].nav_stack.len(), 2);
 
+        let mut second_album = make_item("Second Album", "MusicAlbum");
+        second_album.id = "album-2".into();
+        second_album.artist = "Alpha".into();
+        app.libs[0]
+            .nav_stack
+            .last_mut()
+            .unwrap()
+            .items
+            .push(second_album);
+
         let mut track = make_item("Opening Track", "Audio");
         track.id = "track-1".into();
         track.album = "First Album".into();
@@ -1113,6 +1067,7 @@ mod tests {
 
         let mut layout = LayoutPower::default();
         let out = render_power_library_to_string(&mut app, &mut layout);
+        let lines: Vec<&str> = out.lines().collect();
 
         assert!(
             out.contains("Alpha"),
@@ -1123,6 +1078,49 @@ mod tests {
             "expected the selected album's cached tracks to render inline, \
              without any drilldown:\n{out}"
         );
+        assert!(
+            lines[1].contains("\u{2500}"),
+            "expected top rule directly above selected album row:\n{out}"
+        );
+        assert!(
+            lines[2].contains("First Album"),
+            "expected selected album row to stay in the list flow:\n{out}"
+        );
+        assert!(
+            lines[3].contains("First Album"),
+            "expected album metadata directly under the selected album row:\n{out}"
+        );
+        assert!(
+            lines[6].contains("Opening Track"),
+            "expected selected album tracks inside the inline detail region:\n{out}"
+        );
+        assert!(
+            lines[7].contains("\u{2500}"),
+            "expected bottom rule directly after inline detail:\n{out}"
+        );
+        assert!(
+            lines[8].contains("Second Album"),
+            "expected following album row immediately after reserved inline detail rows:\n{out}"
+        );
+        assert_eq!(
+            layout.left_row_map.get(1),
+            Some(&None),
+            "expected top rule row to be non-selectable"
+        );
+        assert_eq!(
+            layout.left_row_map.get(2),
+            Some(&Some(0)),
+            "expected selected album row to map to its album index"
+        );
+        assert!(
+            layout.left_row_map[3..8].iter().all(Option::is_none),
+            "expected inline detail and bottom-rule rows to be non-selectable"
+        );
+        assert_eq!(
+            layout.left_row_map.get(8),
+            Some(&Some(1)),
+            "expected album row after inline detail to remain selectable"
+        );
         assert_eq!(
             app.libs[0].nav_stack.len(),
             2,
@@ -1131,13 +1129,107 @@ mod tests {
     }
 
     #[test]
+    fn flat_album_folder_listing_renders_inline_detail_under_selected_album() {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+        app.music_levels = vec!["album".into()];
+
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "lib-music".into();
+        library.is_folder = true;
+        library.collection_type = "music".into();
+
+        let mut album = make_item("First Album", "MusicAlbum");
+        album.id = "album-1".into();
+        album.artist = "Alpha".into();
+        album.is_folder = true;
+        let mut second_album = make_item("Second Album", "MusicAlbum");
+        second_album.id = "album-2".into();
+        second_album.artist = "Alpha".into();
+        second_album.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-music".into(),
+                title: "Music".into(),
+                items: vec![album, second_album],
+                total_count: 2,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+        let lines: Vec<&str> = out.lines().collect();
+
+        assert!(
+            lines[2].contains("\u{2500}"),
+            "expected top rule directly above selected album row:\n{out}"
+        );
+        assert!(
+            lines[3].contains("First Album"),
+            "expected selected album row to stay in the flat list flow:\n{out}"
+        );
+        assert!(
+            lines[4].contains("First Album"),
+            "expected album metadata directly under the selected album row:\n{out}"
+        );
+        assert!(
+            lines[7].contains("Opening Track"),
+            "expected tracks inside the inline detail region:\n{out}"
+        );
+        assert!(
+            lines[8].contains("\u{2500}"),
+            "expected bottom rule directly after inline detail:\n{out}"
+        );
+        assert!(
+            lines[9].contains("Second Album"),
+            "expected following album row immediately after inline detail:\n{out}"
+        );
+        assert_eq!(layout.left_row_map.get(1), Some(&None));
+        assert_eq!(layout.left_row_map.get(2), Some(&Some(0)));
+        assert!(layout.left_row_map[3..8].iter().all(Option::is_none));
+        assert_eq!(layout.left_row_map.get(8), Some(&Some(1)));
+    }
+
+    #[test]
     fn album_folder_listing_fetches_and_shows_loading_on_cache_miss() {
         let mut app = make_power_music_group_app();
+        let mut second_album = make_item("Second Album", "MusicAlbum");
+        second_album.id = "album-2".into();
+        second_album.artist = "Alpha".into();
+        app.libs[0]
+            .nav_stack
+            .last_mut()
+            .unwrap()
+            .items
+            .push(second_album);
         assert!(!app.album_tracks_cache.contains_key("album-1"));
         assert!(!app.album_tracks_loading.contains("album-1"));
 
         let mut layout = LayoutPower::default();
         let out = render_power_library_to_string(&mut app, &mut layout);
+        let lines: Vec<&str> = out.lines().collect();
 
         assert!(
             app.album_tracks_loading.contains("album-1"),
@@ -1148,6 +1240,124 @@ mod tests {
             out.to_lowercase().contains("loading"),
             "expected a loading indicator in the detail pane while the \
              fetch is in flight:\n{out}"
+        );
+        assert!(
+            lines[1].contains("\u{2500}"),
+            "expected top rule directly above selected album row:\n{out}"
+        );
+        assert!(
+            lines[2].contains("First Album"),
+            "expected selected album row to stay in the list flow:\n{out}"
+        );
+        assert!(
+            lines[3].to_lowercase().contains("loading"),
+            "expected loading row directly under the selected album row:\n{out}"
+        );
+        assert!(
+            lines[4].contains("\u{2500}"),
+            "expected bottom rule directly after inline loading row:\n{out}"
+        );
+        assert!(
+            lines[5].contains("Second Album"),
+            "expected following album row directly after inline loading row:\n{out}"
+        );
+        assert_eq!(layout.left_row_map.get(1), Some(&None));
+        assert_eq!(layout.left_row_map.get(2), Some(&Some(0)));
+        assert_eq!(layout.left_row_map.get(3), Some(&None));
+        assert_eq!(layout.left_row_map.get(4), Some(&None));
+        assert_eq!(layout.left_row_map.get(5), Some(&Some(1)));
+    }
+
+    #[test]
+    fn album_folder_inline_detail_is_muted_until_track_selection_mode() {
+        let mut app = make_power_music_group_app();
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal(&mut app, &mut layout);
+        let out = buffer_to_string(&term);
+        let lines: Vec<&str> = out.lines().collect();
+        let buf = term.backend().buffer();
+
+        let detail_title_y = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.contains("First Album"))
+            .nth(1)
+            .map(|(y, _)| y)
+            .expect("expected inline album title metadata row");
+        let detail_title_x = lines[detail_title_y]
+            .find("First Album")
+            .expect("expected album title x position");
+        assert_eq!(
+            buf[(detail_title_x as u16, detail_title_y as u16)].fg,
+            palette::MUTED,
+            "expected inactive inline album metadata to be muted:\n{out}"
+        );
+
+        let track_y = lines
+            .iter()
+            .position(|line| line.contains("Opening Track"))
+            .expect("expected inline track row");
+        let track_x = lines[track_y]
+            .find("Opening Track")
+            .expect("expected track x position");
+        assert!(
+            !lines[track_y].starts_with('\u{258c}'),
+            "expected inactive inline track list to omit cursor marker:\n{out}"
+        );
+        assert_eq!(
+            buf[(track_x as u16, track_y as u16)].fg,
+            palette::SUBTLE,
+            "expected inactive inline track list to render muted/subtle:\n{out}"
+        );
+    }
+
+    #[test]
+    fn album_folder_listing_preserves_inline_track_focus_cursor() {
+        let mut app = make_power_music_group_app();
+        app.libs[0].album_track_focus = Some(1);
+
+        let mut first = make_item("Opening Track", "Audio");
+        first.id = "track-1".into();
+        first.album = "First Album".into();
+        first.artist = "Alpha".into();
+        first.index_number = 1;
+
+        let mut second = make_item("Focused Track", "Audio");
+        second.id = "track-2".into();
+        second.album = "First Album".into();
+        second.artist = "Alpha".into();
+        second.index_number = 2;
+
+        app.album_tracks_cache
+            .insert("album-1".into(), vec![first, second]);
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+        let focused_line = out
+            .lines()
+            .find(|line| line.contains("Focused Track"))
+            .expect("expected focused track to render inline");
+        let focused_y = out
+            .lines()
+            .position(|line| line.contains("Focused Track"))
+            .expect("expected focused track row");
+
+        assert!(
+            focused_line.starts_with('\u{258c}'),
+            "expected album_track_focus cursor marker on the focused inline track row:\n{out}"
+        );
+        assert_eq!(
+            layout.cursor_screen_y,
+            Some(focused_y as u16),
+            "expected layout cursor to follow the focused inline track row"
         );
     }
 

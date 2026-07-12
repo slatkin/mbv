@@ -4239,6 +4239,7 @@ mod power_music_track_focus_tests {
             vec!["album-1-track-0", "album-1-track-1", "album-1-track-2"]
         );
         assert_eq!(app.player_tab.queue_cursor, 1);
+        assert_eq!(app.libs[0].album_track_focus, Some(1));
         // Note: `app.queue_source` is not asserted here -- `play_items_routed`
         // (pre-existing, out of Task 4's scope) calls
         // `on_queue_replace_silent` as its first statement, which

@@ -212,7 +212,11 @@ impl App {
             // Build a display row list that interleaves artist headers with album rows.
             enum DisplayRow {
                 ArtistHeader(String),
+                AlbumDetailRule,
                 Album(usize),
+                AlbumDetailStart(usize),
+                AlbumDetailContinuation,
+                AlbumLoading,
             }
 
             // Precompute (artist, row_prefix, album_name) for each item.
@@ -266,7 +270,36 @@ impl App {
                     display_rows.push(DisplayRow::ArtistHeader(artist.clone()));
                     last_artist = artist.clone();
                 }
-                display_rows.push(DisplayRow::Album(idx));
+                if idx == cursor {
+                    match self.album_tracks_cache.get(&items[idx].id) {
+                        Some(tracks) if !tracks.is_empty() => {
+                            let first = &tracks[0];
+                            let detail_rows = 1
+                                + usize::from(!first.artist.is_empty())
+                                + usize::from(first.production_year > 0)
+                                + 1
+                                + tracks.len();
+                            display_rows.push(DisplayRow::AlbumDetailRule);
+                            display_rows.push(DisplayRow::Album(idx));
+                            display_rows.push(DisplayRow::AlbumDetailStart(idx));
+                            display_rows.extend(
+                                std::iter::repeat_with(|| DisplayRow::AlbumDetailContinuation)
+                                    .take(detail_rows.saturating_sub(1)),
+                            );
+                            display_rows.push(DisplayRow::AlbumDetailRule);
+                        }
+                        Some(_) => display_rows.push(DisplayRow::Album(idx)),
+                        None => {
+                            self.fetch_album_tracks(items[idx].id.clone());
+                            display_rows.push(DisplayRow::AlbumDetailRule);
+                            display_rows.push(DisplayRow::Album(idx));
+                            display_rows.push(DisplayRow::AlbumLoading);
+                            display_rows.push(DisplayRow::AlbumDetailRule);
+                        }
+                    }
+                } else {
+                    display_rows.push(DisplayRow::Album(idx));
+                }
             }
 
             // Locate the display row for the current cursor item and derive scroll offset.
@@ -274,92 +307,151 @@ impl App {
                 .iter()
                 .position(|r| matches!(r, DisplayRow::Album(i) if *i == cursor))
                 .unwrap_or(0);
+            let top_bound = if display_cursor > 0
+                && matches!(
+                    display_rows[display_cursor - 1],
+                    DisplayRow::AlbumDetailRule
+                ) {
+                display_cursor - 1
+            } else {
+                display_cursor
+            };
             let offset = stored_scroll.clamp(
-                display_cursor.saturating_sub(visible.saturating_sub(1)),
-                display_cursor,
+                display_cursor
+                    .saturating_sub(visible.saturating_sub(1))
+                    .min(top_bound),
+                top_bound,
             );
             final_offset = offset;
 
             let avail = (area.width as usize).saturating_sub(2);
 
-            let list_items: Vec<ListItem> = display_rows
-                .iter()
-                .skip(offset)
-                .take(visible)
-                .map(|row| {
-                    match row {
-                        DisplayRow::ArtistHeader(name) => {
-                            let artist_label = trunc_str(name, avail);
-                            ListItem::new(Line::from(vec![
+            let visible_rows: Vec<&DisplayRow> =
+                display_rows.iter().skip(offset).take(visible).collect();
+            for (row_idx, row) in visible_rows.iter().enumerate() {
+                let row_area = Rect {
+                    x: content_area.x,
+                    y: content_area.y + row_idx as u16,
+                    width: content_area.width,
+                    height: 1,
+                };
+                match row {
+                    DisplayRow::ArtistHeader(name) => {
+                        let artist_label = trunc_str(name, avail);
+                        f.render_widget(
+                            Paragraph::new(Line::from(vec![
                                 Span::raw(" "),
                                 Span::styled(artist_label, Style::default().fg(palette::YELLOW)),
-                            ]))
+                            ])),
+                            row_area,
+                        );
+                    }
+                    DisplayRow::AlbumDetailRule => {
+                        let rule = "\u{2500}".repeat(avail);
+                        f.render_widget(
+                            Paragraph::new(Line::from(vec![
+                                Span::raw(" "),
+                                Span::styled(rule, Style::default().fg(palette::OVERLAY)),
+                            ])),
+                            row_area,
+                        );
+                    }
+                    DisplayRow::Album(idx) => {
+                        let selected = *idx == cursor;
+                        let (_, year_str, album_name) = &album_info[*idx];
+                        // prefix width: "   (YYYY) " = year.len()+6, or "   " = 3 if no year.
+                        let prefix_w = if year_str.is_empty() {
+                            3
+                        } else {
+                            year_str.len() + 6
+                        };
+                        let name_w = avail.saturating_sub(prefix_w);
+                        let trunc_name = trunc_str(album_name, name_w);
+                        let fg = if focused {
+                            palette::WHITE
+                        } else {
+                            palette::SUBTLE
+                        };
+                        let name_color = if selected && focused {
+                            palette::IRIS
+                        } else {
+                            fg
+                        };
+                        let mut spans: Vec<Span> = Vec::new();
+                        if selected && focused {
+                            spans
+                                .push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
+                        } else {
+                            spans.push(Span::raw(" "));
                         }
-                        DisplayRow::Album(idx) => {
-                            let selected = *idx == cursor;
-                            let (_, year_str, album_name) = &album_info[*idx];
-                            // prefix width: "   (YYYY) " = year.len()+6, or "   " = 3 if no year.
-                            let prefix_w = if year_str.is_empty() {
-                                3
-                            } else {
-                                year_str.len() + 6
-                            };
-                            let name_w = avail.saturating_sub(prefix_w);
-                            let trunc_name = trunc_str(album_name, name_w);
-                            let fg = if focused {
-                                palette::WHITE
-                            } else {
-                                palette::SUBTLE
-                            };
-                            let name_color = if selected && focused {
-                                palette::IRIS
-                            } else {
-                                fg
-                            };
-                            let mut spans: Vec<Span> = Vec::new();
-                            if selected && focused {
-                                spans.push(Span::styled(
-                                    "\u{258c}",
-                                    Style::default().fg(palette::PINE),
-                                ));
-                            } else {
-                                spans.push(Span::raw(" "));
-                            }
-                            if year_str.is_empty() {
-                                spans.push(Span::raw("   "));
-                            } else {
-                                spans.push(Span::styled(
-                                    "   (",
-                                    Style::default().fg(palette::SUBTLE),
-                                ));
-                                spans.push(Span::styled(
-                                    year_str.clone(),
-                                    Style::default().fg(palette::PINE),
-                                ));
-                                spans
-                                    .push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
-                            }
-                            let name_style = if selected && focused {
-                                Style::default().fg(name_color).add_modifier(Modifier::BOLD)
-                            } else {
-                                Style::default().fg(name_color)
-                            };
-                            spans.push(Span::styled(trunc_name.to_string(), name_style));
-                            ListItem::new(Line::from(spans))
+                        if year_str.is_empty() {
+                            spans.push(Span::raw("   "));
+                        } else {
+                            spans.push(Span::styled("   (", Style::default().fg(palette::SUBTLE)));
+                            spans.push(Span::styled(
+                                year_str.clone(),
+                                Style::default().fg(palette::PINE),
+                            ));
+                            spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
+                        }
+                        let name_style = if selected && focused {
+                            Style::default().fg(name_color).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(name_color)
+                        };
+                        spans.push(Span::styled(trunc_name.to_string(), name_style));
+                        f.render_widget(Paragraph::new(Line::from(spans)), row_area);
+                    }
+                    DisplayRow::AlbumDetailStart(idx) => {
+                        let height = visible_rows[row_idx..]
+                            .iter()
+                            .take_while(|r| {
+                                matches!(
+                                    r,
+                                    DisplayRow::AlbumDetailStart(_)
+                                        | DisplayRow::AlbumDetailContinuation
+                                )
+                            })
+                            .count() as u16;
+                        if let Some(tracks) = self.album_tracks_cache.get(&items[*idx].id).cloned()
+                        {
+                            let cursor = self.libs[self.power_left_tab - 1]
+                                .album_track_focus
+                                .unwrap_or(0);
+                            let detail_focused = focused
+                                && self.libs[self.power_left_tab - 1]
+                                    .album_track_focus
+                                    .is_some();
+                            self.render_power_album_detail(
+                                f,
+                                Rect { height, ..row_area },
+                                &tracks,
+                                cursor,
+                                detail_focused,
+                                layout,
+                            );
                         }
                     }
-                })
-                .collect();
+                    DisplayRow::AlbumLoading => {
+                        f.render_widget(
+                            Paragraph::new(Line::from(Span::styled(
+                                " Loading\u{2026}",
+                                Style::default().fg(palette::MUTED),
+                            ))),
+                            row_area,
+                        );
+                    }
+                    DisplayRow::AlbumDetailContinuation => {}
+                }
+            }
 
-            let mut state = ListState::default();
-            state.select(Some(display_cursor.saturating_sub(offset)));
-            layout.cursor_screen_y =
-                Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
-            f.render_stateful_widget(
-                List::new(list_items).highlight_style(Style::default()),
-                content_area,
-                &mut state,
-            );
+            if self.libs[self.power_left_tab - 1]
+                .album_track_focus
+                .is_none()
+            {
+                layout.cursor_screen_y =
+                    Some(content_area.y + (display_cursor.saturating_sub(offset)) as u16);
+            }
 
             // Row map so mouse clicks translate a visual row back to the correct
             // (sorted-order) album index; header rows map to None.
@@ -368,8 +460,11 @@ impl App {
                 .skip(offset)
                 .take(visible)
                 .map(|dr| match dr {
-                    DisplayRow::ArtistHeader(_) => None,
+                    DisplayRow::ArtistHeader(_) | DisplayRow::AlbumDetailRule => None,
                     DisplayRow::Album(idx) => Some(*idx),
+                    DisplayRow::AlbumDetailStart(_)
+                    | DisplayRow::AlbumDetailContinuation
+                    | DisplayRow::AlbumLoading => None,
                 })
                 .collect();
             let display_n = display_rows.len();

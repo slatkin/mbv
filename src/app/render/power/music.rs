@@ -43,7 +43,7 @@ impl App {
             if row_area.width > 0 {
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
-                        "\u{2500}".repeat(row_area.width as usize),
+                        "\u{2501}".repeat(row_area.width as usize),
                         Style::default().fg(palette::FOAM),
                     ))),
                     row_area,
@@ -112,7 +112,7 @@ impl App {
             if idx > 0 {
                 // Dash rule (not a blank space) so the top divider still
                 // reads as continuous underneath/between the pills.
-                spans.push(Span::styled("\u{2500}", Style::default().fg(palette::FOAM)));
+                spans.push(Span::styled("\u{2501}", Style::default().fg(palette::FOAM)));
                 x_cursor += 1;
             }
             let abs_idx = scroll_start + idx;
@@ -149,7 +149,7 @@ impl App {
         let used_w = (x_cursor - row_area.x) as usize;
         if used_w < bar_w {
             spans.push(Span::styled(
-                "\u{2500}".repeat(bar_w - used_w),
+                "\u{2501}".repeat(bar_w - used_w),
                 Style::default().fg(palette::FOAM),
             ));
         }
@@ -235,7 +235,11 @@ impl App {
 
         enum DisplayRow {
             ArtistHeader(String),
+            AlbumDetailRule,
             Album(usize),
+            AlbumDetailStart(usize),
+            AlbumDetailContinuation,
+            AlbumLoading,
         }
 
         // Extract (artist, year, album_name) for each album item. Artist
@@ -289,7 +293,36 @@ impl App {
                 display_rows.push(DisplayRow::ArtistHeader(artist.clone()));
                 last_artist = artist.clone();
             }
-            display_rows.push(DisplayRow::Album(idx));
+            if idx == album_cursor {
+                match self.album_tracks_cache.get(&albums[idx].id) {
+                    Some(tracks) if !tracks.is_empty() => {
+                        let first = &tracks[0];
+                        let detail_rows = 1
+                            + usize::from(!first.artist.is_empty())
+                            + usize::from(first.production_year > 0)
+                            + 1
+                            + tracks.len();
+                        display_rows.push(DisplayRow::AlbumDetailRule);
+                        display_rows.push(DisplayRow::Album(idx));
+                        display_rows.push(DisplayRow::AlbumDetailStart(idx));
+                        display_rows.extend(
+                            std::iter::repeat_with(|| DisplayRow::AlbumDetailContinuation)
+                                .take(detail_rows.saturating_sub(1)),
+                        );
+                        display_rows.push(DisplayRow::AlbumDetailRule);
+                    }
+                    Some(_) => display_rows.push(DisplayRow::Album(idx)),
+                    None => {
+                        self.fetch_album_tracks(albums[idx].id.clone());
+                        display_rows.push(DisplayRow::AlbumDetailRule);
+                        display_rows.push(DisplayRow::Album(idx));
+                        display_rows.push(DisplayRow::AlbumLoading);
+                        display_rows.push(DisplayRow::AlbumDetailRule);
+                    }
+                }
+            } else {
+                display_rows.push(DisplayRow::Album(idx));
+            }
         }
 
         // Locate the cursor row and keep the saved viewport offset stable.
@@ -305,10 +338,23 @@ impl App {
             .map(|lvl| lvl.scroll)
             .unwrap_or(0)
             .min(max_offset);
-        if display_cursor < offset {
+        let top_bound = if display_cursor > 0
+            && matches!(
+                display_rows[display_cursor - 1],
+                DisplayRow::AlbumDetailRule
+            ) {
+            display_cursor - 1
+        } else {
+            display_cursor
+        };
+        if top_bound < offset {
+            offset = top_bound;
+        } else if display_cursor < offset {
             offset = display_cursor;
         } else if display_cursor >= offset + visible {
-            offset = display_cursor.saturating_sub(visible.saturating_sub(1));
+            offset = display_cursor
+                .saturating_sub(visible.saturating_sub(1))
+                .min(top_bound);
         }
         if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             lvl.scroll = offset;
@@ -321,22 +367,44 @@ impl App {
             .skip(offset)
             .take(visible)
             .map(|dr| match dr {
-                DisplayRow::ArtistHeader(_) => None,
+                DisplayRow::ArtistHeader(_) | DisplayRow::AlbumDetailRule => None,
                 DisplayRow::Album(idx) => Some(*idx),
+                DisplayRow::AlbumDetailStart(_)
+                | DisplayRow::AlbumDetailContinuation
+                | DisplayRow::AlbumLoading => None,
             })
             .collect();
 
-        let list_items: Vec<ListItem> = display_rows
-            .iter()
-            .skip(offset)
-            .take(visible)
-            .map(|dr| match dr {
+        let visible_rows: Vec<&DisplayRow> =
+            display_rows.iter().skip(offset).take(visible).collect();
+        for (row_idx, dr) in visible_rows.iter().enumerate() {
+            let y = list_area.y + row_idx as u16;
+            let row_area = Rect {
+                x: list_area.x,
+                y,
+                width: list_area.width,
+                height: 1,
+            };
+            match dr {
                 DisplayRow::ArtistHeader(name) => {
                     let artist_label = trunc_str(name, avail_chars);
-                    ListItem::new(Line::from(vec![
-                        Span::raw(" "),
-                        Span::styled(artist_label, Style::default().fg(palette::YELLOW)),
-                    ]))
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled(artist_label, Style::default().fg(palette::YELLOW)),
+                        ])),
+                        row_area,
+                    );
+                }
+                DisplayRow::AlbumDetailRule => {
+                    let rule = "\u{2500}".repeat(avail_chars);
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled(rule, Style::default().fg(palette::OVERLAY)),
+                        ])),
+                        row_area,
+                    );
                 }
                 DisplayRow::Album(idx) => {
                     let selected = *idx == album_cursor;
@@ -380,19 +448,49 @@ impl App {
                         Style::default().fg(name_color)
                     };
                     spans.push(Span::styled(trunc_name.to_string(), name_style));
-                    ListItem::new(Line::from(spans))
+                    f.render_widget(Paragraph::new(Line::from(spans)), row_area);
                 }
-            })
-            .collect();
-
-        let mut state = ListState::default();
-        state.select(Some(display_cursor.saturating_sub(offset)));
-        f.render_stateful_widget(
-            List::new(list_items).highlight_style(Style::default()),
-            list_area,
-            &mut state,
-        );
-        layout.cursor_screen_y = Some(list_area.y + (display_cursor.saturating_sub(offset)) as u16);
+                DisplayRow::AlbumDetailStart(idx) => {
+                    let height = visible_rows[row_idx..]
+                        .iter()
+                        .take_while(|r| {
+                            matches!(
+                                r,
+                                DisplayRow::AlbumDetailStart(_)
+                                    | DisplayRow::AlbumDetailContinuation
+                            )
+                        })
+                        .count() as u16;
+                    if let Some(tracks) = self.album_tracks_cache.get(&albums[*idx].id).cloned() {
+                        let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
+                        let detail_focused =
+                            focused && self.libs[lib_idx].album_track_focus.is_some();
+                        self.render_power_album_detail(
+                            f,
+                            Rect { height, ..row_area },
+                            &tracks,
+                            cursor,
+                            detail_focused,
+                            layout,
+                        );
+                    }
+                }
+                DisplayRow::AlbumLoading => {
+                    f.render_widget(
+                        Paragraph::new(Line::from(Span::styled(
+                            " Loading\u{2026}",
+                            Style::default().fg(palette::MUTED),
+                        ))),
+                        row_area,
+                    );
+                }
+                DisplayRow::AlbumDetailContinuation => {}
+            }
+        }
+        if self.libs[lib_idx].album_track_focus.is_none() {
+            layout.cursor_screen_y =
+                Some(list_area.y + (display_cursor.saturating_sub(offset)) as u16);
+        }
 
         let display_n = display_rows.len();
         if focused && display_n > visible {

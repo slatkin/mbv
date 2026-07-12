@@ -737,7 +737,7 @@ impl App {
                 let pill_text = format!(" {label} ");
                 let pill_w = (pill_text.width() as u16).min(col_w);
                 let rule_len = col_w.saturating_sub(pill_w);
-                let rule = "\u{2500}".repeat(rule_len as usize);
+                let rule = "\u{2501}".repeat(rule_len as usize);
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
                         Span::styled(
@@ -931,9 +931,9 @@ mod tests {
             "expected 2 columns on header row"
         );
         // Section header renders as a pill: the title sits on an accent-coloured
-        // background, followed by a "─" rule filling the rest of the row.
+        // background, followed by a "━" rule filling the rest of the row.
         assert!(
-            kw_line.contains('\u{2500}'),
+            kw_line.contains('\u{2501}'),
             "expected a rule after the header pill"
         );
         let kw_row = out

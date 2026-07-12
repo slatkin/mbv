@@ -353,9 +353,9 @@ impl App {
             let left = full_w.saturating_sub(pill_w + right);
             f.render_widget(
                 Paragraph::new(Line::from(vec![
-                    Span::styled("\u{2500}".repeat(left), Style::default().fg(palette::FOAM)),
+                    Span::styled("\u{2501}".repeat(left), Style::default().fg(palette::FOAM)),
                     Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
-                    Span::styled("\u{2500}".repeat(right), Style::default().fg(palette::FOAM)),
+                    Span::styled("\u{2501}".repeat(right), Style::default().fg(palette::FOAM)),
                 ])),
                 Rect {
                     x: table_area.x,
