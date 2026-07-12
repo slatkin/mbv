@@ -2049,20 +2049,40 @@ impl App {
         // whole function (dropped only when `run` returns, i.e. on real quit).
         let _tray_handle = if self.stay_alive_ctrl.is_some() {
             let show_systray_icon = self.client.lock().unwrap().config.show_systray_icon;
+            // `local_cmd_tx()` is `Some` here because a stay-alive session
+            // (`stay_alive_ctrl.is_some()`) is only ever constructed via
+            // `App::new`, which always builds `self.player` as
+            // `PlayerProxy::local`; the event loop that can later swap it
+            // to `PlayerProxy::remote` (`switch_to_direct_remote`,
+            // triggered by connecting to another session) hasn't started
+            // yet at this point in `run`. Capturing the `Arc` now, rather
+            // than reading `self.player` from inside the tray later, keeps
+            // tray transport controls targeting the in-process `Player`
+            // even if the user connects to a remote session afterwards --
+            // see `PlayerProxy::local_cmd_tx` for why that's safe.
             if show_systray_icon {
-                let (shutdown_tx, shutdown_rx) = std::sync::mpsc::sync_channel::<()>(1);
-                let handle = crate::tray::spawn(shutdown_tx);
-                // Tray Quit -> the same graceful-quit path as `mbv -q` /
-                // SIGTERM (T3): self-SIGTERM reuses all of QUIT_REQUESTED's
-                // existing save/stop/exit plumbing instead of duplicating it.
-                std::thread::spawn(move || {
-                    if shutdown_rx.recv().is_ok() {
-                        unsafe {
-                            libc::raise(libc::SIGTERM);
+                if let Some(cmd_tx) = self.player.local_cmd_tx() {
+                    let (shutdown_tx, shutdown_rx) = std::sync::mpsc::sync_channel::<()>(1);
+                    let handle =
+                        crate::tray::spawn(shutdown_tx, self.player.status.clone(), cmd_tx);
+                    // Tray Quit -> the same graceful-quit path as `mbv -q` /
+                    // SIGTERM (T3): self-SIGTERM reuses all of QUIT_REQUESTED's
+                    // existing save/stop/exit plumbing instead of duplicating it.
+                    std::thread::spawn(move || {
+                        if shutdown_rx.recv().is_ok() {
+                            unsafe {
+                                libc::raise(libc::SIGTERM);
+                            }
                         }
-                    }
-                });
-                handle
+                    });
+                    handle
+                } else {
+                    log::warn!(
+                        target: "tray",
+                        "stay-alive session has no local player command channel; skipping tray"
+                    );
+                    None
+                }
             } else {
                 None
             }
