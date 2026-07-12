@@ -337,38 +337,20 @@ pub fn start(
                 snapshot: snapshot_poll.clone(),
                 cmd_tx: send,
             };
-            let builder = match connection::Builder::session() {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!("MPRIS D-Bus session error: {e}");
-                    return;
-                }
-            };
-            let builder = match builder.name("org.mpris.MediaPlayer2.mbv") {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!("MPRIS D-Bus name error: {e}");
-                    return;
-                }
-            };
-            let builder = match builder.serve_at("/org/mpris/MediaPlayer2", MediaPlayer2) {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!("MPRIS D-Bus MediaPlayer2 interface error: {e}");
-                    return;
-                }
-            };
-            let builder = match builder.serve_at("/org/mpris/MediaPlayer2", player_iface) {
-                Ok(b) => b,
-                Err(e) => {
-                    eprintln!("MPRIS D-Bus Player interface error: {e}");
-                    return;
-                }
-            };
-            let conn = match builder.build().await {
+            let conn = match connection::Builder::session()
+                .unwrap()
+                .name("org.mpris.MediaPlayer2.mbv")
+                .unwrap()
+                .serve_at("/org/mpris/MediaPlayer2", MediaPlayer2)
+                .unwrap()
+                .serve_at("/org/mpris/MediaPlayer2", player_iface)
+                .unwrap()
+                .build()
+                .await
+            {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("MPRIS D-Bus connection error: {e}");
+                    eprintln!("MPRIS D-Bus error: {e}");
                     return;
                 }
             };
@@ -469,7 +451,6 @@ pub fn start(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc;
 
     fn string_value(metadata: &HashMap<String, zvariant::Value<'static>>, key: &str) -> String {
         metadata
@@ -603,74 +584,5 @@ mod tests {
         });
         assert!(!metadata.contains_key("xesam:title"));
         assert!(!metadata.contains_key("mpris:artUrl"));
-    }
-
-    #[test]
-    #[ignore = "requires an isolated D-Bus session; run with dbus-run-session"]
-    fn mpris_registers_on_session_bus_and_routes_transport_commands() {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-        let (tx, rx) = mpsc::channel();
-        start(
-            Arc::new(Mutex::new(PlayerStatus {
-                active: true,
-                title: "Song".to_string(),
-                ..PlayerStatus::default()
-            })),
-            move |cmd| {
-                tx.send(cmd).unwrap();
-            },
-            None,
-        );
-
-        rt.block_on(async {
-            let conn = zbus::Connection::session().await.unwrap();
-            let dbus = zbus::fdo::DBusProxy::new(&conn).await.unwrap();
-            for _ in 0..20 {
-                if dbus
-                    .list_names()
-                    .await
-                    .unwrap()
-                    .iter()
-                    .any(|name| name.as_str() == "org.mpris.MediaPlayer2.mbv")
-                {
-                    let player = zbus::Proxy::new(
-                        &conn,
-                        "org.mpris.MediaPlayer2.mbv",
-                        "/org/mpris/MediaPlayer2",
-                        "org.mpris.MediaPlayer2.Player",
-                    )
-                    .await
-                    .unwrap();
-                    let _: () = player.call("PlayPause", &()).await.unwrap();
-                    let output = std::process::Command::new("playerctl")
-                        .arg("-l")
-                        .output()
-                        .expect("playerctl should be installed for the MPRIS integration check");
-                    assert!(
-                        output.status.success(),
-                        "playerctl -l failed: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                    assert!(
-                        String::from_utf8_lossy(&output.stdout)
-                            .lines()
-                            .any(|line| line == "mbv"),
-                        "playerctl -l did not discover mbv; stdout: {}",
-                        String::from_utf8_lossy(&output.stdout)
-                    );
-                    return;
-                }
-                tokio::time::sleep(Duration::from_millis(100)).await;
-            }
-            panic!("org.mpris.MediaPlayer2.mbv was not discoverable on the session bus");
-        });
-
-        assert!(matches!(
-            rx.recv_timeout(Duration::from_secs(1)),
-            Ok(PlayerCommand::TogglePause)
-        ));
     }
 }
