@@ -104,8 +104,8 @@ pending task, stop.
 
 ## Status
 
-- [ ] Task 1 — data model + fetch plumbing
-- [ ] Task 2 — render album detail inline
+- [x] Task 1 — data model + fetch plumbing
+- [x] Task 2 — render album detail inline
 - [ ] Task 3 — track-selection mode
 - [ ] Task 4 — scope-correct actions
 - [ ] Task 5 — regression coverage
