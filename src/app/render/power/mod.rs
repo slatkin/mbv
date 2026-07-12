@@ -194,7 +194,8 @@ impl App {
 
                 let marker_text = format!(" {} ", self.libs[lib_idx].library.name);
                 let marker_w = (marker_text.width() as u16).min(right_col_w);
-                let pills_w = right_col_w.saturating_sub(marker_w);
+                let marker_gap_w = if right_col_w > marker_w { 1 } else { 0 };
+                let pills_w = right_col_w.saturating_sub(marker_w + marker_gap_w);
 
                 if pills_w > 0 {
                     let pills_area = Rect {
@@ -208,13 +209,25 @@ impl App {
                     layout.selector_tabs = Vec::new();
                 }
 
+                if marker_gap_w > 0 {
+                    f.render_widget(
+                        Paragraph::new(Line::from(Span::raw(" "))),
+                        Rect {
+                            x: right_col_x + pills_w,
+                            y: crumb_row,
+                            width: marker_gap_w,
+                            height: 1,
+                        },
+                    );
+                }
+
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
                         marker_text,
                         Style::default().fg(palette::BASE).bg(palette::FOAM),
                     ))),
                     Rect {
-                        x: right_col_x + pills_w,
+                        x: right_col_x + pills_w + marker_gap_w,
                         y: crumb_row,
                         width: marker_w,
                         height: 1,
@@ -900,10 +913,29 @@ mod tests {
 
         // The Music marker doesn't scroll with the pills: it still sits at
         // the far right of the (narrow) row.
-        let music_x = row0.rfind("Music").unwrap();
+        let rchar_x = |needle: &str| -> u16 {
+            let byte_idx = row0.rfind(needle).expect("needle not found in row 0");
+            row0[..byte_idx].chars().count() as u16
+        };
+
+        let music_x = rchar_x("Music");
         assert!(
-            music_x as u16 + "Music".len() as u16 + 1 >= width,
+            music_x + "Music".len() as u16 + 1 >= width,
             "expected the Music marker to remain pinned to the far right:\n{out}"
+        );
+        let marker_start = music_x.saturating_sub(1);
+        let right_indicator_x = rchar_x("\u{203a}");
+        let gap_before_marker = row0
+            .chars()
+            .nth(marker_start.saturating_sub(1) as usize)
+            .unwrap();
+        assert!(
+            right_indicator_x < marker_start.saturating_sub(1),
+            "expected at least one column between the right scroll indicator and Music marker:\n{out}"
+        );
+        assert_eq!(
+            gap_before_marker, ' ',
+            "expected a blank gap before the Music marker:\n{out}"
         );
 
         // The selector is still confined to the right column -- the segment
@@ -923,7 +955,7 @@ mod tests {
                 "expected pill hitboxes confined to the right column"
             );
             assert!(
-                (rect.x + rect.width) as usize <= music_x,
+                rect.x + rect.width <= marker_start,
                 "expected pill hitboxes confined to the scrollable area left of Music"
             );
         }

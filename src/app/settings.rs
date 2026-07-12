@@ -3,7 +3,7 @@ use crate::config::{Config, UiConfig};
 
 pub fn setting_label(key: SettingKey) -> &'static str {
     match key {
-        SettingKey::StayAlive => "Stay alive (applies on next launch)",
+        SettingKey::StayAlive => "Stay alive on exit",
         SettingKey::SavePlaylistOnQuit => "Save playlist on quit",
         SettingKey::StartOnQueue => "Start on queue",
         SettingKey::AlwaysPlayNext => "Always play next",
