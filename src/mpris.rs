@@ -49,7 +49,54 @@ struct MediaPlayer2Player {
     cmd_tx: Arc<dyn Fn(PlayerCommand) + Send + Sync>,
 }
 
+/// Candidate on-disk image-cache keys for a track's cover art, in the order
+/// the existing UI card-image cache (`src/app/images.rs`) is most likely to
+/// have already populated them under -- checked cheaply via
+/// `std::path::Path::is_file`, no network I/O. `album_id` mirrors the
+/// audio-album grouping the Power View queue card
+/// (`src/app/render/power/card.rs`) already uses: tracks on the same album
+/// share one cache entry keyed by album id rather than track id.
+fn art_cache_key_candidates(item_id: &str, album_id: &str) -> Vec<String> {
+    let mut keys = Vec::new();
+    if !album_id.is_empty() {
+        keys.push(format!("{album_id}:P"));
+    }
+    if !item_id.is_empty() {
+        keys.push(format!("{item_id}:P"));
+        keys.push(format!("{item_id}:lib"));
+    }
+    keys
+}
+
+/// Resolve `mpris:artUrl` to a local `file://` URI for the current track's
+/// cover art, or `None` when it isn't cached yet.
+///
+/// Per the #158 triage decision this must NEVER fall back to an Emby image
+/// URL: that would embed the API token in a query string and leak it onto
+/// the session D-Bus. An uncached track simply omits `mpris:artUrl`.
+///
+/// `resolve_path` is injected so this stays pure and unit-testable without
+/// touching a real cache directory -- production code passes
+/// `crate::config::image_disk_cache_path`.
+fn resolve_art_url(
+    item_id: &str,
+    album_id: &str,
+    resolve_path: impl Fn(&str) -> Option<std::path::PathBuf>,
+) -> Option<String> {
+    art_cache_key_candidates(item_id, album_id)
+        .into_iter()
+        .find_map(|key| resolve_path(&key))
+        .map(|path| format!("file://{}", path.display()))
+}
+
 fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> {
+    make_metadata_with_art_resolver(s, crate::config::image_disk_cache_path)
+}
+
+fn make_metadata_with_art_resolver(
+    s: &PlayerStatus,
+    resolve_path: impl Fn(&str) -> Option<std::path::PathBuf>,
+) -> HashMap<String, zvariant::Value<'static>> {
     let mut m = HashMap::new();
     let track_id = zvariant::ObjectPath::try_from(if s.active && !s.title.is_empty() {
         "/org/mpris/MediaPlayer2/TrackList/Track1"
@@ -67,11 +114,8 @@ fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> 
             let length_us = s.runtime_ticks * 1_000_000 / TICKS_PER_SECOND;
             m.insert("mpris:length".to_string(), zvariant::Value::new(length_us));
         }
-        if !s.art_url.is_empty() {
-            m.insert(
-                "mpris:artUrl".to_string(),
-                zvariant::Value::new(s.art_url.clone()),
-            );
+        if let Some(art_url) = resolve_art_url(&s.art_item_id, &s.art_album_id, resolve_path) {
+            m.insert("mpris:artUrl".to_string(), zvariant::Value::new(art_url));
         }
         if !s.artist.is_empty() {
             m.insert(
@@ -304,7 +348,7 @@ pub fn start(
                             s.title.clone(),
                             s.artist.clone(),
                             s.album.clone(),
-                            s.art_url.clone(),
+                            s.art_item_id.clone(),
                         ),
                         pos_us,
                         s.volume,
@@ -361,35 +405,97 @@ mod tests {
     }
 
     #[test]
-    fn active_metadata_includes_cover_artist_and_album() {
-        let metadata = make_metadata(&PlayerStatus {
-            active: true,
-            title: "Song".to_string(),
-            artist: "Artist".to_string(),
-            album: "Album".to_string(),
-            art_url: "https://emby.example/Items/track/Images/Primary".to_string(),
-            ..PlayerStatus::default()
-        });
+    fn active_metadata_includes_cover_art_as_file_uri_when_cached() {
+        // #158 regression coverage: mpris:artUrl must be a local file://
+        // URI, never an Emby URL (which would carry the API token onto the
+        // session bus).
+        let metadata = make_metadata_with_art_resolver(
+            &PlayerStatus {
+                active: true,
+                title: "Song".to_string(),
+                artist: "Artist".to_string(),
+                album: "Album".to_string(),
+                art_item_id: "track-1".to_string(),
+                ..PlayerStatus::default()
+            },
+            |key| {
+                assert_eq!(key, "track-1:P", "expected the track-id cache key first");
+                Some(std::path::PathBuf::from("/cache/images/track-1_P"))
+            },
+        );
 
         assert_eq!(
             string_value(&metadata, "mpris:artUrl"),
-            "https://emby.example/Items/track/Images/Primary"
+            "file:///cache/images/track-1_P"
         );
         assert!(metadata.contains_key("xesam:artist"));
         assert_eq!(string_value(&metadata, "xesam:album"), "Album");
     }
 
     #[test]
-    fn inactive_metadata_omits_track_details() {
-        let metadata = make_metadata(&PlayerStatus {
-            artist: "Artist".to_string(),
-            album: "Album".to_string(),
-            art_url: "https://emby.example/art.jpg".to_string(),
-            ..PlayerStatus::default()
-        });
+    fn active_metadata_prefers_album_cache_key_for_grouped_audio_tracks() {
+        let metadata = make_metadata_with_art_resolver(
+            &PlayerStatus {
+                active: true,
+                title: "Song".to_string(),
+                art_item_id: "track-1".to_string(),
+                art_album_id: "album-9".to_string(),
+                ..PlayerStatus::default()
+            },
+            |key| (key == "album-9:P").then(|| std::path::PathBuf::from("/cache/images/album-9_P")),
+        );
+
+        assert_eq!(
+            string_value(&metadata, "mpris:artUrl"),
+            "file:///cache/images/album-9_P"
+        );
+    }
+
+    #[test]
+    fn active_metadata_omits_art_url_when_not_cached() {
+        // Per the #158 triage decision: when cached art isn't available,
+        // omit mpris:artUrl entirely rather than falling back to a
+        // token-bearing Emby URL.
+        let metadata = make_metadata_with_art_resolver(
+            &PlayerStatus {
+                active: true,
+                title: "Song".to_string(),
+                art_item_id: "track-1".to_string(),
+                ..PlayerStatus::default()
+            },
+            |_key| None,
+        );
+
+        assert!(!metadata.contains_key("mpris:artUrl"));
+    }
+
+    #[test]
+    fn inactive_metadata_omits_track_details_and_never_touches_the_cache() {
+        let metadata = make_metadata_with_art_resolver(
+            &PlayerStatus {
+                artist: "Artist".to_string(),
+                album: "Album".to_string(),
+                art_item_id: "track-1".to_string(),
+                ..PlayerStatus::default()
+            },
+            |_key| panic!("art cache should never be consulted for an inactive/no-track state"),
+        );
 
         assert!(!metadata.contains_key("mpris:artUrl"));
         assert!(!metadata.contains_key("xesam:artist"));
         assert!(!metadata.contains_key("xesam:album"));
+    }
+
+    #[test]
+    fn art_cache_key_candidates_prefers_album_then_track_id() {
+        assert_eq!(
+            art_cache_key_candidates("track-1", "album-9"),
+            vec!["album-9:P", "track-1:P", "track-1:lib"]
+        );
+        assert_eq!(
+            art_cache_key_candidates("track-1", ""),
+            vec!["track-1:P", "track-1:lib"]
+        );
+        assert!(art_cache_key_candidates("", "").is_empty());
     }
 }
