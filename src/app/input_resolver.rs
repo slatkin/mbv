@@ -160,8 +160,8 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_global_overlay_open,
     },
     ContextEntry {
-        name: "legacy_tail_power_width",
-        handler: App::handle_key_legacy_tail_power_width,
+        name: "power_left_width",
+        handler: App::handle_key_power_left_width,
     },
     ContextEntry {
         name: "home_search",
@@ -386,7 +386,7 @@ mod app_level_tests {
         assert!(app.show_settings);
         // PRESERVED QUIRK: a second F2 press does not close settings. Once
         // `show_settings` is true, `handle_key_settings` (ordered ahead of
-        // `global_overlay_open`/`legacy_tail` in CONTEXT_STACK, matching the
+        // `global_overlay_open`/`power_left_width` in CONTEXT_STACK, matching the
         // pre-phase-2 branch order) claims F2 first and its match has no
         // `F(2)` arm, so it falls to `_ => {}` and swallows the key. This
         // predates phase 2 (verified against commit 2147343) — not a
@@ -717,7 +717,7 @@ mod app_level_tests {
                 "sessions",
                 "playlists",
                 "global_overlay_open",
-                "legacy_tail_power_width",
+                "power_left_width",
                 "home_search",
                 "power_lib_search",
                 "lib_search",
