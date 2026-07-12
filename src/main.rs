@@ -16,12 +16,31 @@ use mbv_core::{applog, player, remote_player};
 /// TUI as a thin client of a connected daemon, exiting with an error if the
 /// event loop itself fails. Callers still `return` after calling this so
 /// control flow at each call site stays identical to before.
+///
+/// Starts MPRIS here (#160) rather than inside `App::new_remote`: this is a
+/// thin client of `mbvd`, which has no D-Bus/zbus dependency and never
+/// claims `org.mpris.MediaPlayer2.mbv` itself (`on_player_ready` is wired
+/// to a no-op in `crates/mbvd/src/main.rs`), so there is no same-machine
+/// bus-name collision to avoid -- this client is the only thing that will
+/// ever own the name for a daemon-connected session, whether the daemon is
+/// local (`is_local_daemon`) or genuinely remote. `RemotePlayer` is
+/// `Clone`, so `mpris_remote` is a cheap handle sharing the same
+/// `Arc<Mutex<PlayerStatus>>`/command channel/disconnect flag as the
+/// `remote` moved into `App::new_remote` below.
 fn run_remote_app(
     client: EmbyClient,
     remote: remote_player::RemotePlayer,
     player_rx: std::sync::mpsc::Receiver<player::PlayerEvent>,
     is_local_daemon: bool,
 ) {
+    let mpris_remote = remote.clone();
+    mpris::start(
+        mpris_remote.status.clone(),
+        move |cmd| {
+            mpris_remote.send_command(cmd);
+        },
+        Some(remote.disconnected_flag()),
+    );
     if let Err(e) = App::new_remote(client, remote, player_rx, is_local_daemon).run() {
         eprintln!("Error: {e}");
         std::process::exit(1);

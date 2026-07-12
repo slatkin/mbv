@@ -21,6 +21,7 @@ const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 const LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT: Duration = Duration::from_secs(1);
 const LOCAL_DAEMON_CONNECT_RETRY_INTERVAL: Duration = Duration::from_millis(50);
 
+#[derive(Clone)]
 pub struct RemotePlayer {
     pub status: Arc<Mutex<PlayerStatus>>,
     pub subtitle_prefs: Arc<Mutex<crate::player::SubtitlePrefs>>,
@@ -390,6 +391,18 @@ impl RemotePlayer {
 
     pub fn is_disconnected(&self) -> bool {
         self.disconnected.load(Ordering::SeqCst)
+    }
+
+    /// Shared handle to the disconnect flag, cloneable independent of the
+    /// rest of `RemotePlayer` (#160): the root `mbv` crate's MPRIS polling
+    /// loop holds this alongside `status` so it can stop advertising a
+    /// live/active track the moment the daemon connection drops, even
+    /// though `status` itself isn't guaranteed to be updated synchronously
+    /// with the disconnect (an "expected" disconnect, e.g. an Emby Remote
+    /// takeover, never sends a `Stopped` event -- see the reader thread in
+    /// `connect_endpoint`).
+    pub fn disconnected_flag(&self) -> Arc<AtomicBool> {
+        self.disconnected.clone()
     }
 
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {

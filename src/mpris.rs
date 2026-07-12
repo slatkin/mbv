@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -87,6 +88,18 @@ fn resolve_art_url(
         .into_iter()
         .find_map(|key| resolve_path(&key))
         .map(|path| format!("file://{}", path.display()))
+}
+
+/// Forces `s` to look inactive (Stopped/NoTrack, no metadata) when
+/// `disconnected` is true -- see `start`'s doc comment. Pure and cheap so
+/// it's cloned/called every poll tick without hesitation; kept separate
+/// from `start` so the "what should published state look like" decision is
+/// unit-testable without a real D-Bus connection.
+fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
+    if disconnected {
+        s.active = false;
+    }
+    s
 }
 
 fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> {
@@ -276,9 +289,18 @@ impl MediaPlayer2Player {
     }
 }
 
+/// Starts the MPRIS D-Bus service against `status`, forwarding player
+/// commands via `send`.
+///
+/// `disconnected` (#160) is the daemon-connection drop signal for the
+/// remote-client case (`RemotePlayer::disconnected_flag()`); pass `None`
+/// for the local, non-daemon player, which has no such connection to lose.
+/// When set and tripped, published state is forced to `Stopped`/`NoTrack`
+/// regardless of what's still cached in `status` -- see `effective_status`.
 pub fn start(
     status: Arc<Mutex<PlayerStatus>>,
     send: impl Fn(PlayerCommand) + Send + Sync + 'static,
+    disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
 ) {
     let send = Arc::new(send);
     let status_poll = status.clone();
@@ -330,9 +352,17 @@ pub fn start(
                 tokio::time::sleep(Duration::from_millis(500)).await;
 
                 // Snapshot PlayerStatus once per poll cycle so all property
-                // reads see consistent state.
+                // reads see consistent state. Force Stopped/NoTrack once the
+                // daemon connection has dropped (#160) -- `status` itself
+                // isn't guaranteed to reflect that promptly (an "expected"
+                // disconnect, e.g. an Emby Remote takeover, never sends a
+                // Stopped PlayerEvent; see RemotePlayer::connect_endpoint).
+                let is_disconnected = disconnected
+                    .as_ref()
+                    .is_some_and(|d| d.load(Ordering::SeqCst));
                 let (cur_status, cur_metadata_key, cur_pos_us, cur_vol) = {
-                    let s = status_poll.lock().unwrap();
+                    let raw = status_poll.lock().unwrap().clone();
+                    let s = effective_status(raw, is_disconnected);
                     *snapshot_poll.lock().unwrap() = s.clone();
                     let st = if !s.active {
                         "Stopped".to_string()
@@ -497,5 +527,30 @@ mod tests {
             vec!["track-1:P", "track-1:lib"]
         );
         assert!(art_cache_key_candidates("", "").is_empty());
+    }
+
+    #[test]
+    fn effective_status_forces_inactive_when_disconnected() {
+        // #160: once the daemon connection drops, published MPRIS state
+        // must go to Stopped/NoTrack even if `status` still has stale
+        // "still playing" data in it.
+        let playing = PlayerStatus {
+            active: true,
+            title: "Song".to_string(),
+            art_item_id: "track-1".to_string(),
+            ..PlayerStatus::default()
+        };
+
+        let untouched = effective_status(playing.clone(), false);
+        assert!(untouched.active);
+
+        let forced = effective_status(playing, true);
+        assert!(!forced.active);
+        // make_metadata should now take the inactive/NoTrack branch.
+        let metadata = make_metadata_with_art_resolver(&forced, |_| {
+            panic!("art cache should never be consulted once disconnected")
+        });
+        assert!(!metadata.contains_key("xesam:title"));
+        assert!(!metadata.contains_key("mpris:artUrl"));
     }
 }

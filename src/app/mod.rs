@@ -1368,11 +1368,15 @@ impl App {
         );
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();
-        crate::mpris::start(player_status, move |cmd| {
-            if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
-                let _ = tx.send(cmd);
-            }
-        });
+        crate::mpris::start(
+            player_status,
+            move |cmd| {
+                if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
+                    let _ = tx.send(cmd);
+                }
+            },
+            None,
+        );
         let player = PlayerProxy::local(raw_player, always_play_next);
         let client_arc = Arc::new(Mutex::new(client));
         {
