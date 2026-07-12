@@ -224,7 +224,7 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
                         while let Ok(msg) = out_rx.try_recv() {
                             match msg {
                                 OutboundMessage::Text(msg) => {
-                                    if socket.send(Message::Text(msg)).is_err() {
+                                    if socket.send(Message::Text(msg.into())).is_err() {
                                         log::warn!(target: "ws", "send error, reconnecting");
                                         break 'conn;
                                     }
@@ -237,7 +237,7 @@ pub fn start(ws_url: String, event_tx: mpsc::Sender<WsEvent>) -> WsSender {
 
                         // M4: Send periodic heartbeat pings.
                         if last_ping.elapsed() >= PING_INTERVAL {
-                            if socket.send(Message::Ping(vec![])).is_err() {
+                            if socket.send(Message::Ping(vec![].into())).is_err() {
                                 log::warn!(target: "ws", "ping send failed, reconnecting");
                                 break 'conn;
                             }
