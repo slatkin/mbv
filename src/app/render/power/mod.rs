@@ -697,18 +697,18 @@ mod tests {
             "expected selected movie row directly below the opening rule:\n{out}"
         );
         assert_eq!(
-            lines[2].chars().next(),
-            Some('▌'),
-            "expected the selected-row indicator at the banner edge:\n{out}"
+            lines[2].find('▌'),
+            Some(2),
+            "expected the selected-row indicator to be indented two spaces:\n{out}"
         );
         assert!(
             out.contains("compact movie banner"),
             "expected compact overview text:\n{out}"
         );
         assert_eq!(
-            lines[3].chars().next(),
-            Some('▌'),
-            "expected the selection indicator to continue through the banner:\n{out}"
+            lines[3].find('▌'),
+            Some(2),
+            "expected the selection indicator to continue through the banner at the indented column:\n{out}"
         );
         assert!(
             lines[17].contains("Second Movie"),
@@ -725,7 +725,11 @@ mod tests {
         assert!(
             lines
                 .get(director_line.saturating_sub(1))
-                .map(|l| l.starts_with('▌') && l.chars().skip(1).all(|c| c == ' '))
+                .map(|l| {
+                    l.find('▌') == Some(2)
+                        && l.chars().take(2).all(|c| c == ' ')
+                        && l.chars().skip(3).all(|c| c == ' ')
+                })
                 .unwrap_or(false),
             "expected a spacer row before the director line:\n{out}"
         );
@@ -734,8 +738,8 @@ mod tests {
             "expected closing rule below banner content:\n{out}"
         );
         assert_ne!(
-            lines[16].chars().next(),
-            Some('▌'),
+            lines[16].find('▌'),
+            Some(2),
             "expected the selection indicator to stop before the banner's closing rule:\n{out}"
         );
         assert!(

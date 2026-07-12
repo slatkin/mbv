@@ -25,6 +25,7 @@ const COMPACT_BANNER_CONTENT_ROWS: usize = 13;
 const COMPACT_BANNER_GAP_ROWS: usize = 1;
 const COMPACT_BANNER_TOTAL_ROWS: usize =
     COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_CONTENT_ROWS + COMPACT_BANNER_GAP_ROWS;
+const COMPACT_BANNER_INDENT: u16 = 2;
 
 impl App {
     /// Filler-row count to reserve around the selected movie's row in
@@ -325,7 +326,9 @@ impl App {
             let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
             let show_scrollbar = focused && total_display > visible;
 
-            let avail = (area.width as usize).saturating_sub(2);
+            let rule_indent = " ".repeat(COMPACT_BANNER_INDENT as usize + 1);
+            let avail = (area.width as usize)
+                .saturating_sub(2 + COMPACT_BANNER_INDENT as usize);
             let list_items: Vec<ListItem> = display_rows
                 .iter()
                 .enumerate()
@@ -338,7 +341,7 @@ impl App {
                             && (abs_idx == banner_rule_top || abs_idx == banner_rule_bottom)
                         {
                             ListItem::new(Line::from(vec![
-                                Span::raw(" "),
+                                Span::raw(rule_indent.clone()),
                                 Span::styled(
                                     "\u{2500}".repeat(avail),
                                     Style::default().fg(palette::OVERLAY),
@@ -389,6 +392,7 @@ impl App {
                         };
                         let mut spans: Vec<Span> = if selected && focused {
                             vec![
+                                Span::raw(" ".repeat(COMPACT_BANNER_INDENT as usize)),
                                 Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
                                 Span::styled(
                                     title,
@@ -433,9 +437,9 @@ impl App {
                     (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
                 if banner_h > 0 {
                     let banner_rect = Rect {
-                        x: content_area.x,
+                        x: content_area.x + COMPACT_BANNER_INDENT,
                         y: banner_y,
-                        width: banner_w,
+                        width: banner_w.saturating_sub(COMPACT_BANNER_INDENT),
                         height: banner_h,
                     };
                     let want_cursor_y = layout.cursor_screen_y;
@@ -464,7 +468,7 @@ impl App {
                     f.render_widget(
                         Paragraph::new(selection_bar),
                         Rect {
-                            x: content_area.x,
+                            x: content_area.x + COMPACT_BANNER_INDENT,
                             y: selected_y,
                             width: 1,
                             height: bar_h,
@@ -526,6 +530,7 @@ impl App {
             let content_start = display_cursor + 1;
             let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
             let show_scrollbar = focused && total_display > visible;
+            let rule_indent = " ".repeat(COMPACT_BANNER_INDENT as usize + 1);
 
             let list_items: Vec<ListItem> = display_rows
                 .iter()
@@ -537,9 +542,10 @@ impl App {
                         if banner_rows > 0
                             && (abs_idx == banner_rule_top || abs_idx == banner_rule_bottom)
                         {
-                            let avail = (area.width as usize).saturating_sub(2);
+                            let avail = (area.width as usize)
+                                .saturating_sub(2 + COMPACT_BANNER_INDENT as usize);
                             ListItem::new(Line::from(vec![
-                                Span::raw(" "),
+                                Span::raw(rule_indent.clone()),
                                 Span::styled(
                                     "\u{2500}".repeat(avail),
                                     Style::default().fg(palette::OVERLAY),
@@ -576,7 +582,11 @@ impl App {
                             (item.display_name(), dur)
                         };
 
-                        let avail = (area.width as usize).saturating_sub(2);
+                        let avail = if selected && focused {
+                            (area.width as usize).saturating_sub(2 + COMPACT_BANNER_INDENT as usize)
+                        } else {
+                            (area.width as usize).saturating_sub(2)
+                        };
                         let name_w = avail.saturating_sub(dur_str.width());
                         let title = trunc_str(&item_name, name_w);
                         let fg = if focused {
@@ -587,6 +597,7 @@ impl App {
 
                         let mut spans: Vec<Span> = if selected && focused {
                             vec![
+                                Span::raw(" ".repeat(COMPACT_BANNER_INDENT as usize)),
                                 Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
                                 Span::styled(
                                     title,
@@ -641,9 +652,9 @@ impl App {
                     (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
                 if banner_h > 0 {
                     let banner_rect = Rect {
-                        x: content_area.x,
+                        x: content_area.x + COMPACT_BANNER_INDENT,
                         y: banner_y,
-                        width: banner_w,
+                        width: banner_w.saturating_sub(COMPACT_BANNER_INDENT),
                         height: banner_h,
                     };
                     // render_power_compact_detail overwrites layout.cursor_screen_y with
@@ -676,7 +687,7 @@ impl App {
                     f.render_widget(
                         Paragraph::new(selection_bar),
                         Rect {
-                            x: content_area.x,
+                            x: content_area.x + COMPACT_BANNER_INDENT,
                             y: selected_y,
                             width: 1,
                             height: bar_h,
