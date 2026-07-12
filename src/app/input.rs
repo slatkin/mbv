@@ -18,7 +18,7 @@ impl App {
     /// Whether a context menu is currently open. Shared by every
     /// CONTEXT_STACK layer above `context_menu` that must yield to it
     /// (`panel_toggle_h`, `home_search`, `power_lib_search`, `lib_search`,
-    /// `clear_queue_prompt_c`, `legacy_tail_power_width`) — see
+    /// `clear_queue_prompt_c`, `power_left_width`) — see
     /// docs/adr/0002-centralized-input-handling.md phase 6 (#135).
     fn context_menu_open(&self) -> bool {
         self.context_menu.is_some()
@@ -145,7 +145,7 @@ impl App {
         None
     }
 
-    pub(super) fn handle_key_legacy_tail_power_width(&mut self, key: KeyEvent) -> Option<bool> {
+    pub(super) fn handle_key_power_left_width(&mut self, key: KeyEvent) -> Option<bool> {
         if self.handle_power_left_width_key(key) {
             Some(false)
         } else {
