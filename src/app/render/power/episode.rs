@@ -106,11 +106,15 @@ impl App {
                         width: IMG_COLS,
                         height: IMG_MAX_ROWS,
                     };
-                    let actual = state.size_for(
+                    match state.size_for(
                         ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
                         avail,
-                    );
-                    (actual.width, actual.height, false)
+                    ) {
+                        Some(actual) => (actual.width, actual.height, false),
+                        // Resize+encode still in-flight on the worker thread —
+                        // reserve space like the fetch-in-flight case below.
+                        None => (IMG_COLS, IMG_PLACEHOLDER_H, true),
+                    }
                 } else if img_loading {
                     // Reserve space while the image fetch is in flight.
                     (IMG_COLS, IMG_PLACEHOLDER_H, true)
@@ -343,8 +347,7 @@ impl App {
                     );
                 } else if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key)
                 {
-                    type SImg =
-                        ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
+                    type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                     f.render_stateful_widget(
                         SImg::default()
                             .resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),

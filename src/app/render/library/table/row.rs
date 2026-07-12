@@ -70,7 +70,7 @@ impl App {
         }
 
         if let Some(img_rect) = img_rect_opt {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
+            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
                 f.render_stateful_widget(
                     SImg::default().resize(ratatui_image::Resize::Fit(Some(
@@ -250,13 +250,16 @@ impl App {
         } else {
             (LIB_SELECTED_IMG_W, ctx.selected_img_h)
         };
-        Some(state.size_for(
+        // `size_for` is `None` while resize+encode is in-flight on the
+        // worker thread (ThreadProtocol); treat that the same as no image
+        // yet, same as the `?` above for an absent/unfetched entry.
+        state.size_for(
             ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3)),
             Size {
                 width: img_w,
                 height: img_h.min(padded_area.height),
             },
-        ))
+        )
     }
 
     fn library_row_rects(

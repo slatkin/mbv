@@ -122,6 +122,9 @@ impl App {
         };
         let cache_key = format!("{}:lib", item.id);
         if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
+            // `size_for` is `None` while resize+encode is in-flight on the
+            // worker thread; fall back to the reserved height like an
+            // absent/unfetched entry.
             state
                 .size_for(
                     ratatui_image::Resize::Fit(Some(ratatui_image::FilterType::Lanczos3)),
@@ -130,7 +133,8 @@ impl App {
                         height: img_h,
                     },
                 )
-                .height
+                .map(|s| s.height)
+                .unwrap_or(img_h)
         } else {
             img_h
         }

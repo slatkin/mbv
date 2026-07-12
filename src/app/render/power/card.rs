@@ -59,40 +59,45 @@ impl App {
         let max_h = max_h.min(if self.terminal_height <= 30 { 12 } else { 18 });
         let image_loading = self.card_image_loading.contains(cache_key);
         if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
-            type SImg = ratatui_image::StatefulImage<ratatui_image::protocol::StatefulProtocol>;
+            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
             let avail = ratatui::layout::Size {
                 width: area.width,
                 height: max_h.saturating_sub(1),
             };
-            let actual = state.size_for(
+            // `size_for` returns `None` while the resize+encode is still
+            // in-flight on the worker thread (ThreadProtocol has taken its
+            // inner protocol to send it off). Fall through to the
+            // loading/placeholder path below for that frame; the next
+            // frame after the response arrives will have a size again.
+            if let Some(actual) = state.size_for(
                 ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
                 avail,
-            );
-            let img_x = area.x + (area.width.saturating_sub(actual.width)) / 2;
-            let img_rect = Rect {
-                x: img_x,
-                y: area.y,
-                width: actual.width,
-                height: actual.height,
-            };
-            f.render_stateful_widget(
-                SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
-                img_rect,
-                state,
-            );
-            self.last_card_height = actual.height + 1;
-            (actual.height + 1, false)
-        } else {
-            // No image loaded yet — if a fetch is in-flight and we have never
-            // rendered a card before, reserve the full height cap so the queue
-            // panel doesn't expand then collapse when the first image arrives.
-            let placeholder = if self.last_card_height == 0 && image_loading {
-                max_h
-            } else {
-                self.last_card_height
-            };
-            (placeholder, image_loading)
+            ) {
+                let img_x = area.x + (area.width.saturating_sub(actual.width)) / 2;
+                let img_rect = Rect {
+                    x: img_x,
+                    y: area.y,
+                    width: actual.width,
+                    height: actual.height,
+                };
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
+                    img_rect,
+                    state,
+                );
+                self.last_card_height = actual.height + 1;
+                return (actual.height + 1, false);
+            }
         }
+        // No image loaded yet — if a fetch is in-flight and we have never
+        // rendered a card before, reserve the full height cap so the queue
+        // panel doesn't expand then collapse when the first image arrives.
+        let placeholder = if self.last_card_height == 0 && image_loading {
+            max_h
+        } else {
+            self.last_card_height
+        };
+        (placeholder, image_loading)
     }
 
     /// Renders the card image and returns `(rows_used, image_loading)`.
