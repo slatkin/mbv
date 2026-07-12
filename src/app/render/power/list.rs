@@ -982,6 +982,8 @@ mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app
@@ -1028,6 +1030,8 @@ mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         let mut layout = LayoutPower::default();

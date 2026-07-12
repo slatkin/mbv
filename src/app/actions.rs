@@ -4757,6 +4757,8 @@ impl App {
                 feed_home_video,
                 power_detail_item: detail_item,
                 power_detail_scroll: detail_scroll,
+
+                album_track_focus: None,
             });
         }
         let n = self.libs.len();
@@ -5298,6 +5300,8 @@ mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         let level = BrowseLevel {
@@ -5357,6 +5361,8 @@ mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app.normalize_current_browse_level_items(0, false);

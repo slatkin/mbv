@@ -498,11 +498,14 @@ impl App {
                 if let Some(album) = self.selected_album_item(lib_idx) {
                     match self.album_tracks_cache.get(&album.id).cloned() {
                         Some(tracks) => {
+                            // In track-selection mode (#145 task 3) highlight the
+                            // focused track instead of always the first row.
+                            let cursor = self.libs[lib_idx].album_track_focus.unwrap_or(0);
                             self.render_power_album_detail(
                                 f,
                                 detail_area,
                                 &tracks,
-                                0,
+                                cursor,
                                 focused,
                                 layout,
                             );
@@ -550,7 +553,10 @@ impl App {
     /// -- *not* the artist-grouped display order that
     /// `render_power_music_group_view` builds for rendering -- so a plain
     /// `items.get(cursor)` is correct even for the grouped music view.
-    fn selected_album_item(&self, lib_idx: usize) -> Option<mbv_core::api::MediaItem> {
+    pub(in crate::app) fn selected_album_item(
+        &self,
+        lib_idx: usize,
+    ) -> Option<mbv_core::api::MediaItem> {
         let lvl = self.libs[lib_idx].nav_stack.last()?;
         lvl.items.get(lvl.cursor).cloned()
     }
@@ -676,6 +682,8 @@ mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app
@@ -830,6 +838,8 @@ mod tests {
             feed_home_video: None,
             power_detail_item: None,
             power_detail_scroll: 0,
+
+            album_track_focus: None,
         });
 
         app
