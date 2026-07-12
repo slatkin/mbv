@@ -3073,6 +3073,47 @@ impl PlayerProxy {
         }
     }
 
+    /// Shared disconnect flag for the current inner target, or `None` for a
+    /// local `Player` (which has no daemon connection to lose). Mirrors
+    /// `RemotePlayer::disconnected_flag()` -- used by callers (MPRIS
+    /// wiring, see #175) that need to rebind to whichever target currently
+    /// owns playback without caring whether that's local or remote.
+    pub fn disconnected_flag(&self) -> Option<Arc<AtomicBool>> {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => None,
+            PlayerProxyInner::Remote(r) => Some(r.disconnected_flag()),
+        }
+    }
+
+    /// A `'static`, cheaply-cloneable command sender for whichever target
+    /// this proxy currently wraps, independent of `self`'s lifetime.
+    ///
+    /// Exists so callers that need to hand a command path to something
+    /// that outlives `self` (e.g. MPRIS's polling thread, see #175) don't
+    /// have to hand-roll the local/remote match themselves -- and so that
+    /// rebinding after `App::switch_to_direct_remote` /
+    /// `restore_local_mode` always routes through whatever `self.inner`
+    /// currently is at the moment this is called, not whatever it was when
+    /// some earlier closure was built.
+    pub fn command_sender(&self) -> Arc<dyn Fn(PlayerCommand) + Send + Sync> {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => {
+                let cmd_tx = p.cmd_tx.clone();
+                Arc::new(move |cmd: PlayerCommand| {
+                    if let Some(tx) = cmd_tx.lock().unwrap().as_ref() {
+                        let _ = tx.send(cmd);
+                    }
+                })
+            }
+            PlayerProxyInner::Remote(r) => {
+                let remote = r.clone();
+                Arc::new(move |cmd: PlayerCommand| {
+                    remote.send_command(cmd);
+                })
+            }
+        }
+    }
+
     /// Returns a clonable stop handle for use from other threads (e.g. the
     /// quit watchdog). None in remote mode — the daemon owns the player.
     pub fn quit_handle(&self) -> Option<QuitHandle> {

@@ -42,12 +42,40 @@ impl MediaPlayer2 {
     }
 }
 
-struct MediaPlayer2Player {
+/// The live status/command-sender/disconnect-flag triple MPRIS publishes.
+///
+/// Kept behind a handle (rather than baked directly into `MediaPlayer2Player`
+/// and the polling loop's captured variables) so `rebind` (#175) can
+/// re-point an already-registered MPRIS service at a different
+/// `PlayerStatus` source without restarting the D-Bus connection: the App
+/// swaps between a local `Player` and a `RemotePlayer` at runtime
+/// (`switch_to_direct_remote` / `restore_local_mode`), and MPRIS must track
+/// whichever one currently owns playback rather than staying wired to
+/// whatever was live when `start` was first called.
+pub(crate) struct MprisSource {
     status: Arc<Mutex<PlayerStatus>>,
+    send: Arc<dyn Fn(PlayerCommand) + Send + Sync>,
+    disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
+}
+
+/// Handle returned by `start`; pass it to `rebind` to re-point a live MPRIS
+/// registration at a different playback source. Callers outside this module
+/// (`main.rs`, `app/mod.rs`) only ever move this opaque handle around and
+/// pass it back into `rebind` -- they never touch `MprisSource`'s fields
+/// directly, which stay module-private.
+pub(crate) type MprisHandle = Arc<Mutex<MprisSource>>;
+
+struct MediaPlayer2Player {
+    /// The current status/command-sender/disconnect-flag triple, shared
+    /// with `start`'s polling thread. Rebindable at runtime via `rebind`
+    /// (#175) so the same live D-Bus registration can be re-pointed at a
+    /// different `PlayerStatus` source (e.g. after `App::switch_to_direct_remote`
+    /// swaps the app from a local `Player` to a `RemotePlayer`, or back)
+    /// without tearing down and re-registering the MPRIS bus name.
+    source: MprisHandle,
     /// Snapshot updated every 500ms by the polling loop so all property reads
     /// within one D-Bus call batch see consistent state.
     snapshot: Arc<Mutex<PlayerStatus>>,
-    cmd_tx: Arc<dyn Fn(PlayerCommand) + Send + Sync>,
 }
 
 /// Candidate on-disk image-cache keys for a track's cover art, in the order
@@ -155,38 +183,64 @@ fn make_metadata_with_art_resolver(
     m
 }
 
+impl MediaPlayer2Player {
+    /// Clones the current `status`/`send` pair out from behind `self.source`'s
+    /// lock, dropping that lock immediately -- so callers below never hold
+    /// both `self.source`'s lock and `status`'s lock at once, and always act
+    /// on whatever `rebind` (#175) most recently set rather than something
+    /// captured once at registration time.
+    ///
+    /// Deliberately kept in a plain (non-`#[interface]`) impl block: zbus's
+    /// `#[interface]` macro treats every method in its block as an exposed
+    /// D-Bus method/property, and this helper's tuple return type has no
+    /// D-Bus marshaling impl.
+    fn status_and_sender(
+        &self,
+    ) -> (
+        Arc<Mutex<PlayerStatus>>,
+        Arc<dyn Fn(PlayerCommand) + Send + Sync>,
+    ) {
+        let source = self.source.lock().unwrap();
+        (source.status.clone(), source.send.clone())
+    }
+}
+
 #[interface(name = "org.mpris.MediaPlayer2.Player")]
 impl MediaPlayer2Player {
     fn play(&self) {
-        if let Some(cmd) = self.status.lock().unwrap().toggle_to_reach(false) {
-            (self.cmd_tx)(cmd);
-        }
+        let (status, send) = self.status_and_sender();
+        if let Some(cmd) = status.lock().unwrap().toggle_to_reach(false) {
+            send(cmd);
+        };
     }
 
     fn pause(&self) {
-        if let Some(cmd) = self.status.lock().unwrap().toggle_to_reach(true) {
-            (self.cmd_tx)(cmd);
-        }
+        let (status, send) = self.status_and_sender();
+        if let Some(cmd) = status.lock().unwrap().toggle_to_reach(true) {
+            send(cmd);
+        };
     }
 
     fn play_pause(&self) {
-        (self.cmd_tx)(PlayerCommand::TogglePause);
+        (self.status_and_sender().1)(PlayerCommand::TogglePause);
     }
 
     fn stop(&self) {
-        (self.cmd_tx)(PlayerCommand::TogglePause);
+        (self.status_and_sender().1)(PlayerCommand::TogglePause);
     }
 
     fn next(&self) {
-        if let Some(idx) = self.status.lock().unwrap().next_idx() {
-            (self.cmd_tx)(PlayerCommand::JumpTo(idx));
-        }
+        let (status, send) = self.status_and_sender();
+        if let Some(idx) = status.lock().unwrap().next_idx() {
+            send(PlayerCommand::JumpTo(idx));
+        };
     }
 
     fn previous(&self) {
-        if let Some(idx) = self.status.lock().unwrap().previous_idx() {
-            (self.cmd_tx)(PlayerCommand::JumpTo(idx));
-        }
+        let (status, send) = self.status_and_sender();
+        if let Some(idx) = status.lock().unwrap().previous_idx() {
+            send(PlayerCommand::JumpTo(idx));
+        };
     }
 
     fn seek(&self, offset_us: i64) {
@@ -195,7 +249,7 @@ impl MediaPlayer2Player {
         if secs.abs() > 86400.0 {
             return;
         }
-        (self.cmd_tx)(PlayerCommand::Seek(secs));
+        (self.source.lock().unwrap().send)(PlayerCommand::Seek(secs));
     }
 
     fn set_position(&self, track_id: zvariant::ObjectPath<'_>, position_us: i64) {
@@ -206,13 +260,12 @@ impl MediaPlayer2Player {
         if position_us < 0 {
             return;
         }
-        let runtime_us = self.status.lock().unwrap().runtime_ticks * 1_000_000 / TICKS_PER_SECOND;
+        let source = self.source.lock().unwrap();
+        let runtime_us = source.status.lock().unwrap().runtime_ticks * 1_000_000 / TICKS_PER_SECOND;
         if runtime_us > 0 && position_us > runtime_us {
             return;
         }
-        (self.cmd_tx)(PlayerCommand::SeekAbsolute(
-            position_us as f64 / 1_000_000.0,
-        ));
+        (source.send)(PlayerCommand::SeekAbsolute(position_us as f64 / 1_000_000.0));
     }
 
     fn open_uri(&self, _uri: &str) {}
@@ -256,7 +309,7 @@ impl MediaPlayer2Player {
 
     #[zbus(property)]
     async fn set_volume(&self, vol: f64) {
-        (self.cmd_tx)(PlayerCommand::SetVolume((vol * 100.0).round() as i64));
+        (self.source.lock().unwrap().send)(PlayerCommand::SetVolume((vol * 100.0).round() as i64));
     }
 
     #[zbus(property)]
@@ -310,14 +363,25 @@ impl MediaPlayer2Player {
 /// clears `status` directly at the point it detects an "expected" (silent)
 /// disconnect, but polling can race that update, so this flag is checked
 /// independently on every tick.
+///
+/// Returns a handle that `rebind` (#175) can later use to re-point this
+/// same live registration at a different `status`/`send`/`disconnected`
+/// triple -- needed because `App::switch_to_direct_remote` /
+/// `restore_local_mode` swap which `Player`/`RemotePlayer` owns playback
+/// at runtime, and MPRIS must follow whichever one is current rather than
+/// staying wired to whatever was live when `start` was first called.
 pub fn start(
     status: Arc<Mutex<PlayerStatus>>,
     send: impl Fn(PlayerCommand) + Send + Sync + 'static,
     disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
-) {
-    let send = Arc::new(send);
-    let status_poll = status.clone();
+) -> MprisHandle {
     let snapshot = Arc::new(Mutex::new(status.lock().unwrap().clone()));
+    let source: MprisHandle = Arc::new(Mutex::new(MprisSource {
+        status,
+        send: Arc::new(send),
+        disconnected,
+    }));
+    let source_poll = source.clone();
     let snapshot_poll = snapshot.clone();
 
     thread::spawn(move || {
@@ -333,9 +397,8 @@ pub fn start(
         };
         rt.block_on(async move {
             let player_iface = MediaPlayer2Player {
-                status,
+                source: source_poll.clone(),
                 snapshot: snapshot_poll.clone(),
-                cmd_tx: send,
             };
             let conn = match connection::Builder::session()
                 .unwrap()
@@ -364,20 +427,25 @@ pub fn start(
             loop {
                 tokio::time::sleep(Duration::from_millis(500)).await;
 
-                // Snapshot PlayerStatus once per poll cycle so all property
-                // reads see consistent state. Force Stopped/NoTrack once the
-                // daemon connection has dropped (#160) -- `status` itself
-                // isn't guaranteed to reflect that promptly (an "expected"
-                // disconnect, e.g. an Emby Remote takeover, never sends a
-                // Stopped PlayerEvent; see RemotePlayer::connect_endpoint).
-                let is_disconnected = disconnected
-                    .as_ref()
-                    .is_some_and(|d| d.load(Ordering::SeqCst));
+                // Re-read the current status/disconnect-flag pair from
+                // `source_poll` on every tick (rather than closing over a
+                // fixed `Arc` once, before the loop) so a `rebind` call
+                // takes effect on the very next poll, not just for a
+                // freshly-registered D-Bus service (#175).
+                let (status_arc, is_disconnected) = {
+                    let src = source_poll.lock().unwrap();
+                    let is_disconnected = src
+                        .disconnected
+                        .as_ref()
+                        .is_some_and(|d| d.load(Ordering::SeqCst));
+                    (src.status.clone(), is_disconnected)
+                };
+
                 let (cur_status, cur_metadata_key, cur_pos_us, cur_vol) = {
                     // Single clone out of the mutex for the whole tick: `s`
                     // is consumed to build the tuple below and then moved
                     // (not cloned again) into `snapshot_poll` last.
-                    let raw = status_poll.lock().unwrap().clone();
+                    let raw = status_arc.lock().unwrap().clone();
                     let s = effective_status(raw, is_disconnected);
                     let st = if !s.active {
                         "Stopped".to_string()
@@ -446,6 +514,52 @@ pub fn start(
             }
         });
     });
+
+    source
+}
+
+/// Re-points an already-registered MPRIS service (from `start`) at a
+/// different `status`/`send`/`disconnected` triple, without restarting the
+/// D-Bus connection or re-claiming the bus name.
+///
+/// #175: `App::switch_to_direct_remote` and `restore_local_mode` swap which
+/// `Player`/`RemotePlayer` currently owns playback; before this existed,
+/// MPRIS stayed wired to whatever was live when `start` was first called
+/// (almost always the initial local `Player`), so local desktop MPRIS never
+/// picked up a remote daemon's playback after a mid-session takeover.
+pub fn rebind(
+    handle: &MprisHandle,
+    status: Arc<Mutex<PlayerStatus>>,
+    send: impl Fn(PlayerCommand) + Send + Sync + 'static,
+    disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
+) {
+    let mut source = handle.lock().unwrap();
+    source.status = status;
+    source.send = Arc::new(send);
+    source.disconnected = disconnected;
+}
+
+/// Test-only constructor/inspector pair for `MprisHandle`, used by
+/// `src/app/mod.rs`'s tests to inject a lightweight (no real D-Bus/tokio)
+/// handle into `App.mpris` and assert `switch_to_direct_remote` /
+/// `restore_local_mode` actually call `rebind` on it (#175), without
+/// duplicating `MprisSource`'s private fields outside this module.
+#[cfg(test)]
+pub(crate) fn test_handle(
+    status: Arc<Mutex<PlayerStatus>>,
+    send: impl Fn(PlayerCommand) + Send + Sync + 'static,
+    disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
+) -> MprisHandle {
+    Arc::new(Mutex::new(MprisSource {
+        status,
+        send: Arc::new(send),
+        disconnected,
+    }))
+}
+
+#[cfg(test)]
+pub(crate) fn test_status(handle: &MprisHandle) -> Arc<Mutex<PlayerStatus>> {
+    handle.lock().unwrap().status.clone()
 }
 
 #[cfg(test)]
@@ -584,5 +698,57 @@ mod tests {
         });
         assert!(!metadata.contains_key("xesam:title"));
         assert!(!metadata.contains_key("mpris:artUrl"));
+    }
+
+    #[test]
+    fn rebind_repoints_a_handle_at_a_new_status_and_sender() {
+        // #175: `App::switch_to_direct_remote` / `restore_local_mode` call
+        // `rebind` to re-point an already-registered MPRIS service at
+        // whichever `Player`/`RemotePlayer` now owns playback. This test
+        // exercises `rebind` directly (no real D-Bus/tokio involved) --
+        // it's the smallest reproduction of the propagation break: before
+        // `rebind` existed, nothing updated the `Arc<Mutex<PlayerStatus>>`
+        // MPRIS's polling loop was watching after such a swap.
+        let status_a = Arc::new(Mutex::new(PlayerStatus {
+            active: false,
+            ..PlayerStatus::default()
+        }));
+        let status_b = Arc::new(Mutex::new(PlayerStatus {
+            active: true,
+            title: "Remote Song".to_string(),
+            ..PlayerStatus::default()
+        }));
+        let sent = Arc::new(Mutex::new(Vec::<PlayerCommand>::new()));
+
+        let handle: MprisHandle = Arc::new(Mutex::new(MprisSource {
+            status: status_a.clone(),
+            send: Arc::new(|_: PlayerCommand| {}),
+            disconnected: None,
+        }));
+
+        let sent_for_rebind = sent.clone();
+        let disconnected_b = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        rebind(
+            &handle,
+            status_b.clone(),
+            move |cmd| sent_for_rebind.lock().unwrap().push(cmd),
+            Some(disconnected_b.clone()),
+        );
+
+        let source = handle.lock().unwrap();
+        assert!(
+            Arc::ptr_eq(&source.status, &status_b),
+            "rebind must repoint the handle's status at the new source, not stay on the old one"
+        );
+        assert!(!Arc::ptr_eq(&source.status, &status_a));
+        assert!(source
+            .disconnected
+            .as_ref()
+            .is_some_and(|d| Arc::ptr_eq(d, &disconnected_b)));
+        (source.send)(PlayerCommand::TogglePause);
+        drop(source);
+        let sent = sent.lock().unwrap();
+        assert_eq!(sent.len(), 1);
+        assert!(matches!(sent[0], PlayerCommand::TogglePause));
     }
 }

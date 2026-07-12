@@ -779,4 +779,84 @@ mod tests {
 
         assert!(!adopted);
     }
+
+    #[test]
+    fn connect_endpoint_propagates_active_remote_playback_status() {
+        // #175: a local `mbv` connected as the ctrl client of a remote
+        // `mbvd` must mirror the daemon's active playback into
+        // `RemotePlayer.status` -- that's the shared `Arc<Mutex<PlayerStatus>>`
+        // MPRIS polls directly (see `src/mpris.rs::start`). This drives the
+        // *real* TCP protocol path (hello exchange, initial `State`, then a
+        // `StatusOnly` push) end-to-end, rather than calling
+        // `apply_ctrl_event` directly, so it catches propagation bugs in the
+        // reader thread / connect handshake that a unit-level test of
+        // `apply_ctrl_event` alone would miss.
+        use std::io::{BufRead, BufReader};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let daemon = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut writer = stream.try_clone().unwrap();
+            let mut reader = BufReader::new(stream);
+
+            // Protocol hello.
+            let hello = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap();
+            writeln!(writer, "{hello}").unwrap();
+
+            // Read the client's hello back (unused beyond draining the line).
+            let mut client_hello = String::new();
+            reader.read_line(&mut client_hello).unwrap();
+
+            // Initial baseline state: idle, nothing playing yet.
+            let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
+                status: PlayerStatus::default(),
+                items: Vec::new(),
+                cursor: 0,
+                source: crate::config::QueueSource::Unknown,
+            }))
+            .unwrap();
+            writeln!(writer, "{initial_state}").unwrap();
+
+            // Now the daemon reports active playback, exactly like the #175
+            // repro: an active `StatusOnly` push after the initial handshake.
+            let active_status = serde_json::to_string(&CtrlEvent::StatusOnly(PlayerStatus {
+                active: true,
+                paused: false,
+                title: "Song".to_string(),
+                position_ticks: 5_000_000,
+                runtime_ticks: 100_000_000,
+                ..PlayerStatus::default()
+            }))
+            .unwrap();
+            writeln!(writer, "{active_status}").unwrap();
+
+            // Keep the connection open until the test thread is done with it.
+            std::thread::sleep(Duration::from_millis(500));
+        });
+
+        let (remote, _event_rx) =
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        loop {
+            if remote.status.lock().unwrap().active {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "remote status never reflected the daemon's active playback"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+
+        let status = remote.status.lock().unwrap().clone();
+        assert!(status.active);
+        assert!(!status.paused);
+        assert_eq!(status.title, "Song");
+
+        daemon.join().unwrap();
+    }
 }
