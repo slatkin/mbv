@@ -186,18 +186,6 @@ impl App {
         let show_length = render_w > 30;
         let dur_w: usize = if show_length { 6 } else { 0 }; // "mm:ss" or "h:mm:ss"
 
-        // Spinner character for the active item — computed once per frame, not per row.
-        const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        // Drive frame index from playback position (10M ticks/sec; 1.5M ticks = 150ms per frame).
-        // position_ticks is frozen when paused, so the spinner naturally freezes at the right frame.
-        let spinner_frame: &str = SPINNER_FRAMES
-            [(playback.position_ticks.max(0) / 1_500_000) as usize % SPINNER_FRAMES.len()];
-        let spinner_color = if playback.paused {
-            palette::YELLOW
-        } else {
-            palette::IRIS
-        };
-
         // Build visible ListItems and the row map simultaneously.
         let mut list_items: Vec<ListItem> = Vec::new();
         let mut header_ys: Vec<u16> = Vec::new();
@@ -284,13 +272,8 @@ impl App {
                         palette::MUTED
                     };
 
-                    // Spinner shown right after the title while the item is playing.
-                    let spinner_char: &str = if is_active { spinner_frame } else { "" };
-
-                    // Reserve 2 extra chars for " ⠋" when active.
-                    let spinner_w: usize = if is_active { 2 } else { 0 };
-                    // Title truncated to leave room for indent + marker + spinner + duration + pct.
-                    let extra = dur_w + pct_str.chars().count() + spinner_w;
+                    // Title truncated to leave room for indent + marker + duration + pct.
+                    let extra = dur_w + pct_str.chars().count();
                     let title_w = render_w.saturating_sub(indent + 1 + extra); // 1 marker
                     let title = trunc_str(&label, title_w);
 
@@ -302,8 +285,7 @@ impl App {
                         spans.push(Span::raw(" "));
                     }
                     spans.push(marker);
-                    // Prefix is "{n:>w}. " — render it dim, then insert spinner between
-                    // prefix and name when active so it reads " 3. ⠋ Title".
+                    // Prefix is "{n:>w}. " — render it dim.
                     let prefix_chars = format!("{:>num_w$}. ", queue_pos).chars().count();
                     let tc = title.chars().count();
                     if tc > prefix_chars {
@@ -316,25 +298,11 @@ impl App {
                             title[..split].to_string(),
                             Style::default().fg(dim_color),
                         ));
-                        if is_active {
-                            spans.push(Span::styled(
-                                spinner_char.to_string(),
-                                Style::default().fg(spinner_color),
-                            ));
-                            spans.push(Span::raw(" "));
-                        }
                         spans.push(Span::styled(
                             title[split..].to_string(),
                             Style::default().fg(title_color),
                         ));
                     } else {
-                        if is_active {
-                            spans.push(Span::styled(
-                                spinner_char.to_string(),
-                                Style::default().fg(spinner_color),
-                            ));
-                            spans.push(Span::raw(" "));
-                        }
                         spans.push(Span::styled(title, Style::default().fg(title_color)));
                     }
                     if !pct_str.is_empty() {
@@ -374,22 +342,28 @@ impl App {
 
         if need_sb {
             let max_off = total.saturating_sub(visible);
-            let mut sb = ScrollbarState::new(max_off + 1).position(offset);
-            let sb_area = Rect {
-                x: area.x + area.width.saturating_sub(1),
-                width: 1,
-                ..area
-            };
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("\u{2590}")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                sb_area,
-                &mut sb,
-            );
+            let sb_x = area.x + area.width.saturating_sub(1);
+            let thumb_h = 2u16.min(area.height);
+            let max_thumb_y = area.height.saturating_sub(thumb_h);
+            let thumb_y = if max_off == 0 {
+                0
+            } else {
+                ((offset * max_thumb_y as usize) + (max_off / 2)) / max_off
+            } as u16;
+            for dy in 0..thumb_h {
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        "\u{2590}",
+                        Style::default().fg(palette::SUBTLE),
+                    ))),
+                    Rect {
+                        x: sb_x,
+                        y: area.y + thumb_y + dy,
+                        width: 1,
+                        height: 1,
+                    },
+                );
+            }
         }
         header_ys
     }

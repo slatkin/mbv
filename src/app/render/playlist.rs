@@ -141,17 +141,6 @@ impl App {
         let title_col_width =
             (table_area.width as i32 - if show_ep_cols { 21 } else { 13 }).max(0) as usize;
 
-        const SPINNER_FRAMES: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-        // Drive frame index from playback position (10M ticks/sec; 1.5M ticks = 150ms per frame).
-        // position_ticks is frozen when paused, so the spinner naturally freezes at the right frame.
-        let spinner_char: &str = SPINNER_FRAMES
-            [(playback.position_ticks.max(0) / 1_500_000) as usize % SPINNER_FRAMES.len()];
-        let spinner_color = if playback.paused {
-            palette::YELLOW
-        } else {
-            palette::IRIS
-        };
-
         // Build display rows and window them to the visible height.
         //
         // A queue sourced from a saved playlist gets a single header naming the
@@ -272,8 +261,6 @@ impl App {
                     } else {
                         (item.playback_position_ticks, item.runtime_ticks)
                     };
-                    // Spinner prefix "⠋ " costs 2 chars when now-playing.
-                    let spin_w: usize = if now_playing { 2 } else { 0 };
                     let indent: usize = if *in_group { 1 } else { 0 };
                     let avail = title_col_width.saturating_sub(indent);
                     // Now-playing title text is emby blue (not bold); others inherit row_style.
@@ -291,32 +278,18 @@ impl App {
                             palette::MUTED
                         };
                         let pct_str = format!(" {pct}%");
-                        let max_title = avail.saturating_sub(pct_str.chars().count() + spin_w);
+                        let max_title = avail.saturating_sub(pct_str.chars().count());
                         let mut spans: Vec<Span> = Vec::new();
                         if indent > 0 {
-                            spans.push(Span::raw(" "));
-                        }
-                        if now_playing {
-                            spans.push(Span::styled(
-                                spinner_char.to_string(),
-                                Style::default().fg(spinner_color),
-                            ));
                             spans.push(Span::raw(" "));
                         }
                         spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
                         spans.push(Span::styled(pct_str, Style::default().fg(pct_style)));
                         Cell::from(Line::from(spans))
                     } else {
-                        let max_title = avail.saturating_sub(spin_w);
+                        let max_title = avail;
                         let mut spans: Vec<Span> = Vec::new();
                         if indent > 0 {
-                            spans.push(Span::raw(" "));
-                        }
-                        if now_playing {
-                            spans.push(Span::styled(
-                                spinner_char.to_string(),
-                                Style::default().fg(spinner_color),
-                            ));
                             spans.push(Span::raw(" "));
                         }
                         spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));

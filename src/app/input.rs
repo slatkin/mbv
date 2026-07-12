@@ -1523,6 +1523,19 @@ impl App {
                             if self.libs[lib_idx].album_track_focus.is_none() {
                                 self.libs[lib_idx].album_track_focus = Some(0);
                             } else {
+                                let has_focused_track = self
+                                    .selected_album_item(lib_idx)
+                                    .and_then(|album| {
+                                        self.album_tracks_cache.get(&album.id).and_then(|tracks| {
+                                            self.libs[lib_idx]
+                                                .album_track_focus
+                                                .and_then(|idx| tracks.get(idx))
+                                        })
+                                    })
+                                    .is_some();
+                                if !has_focused_track {
+                                    return false;
+                                }
                                 // Track already focused (#145 task 4): play
                                 // it. Reuses `select()` (now track-focus
                                 // aware via `current_lib_item()`) rather
@@ -2425,6 +2438,9 @@ impl App {
                             // Letter-grouped mode: row map gives item index (None = header row).
                             if let Some(Some(item_idx)) = row_map_item {
                                 if item_idx < lvl.items.len() {
+                                    if lvl.cursor != item_idx {
+                                        lib.album_track_focus = None;
+                                    }
                                     lvl.cursor = item_idx;
                                 }
                             }
@@ -2437,6 +2453,9 @@ impl App {
                             };
                             let clicked = offset + click_y;
                             if clicked < lvl.items.len() {
+                                if lvl.cursor != clicked {
+                                    lib.album_track_focus = None;
+                                }
                                 lvl.cursor = clicked;
                             }
                         }
@@ -3864,6 +3883,7 @@ mod power_music_track_focus_tests {
     use crate::app::tests::{make_app_stub, make_item};
     use crate::app::{BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::layout::Rect;
 
     /// Power-view music library sitting on the album-folder-listing nav
     /// level (`is_viewing_album_folders` holds): a grouped `["group",
@@ -3985,6 +4005,49 @@ mod power_music_track_focus_tests {
             album_cursor_before,
             "track-mode Up/Down must not move the album cursor"
         );
+    }
+
+    #[test]
+    fn mouse_clicking_another_album_clears_track_focus() {
+        let mut app = make_power_music_album_app();
+        push_tracks(&mut app, "album-1", 3);
+        app.libs[0].album_track_focus = Some(1);
+        app.layout.power.left_area = Rect::new(10, 5, 30, 4);
+        app.layout.power.left_row_map = vec![Some(1)];
+
+        let handled = app.click_set_cursor(11, 5);
+
+        assert!(handled);
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+        assert!(app.libs[0].album_track_focus.is_none());
+    }
+
+    #[test]
+    fn selecting_music_group_clears_track_focus() {
+        let mut app = make_power_music_album_app();
+        let mut group2 = make_item("Beta", "MusicArtist");
+        group2.id = "group-1".into();
+        group2.is_folder = true;
+        app.libs[0].nav_stack[0].items.push(group2);
+        app.libs[0].album_track_focus = Some(1);
+
+        app.select_music_group(0, 1);
+
+        assert!(app.libs[0].album_track_focus.is_none());
+    }
+
+    #[test]
+    fn switching_music_group_clears_track_focus() {
+        let mut app = make_power_music_album_app();
+        let mut group2 = make_item("Beta", "MusicArtist");
+        group2.id = "group-1".into();
+        group2.is_folder = true;
+        app.libs[0].nav_stack[0].items.push(group2);
+        app.libs[0].album_track_focus = Some(1);
+
+        app.switch_music_group(0, 1);
+
+        assert!(app.libs[0].album_track_focus.is_none());
     }
 
     #[test]
@@ -4191,10 +4254,13 @@ mod power_music_track_focus_tests {
         let mut app = make_power_music_album_app();
         // No `push_tracks` -- cache miss, async fetch still in flight.
         app.libs[0].album_track_focus = Some(0);
+        let nav_len_before = app.libs[0].nav_stack.len();
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
         assert!(!handled);
+        assert_eq!(app.libs[0].album_track_focus, Some(0));
+        assert_eq!(app.libs[0].nav_stack.len(), nav_len_before);
     }
 
     #[test]

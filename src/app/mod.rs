@@ -2624,10 +2624,10 @@ impl App {
 
             self.sync_volume_from_player();
 
-            // Animate the now-playing spinner at ~150 ms whenever a local player
-            // is active or a remote session is connected; fall back to 1 s when
-            // fully idle. Remote queue views need the fast cadence even if the
-            // active item match is temporarily unavailable.
+            // Keep active playback/progress responsive at ~150 ms whenever a
+            // local player is active or a remote session is connected; fall
+            // back to 1 s when fully idle. Remote queue views need the fast
+            // cadence even if the active item match is temporarily unavailable.
             let render_interval = {
                 let playback = self.effective_playback_state();
                 if playback.active || self.connected_session_state.is_some() {
