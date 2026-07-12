@@ -678,6 +678,17 @@ struct SuspendedLocalSession {
 pub struct App {
     client: Arc<Mutex<EmbyClient>>,
     player: PlayerProxy,
+    /// Handle to the live MPRIS D-Bus registration, if one was started for
+    /// this session (`App::new` / `App::new_remote` both start one; test
+    /// construction via `build()` does not). `None` in tests so they never
+    /// spin up a real D-Bus connection.
+    ///
+    /// `switch_to_direct_remote` and `restore_local_mode` call
+    /// `mpris::rebind` on this whenever they swap `player` between a local
+    /// `Player` and a `RemotePlayer` (#175): MPRIS must always publish
+    /// whichever one currently owns playback, not whatever was live when
+    /// the D-Bus service was first registered.
+    mpris: Option<crate::mpris::MprisHandle>,
     player_rx: mpsc::Receiver<PlayerEvent>,
     ws_rx: mpsc::Receiver<WsEvent>,
     tab_idx: usize,
@@ -1160,6 +1171,7 @@ impl App {
             _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
             client: init.client,
             player: init.player,
+            mpris: None,
             player_rx: init.player_rx,
             ws_rx: init.ws_rx,
             ws_send_tx: init.ws_send_tx,
@@ -1368,7 +1380,7 @@ impl App {
         );
         let player_status = raw_player.status.clone();
         let player_cmd_tx = raw_player.cmd_tx.clone();
-        crate::mpris::start(
+        let mpris_handle = crate::mpris::start(
             player_status,
             move |cmd| {
                 if let Some(tx) = player_cmd_tx.lock().unwrap().as_ref() {
@@ -1387,7 +1399,7 @@ impl App {
                 c.lock().unwrap().chapter_api_available = probe.chapter_api_available;
             });
         }
-        Self::build(AppInit {
+        let mut app = Self::build(AppInit {
             client: client_arc,
             player,
             player_rx,
@@ -1417,7 +1429,9 @@ impl App {
             search_tx,
             search_rx,
             stay_alive_ctrl: stay_alive::StayAliveCtrl::from_env(),
-        })
+        });
+        app.mpris = Some(mpris_handle);
+        app
     }
 
     /// `is_local_daemon` distinguishes the two daemon-connection modes:
@@ -1491,6 +1505,19 @@ impl App {
             .as_ref()
             .and_then(|bootstrap| bootstrap.adopt_queue.clone())
             .is_some_and(|(items, cursor, source)| !remote.adopt_queue(items, cursor, source));
+        // Start MPRIS against this `RemotePlayer` (#175, previously done in
+        // `main.rs::run_remote_app` before this constructor even ran).
+        // Moved here so App owns the resulting handle and can `rebind` it
+        // later if `switch_to_direct_remote` / `restore_local_mode` swap
+        // which target owns playback.
+        let mpris_remote = remote.clone();
+        let mpris_handle = crate::mpris::start(
+            mpris_remote.status.clone(),
+            move |cmd| {
+                mpris_remote.send_command(cmd);
+            },
+            Some(remote.disconnected_flag()),
+        );
         let player = PlayerProxy::remote(remote, always_play_next);
         let (player_tab, remote_player_tab) = if is_local_daemon {
             // Local daemon: one unified queue, exactly like plain local
@@ -1538,6 +1565,7 @@ impl App {
             search_rx,
             stay_alive_ctrl: None,
         });
+        app.mpris = Some(mpris_handle);
         if is_local_daemon {
             let bootstrap = local_daemon_bootstrap.unwrap();
             app.queue_source = bootstrap.queue_source;
@@ -1849,6 +1877,11 @@ impl App {
         let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
         let always_play_next = self.client.lock().unwrap().config.always_play_next;
+        // Cloned before `remote` is moved into `PlayerProxy::remote` below:
+        // MPRIS (if this session has a live registration) must follow this
+        // new ctrl-owning target too, or it stays wired to whatever owned
+        // playback before the takeover -- see #175.
+        let mpris_remote = remote.clone();
 
         if !self.player.is_remote() {
             self.player.stop();
@@ -1867,6 +1900,18 @@ impl App {
         } else {
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
+        }
+
+        if let Some(handle) = &self.mpris {
+            let disconnected = mpris_remote.disconnected_flag();
+            crate::mpris::rebind(
+                handle,
+                mpris_remote.status.clone(),
+                move |cmd| {
+                    mpris_remote.send_command(cmd);
+                },
+                Some(disconnected),
+            );
         }
 
         self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
@@ -1899,6 +1944,19 @@ impl App {
             self.player_rx = suspended.player_rx;
             self.ws_rx = suspended.ws_rx;
             self.ws_send_tx = suspended.ws_send_tx;
+            // Mirror `switch_to_direct_remote`'s rebind (#175): the suspended
+            // local `Player` is being restored as the ctrl-owning target
+            // again, so MPRIS (if registered) must follow it back rather
+            // than staying wired to the just-abandoned remote session.
+            if let Some(handle) = &self.mpris {
+                let sender = self.player.command_sender();
+                crate::mpris::rebind(
+                    handle,
+                    self.player.status.clone(),
+                    move |cmd| sender(cmd),
+                    self.player.disconnected_flag(),
+                );
+            }
         }
         self.remote_player_tab = None;
         self.connected_session_id = None;
@@ -3304,6 +3362,7 @@ pub(crate) mod tests {
             _test_state_dir_guard: crate::config::TestStateDirGuard::new_if_unset(),
             client: Arc::new(Mutex::new(client)),
             player,
+            mpris: None,
             player_rx,
             ws_rx,
             tab_idx: 0,
@@ -6945,6 +7004,65 @@ pub(crate) mod tests {
             remote_items[0].id
         );
         assert_eq!(app.player_tab.items.len(), 2);
+    }
+
+    #[test]
+    fn switch_to_direct_remote_rebinds_mpris_to_the_new_remote_status() {
+        // #175: before `switch_to_direct_remote` called `mpris::rebind`,
+        // MPRIS stayed wired to whatever `PlayerStatus` was live when the
+        // D-Bus service was first registered (almost always the initial
+        // local `Player`'s), so local desktop MPRIS never picked up a
+        // remote daemon's playback after a mid-session "Direct Remote"
+        // takeover -- exactly the bug this issue reports. This drives the
+        // real `App` method (not just `mpris::rebind` in isolation) to
+        // prove the wiring at the call site is actually in place.
+        let mut app = make_app_stub();
+        let local_status = app.player.status.clone();
+        app.mpris = Some(crate::mpris::test_handle(local_status.clone(), |_| {}, None));
+
+        let remote_items = make_items(1);
+        let (remote, remote_rx) =
+            mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
+        let remote_status = remote.status.clone();
+        let sess = make_session("remote-host", "mbv");
+
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+
+        let handle = app.mpris.as_ref().expect("mpris handle still present");
+        let bound_status = crate::mpris::test_status(handle);
+        assert!(
+            Arc::ptr_eq(&bound_status, &remote_status),
+            "switch_to_direct_remote must rebind MPRIS to the new remote's status"
+        );
+        assert!(!Arc::ptr_eq(&bound_status, &local_status));
+    }
+
+    #[test]
+    fn restore_local_mode_rebinds_mpris_back_to_the_suspended_local_status() {
+        // #175 follow-through: after a Direct Remote takeover ends (however
+        // it ends -- disconnect, user action, etc.), MPRIS must follow
+        // playback back to the restored local `Player`, not stay wired to
+        // the now-defunct remote session.
+        let mut app = make_app_stub();
+        let local_status = app.player.status.clone();
+        app.mpris = Some(crate::mpris::test_handle(local_status.clone(), |_| {}, None));
+
+        let remote_items = make_items(1);
+        let (remote, remote_rx) =
+            mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
+        let remote_status = remote.status.clone();
+        let sess = make_session("remote-host", "mbv");
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+
+        app.restore_local_mode("test: ending direct remote session");
+
+        let handle = app.mpris.as_ref().expect("mpris handle still present");
+        let bound_status = crate::mpris::test_status(handle);
+        assert!(
+            Arc::ptr_eq(&bound_status, &local_status),
+            "restore_local_mode must rebind MPRIS back to the restored local status"
+        );
+        assert!(!Arc::ptr_eq(&bound_status, &remote_status));
     }
 
     #[test]
