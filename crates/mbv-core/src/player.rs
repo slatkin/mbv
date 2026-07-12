@@ -3027,6 +3027,29 @@ impl PlayerProxy {
         matches!(self.inner, PlayerProxyInner::Remote(_))
     }
 
+    /// Returns a clone of the raw local `Player`'s command channel, or
+    /// `None` when this proxy currently wraps a `RemotePlayer`.
+    ///
+    /// Intended for callers (e.g. the stay-alive tray, `src/tray.rs`) that
+    /// must drive playback through the in-process `Player` mpsc *only* --
+    /// never through `send_command`/`next`/`previous`/`set_paused` above,
+    /// which forward to `RemotePlayer::send_command` (a ctrl-socket call)
+    /// when this proxy is `Remote`. Capture this once, while the proxy is
+    /// known to be `Local`, and keep the returned `Arc` rather than
+    /// re-deriving it later: `App::switch_to_direct_remote` /
+    /// `restore_local_mode` can swap `PlayerProxy`'s inner variant at
+    /// runtime, but they never replace the underlying local `Player`
+    /// object itself (it is suspended/resumed, not dropped), so the `Arc`
+    /// returned here stays valid and keeps targeting the same in-process
+    /// player for the caller's whole lifetime -- immune to later
+    /// local/remote swaps on `self`.
+    pub fn local_cmd_tx(&self) -> Option<Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>> {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => Some(p.cmd_tx.clone()),
+            PlayerProxyInner::Remote(_) => None,
+        }
+    }
+
     pub fn is_remote_disconnected(&self) -> bool {
         match &self.inner {
             PlayerProxyInner::Local(_) => false,
