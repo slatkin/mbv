@@ -43,6 +43,7 @@ pub const CTRL_DETACH: &str = "DETACH";
 /// for graphics transparency).
 pub const TAG_DATA: u8 = 1;
 pub const TAG_WINSZ: u8 = 2;
+pub const TAG_DATA_READY: u8 = 3;
 
 /// Full restore sequence written directly (no crossterm) so it is safe to
 /// call from a signal handler: only raw writes, no allocation.
@@ -456,6 +457,9 @@ pub fn run_relay_main(socket_path: String, inferior: Vec<String>) -> ! {
                     if let Some(old) = current_winsz.lock().unwrap().take() {
                         let _ = old.shutdown(std::net::Shutdown::Both);
                         log("evicted incumbent winsz connection");
+                    }
+                    if stream.write_all(&[TAG_DATA_READY]).is_err() {
+                        return;
                     }
                     *current_data.lock().unwrap() = Some(stream.try_clone().unwrap());
                     log(&format!("client ATTACHED (gen {my_gen})"));

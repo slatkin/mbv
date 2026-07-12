@@ -11,7 +11,7 @@
 //! panic — ADR 0006 "never trust socket-file existence"). Callers should
 //! treat exit 3 as "stale socket, start a fresh session".
 
-use crate::relay::{encode_winsize, RESTORE_SEQ, TAG_DATA, TAG_WINSZ};
+use crate::relay::{encode_winsize, RESTORE_SEQ, TAG_DATA, TAG_DATA_READY, TAG_WINSZ};
 use crossterm::cursor::{Hide, Show};
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::execute;
@@ -128,6 +128,19 @@ fn send_winsize(winsz: &mut UnixStream, fd: i32) {
     }
 }
 
+fn wait_for_data_ready(data: &mut UnixStream) -> std::io::Result<()> {
+    let mut ready = [0u8; 1];
+    data.read_exact(&mut ready)?;
+    if ready[0] == TAG_DATA_READY {
+        Ok(())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "relay sent invalid data-ready ack",
+        ))
+    }
+}
+
 /// Attach to the relay at `socket_path` as a terminal-client, taking over
 /// the real terminal for the duration of the session. Returns an exit code
 /// (see `EXIT_*` constants above) — never panics on a stale/absent socket.
@@ -165,6 +178,10 @@ pub fn run_terminal_client(socket_path: &str) -> i32 {
     hs.extend_from_slice(&encode_winsize(&ws0));
     if let Err(e) = data.write_all(&hs) {
         eprintln!("mbv: relay closed during handshake: {e}");
+        return EXIT_STALE_SOCKET;
+    }
+    if let Err(e) = wait_for_data_ready(&mut data) {
+        eprintln!("mbv: relay did not complete data handshake: {e}");
         return EXIT_STALE_SOCKET;
     }
 
@@ -270,4 +287,26 @@ pub fn run_terminal_client(socket_path: &str) -> i32 {
     .ok();
     let _ = crossterm::terminal::disable_raw_mode();
     EXIT_CLEAN_DETACH
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wait_for_data_ready_accepts_ready_ack() {
+        let (mut relay, mut client) = UnixStream::pair().unwrap();
+        relay.write_all(&[TAG_DATA_READY]).unwrap();
+
+        wait_for_data_ready(&mut client).unwrap();
+    }
+
+    #[test]
+    fn wait_for_data_ready_rejects_wrong_ack() {
+        let (mut relay, mut client) = UnixStream::pair().unwrap();
+        relay.write_all(&[TAG_WINSZ]).unwrap();
+
+        let err = wait_for_data_ready(&mut client).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidData);
+    }
 }
