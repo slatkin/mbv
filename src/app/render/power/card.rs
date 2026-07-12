@@ -126,6 +126,28 @@ impl App {
             // (handled below)
         } else if lib_focused
             && self.power_left_tab > 0
+            && self.is_viewing_album_folders(self.power_left_tab - 1)
+        {
+            // Inline album view: while the selected album's tracks are shown
+            // under the album row, keep the card slot on that album's artwork.
+            let lib_idx = self.power_left_tab - 1;
+            let Some(album) = self.selected_album_item(lib_idx) else {
+                return (0, false);
+            };
+            let cache_key = format!(
+                "{}:{}",
+                album.id,
+                crate::config::IMAGE_CACHE_SUFFIX_POWER_ALBUM
+            );
+            self.fetch_list_card_image_when_idle(
+                cache_key.clone(),
+                album.id,
+                String::new(),
+                &["AudioChild", "Primary"],
+            );
+            return self.render_card_image(f, area, &cache_key, area.height.min(18));
+        } else if lib_focused
+            && self.power_left_tab > 0
             && self.is_album_level(self.power_left_tab - 1)
         {
             // When browsing a music album's tracks, show the album art in the card slot.
@@ -363,7 +385,7 @@ impl App {
 mod tests {
     use super::{power_card_source, PowerCardSource};
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{App, BrowseLevel, LibraryTab, PowerFocus};
+    use crate::app::{App, BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
@@ -404,6 +426,69 @@ mod tests {
             power_detail_item: None,
             power_detail_scroll: 0,
 
+            album_track_focus: None,
+        });
+
+        app
+    }
+
+    fn make_inline_album_app() -> App {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+        app.music_levels = vec!["group".into(), "album".into()];
+
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "lib-music".into();
+        library.is_folder = true;
+        library.collection_type = "music".into();
+
+        let mut group = make_item("Alpha", "MusicArtist");
+        group.id = "group-0".into();
+        group.is_folder = true;
+
+        let mut album = make_item("First Album", "MusicAlbum");
+        album.id = "album-1".into();
+        album.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![
+                BrowseLevel {
+                    parent_id: "lib-music".into(),
+                    title: "Music".into(),
+                    items: vec![group],
+                    total_count: 1,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+                BrowseLevel {
+                    parent_id: "group-0".into(),
+                    title: "Alpha".into(),
+                    items: vec![album],
+                    total_count: 1,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+            ],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
             album_track_focus: None,
         });
 
@@ -495,6 +580,23 @@ mod tests {
         // cache key must not have been marked as "no image" — that only
         // happens once the fetch resolves to nothing.
         assert!(!matches!(app.card_image_states.get(&cache_key), Some(None)));
+    }
+
+    #[test]
+    fn inline_selected_album_fetches_album_art() {
+        let mut app = make_inline_album_app();
+        app.image_protocol_enabled = true;
+        assert!(app.is_viewing_album_folders(0));
+        assert!(!app.is_album_level(0));
+
+        render_power_card(&mut app);
+
+        let cache_key = "album-1:pwr_al".to_string();
+        assert!(
+            app.card_image_loading.contains(&cache_key)
+                || app.card_image_states.contains_key(&cache_key),
+            "expected the selected inline album's artwork fetch to be requested"
+        );
     }
 
     #[test]
