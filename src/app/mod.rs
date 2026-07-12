@@ -2449,6 +2449,7 @@ impl App {
             // newer resize request for the same (still-present) key is a
             // no-op too.
             while let Ok((key, response)) = self.resize_response_rx.try_recv() {
+                had_events = true;
                 if let Some(Some(state)) = self.card_image_states.get_mut(&key) {
                     state.update_resized_protocol(response);
                 }

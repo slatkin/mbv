@@ -139,7 +139,7 @@ impl App {
                 album.id,
                 crate::config::IMAGE_CACHE_SUFFIX_POWER_ALBUM
             );
-            self.fetch_list_card_image_when_idle(
+            self.fetch_card_image(
                 cache_key.clone(),
                 album.id,
                 String::new(),
@@ -171,7 +171,7 @@ impl App {
                 album_id,
                 crate::config::IMAGE_CACHE_SUFFIX_POWER_ALBUM
             );
-            self.fetch_list_card_image_when_idle(
+            self.fetch_card_image(
                 cache_key.clone(),
                 fetch_id,
                 String::new(),
@@ -227,7 +227,7 @@ impl App {
                     None => return (0, false),
                 }
             };
-            self.fetch_list_card_image_when_idle(
+            self.fetch_card_image(
                 cache_key.clone(),
                 item_id,
                 series_id,
@@ -255,7 +255,7 @@ impl App {
             };
             let (item_id, series_id) = (item.id.clone(), item.series_id.clone());
             let cache_key = format!("{}:pwr_hv", item_id);
-            self.fetch_list_card_image_when_idle(
+            self.fetch_card_image(
                 cache_key.clone(),
                 item_id,
                 series_id,
@@ -269,7 +269,7 @@ impl App {
                 let img_types: &[&str] = &["Backdrop", "Primary", "Logo"];
                 let cache_key = format!("{}:P", item.id);
                 if self.images_enabled() {
-                    self.fetch_list_card_image_when_idle(
+                    self.fetch_card_image(
                         cache_key.clone(),
                         item.id.clone(),
                         item.series_id.clone(),
@@ -295,12 +295,7 @@ impl App {
             let img_types: &[&str] = &["Backdrop", "Primary", "Logo"];
             let cache_key = format!("{}:P", detail_id);
             if self.images_enabled() {
-                self.fetch_list_card_image_when_idle(
-                    cache_key.clone(),
-                    detail_id,
-                    series_id,
-                    img_types,
-                );
+                self.fetch_card_image(cache_key.clone(), detail_id, series_id, img_types);
             }
             return self.render_card_image(f, area, &cache_key, area.height.min(18));
         }
@@ -343,7 +338,7 @@ impl App {
         };
         let is_music_item = matches!(img_types, &["Primary"] | &["AudioChild"]);
         if self.images_enabled() || is_music_item {
-            self.fetch_list_card_image_when_idle(cache_key.clone(), item_id, series_id, img_types);
+            self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         }
 
         // Prefetch images for nearby items so they are ready before the cursor reaches them.
@@ -600,7 +595,7 @@ mod tests {
     }
 
     #[test]
-    fn compact_banner_recent_navigation_does_not_fetch_skipped_movie_image() {
+    fn compact_banner_recent_navigation_still_fetches_focused_movie_image() {
         let mut app = make_compact_banner_movie_app();
         app.image_protocol_enabled = true;
         app.last_nav_at = Instant::now();
@@ -609,9 +604,9 @@ mod tests {
 
         let cache_key = "movie-focused:P".to_string();
         assert!(
-            !app.card_image_loading.contains(&cache_key)
-                && !app.card_image_states.contains_key(&cache_key),
-            "rapid navigation should not reserve a loading slot for a skipped movie"
+            app.card_image_loading.contains(&cache_key)
+                || app.card_image_states.contains_key(&cache_key),
+            "the focused movie image should start loading immediately even during rapid navigation"
         );
     }
 

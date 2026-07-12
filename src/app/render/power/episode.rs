@@ -89,7 +89,7 @@ impl App {
             let img_start_row = area.y + 1; // row after title
             let primary_cache_key = format!("{}:ser_primary", item.series_id);
             if !item.series_id.is_empty() && self.images_enabled() {
-                self.fetch_list_card_image_when_idle(
+                self.fetch_card_image(
                     primary_cache_key.clone(),
                     item.series_id.clone(),
                     String::new(),

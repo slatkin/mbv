@@ -72,7 +72,7 @@ impl App {
 
         let primary_cache_key = format!("{}:cmp_primary", item.id);
         if self.images_enabled() {
-            self.fetch_list_card_image_when_idle(
+            self.fetch_card_image(
                 primary_cache_key.clone(),
                 item.id.clone(),
                 item.series_id.clone(),
@@ -330,7 +330,7 @@ impl App {
         // Fetch the Primary image using a key distinct from the backdrop key.
         let primary_cache_key = format!("{}:det_primary", item.id);
         if self.images_enabled() {
-            self.fetch_list_card_image_when_idle(
+            self.fetch_card_image(
                 primary_cache_key.clone(),
                 item.id.clone(),
                 item.series_id.clone(),
