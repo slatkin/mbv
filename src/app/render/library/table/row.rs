@@ -48,7 +48,7 @@ impl App {
             height: row_h.saturating_sub(1),
             ..row_rect
         };
-        let cache_key = format!("{}:lib", item.id);
+        let cache_key = format!("{}:{}", item.id, crate::config::IMAGE_CACHE_SUFFIX_LIBRARY);
         let img_actual = self.library_row_image_actual(item, show_img, content_area, ctx);
         let (ind_rect, text_rect, img_rect_opt) =
             self.library_row_rects(content_area, img_actual, is_audio, is_album_folder);
@@ -241,7 +241,7 @@ impl App {
         if !show_img {
             return None;
         }
-        let cache_key = format!("{}:lib", item.id);
+        let cache_key = format!("{}:{}", item.id, crate::config::IMAGE_CACHE_SUFFIX_LIBRARY);
         let state = self.card_image_states.get_mut(&cache_key)?.as_mut()?;
         let (img_w, img_h) = if library_is_audio(item) || (ctx.at_album_folders && item.is_folder) {
             (LIB_AUDIO_IMG_W, ctx.audio_img_h)

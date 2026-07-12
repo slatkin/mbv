@@ -56,7 +56,7 @@ impl App {
             height: area.height,
         };
 
-        let cache_key = format!("{}:lib", album_id);
+        let cache_key = format!("{}:{}", album_id, crate::config::IMAGE_CACHE_SUFFIX_LIBRARY);
         self.fetch_list_card_image_when_idle(
             cache_key.clone(),
             album_id,

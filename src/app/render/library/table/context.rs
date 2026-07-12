@@ -120,7 +120,7 @@ impl App {
         } else {
             (LIB_SELECTED_IMG_W, selected_img_h)
         };
-        let cache_key = format!("{}:lib", item.id);
+        let cache_key = format!("{}:{}", item.id, crate::config::IMAGE_CACHE_SUFFIX_LIBRARY);
         if let Some(Some(state)) = self.card_image_states.get_mut(&cache_key) {
             // `size_for` is `None` while resize+encode is in-flight on the
             // worker thread; fall back to the reserved height like an
@@ -250,7 +250,8 @@ impl App {
                 let is_audio = library_is_audio(item);
                 let is_album_folder = ctx.at_album_folders && item.is_folder;
                 if ctx.images_enabled || is_audio || is_album_folder {
-                    let cache_key = format!("{}:lib", item.id);
+                    let cache_key =
+                        format!("{}:{}", item.id, crate::config::IMAGE_CACHE_SUFFIX_LIBRARY);
                     let img_types: &[&str] = if is_album_folder {
                         &["AudioChild", "Primary"]
                     } else {

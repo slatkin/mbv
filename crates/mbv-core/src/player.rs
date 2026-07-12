@@ -69,8 +69,21 @@ pub struct PlayerStatus {
     pub artist: String,
     #[serde(default)]
     pub album: String,
+    /// Id of the current track's Emby item, used by the root `mbv` crate to
+    /// resolve `mpris:artUrl` against the on-disk image cache. Deliberately
+    /// NOT a ready-made URL: `mbv-core` has no access to the disk cache
+    /// (that lives in the root crate's `config` module) and, per #158's
+    /// recorded triage decision, must never build a token-bearing Emby URL
+    /// as a fallback. See `src/mpris.rs::resolve_art_url`.
     #[serde(default)]
-    pub art_url: String,
+    pub art_item_id: String,
+    /// Album id for the current track, when it's a grouped audio track
+    /// (mirrors the `Audio` + non-empty `album_id` grouping the Power View
+    /// queue card already uses in `src/app/render/power/card.rs`, so the
+    /// same disk-cache entry a browsed album card populated can be reused
+    /// here). Empty when not applicable.
+    #[serde(default)]
+    pub art_album_id: String,
     pub audio_tracks: Vec<(i64, String)>,     // (mpv id, label)
     pub sub_tracks: Vec<(i64, String, bool)>, // (mpv id, label, forced)
     #[serde(default)]
@@ -88,17 +101,18 @@ pub struct PlayerStatus {
 }
 
 impl PlayerStatus {
-    pub fn set_current_item_metadata(&mut self, item: &MediaItem, server_url: &str, token: &str) {
+    pub fn set_current_item_metadata(&mut self, item: &MediaItem) {
         self.title = item.display_name();
         self.artist = item.artist.clone();
         self.album = item.album.clone();
-        self.art_url = if item.id.is_empty() {
-            String::new()
+        self.art_item_id = item.id.clone();
+        // Same audio-album grouping condition as the Power View queue card
+        // (src/app/render/power/card.rs) uses for its cache key, so a
+        // previously browsed/cached album cover is found under the same key.
+        self.art_album_id = if item.item_type == "Audio" && !item.album_id.is_empty() {
+            item.album_id.clone()
         } else {
-            format!(
-                "{}/Items/{}/Images/Primary?maxHeight=400&quality=80&api_key={}",
-                server_url, item.id, token
-            )
+            String::new()
         };
     }
 
@@ -106,7 +120,8 @@ impl PlayerStatus {
         self.title.clear();
         self.artist.clear();
         self.album.clear();
-        self.art_url.clear();
+        self.art_item_id.clear();
+        self.art_album_id.clear();
     }
 
     pub fn subtitle_stream_index_to_mpv_id(&self, stream_index: i64) -> Option<i64> {
@@ -165,7 +180,8 @@ impl Default for PlayerStatus {
             title: String::new(),
             artist: String::new(),
             album: String::new(),
-            art_url: String::new(),
+            art_item_id: String::new(),
+            art_album_id: String::new(),
             audio_tracks: Vec::new(),
             sub_tracks: Vec::new(),
             sub_track_stream_indexes: Vec::new(),
@@ -1597,7 +1613,7 @@ impl PlaybackSession {
             s.runtime_ticks = active_item.runtime_ticks;
             s.current_idx = self.current_idx;
             s.queue_len = self.queue_len();
-            s.set_current_item_metadata(&active_item, &self.server_url, &self.token);
+            s.set_current_item_metadata(&active_item);
         }
 
         // Stop progress reporter during transition to prevent stale reports,
@@ -1650,7 +1666,7 @@ impl PlaybackSession {
             st.position_ticks = item.playback_position_ticks;
             st.current_idx = 0;
             st.queue_len = 1;
-            st.set_current_item_metadata(&item, &self.server_url, &self.token);
+            st.set_current_item_metadata(&item);
         }
 
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
@@ -2069,7 +2085,7 @@ impl PlaybackSession {
             s.runtime_ticks = next_item.runtime_ticks;
             s.current_idx = self.current_idx;
             s.queue_len = self.queue_len();
-            s.set_current_item_metadata(&next_item, &self.server_url, &self.token);
+            s.set_current_item_metadata(&next_item);
         }
 
         let stop_report_accepted = self.reporter.report_stopped(completed_pos);
@@ -2552,7 +2568,7 @@ impl Player {
         st.current_idx = cursor;
         st.queue_len = items.len();
         st.active = false;
-        st.set_current_item_metadata(&items[cursor], &self.server_url, &self.token);
+        st.set_current_item_metadata(&items[cursor]);
     }
 
     // Pipe mode always forces headless (no video window), regardless of item
@@ -2588,7 +2604,7 @@ impl Player {
                 st.paused = false;
                 st.current_idx = 0;
                 st.queue_len = 1;
-                st.set_current_item_metadata(item, &self.server_url, &self.token);
+                st.set_current_item_metadata(item);
             }
             self.send_command(PlayerCommand::LoadNew {
                 url,
@@ -2647,7 +2663,7 @@ impl Player {
             st.current_idx = 0;
             st.queue_len = 1;
             st.active = true;
-            st.set_current_item_metadata(&item, &server_url, &token);
+            st.set_current_item_metadata(&item);
         }
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
@@ -2745,7 +2761,7 @@ impl Player {
                 st.paused = false;
                 st.current_idx = start_idx;
                 st.queue_len = items.len();
-                st.set_current_item_metadata(&items[start_idx], &self.server_url, &self.token);
+                st.set_current_item_metadata(&items[start_idx]);
             }
             self.send_command(PlayerCommand::ReplaceQueue { items, start_idx });
             return;
@@ -2783,7 +2799,7 @@ impl Player {
             st.current_idx = start_idx;
             st.queue_len = items.len();
             st.active = true;
-            st.set_current_item_metadata(&items[start_idx], &server_url, &token);
+            st.set_current_item_metadata(&items[start_idx]);
         }
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
@@ -3646,21 +3662,55 @@ input-ipc-server=/tmp/user.sock
     }
 
     #[test]
-    fn current_item_metadata_includes_emby_primary_art_url() {
+    fn current_item_metadata_stores_art_item_id_never_a_token_url() {
+        // Regression coverage for #158: `set_current_item_metadata` no longer
+        // takes a server URL or token at all (it can't reconstruct an Emby
+        // image URL that would embed `token` as a query-string api_key and
+        // leak it onto the session D-Bus via mpris:artUrl). mbv-core has no
+        // access to the on-disk image cache, so it only records the raw item
+        // id; `src/mpris.rs::resolve_art_url` turns that into a file:// URI
+        // (or omits mpris:artUrl) using the cache.
         let mut item = make_media_item("track-1");
         item.artist = "Artist".to_string();
         item.album = "Album".to_string();
 
         let mut status = PlayerStatus::default();
-        status.set_current_item_metadata(&item, "https://emby.example", "token-1");
+        status.set_current_item_metadata(&item);
 
         assert_eq!(status.title, item.display_name());
         assert_eq!(status.artist, "Artist");
         assert_eq!(status.album, "Album");
-        assert_eq!(
-            status.art_url,
-            "https://emby.example/Items/track-1/Images/Primary?maxHeight=400&quality=80&api_key=token-1"
-        );
+        assert_eq!(status.art_item_id, "track-1");
+        // Episode (the default make_media_item item_type) isn't grouped by
+        // album, so no album-cache key is recorded.
+        assert_eq!(status.art_album_id, "");
+    }
+
+    #[test]
+    fn current_item_metadata_uses_album_id_for_grouped_audio_tracks() {
+        let mut item = make_media_item("track-1");
+        item.item_type = "Audio".to_string();
+        item.album_id = "album-9".to_string();
+
+        let mut status = PlayerStatus::default();
+        status.set_current_item_metadata(&item);
+
+        assert_eq!(status.art_item_id, "track-1");
+        assert_eq!(status.art_album_id, "album-9");
+    }
+
+    #[test]
+    fn clear_current_item_metadata_clears_art_fields() {
+        let mut item = make_media_item("track-1");
+        item.item_type = "Audio".to_string();
+        item.album_id = "album-9".to_string();
+
+        let mut status = PlayerStatus::default();
+        status.set_current_item_metadata(&item);
+        status.clear_current_item_metadata();
+
+        assert_eq!(status.art_item_id, "");
+        assert_eq!(status.art_album_id, "");
     }
 
     #[test]

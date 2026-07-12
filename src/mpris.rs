@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -49,7 +50,75 @@ struct MediaPlayer2Player {
     cmd_tx: Arc<dyn Fn(PlayerCommand) + Send + Sync>,
 }
 
+/// Candidate on-disk image-cache keys for a track's cover art, in the order
+/// the existing UI card-image cache (`src/app/images.rs` and
+/// `src/app/render/{power,library}/*`) is most likely to have already
+/// populated them under -- checked cheaply via `std::path::Path::is_file`,
+/// no network I/O. Covers every write site that keys on an album/item id:
+/// Power View's card (`:P`) and album-level card (`:pwr_al`), and the
+/// Library view's row/grid/album cache (`:lib`). `album_id` mirrors the
+/// audio-album grouping the Power View queue card already uses: tracks on
+/// the same album share one cache entry keyed by album id rather than
+/// track id.
+fn art_cache_key_candidates(item_id: &str, album_id: &str) -> Vec<String> {
+    use crate::config::{
+        IMAGE_CACHE_SUFFIX_LIBRARY, IMAGE_CACHE_SUFFIX_POWER_ALBUM,
+        IMAGE_CACHE_SUFFIX_POWER_PRIMARY,
+    };
+    let mut keys = Vec::new();
+    if !album_id.is_empty() {
+        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_POWER_PRIMARY}"));
+        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_LIBRARY}"));
+        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_POWER_ALBUM}"));
+    }
+    if !item_id.is_empty() {
+        keys.push(format!("{item_id}:{IMAGE_CACHE_SUFFIX_POWER_PRIMARY}"));
+        keys.push(format!("{item_id}:{IMAGE_CACHE_SUFFIX_LIBRARY}"));
+    }
+    keys
+}
+
+/// Resolve `mpris:artUrl` to a local `file://` URI for the current track's
+/// cover art, or `None` when it isn't cached yet.
+///
+/// Per the #158 triage decision this must NEVER fall back to an Emby image
+/// URL: that would embed the API token in a query string and leak it onto
+/// the session D-Bus. An uncached track simply omits `mpris:artUrl`.
+///
+/// `resolve_path` is injected so this stays pure and unit-testable without
+/// touching a real cache directory -- production code passes
+/// `crate::config::image_disk_cache_path`.
+fn resolve_art_url(
+    item_id: &str,
+    album_id: &str,
+    resolve_path: impl Fn(&str) -> Option<std::path::PathBuf>,
+) -> Option<String> {
+    art_cache_key_candidates(item_id, album_id)
+        .into_iter()
+        .find_map(|key| resolve_path(&key))
+        .map(|path| format!("file://{}", path.display()))
+}
+
+/// Forces `s` to look inactive (Stopped/NoTrack, no metadata) when
+/// `disconnected` is true -- see `start`'s doc comment. Pure and cheap so
+/// it's cloned/called every poll tick without hesitation; kept separate
+/// from `start` so the "what should published state look like" decision is
+/// unit-testable without a real D-Bus connection.
+fn effective_status(mut s: PlayerStatus, disconnected: bool) -> PlayerStatus {
+    if disconnected {
+        s.active = false;
+    }
+    s
+}
+
 fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> {
+    make_metadata_with_art_resolver(s, crate::config::image_disk_cache_path)
+}
+
+fn make_metadata_with_art_resolver(
+    s: &PlayerStatus,
+    resolve_path: impl Fn(&str) -> Option<std::path::PathBuf>,
+) -> HashMap<String, zvariant::Value<'static>> {
     let mut m = HashMap::new();
     let track_id = zvariant::ObjectPath::try_from(if s.active && !s.title.is_empty() {
         "/org/mpris/MediaPlayer2/TrackList/Track1"
@@ -67,11 +136,8 @@ fn make_metadata(s: &PlayerStatus) -> HashMap<String, zvariant::Value<'static>> 
             let length_us = s.runtime_ticks * 1_000_000 / TICKS_PER_SECOND;
             m.insert("mpris:length".to_string(), zvariant::Value::new(length_us));
         }
-        if !s.art_url.is_empty() {
-            m.insert(
-                "mpris:artUrl".to_string(),
-                zvariant::Value::new(s.art_url.clone()),
-            );
+        if let Some(art_url) = resolve_art_url(&s.art_item_id, &s.art_album_id, resolve_path) {
+            m.insert("mpris:artUrl".to_string(), zvariant::Value::new(art_url));
         }
         if !s.artist.is_empty() {
             m.insert(
@@ -232,9 +298,22 @@ impl MediaPlayer2Player {
     }
 }
 
+/// Starts the MPRIS D-Bus service against `status`, forwarding player
+/// commands via `send`.
+///
+/// `disconnected` (#160) is the daemon-connection drop signal for the
+/// remote-client case (`RemotePlayer::disconnected_flag()`); pass `None`
+/// for the local, non-daemon player, which has no such connection to lose.
+/// When set and tripped, published state is forced to `Stopped`/`NoTrack`
+/// regardless of what's still cached in `status` -- see `effective_status`.
+/// This is a defense-in-depth net: `RemotePlayer::connect_endpoint` also
+/// clears `status` directly at the point it detects an "expected" (silent)
+/// disconnect, but polling can race that update, so this flag is checked
+/// independently on every tick.
 pub fn start(
     status: Arc<Mutex<PlayerStatus>>,
     send: impl Fn(PlayerCommand) + Send + Sync + 'static,
+    disconnected: Option<Arc<std::sync::atomic::AtomicBool>>,
 ) {
     let send = Arc::new(send);
     let status_poll = status.clone();
@@ -286,10 +365,20 @@ pub fn start(
                 tokio::time::sleep(Duration::from_millis(500)).await;
 
                 // Snapshot PlayerStatus once per poll cycle so all property
-                // reads see consistent state.
+                // reads see consistent state. Force Stopped/NoTrack once the
+                // daemon connection has dropped (#160) -- `status` itself
+                // isn't guaranteed to reflect that promptly (an "expected"
+                // disconnect, e.g. an Emby Remote takeover, never sends a
+                // Stopped PlayerEvent; see RemotePlayer::connect_endpoint).
+                let is_disconnected = disconnected
+                    .as_ref()
+                    .is_some_and(|d| d.load(Ordering::SeqCst));
                 let (cur_status, cur_metadata_key, cur_pos_us, cur_vol) = {
-                    let s = status_poll.lock().unwrap();
-                    *snapshot_poll.lock().unwrap() = s.clone();
+                    // Single clone out of the mutex for the whole tick: `s`
+                    // is consumed to build the tuple below and then moved
+                    // (not cloned again) into `snapshot_poll` last.
+                    let raw = status_poll.lock().unwrap().clone();
+                    let s = effective_status(raw, is_disconnected);
                     let st = if !s.active {
                         "Stopped".to_string()
                     } else if s.paused {
@@ -298,17 +387,28 @@ pub fn start(
                         "Playing".to_string()
                     };
                     let pos_us = s.position_ticks * 1_000_000 / TICKS_PER_SECOND;
-                    (
+                    // Resolve the actual cached-art result (not just the raw
+                    // item/album id) into the change-detection key: if art
+                    // shows up in the cache after this track already started
+                    // publishing metadata (e.g. a Power View browse populates
+                    // the cache mid-track), the resolved value flips from ""
+                    // to a real path and `metadata_changed` fires, instead of
+                    // silently staying stuck on the id-only key that never
+                    // changes for the rest of the track.
+                    let art_key = resolve_art_url(
+                        &s.art_item_id,
+                        &s.art_album_id,
+                        crate::config::image_disk_cache_path,
+                    )
+                    .unwrap_or_default();
+                    let result = (
                         st,
-                        (
-                            s.title.clone(),
-                            s.artist.clone(),
-                            s.album.clone(),
-                            s.art_url.clone(),
-                        ),
+                        (s.title.clone(), s.artist.clone(), s.album.clone(), art_key),
                         pos_us,
                         s.volume,
-                    )
+                    );
+                    *snapshot_poll.lock().unwrap() = s;
+                    result
                 };
 
                 let Ok(iface_ref) = conn
@@ -361,35 +461,128 @@ mod tests {
     }
 
     #[test]
-    fn active_metadata_includes_cover_artist_and_album() {
-        let metadata = make_metadata(&PlayerStatus {
-            active: true,
-            title: "Song".to_string(),
-            artist: "Artist".to_string(),
-            album: "Album".to_string(),
-            art_url: "https://emby.example/Items/track/Images/Primary".to_string(),
-            ..PlayerStatus::default()
-        });
+    fn active_metadata_includes_cover_art_as_file_uri_when_cached() {
+        // #158 regression coverage: mpris:artUrl must be a local file://
+        // URI, never an Emby URL (which would carry the API token onto the
+        // session bus).
+        let metadata = make_metadata_with_art_resolver(
+            &PlayerStatus {
+                active: true,
+                title: "Song".to_string(),
+                artist: "Artist".to_string(),
+                album: "Album".to_string(),
+                art_item_id: "track-1".to_string(),
+                ..PlayerStatus::default()
+            },
+            |key| {
+                assert_eq!(key, "track-1:P", "expected the track-id cache key first");
+                Some(std::path::PathBuf::from("/cache/images/track-1_P"))
+            },
+        );
 
         assert_eq!(
             string_value(&metadata, "mpris:artUrl"),
-            "https://emby.example/Items/track/Images/Primary"
+            "file:///cache/images/track-1_P"
         );
         assert!(metadata.contains_key("xesam:artist"));
         assert_eq!(string_value(&metadata, "xesam:album"), "Album");
     }
 
     #[test]
-    fn inactive_metadata_omits_track_details() {
-        let metadata = make_metadata(&PlayerStatus {
-            artist: "Artist".to_string(),
-            album: "Album".to_string(),
-            art_url: "https://emby.example/art.jpg".to_string(),
-            ..PlayerStatus::default()
-        });
+    fn active_metadata_prefers_album_cache_key_for_grouped_audio_tracks() {
+        let metadata = make_metadata_with_art_resolver(
+            &PlayerStatus {
+                active: true,
+                title: "Song".to_string(),
+                art_item_id: "track-1".to_string(),
+                art_album_id: "album-9".to_string(),
+                ..PlayerStatus::default()
+            },
+            |key| (key == "album-9:P").then(|| std::path::PathBuf::from("/cache/images/album-9_P")),
+        );
+
+        assert_eq!(
+            string_value(&metadata, "mpris:artUrl"),
+            "file:///cache/images/album-9_P"
+        );
+    }
+
+    #[test]
+    fn active_metadata_omits_art_url_when_not_cached() {
+        // Per the #158 triage decision: when cached art isn't available,
+        // omit mpris:artUrl entirely rather than falling back to a
+        // token-bearing Emby URL.
+        let metadata = make_metadata_with_art_resolver(
+            &PlayerStatus {
+                active: true,
+                title: "Song".to_string(),
+                art_item_id: "track-1".to_string(),
+                ..PlayerStatus::default()
+            },
+            |_key| None,
+        );
+
+        assert!(!metadata.contains_key("mpris:artUrl"));
+    }
+
+    #[test]
+    fn inactive_metadata_omits_track_details_and_never_touches_the_cache() {
+        let metadata = make_metadata_with_art_resolver(
+            &PlayerStatus {
+                artist: "Artist".to_string(),
+                album: "Album".to_string(),
+                art_item_id: "track-1".to_string(),
+                ..PlayerStatus::default()
+            },
+            |_key| panic!("art cache should never be consulted for an inactive/no-track state"),
+        );
 
         assert!(!metadata.contains_key("mpris:artUrl"));
         assert!(!metadata.contains_key("xesam:artist"));
         assert!(!metadata.contains_key("xesam:album"));
+    }
+
+    #[test]
+    fn art_cache_key_candidates_prefers_album_then_track_id() {
+        assert_eq!(
+            art_cache_key_candidates("track-1", "album-9"),
+            vec![
+                "album-9:P",
+                "album-9:lib",
+                "album-9:pwr_al",
+                "track-1:P",
+                "track-1:lib"
+            ]
+        );
+        assert_eq!(
+            art_cache_key_candidates("track-1", ""),
+            vec!["track-1:P", "track-1:lib"]
+        );
+        assert!(art_cache_key_candidates("", "").is_empty());
+    }
+
+    #[test]
+    fn effective_status_forces_inactive_when_disconnected() {
+        // #160: once the daemon connection drops, published MPRIS state
+        // must go to Stopped/NoTrack even if `status` still has stale
+        // "still playing" data in it.
+        let playing = PlayerStatus {
+            active: true,
+            title: "Song".to_string(),
+            art_item_id: "track-1".to_string(),
+            ..PlayerStatus::default()
+        };
+
+        let untouched = effective_status(playing.clone(), false);
+        assert!(untouched.active);
+
+        let forced = effective_status(playing, true);
+        assert!(!forced.active);
+        // make_metadata should now take the inactive/NoTrack branch.
+        let metadata = make_metadata_with_art_resolver(&forced, |_| {
+            panic!("art cache should never be consulted once disconnected")
+        });
+        assert!(!metadata.contains_key("xesam:title"));
+        assert!(!metadata.contains_key("mpris:artUrl"));
     }
 }

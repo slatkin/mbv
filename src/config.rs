@@ -177,6 +177,27 @@ pub fn read_image_disk_cache(key: &str) -> Option<Vec<u8>> {
     std::fs::read(path).ok()
 }
 
+/// Path to the on-disk cached image file for `key`, if one is already
+/// present -- without reading its bytes. Used to build `mpris:artUrl`
+/// `file://` URIs (see `src/mpris.rs::resolve_art_url`), which need the
+/// path itself, not the decoded image data.
+pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
+    let path = image_disk_cache_dir().join(safe_cache_filename(key));
+    path.is_file().then_some(path)
+}
+
+/// Cache-key suffix for a Power View card's primary image
+/// (see `src/app/render/power/card.rs`).
+pub const IMAGE_CACHE_SUFFIX_POWER_PRIMARY: &str = "P";
+
+/// Cache-key suffix for a Library view row/card's primary image
+/// (see `src/app/render/library/*`).
+pub const IMAGE_CACHE_SUFFIX_LIBRARY: &str = "lib";
+
+/// Cache-key suffix for a Power View album-level card
+/// (see `src/app/render/power/card.rs`).
+pub const IMAGE_CACHE_SUFFIX_POWER_ALBUM: &str = "pwr_al";
+
 pub fn write_image_disk_cache(key: &str, bytes: &[u8]) {
     let dir = image_disk_cache_dir();
     let _ = std::fs::create_dir_all(&dir);
