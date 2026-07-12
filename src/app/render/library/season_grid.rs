@@ -81,7 +81,7 @@ impl App {
             let last = ((scroll_row + n_visible_rows) * COLS).min(n);
             let ids: Vec<String> = items[first..last].iter().map(|i| i.id.clone()).collect();
             for id in ids {
-                let key = format!("{}:lib", id);
+                let key = format!("{}:{}", id, crate::config::IMAGE_CACHE_SUFFIX_LIBRARY);
                 self.fetch_list_card_image_when_idle(key, id, String::new(), &["Primary"]);
             }
         }
@@ -112,7 +112,7 @@ impl App {
                 let cell_x = x_off + col as u16 * (cell_w + H_GAP);
 
                 if images_enabled {
-                    let key = format!("{}:lib", item.id);
+                    let key = format!("{}:{}", item.id, crate::config::IMAGE_CACHE_SUFFIX_LIBRARY);
                     let avail = ratatui::layout::Size {
                         width: cell_w,
                         height: img_h,

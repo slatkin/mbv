@@ -360,6 +360,19 @@ impl RemotePlayer {
                     progress_report_accepted: false,
                     error: None,
                 });
+            } else {
+                // An "expected"/structured disconnect (e.g. an Emby Remote
+                // takeover) never sends a Stopped PlayerEvent, so nothing
+                // else clears `status`. Clear it here, at the source, so
+                // every consumer of `status` (not just MPRIS's separate
+                // `disconnected_flag()` check in src/mpris.rs) sees an
+                // inactive/no-track player immediately rather than stale
+                // "still playing" data.
+                if let Ok(mut s) = status_r.lock() {
+                    s.active = false;
+                    s.paused = false;
+                    s.clear_current_item_metadata();
+                }
             }
         });
 
