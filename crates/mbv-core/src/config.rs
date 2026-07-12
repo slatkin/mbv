@@ -268,7 +268,7 @@ fn queue_state_path() -> PathBuf {
     state_dir().join("queue_state.json")
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Default, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum QueueSource {
     Playlist {

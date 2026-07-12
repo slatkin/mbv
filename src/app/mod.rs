@@ -120,7 +120,7 @@ use mbv_core::playback_queue::{
 use mbv_core::player::{Player, PlayerCommand, PlayerEvent, PlayerProxy};
 use mbv_core::ws::WsEvent;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum ContextAction {
     Play,
     PlayFolder(String),

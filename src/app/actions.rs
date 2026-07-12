@@ -1098,7 +1098,8 @@ impl App {
     }
 
     pub(super) fn current_lib_item(&self) -> Option<MediaItem> {
-        let lib = self.libs.get(self.tab_idx - self.lib_tab_offset())?;
+        let lib_idx = self.tab_idx - self.lib_tab_offset();
+        let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
         } else {
@@ -1106,8 +1107,35 @@ impl App {
                 let idx = *s.results.get(s.cursor)?;
                 return s.items.get(idx).cloned();
             }
-            if self.is_feed_home_video_group_view(self.tab_idx - self.lib_tab_offset()) {
-                return self.selected_feed_home_video_item(self.tab_idx - self.lib_tab_offset());
+            if self.is_feed_home_video_group_view(lib_idx) {
+                return self.selected_feed_home_video_item(lib_idx);
+            }
+            // Track-selection mode (#145 task 4): when the power-left panel
+            // is sitting on the album-folder-listing nav level AND a track
+            // is focused (`album_track_focus = Some(idx)`), resolve to that
+            // track instead of the album folder item, so play/enqueue/
+            // context-menu actions target the focused track. Strictly
+            // gated on `is_viewing_album_folders` -- per Task 3's
+            // invariant, `album_track_focus` is only ever `Some` when that
+            // holds, so this branch is unreachable from every other tab,
+            // every other nav level, and the legacy `is_album_level`
+            // drilldown.
+            if self.is_viewing_album_folders(lib_idx) {
+                if let Some(track_idx) = lib.album_track_focus {
+                    if let Some(album) = self.selected_album_item(lib_idx) {
+                        if let Some(track) = self
+                            .album_tracks_cache
+                            .get(&album.id)
+                            .and_then(|tracks| tracks.get(track_idx))
+                        {
+                            return Some(track.clone());
+                        }
+                    }
+                    // Cache miss (async fetch still in flight) or an
+                    // out-of-bounds index (shouldn't happen -- Up/Down
+                    // clamps -- but stay safe): fall back to the album
+                    // folder item below rather than returning None.
+                }
             }
             let lvl = lib.nav_stack.last()?;
             lvl.items.get(lvl.cursor).cloned()
@@ -2409,12 +2437,30 @@ impl App {
                     })
                     .unwrap_or(item)
             };
-            if self.libs[lib_idx].search.is_none() && self.is_album_level(lib_idx) {
-                let level_items = self.libs[lib_idx]
-                    .nav_stack
-                    .last()
-                    .map(|l| l.items.clone())
-                    .unwrap_or_default();
+            let in_track_focus_mode = self.is_viewing_album_folders(lib_idx)
+                && self.libs[lib_idx].album_track_focus.is_some();
+            if self.libs[lib_idx].search.is_none()
+                && (self.is_album_level(lib_idx) || in_track_focus_mode)
+            {
+                // Legacy `is_album_level` drilldown sources its track list
+                // from the pushed nav_stack level (unchanged); the new
+                // inline track-selection mode (#145 task 4) sources it from
+                // the proactively-fetched `album_tracks_cache` instead,
+                // keyed by the selected album's id. Kept as a separate
+                // if/else picking the source `Vec<MediaItem>` rather than
+                // merging the two paths, so the well-tested legacy path
+                // stays byte-for-byte unchanged.
+                let level_items = if self.is_album_level(lib_idx) {
+                    self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .map(|l| l.items.clone())
+                        .unwrap_or_default()
+                } else {
+                    self.selected_album_item(lib_idx)
+                        .and_then(|album| self.album_tracks_cache.get(&album.id).cloned())
+                        .unwrap_or_default()
+                };
                 let mut tracks: Vec<MediaItem> =
                     level_items.into_iter().filter(is_playable).collect();
                 sort_audio_tracks(&mut tracks);
