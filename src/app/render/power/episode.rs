@@ -630,7 +630,6 @@ impl App {
         let visible_rows = table_area.height as usize;
         if n > visible_rows {
             let max_offset = n.saturating_sub(visible_rows);
-            let mut sb_state = ScrollbarState::new(max_offset + 1).position(state.offset());
             // Inset one row at the top so the scrollbar doesn't sit flush against
             // the season pill bar.
             let sb_area = Rect {
@@ -638,16 +637,7 @@ impl App {
                 height: table_area.height.saturating_sub(1),
                 ..table_area
             };
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("\u{2590}")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                sb_area,
-                &mut sb_state,
-            );
+            super::render_power_scrollbar(f, sb_area, max_offset, state.offset());
         }
     }
 }

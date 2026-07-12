@@ -272,17 +272,7 @@ impl App {
         let display_n = display_rows.len();
         if focused && display_n > visible {
             let max_off = display_n.saturating_sub(visible);
-            let mut sb = ScrollbarState::new(max_off + 1).position(offset);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("\u{2590}")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                area,
-                &mut sb,
-            );
+            super::render_power_scrollbar(f, area, max_off, offset);
         }
 
         offset
@@ -476,17 +466,7 @@ impl App {
         let visible_rows = table_area.height as usize;
         if n > visible_rows {
             let max_offset = n.saturating_sub(visible_rows);
-            let mut sb_state = ScrollbarState::new(max_offset + 1).position(state.offset());
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("\u{2590}")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                table_area,
-                &mut sb_state,
-            );
+            super::render_power_scrollbar(f, table_area, max_offset, state.offset());
         }
     }
 }

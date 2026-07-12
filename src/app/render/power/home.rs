@@ -331,17 +331,7 @@ impl App {
         // Scrollbar (hidden when unfocused, consistent with queue panel).
         if needs_scrollbar && focused {
             let max_off = n.saturating_sub(1);
-            let mut sb = ScrollbarState::new(max_off + 1).position(scroll);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("\u{2590}")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                content_area,
-                &mut sb,
-            );
+            super::render_power_scrollbar(f, content_area, max_off, scroll);
         }
     }
 
@@ -577,17 +567,7 @@ impl App {
 
         if needs_scrollbar && focused {
             let max_off = items.len().saturating_sub(1);
-            let mut sb = ScrollbarState::new(max_off + 1).position(scroll);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("\u{2590}")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                list_area,
-                &mut sb,
-            );
+            super::render_power_scrollbar(f, list_area, max_off, scroll);
         }
     }
 
@@ -843,17 +823,8 @@ impl App {
 
         // Panel scrollbar on the far right.
         if needs_scrollbar && focused {
-            let mut sb = ScrollbarState::new(total_h as usize).position(scroll_y as usize);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("\u{2590}")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                area,
-                &mut sb,
-            );
+            let max_off = total_h.saturating_sub(area.height) as usize;
+            super::render_power_scrollbar(f, area, max_off, scroll_y as usize);
         }
     }
 }

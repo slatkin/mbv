@@ -475,17 +475,7 @@ impl App {
 
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
-                let mut sb = ScrollbarState::new(max_off + 1).position(offset);
-                f.render_stateful_widget(
-                    Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                        .thumb_symbol("\u{2590}")
-                        .track_symbol(Some(" "))
-                        .begin_symbol(None)
-                        .end_symbol(None)
-                        .style(Style::default().fg(palette::SUBTLE)),
-                    content_area,
-                    &mut sb,
-                );
+                super::render_power_scrollbar(f, content_area, max_off, offset);
             }
         } else {
             enum DisplayRow {
@@ -697,17 +687,7 @@ impl App {
 
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
-                let mut sb = ScrollbarState::new(max_off + 1).position(offset);
-                f.render_stateful_widget(
-                    Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                        .thumb_symbol("\u{2590}")
-                        .track_symbol(Some(" "))
-                        .begin_symbol(None)
-                        .end_symbol(None)
-                        .style(Style::default().fg(palette::SUBTLE)),
-                    content_area,
-                    &mut sb,
-                );
+                super::render_power_scrollbar(f, content_area, max_off, offset);
             }
         }
 

@@ -21,6 +21,38 @@ use unicode_width::UnicodeWidthStr;
 // these hot paths to reduce terminal image preparation stalls.
 pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
     ratatui_image::FilterType::Triangle;
+const POWER_SCROLLBAR_THUMB_ROWS: u16 = 2;
+
+pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usize, offset: usize) {
+    if area.height == 0 {
+        return;
+    }
+
+    let track_len = area.height as usize;
+    let thumb_len = usize::from(POWER_SCROLLBAR_THUMB_ROWS.min(area.height)).max(1);
+    let max_thumb_start = track_len.saturating_sub(thumb_len);
+    let thumb_start = (offset.min(max_offset) * max_thumb_start + (max_offset / 2))
+        .checked_div(max_offset)
+        .unwrap_or(0);
+    let x = area.x + area.width.saturating_sub(1);
+
+    for row in 0..track_len {
+        let sym = if row >= thumb_start && row < thumb_start + thumb_len {
+            "\u{2590}"
+        } else {
+            " "
+        };
+        f.render_widget(
+            Paragraph::new(Span::styled(sym, Style::default().fg(palette::SUBTLE))),
+            Rect {
+                x,
+                y: area.y + row as u16,
+                width: 1,
+                height: 1,
+            },
+        );
+    }
+}
 
 /// For folder-based music libraries where albums are stored as directories named
 /// "Artist (YYYY) Album Title", parse out the three components.

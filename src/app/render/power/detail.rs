@@ -594,17 +594,7 @@ impl App {
                         width: area.width,
                         height: avail as u16,
                     };
-                    let mut sb = ScrollbarState::new(max_scroll + 1).position(scroll);
-                    f.render_stateful_widget(
-                        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                            .thumb_symbol("\u{2590}")
-                            .track_symbol(Some(" "))
-                            .begin_symbol(None)
-                            .end_symbol(None)
-                            .style(Style::default().fg(palette::SUBTLE)),
-                        ov_area,
-                        &mut sb,
-                    );
+                    super::render_power_scrollbar(f, ov_area, max_scroll, scroll);
                 }
             }
         }
