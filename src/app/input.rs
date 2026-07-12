@@ -3793,6 +3793,69 @@ mod power_movie_detail_tests {
             "Ctrl+z pops the queue undo stack when the queue panel is focused"
         );
     }
+
+    // ── #145 task 5: regression coverage for other Power View shortcuts ──
+    // These paths (queue-panel PageUp/PageDown and the movie context menu)
+    // sit in the same functions the new track-focus interception lives in
+    // (the power-left key dispatch match block and `open_context_menu`), but
+    // are untouched by tasks 1-4: the queue PageUp/PageDown block is a
+    // separate `if` gated on `PowerFocus::Queue`, entirely outside the
+    // `is_viewing_album_folders`-gated block added for track-selection mode;
+    // and `open_context_menu`'s non-folder branch (which a `Movie` item
+    // takes) doesn't consult `album_track_focus` or `is_viewing_album_folders`
+    // at all -- only `current_lib_item()` does, and that new branch is
+    // itself gated on `is_viewing_album_folders`, which is always false for
+    // a movies library (`collection_type != "music"`).
+
+    #[test]
+    fn queue_page_up_and_down_move_queue_cursor_when_queue_panel_focused() {
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+        app.layout.power.queue_area = Rect::new(0, 0, 20, 11);
+
+        for i in 0..20 {
+            let mut item = make_item(&format!("Queued {i}"), "Movie");
+            item.id = format!("queued-{i}");
+            app.player_tab.items.push(item);
+        }
+        app.player_tab.queue_cursor = 15;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(
+            app.player_tab.queue_cursor, 5,
+            "PageUp should move the queue cursor back by the queue panel's page size \
+             (height.saturating_sub(1)), unaffected by #145's album-folder changes"
+        );
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+        assert!(!handled);
+        assert_eq!(
+            app.player_tab.queue_cursor, 15,
+            "PageDown should move the queue cursor forward by the same page size"
+        );
+    }
+
+    #[test]
+    fn power_view_movie_context_menu_offers_unaffected_non_folder_verbs() {
+        let mut app = make_power_movie_app();
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
+
+        let menu = app
+            .context_menu
+            .as_ref()
+            .expect("expected a context menu for the focused movie");
+        let labels: Vec<&str> = menu.entries.iter().map(|e| e.label).collect();
+        assert_eq!(
+            labels,
+            vec!["Play", "Add to Queue", "Mark Watched"],
+            "a movie (non-folder, non-music) item's context menu must keep its \
+             original verb set, untouched by #145's album/track scoping \
+             (which only ever changes the folder branch and only for music \
+             libraries): {labels:?}"
+        );
+    }
 }
 
 #[cfg(test)]

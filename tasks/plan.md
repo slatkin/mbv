@@ -108,4 +108,4 @@ pending task, stop.
 - [x] Task 2 — render album detail inline
 - [x] Task 3 — track-selection mode
 - [x] Task 4 — scope-correct actions
-- [ ] Task 5 — regression coverage
+- [x] Task 5 — regression coverage
