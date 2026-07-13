@@ -7593,4 +7593,100 @@ pub(crate) mod tests {
         }
         assert_eq!(app.home.section, 1);
     }
+
+    // ── status_bar (Task 2: session/connection label + unsaved marker) ───────
+
+    #[test]
+    fn status_bar_shows_direct_remote_label_next_to_pill() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote);
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("REMOTE"),
+            "expected a REMOTE label on the status bar for DirectRemote state:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_has_no_session_label_when_remote_slot_is_off() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            !last_line.contains("REMOTE") && !last_line.contains("ATTACHED") && !last_line.contains("DAEMON"),
+            "expected no session label when nothing is connected:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_shows_unsaved_marker_on_any_tab_when_queue_is_dirty() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0; // Home tab, not the Queue tab -- unsaved state must still show.
+        app.queue_dirty = true;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("UNSAVED"),
+            "expected an UNSAVED marker regardless of the active tab when the queue is dirty:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_drops_alive_before_unsaved_when_left_segment_overflows() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote); // -> " REMOTE" label (7 cols)
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end)); // -> " ALIVE" (6 cols)
+        app.queue_dirty = true; // -> " UNSAVED" (8 cols)
+
+        // pill (9) + REMOTE (7) + ALIVE (6) + UNSAVED (8) = 30 cols; a 28-col
+        // terminal leaves only 19 cols for the label -- enough for REMOTE +
+        // UNSAVED (15) but not all three (21), so ALIVE must drop first.
+        let rendered = render_app_to_string(&mut app, 28, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("REMOTE") && last_line.contains("UNSAVED"),
+            "expected REMOTE and UNSAVED to survive the overflow:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("ALIVE"),
+            "expected ALIVE to be the first thing dropped on overflow:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_keeps_only_unsaved_when_left_segment_severely_overflows() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote);
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+        app.queue_dirty = true;
+
+        // Only 11 cols available for the label (20 - 9) -- not enough for
+        // REMOTE + UNSAVED (15), so REMOTE must drop too; UNSAVED (8) still fits
+        // and is never dropped.
+        let rendered = render_app_to_string(&mut app, 20, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("UNSAVED"),
+            "UNSAVED must be protected even under severe overflow:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("REMOTE") && !last_line.contains("ALIVE"),
+            "expected REMOTE and ALIVE both dropped before UNSAVED is touched:\n{last_line}"
+        );
+    }
 }

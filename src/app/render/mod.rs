@@ -261,7 +261,7 @@ impl App {
         // Persistent bottom status bar: control pill lives here now instead of
         // the tab row. Session/queue segments and toast override land in
         // later tasks; for now this row renders only the pill.
-        self.render_control_pill(f, status_bar_area, &mut layout.playback);
+        self.render_status_bar(f, status_bar_area, &mut layout.playback);
 
         let now_playing: Option<String> = if active {
             let idx = self.player.status.lock().unwrap().current_idx;
@@ -801,6 +801,91 @@ impl App {
                 height: 1,
             },
         );
+    }
+
+    /// Persistent bottom status bar. Left side: control pill + a text label
+    /// for session/connection state the pill's glyph alone doesn't spell out
+    /// (RemoteSlotState, stay-alive), plus an UNSAVED marker whenever the
+    /// queue is dirty -- shown on every tab, not just the Queue tab, since
+    /// losing track of unsaved queue changes while browsing elsewhere is a
+    /// real failure mode. Right side (added in a later task): queue source/
+    /// autosave/scope detail, shown only on the Queue tab / Power View.
+    fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
+        self.render_control_pill(f, area, layout);
+
+        let remote_state = self.remote_slot_state();
+        let remote_spans: Vec<Span> = match remote_state {
+            super::RemoteSlotState::Off => Vec::new(),
+            super::RemoteSlotState::AttachedSession => vec![Span::styled(
+                " ATTACHED",
+                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
+            )],
+            super::RemoteSlotState::DirectRemote => vec![Span::styled(
+                " REMOTE",
+                Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
+            )],
+            super::RemoteSlotState::LocalDaemon => vec![Span::styled(
+                " DAEMON",
+                Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
+            )],
+        };
+        let alive_span: Option<Span> = self
+            .stay_alive_ctrl
+            .is_some()
+            .then(|| Span::styled(" ALIVE", Style::default().fg(palette::FOAM)));
+        // Dirty-queue marker: always shown, on every tab, not gated to the Queue
+        // tab like the rest of the queue-state segment (see Task 3) -- unsaved
+        // changes are worth surfacing no matter what you're currently looking at.
+        let unsaved_span: Option<Span> = self.queue_dirty.then(|| {
+            Span::styled(
+                " UNSAVED",
+                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
+            )
+        });
+
+        // Left-segment overflow priority: UNSAVED is protected (it's the one thing
+        // that must stay visible on every tab); ALIVE drops first if the combined
+        // left segment wouldn't fit in the row, then the remote-state label text,
+        // before UNSAVED itself would ever be at risk of being clipped by Paragraph.
+        let remote_w: u16 = remote_spans.iter().map(|s| s.content.width() as u16).sum();
+        let alive_w: u16 = alive_span.as_ref().map(|s| s.content.width() as u16).unwrap_or(0);
+        let unsaved_w: u16 = unsaved_span.as_ref().map(|s| s.content.width() as u16).unwrap_or(0);
+        // Pill is always "  m ⇌ ≡  " = 9 cols wide; `available` is what's left of
+        // the row for the label/ALIVE/UNSAVED content.
+        let available = area.width.saturating_sub(9);
+        let fits_all = remote_w + alive_w + unsaved_w <= available;
+        let fits_without_alive = !fits_all && remote_w + unsaved_w <= available;
+
+        let mut spans: Vec<Span> = Vec::new();
+        if fits_all || fits_without_alive {
+            spans.extend(remote_spans);
+        }
+        // else: drop the remote-state label too; UNSAVED is still protected below.
+        if fits_all {
+            if let Some(a) = alive_span {
+                spans.push(a);
+            }
+        }
+        if let Some(u) = unsaved_span {
+            spans.push(u);
+        }
+
+        // `left_content_w` tracks how far the left segment actually extends after
+        // the above priority drop -- pill alone, pill + some subset of the label
+        // pieces, or pill + everything -- so Task 3's right-segment overlap check
+        // can compare against the real left edge instead of a hardcoded constant.
+        let label_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
+        let left_content_w: u16 = 9 + label_w;
+        if !spans.is_empty() {
+            let label_x = area.x + 9;
+            let label_rect = Rect {
+                x: label_x,
+                y: area.y,
+                width: area.width.saturating_sub(9),
+                height: 1,
+            };
+            f.render_widget(Paragraph::new(Line::from(spans)), label_rect);
+        }
     }
 
     /// Full-width seekbar row: green up to the playhead, gray for the remainder.
