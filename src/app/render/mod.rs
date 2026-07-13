@@ -912,18 +912,15 @@ impl App {
         self.render_remote_status_hitbox(layout, area);
 
         let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
-            vec![
-                Span::styled("\u{2665}", Style::default().fg(palette::RED).bg(palette::PILL_BG)),
-                Span::styled(
-                    " staying alive",
-                    Style::default().fg(palette::FOAM).bg(palette::PILL_BG),
-                ),
-            ]
+            vec![Span::styled(
+                "\u{2665}",
+                Style::default().fg(palette::RED).bg(palette::PILL_BG),
+            )]
         });
         let mute_status = self.mute_status_spans();
 
-        // Left-segment overflow priority: alive drops first if the combined
-        // left segment wouldn't fit in the row, then mute, then remote, then playlist.
+        // Left-segment overflow priority: mute drops first if the combined
+        // left segment wouldn't fit in the row, then playlist, then remote.
         let remote_w = Self::status_width(&remote_status);
         let playlist_w = Self::status_width(&playlist_status);
         let alive_w: u16 = alive_status
@@ -956,19 +953,17 @@ impl App {
         let fits_without_remote = !fits_all
             && !fits_without_alive
             && !fits_without_mute
-            && joined_width(&[playlist_w]) <= available;
+            && joined_width(&[playlist_w, alive_w]) <= available;
 
         let mut spans: Vec<Span> = Vec::new();
+        if let Some(alive) = alive_status {
+            Self::append_status(&mut spans, alive);
+        }
         if fits_all || fits_without_alive || fits_without_mute {
             Self::append_status(&mut spans, remote_status);
             Self::append_status(&mut spans, playlist_status);
         } else if fits_without_remote {
             Self::append_status(&mut spans, playlist_status);
-        }
-        if fits_all {
-            if let Some(alive) = alive_status {
-                Self::append_status(&mut spans, alive);
-            }
         }
         if fits_all || fits_without_alive {
             if let Some(mute) = mute_status {
