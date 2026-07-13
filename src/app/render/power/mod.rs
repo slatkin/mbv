@@ -753,6 +753,42 @@ mod tests {
     }
 
     #[test]
+    fn movie_library_unfocused_selected_banner_keeps_text_right_of_indicator() {
+        let mut app = make_power_movie_app();
+        let mut layout = LayoutPower::default();
+
+        let term = render_power_library_to_terminal_focused(&mut app, &mut layout, false);
+        let out = buffer_to_string(&term);
+        let lines: Vec<&str> = out.lines().collect();
+
+        let selected_line = lines
+            .iter()
+            .find(|line| line.contains("Focused Movie"))
+            .expect("expected selected movie row");
+        let selected_bar = selected_line.find('▌').expect("expected selected bar");
+        let selected_text = selected_line
+            .find("Focused Movie")
+            .expect("expected selected title");
+        assert!(
+            selected_text > selected_bar,
+            "selected movie title should stay to the right of the indicator while unfocused:\n{out}"
+        );
+
+        let overview_line = lines
+            .iter()
+            .find(|line| line.contains("compact movie banner"))
+            .expect("expected compact overview line");
+        let overview_bar = overview_line.find('▌').expect("expected banner bar");
+        let overview_text = overview_line
+            .find("compact movie banner")
+            .expect("expected compact overview text");
+        assert!(
+            overview_text > overview_bar,
+            "compact overview text should stay to the right of the indicator while unfocused:\n{out}"
+        );
+    }
+
+    #[test]
     fn power_view_uses_configured_left_column_width() {
         let mut app = make_power_movie_app();
         app.power_left_width = 55;
@@ -1135,8 +1171,12 @@ mod tests {
             "expected selected album row to drop the grouped indent after the gutter:\n{out}"
         );
         assert!(
-            lines[3].trim().is_empty() || lines[3].starts_with("  \u{258c}"),
-            "expected single spacer row after selected album title:\n{out}"
+            lines[3].contains("^P: Play all | ^A: Add to Queue | ^S: Shuffle"),
+            "expected action hints directly under selected album title:\n{out}"
+        );
+        assert!(
+            lines[3].starts_with("  \u{258c} "),
+            "expected action hints to share the selected-region gutter:\n{out}"
         );
         assert!(
             lines[4].contains("Opening Track"),
@@ -1247,6 +1287,10 @@ mod tests {
             "expected flat selected album title to align after a one-column gutter gap:\n{out}"
         );
         assert!(
+            lines[4].contains("^P: Play all | ^A: Add to Queue | ^S: Shuffle"),
+            "expected action hints directly under selected album title:\n{out}"
+        );
+        assert!(
             lines[5].contains("Opening Track"),
             "expected tracks inside the inline detail region:\n{out}"
         );
@@ -1350,6 +1394,19 @@ mod tests {
             "expected no duplicate inline album title row:\n{out}"
         );
 
+        let hint_y = lines
+            .iter()
+            .position(|line| line.contains("^P: Play all"))
+            .expect("expected inline action hint row");
+        let hint_x = lines[hint_y]
+            .find("^P: Play all")
+            .expect("expected hint x position");
+        assert_eq!(
+            buf[(hint_x as u16, hint_y as u16)].fg,
+            palette::SUBTLE,
+            "expected inline action hints to render grey/subtle:\n{out}"
+        );
+
         let track_y = lines
             .iter()
             .position(|line| line.contains("Opening Track"))
@@ -1365,6 +1422,32 @@ mod tests {
             buf[(track_x as u16, track_y as u16)].fg,
             palette::SUBTLE,
             "expected inactive inline track list to render muted/subtle:\n{out}"
+        );
+    }
+
+    #[test]
+    fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
+        let mut app = make_power_music_group_app();
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal_focused(&mut app, &mut layout, false);
+        let out = buffer_to_string(&term);
+        let title_line = out
+            .lines()
+            .find(|line| line.contains("First Album"))
+            .expect("expected selected album title row");
+
+        assert_eq!(
+            title_line.find('▌'),
+            Some(2),
+            "selected album title row should keep the selected-region gutter while unfocused:\n{out}"
         );
     }
 

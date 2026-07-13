@@ -389,16 +389,19 @@ impl App {
                         } else {
                             palette::SUBTLE
                         };
-                        let mut spans: Vec<Span> = if selected && focused {
+                        let selected_region = selected && banner_rows > 0;
+                        let mut spans: Vec<Span> = if selected_region {
+                            let title_style = if focused {
+                                Style::default()
+                                    .fg(palette::IRIS)
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(fg)
+                            };
                             vec![
                                 Span::raw(" ".repeat(COMPACT_BANNER_INDENT as usize)),
                                 Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                                Span::styled(
-                                    title,
-                                    Style::default()
-                                        .fg(palette::IRIS)
-                                        .add_modifier(Modifier::BOLD),
-                                ),
+                                Span::styled(title, title_style),
                             ]
                         } else {
                             vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
@@ -581,7 +584,8 @@ impl App {
                             (item.display_name(), dur)
                         };
 
-                        let avail = if selected && focused {
+                        let selected_region = selected && banner_rows > 0;
+                        let avail = if selected_region {
                             (area.width as usize).saturating_sub(2 + COMPACT_BANNER_INDENT as usize)
                         } else {
                             (area.width as usize).saturating_sub(2)
@@ -594,16 +598,18 @@ impl App {
                             palette::SUBTLE
                         };
 
-                        let mut spans: Vec<Span> = if selected && focused {
+                        let mut spans: Vec<Span> = if selected_region {
+                            let title_style = if focused {
+                                Style::default()
+                                    .fg(palette::IRIS)
+                                    .add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(fg)
+                            };
                             vec![
                                 Span::raw(" ".repeat(COMPACT_BANNER_INDENT as usize)),
                                 Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                                Span::styled(
-                                    title,
-                                    Style::default()
-                                        .fg(palette::IRIS)
-                                        .add_modifier(Modifier::BOLD),
-                                ),
+                                Span::styled(title, title_style),
                             ]
                         } else {
                             vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]

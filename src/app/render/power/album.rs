@@ -294,7 +294,7 @@ impl App {
                         fg
                     };
                     let mut spans: Vec<Span> = Vec::new();
-                    if selected && focused {
+                    if selected {
                         spans.push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
                     } else {
                         spans.push(Span::raw(" "));
@@ -451,14 +451,17 @@ impl App {
             row += 1;
         }
 
-        // — Blank spacer row —
+        // — Inline album actions / spacer row —
         if row < max_y {
             if selected_region_gutter {
+                let hint_w = (area.width as usize).saturating_sub(gutter_w);
+                let hint = trunc_str("^P: Play all | ^A: Add to Queue | ^S: Shuffle", hint_w);
                 f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        "\u{258c}",
-                        Style::default().fg(palette::PINE),
-                    ))),
+                    Paragraph::new(Line::from(vec![
+                        Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                        Span::raw(" "),
+                        Span::styled(hint.to_string(), Style::default().fg(palette::SUBTLE)),
+                    ])),
                     Rect {
                         x: area.x,
                         y: row,

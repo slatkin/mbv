@@ -827,6 +827,7 @@ pub struct App {
     sessions_rx: mpsc::Receiver<SessionEvent>,
     connected_session_id: Option<String>,
     connected_session_state: Option<mbv_core::api::SessionInfo>,
+    direct_remote_label: Option<String>,
     last_session_poll: Instant,
     session_miss_count: u8, // consecutive polls that didn't find the connected session
     remote_pos_s: i64,      // monotonic position estimate for the connected remote
@@ -1317,6 +1318,7 @@ impl App {
             last_capabilities: Instant::now(),
             connected_session_id: None,
             connected_session_state: None,
+            direct_remote_label: None,
             last_session_poll: Instant::now() - Duration::from_secs(60),
             session_miss_count: 0,
             remote_pos_s: 0,
@@ -1941,6 +1943,10 @@ impl App {
         self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
         self.connected_session_id = None;
         self.connected_session_state = None;
+        self.direct_remote_label = {
+            let name = sess.device_name.trim();
+            (!name.is_empty()).then(|| name.to_string())
+        };
         self.session_miss_count = 0;
         self.remote_pos_s = 0;
         self.remote_pos_at = Instant::now();
@@ -1985,6 +1991,7 @@ impl App {
         self.remote_player_tab = None;
         self.connected_session_id = None;
         self.connected_session_state = None;
+        self.direct_remote_label = None;
         self.session_miss_count = 0;
         self.remote_pos_s = 0;
         self.next_up_item = None;
@@ -3503,6 +3510,7 @@ pub(crate) mod tests {
             sessions_rx,
             connected_session_id: None,
             connected_session_state: None,
+            direct_remote_label: None,
             last_session_poll: std::time::Instant::now(),
             session_miss_count: 0,
             remote_pos_s: 0,
@@ -3631,6 +3639,13 @@ pub(crate) mod tests {
             out.push('\n');
         }
         out
+    }
+
+    fn render_app_to_terminal(app: &mut App, width: u16, height: u16) -> Terminal<TestBackend> {
+        let backend = TestBackend::new(width, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.render(f)).unwrap();
+        term
     }
 
     // ── transport_prev_next_available (issue #112) ─────────────────────────
@@ -5601,7 +5616,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn status_bar_row_is_always_present_and_holds_the_control_pill() {
+    fn status_bar_row_is_always_present_and_holds_status_labels() {
         let mut app = make_app_stub();
         app.tab_idx = 0; // Home tab, nothing playing — the row must still appear.
 
@@ -5609,14 +5624,14 @@ pub(crate) mod tests {
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains('\u{2261}'),
-            "expected the control pill's playlist glyph (≡) on the final screen row:\n{rendered}"
+            last_line.contains("\u{1F5AD}  none"),
+            "expected the playlist status on the final screen row:\n{rendered}"
         );
-        // The pill must no longer render inside the tab row (first line).
+        // The status labels must not render inside the tab row (first line).
         let first_line = rendered.lines().next().unwrap();
         assert!(
-            !first_line.contains('\u{2261}'),
-            "control pill must have moved off the tab row:\n{first_line}"
+            !first_line.contains('\u{1F5AD}'),
+            "status labels must stay off the tab row:\n{first_line}"
         );
         // TABBAR_LEFT_RESERVE shrinks from 10 (pill + gap) to 2 (small margin)
         // now that the pill no longer lives in the tab row -- the first tab
@@ -7601,18 +7616,184 @@ pub(crate) mod tests {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 0;
         app.set_queue_scope(QueueScope::Remote);
+        app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
+        app.client.lock().unwrap().config.server_url = "http://emby.local:8096".into();
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains("REMOTE"),
-            "expected a REMOTE label on the status bar for DirectRemote state:\n{last_line}"
+            last_line.contains("\u{1F5A7}  music.local"),
+            "expected the remote glyph to be the label prefix:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("\u{1F5A7}  music.local@emby.local"),
+            "Emby server host should not be folded into remote status:\n{last_line}"
         );
     }
 
     #[test]
-    fn status_bar_has_no_session_label_when_remote_slot_is_off() {
+    fn status_bar_uses_attached_session_device_name_not_loopback_host() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.connected_session_id = Some("sess-1".into());
+        app.connected_session_state = Some(make_session("music", "Emby"));
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("\u{1F5A7}  music"),
+            "expected attached session status to use the F3-visible device name:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("local"),
+            "attached remote session should not render as local:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_uses_direct_upgrade_session_name_after_state_is_cleared() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0);
+        let sess = make_session("music", "mbv");
+
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+
+        assert!(app.connected_session_id.is_none());
+        assert!(app.connected_session_state.is_none());
+        app.status.clear();
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("\u{1F5A7}  music"),
+            "direct-upgraded remote should keep the F3-visible session name:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("\u{1F5A7}  local"),
+            "direct-upgraded remote should not fall back to local after clearing session state:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_shows_emby_server_on_the_right_side() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.client.lock().unwrap().config.server_url = "http://emby.local:8096".into();
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("emby.local"),
+            "expected Emby server host on the right side of the status bar:\n{last_line}"
+        );
+        assert!(
+            last_line.trim_end().ends_with("emby.local"),
+            "Emby server host should be the rightmost status item:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("server:"),
+            "server host should not be prefixed on the right side:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_right_side_delimits_items_and_keeps_server_rightmost() {
+        let mut app = make_app_stub();
+        app.tab_idx = 1; // Queue tab
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".into()),
+            name: "Road Trip".into(),
+        };
+        {
+            let mut cfg = app.client.lock().unwrap();
+            cfg.config.server_url = "http://emby.local:8096".into();
+            cfg.config.save_playlist_on_consume = true;
+        }
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("AUTOSAVE | emby.local"),
+            "expected right-side statuses to use pipe delimiters with server last:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("emby.local | AUTOSAVE"),
+            "Emby server host should not precede autosave status:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_shows_muted_text_without_mute_glyph() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.mute_on = true;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("muted"),
+            "expected text label for muted state:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains(" m "),
+            "muted state should not use the old single-letter mute glyph:\n{last_line}"
+        );
+        let remote_pos = last_line.find("\u{1F5A7}  local").unwrap();
+        let playlist_pos = last_line.find("\u{1F5AD}  none").unwrap();
+        let muted_pos = last_line.find("muted").unwrap();
+        assert!(
+            remote_pos < playlist_pos && playlist_pos < muted_pos,
+            "muted should be the last left-side status so appearing/disappearing does not shift earlier statuses:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_hides_mute_indicator_when_not_muted() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.mute_on = false;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            !last_line.contains("mute"),
+            "unmuted state should not render a mute indicator:\n{last_line}"
+        );
+        assert_eq!(
+            app.layout.playback.ind_mu,
+            ratatui::layout::Rect::default(),
+            "hidden mute indicator should not leave an invisible click target"
+        );
+    }
+
+    #[test]
+    fn status_bar_separates_left_statuses_with_dot_delimiter() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote);
+        app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+        app.queue_dirty = true;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("\u{1F5A7}  music.local | \u{1F5AD}  none | alive | UNSAVED"),
+            "expected left statuses separated by pipe delimiters:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_has_no_session_or_daemon_label_when_remote_slot_is_off() {
         let mut app = make_app_stub();
         app.tab_idx = 0;
 
@@ -7620,9 +7801,107 @@ pub(crate) mod tests {
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            !last_line.contains("REMOTE") && !last_line.contains("ATTACHED") && !last_line.contains("DAEMON"),
-            "expected no session label when nothing is connected:\n{last_line}"
+            !last_line.contains("attached:") && !last_line.contains("daemon:"),
+            "expected no attached-session or daemon label when nothing is connected:\n{last_line}"
         );
+    }
+
+    #[test]
+    fn status_bar_shows_local_remote_status_when_not_connected_to_remote() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("\u{1F5A7}  local"),
+            "expected local remote-status when no remote is connected:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("remote:"),
+            "local playback should not be labeled as remote:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_shows_playlist_status_when_none_is_active() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("\u{1F5AD}  none"),
+            "expected playlist glyph as the playlist label prefix:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_shows_active_playlist_name_next_to_playlist_glyph() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".into()),
+            name: "Road Trip".into(),
+        };
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("\u{1F5AD}  Road Trip"),
+            "expected playlist glyph as the active playlist label prefix:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_colors_remote_icon_grey_when_disconnected_and_yellow_when_connected() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+
+        let term = render_app_to_terminal(&mut app, 80, 24);
+        let buf = term.backend().buffer();
+        let last_y = buf.area().height - 1;
+        let remote_x = (0..buf.area().width)
+            .find(|&x| buf[(x, last_y)].symbol() == "\u{1F5A7}")
+            .unwrap();
+        assert_eq!(buf[(remote_x, last_y)].fg, palette::SUBTLE);
+
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote);
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".into()),
+            name: "Road Trip".into(),
+        };
+
+        let term = render_app_to_terminal(&mut app, 80, 24);
+        let buf = term.backend().buffer();
+        let last_y = buf.area().height - 1;
+        let remote_x = (0..buf.area().width)
+            .find(|&x| buf[(x, last_y)].symbol() == "\u{1F5A7}")
+            .unwrap();
+        assert_eq!(buf[(remote_x, last_y)].fg, palette::YELLOW);
+    }
+
+    #[test]
+    fn status_bar_has_full_width_background() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+
+        let term = render_app_to_terminal(&mut app, 80, 24);
+        let buf = term.backend().buffer();
+        let last_y = buf.area().height - 1;
+
+        for x in 0..buf.area().width {
+            assert_eq!(
+                buf[(x, last_y)].bg,
+                palette::PILL_BG,
+                "expected status bar background at x={x}"
+            );
+        }
     }
 
     #[test]
@@ -7644,24 +7923,27 @@ pub(crate) mod tests {
     fn status_bar_drops_alive_before_unsaved_when_left_segment_overflows() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 0;
-        app.set_queue_scope(QueueScope::Remote); // -> " REMOTE" label (7 cols)
+        app.mute_on = false;
+        app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
+        app.set_queue_scope(QueueScope::Remote);
         let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end)); // -> " ALIVE" (6 cols)
-        app.queue_dirty = true; // -> " UNSAVED" (8 cols)
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+        app.queue_dirty = true;
 
-        // pill (9) + REMOTE (7) + ALIVE (6) + UNSAVED (8) = 30 cols; a 28-col
-        // terminal leaves only 19 cols for the label -- enough for REMOTE +
-        // UNSAVED (15) but not all three (21), so ALIVE must drop first.
-        let rendered = render_app_to_string(&mut app, 28, 24);
+        // remote + playlist + alive + UNSAVED is too wide for 39 cols, but
+        // remote + playlist + UNSAVED fits, so alive must drop first.
+        let rendered = render_app_to_string(&mut app, 39, 24);
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains("REMOTE") && last_line.contains("UNSAVED"),
-            "expected REMOTE and UNSAVED to survive the overflow:\n{last_line}"
+            last_line.contains("\u{1F5A7}  ")
+                && last_line.contains("\u{1F5AD}  none")
+                && last_line.contains("UNSAVED"),
+            "expected remote, playlist, and UNSAVED to survive the overflow:\n{last_line}"
         );
         assert!(
-            !last_line.contains("ALIVE"),
-            "expected ALIVE to be the first thing dropped on overflow:\n{last_line}"
+            !last_line.contains("alive"),
+            "expected alive to be the first thing dropped on overflow:\n{last_line}"
         );
     }
 
@@ -7669,14 +7951,15 @@ pub(crate) mod tests {
     fn status_bar_keeps_only_unsaved_when_left_segment_severely_overflows() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 0;
+        app.mute_on = false;
         app.set_queue_scope(QueueScope::Remote);
         let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
         app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
         app.queue_dirty = true;
 
-        // Only 11 cols available for the label (20 - 9) -- not enough for
-        // REMOTE + UNSAVED (15), so REMOTE must drop too; UNSAVED (8) still fits
-        // and is never dropped.
+        // Only 15 cols available for statuses (20 - 5) -- not enough for
+        // delimited remote + UNSAVED (19), so remote must drop too; delimited
+        // UNSAVED (10) still fits and is never dropped.
         let rendered = render_app_to_string(&mut app, 20, 24);
         let last_line = rendered.lines().last().unwrap();
 
@@ -7685,8 +7968,8 @@ pub(crate) mod tests {
             "UNSAVED must be protected even under severe overflow:\n{last_line}"
         );
         assert!(
-            !last_line.contains("REMOTE") && !last_line.contains("ALIVE"),
-            "expected REMOTE and ALIVE both dropped before UNSAVED is touched:\n{last_line}"
+            !last_line.contains("remote") && !last_line.contains("alive"),
+            "expected remote and alive both dropped before UNSAVED is touched:\n{last_line}"
         );
     }
 
@@ -7719,6 +8002,21 @@ pub(crate) mod tests {
         assert!(
             !last_line.contains("ALBUM"),
             "queue source/autosave/scope detail must not leak onto tabs where it isn't relevant:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_omits_redundant_remote_queue_label() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 1; // Queue tab
+        app.set_queue_scope(QueueScope::Remote);
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            !last_line.contains("REMOTE QUEUE"),
+            "queue scope is already apparent from the UI and should not be repeated:\n{last_line}"
         );
     }
 
@@ -7758,8 +8056,8 @@ pub(crate) mod tests {
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains('\u{2261}'),
-            "expected the control pill to still render when no toast is active:\n{last_line}"
+            last_line.contains("\u{1F5AD}  none"),
+            "expected status labels to still render when no toast is active:\n{last_line}"
         );
     }
 
@@ -7772,14 +8070,9 @@ pub(crate) mod tests {
 
         let rendered = render_app_to_string(&mut app, 80, 24);
 
-        // The mute/remote-cycle click hitboxes must still be populated even
+        // The visible remote-cycle click hitbox must still be populated even
         // though a toast is covering the status bar this frame -- otherwise
-        // clicks on those icons silently do nothing for the toast's duration.
-        assert_ne!(
-            app.layout.playback.ind_mu,
-            ratatui::layout::Rect::default(),
-            "mute hitbox went stale while a toast was active"
-        );
+        // clicks on that icon silently do nothing for the toast's duration.
         assert_ne!(
             app.layout.playback.ind_rc,
             ratatui::layout::Rect::default(),
@@ -7795,7 +8088,7 @@ pub(crate) mod tests {
             "expected the toast text on the final row:\n{last_line}"
         );
         assert!(
-            !last_line.contains('\u{2261}'),
+            !last_line.contains('\u{1F5AD}'),
             "leftover control-pill glyph bled through under the toast:\n{last_line}"
         );
     }

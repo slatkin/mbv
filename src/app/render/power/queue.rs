@@ -9,6 +9,8 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
+
 impl App {
     pub(super) fn render_power_queue(
         &mut self,
@@ -130,24 +132,7 @@ impl App {
 
         // Build display rows: audio grouped by album, episodes by series, the rest
         // flat. group_for_header[j] holds the label for the j-th Header.
-        //
-        // A queue sourced from a saved playlist gets a single header naming the
-        // playlist instead -- see the matching logic in `render_queue_panel`
-        // (render/playlist.rs) for why: per-album/per-series headers make a
-        // playlist queue look like it was built by "play series"/"play album"
-        // and hide that it's a curated playlist.
-        let playlist_name = self.queue_playlist_name();
-        let (display, group_for_header) = if !playlist_name.is_empty() {
-            let mut rows: Vec<QueueRow> = Vec::with_capacity(items.len() + 1);
-            rows.push(QueueRow::Header);
-            rows.extend((0..items.len()).map(|idx| QueueRow::Track {
-                idx,
-                in_group: false,
-            }));
-            (rows, vec![playlist_name.to_string()])
-        } else {
-            build_queue_rows(&items, true)
-        };
+        let (display, group_for_header) = build_queue_rows(&items, true);
         let total = display.len();
         let visible = area.height as usize;
 
@@ -274,8 +259,14 @@ impl App {
 
                     // Title truncated to leave room for indent + marker + duration + pct.
                     let extra = dur_w + pct_str.chars().count();
-                    let title_w = render_w.saturating_sub(indent + 1 + extra); // 1 marker
+                    let title_w =
+                        render_w.saturating_sub(indent + 1 + extra + QUEUE_TITLE_QUIET_COLUMNS);
                     let title = trunc_str(&label, title_w);
+                    let title_pad = QUEUE_TITLE_QUIET_COLUMNS.min(
+                        render_w
+                            .saturating_sub(indent + 1 + extra)
+                            .saturating_sub(title.width()),
+                    );
 
                     // Now-playing title text is always emby blue, regardless of focus state.
                     let title_color = if is_active { palette::FOAM } else { fg };
@@ -311,6 +302,9 @@ impl App {
                         } else {
                             palette::MUTED
                         };
+                        if title_pad > 0 {
+                            spans.push(Span::raw(" ".repeat(title_pad)));
+                        }
                         spans.push(Span::styled(pct_str, Style::default().fg(pct_color)));
                     }
                     if show_length && !dur.is_empty() {

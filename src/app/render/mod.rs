@@ -17,6 +17,49 @@ use ratatui::Frame;
 use std::time::Instant;
 use unicode_width::UnicodeWidthStr;
 
+fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
+    let endpoint = endpoint.trim();
+    if endpoint.is_empty() || endpoint.eq_ignore_ascii_case("local") {
+        return None;
+    }
+    if let Some(tcp) = endpoint.strip_prefix("tcp://") {
+        return tcp
+            .rsplit_once(':')
+            .map(|(host, _port)| host)
+            .filter(|host| !host.is_empty())
+            .map(str::to_string);
+    }
+    if let Some(path) = endpoint.strip_prefix("unix://") {
+        return std::path::Path::new(path)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_string);
+    }
+    std::path::Path::new(endpoint)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .filter(|name| !name.is_empty())
+        .map(str::to_string)
+}
+
+fn server_url_label(server_url: &str) -> Option<String> {
+    let value = server_url.trim();
+    if value.is_empty() {
+        return None;
+    }
+    let without_scheme = value
+        .split_once("://")
+        .map(|(_, rest)| rest)
+        .unwrap_or(value);
+    without_scheme
+        .split('/')
+        .next()
+        .and_then(|host_port| host_port.split('@').next_back())
+        .and_then(|host_port| host_port.split(':').next())
+        .filter(|host| !host.is_empty())
+        .map(str::to_string)
+}
+
 impl App {
     pub fn render(&mut self, f: &mut Frame) {
         let area = f.area();
@@ -68,7 +111,7 @@ impl App {
         let spacer_h: u16 = 1;
         let status_bar_h: u16 = 1;
         // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
-        // status_bar is the persistent bottom row (control pill, session/queue state, toast) --
+        // status_bar is the persistent bottom row (session/queue state, toast) --
         // unlike the other player rows it is not conditional on onerow/reserve_player_rows.
         let (seek_h, gap_h, title_h, controls_h): (u16, u16, u16, u16) =
             if onerow || reserve_player_rows {
@@ -109,7 +152,7 @@ impl App {
         layout.playback.ind_rc = Rect::default();
 
         {
-            // Tabs occupy the space between the control pill (left) and VOL (right).
+            // Tabs occupy the space between the left margin and VOL (right).
             let tabs_x = tabs_area.x + super::TABBAR_LEFT_RESERVE;
             let tabs_w = tabs_area
                 .width
@@ -264,7 +307,8 @@ impl App {
         // even while a toast visually covers this row -- Clear wipes the leftover
         // glyphs before the toast draws over them so nothing bleeds through.
         self.render_status_bar(f, status_bar_area, &mut layout.playback);
-        let show_toast = !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
+        let show_toast =
+            !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
         if show_toast {
             f.render_widget(Clear, status_bar_area);
             f.render_widget(
@@ -321,7 +365,6 @@ impl App {
                 &mut layout.library,
             );
         }
-
 
         self.render_context_menu(f, &mut layout);
 
@@ -732,184 +775,319 @@ impl App {
         }
     }
 
-    /// Control pill on the far left of the status bar: `  m ⇌ ≡  ` on an always-green
-    /// background. Each icon is its assigned color when ON, or reverse-video
-    /// (dark on green) when OFF. `m` mute and `⇌` remote are clickable.
-    fn render_control_pill(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
-        let bg = palette::PILL_BG;
-        let mute_on = self.playback_display_target().displayed_mute(self);
-        let is_playlist = matches!(
-            &self.queue_source,
-            crate::config::QueueSource::Playlist { .. }
+    fn remote_status_spans(
+        &self,
+        remote_state: super::RemoteSlotState,
+        daemon_endpoint: &str,
+    ) -> Vec<Span<'static>> {
+        let remote_on = matches!(
+            remote_state,
+            super::RemoteSlotState::AttachedSession | super::RemoteSlotState::DirectRemote
         );
-        let remote_state = self.remote_slot_state();
-        let icon = |on: bool, on_color: Color, bold: bool| {
-            // OFF: no explicit foreground (terminal default bleeds through).
-            let style = Style::default()
-                .bg(bg)
-                .fg(if on { on_color } else { Color::Reset });
-            if bold {
-                style.add_modifier(Modifier::BOLD)
-            } else {
-                style
+        let mut glyph_style = Style::default().bg(palette::PILL_BG).fg(if remote_on {
+            palette::YELLOW
+        } else {
+            palette::SUBTLE
+        });
+        if remote_on {
+            glyph_style = glyph_style.add_modifier(Modifier::BOLD);
+        }
+
+        let target = match remote_state {
+            super::RemoteSlotState::Off => None,
+            super::RemoteSlotState::AttachedSession => {
+                self.connected_session_state.as_ref().and_then(|session| {
+                    let device_name = session.device_name.trim();
+                    if !device_name.is_empty() {
+                        Some(device_name.to_string())
+                    } else {
+                        let host = session.host.trim();
+                        (!host.is_empty()).then(|| host.to_string())
+                    }
+                })
             }
+            super::RemoteSlotState::DirectRemote => self
+                .direct_remote_label
+                .clone()
+                .or_else(|| daemon_endpoint_label(daemon_endpoint)),
+            super::RemoteSlotState::LocalDaemon => None,
         };
-        let pad = Style::default().bg(bg);
-        let (x, y) = (area.x, area.y);
-        // Layout: "  m ⇌ ≡  " — m at x+2, ⇌ at x+4, ≡ at x+6.
-        layout.ind_mu = Rect {
-            x: x + 2,
-            y,
-            width: 1,
-            height: 1,
+        let label = match target {
+            Some(target) => format!("  {target}"),
+            None => "  local".to_string(),
         };
-        layout.ind_rc = Rect {
-            x: x + 4,
-            y,
-            width: 1,
-            height: 1,
+        let label_style = if remote_on {
+            Style::default()
+                .fg(palette::PINE)
+                .bg(palette::PILL_BG)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG)
         };
-        let (remote_glyph, remote_on, remote_color, remote_bold) = match remote_state {
-            super::RemoteSlotState::Off => ("\u{21CC}", false, Color::Reset, false),
-            super::RemoteSlotState::AttachedSession => ("\u{21CC}", true, palette::YELLOW, true),
-            super::RemoteSlotState::DirectRemote => ("\u{21CC}", true, palette::PINE, true),
-            super::RemoteSlotState::LocalDaemon => ("\u{25CF}", true, palette::PINE, false),
-        };
-        let spans = vec![
-            Span::styled("  ", pad),
-            Span::styled("m", icon(mute_on, palette::RED, true)),
-            Span::styled(" ", pad),
-            Span::styled(remote_glyph, icon(remote_on, remote_color, remote_bold)),
-            Span::styled(" ", pad),
-            Span::styled("\u{2261}", icon(is_playlist, palette::FOAM, true)),
-            Span::styled("  ", pad),
-        ];
-        f.render_widget(
-            Paragraph::new(Line::from(spans)),
-            Rect {
-                x,
-                y,
-                width: 9,
-                height: 1,
-            },
-        );
+
+        vec![
+            Span::styled("\u{1F5A7}", glyph_style),
+            Span::styled(label, label_style),
+        ]
     }
 
-    /// Persistent bottom status bar. Left side: control pill + a text label
-    /// for session/connection state the pill's glyph alone doesn't spell out
-    /// (RemoteSlotState, stay-alive), plus an UNSAVED marker whenever the
+    fn playlist_status_spans(&self) -> Vec<Span<'static>> {
+        let (label, on) = match &self.queue_source {
+            crate::config::QueueSource::Playlist { name, .. } => (format!("  {name}"), true),
+            _ => ("  none".to_string(), false),
+        };
+        let glyph_style = Style::default()
+            .bg(palette::PILL_BG)
+            .fg(if on { palette::FOAM } else { palette::YELLOW })
+            .add_modifier(if on {
+                Modifier::BOLD
+            } else {
+                Modifier::empty()
+            });
+        let label_style = Style::default()
+            .fg(if on { palette::FOAM } else { palette::SUBTLE })
+            .bg(palette::PILL_BG);
+
+        vec![
+            Span::styled("\u{1F5AD}", glyph_style),
+            Span::styled(label, label_style),
+        ]
+    }
+
+    fn mute_status_spans(&self) -> Option<Vec<Span<'static>>> {
+        self.playback_display_target()
+            .displayed_mute(self)
+            .then(|| {
+                vec![Span::styled(
+                    "muted",
+                    Style::default()
+                        .fg(palette::RED)
+                        .bg(palette::PILL_BG)
+                        .add_modifier(Modifier::BOLD),
+                )]
+            })
+    }
+
+    fn status_width(spans: &[Span]) -> u16 {
+        spans.iter().map(|s| s.content.width() as u16).sum()
+    }
+
+    fn append_status(spans: &mut Vec<Span<'static>>, status: Vec<Span<'static>>) {
+        if !spans.is_empty() {
+            spans.push(Span::styled(
+                " | ",
+                Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG),
+            ));
+        }
+        spans.extend(status);
+    }
+
+    fn render_remote_status_hitbox(&self, layout: &mut LayoutPlayback, area: Rect) {
+        if area.width == 0 {
+            layout.ind_rc = Rect::default();
+        } else {
+            layout.ind_rc = Rect {
+                x: area.x,
+                y: area.y,
+                width: 1,
+                height: 1,
+            };
+        }
+    }
+
+    /// Persistent bottom status bar. Left side: connection, playlist, stay-alive,
+    /// UNSAVED, and mute status groups. UNSAVED is shown whenever the
     /// queue is dirty -- shown on every tab, not just the Queue tab, since
     /// losing track of unsaved queue changes while browsing elsewhere is a
     /// real failure mode. Right side (added in a later task): queue source/
     /// autosave/scope detail, shown only on the Queue tab / Power View.
     fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
-        self.render_control_pill(f, area, layout);
+        let bar_style = Style::default().bg(palette::PILL_BG);
+        f.render_widget(Block::default().style(bar_style), area);
+        layout.ind_mu = Rect::default();
 
         let remote_state = self.remote_slot_state();
-        let remote_spans: Vec<Span> = match remote_state {
-            super::RemoteSlotState::Off => Vec::new(),
-            super::RemoteSlotState::AttachedSession => vec![Span::styled(
-                " ATTACHED",
-                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
-            )],
-            super::RemoteSlotState::DirectRemote => vec![Span::styled(
-                " REMOTE",
-                Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
-            )],
-            super::RemoteSlotState::LocalDaemon => vec![Span::styled(
-                " DAEMON",
-                Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
-            )],
+        let (daemon_endpoint, server_url) = {
+            let cfg = &self.client.lock().unwrap().config;
+            (cfg.daemon_client_endpoint.clone(), cfg.server_url.clone())
         };
-        let alive_span: Option<Span> = self
-            .stay_alive_ctrl
-            .is_some()
-            .then(|| Span::styled(" ALIVE", Style::default().fg(palette::FOAM)));
+        let remote_status = self.remote_status_spans(remote_state, &daemon_endpoint);
+        let playlist_status = self.playlist_status_spans();
+        self.render_remote_status_hitbox(layout, area);
+
+        let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
+            vec![Span::styled(
+                "alive",
+                Style::default().fg(palette::FOAM).bg(palette::PILL_BG),
+            )]
+        });
         // Dirty-queue marker: always shown, on every tab, not gated to the Queue
         // tab like the rest of the queue-state segment (see Task 3) -- unsaved
         // changes are worth surfacing no matter what you're currently looking at.
-        let unsaved_span: Option<Span> = self.queue_dirty.then(|| {
-            Span::styled(
-                " UNSAVED",
-                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
-            )
+        let unsaved_status: Option<Vec<Span>> = self.queue_dirty.then(|| {
+            vec![Span::styled(
+                "UNSAVED",
+                Style::default()
+                    .fg(palette::YELLOW)
+                    .bg(palette::PILL_BG)
+                    .add_modifier(Modifier::BOLD),
+            )]
         });
+        let mute_status = self.mute_status_spans();
 
         // Left-segment overflow priority: UNSAVED is protected (it's the one thing
-        // that must stay visible on every tab); ALIVE drops first if the combined
-        // left segment wouldn't fit in the row, then the remote-state label text,
-        // before UNSAVED itself would ever be at risk of being clipped by Paragraph.
-        let remote_w: u16 = remote_spans.iter().map(|s| s.content.width() as u16).sum();
-        let alive_w: u16 = alive_span.as_ref().map(|s| s.content.width() as u16).unwrap_or(0);
-        let unsaved_w: u16 = unsaved_span.as_ref().map(|s| s.content.width() as u16).unwrap_or(0);
-        // Pill is always "  m ⇌ ≡  " = 9 cols wide; `available` is what's left of
-        // the row for the label/ALIVE/UNSAVED content.
-        let available = area.width.saturating_sub(9);
-        let fits_all = remote_w + alive_w + unsaved_w <= available;
-        let fits_without_alive = !fits_all && remote_w + unsaved_w <= available;
+        // that must stay visible on every tab); alive drops first if the combined
+        // left segment wouldn't fit in the row, then mute, then remote, then playlist.
+        let remote_w = Self::status_width(&remote_status);
+        let playlist_w = Self::status_width(&playlist_status);
+        let alive_w: u16 = alive_status
+            .as_ref()
+            .map(|spans| Self::status_width(spans))
+            .unwrap_or(0);
+        let unsaved_w: u16 = unsaved_status
+            .as_ref()
+            .map(|spans| Self::status_width(spans))
+            .unwrap_or(0);
+        let mute_w: u16 = mute_status
+            .as_ref()
+            .map(|spans| Self::status_width(spans))
+            .unwrap_or(0);
+        let available = area.width;
+        let joined_width = |widths: &[u16]| -> u16 {
+            let mut total = 0u16;
+            let mut count = 0u16;
+            for width in widths.iter().copied().filter(|w| *w > 0) {
+                total = total.saturating_add(width);
+                if count > 0 {
+                    total = total.saturating_add(3);
+                }
+                count += 1;
+            }
+            total
+        };
+        let fits_all =
+            joined_width(&[remote_w, playlist_w, alive_w, unsaved_w, mute_w]) <= available;
+        let fits_without_alive =
+            !fits_all && joined_width(&[remote_w, playlist_w, unsaved_w, mute_w]) <= available;
+        let fits_without_mute = !fits_all
+            && !fits_without_alive
+            && joined_width(&[remote_w, playlist_w, unsaved_w]) <= available;
+        let fits_without_remote = !fits_all
+            && !fits_without_alive
+            && !fits_without_mute
+            && joined_width(&[playlist_w, unsaved_w]) <= available;
 
         let mut spans: Vec<Span> = Vec::new();
-        if fits_all || fits_without_alive {
-            spans.extend(remote_spans);
+        if fits_all || fits_without_alive || fits_without_mute {
+            Self::append_status(&mut spans, remote_status);
+            Self::append_status(&mut spans, playlist_status);
+        } else if fits_without_remote {
+            Self::append_status(&mut spans, playlist_status);
         }
-        // else: drop the remote-state label too; UNSAVED is still protected below.
         if fits_all {
-            if let Some(a) = alive_span {
-                spans.push(a);
+            if let Some(alive) = alive_status {
+                Self::append_status(&mut spans, alive);
             }
         }
-        if let Some(u) = unsaved_span {
-            spans.push(u);
+        if let Some(unsaved) = unsaved_status {
+            Self::append_status(&mut spans, unsaved);
+        }
+        if fits_all || fits_without_alive {
+            if let Some(mute) = mute_status {
+                let mute_x =
+                    area.x + Self::status_width(&spans) + if spans.is_empty() { 0 } else { 3 };
+                let mute_w = Self::status_width(&mute);
+                Self::append_status(&mut spans, mute);
+                layout.ind_mu = Rect {
+                    x: mute_x,
+                    y: area.y,
+                    width: mute_w,
+                    height: 1,
+                };
+            }
         }
 
         // `left_content_w` tracks how far the left segment actually extends after
-        // the above priority drop -- pill alone, pill + some subset of the label
-        // pieces, or pill + everything -- so Task 3's right-segment overlap check
-        // can compare against the real left edge instead of a hardcoded constant.
+        // the above priority drop, so the right-segment overlap check can compare
+        // against the real left edge instead of a hardcoded constant.
         let label_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
-        let left_content_w: u16 = 9 + label_w;
+        let left_content_w: u16 = label_w;
         if !spans.is_empty() {
-            let label_x = area.x + 9;
             let label_rect = Rect {
-                x: label_x,
+                x: area.x,
                 y: area.y,
-                width: area.width.saturating_sub(9),
+                width: area.width,
                 height: 1,
             };
-            f.render_widget(Paragraph::new(Line::from(spans)), label_rect);
+            f.render_widget(
+                Paragraph::new(Line::from(spans)).style(bar_style),
+                label_rect,
+            );
         }
 
-        if self.tab_idx == 1 {
+        {
             let mut right_spans: Vec<Span> = Vec::new();
             let source_label: Option<(String, Color)> = match &self.queue_source {
-                crate::config::QueueSource::Playlist { name, .. } => {
-                    Some((format!("PLAYLIST {name}"), palette::FOAM))
+                crate::config::QueueSource::Playlist { .. } => None,
+                crate::config::QueueSource::Album if self.tab_idx == 1 => {
+                    Some(("ALBUM".to_string(), palette::MUTED))
                 }
-                crate::config::QueueSource::Album => Some(("ALBUM".to_string(), palette::MUTED)),
-                crate::config::QueueSource::Series => Some(("SERIES".to_string(), palette::MUTED)),
-                crate::config::QueueSource::Shuffle => Some(("SHUFFLE".to_string(), palette::MUTED)),
-                crate::config::QueueSource::Remote => Some(("REMOTE Q".to_string(), palette::MUTED)),
-                crate::config::QueueSource::Collection { collection_type } => {
+                crate::config::QueueSource::Series if self.tab_idx == 1 => {
+                    Some(("SERIES".to_string(), palette::MUTED))
+                }
+                crate::config::QueueSource::Shuffle if self.tab_idx == 1 => {
+                    Some(("SHUFFLE".to_string(), palette::MUTED))
+                }
+                crate::config::QueueSource::Remote if self.tab_idx == 1 => {
+                    Some(("REMOTE Q".to_string(), palette::MUTED))
+                }
+                crate::config::QueueSource::Collection { collection_type } if self.tab_idx == 1 => {
                     Some((collection_type.to_uppercase(), palette::MUTED))
                 }
                 crate::config::QueueSource::Unknown => None,
+                _ => None,
+            };
+            let append_right = |right_spans: &mut Vec<Span<'static>>, span: Span<'static>| {
+                if !right_spans.is_empty() {
+                    right_spans.push(Span::styled(
+                        " | ",
+                        Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG),
+                    ));
+                }
+                right_spans.push(span);
             };
             if let Some((label, color)) = source_label {
-                right_spans.push(Span::styled(label, Style::default().fg(color)));
+                append_right(
+                    &mut right_spans,
+                    Span::styled(label, Style::default().fg(color).bg(palette::PILL_BG)),
+                );
             }
-            let autosave_on = self.queue_is_saved_playlist() && {
+            let autosave_on = self.tab_idx == 1 && self.queue_is_saved_playlist() && {
                 let cfg = &self.client.lock().unwrap().config;
                 cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
             };
             if autosave_on {
-                right_spans.push(Span::styled(" AUTOSAVE", Style::default().fg(palette::PINE)));
+                append_right(
+                    &mut right_spans,
+                    Span::styled(
+                        "AUTOSAVE",
+                        Style::default().fg(palette::PINE).bg(palette::PILL_BG),
+                    ),
+                );
+            }
+            if let Some(server) = server_url_label(&server_url) {
+                append_right(
+                    &mut right_spans,
+                    Span::styled(
+                        server,
+                        Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG),
+                    ),
+                );
             }
             // Dirty/unsaved marker is NOT rendered here -- it lives in the
             // always-on left segment (Task 2) so it's visible on every tab,
-            // not just the Queue tab. Do not re-add it to this right segment.
-            if self.visible_queue_scope() == super::QueueScope::Remote {
-                right_spans.push(Span::styled(" REMOTE QUEUE", Style::default().fg(palette::PINE)));
-            }
+            // not just the Queue tab. Remote queue scope is also omitted here:
+            // the active queue is already apparent from the queue UI.
             if !right_spans.is_empty() {
                 let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
                 // Compare against `left_content_w` (pill + session label, from Task 2),
@@ -925,7 +1103,10 @@ impl App {
                         width: right_w,
                         height: 1,
                     };
-                    f.render_widget(Paragraph::new(Line::from(right_spans)), right_rect);
+                    f.render_widget(
+                        Paragraph::new(Line::from(right_spans)).style(bar_style),
+                        right_rect,
+                    );
                 }
                 // else: terminal too narrow for both segments -- right segment drops
                 // silently rather than overlapping the pill or the session label.
