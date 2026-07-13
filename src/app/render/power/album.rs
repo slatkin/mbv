@@ -460,7 +460,7 @@ impl App {
                     Paragraph::new(Line::from(vec![
                         Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
                         Span::raw(" "),
-                        Span::styled(hint.to_string(), Style::default().fg(palette::SUBTLE)),
+                        Span::styled(hint.to_string(), Style::default().fg(palette::MUTED)),
                     ])),
                     Rect {
                         x: area.x,

@@ -1403,8 +1403,8 @@ mod tests {
             .expect("expected hint x position");
         assert_eq!(
             buf[(hint_x as u16, hint_y as u16)].fg,
-            palette::SUBTLE,
-            "expected inline action hints to render grey/subtle:\n{out}"
+            palette::MUTED,
+            "expected inline action hints to render darker than unfocused track text:\n{out}"
         );
 
         let track_y = lines
