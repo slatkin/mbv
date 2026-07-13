@@ -958,7 +958,7 @@ impl App {
         let mut spans: Vec<Span> = Vec::new();
         if let Some(alive) = alive_status {
             spans.push(Span::raw(" "));
-            Self::append_status(&mut spans, alive);
+            spans.extend(alive);
         }
         if fits_all || fits_without_alive || fits_without_mute {
             Self::append_status(&mut spans, remote_status);
