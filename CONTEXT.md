@@ -186,6 +186,10 @@ _Avoid_: "artist" alone when what's meant is only the item's own (possibly empty
 The order items actually appear on screen in a power-list view, whenever that differs from API order — e.g. albums resorted by resolved artist in a grouped album view, or items resorted by `effective_sort_str` for letter-bucket grouping. Published as `left_sorted_indices` so keyboard and mouse navigation stay consistent with what's rendered, regardless of which view produced the reordering.
 _Avoid_: "sorted order" — ambiguous with API order, which is also a sort result. Also avoid treating this as specific to grouped album views — any power-list view that reorders for display produces one.
 
+**Display row**:
+A row occupied in a rendered library list. A display row may correspond to a selectable media item, or it may be a structural/detail row such as an artist header, inline album-track row, separator, or loading placeholder.
+_Avoid_: treating display rows and media items as interchangeable; one media item can occupy multiple display rows when inline detail is expanded, and some display rows are not selectable items at all.
+
 **Grouped album view**:
 A display mode for an album listing that inserts an artist header row at each artist boundary, built from resolved artist rather than API order. One of several power-list view modes that produce a display order (another being the letter-grouped view, which buckets by first letter instead of artist).
 _Avoid_: conflating with "album level" (whether a navigation level shows albums at all) — grouping is about whether those albums are clustered by resolved artist within that level, an orthogonal concern.
