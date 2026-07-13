@@ -259,9 +259,20 @@ impl App {
         }
 
         // Persistent bottom status bar: control pill lives here now instead of
-        // the tab row. Session/queue segments and toast override land in
-        // later tasks; for now this row renders only the pill.
-        self.render_status_bar(f, status_bar_area, &mut layout.playback);
+        // the tab row. Toast takes over the entire row when active; otherwise
+        // session/queue state segments render in their usual places.
+
+        let show_toast = !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
+        if show_toast {
+            f.render_widget(
+                Paragraph::new(Self::toast_line(&self.status))
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(palette::TEXT).bg(palette::IRIS)),
+                status_bar_area,
+            );
+        } else {
+            self.render_status_bar(f, status_bar_area, &mut layout.playback);
+        }
 
         let now_playing: Option<String> = if active {
             let idx = self.player.status.lock().unwrap().current_idx;
@@ -310,26 +321,6 @@ impl App {
             );
         }
 
-        if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {
-            let toast_rect = Rect {
-                x: area.x,
-                y: area.y + area.height - 3,
-                width: area.width,
-                height: 3,
-            };
-            f.render_widget(Clear, toast_rect);
-            f.render_widget(
-                Paragraph::new(Self::toast_line(&self.status))
-                    .alignment(Alignment::Center)
-                    .style(Style::default().fg(palette::TEXT).bg(palette::IRIS))
-                    .block(
-                        Block::default()
-                            .style(Style::default().fg(palette::TEXT).bg(palette::IRIS))
-                            .padding(ratatui::widgets::Padding::vertical(1)),
-                    ),
-                toast_rect,
-            );
-        }
 
         self.render_context_menu(f, &mut layout);
 

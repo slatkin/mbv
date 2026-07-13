@@ -7721,4 +7721,45 @@ pub(crate) mod tests {
             "queue source/autosave/scope detail must not leak onto tabs where it isn't relevant:\n{last_line}"
         );
     }
+
+    // ── status_bar (Task 4: toast overlay replacement) ──────────────────────
+
+    #[test]
+    fn toast_renders_in_status_bar_without_covering_main_content_above_it() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.status = "Saved [Y]".to_string();
+        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let lines: Vec<&str> = rendered.lines().collect();
+        let last_line = lines.last().unwrap();
+
+        assert!(
+            last_line.contains("Saved"),
+            "expected the toast text on the final row:\n{last_line}"
+        );
+        // Old behavior covered 3 rows with Clear+overlay; new behavior must
+        // only touch the single bottom row, leaving the row above untouched.
+        let second_to_last = lines[lines.len() - 2];
+        assert!(
+            !second_to_last.contains("Saved"),
+            "toast must not spill onto the row above the status bar:\n{second_to_last}"
+        );
+    }
+
+    #[test]
+    fn status_bar_shows_normal_content_when_no_toast_is_active() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.status = String::new();
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains('\u{2261}'),
+            "expected the control pill to still render when no toast is active:\n{last_line}"
+        );
+    }
 }
