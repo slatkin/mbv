@@ -80,6 +80,15 @@ Add to the `tests` module in `src/app/mod.rs` (near the other `render_app_to_str
             !first_line.contains('\u{2261}'),
             "control pill must have moved off the tab row:\n{first_line}"
         );
+        // TABBAR_LEFT_RESERVE shrinks from 10 (pill + gap) to 2 (small margin)
+        // now that the pill no longer lives in the tab row -- the first tab
+        // label should start within a couple columns of the left edge, not
+        // leave a 10-column dead zone where the pill used to be.
+        let first_non_space = first_line.find(|c: char| c != ' ').unwrap_or(0);
+        assert!(
+            first_non_space <= 3,
+            "expected the tab row's first tab to start near the left edge (col <= 3), got col {first_non_space}:\n{first_line}"
+        );
     }
 ```
 
@@ -158,7 +167,30 @@ In the same function, find the block:
             let tabs_x = tabs_area.x + super::TABBAR_LEFT_RESERVE;
 ```
 
-Delete the `self.render_control_pill(...)` line and its comment from inside that block (leave `tabs_x`/everything else in the block untouched — `TABBAR_LEFT_RESERVE` still reserves room for it visually consistent tab alignment, that constant is a separate concern from this task). Immediately after that whole tab-row block closes (right before the `let now_playing: Option<String> = ...` line), add:
+Delete the `self.render_control_pill(...)` line and its comment from inside that block.
+
+`TABBAR_LEFT_RESERVE` (`src/app/mod.rs:31`) is currently `10` — sized for the pill's `"  m ⇌ ≡  "` (9 cols) plus a 1-col gap before the tabs start (see its doc comment: "Width reserved on the left of the tab bar for the control pill... + gap"). Once the pill moves out of `tabs_area` in this same task, that reservation no longer holds anything — it becomes a permanent 10-column blank strip at the left of the tab row every frame, which reads as a layout bug the moment this task lands (three commits before the rest of the design is visible). Shrink it as part of this task, not as separate follow-up: change it to a small fixed left margin.
+
+In `src/app/mod.rs`, replace:
+
+```rust
+/// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
+pub(super) const TABBAR_LEFT_RESERVE: u16 = 10;
+```
+
+with:
+
+```rust
+/// Small left margin so tabs don't sit flush against the terminal edge. The
+/// control pill used to live here (hence the old, larger reservation); it now
+/// renders in the status bar (see `render_status_bar`) and no longer needs
+/// room in the tab row.
+pub(super) const TABBAR_LEFT_RESERVE: u16 = 2;
+```
+
+(`TABBAR_RIGHT_RESERVE` stays `17` — unrelated to the pill, it reserves room for the `VOL` badge/scroll-arrow content on the right of the tab row, which isn't moving.)
+
+Immediately after that whole tab-row block closes (right before the `let now_playing: Option<String> = ...` line), add:
 
 ```rust
         // Persistent bottom status bar: control pill lives here now instead of
@@ -218,8 +250,12 @@ git commit -m "Reclaim dormant status row as persistent bottom bar; relocate con
 - Test: `src/app/mod.rs` `tests` module
 
 **Interfaces:**
-- Consumes: `self.remote_slot_state() -> RemoteSlotState` (`src/app/mod.rs`, variants `Off` / `AttachedSession` / `DirectRemote` / `LocalDaemon`), `self.stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>` (`src/app/mod.rs`), `LayoutPlayback` (from Task 1).
-- Produces: `fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback)` — replaces the direct `render_control_pill` call in `App::render`. Task 3 extends this same method with the right-aligned queue segment.
+- Consumes: `self.remote_slot_state() -> RemoteSlotState` (`src/app/mod.rs`, variants `Off` / `AttachedSession` / `DirectRemote` / `LocalDaemon`), `self.stay_alive_ctrl: Option<stay_alive::StayAliveCtrl>` (`src/app/mod.rs`), `self.queue_dirty: bool` (`src/app/mod.rs`), `LayoutPlayback` (from Task 1).
+- Produces: `fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback)` — replaces the direct `render_control_pill` call in `App::render`. Task 3 extends this same method with the right-aligned queue segment, and reuses the `left_content_w` local variable this task introduces (pill width plus whatever the left segment — session label + unsaved marker — actually consumes) so the right segment's overlap check in Task 3 is checking against the real left-content width, not just the pill.
+
+**Design note (from grilling review):** the dirty/unsaved queue marker (`UNSAVED`) lives in this task's always-on left segment, not Task 3's Queue-tab-only right segment. Rationale: source/autosave/scope only matter when you're looking at the queue, but "you have unsaved queue changes" is worth surfacing no matter which tab you're browsing — otherwise a user can build a queue, tab away to browse the library, and lose all on-screen indication that they have unsaved work. `UNSAVED` therefore renders on every tab; `PLAYLIST <name>` / `ALBUM` / `SERIES` / `SHUFFLE` / `REMOTE Q` / `AUTOSAVE` / `REMOTE QUEUE` stay Queue-tab-only in Task 3.
+
+**Design note (overflow priority, from grilling review):** the left segment can now contain up to three pieces (remote-state label, `ALIVE`, `UNSAVED`) plus the pill, and on a narrow terminal all three plus the pill may not fit before the row's right edge / before colliding with Task 3's right segment. Because `UNSAVED` is the one piece meant to be visible unconditionally, it is protected: if the combined width overflows, `ALIVE` is dropped first, then the remote-state label text, before `UNSAVED` is ever at risk of being clipped. (Task 3's right-segment behavior is unchanged — it still drops as a whole unit rather than degrading piece-by-piece; only the left segment gets this priority treatment, since only the left segment has a piece that must never disappear.)
 
 - [ ] **Step 1: Write the failing test**
 
@@ -252,14 +288,79 @@ git commit -m "Reclaim dormant status row as persistent bottom bar; relocate con
             "expected no session label when nothing is connected:\n{last_line}"
         );
     }
+
+    #[test]
+    fn status_bar_shows_unsaved_marker_on_any_tab_when_queue_is_dirty() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0; // Home tab, not the Queue tab -- unsaved state must still show.
+        app.queue_dirty = true;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("UNSAVED"),
+            "expected an UNSAVED marker regardless of the active tab when the queue is dirty:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_drops_alive_before_unsaved_when_left_segment_overflows() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote); // -> " REMOTE" label (7 cols)
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end)); // -> " ALIVE" (6 cols)
+        app.queue_dirty = true; // -> " UNSAVED" (8 cols)
+
+        // pill (9) + REMOTE (7) + ALIVE (6) + UNSAVED (8) = 30 cols; a 28-col
+        // terminal leaves only 19 cols for the label -- enough for REMOTE +
+        // UNSAVED (15) but not all three (21), so ALIVE must drop first.
+        let rendered = render_app_to_string(&mut app, 28, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("REMOTE") && last_line.contains("UNSAVED"),
+            "expected REMOTE and UNSAVED to survive the overflow:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("ALIVE"),
+            "expected ALIVE to be the first thing dropped on overflow:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_keeps_only_unsaved_when_left_segment_severely_overflows() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote);
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+        app.queue_dirty = true;
+
+        // Only 11 cols available for the label (20 - 9) -- not enough for
+        // REMOTE + UNSAVED (15), so REMOTE must drop too; UNSAVED (8) still fits
+        // and is never dropped.
+        let rendered = render_app_to_string(&mut app, 20, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("UNSAVED"),
+            "UNSAVED must be protected even under severe overflow:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("REMOTE") && !last_line.contains("ALIVE"),
+            "expected REMOTE and ALIVE both dropped before UNSAVED is touched:\n{last_line}"
+        );
+    }
 ```
 
-Both tests reuse `make_remote_app_stub` — confirm it exists near `make_app_stub` in `src/app/mod.rs` before writing the test (it's used by the existing `power_queue_renders_scope_pills_and_hitboxes_for_direct_remote` test, so it does).
+Both `REMOTE`/`ATTACHED`/`DAEMON` tests reuse `make_remote_app_stub` — confirm it exists near `make_app_stub` in `src/app/mod.rs` before writing the test (it's used by the existing `power_queue_renders_scope_pills_and_hitboxes_for_direct_remote` test, so it does). The two overflow tests additionally use `stay_alive::StayAliveCtrl::for_test` — confirm this exists via the pattern already used at `src/app/mod.rs:3584` (`try_quit_stay_alive_detach_clears_attached_and_notifies_relay`), which constructs it the same way from one end of a `UnixStream::pair()`.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cargo test --lib status_bar_shows_direct_remote_label_next_to_pill status_bar_has_no_session_label_when_remote_slot_is_off`
-Expected: FAIL — no `render_status_bar` exists yet, so `render_app_to_string` still only draws the bare pill from Task 1; neither label appears.
+Run: `cargo test --lib status_bar_shows_direct_remote_label_next_to_pill status_bar_has_no_session_label_when_remote_slot_is_off status_bar_shows_unsaved_marker_on_any_tab_when_queue_is_dirty status_bar_drops_alive_before_unsaved_when_left_segment_overflows status_bar_keeps_only_unsaved_when_left_segment_severely_overflows`
+Expected: FAIL — no `render_status_bar` exists yet, so `render_app_to_string` still only draws the bare pill from Task 1; none of the labels/markers appear.
 
 - [ ] **Step 3: Implement `render_status_bar` and wire it in**
 
@@ -268,39 +369,79 @@ In `src/app/render/mod.rs`, add a new method near `render_control_pill`:
 ```rust
     /// Persistent bottom status bar. Left side: control pill + a text label
     /// for session/connection state the pill's glyph alone doesn't spell out
-    /// (RemoteSlotState, stay-alive). Right side (added in a later task):
-    /// queue state, shown only on the Queue tab / Power View.
+    /// (RemoteSlotState, stay-alive), plus an UNSAVED marker whenever the
+    /// queue is dirty -- shown on every tab, not just the Queue tab, since
+    /// losing track of unsaved queue changes while browsing elsewhere is a
+    /// real failure mode. Right side (added in a later task): queue source/
+    /// autosave/scope detail, shown only on the Queue tab / Power View.
     fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
         self.render_control_pill(f, area, layout);
 
         let remote_state = self.remote_slot_state();
+        let remote_spans: Vec<Span> = match remote_state {
+            super::RemoteSlotState::Off => Vec::new(),
+            super::RemoteSlotState::AttachedSession => vec![Span::styled(
+                " ATTACHED",
+                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
+            )],
+            super::RemoteSlotState::DirectRemote => vec![Span::styled(
+                " REMOTE",
+                Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
+            )],
+            super::RemoteSlotState::LocalDaemon => vec![Span::styled(
+                " DAEMON",
+                Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
+            )],
+        };
+        let alive_span: Option<Span> = self
+            .stay_alive_ctrl
+            .is_some()
+            .then(|| Span::styled(" ALIVE", Style::default().fg(palette::FOAM)));
+        // Dirty-queue marker: always shown, on every tab, not gated to the Queue
+        // tab like the rest of the queue-state segment (see Task 3) -- unsaved
+        // changes are worth surfacing no matter what you're currently looking at.
+        let unsaved_span: Option<Span> = self.queue_dirty.then(|| {
+            Span::styled(
+                " UNSAVED",
+                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
+            )
+        });
+
+        // Left-segment overflow priority: UNSAVED is protected (it's the one thing
+        // that must stay visible on every tab); ALIVE drops first if the combined
+        // left segment wouldn't fit in the row, then the remote-state label text,
+        // before UNSAVED itself would ever be at risk of being clipped by Paragraph.
+        let remote_w: u16 = remote_spans.iter().map(|s| s.content.width() as u16).sum();
+        let alive_w: u16 = alive_span.as_ref().map(|s| s.content.width() as u16).unwrap_or(0);
+        let unsaved_w: u16 = unsaved_span.as_ref().map(|s| s.content.width() as u16).unwrap_or(0);
+        // Pill is always "  m ⇌ ≡  " = 9 cols wide; `available` is what's left of
+        // the row for the label/ALIVE/UNSAVED content.
+        let available = area.width.saturating_sub(9);
+        let fits_all = remote_w + alive_w + unsaved_w <= available;
+        let fits_without_alive = !fits_all && remote_w + unsaved_w <= available;
+
         let mut spans: Vec<Span> = Vec::new();
-        match remote_state {
-            super::RemoteSlotState::Off => {}
-            super::RemoteSlotState::AttachedSession => {
-                spans.push(Span::styled(
-                    " ATTACHED",
-                    Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
-                ));
-            }
-            super::RemoteSlotState::DirectRemote => {
-                spans.push(Span::styled(
-                    " REMOTE",
-                    Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
-                ));
-            }
-            super::RemoteSlotState::LocalDaemon => {
-                spans.push(Span::styled(
-                    " DAEMON",
-                    Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
-                ));
+        if fits_all || fits_without_alive {
+            spans.extend(remote_spans);
+        }
+        // else: drop the remote-state label too; UNSAVED is still protected below.
+        if fits_all {
+            if let Some(a) = alive_span {
+                spans.push(a);
             }
         }
-        if self.stay_alive_ctrl.is_some() {
-            spans.push(Span::styled(" ALIVE", Style::default().fg(palette::FOAM)));
+        if let Some(u) = unsaved_span {
+            spans.push(u);
         }
+
+        // `left_content_w` tracks how far the left segment actually extends after
+        // the above priority drop -- pill alone, pill + some subset of the label
+        // pieces, or pill + everything -- so Task 3's right-segment overlap check
+        // can compare against the real left edge instead of a hardcoded constant.
+        let label_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
+        let left_content_w: u16 = 9 + label_w;
         if !spans.is_empty() {
-            let label_x = area.x + 9; // pill is always "  m ⇌ ≡  " = 9 cols wide
+            let label_x = area.x + 9;
             let label_rect = Rect {
                 x: label_x,
                 y: area.y,
@@ -311,6 +452,8 @@ In `src/app/render/mod.rs`, add a new method near `render_control_pill`:
         }
     }
 ```
+
+Note: `left_content_w` is computed unconditionally (it's just `9 + 0` when `spans` is empty) so Task 3's appended code — which lives in the same function body, after this block — can reference it directly without restructuring the function into two passes.
 
 Then in `App::render`, replace the line added in Task 1:
 
@@ -326,7 +469,7 @@ with:
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cargo test --lib status_bar_shows_direct_remote_label_next_to_pill status_bar_has_no_session_label_when_remote_slot_is_off`
+Run: `cargo test --lib status_bar_shows_direct_remote_label_next_to_pill status_bar_has_no_session_label_when_remote_slot_is_off status_bar_shows_unsaved_marker_on_any_tab_when_queue_is_dirty status_bar_drops_alive_before_unsaved_when_left_segment_overflows status_bar_keeps_only_unsaved_when_left_segment_severely_overflows`
 Expected: PASS
 
 - [ ] **Step 5: Run the full suite**
@@ -338,7 +481,7 @@ Expected: PASS
 
 ```bash
 git add src/app/render/mod.rs
-git commit -m "Add session/connection label to the status bar"
+git commit -m "Add session/connection label and always-on unsaved-queue marker to the status bar"
 ```
 
 ---
@@ -350,24 +493,24 @@ git commit -m "Add session/connection label to the status bar"
 - Test: `src/app/mod.rs` `tests` module
 
 **Interfaces:**
-- Consumes: `self.tab_idx: usize`, `self.queue_dirty: bool`, `self.queue_source: crate::config::QueueSource`, `self.queue_is_saved_playlist() -> bool` (`src/app/actions.rs`), `self.visible_queue_scope() -> QueueScope` (`src/app/mod.rs`), `self.client.lock().unwrap().config.save_playlist_on_consume: bool` / `.save_playlist_on_consume_audio: bool` (established access pattern, see `src/app/actions.rs:4218` and `:4246`).
-- Produces: extends `render_status_bar` in place; no new public interface for later tasks (Task 4 only touches the toast path, not this segment).
+- Consumes: `self.tab_idx: usize`, `self.queue_source: crate::config::QueueSource`, `self.queue_is_saved_playlist() -> bool` (`src/app/actions.rs`), `self.visible_queue_scope() -> QueueScope` (`src/app/mod.rs`), `self.client.lock().unwrap().config.save_playlist_on_consume: bool` / `.save_playlist_on_consume_audio: bool` (established access pattern, see `src/app/actions.rs:4218` and `:4246`). (`self.queue_dirty` moved to Task 2's always-on left segment — see that task's design note — and is not read here.)
+- Produces: extends `render_status_bar` in place; no new public interface for later tasks (Task 4 only touches the toast path, not this segment). Reads `left_content_w` (introduced in Task 2, Step 3) rather than re-deriving a pill-only width, so the overlap guard reflects the actual left-content extent.
 
 - [ ] **Step 1: Write the failing test**
 
 ```rust
     #[test]
-    fn status_bar_shows_unsaved_marker_for_dirty_queue_on_queue_tab() {
+    fn status_bar_shows_queue_source_label_on_queue_tab() {
         let mut app = make_app_stub();
         app.tab_idx = 1; // Queue tab
-        app.queue_dirty = true;
+        app.queue_source = crate::config::QueueSource::Album;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains("UNSAVED"),
-            "expected an UNSAVED marker for a dirty queue on the Queue tab:\n{last_line}"
+            last_line.contains("ALBUM"),
+            "expected an ALBUM queue-source label on the Queue tab:\n{last_line}"
         );
     }
 
@@ -375,22 +518,24 @@ git commit -m "Add session/connection label to the status bar"
     fn status_bar_hides_queue_segment_outside_queue_and_power_view() {
         let mut app = make_app_stub();
         app.tab_idx = 0; // Home tab
-        app.queue_dirty = true;
+        app.queue_source = crate::config::QueueSource::Album;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            !last_line.contains("UNSAVED"),
-            "queue state must not leak onto tabs where it isn't relevant:\n{last_line}"
+            !last_line.contains("ALBUM"),
+            "queue source/autosave/scope detail must not leak onto tabs where it isn't relevant:\n{last_line}"
         );
     }
 ```
 
+Note: this no longer uses `queue_dirty`/`UNSAVED` as the gating probe — that marker moved to Task 2's always-on left segment in the previous task and would now show on every tab, so it can't be used to prove this segment is tab-gated. `queue_source` (source label) is still exclusively part of this right segment, so it's the correct probe for these two tests.
+
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cargo test --lib status_bar_shows_unsaved_marker_for_dirty_queue_on_queue_tab status_bar_hides_queue_segment_outside_queue_and_power_view`
-Expected: first test FAILs (no `UNSAVED` text exists yet); second PASSes trivially (nothing renders queue state anywhere yet) — that's fine, it becomes a meaningful regression guard once Step 3 lands.
+Run: `cargo test --lib status_bar_shows_queue_source_label_on_queue_tab status_bar_hides_queue_segment_outside_queue_and_power_view`
+Expected: first test FAILs (no `ALBUM` text exists yet); second PASSes trivially (nothing renders queue state anywhere yet) — that's fine, it becomes a meaningful regression guard once Step 3 lands.
 
 - [ ] **Step 3: Extend `render_status_bar` with the right segment**
 
@@ -422,20 +567,19 @@ Append to the end of `render_status_bar` (after the left-segment `if !spans.is_e
             if autosave_on {
                 right_spans.push(Span::styled(" AUTOSAVE", Style::default().fg(palette::PINE)));
             }
-            if self.queue_dirty {
-                right_spans.push(Span::styled(
-                    " UNSAVED",
-                    Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
-                ));
-            }
+            // Dirty/unsaved marker is NOT rendered here -- it lives in the
+            // always-on left segment (Task 2) so it's visible on every tab,
+            // not just the Queue tab. Do not re-add it to this right segment.
             if self.visible_queue_scope() == super::QueueScope::Remote {
                 right_spans.push(Span::styled(" REMOTE QUEUE", Style::default().fg(palette::PINE)));
             }
             if !right_spans.is_empty() {
                 let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
-                let left_end = area.x + 9; // pill width; label (if any) extends further but
-                                            // right segment yielding to the pill alone is enough
-                                            // to avoid the worst overlap on narrow terminals.
+                // Compare against `left_content_w` (pill + session label, from Task 2),
+                // not a hardcoded pill-only width -- otherwise this check passes while
+                // the right segment still overlaps a rendered session label (e.g.
+                // " ATTACHED" / " REMOTE ALIVE") on narrow terminals.
+                let left_end = area.x + left_content_w;
                 let right_x = area.x + area.width.saturating_sub(right_w);
                 if right_x >= left_end {
                     let right_rect = Rect {
@@ -447,8 +591,9 @@ Append to the end of `render_status_bar` (after the left-segment `if !spans.is_e
                     f.render_widget(Paragraph::new(Line::from(right_spans)), right_rect);
                 }
                 // else: terminal too narrow for both segments -- right segment drops
-                // silently rather than overlapping the pill. (Design doc's open
-                // question on narrow-terminal truncation: right segment yields first.)
+                // silently rather than overlapping the pill or the session label.
+                // (Design doc's open question on narrow-terminal truncation: right
+                // segment yields first.)
             }
         }
 ```
@@ -457,7 +602,7 @@ This requires `Color` and `Widget::width` trait (`unicode_width::UnicodeWidthStr
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cargo test --lib status_bar_shows_unsaved_marker_for_dirty_queue_on_queue_tab status_bar_hides_queue_segment_outside_queue_and_power_view`
+Run: `cargo test --lib status_bar_shows_queue_source_label_on_queue_tab status_bar_hides_queue_segment_outside_queue_and_power_view`
 Expected: PASS
 
 - [ ] **Step 5: Run the full suite**
@@ -609,6 +754,6 @@ git commit -m "Move toast rendering into the persistent status bar; delete the 3
 
 ## Plan Self-Review
 
-- **Spec coverage:** Layout placement (Task 1) ✓. Control pill relocation (Task 1) ✓. Session/connection label (Task 2) ✓. Queue-state right segment, gated to Queue/Power View (Task 3) ✓. Toast full-width takeover replacing the 3-row overlay (Task 4) ✓. Res/audio/sub chips and `VOL` badge explicitly left untouched (never referenced by any task) ✓. Narrow-terminal truncation open question resolved in Task 3 Step 3 (right segment drops before overlapping the pill).
+- **Spec coverage:** Layout placement (Task 1) ✓. Control pill relocation (Task 1) ✓. Session/connection label + always-on unsaved-queue marker (Task 2) ✓. Queue source/autosave/scope right segment, gated to Queue/Power View (Task 3) ✓. Toast full-width takeover replacing the 3-row overlay (Task 4) ✓. Res/audio/sub chips and `VOL` badge explicitly left untouched (never referenced by any task) ✓. Narrow-terminal truncation open question resolved in Task 3 Step 3: right segment drops before overlapping the *actual* left content (pill + session label + unsaved marker, via `left_content_w` from Task 2), not just the pill — an earlier draft of this plan compared only against the pill's fixed 9-col width and could have let the right segment overlap a rendered session label; fixed during design review. `TABBAR_LEFT_RESERVE` shrunk from `10` to `2` in Task 1 so the tab row doesn't carry a dead 10-column gap left over from the pill's old position; an earlier draft deferred this as "a separate concern," which would have shipped a visibly broken tab row for the life of this plan's first commit — fixed during design review. Dirty/unsaved queue state moved from Task 3's Queue-tab-only right segment to Task 2's always-on left segment during design review, so unsaved changes stay visible while browsing other tabs, while source/autosave/scope detail (only meaningful when looking at the queue) stay Queue-tab-only.
 - **Placeholder scan:** No TBD/TODO; every step shows literal code, not a description of code.
 - **Type consistency:** `render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback)` signature introduced in Task 2 is reused unchanged in Task 3 (extended in place) and called unchanged (inside the `else` branch) in Task 4. `RemoteSlotState`/`QueueScope` referenced via `super::` consistently, matching the existing `render_control_pill` pattern.
