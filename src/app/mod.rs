@@ -7787,7 +7787,7 @@ pub(crate) mod tests {
 
         assert!(
             last_line
-                .contains("\u{1F5A7}  music.local | \u{1F5AD}  none | \u{1F5A4}  alive"),
+                .contains("\u{1F5A7}  music.local | \u{1F5AD}  none | \u{2764} alive"),
             "expected left statuses separated by pipe delimiters:\n{last_line}"
         );
     }

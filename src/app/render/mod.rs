@@ -913,7 +913,7 @@ impl App {
 
         let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
             vec![
-                Span::styled("\u{1F5A4}", Style::default().fg(palette::RED).bg(palette::PILL_BG)),
+                Span::styled("\u{2764}", Style::default().fg(palette::RED).bg(palette::PILL_BG)),
                 Span::styled(
                     " alive",
                     Style::default().fg(palette::FOAM).bg(palette::PILL_BG),
