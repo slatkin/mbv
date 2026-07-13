@@ -7786,7 +7786,7 @@ pub(crate) mod tests {
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains("\u{2665} | \u{1F5A7}  music.local | \u{1F5AD}  none"),
+            last_line.contains(" \u{2665} | \u{1F5A7}  music.local | \u{1F5AD}  none "),
             "expected left statuses separated by pipe delimiters:\n{last_line}"
         );
     }

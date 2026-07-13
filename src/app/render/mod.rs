@@ -957,6 +957,7 @@ impl App {
 
         let mut spans: Vec<Span> = Vec::new();
         if let Some(alive) = alive_status {
+            spans.push(Span::raw(" "));
             Self::append_status(&mut spans, alive);
         }
         if fits_all || fits_without_alive || fits_without_mute {
@@ -1067,6 +1068,9 @@ impl App {
                         Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG),
                     ),
                 );
+            }
+            if !right_spans.is_empty() {
+                right_spans.push(Span::raw(" "));
             }
             // Remote queue scope is omitted here: the active queue is already
             // apparent from the queue UI.
