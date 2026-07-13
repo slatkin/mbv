@@ -140,7 +140,7 @@ with:
             } else {
                 (1, 0, 0, 0)
             };
-        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, status_bar_area, main_area] =
+        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, main_area, status_bar_area] =
             Layout::vertical([
                 Constraint::Length(tabs_h),
                 Constraint::Length(spacer_h),
@@ -148,11 +148,13 @@ with:
                 Constraint::Length(gap_h),
                 Constraint::Length(title_h),
                 Constraint::Length(controls_h),
-                Constraint::Length(status_bar_h),
                 Constraint::Min(0),
+                Constraint::Length(status_bar_h),
             ])
             .areas(area);
 ```
+
+**Correction (caught during Task 1 implementation, not during design/grilling review):** `Constraint::Min(0)` must stay last for the *previous* item in the list to reach the literal bottom edge — `Layout::vertical` stacks rects in the same order as the constraint list, so whichever constraint is last ends up at the bottom of `area`. The original draft of this step put `status_bar_area` (`Length(1)`) before `main_area` (`Min(0)`) in the list — copied from the old `[..., _status_area, main_area]` order without noticing that keeping `Min(0)` last reproduces the exact bug this task exists to fix: `main_area` would still extend to the true terminal bottom, with the 1-row status bar stuck above it instead of anchoring the edge. Swapping the order (`Min(0)` second-to-last, status bar's `Length(1)` last) is required for the status bar to actually be the bottom-most row. Confirmed empirically: the Task 1 test (`status_bar_row_is_always_present_and_holds_the_control_pill`) asserts the pill glyph is on `rendered.lines().last()` of the full terminal buffer, which only passes with this corrected order.
 
 - [ ] **Step 4: Move the control pill call out of the tab-row block and into the new row**
 
