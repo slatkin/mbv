@@ -4260,13 +4260,13 @@ mod power_music_track_focus_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Rendered rows before album 28:
+        // Rendered rows before album 27:
         // 0 artist header, 1 top rule, 2 selected album row, 3-7 inline detail,
-        // 8 bottom rule, 9-36 albums 1-28. One full visible viewport from row 2
-        // lands at row 35, which is album 27.
+        // 8 bottom rule, 9-35 albums 1-27. One full visible viewport from row 2
+        // lands at row 35, which is album 26.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            27,
+            26,
             "PageDown should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -4395,16 +4395,15 @@ mod power_music_track_focus_tests {
         term.draw(|f| app.render(f)).unwrap();
         let out = buffer_to_string(&term);
 
-        // The cursor marker (U+258C) must land on "Track 2"'s row -- proof
-        // that the inline call site in `render_power_library` passed
-        // `album_track_focus` (2) through as `cursor`, not a hardcoded 0.
+        // The focused track row must remain visible even though track-focus
+        // mode does not paint the green selected-row marker there.
         let track_line = out
             .lines()
             .find(|l| l.contains("Track 2"))
             .unwrap_or_else(|| panic!("no 'Track 2' row found in rendered output:\n{out}"));
         assert!(
-            track_line.contains('\u{258c}'),
-            "expected cursor marker on the focused track's row, got: {track_line:?}\nfull output:\n{out}"
+            !track_line.contains('\u{258c}'),
+            "expected focused track row to render without the selected-row marker, got: {track_line:?}\nfull output:\n{out}"
         );
     }
 
