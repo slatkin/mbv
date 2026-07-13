@@ -7689,4 +7689,36 @@ pub(crate) mod tests {
             "expected REMOTE and ALIVE both dropped before UNSAVED is touched:\n{last_line}"
         );
     }
+
+    // ── status_bar (Task 3: right-aligned queue-state segment) ────────────────
+
+    #[test]
+    fn status_bar_shows_queue_source_label_on_queue_tab() {
+        let mut app = make_app_stub();
+        app.tab_idx = 1; // Queue tab
+        app.queue_source = crate::config::QueueSource::Album;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("ALBUM"),
+            "expected an ALBUM queue-source label on the Queue tab:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_hides_queue_segment_outside_queue_and_power_view() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0; // Home tab
+        app.queue_source = crate::config::QueueSource::Album;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            !last_line.contains("ALBUM"),
+            "queue source/autosave/scope detail must not leak onto tabs where it isn't relevant:\n{last_line}"
+        );
+    }
 }

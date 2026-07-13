@@ -886,6 +886,61 @@ impl App {
             };
             f.render_widget(Paragraph::new(Line::from(spans)), label_rect);
         }
+
+        if self.tab_idx == 1 {
+            let mut right_spans: Vec<Span> = Vec::new();
+            let source_label: Option<(String, Color)> = match &self.queue_source {
+                crate::config::QueueSource::Playlist { name, .. } => {
+                    Some((format!("PLAYLIST {name}"), palette::FOAM))
+                }
+                crate::config::QueueSource::Album => Some(("ALBUM".to_string(), palette::MUTED)),
+                crate::config::QueueSource::Series => Some(("SERIES".to_string(), palette::MUTED)),
+                crate::config::QueueSource::Shuffle => Some(("SHUFFLE".to_string(), palette::MUTED)),
+                crate::config::QueueSource::Remote => Some(("REMOTE Q".to_string(), palette::MUTED)),
+                crate::config::QueueSource::Collection { collection_type } => {
+                    Some((collection_type.to_uppercase(), palette::MUTED))
+                }
+                crate::config::QueueSource::Unknown => None,
+            };
+            if let Some((label, color)) = source_label {
+                right_spans.push(Span::styled(label, Style::default().fg(color)));
+            }
+            let autosave_on = self.queue_is_saved_playlist() && {
+                let cfg = &self.client.lock().unwrap().config;
+                cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
+            };
+            if autosave_on {
+                right_spans.push(Span::styled(" AUTOSAVE", Style::default().fg(palette::PINE)));
+            }
+            // Dirty/unsaved marker is NOT rendered here -- it lives in the
+            // always-on left segment (Task 2) so it's visible on every tab,
+            // not just the Queue tab. Do not re-add it to this right segment.
+            if self.visible_queue_scope() == super::QueueScope::Remote {
+                right_spans.push(Span::styled(" REMOTE QUEUE", Style::default().fg(palette::PINE)));
+            }
+            if !right_spans.is_empty() {
+                let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
+                // Compare against `left_content_w` (pill + session label, from Task 2),
+                // not a hardcoded pill-only width -- otherwise this check passes while
+                // the right segment still overlaps a rendered session label (e.g.
+                // " ATTACHED" / " REMOTE ALIVE") on narrow terminals.
+                let left_end = area.x + left_content_w;
+                let right_x = area.x + area.width.saturating_sub(right_w);
+                if right_x >= left_end {
+                    let right_rect = Rect {
+                        x: right_x,
+                        y: area.y,
+                        width: right_w,
+                        height: 1,
+                    };
+                    f.render_widget(Paragraph::new(Line::from(right_spans)), right_rect);
+                }
+                // else: terminal too narrow for both segments -- right segment drops
+                // silently rather than overlapping the pill or the session label.
+                // (Design doc's open question on narrow-terminal truncation: right
+                // segment yields first.)
+            }
+        }
     }
 
     /// Full-width seekbar row: green up to the playhead, gray for the remainder.
