@@ -20,21 +20,28 @@ enum GroupedAlbumDisplayRow {
     AlbumLoading,
 }
 
+struct GroupedAlbumDisplayPlan {
+    order: Vec<usize>,
+    rows: Vec<GroupedAlbumDisplayRow>,
+    display_cursor: usize,
+}
+
+impl GroupedAlbumDisplayRow {
+    fn album_index(&self) -> Option<usize> {
+        match self {
+            Self::Album(idx) => Some(*idx),
+            _ => None,
+        }
+    }
+}
+
 impl App {
-    pub(super) fn render_power_grouped_album_rows(
+    fn build_grouped_album_display_plan(
         &mut self,
-        f: &mut Frame,
-        area: Rect,
-        lib_idx: usize,
         albums: &[mbv_core::api::MediaItem],
         cursor: usize,
-        stored_scroll: usize,
-        focused: bool,
-        layout: &mut LayoutPower,
-    ) -> usize {
-        let visible = area.height as usize;
-        let avail = (area.width as usize).saturating_sub(2);
-
+        fetch_missing_tracks: bool,
+    ) -> GroupedAlbumDisplayPlan {
         let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
         for item in albums {
             let artist = self.resolve_group_album_artist(item);
@@ -60,49 +67,158 @@ impl App {
 
         let mut order: Vec<usize> = (0..album_info.len()).collect();
         order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
-        layout.left_sorted_indices = order.clone();
 
-        let mut display_rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
+        let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
         let mut last_artist = String::new();
         for &idx in &order {
             let artist = &album_info[idx].0;
             if artist != &last_artist {
-                display_rows.push(GroupedAlbumDisplayRow::ArtistHeader(artist.clone()));
+                rows.push(GroupedAlbumDisplayRow::ArtistHeader(artist.clone()));
                 last_artist = artist.clone();
             }
             if idx == cursor {
                 match self.album_tracks_cache.get(&albums[idx].id) {
                     Some(tracks) if !tracks.is_empty() => {
                         let detail_rows = 1 + tracks.len();
-                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                        display_rows.push(GroupedAlbumDisplayRow::Album(idx));
-                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
-                        display_rows.extend(
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        rows.push(GroupedAlbumDisplayRow::Album(idx));
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
+                        rows.extend(
                             std::iter::repeat_with(|| {
                                 GroupedAlbumDisplayRow::AlbumDetailContinuation
                             })
                             .take(detail_rows.saturating_sub(1)),
                         );
-                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                     }
-                    Some(_) => display_rows.push(GroupedAlbumDisplayRow::Album(idx)),
+                    Some(_) => rows.push(GroupedAlbumDisplayRow::Album(idx)),
                     None => {
-                        self.fetch_album_tracks(albums[idx].id.clone());
-                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
-                        display_rows.push(GroupedAlbumDisplayRow::Album(idx));
-                        display_rows.push(GroupedAlbumDisplayRow::AlbumLoading);
-                        display_rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        if fetch_missing_tracks {
+                            self.fetch_album_tracks(albums[idx].id.clone());
+                        }
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        rows.push(GroupedAlbumDisplayRow::Album(idx));
+                        rows.push(GroupedAlbumDisplayRow::AlbumLoading);
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                     }
                 }
             } else {
-                display_rows.push(GroupedAlbumDisplayRow::Album(idx));
+                rows.push(GroupedAlbumDisplayRow::Album(idx));
             }
         }
 
-        let display_cursor = display_rows
+        let display_cursor = rows
             .iter()
-            .position(|r| matches!(r, GroupedAlbumDisplayRow::Album(i) if *i == cursor))
+            .position(|row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor))
             .unwrap_or(0);
+
+        GroupedAlbumDisplayPlan {
+            order,
+            rows,
+            display_cursor,
+        }
+    }
+
+    pub(in crate::app) fn page_power_grouped_album_cursor(
+        &mut self,
+        lib_idx: usize,
+        page_down: bool,
+    ) -> bool {
+        if self.queue_view != crate::app::QUEUE_VIEW_POWER
+            || self.power_left_tab != lib_idx + 1
+            || !matches!(self.power_focus, crate::app::PowerFocus::Left)
+            || self.libs[lib_idx].search.is_some()
+            || self.libs[lib_idx].album_track_focus.is_some()
+            || !self.is_viewing_album_folders(lib_idx)
+        {
+            return false;
+        }
+
+        let idle = self.list_image_fetches_allowed();
+        self.last_nav_at = std::time::Instant::now();
+
+        let Some(level) = self.libs[lib_idx].nav_stack.last() else {
+            return false;
+        };
+        if level.items.is_empty() {
+            return true;
+        }
+
+        let cursor = level.cursor;
+        let albums = level.items.clone();
+        let page = (self.layout.power.left_area.height as usize).max(1);
+        let plan = self.build_grouped_album_display_plan(&albums, cursor, false);
+        let target_row = if page_down {
+            (plan.display_cursor + page).min(plan.rows.len().saturating_sub(1))
+        } else {
+            plan.display_cursor.saturating_sub(page)
+        };
+        let new_cursor = if page_down {
+            plan.rows
+                .iter()
+                .skip(target_row)
+                .find_map(GroupedAlbumDisplayRow::album_index)
+                .unwrap_or_else(|| plan.order.last().copied().unwrap_or(cursor))
+        } else {
+            plan.rows[..=target_row]
+                .iter()
+                .rev()
+                .find_map(GroupedAlbumDisplayRow::album_index)
+                .unwrap_or_else(|| plan.order.first().copied().unwrap_or(cursor))
+        };
+
+        if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+            if level.cursor != new_cursor {
+                level.cursor = new_cursor;
+                self.libs[lib_idx].album_track_focus = None;
+            }
+        }
+        if idle {
+            self.maybe_fetch_next_page(lib_idx);
+        }
+        true
+    }
+
+    pub(super) fn render_power_grouped_album_rows(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        albums: &[mbv_core::api::MediaItem],
+        cursor: usize,
+        stored_scroll: usize,
+        focused: bool,
+        layout: &mut LayoutPower,
+    ) -> usize {
+        let visible = area.height as usize;
+        let avail = (area.width as usize).saturating_sub(2);
+        let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
+        for item in albums {
+            let artist = self.resolve_group_album_artist(item);
+            let (year_str, album_name) = if !item.artist.is_empty() {
+                let year_str = if item.production_year > 0 {
+                    item.production_year.to_string()
+                } else {
+                    String::new()
+                };
+                (year_str, item.display_name())
+            } else if let Some((_, year, album)) = parse_album_folder_name(&item.name) {
+                let year_str = if year > 0 {
+                    year.to_string()
+                } else {
+                    String::new()
+                };
+                (year_str, album)
+            } else {
+                (String::new(), item.display_name())
+            };
+            album_info.push((artist, year_str, album_name));
+        }
+
+        let plan = self.build_grouped_album_display_plan(albums, cursor, true);
+        layout.left_sorted_indices = plan.order.clone();
+        let display_cursor = plan.display_cursor;
+        let display_rows = plan.rows;
         let top_bound = if display_cursor > 0
             && matches!(
                 display_rows[display_cursor - 1],

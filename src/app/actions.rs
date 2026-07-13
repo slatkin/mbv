@@ -3443,7 +3443,7 @@ impl App {
         });
     }
 
-    fn maybe_fetch_next_page(&mut self, lib_idx: usize) {
+    pub(in crate::app) fn maybe_fetch_next_page(&mut self, lib_idx: usize) {
         let lib = &self.libs[lib_idx];
         if lib.search.is_some() {
             return;

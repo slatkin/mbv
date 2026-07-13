@@ -327,8 +327,7 @@ impl App {
             let show_scrollbar = focused && total_display > visible;
 
             let rule_indent = " ".repeat(COMPACT_BANNER_INDENT as usize + 1);
-            let avail = (area.width as usize)
-                .saturating_sub(2 + COMPACT_BANNER_INDENT as usize);
+            let avail = (area.width as usize).saturating_sub(2 + COMPACT_BANNER_INDENT as usize);
             let list_items: Vec<ListItem> = display_rows
                 .iter()
                 .enumerate()

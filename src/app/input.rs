@@ -1020,12 +1020,16 @@ impl App {
             KeyCode::Left if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(-1),
             KeyCode::Right if self.is_viewing_season_grid(lib_idx) => self.move_lib_cursor(1),
             KeyCode::PageUp => {
-                let p = self.lib_page_size();
-                self.move_lib_cursor(-(p as i64));
+                if !self.page_power_grouped_album_cursor(lib_idx, false) {
+                    let p = self.lib_page_size();
+                    self.move_lib_cursor(-(p as i64));
+                }
             }
             KeyCode::PageDown => {
-                let p = self.lib_page_size();
-                self.move_lib_cursor(p as i64);
+                if !self.page_power_grouped_album_cursor(lib_idx, true) {
+                    let p = self.lib_page_size();
+                    self.move_lib_cursor(p as i64);
+                }
             }
             KeyCode::Home => self.jump_lib_cursor(false),
             KeyCode::End => self.jump_lib_cursor(true),
@@ -3904,7 +3908,9 @@ mod power_music_track_focus_tests {
     use crate::app::tests::{make_app_stub, make_item};
     use crate::app::{BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
+    use ratatui::Terminal;
 
     /// Power-view music library sitting on the album-folder-listing nav
     /// level (`is_viewing_album_folders` holds): a grouped `["group",
@@ -3985,6 +3991,81 @@ mod power_music_track_focus_tests {
             })
             .collect();
         app.album_tracks_cache.insert(album_id.to_string(), tracks);
+    }
+
+    fn make_power_music_album_list_app(album_count: usize, cursor: usize) -> App {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+        app.music_levels = vec!["group".into(), "album".into()];
+
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "lib-music".into();
+        library.is_folder = true;
+        library.collection_type = "music".into();
+
+        let mut group = make_item("Alpha", "MusicArtist");
+        group.id = "group-0".into();
+        group.is_folder = true;
+
+        let albums: Vec<_> = (0..album_count)
+            .map(|i| {
+                let mut album = make_item(&format!("Album {i:02}"), "MusicAlbum");
+                album.id = format!("album-{i}");
+                album.artist = "Alpha".into();
+                album.is_folder = true;
+                album
+            })
+            .collect();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![
+                BrowseLevel {
+                    parent_id: "lib-music".into(),
+                    title: "Music".into(),
+                    items: vec![group],
+                    total_count: 1,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+                BrowseLevel {
+                    parent_id: "group-0".into(),
+                    title: "Alpha".into(),
+                    items: albums,
+                    total_count: album_count,
+                    cursor,
+                    scroll: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                },
+            ],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+
+        app
+    }
+
+    fn render_full_app(app: &mut App, width: u16, height: u16) {
+        let backend = TestBackend::new(width, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.render(f)).unwrap();
     }
 
     #[test]
@@ -4163,6 +4244,131 @@ mod power_music_track_focus_tests {
             via_escape_key.libs[0].nav_stack.last().unwrap().cursor,
             via_go_back.libs[0].nav_stack.last().unwrap().cursor
         );
+    }
+
+    #[test]
+    fn page_down_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
+        let mut app = make_power_music_album_list_app(60, 0);
+        push_tracks(&mut app, "album-0", 4);
+        render_full_app(&mut app, 100, 40);
+        let viewport_rows = app.layout.power.left_area.height as usize;
+        assert_eq!(
+            viewport_rows, 33,
+            "fixture sanity: expected 33 rendered list rows"
+        );
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+
+        assert!(!handled);
+        // Rendered rows before album 28:
+        // 0 artist header, 1 top rule, 2 selected album row, 3-7 inline detail,
+        // 8 bottom rule, 9-36 albums 1-28. One full visible viewport from row 2
+        // lands at row 35, which is album 27.
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            27,
+            "PageDown should move by rendered display rows, not raw album count"
+        );
+        assert!(app.libs[0].album_track_focus.is_none());
+    }
+
+    #[test]
+    fn page_up_in_album_list_mode_pages_by_rendered_rows_with_inline_detail() {
+        let mut app = make_power_music_album_list_app(60, 35);
+        push_tracks(&mut app, "album-35", 4);
+        render_full_app(&mut app, 100, 40);
+        let viewport_rows = app.layout.power.left_area.height as usize;
+        assert_eq!(
+            viewport_rows, 33,
+            "fixture sanity: expected 33 rendered list rows"
+        );
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+
+        assert!(!handled);
+        // Selected album 35 renders on row 37:
+        // row 0 artist header, rows 1-35 albums 0-34, row 36 top rule, row 37 album 35.
+        // Paging up by one 33-row viewport targets row 4, which is album 3.
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            3,
+            "PageUp should move by rendered display rows, not raw album count"
+        );
+        assert!(app.libs[0].album_track_focus.is_none());
+    }
+
+    #[test]
+    fn paging_past_display_edges_clamps_in_display_order_not_api_order() {
+        let mut app = make_power_music_album_list_app(3, 0);
+        app.libs[0].nav_stack.last_mut().unwrap().items[0].artist = "Zulu".into();
+        app.libs[0].nav_stack.last_mut().unwrap().items[1].artist = "Alpha".into();
+        app.libs[0].nav_stack.last_mut().unwrap().items[2].artist = "Bravo".into();
+        push_tracks(&mut app, "album-0", 4);
+        render_full_app(&mut app, 100, 40);
+        app.layout.power.left_area.height = 100;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            0,
+            "PageDown past the last display row should clamp to the last display-order album"
+        );
+
+        let mut app = make_power_music_album_list_app(3, 1);
+        app.libs[0].nav_stack.last_mut().unwrap().items[0].artist = "Zulu".into();
+        app.libs[0].nav_stack.last_mut().unwrap().items[1].artist = "Alpha".into();
+        app.libs[0].nav_stack.last_mut().unwrap().items[2].artist = "Bravo".into();
+        push_tracks(&mut app, "album-1", 4);
+        render_full_app(&mut app, 100, 40);
+        app.layout.power.left_area.height = 100;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            1,
+            "PageUp past the first display row should clamp to the first display-order album"
+        );
+    }
+
+    #[test]
+    fn paging_from_non_selectable_loading_and_rule_rows_chooses_nearest_album_by_direction() {
+        let mut down_app = make_power_music_album_list_app(10, 0);
+        render_full_app(&mut down_app, 100, 40);
+        assert!(
+            down_app.album_tracks_loading.contains("album-0"),
+            "fixture sanity: initial render should request tracks and show a loading placeholder"
+        );
+        down_app.layout.power.left_area.height = 2;
+
+        let handled = down_app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
+
+        assert!(!handled);
+        // Selected album 0 with a loading placeholder renders:
+        // row 0 artist header, row 1 top rule, row 2 album 0, row 3 loading, row 4 bottom rule.
+        // With a 2-row page, PageDown targets row 4 (bottom rule), so paging must resolve
+        // forward to the next selectable album row at row 5 => album 1.
+        assert_eq!(down_app.libs[0].nav_stack.last().unwrap().cursor, 1);
+
+        let mut up_app = make_power_music_album_list_app(10, 3);
+        render_full_app(&mut up_app, 100, 40);
+        assert!(
+            up_app.album_tracks_loading.contains("album-3"),
+            "fixture sanity: initial render should request tracks and show a loading placeholder"
+        );
+        up_app.layout.power.left_area.height = 1;
+
+        let handled = up_app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
+
+        assert!(!handled);
+        // Selected album 3 with a loading placeholder renders:
+        // row 0 artist header, rows 1-3 albums 0-2, row 4 top rule, row 5 album 3.
+        // With a 1-row page, PageUp targets row 4 (top rule), so paging must resolve
+        // backward to the previous selectable album row at row 3 => album 2.
+        assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 2);
     }
 
     fn buffer_to_string(term: &ratatui::Terminal<ratatui::backend::TestBackend>) -> String {
