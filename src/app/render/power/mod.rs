@@ -597,15 +597,15 @@ mod tests {
         focused: bool,
     ) -> Terminal<TestBackend> {
         // Height is one row taller than the banner's own reserved footprint
-        // (1 selected row + 15 rule/content/gap rows: 1 opening rule + 13
+        // (1 selected row + 17 rule/content/gap rows: 1 opening rule + 15
         // content + 1 closing rule) to also leave room for the " N items"
         // header row that `render_power_list` now draws unconditionally for a
         // focused library panel -- there's no separate top-pinned title row
         // to absorb it now that this goes through the shared catch-all path.
-        let backend = TestBackend::new(60, 18);
+        let backend = TestBackend::new(60, 20);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_power_library(f, Rect::new(0, 0, 60, 18), focused, layout);
+            app.render_power_library(f, Rect::new(0, 0, 60, 20), focused, layout);
         })
         .unwrap();
         term
@@ -1171,7 +1171,7 @@ mod tests {
             "expected selected album row to drop the grouped indent after the gutter:\n{out}"
         );
         assert!(
-            lines[3].contains("^P: Play all | ^A: Add to Queue | ^S: Shuffle"),
+            lines[3].contains("^P: Play | ^A: Enqueue | ^S: Shuffle"),
             "expected action hints directly under selected album title:\n{out}"
         );
         assert!(
@@ -1179,19 +1179,19 @@ mod tests {
             "expected action hints to share the selected-region gutter:\n{out}"
         );
         assert!(
-            lines[4].contains("Opening Track"),
+            lines[5].contains("Opening Track"),
             "expected selected album tracks inside the inline detail region:\n{out}"
         );
         assert!(
-            lines[4].starts_with("  \u{258c} 1. Opening Track"),
+            lines[5].starts_with("  \u{258c} 1. Opening Track"),
             "expected inline tracks to share the selected-region gutter:\n{out}"
         );
         assert!(
-            lines[5].contains("\u{2500}"),
+            lines[6].contains("\u{2500}"),
             "expected bottom rule directly after inline detail:\n{out}"
         );
         assert!(
-            lines[6].contains("Second Album"),
+            lines[7].contains("Second Album"),
             "expected following album row immediately after reserved inline detail rows:\n{out}"
         );
         assert_eq!(
@@ -1205,11 +1205,11 @@ mod tests {
             "expected selected album row to map to its album index"
         );
         assert!(
-            layout.left_row_map[3..6].iter().all(Option::is_none),
+            layout.left_row_map[3..7].iter().all(Option::is_none),
             "expected inline detail and bottom-rule rows to be non-selectable"
         );
         assert_eq!(
-            layout.left_row_map.get(6),
+            layout.left_row_map.get(7),
             Some(&Some(1)),
             "expected album row after inline detail to remain selectable"
         );
@@ -1287,25 +1287,33 @@ mod tests {
             "expected flat selected album title to align after a one-column gutter gap:\n{out}"
         );
         assert!(
-            lines[4].contains("^P: Play all | ^A: Add to Queue | ^S: Shuffle"),
+            lines[4].contains("^P: Play | ^A: Enqueue | ^S: Shuffle"),
             "expected action hints directly under selected album title:\n{out}"
         );
         assert!(
-            lines[5].contains("Opening Track"),
+            lines[5].starts_with("  \u{258c}"),
+            "expected the spacer row between hints and tracks to keep the selected-region gutter:\n{out}"
+        );
+        assert!(
+            lines[6].contains("Opening Track"),
             "expected tracks inside the inline detail region:\n{out}"
         );
         assert!(
-            lines[6].contains("\u{2500}"),
+            lines[6].starts_with("  \u{258c} 1. Opening Track"),
+            "expected inline tracks to share the selected-region gutter:\n{out}"
+        );
+        assert!(
+            lines[7].contains("\u{2500}"),
             "expected bottom rule directly after inline detail:\n{out}"
         );
         assert!(
-            lines[7].contains("Second Album"),
+            lines[8].contains("Second Album"),
             "expected following album row immediately after inline detail:\n{out}"
         );
         assert_eq!(layout.left_row_map.get(1), Some(&None));
         assert_eq!(layout.left_row_map.get(2), Some(&Some(0)));
-        assert!(layout.left_row_map[3..6].iter().all(Option::is_none));
-        assert_eq!(layout.left_row_map.get(6), Some(&Some(1)));
+        assert!(layout.left_row_map[3..7].iter().all(Option::is_none));
+        assert_eq!(layout.left_row_map.get(7), Some(&Some(1)));
     }
 
     #[test]
@@ -1396,10 +1404,10 @@ mod tests {
 
         let hint_y = lines
             .iter()
-            .position(|line| line.contains("^P: Play all"))
+            .position(|line| line.contains("^P: Play"))
             .expect("expected inline action hint row");
         let hint_x = lines[hint_y]
-            .find("^P: Play all")
+            .find("^P: Play")
             .expect("expected hint x position");
         assert_eq!(
             buf[(hint_x as u16, hint_y as u16)].fg,
@@ -1415,8 +1423,8 @@ mod tests {
             .find("Opening Track")
             .expect("expected track x position");
         assert!(
-            lines[track_y].starts_with("  \u{258c} 1. Opening Track"),
-            "expected inactive inline track list to keep the selected-region gutter:\n{out}"
+            lines[track_y].contains("1. Opening Track"),
+            "expected inactive inline track list to still render the track row:\n{out}"
         );
         assert_eq!(
             buf[(track_x as u16, track_y as u16)].fg,
@@ -1483,9 +1491,8 @@ mod tests {
             .expect("expected focused track row");
 
         assert!(
-            focused_line.starts_with("  \u{258c} \u{258c}"),
-            "expected focused track row to show both the selected-region gutter and \
-             a distinct track-focus cursor:\n{out}"
+            focused_line.starts_with("    2. Focused Track"),
+            "expected focused track row to render without a green selected-row marker:\n{out}"
         );
         assert_eq!(
             layout.cursor_screen_y,
@@ -1523,8 +1530,8 @@ mod tests {
             .expect("expected focused track to render inline");
 
         assert!(
-            focused_line.starts_with("  \u{258c}"),
-            "expected track-selection cursor to remain visible while pane is unfocused:\n{out}"
+            focused_line.starts_with("    2. Focused Track"),
+            "expected track-selection row to remain visible while pane is unfocused:\n{out}"
         );
     }
 

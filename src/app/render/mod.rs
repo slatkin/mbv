@@ -838,7 +838,7 @@ impl App {
         };
         let glyph_style = Style::default()
             .bg(palette::PILL_BG)
-            .fg(if on { palette::FOAM } else { palette::YELLOW })
+            .fg(if on { palette::YELLOW } else { palette::FOAM })
             .add_modifier(if on {
                 Modifier::BOLD
             } else {

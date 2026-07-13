@@ -79,7 +79,7 @@ impl App {
             if idx == cursor {
                 match self.album_tracks_cache.get(&albums[idx].id) {
                     Some(tracks) if !tracks.is_empty() => {
-                        let detail_rows = 1 + tracks.len();
+                        let detail_rows = 2 + tracks.len();
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                         rows.push(GroupedAlbumDisplayRow::Album(idx));
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
@@ -455,7 +455,7 @@ impl App {
         if row < max_y {
             if selected_region_gutter {
                 let hint_w = (area.width as usize).saturating_sub(gutter_w);
-                let hint = trunc_str("^P: Play all | ^A: Add to Queue | ^S: Shuffle", hint_w);
+                let hint = trunc_str("^P: Play | ^A: Enqueue | ^S: Shuffle", hint_w);
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
                         Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
@@ -469,8 +469,29 @@ impl App {
                         height: 1,
                     },
                 );
+                row += 1;
+                if row + 1 < max_y {
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::styled(
+                                "\u{258c}",
+                                Style::default().fg(palette::PINE),
+                            ),
+                            Span::raw(" "),
+                        ])),
+                        Rect {
+                            x: area.x,
+                            y: row,
+                            width: area.width,
+                            height: 1,
+                        },
+                    );
+                    row += 1;
+                }
             }
-            row += 1;
+            if !selected_region_gutter {
+                row += 1;
+            }
         }
 
         // — Scrollable track list —
@@ -505,7 +526,13 @@ impl App {
             .map(|(i, item)| {
                 let is_cursor = i == cursor;
                 let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
-                let row_style = if is_playing {
+                let row_style = if selected_region_gutter && is_cursor && focused {
+                    let mut style = Style::default().fg(palette::YELLOW);
+                    if is_playing {
+                        style = style.add_modifier(Modifier::BOLD);
+                    }
+                    style
+                } else if is_playing {
                     Style::default()
                         .fg(palette::FOAM)
                         .add_modifier(Modifier::BOLD)
@@ -516,7 +543,9 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if selected_region_gutter || (is_cursor && focused) {
+                let marker = if selected_region_gutter && is_cursor && focused {
+                    Span::raw(" ")
+                } else if selected_region_gutter || (is_cursor && focused) {
                     Span::styled("\u{258c}", Style::default().fg(palette::PINE))
                 } else {
                     Span::raw(" ")
@@ -529,17 +558,9 @@ impl App {
                 let mut title_spans = vec![marker];
                 if selected_region_gutter {
                     title_spans.push(Span::raw(" "));
-                    if is_cursor && focused {
-                        title_spans
-                            .push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
-                    }
                 }
                 let num_w = track_num.chars().count();
-                let focus_marker_w = usize::from(selected_region_gutter && is_cursor && focused);
-                let title = trunc_str(
-                    &item.name,
-                    title_col_w.saturating_sub(num_w + focus_marker_w),
-                );
+                let title = trunc_str(&item.name, title_col_w.saturating_sub(num_w));
                 title_spans.push(Span::styled(
                     track_num,
                     Style::default().fg(palette::SUBTLE),
