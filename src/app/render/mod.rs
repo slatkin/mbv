@@ -66,14 +66,17 @@ impl App {
         let reserve_player_rows = in_power && mode == crate::config::PanelMode::OneRow;
         let tabs_h: u16 = 1;
         let spacer_h: u16 = 1;
-        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it. (status is unused.)
-        let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) =
+        let status_bar_h: u16 = 1;
+        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
+        // status_bar is the persistent bottom row (control pill, session/queue state, toast) --
+        // unlike the other player rows it is not conditional on onerow/reserve_player_rows.
+        let (seek_h, gap_h, title_h, controls_h): (u16, u16, u16, u16) =
             if onerow || reserve_player_rows {
-                (1, 0, 1, 1, 0)
+                (1, 0, 1, 1)
             } else {
-                (1, 0, 0, 0, 0)
+                (1, 0, 0, 0)
             };
-        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, _status_area, main_area] =
+        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, main_area, status_bar_area] =
             Layout::vertical([
                 Constraint::Length(tabs_h),
                 Constraint::Length(spacer_h),
@@ -81,8 +84,8 @@ impl App {
                 Constraint::Length(gap_h),
                 Constraint::Length(title_h),
                 Constraint::Length(controls_h),
-                Constraint::Length(status_h),
                 Constraint::Min(0),
+                Constraint::Length(status_bar_h),
             ])
             .areas(area);
 
@@ -106,9 +109,6 @@ impl App {
         layout.playback.ind_rc = Rect::default();
 
         {
-            // Control pill (m ⇌ ≡) on the far left of the tab bar.
-            self.render_control_pill(f, tabs_area, &mut layout.playback);
-
             // Tabs occupy the space between the control pill (left) and VOL (right).
             let tabs_x = tabs_area.x + super::TABBAR_LEFT_RESERVE;
             let tabs_w = tabs_area
@@ -257,6 +257,11 @@ impl App {
                 inner_tabs,
             );
         }
+
+        // Persistent bottom status bar: control pill lives here now instead of
+        // the tab row. Session/queue segments and toast override land in
+        // later tasks; for now this row renders only the pill.
+        self.render_control_pill(f, status_bar_area, &mut layout.playback);
 
         let now_playing: Option<String> = if active {
             let idx = self.player.status.lock().unwrap().current_idx;
@@ -735,10 +740,10 @@ impl App {
         }
     }
 
-    /// Control pill on the far left of the tab bar: `  m ⇌ ≡  ` on an always-green
+    /// Control pill on the far left of the status bar: `  m ⇌ ≡  ` on an always-green
     /// background. Each icon is its assigned color when ON, or reverse-video
     /// (dark on green) when OFF. `m` mute and `⇌` remote are clickable.
-    fn render_control_pill(&mut self, f: &mut Frame, tabs_area: Rect, layout: &mut LayoutPlayback) {
+    fn render_control_pill(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
         let bg = palette::PILL_BG;
         let mute_on = self.playback_display_target().displayed_mute(self);
         let is_playlist = matches!(
@@ -758,7 +763,7 @@ impl App {
             }
         };
         let pad = Style::default().bg(bg);
-        let (x, y) = (tabs_area.x, tabs_area.y);
+        let (x, y) = (area.x, area.y);
         // Layout: "  m ⇌ ≡  " — m at x+2, ⇌ at x+4, ≡ at x+6.
         layout.ind_mu = Rect {
             x: x + 2,

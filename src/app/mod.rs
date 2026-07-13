@@ -27,8 +27,11 @@ pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
 pub(super) const POWER_LEFT_WIDTH_STEP: u16 = 5;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
-/// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
-pub(super) const TABBAR_LEFT_RESERVE: u16 = 10;
+/// Small left margin so tabs don't sit flush against the terminal edge. The
+/// control pill used to live here (hence the old, larger reservation); it now
+/// renders in the status bar (see `render_status_bar`) and no longer needs
+/// room in the tab row.
+pub(super) const TABBAR_LEFT_RESERVE: u16 = 2;
 
 /// Shared local-vs-remote playback seam for the TUI action layer.
 #[derive(Clone, Copy)]
@@ -5595,6 +5598,35 @@ pub(crate) mod tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
         assert!(!handled);
         assert_eq!(app.visible_queue_scope(), QueueScope::Local);
+    }
+
+    #[test]
+    fn status_bar_row_is_always_present_and_holds_the_control_pill() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0; // Home tab, nothing playing — the row must still appear.
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains('\u{2261}'),
+            "expected the control pill's playlist glyph (≡) on the final screen row:\n{rendered}"
+        );
+        // The pill must no longer render inside the tab row (first line).
+        let first_line = rendered.lines().next().unwrap();
+        assert!(
+            !first_line.contains('\u{2261}'),
+            "control pill must have moved off the tab row:\n{first_line}"
+        );
+        // TABBAR_LEFT_RESERVE shrinks from 10 (pill + gap) to 2 (small margin)
+        // now that the pill no longer lives in the tab row -- the first tab
+        // label should start within a couple columns of the left edge, not
+        // leave a 10-column dead zone where the pill used to be.
+        let first_non_space = first_line.find(|c: char| c != ' ').unwrap_or(0);
+        assert!(
+            first_non_space <= 3,
+            "expected the tab row's first tab to start near the left edge (col <= 3), got col {first_non_space}:\n{first_line}"
+        );
     }
 
     #[test]
