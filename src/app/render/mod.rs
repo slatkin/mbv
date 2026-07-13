@@ -258,20 +258,21 @@ impl App {
             );
         }
 
-        // Persistent bottom status bar: control pill lives here now instead of
-        // the tab row. Toast takes over the entire row when active; otherwise
-        // session/queue state segments render in their usual places.
-
+        // Persistent bottom status bar: pill + session/queue segments, or the
+        // toast overlay when a message is active. render_status_bar always runs
+        // first so its click hitboxes (ind_mu/ind_rc) stay populated every frame,
+        // even while a toast visually covers this row -- Clear wipes the leftover
+        // glyphs before the toast draws over them so nothing bleeds through.
+        self.render_status_bar(f, status_bar_area, &mut layout.playback);
         let show_toast = !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
         if show_toast {
+            f.render_widget(Clear, status_bar_area);
             f.render_widget(
                 Paragraph::new(Self::toast_line(&self.status))
                     .alignment(Alignment::Center)
                     .style(Style::default().fg(palette::TEXT).bg(palette::IRIS)),
                 status_bar_area,
             );
-        } else {
-            self.render_status_bar(f, status_bar_area, &mut layout.playback);
         }
 
         let now_playing: Option<String> = if active {

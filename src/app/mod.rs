@@ -7762,4 +7762,41 @@ pub(crate) mod tests {
             "expected the control pill to still render when no toast is active:\n{last_line}"
         );
     }
+
+    #[test]
+    fn status_bar_pill_click_regions_stay_populated_during_toast() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.status = "Saved [Y]".to_string();
+        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+
+        // The mute/remote-cycle click hitboxes must still be populated even
+        // though a toast is covering the status bar this frame -- otherwise
+        // clicks on those icons silently do nothing for the toast's duration.
+        assert_ne!(
+            app.layout.playback.ind_mu,
+            ratatui::layout::Rect::default(),
+            "mute hitbox went stale while a toast was active"
+        );
+        assert_ne!(
+            app.layout.playback.ind_rc,
+            ratatui::layout::Rect::default(),
+            "remote-cycle hitbox went stale while a toast was active"
+        );
+
+        // The toast text must win the row, with no leftover pill glyphs
+        // bleeding through underneath it (which would happen if the toast
+        // were drawn without Clear-ing the row render_status_bar just wrote).
+        let last_line = rendered.lines().last().unwrap();
+        assert!(
+            last_line.contains("Saved"),
+            "expected the toast text on the final row:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains('\u{2261}'),
+            "leftover control-pill glyph bled through under the toast:\n{last_line}"
+        );
+    }
 }
