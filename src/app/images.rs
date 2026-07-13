@@ -208,7 +208,7 @@ impl App {
         self.spawn_image_fetch(req);
     }
 
-    pub(super) fn list_image_fetches_allowed(&self) -> bool {
+    pub(in crate::app) fn list_image_fetches_allowed(&self) -> bool {
         self.last_nav_at.elapsed() >= NAV_IMAGE_FETCH_IDLE_DELAY
     }
 
