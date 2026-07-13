@@ -66,14 +66,17 @@ impl App {
         let reserve_player_rows = in_power && mode == crate::config::PanelMode::OneRow;
         let tabs_h: u16 = 1;
         let spacer_h: u16 = 1;
-        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it. (status is unused.)
-        let (seek_h, gap_h, title_h, controls_h, status_h): (u16, u16, u16, u16, u16) =
+        let status_bar_h: u16 = 1;
+        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
+        // status_bar is the persistent bottom row (control pill, session/queue state, toast) --
+        // unlike the other player rows it is not conditional on onerow/reserve_player_rows.
+        let (seek_h, gap_h, title_h, controls_h): (u16, u16, u16, u16) =
             if onerow || reserve_player_rows {
-                (1, 0, 1, 1, 0)
+                (1, 0, 1, 1)
             } else {
-                (1, 0, 0, 0, 0)
+                (1, 0, 0, 0)
             };
-        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, _status_area, main_area] =
+        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, main_area, status_bar_area] =
             Layout::vertical([
                 Constraint::Length(tabs_h),
                 Constraint::Length(spacer_h),
@@ -81,8 +84,8 @@ impl App {
                 Constraint::Length(gap_h),
                 Constraint::Length(title_h),
                 Constraint::Length(controls_h),
-                Constraint::Length(status_h),
                 Constraint::Min(0),
+                Constraint::Length(status_bar_h),
             ])
             .areas(area);
 
@@ -106,9 +109,6 @@ impl App {
         layout.playback.ind_rc = Rect::default();
 
         {
-            // Control pill (m ⇌ ≡) on the far left of the tab bar.
-            self.render_control_pill(f, tabs_area, &mut layout.playback);
-
             // Tabs occupy the space between the control pill (left) and VOL (right).
             let tabs_x = tabs_area.x + super::TABBAR_LEFT_RESERVE;
             let tabs_w = tabs_area
@@ -258,6 +258,23 @@ impl App {
             );
         }
 
+        // Persistent bottom status bar: pill + session/queue segments, or the
+        // toast overlay when a message is active. render_status_bar always runs
+        // first so its click hitboxes (ind_mu/ind_rc) stay populated every frame,
+        // even while a toast visually covers this row -- Clear wipes the leftover
+        // glyphs before the toast draws over them so nothing bleeds through.
+        self.render_status_bar(f, status_bar_area, &mut layout.playback);
+        let show_toast = !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
+        if show_toast {
+            f.render_widget(Clear, status_bar_area);
+            f.render_widget(
+                Paragraph::new(Self::toast_line(&self.status))
+                    .alignment(Alignment::Center)
+                    .style(Style::default().fg(palette::TEXT).bg(palette::IRIS)),
+                status_bar_area,
+            );
+        }
+
         let now_playing: Option<String> = if active {
             let idx = self.player.status.lock().unwrap().current_idx;
             self.playback_queue()
@@ -305,26 +322,6 @@ impl App {
             );
         }
 
-        if !self.status.is_empty() && (!self.system_notifications || self.notif_failed) {
-            let toast_rect = Rect {
-                x: area.x,
-                y: area.y + area.height - 3,
-                width: area.width,
-                height: 3,
-            };
-            f.render_widget(Clear, toast_rect);
-            f.render_widget(
-                Paragraph::new(Self::toast_line(&self.status))
-                    .alignment(Alignment::Center)
-                    .style(Style::default().fg(palette::TEXT).bg(palette::IRIS))
-                    .block(
-                        Block::default()
-                            .style(Style::default().fg(palette::TEXT).bg(palette::IRIS))
-                            .padding(ratatui::widgets::Padding::vertical(1)),
-                    ),
-                toast_rect,
-            );
-        }
 
         self.render_context_menu(f, &mut layout);
 
@@ -735,10 +732,10 @@ impl App {
         }
     }
 
-    /// Control pill on the far left of the tab bar: `  m ⇌ ≡  ` on an always-green
+    /// Control pill on the far left of the status bar: `  m ⇌ ≡  ` on an always-green
     /// background. Each icon is its assigned color when ON, or reverse-video
     /// (dark on green) when OFF. `m` mute and `⇌` remote are clickable.
-    fn render_control_pill(&mut self, f: &mut Frame, tabs_area: Rect, layout: &mut LayoutPlayback) {
+    fn render_control_pill(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
         let bg = palette::PILL_BG;
         let mute_on = self.playback_display_target().displayed_mute(self);
         let is_playlist = matches!(
@@ -758,7 +755,7 @@ impl App {
             }
         };
         let pad = Style::default().bg(bg);
-        let (x, y) = (tabs_area.x, tabs_area.y);
+        let (x, y) = (area.x, area.y);
         // Layout: "  m ⇌ ≡  " — m at x+2, ⇌ at x+4, ≡ at x+6.
         layout.ind_mu = Rect {
             x: x + 2,
@@ -796,6 +793,146 @@ impl App {
                 height: 1,
             },
         );
+    }
+
+    /// Persistent bottom status bar. Left side: control pill + a text label
+    /// for session/connection state the pill's glyph alone doesn't spell out
+    /// (RemoteSlotState, stay-alive), plus an UNSAVED marker whenever the
+    /// queue is dirty -- shown on every tab, not just the Queue tab, since
+    /// losing track of unsaved queue changes while browsing elsewhere is a
+    /// real failure mode. Right side (added in a later task): queue source/
+    /// autosave/scope detail, shown only on the Queue tab / Power View.
+    fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
+        self.render_control_pill(f, area, layout);
+
+        let remote_state = self.remote_slot_state();
+        let remote_spans: Vec<Span> = match remote_state {
+            super::RemoteSlotState::Off => Vec::new(),
+            super::RemoteSlotState::AttachedSession => vec![Span::styled(
+                " ATTACHED",
+                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
+            )],
+            super::RemoteSlotState::DirectRemote => vec![Span::styled(
+                " REMOTE",
+                Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
+            )],
+            super::RemoteSlotState::LocalDaemon => vec![Span::styled(
+                " DAEMON",
+                Style::default().fg(palette::PINE).add_modifier(Modifier::BOLD),
+            )],
+        };
+        let alive_span: Option<Span> = self
+            .stay_alive_ctrl
+            .is_some()
+            .then(|| Span::styled(" ALIVE", Style::default().fg(palette::FOAM)));
+        // Dirty-queue marker: always shown, on every tab, not gated to the Queue
+        // tab like the rest of the queue-state segment (see Task 3) -- unsaved
+        // changes are worth surfacing no matter what you're currently looking at.
+        let unsaved_span: Option<Span> = self.queue_dirty.then(|| {
+            Span::styled(
+                " UNSAVED",
+                Style::default().fg(palette::YELLOW).add_modifier(Modifier::BOLD),
+            )
+        });
+
+        // Left-segment overflow priority: UNSAVED is protected (it's the one thing
+        // that must stay visible on every tab); ALIVE drops first if the combined
+        // left segment wouldn't fit in the row, then the remote-state label text,
+        // before UNSAVED itself would ever be at risk of being clipped by Paragraph.
+        let remote_w: u16 = remote_spans.iter().map(|s| s.content.width() as u16).sum();
+        let alive_w: u16 = alive_span.as_ref().map(|s| s.content.width() as u16).unwrap_or(0);
+        let unsaved_w: u16 = unsaved_span.as_ref().map(|s| s.content.width() as u16).unwrap_or(0);
+        // Pill is always "  m ⇌ ≡  " = 9 cols wide; `available` is what's left of
+        // the row for the label/ALIVE/UNSAVED content.
+        let available = area.width.saturating_sub(9);
+        let fits_all = remote_w + alive_w + unsaved_w <= available;
+        let fits_without_alive = !fits_all && remote_w + unsaved_w <= available;
+
+        let mut spans: Vec<Span> = Vec::new();
+        if fits_all || fits_without_alive {
+            spans.extend(remote_spans);
+        }
+        // else: drop the remote-state label too; UNSAVED is still protected below.
+        if fits_all {
+            if let Some(a) = alive_span {
+                spans.push(a);
+            }
+        }
+        if let Some(u) = unsaved_span {
+            spans.push(u);
+        }
+
+        // `left_content_w` tracks how far the left segment actually extends after
+        // the above priority drop -- pill alone, pill + some subset of the label
+        // pieces, or pill + everything -- so Task 3's right-segment overlap check
+        // can compare against the real left edge instead of a hardcoded constant.
+        let label_w: u16 = spans.iter().map(|s| s.content.width() as u16).sum();
+        let left_content_w: u16 = 9 + label_w;
+        if !spans.is_empty() {
+            let label_x = area.x + 9;
+            let label_rect = Rect {
+                x: label_x,
+                y: area.y,
+                width: area.width.saturating_sub(9),
+                height: 1,
+            };
+            f.render_widget(Paragraph::new(Line::from(spans)), label_rect);
+        }
+
+        if self.tab_idx == 1 {
+            let mut right_spans: Vec<Span> = Vec::new();
+            let source_label: Option<(String, Color)> = match &self.queue_source {
+                crate::config::QueueSource::Playlist { name, .. } => {
+                    Some((format!("PLAYLIST {name}"), palette::FOAM))
+                }
+                crate::config::QueueSource::Album => Some(("ALBUM".to_string(), palette::MUTED)),
+                crate::config::QueueSource::Series => Some(("SERIES".to_string(), palette::MUTED)),
+                crate::config::QueueSource::Shuffle => Some(("SHUFFLE".to_string(), palette::MUTED)),
+                crate::config::QueueSource::Remote => Some(("REMOTE Q".to_string(), palette::MUTED)),
+                crate::config::QueueSource::Collection { collection_type } => {
+                    Some((collection_type.to_uppercase(), palette::MUTED))
+                }
+                crate::config::QueueSource::Unknown => None,
+            };
+            if let Some((label, color)) = source_label {
+                right_spans.push(Span::styled(label, Style::default().fg(color)));
+            }
+            let autosave_on = self.queue_is_saved_playlist() && {
+                let cfg = &self.client.lock().unwrap().config;
+                cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
+            };
+            if autosave_on {
+                right_spans.push(Span::styled(" AUTOSAVE", Style::default().fg(palette::PINE)));
+            }
+            // Dirty/unsaved marker is NOT rendered here -- it lives in the
+            // always-on left segment (Task 2) so it's visible on every tab,
+            // not just the Queue tab. Do not re-add it to this right segment.
+            if self.visible_queue_scope() == super::QueueScope::Remote {
+                right_spans.push(Span::styled(" REMOTE QUEUE", Style::default().fg(palette::PINE)));
+            }
+            if !right_spans.is_empty() {
+                let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
+                // Compare against `left_content_w` (pill + session label, from Task 2),
+                // not a hardcoded pill-only width -- otherwise this check passes while
+                // the right segment still overlaps a rendered session label (e.g.
+                // " ATTACHED" / " REMOTE ALIVE") on narrow terminals.
+                let left_end = area.x + left_content_w;
+                let right_x = area.x + area.width.saturating_sub(right_w);
+                if right_x >= left_end {
+                    let right_rect = Rect {
+                        x: right_x,
+                        y: area.y,
+                        width: right_w,
+                        height: 1,
+                    };
+                    f.render_widget(Paragraph::new(Line::from(right_spans)), right_rect);
+                }
+                // else: terminal too narrow for both segments -- right segment drops
+                // silently rather than overlapping the pill or the session label.
+                // (Design doc's open question on narrow-terminal truncation: right
+                // segment yields first.)
+            }
+        }
     }
 
     /// Full-width seekbar row: green up to the playhead, gray for the remainder.

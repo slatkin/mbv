@@ -27,8 +27,11 @@ pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
 pub(super) const POWER_LEFT_WIDTH_STEP: u16 = 5;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
 pub(super) const TABBAR_RIGHT_RESERVE: u16 = 17;
-/// Width reserved on the left of the tab bar for the control pill (`  m ⇌ ≡  ` + gap).
-pub(super) const TABBAR_LEFT_RESERVE: u16 = 10;
+/// Small left margin so tabs don't sit flush against the terminal edge. The
+/// control pill used to live here (hence the old, larger reservation); it now
+/// renders in the status bar (see `render_status_bar`) and no longer needs
+/// room in the tab row.
+pub(super) const TABBAR_LEFT_RESERVE: u16 = 2;
 
 /// Shared local-vs-remote playback seam for the TUI action layer.
 #[derive(Clone, Copy)]
@@ -5598,6 +5601,35 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn status_bar_row_is_always_present_and_holds_the_control_pill() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0; // Home tab, nothing playing — the row must still appear.
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains('\u{2261}'),
+            "expected the control pill's playlist glyph (≡) on the final screen row:\n{rendered}"
+        );
+        // The pill must no longer render inside the tab row (first line).
+        let first_line = rendered.lines().next().unwrap();
+        assert!(
+            !first_line.contains('\u{2261}'),
+            "control pill must have moved off the tab row:\n{first_line}"
+        );
+        // TABBAR_LEFT_RESERVE shrinks from 10 (pill + gap) to 2 (small margin)
+        // now that the pill no longer lives in the tab row -- the first tab
+        // label should start within a couple columns of the left edge, not
+        // leave a 10-column dead zone where the pill used to be.
+        let first_non_space = first_line.find(|c: char| c != ' ').unwrap_or(0);
+        assert!(
+            first_non_space <= 3,
+            "expected the tab row's first tab to start near the left edge (col <= 3), got col {first_non_space}:\n{first_line}"
+        );
+    }
+
+    #[test]
     fn direct_remote_play_items_keeps_local_queue_intact() {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
@@ -7560,5 +7592,211 @@ pub(crate) mod tests {
             app.home.section = n.saturating_sub(1);
         }
         assert_eq!(app.home.section, 1);
+    }
+
+    // ── status_bar (Task 2: session/connection label + unsaved marker) ───────
+
+    #[test]
+    fn status_bar_shows_direct_remote_label_next_to_pill() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote);
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("REMOTE"),
+            "expected a REMOTE label on the status bar for DirectRemote state:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_has_no_session_label_when_remote_slot_is_off() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            !last_line.contains("REMOTE") && !last_line.contains("ATTACHED") && !last_line.contains("DAEMON"),
+            "expected no session label when nothing is connected:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_shows_unsaved_marker_on_any_tab_when_queue_is_dirty() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0; // Home tab, not the Queue tab -- unsaved state must still show.
+        app.queue_dirty = true;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("UNSAVED"),
+            "expected an UNSAVED marker regardless of the active tab when the queue is dirty:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_drops_alive_before_unsaved_when_left_segment_overflows() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote); // -> " REMOTE" label (7 cols)
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end)); // -> " ALIVE" (6 cols)
+        app.queue_dirty = true; // -> " UNSAVED" (8 cols)
+
+        // pill (9) + REMOTE (7) + ALIVE (6) + UNSAVED (8) = 30 cols; a 28-col
+        // terminal leaves only 19 cols for the label -- enough for REMOTE +
+        // UNSAVED (15) but not all three (21), so ALIVE must drop first.
+        let rendered = render_app_to_string(&mut app, 28, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("REMOTE") && last_line.contains("UNSAVED"),
+            "expected REMOTE and UNSAVED to survive the overflow:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("ALIVE"),
+            "expected ALIVE to be the first thing dropped on overflow:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_keeps_only_unsaved_when_left_segment_severely_overflows() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote);
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+        app.queue_dirty = true;
+
+        // Only 11 cols available for the label (20 - 9) -- not enough for
+        // REMOTE + UNSAVED (15), so REMOTE must drop too; UNSAVED (8) still fits
+        // and is never dropped.
+        let rendered = render_app_to_string(&mut app, 20, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("UNSAVED"),
+            "UNSAVED must be protected even under severe overflow:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains("REMOTE") && !last_line.contains("ALIVE"),
+            "expected REMOTE and ALIVE both dropped before UNSAVED is touched:\n{last_line}"
+        );
+    }
+
+    // ── status_bar (Task 3: right-aligned queue-state segment) ────────────────
+
+    #[test]
+    fn status_bar_shows_queue_source_label_on_queue_tab() {
+        let mut app = make_app_stub();
+        app.tab_idx = 1; // Queue tab
+        app.queue_source = crate::config::QueueSource::Album;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains("ALBUM"),
+            "expected an ALBUM queue-source label on the Queue tab:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_hides_queue_segment_outside_queue_and_power_view() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0; // Home tab
+        app.queue_source = crate::config::QueueSource::Album;
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            !last_line.contains("ALBUM"),
+            "queue source/autosave/scope detail must not leak onto tabs where it isn't relevant:\n{last_line}"
+        );
+    }
+
+    // ── status_bar (Task 4: toast overlay replacement) ──────────────────────
+
+    #[test]
+    fn toast_renders_in_status_bar_without_covering_main_content_above_it() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.status = "Saved [Y]".to_string();
+        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let lines: Vec<&str> = rendered.lines().collect();
+        let last_line = lines.last().unwrap();
+
+        assert!(
+            last_line.contains("Saved"),
+            "expected the toast text on the final row:\n{last_line}"
+        );
+        // Old behavior covered 3 rows with Clear+overlay; new behavior must
+        // only touch the single bottom row, leaving the row above untouched.
+        let second_to_last = lines[lines.len() - 2];
+        assert!(
+            !second_to_last.contains("Saved"),
+            "toast must not spill onto the row above the status bar:\n{second_to_last}"
+        );
+    }
+
+    #[test]
+    fn status_bar_shows_normal_content_when_no_toast_is_active() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.status = String::new();
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+        let last_line = rendered.lines().last().unwrap();
+
+        assert!(
+            last_line.contains('\u{2261}'),
+            "expected the control pill to still render when no toast is active:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_pill_click_regions_stay_populated_during_toast() {
+        let mut app = make_app_stub();
+        app.tab_idx = 0;
+        app.status = "Saved [Y]".to_string();
+        app.status_expires = Some(std::time::Instant::now() + std::time::Duration::from_secs(5));
+
+        let rendered = render_app_to_string(&mut app, 80, 24);
+
+        // The mute/remote-cycle click hitboxes must still be populated even
+        // though a toast is covering the status bar this frame -- otherwise
+        // clicks on those icons silently do nothing for the toast's duration.
+        assert_ne!(
+            app.layout.playback.ind_mu,
+            ratatui::layout::Rect::default(),
+            "mute hitbox went stale while a toast was active"
+        );
+        assert_ne!(
+            app.layout.playback.ind_rc,
+            ratatui::layout::Rect::default(),
+            "remote-cycle hitbox went stale while a toast was active"
+        );
+
+        // The toast text must win the row, with no leftover pill glyphs
+        // bleeding through underneath it (which would happen if the toast
+        // were drawn without Clear-ing the row render_status_bar just wrote).
+        let last_line = rendered.lines().last().unwrap();
+        assert!(
+            last_line.contains("Saved"),
+            "expected the toast text on the final row:\n{last_line}"
+        );
+        assert!(
+            !last_line.contains('\u{2261}'),
+            "leftover control-pill glyph bled through under the toast:\n{last_line}"
+        );
     }
 }
