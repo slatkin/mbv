@@ -11,6 +11,8 @@ use mbv_core::player::PlayerCommand;
 use mbv_core::ws::WsEvent;
 use rand::seq::SliceRandom;
 use std::collections::{HashMap, HashSet};
+#[cfg(not(test))]
+use std::io::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -2058,6 +2060,19 @@ impl App {
         }
     }
 
+    fn ring_terminal_bell(&self) {
+        #[cfg(not(test))]
+        {
+            let mut stdout = std::io::stdout();
+            let _ = stdout.write_all(b"\x07");
+            let _ = stdout.flush();
+        }
+        #[cfg(test)]
+        {
+            let _ = self;
+        }
+    }
+
     pub(super) fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
         if !self.system_notifications {
             return;
@@ -2093,12 +2108,14 @@ impl App {
     }
 
     pub(super) fn flash_status(&mut self, msg: String) {
+        self.ring_terminal_bell();
         self.notify_system(&msg);
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(2));
     }
 
     pub(super) fn flash_status_high(&mut self, msg: String) {
+        self.ring_terminal_bell();
         self.notify_system(&msg);
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(5));
