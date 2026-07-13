@@ -896,11 +896,7 @@ impl App {
     }
 
     /// Persistent bottom status bar. Left side: connection, playlist, stay-alive,
-    /// UNSAVED, and mute status groups. UNSAVED is shown whenever the
-    /// queue is dirty -- shown on every tab, not just the Queue tab, since
-    /// losing track of unsaved queue changes while browsing elsewhere is a
-    /// real failure mode. Right side (added in a later task): queue source/
-    /// autosave/scope detail, shown only on the Queue tab / Power View.
+    /// and mute status groups. Right side: queue source/save-state/scope detail.
     fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
         let bar_style = Style::default().bg(palette::PILL_BG);
         f.render_widget(Block::default().style(bar_style), area);
@@ -916,35 +912,21 @@ impl App {
         self.render_remote_status_hitbox(layout, area);
 
         let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
-            vec![Span::styled(
-                "alive",
-                Style::default().fg(palette::FOAM).bg(palette::PILL_BG),
-            )]
-        });
-        // Dirty-queue marker: always shown, on every tab, not gated to the Queue
-        // tab like the rest of the queue-state segment (see Task 3) -- unsaved
-        // changes are worth surfacing no matter what you're currently looking at.
-        let unsaved_status: Option<Vec<Span>> = self.queue_dirty.then(|| {
-            vec![Span::styled(
-                "UNSAVED",
-                Style::default()
-                    .fg(palette::YELLOW)
-                    .bg(palette::PILL_BG)
-                    .add_modifier(Modifier::BOLD),
-            )]
+            vec![
+                Span::styled("\u{1F5A4}", Style::default().fg(palette::RED).bg(palette::PILL_BG)),
+                Span::styled(
+                    " alive",
+                    Style::default().fg(palette::FOAM).bg(palette::PILL_BG),
+                ),
+            ]
         });
         let mute_status = self.mute_status_spans();
 
-        // Left-segment overflow priority: UNSAVED is protected (it's the one thing
-        // that must stay visible on every tab); alive drops first if the combined
+        // Left-segment overflow priority: alive drops first if the combined
         // left segment wouldn't fit in the row, then mute, then remote, then playlist.
         let remote_w = Self::status_width(&remote_status);
         let playlist_w = Self::status_width(&playlist_status);
         let alive_w: u16 = alive_status
-            .as_ref()
-            .map(|spans| Self::status_width(spans))
-            .unwrap_or(0);
-        let unsaved_w: u16 = unsaved_status
             .as_ref()
             .map(|spans| Self::status_width(spans))
             .unwrap_or(0);
@@ -965,17 +947,16 @@ impl App {
             }
             total
         };
-        let fits_all =
-            joined_width(&[remote_w, playlist_w, alive_w, unsaved_w, mute_w]) <= available;
+        let fits_all = joined_width(&[remote_w, playlist_w, alive_w, mute_w]) <= available;
         let fits_without_alive =
-            !fits_all && joined_width(&[remote_w, playlist_w, unsaved_w, mute_w]) <= available;
+            !fits_all && joined_width(&[remote_w, playlist_w, mute_w]) <= available;
         let fits_without_mute = !fits_all
             && !fits_without_alive
-            && joined_width(&[remote_w, playlist_w, unsaved_w]) <= available;
+            && joined_width(&[remote_w, playlist_w]) <= available;
         let fits_without_remote = !fits_all
             && !fits_without_alive
             && !fits_without_mute
-            && joined_width(&[playlist_w, unsaved_w]) <= available;
+            && joined_width(&[playlist_w]) <= available;
 
         let mut spans: Vec<Span> = Vec::new();
         if fits_all || fits_without_alive || fits_without_mute {
@@ -988,9 +969,6 @@ impl App {
             if let Some(alive) = alive_status {
                 Self::append_status(&mut spans, alive);
             }
-        }
-        if let Some(unsaved) = unsaved_status {
-            Self::append_status(&mut spans, unsaved);
         }
         if fits_all || fits_without_alive {
             if let Some(mute) = mute_status {
@@ -1066,7 +1044,18 @@ impl App {
                 let cfg = &self.client.lock().unwrap().config;
                 cfg.save_playlist_on_consume || cfg.save_playlist_on_consume_audio
             };
-            if autosave_on {
+            if self.queue_dirty {
+                append_right(
+                    &mut right_spans,
+                    Span::styled(
+                        "UNSAVED",
+                        Style::default()
+                            .fg(palette::YELLOW)
+                            .bg(palette::PILL_BG)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                );
+            } else if autosave_on {
                 append_right(
                     &mut right_spans,
                     Span::styled(
@@ -1084,10 +1073,8 @@ impl App {
                     ),
                 );
             }
-            // Dirty/unsaved marker is NOT rendered here -- it lives in the
-            // always-on left segment (Task 2) so it's visible on every tab,
-            // not just the Queue tab. Remote queue scope is also omitted here:
-            // the active queue is already apparent from the queue UI.
+            // Remote queue scope is omitted here: the active queue is already
+            // apparent from the queue UI.
             if !right_spans.is_empty() {
                 let right_w: u16 = right_spans.iter().map(|s| s.content.width() as u16).sum();
                 // Compare against `left_content_w` (pill + session label, from Task 2),
@@ -1096,7 +1083,7 @@ impl App {
                 // " ATTACHED" / " REMOTE ALIVE") on narrow terminals.
                 let left_end = area.x + left_content_w;
                 let right_x = area.x + area.width.saturating_sub(right_w);
-                if right_x >= left_end {
+                if right_x > left_end {
                     let right_rect = Rect {
                         x: right_x,
                         y: area.y,

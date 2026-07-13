@@ -7781,13 +7781,13 @@ pub(crate) mod tests {
         app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
         let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
         app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
-        app.queue_dirty = true;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains("\u{1F5A7}  music.local | \u{1F5AD}  none | alive | UNSAVED"),
+            last_line
+                .contains("\u{1F5A7}  music.local | \u{1F5AD}  none | \u{1F5A4}  alive"),
             "expected left statuses separated by pipe delimiters:\n{last_line}"
         );
     }
@@ -7920,7 +7920,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn status_bar_drops_alive_before_unsaved_when_left_segment_overflows() {
+    fn status_bar_right_unsaved_does_not_touch_left_segment_when_space_is_tight() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 0;
         app.mute_on = false;
@@ -7930,46 +7930,36 @@ pub(crate) mod tests {
         app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
         app.queue_dirty = true;
 
-        // remote + playlist + alive + UNSAVED is too wide for 39 cols, but
-        // remote + playlist + UNSAVED fits, so alive must drop first.
         let rendered = render_app_to_string(&mut app, 39, 24);
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains("\u{1F5A7}  ")
-                && last_line.contains("\u{1F5AD}  none")
-                && last_line.contains("UNSAVED"),
-            "expected remote, playlist, and UNSAVED to survive the overflow:\n{last_line}"
-        );
-        assert!(
-            !last_line.contains("alive"),
-            "expected alive to be the first thing dropped on overflow:\n{last_line}"
+            !last_line.contains("aliveUNSAVED"),
+            "right-side UNSAVED must not attach to the left status cluster:\n{last_line}"
         );
     }
 
     #[test]
-    fn status_bar_keeps_only_unsaved_when_left_segment_severely_overflows() {
-        let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.tab_idx = 0;
-        app.mute_on = false;
-        app.set_queue_scope(QueueScope::Remote);
-        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
-        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+    fn status_bar_uses_unsaved_in_autosave_slot_when_dirty() {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("playlist-1".into()),
+            name: "Road Trip".into(),
+        };
+        app.client.lock().unwrap().config.save_playlist_on_consume = true;
         app.queue_dirty = true;
 
-        // Only 15 cols available for statuses (20 - 5) -- not enough for
-        // delimited remote + UNSAVED (19), so remote must drop too; delimited
-        // UNSAVED (10) still fits and is never dropped.
-        let rendered = render_app_to_string(&mut app, 20, 24);
+        let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
             last_line.contains("UNSAVED"),
-            "UNSAVED must be protected even under severe overflow:\n{last_line}"
+            "dirty saved-playlist queue should show UNSAVED in the save-state slot:\n{last_line}"
         );
         assert!(
-            !last_line.contains("remote") && !last_line.contains("alive"),
-            "expected remote and alive both dropped before UNSAVED is touched:\n{last_line}"
+            !last_line.contains("AUTOSAVE"),
+            "UNSAVED should replace AUTOSAVE while the queue is dirty:\n{last_line}"
         );
     }
 
