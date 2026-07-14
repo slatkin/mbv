@@ -12,7 +12,9 @@ use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
+use ratatui::widgets::{
+    Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs,
+};
 use ratatui::Frame;
 use std::time::Instant;
 use unicode_width::UnicodeWidthStr;
@@ -538,46 +540,34 @@ impl App {
     /// Overlay a thin scroll indicator on a sidebar's right border column when
     /// its content doesn't fit `content.height`. Reuses the existing border
     /// column instead of reserving a dedicated width for a scrollbar.
-    ///
-    /// The thumb position/length are computed directly (rather than via
-    /// ratatui's `Scrollbar` widget) because that widget's math assumes
-    /// `position` can reach `content_length - 1` (list-style scrolling to the
-    /// last item); our `scroll` is a paragraph offset clamped to
-    /// `total - visible`, which is smaller whenever `total > visible + 1` and
-    /// left the thumb short of the track's bottom.
     pub(super) fn render_sidebar_scrollbar(
         f: &mut Frame,
         content: Rect,
         total: usize,
         scroll: usize,
     ) {
-        let track_len = content.height as usize;
-        let visible = track_len;
-        if track_len == 0 || total <= visible {
+        let visible = content.height as usize;
+        if visible == 0 || total <= visible {
             return;
         }
-        let max_offset = total - visible;
-        let thumb_len = (track_len * visible / total).clamp(1, track_len);
-        let max_thumb_start = track_len - thumb_len;
-        let thumb_start = scroll.min(max_offset) * max_thumb_start / max_offset;
-        let x = content.x + content.width;
-        for row in 0..track_len {
-            let is_thumb = row >= thumb_start && row < thumb_start + thumb_len;
-            let (sym, style) = if is_thumb {
-                ("\u{2590}", Style::default().fg(palette::PINE))
-            } else {
-                ("\u{2502}", Style::default().fg(palette::OVERLAY))
-            };
-            f.render_widget(
-                Paragraph::new(Span::styled(sym, style)),
-                Rect {
-                    x,
-                    y: content.y + row as u16,
-                    width: 1,
-                    height: 1,
-                },
-            );
-        }
+        let max_offset = total.saturating_sub(visible);
+        let mut state = ScrollbarState::new(max_offset + 1)
+            .position(scroll.min(max_offset))
+            .viewport_content_length(visible);
+        f.render_stateful_widget(
+            Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .style(Style::default().fg(palette::OVERLAY))
+                .thumb_symbol("▐")
+                .thumb_style(Style::default().fg(palette::PINE))
+                .track_symbol(Some("│"))
+                .begin_symbol(None)
+                .end_symbol(None),
+            Rect {
+                width: content.width.saturating_add(1),
+                ..content
+            },
+            &mut state,
+        );
     }
 
     /// Render one row in a sidebar panel list.
@@ -1364,5 +1354,42 @@ mod tests {
         );
         assert!(app.status.is_empty());
         assert!(app.status_expires.is_none());
+    }
+
+    fn render_sidebar_scrollbar_column(total: usize, visible: u16, scroll: usize) -> String {
+        let backend = TestBackend::new(1, visible);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            App::render_sidebar_scrollbar(f, Rect::new(0, 0, 0, visible), total, scroll);
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
+    #[test]
+    fn sidebar_scrollbar_reaches_top_and_bottom_with_paragraph_offsets() {
+        let top = render_sidebar_scrollbar_column(10, 5, 0);
+        let bottom = render_sidebar_scrollbar_column(10, 5, 5);
+
+        assert_eq!(top.lines().next(), Some("▐"));
+        assert_eq!(bottom.lines().last(), Some("▐"));
+        assert_eq!(top.matches('▐').count(), bottom.matches('▐').count());
+        assert_ne!(top, bottom);
+    }
+
+    #[test]
+    fn sidebar_scrollbar_thumb_uses_pine_not_track_color() {
+        let backend = TestBackend::new(1, 5);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            App::render_sidebar_scrollbar(f, Rect::new(0, 0, 0, 5), 10, 0);
+        })
+        .unwrap();
+
+        let buf = term.backend().buffer();
+        assert_eq!(buf[(0, 0)].symbol(), "▐");
+        assert_eq!(buf[(0, 0)].fg, palette::PINE);
+        assert_eq!(buf[(0, 4)].symbol(), "│");
+        assert_eq!(buf[(0, 4)].fg, palette::OVERLAY);
     }
 }

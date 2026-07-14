@@ -13,7 +13,7 @@ use super::super::{palette, App, PowerFocus};
 use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -21,37 +21,42 @@ use unicode_width::UnicodeWidthStr;
 // these hot paths to reduce terminal image preparation stalls.
 pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
     ratatui_image::FilterType::Triangle;
-const POWER_SCROLLBAR_THUMB_ROWS: u16 = 2;
 
 pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usize, offset: usize) {
-    if area.height == 0 {
+    let visible = area.height as usize;
+    render_power_scrollbar_with_viewport(
+        f,
+        area,
+        max_offset.saturating_add(visible),
+        visible,
+        offset,
+    );
+}
+
+pub(super) fn render_power_scrollbar_with_viewport(
+    f: &mut Frame,
+    area: Rect,
+    content_length: usize,
+    viewport_content_length: usize,
+    offset: usize,
+) {
+    if area.height == 0 || viewport_content_length == 0 || content_length <= viewport_content_length {
         return;
     }
-
-    let track_len = area.height as usize;
-    let thumb_len = usize::from(POWER_SCROLLBAR_THUMB_ROWS.min(area.height)).max(1);
-    let max_thumb_start = track_len.saturating_sub(thumb_len);
-    let thumb_start = (offset.min(max_offset) * max_thumb_start + (max_offset / 2))
-        .checked_div(max_offset)
-        .unwrap_or(0);
-    let x = area.x + area.width.saturating_sub(1);
-
-    for row in 0..track_len {
-        let sym = if row >= thumb_start && row < thumb_start + thumb_len {
-            "\u{2590}"
-        } else {
-            " "
-        };
-        f.render_widget(
-            Paragraph::new(Span::styled(sym, Style::default().fg(palette::SUBTLE))),
-            Rect {
-                x,
-                y: area.y + row as u16,
-                width: 1,
-                height: 1,
-            },
-        );
-    }
+    let max_offset = content_length.saturating_sub(viewport_content_length);
+    let mut state = ScrollbarState::new(max_offset + 1)
+        .position(offset.min(max_offset))
+        .viewport_content_length(viewport_content_length);
+    f.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .thumb_symbol("▐")
+            .track_symbol(Some(" "))
+            .style(Style::default().fg(palette::SUBTLE))
+            .begin_symbol(None)
+            .end_symbol(None),
+        area,
+        &mut state,
+    );
 }
 
 /// For folder-based music libraries where albums are stored as directories named
@@ -593,6 +598,57 @@ mod tests {
     #[test]
     fn power_view_uses_triangle_resampling() {
         assert_eq!(POWER_RENDER_FILTER, ratatui_image::FilterType::Triangle);
+    }
+
+    fn render_power_scrollbar_column(height: u16, max_offset: usize, offset: usize) -> String {
+        let backend = TestBackend::new(1, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            render_power_scrollbar(f, Rect::new(0, 0, 1, height), max_offset, offset);
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
+    fn render_power_scrollbar_column_with_viewport(
+        height: u16,
+        content_length: usize,
+        viewport_content_length: usize,
+        offset: usize,
+    ) -> String {
+        let backend = TestBackend::new(1, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            render_power_scrollbar_with_viewport(
+                f,
+                Rect::new(0, 0, 1, height),
+                content_length,
+                viewport_content_length,
+                offset,
+            );
+        })
+        .unwrap();
+        buffer_to_string(&term)
+    }
+
+    #[test]
+    fn power_scrollbar_is_proportional_and_reaches_both_ends() {
+        let top = render_power_scrollbar_column(7, 3, 0);
+        let bottom = render_power_scrollbar_column(7, 3, 3);
+
+        assert_eq!(top.lines().next(), Some("▐"));
+        assert_eq!(bottom.lines().last(), Some("▐"));
+        assert!(top.matches('▐').count() > 2, "expected a proportional thumb:\n{top}");
+    }
+
+    #[test]
+    fn power_scrollbar_respects_custom_viewport_units() {
+        let top = render_power_scrollbar_column_with_viewport(7, 10, 2, 0);
+        let bottom = render_power_scrollbar_column_with_viewport(7, 10, 2, 8);
+
+        assert_eq!(top.matches('▐').count(), 1);
+        assert_eq!(top.lines().next(), Some("▐"));
+        assert_eq!(bottom.lines().last(), Some("▐"));
     }
 
     fn buffer_to_string(term: &Terminal<TestBackend>) -> String {

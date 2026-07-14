@@ -295,12 +295,14 @@ impl App {
         }
 
         let mut row_y = content_area.y;
+        let mut visible_items = 0usize;
         let mut row_map: Vec<Option<usize>> = Vec::with_capacity(content_area.height as usize);
 
         for (i, item) in items.iter().enumerate().skip(scroll) {
             if row_y >= content_area.y + content_area.height {
                 break;
             }
+            visible_items += 1;
             let item_h = item_heights[i];
             let selected = i == cursor;
             if selected {
@@ -330,8 +332,13 @@ impl App {
 
         // Scrollbar (hidden when unfocused, consistent with queue panel).
         if needs_scrollbar && focused {
-            let max_off = n.saturating_sub(1);
-            super::render_power_scrollbar(f, content_area, max_off, scroll);
+            super::render_power_scrollbar_with_viewport(
+                f,
+                content_area,
+                n,
+                visible_items.max(1),
+                scroll,
+            );
         }
     }
 
@@ -542,10 +549,12 @@ impl App {
 
         let mut row_map: Vec<Option<usize>> = Vec::with_capacity(list_area.height as usize);
         let mut row_y = list_area.y;
+        let mut visible_items = 0usize;
         for (item_idx, item) in items.iter().enumerate().skip(scroll) {
             if row_y >= list_area.y + list_area.height {
                 break;
             }
+            visible_items += 1;
             let item_h = item_heights[item_idx];
             let selected = item_idx == current_pos;
             if selected {
@@ -566,8 +575,13 @@ impl App {
         layout.left_row_map = row_map;
 
         if needs_scrollbar && focused {
-            let max_off = items.len().saturating_sub(1);
-            super::render_power_scrollbar(f, list_area, max_off, scroll);
+            super::render_power_scrollbar_with_viewport(
+                f,
+                list_area,
+                items.len(),
+                visible_items.max(1),
+                scroll,
+            );
         }
     }
 
