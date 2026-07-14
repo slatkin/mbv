@@ -4190,33 +4190,39 @@ impl App {
     }
 
     /// `q` (and every keyboard/mouse path that routes here). In stay-alive
-    /// mode this is a **detach**, never a quit: diverted before
-    /// `player.stop()`, the player keeps running and the run loop keeps
-    /// going (returns `false`). A real quit is only `mbv -q` / tray-Quit
-    /// (see `crate::app::stay_alive` / T3's graceful SIGTERM path).
+    /// mode this is a **detach** only while the current session still has
+    /// `Stay alive on exit` enabled: diverted before `player.stop()`, the
+    /// player keeps running and the run loop keeps going (returns `false`).
+    /// If the user disables that setting mid-session, the next `q` becomes
+    /// a real quit for the current attached app instance. `mbv -q` / tray-Quit
+    /// remain real quits regardless (see `crate::app::stay_alive` / T3's
+    /// graceful SIGTERM path).
     ///
     /// In bare mode this is a real quit. Any dirty saved-playlist queue is
     /// saved/discarded **silently** per `save_playlist_on_quit` — no
     /// interactive modal (that modal is reserved for the attended
     /// ClearQueue/PlayItems cases; see issue #156).
     pub(super) fn try_quit(&mut self) -> bool {
-        if let Some(ctrl) = &self.stay_alive_ctrl {
-            match ctrl.send_detach() {
-                Ok(()) => {
-                    self.flash_status("Detached — mbv keeps playing in the background".into());
-                    // #156: no terminal-client left to answer the run loop's
-                    // terminal.clear()/draw() calls until the next reattach
-                    // sets this back via take_attach_pending(); see the
-                    // `attached` field doc for why that matters.
-                    self.attached = false;
-                }
-                Err(e) => {
-                    self.flash_status_high(format!(
+        let stay_alive_on_exit = self.client.lock().unwrap().config.stay_alive;
+        if stay_alive_on_exit {
+            if let Some(ctrl) = &self.stay_alive_ctrl {
+                match ctrl.send_detach() {
+                    Ok(()) => {
+                        self.flash_status("Detached — mbv keeps playing in the background".into());
+                        // #156: no terminal-client left to answer the run loop's
+                        // terminal.clear()/draw() calls until the next reattach
+                        // sets this back via take_attach_pending(); see the
+                        // `attached` field doc for why that matters.
+                        self.attached = false;
+                    }
+                    Err(e) => {
+                        self.flash_status_high(format!(
                         "Detach failed ({e}) — still attached; try again or `mbv -q` from another shell"
                     ));
+                    }
                 }
+                return false;
             }
-            return false;
         }
         if self.queue_dirty && self.queue_is_saved_playlist() {
             let save_on_quit = self.client.lock().unwrap().config.save_playlist_on_quit;
