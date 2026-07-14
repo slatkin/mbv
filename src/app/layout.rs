@@ -20,16 +20,6 @@
 
 use ratatui::layout::Rect;
 
-/// Geometry of one power-home section card in the two-column grid, computed at render
-/// time and reused by keyboard navigation (column jumps).
-#[derive(Clone, Default)]
-pub(crate) struct PowerHomeSectionMeta {
-    pub flat_start: usize, // first flat item index in this section
-    pub len: usize,        // number of items (0 for the empty Keep Watching card)
-    pub row: usize,        // grid row
-    pub col: usize,        // grid column
-}
-
 /// Seekbar rect, the two divider status indicators that still have a click
 /// target (remote-session and mute), and the mouse hit targets for the
 /// one-row playback header's transport controls (play/pause glyph and next).
@@ -73,12 +63,11 @@ pub(crate) struct LayoutQueue {
     pub scope_remote_area: Rect,
 }
 
-/// Geometry for the power-view's own Home sub-tab (the two-column card grid),
+/// Geometry for the power-view's own Home sub-tab,
 /// separate from `LayoutHome` which belongs to the regular Home tab.
 #[derive(Default)]
 pub(crate) struct LayoutPowerHome {
     pub hitmap: Vec<(Rect, usize)>,
-    pub layout: Vec<PowerHomeSectionMeta>,
 }
 
 /// Power-view left panel, queue panel, and home-grid geometry.

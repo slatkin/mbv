@@ -9,6 +9,8 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
+
 impl App {
     pub(super) fn render_power_queue(
         &mut self,
@@ -130,24 +132,7 @@ impl App {
 
         // Build display rows: audio grouped by album, episodes by series, the rest
         // flat. group_for_header[j] holds the label for the j-th Header.
-        //
-        // A queue sourced from a saved playlist gets a single header naming the
-        // playlist instead -- see the matching logic in `render_queue_panel`
-        // (render/playlist.rs) for why: per-album/per-series headers make a
-        // playlist queue look like it was built by "play series"/"play album"
-        // and hide that it's a curated playlist.
-        let playlist_name = self.queue_playlist_name();
-        let (display, group_for_header) = if !playlist_name.is_empty() {
-            let mut rows: Vec<QueueRow> = Vec::with_capacity(items.len() + 1);
-            rows.push(QueueRow::Header);
-            rows.extend((0..items.len()).map(|idx| QueueRow::Track {
-                idx,
-                in_group: false,
-            }));
-            (rows, vec![playlist_name.to_string()])
-        } else {
-            build_queue_rows(&items, true)
-        };
+        let (display, group_for_header) = build_queue_rows(&items, true);
         let total = display.len();
         let visible = area.height as usize;
 
@@ -184,7 +169,6 @@ impl App {
         let need_sb = has_sb && focused; // scrollbar only drawn when focused
         let render_w = area.width.saturating_sub(if has_sb { 1 } else { 0 }) as usize;
         let show_length = render_w > 30;
-        let dur_w: usize = if show_length { 6 } else { 0 }; // "mm:ss" or "h:mm:ss"
 
         // Build visible ListItems and the row map simultaneously.
         let mut list_items: Vec<ListItem> = Vec::new();
@@ -239,7 +223,7 @@ impl App {
                         (item.playback_position_ticks, item.runtime_ticks)
                     };
                     let pct_str = if pt > 0 && rt > 0 && !item.is_audio() {
-                        format!(" {}%", pt * 100 / rt.max(1))
+                        format!("{}%", pt * 100 / rt.max(1))
                     } else {
                         String::new()
                     };
@@ -272,9 +256,16 @@ impl App {
                         palette::MUTED
                     };
 
-                    // Title truncated to leave room for indent + marker + duration + pct.
-                    let extra = dur_w + pct_str.chars().count();
-                    let title_w = render_w.saturating_sub(indent + 1 + extra); // 1 marker
+                    // Title truncated to leave room for indent + marker + right-aligned metadata.
+                    let dur_visible = show_length && !dur.is_empty();
+                    let pct_visible = !pct_str.is_empty();
+                    let metadata_gap = if dur_visible && pct_visible { 1 } else { 0 };
+                    let metadata_w = dur_visible.then_some(dur.width()).unwrap_or(0)
+                        + pct_visible.then_some(pct_str.width()).unwrap_or(0)
+                        + metadata_gap;
+                    let extra = metadata_w;
+                    let title_w =
+                        render_w.saturating_sub(indent + 1 + extra + QUEUE_TITLE_QUIET_COLUMNS);
                     let title = trunc_str(&label, title_w);
 
                     // Now-playing title text is always emby blue, regardless of focus state.
@@ -305,7 +296,12 @@ impl App {
                     } else {
                         spans.push(Span::styled(title, Style::default().fg(title_color)));
                     }
-                    if !pct_str.is_empty() {
+                    if pct_visible || dur_visible {
+                        let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
+                        let pad = render_w.saturating_sub(used + metadata_w);
+                        spans.push(Span::raw(" ".repeat(pad)));
+                    }
+                    if pct_visible {
                         let pct_color = if is_active {
                             palette::IRIS
                         } else {
@@ -313,12 +309,11 @@ impl App {
                         };
                         spans.push(Span::styled(pct_str, Style::default().fg(pct_color)));
                     }
-                    if show_length && !dur.is_empty() {
+                    if pct_visible && dur_visible {
+                        spans.push(Span::raw(" "));
+                    }
+                    if dur_visible {
                         let dur_color = dim_color;
-                        // Right-align duration to the right edge of the queue panel.
-                        let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
-                        let pad = render_w.saturating_sub(used + dur.width());
-                        spans.push(Span::raw(" ".repeat(pad)));
                         spans.push(Span::styled(dur, Style::default().fg(dur_color)));
                     }
 

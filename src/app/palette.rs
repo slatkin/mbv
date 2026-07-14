@@ -15,14 +15,3 @@ pub const FOCUSED: Color = Color::Rgb(83, 83, 83); // focused item bg (#535353)
 pub const RED: Color = Color::Rgb(220, 60, 60); // loud volume
 pub const PILL_BG: Color = Color::Rgb(60, 66, 74); // subtle grey control-pill background
 pub const SEEK_TRACK: Color = Color::Rgb(70, 84, 95); // unplayed seek track (design #46545f)
-pub const ORANGE: Color = Color::Rgb(224, 149, 77); // section accent
-pub const PURPLE: Color = Color::Rgb(157, 91, 210); // section accent
-pub const CYAN: Color = Color::Rgb(61, 200, 224); // section accent
-
-/// Accent colours cycled across power-home section cards, in display order.
-pub const SECTION_COLORS: [Color; 5] = [PINE, FOAM, ORANGE, PURPLE, CYAN];
-
-/// The accent colour for the section at display index `i`.
-pub fn section_color(i: usize) -> Color {
-    SECTION_COLORS[i % SECTION_COLORS.len()]
-}

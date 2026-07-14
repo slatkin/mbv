@@ -159,7 +159,7 @@ impl App {
 
     /// Renders the grouped-by-artist album list for a music group library. The
     /// group-selector pills for this view are rendered by the caller on the
-    /// power view's top rule row instead (`render_power_music_group_pills_row`,
+    /// Power View's top rule row instead (`render_power_music_group_pills_row`,
     /// see #180) -- this method starts directly with the album list.
     pub(super) fn render_power_music_group_view(
         &mut self,

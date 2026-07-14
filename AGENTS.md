@@ -79,6 +79,8 @@ Uses the default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agen
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+- Documentation cleanup is agent-owned work in this repo: keep `CONTEXT.md`, `docs/adr/`, and related domain docs current as part of implementation changes, do not hand that cleanup back to the user, and do not leave doc edits sitting uncommitted at the end of the task.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
@@ -88,8 +90,8 @@ This project is indexed by GitNexus as **mbv** (3479 symbols, 14656 relationship
 
 ## Always Do
 
-- **MUST run impact analysis before editing any symbol.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user.
-- **MUST run `detect_changes()` before committing** to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
+- **MUST run impact analysis before editing any symbol, except for small ad-hoc UI changes.** Before modifying a function, class, or method, run `impact({target: "symbolName", direction: "upstream"})` and report the blast radius (direct callers, affected processes, risk level) to the user. For small ad-hoc UI polish requested interactively, GitNexus is optional; use judgment and prefer direct code inspection plus focused UI/render checks.
+- **MUST run `detect_changes()` before committing, except for small ad-hoc UI changes.** Use it to verify your changes only affect expected symbols and execution flows. For regression review, compare against the default branch: `detect_changes({scope: "compare", base_ref: "main"})`.
 - **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
 - When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
 - When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
@@ -100,7 +102,7 @@ This project is indexed by GitNexus as **mbv** (3479 symbols, 14656 relationship
 - NEVER edit a function, class, or method without first running `impact` on it.
 - NEVER ignore HIGH or CRITICAL risk warnings from impact analysis.
 - NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit changes without running `detect_changes()` to check affected scope.
+- NEVER commit non-trivial or non-UI-polish changes without running `detect_changes()` to check affected scope.
 
 ## Resources
 

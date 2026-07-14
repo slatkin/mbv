@@ -11,7 +11,7 @@ use super::super::layout::LayoutPower;
 use super::super::ui_util::{natural_sort_key, trunc_str};
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -196,7 +196,36 @@ impl App {
             let is_music_group_lib =
                 self.power_left_tab > 0 && self.is_music_group_view(self.power_left_tab - 1);
 
-            if is_music_group_lib {
+            if self.power_left_tab == 0 {
+                layout.breadcrumbs = Vec::new();
+
+                let right_col_w = right_w.saturating_sub(1);
+                let marker_text = " Keep Watching ";
+                let marker_w = (marker_text.width() as u16).min(right_col_w);
+                let left_line_w = area.width.saturating_sub(marker_w);
+
+                f.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::styled(
+                            "\u{2501}".repeat(left_line_w as usize),
+                            Style::default().fg(palette::FOAM),
+                        ),
+                        Span::styled(
+                            marker_text,
+                            Style::default()
+                                .fg(palette::BASE)
+                                .bg(palette::FOAM)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ])),
+                    Rect {
+                        x: area.x,
+                        y: crumb_row,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+            } else if is_music_group_lib {
                 layout.breadcrumbs = Vec::new();
                 let lib_idx = self.power_left_tab - 1;
 
@@ -269,31 +298,26 @@ impl App {
                 layout.selector_tabs = Vec::new();
 
                 // Build (display_name, target_truncation_depth) pairs.
-                let crumb_depths: Vec<(String, usize)> = if self.power_left_tab == 0 {
-                    vec![("mbv".to_string(), 0)]
+                let lib_idx = self.power_left_tab - 1;
+                let lib = &self.libs[lib_idx];
+                let skip = if lib
+                    .nav_stack
+                    .first()
+                    .map(|l| l.title == lib.library.name)
+                    .unwrap_or(false)
+                {
+                    1
                 } else {
-                    let lib_idx = self.power_left_tab - 1;
-                    let lib = &self.libs[lib_idx];
-                    let skip = if lib
-                        .nav_stack
-                        .first()
-                        .map(|l| l.title == lib.library.name)
-                        .unwrap_or(false)
-                    {
-                        1
-                    } else {
-                        0
-                    };
-                    let mut cd: Vec<(String, usize)> = vec![(lib.library.name.clone(), skip)];
-                    for (j, lvl) in lib.nav_stack.iter().enumerate().skip(skip) {
-                        cd.push((lvl.title.clone(), j + 1));
-                    }
-                    // Drop the current (deepest) level from the pill unless it's the only one.
-                    if cd.len() > 1 {
-                        cd.pop();
-                    }
-                    cd
+                    0
                 };
+                let mut crumb_depths: Vec<(String, usize)> = vec![(lib.library.name.clone(), skip)];
+                for (j, lvl) in lib.nav_stack.iter().enumerate().skip(skip) {
+                    crumb_depths.push((lvl.title.clone(), j + 1));
+                }
+                // Drop the current (deepest) level from the pill unless it's the only one.
+                if crumb_depths.len() > 1 {
+                    crumb_depths.pop();
+                }
 
                 let pill_style = Style::default().fg(palette::BASE).bg(palette::FOAM);
                 let sep_style = Style::default().fg(palette::WHITE).bg(palette::FOAM);
@@ -597,15 +621,15 @@ mod tests {
         focused: bool,
     ) -> Terminal<TestBackend> {
         // Height is one row taller than the banner's own reserved footprint
-        // (1 selected row + 15 rule/content/gap rows: 1 opening rule + 13
+        // (1 selected row + 17 rule/content/gap rows: 1 opening rule + 15
         // content + 1 closing rule) to also leave room for the " N items"
         // header row that `render_power_list` now draws unconditionally for a
         // focused library panel -- there's no separate top-pinned title row
         // to absorb it now that this goes through the shared catch-all path.
-        let backend = TestBackend::new(60, 18);
+        let backend = TestBackend::new(60, 20);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_power_library(f, Rect::new(0, 0, 60, 18), focused, layout);
+            app.render_power_library(f, Rect::new(0, 0, 60, 20), focused, layout);
         })
         .unwrap();
         term
@@ -749,6 +773,42 @@ mod tests {
         assert!(
             !lines[17].contains("Focused Movie"),
             "expected selected row to stay above banner, not repeat below it:\n{out}"
+        );
+    }
+
+    #[test]
+    fn movie_library_unfocused_selected_banner_keeps_text_right_of_indicator() {
+        let mut app = make_power_movie_app();
+        let mut layout = LayoutPower::default();
+
+        let term = render_power_library_to_terminal_focused(&mut app, &mut layout, false);
+        let out = buffer_to_string(&term);
+        let lines: Vec<&str> = out.lines().collect();
+
+        let selected_line = lines
+            .iter()
+            .find(|line| line.contains("Focused Movie"))
+            .expect("expected selected movie row");
+        let selected_bar = selected_line.find('▌').expect("expected selected bar");
+        let selected_text = selected_line
+            .find("Focused Movie")
+            .expect("expected selected title");
+        assert!(
+            selected_text > selected_bar,
+            "selected movie title should stay to the right of the indicator while unfocused:\n{out}"
+        );
+
+        let overview_line = lines
+            .iter()
+            .find(|line| line.contains("compact movie banner"))
+            .expect("expected compact overview line");
+        let overview_bar = overview_line.find('▌').expect("expected banner bar");
+        let overview_text = overview_line
+            .find("compact movie banner")
+            .expect("expected compact overview text");
+        assert!(
+            overview_text > overview_bar,
+            "compact overview text should stay to the right of the indicator while unfocused:\n{out}"
         );
     }
 
@@ -1135,23 +1195,27 @@ mod tests {
             "expected selected album row to drop the grouped indent after the gutter:\n{out}"
         );
         assert!(
-            lines[3].trim().is_empty() || lines[3].starts_with("  \u{258c}"),
-            "expected single spacer row after selected album title:\n{out}"
+            lines[3].contains("^P: Play | ^A: Enqueue | ^S: Shuffle"),
+            "expected action hints directly under selected album title:\n{out}"
         );
         assert!(
-            lines[4].contains("Opening Track"),
+            lines[3].starts_with("  \u{258c} "),
+            "expected action hints to share the selected-region gutter:\n{out}"
+        );
+        assert!(
+            lines[5].contains("Opening Track"),
             "expected selected album tracks inside the inline detail region:\n{out}"
         );
         assert!(
-            lines[4].starts_with("  \u{258c} 1. Opening Track"),
+            lines[5].starts_with("  \u{258c} 1. Opening Track"),
             "expected inline tracks to share the selected-region gutter:\n{out}"
         );
         assert!(
-            lines[5].contains("\u{2500}"),
+            lines[6].contains("\u{2500}"),
             "expected bottom rule directly after inline detail:\n{out}"
         );
         assert!(
-            lines[6].contains("Second Album"),
+            lines[7].contains("Second Album"),
             "expected following album row immediately after reserved inline detail rows:\n{out}"
         );
         assert_eq!(
@@ -1165,11 +1229,11 @@ mod tests {
             "expected selected album row to map to its album index"
         );
         assert!(
-            layout.left_row_map[3..6].iter().all(Option::is_none),
+            layout.left_row_map[3..7].iter().all(Option::is_none),
             "expected inline detail and bottom-rule rows to be non-selectable"
         );
         assert_eq!(
-            layout.left_row_map.get(6),
+            layout.left_row_map.get(7),
             Some(&Some(1)),
             "expected album row after inline detail to remain selectable"
         );
@@ -1247,21 +1311,33 @@ mod tests {
             "expected flat selected album title to align after a one-column gutter gap:\n{out}"
         );
         assert!(
-            lines[5].contains("Opening Track"),
+            lines[4].contains("^P: Play | ^A: Enqueue | ^S: Shuffle"),
+            "expected action hints directly under selected album title:\n{out}"
+        );
+        assert!(
+            lines[5].starts_with("  \u{258c}"),
+            "expected the spacer row between hints and tracks to keep the selected-region gutter:\n{out}"
+        );
+        assert!(
+            lines[6].contains("Opening Track"),
             "expected tracks inside the inline detail region:\n{out}"
         );
         assert!(
-            lines[6].contains("\u{2500}"),
+            lines[6].starts_with("  \u{258c} 1. Opening Track"),
+            "expected inline tracks to share the selected-region gutter:\n{out}"
+        );
+        assert!(
+            lines[7].contains("\u{2500}"),
             "expected bottom rule directly after inline detail:\n{out}"
         );
         assert!(
-            lines[7].contains("Second Album"),
+            lines[8].contains("Second Album"),
             "expected following album row immediately after inline detail:\n{out}"
         );
         assert_eq!(layout.left_row_map.get(1), Some(&None));
         assert_eq!(layout.left_row_map.get(2), Some(&Some(0)));
-        assert!(layout.left_row_map[3..6].iter().all(Option::is_none));
-        assert_eq!(layout.left_row_map.get(6), Some(&Some(1)));
+        assert!(layout.left_row_map[3..7].iter().all(Option::is_none));
+        assert_eq!(layout.left_row_map.get(7), Some(&Some(1)));
     }
 
     #[test]
@@ -1350,6 +1426,19 @@ mod tests {
             "expected no duplicate inline album title row:\n{out}"
         );
 
+        let hint_y = lines
+            .iter()
+            .position(|line| line.contains("^P: Play"))
+            .expect("expected inline action hint row");
+        let hint_x = lines[hint_y]
+            .find("^P: Play")
+            .expect("expected hint x position");
+        assert_eq!(
+            buf[(hint_x as u16, hint_y as u16)].fg,
+            palette::MUTED,
+            "expected inline action hints to render darker than unfocused track text:\n{out}"
+        );
+
         let track_y = lines
             .iter()
             .position(|line| line.contains("Opening Track"))
@@ -1358,13 +1447,39 @@ mod tests {
             .find("Opening Track")
             .expect("expected track x position");
         assert!(
-            lines[track_y].starts_with("  \u{258c} 1. Opening Track"),
-            "expected inactive inline track list to keep the selected-region gutter:\n{out}"
+            lines[track_y].contains("1. Opening Track"),
+            "expected inactive inline track list to still render the track row:\n{out}"
         );
         assert_eq!(
             buf[(track_x as u16, track_y as u16)].fg,
             palette::SUBTLE,
             "expected inactive inline track list to render muted/subtle:\n{out}"
+        );
+    }
+
+    #[test]
+    fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
+        let mut app = make_power_music_group_app();
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal_focused(&mut app, &mut layout, false);
+        let out = buffer_to_string(&term);
+        let title_line = out
+            .lines()
+            .find(|line| line.contains("First Album"))
+            .expect("expected selected album title row");
+
+        assert_eq!(
+            title_line.find('▌'),
+            Some(2),
+            "selected album title row should keep the selected-region gutter while unfocused:\n{out}"
         );
     }
 
@@ -1400,9 +1515,8 @@ mod tests {
             .expect("expected focused track row");
 
         assert!(
-            focused_line.starts_with("  \u{258c} \u{258c}"),
-            "expected focused track row to show both the selected-region gutter and \
-             a distinct track-focus cursor:\n{out}"
+            focused_line.starts_with("  \u{258c} 2. Focused Track"),
+            "expected focused track row to keep the green selected-row gutter in track-selection mode:\n{out}"
         );
         assert_eq!(
             layout.cursor_screen_y,
@@ -1440,8 +1554,8 @@ mod tests {
             .expect("expected focused track to render inline");
 
         assert!(
-            focused_line.starts_with("  \u{258c}"),
-            "expected track-selection cursor to remain visible while pane is unfocused:\n{out}"
+            focused_line.starts_with("  \u{258c} 2. Focused Track"),
+            "expected track-selection row to keep the green selected-row gutter while pane is unfocused:\n{out}"
         );
     }
 

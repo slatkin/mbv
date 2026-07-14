@@ -11,8 +11,6 @@ use mbv_core::player::PlayerCommand;
 use mbv_core::ws::WsEvent;
 use rand::seq::SliceRandom;
 use std::collections::{HashMap, HashSet};
-#[cfg(not(test))]
-use std::io::Write;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -676,7 +674,7 @@ impl App {
 
     /// Common guard for kicking off `spawn_feed_home_video_aggregate` (or the
     /// podcast equivalent) once a grouped library's root folder listing has
-    /// fully paginated: power view is showing this library's tab, it's a
+    /// fully paginated: Power View is showing this library's tab, it's a
     /// feed-home-video or podcast library, and its root nav level has loaded
     /// every item. `extra_ok` carries the caller-specific condition (e.g.
     /// which event/level this check is reacting to).
@@ -826,7 +824,7 @@ impl App {
     }
 
     pub(super) fn lib_page_size(&self) -> usize {
-        // In power view the library list is rendered into the right panel, and the
+        // In Power View the library list is rendered into the right panel, and the
         // normal-view per-row height map (`layout.library.lib_row_heights`) is never populated,
         // so it would fall back to 1. Use the panel height directly (rows are single-line;
         // subtract 1 for the count/search header line).
@@ -870,7 +868,7 @@ impl App {
             return;
         }
 
-        // In power view with letter-grouped display, navigate in sorted display order so
+        // In Power View with letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
         if self.queue_view == QUEUE_VIEW_POWER && !self.layout.power.left_sorted_indices.is_empty()
         {
@@ -931,7 +929,7 @@ impl App {
             return;
         }
 
-        // In power view with letter-grouped display, Home/End jump to the first/last item
+        // In Power View with letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
         if self.queue_view == QUEUE_VIEW_POWER && !self.layout.power.left_sorted_indices.is_empty()
         {
@@ -1194,7 +1192,7 @@ impl App {
             .map(|i| i.item_type == "Season")
             .unwrap_or(false)
     }
-    /// True when the power view should show the combined series view:
+    /// True when Power View should show the combined series view:
     /// either at episode level (with a Season level directly above), or at
     /// season level while episodes are still loading.
     pub(super) fn is_series_view(&self, lib_idx: usize) -> bool {
@@ -1241,7 +1239,7 @@ impl App {
             .unwrap_or(false)
     }
 
-    /// True when the power view should show the combined music group view:
+    /// True when Power View should show the combined music group view:
     /// a group-selector bar at top with the album list below.
     /// Activated when `music.levels` starts with `"group"` and the nav stack
     /// has a group level plus an album level above it.
@@ -2060,20 +2058,16 @@ impl App {
         }
     }
 
-    fn ring_terminal_bell(&self) {
-        #[cfg(not(test))]
-        {
-            let mut stdout = std::io::stdout();
-            let _ = stdout.write_all(b"\x07");
-            let _ = stdout.flush();
-        }
-        #[cfg(test)]
-        {
-            let _ = self;
-        }
+    fn ring_terminal_bell() {
+        use std::io::Write;
+
+        let mut stderr = std::io::stderr();
+        let _ = stderr.write_all(b"\x07");
+        let _ = stderr.flush();
     }
 
     pub(super) fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
+        Self::ring_terminal_bell();
         if !self.system_notifications {
             return;
         }
@@ -2108,14 +2102,14 @@ impl App {
     }
 
     pub(super) fn flash_status(&mut self, msg: String) {
-        self.ring_terminal_bell();
+        Self::ring_terminal_bell();
         self.notify_system(&msg);
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(2));
     }
 
     pub(super) fn flash_status_high(&mut self, msg: String) {
-        self.ring_terminal_bell();
+        Self::ring_terminal_bell();
         self.notify_system(&msg);
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(5));
@@ -2580,7 +2574,7 @@ impl App {
                     *v = 0;
                 }
 
-                // In the power view, skip past the auto-pushed Season level so
+                // In Power View, skip past the auto-pushed Season level so
                 // a single Escape takes the user back to the series list.
                 if self.queue_view == QUEUE_VIEW_POWER && self.power_left_tab == lib_idx + 1 {
                     let exposed_seasons = self.libs[lib_idx]
@@ -3688,7 +3682,7 @@ impl App {
     }
 
     fn maybe_auto_push_power_tv_season_level(&mut self, lib_idx: usize) {
-        // In the power view: when a season list arrives for a TV library,
+        // In Power View: when a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.
         let should_auto_push = self.queue_view == QUEUE_VIEW_POWER
@@ -3750,7 +3744,7 @@ impl App {
     }
 
     fn maybe_auto_push_power_music_group_level(&mut self, lib_idx: usize) {
-        // In the power view: when the group list loads for a music library with
+        // In Power View: when the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.
         let should_auto_push_music = self.queue_view == QUEUE_VIEW_POWER
@@ -4091,8 +4085,10 @@ impl App {
             if save_on_quit {
                 // non-blocking: enqueues save in a spawned thread, does not block quit
                 self.save_playlist_to_emby();
+                self.queue_dirty = false;
+            } else {
+                self.on_queue_replace_silent();
             }
-            self.on_queue_replace_silent();
         }
         self.save_prefs();
         if !self.player.is_remote() {
@@ -4284,7 +4280,7 @@ impl App {
         });
     }
 
-    /// Number of selectable left-panel tabs in power view: Home/CW + all libraries.
+    /// Number of selectable left-panel tabs in Power View: Home/CW + all libraries.
     pub(super) fn power_left_tab_count(&self) -> usize {
         1 + self.libs.len()
     }
@@ -4362,17 +4358,6 @@ impl App {
 
     // ── Power-view home flat list ────────────────────────────────────────────
 
-    /// Total number of items across all power-home groups (CW + all latest sections).
-    fn power_home_total(&self) -> usize {
-        self.home.continue_items.len()
-            + self
-                .home
-                .latest
-                .iter()
-                .map(|(_, _, items, _)| items.len())
-                .sum::<usize>()
-    }
-
     /// The MediaItem at the current flat `power_home_cursor`, or None.
     pub(super) fn power_home_current_item(&self) -> Option<MediaItem> {
         let cursor = self.home.power_home_cursor;
@@ -4394,113 +4379,132 @@ impl App {
         None
     }
 
-    /// Move the flat power-home cursor by `delta`, clamped to bounds.
+    /// Flat cursor range for a power-home section. Section 0 is Keep Watching;
+    /// non-empty latest sections keep their regular Home section index.
+    fn power_home_section_range(&self, section_idx: usize) -> Option<(usize, usize)> {
+        let mut pos = 0usize;
+        if section_idx == 0 {
+            return Some((0, self.home.continue_items.len()));
+        }
+        pos += self.home.continue_items.len();
+        for (idx, (_, _, items, _)) in self.home.latest.iter().enumerate() {
+            let current_section = idx + 1;
+            if current_section == section_idx {
+                return if items.is_empty() {
+                    None
+                } else {
+                    Some((pos, items.len()))
+                };
+            }
+            pos += items.len();
+        }
+        None
+    }
+
+    fn power_home_new_sections(&self) -> Vec<usize> {
+        let mut sections = Vec::new();
+        for (idx, (_, _, items, _)) in self.home.latest.iter().enumerate() {
+            if !items.is_empty() {
+                sections.push(idx + 1);
+            }
+        }
+        sections
+    }
+
+    pub(super) fn power_home_select_section(&mut self, section_idx: usize) {
+        let new_sections = self.power_home_new_sections();
+        let section_idx = if new_sections.contains(&section_idx) {
+            section_idx
+        } else if let Some(first) = new_sections.first() {
+            *first
+        } else {
+            self.home.section = 0;
+            return;
+        };
+        let was_keep_watching = self
+            .power_home_section_range(0)
+            .is_some_and(|(start, len)| {
+                len > 0
+                    && self.home.power_home_cursor >= start
+                    && self.home.power_home_cursor < start + len
+            });
+        self.home.section = section_idx;
+        self.home.power_home_scroll = 0;
+        if !was_keep_watching {
+            if let Some((start, len)) = self.power_home_section_range(section_idx) {
+                self.home.power_home_cursor = if len == 0 {
+                    start
+                } else {
+                    self.home.power_home_cursor.clamp(start, start + len - 1)
+                };
+            }
+        }
+    }
+
+    fn power_home_visible_indices(&self) -> Vec<usize> {
+        let mut indices = Vec::new();
+        if let Some((start, len)) = self.power_home_section_range(0) {
+            indices.extend(start..start + len);
+        }
+        let selected_new = if self.power_home_new_sections().contains(&self.home.section) {
+            self.home.section
+        } else {
+            self.power_home_new_sections().first().copied().unwrap_or(0)
+        };
+        if selected_new > 0 {
+            if let Some((start, len)) = self.power_home_section_range(selected_new) {
+                indices.extend(start..start + len);
+            }
+        }
+        indices
+    }
+
+    /// Move the flat power-home cursor by `delta`, clamped to the fixed Keep
+    /// Watching block plus the selected New section.
     pub(super) fn power_home_move_cursor(&mut self, delta: i64) {
-        let total = self.power_home_total();
-        if total == 0 {
+        let indices = self.power_home_visible_indices();
+        if indices.is_empty() {
+            self.home.power_home_cursor = 0;
             return;
-        }
-        let cur = self.home.power_home_cursor.min(total - 1) as i64;
-        self.home.power_home_cursor = (cur + delta).clamp(0, total as i64 - 1) as usize;
-    }
-
-    /// Section (index into `layout.power.home.layout`) currently holding the flat cursor.
-    fn power_home_cur_section(&self) -> Option<usize> {
-        let cursor = self.home.power_home_cursor;
-        self.layout
-            .power
-            .home
-            .layout
+        };
+        let pos = indices
             .iter()
-            .position(|m| m.len > 0 && cursor >= m.flat_start && cursor < m.flat_start + m.len)
+            .position(|idx| *idx == self.home.power_home_cursor)
+            .unwrap_or(0);
+        let next = (pos as i64 + delta).clamp(0, indices.len() as i64 - 1) as usize;
+        self.home.power_home_cursor = indices[next];
     }
 
-    /// Select the first item of the first non-empty section.
-    fn power_home_select_first(&mut self) {
-        if let Some(m) = self.layout.power.home.layout.iter().find(|x| x.len > 0) {
-            self.home.power_home_cursor = m.flat_start;
+    pub(super) fn power_home_select_start(&mut self) {
+        if let Some(first) = self.power_home_visible_indices().first() {
+            self.home.power_home_cursor = *first;
         }
     }
 
-    /// Grid-aware down: within the current card, else the top of the next non-empty
-    /// card in the same column.
+    pub(super) fn power_home_select_end(&mut self) {
+        if let Some(last) = self.power_home_visible_indices().last() {
+            self.home.power_home_cursor = *last;
+        }
+    }
+
     pub(super) fn power_home_move_down(&mut self) {
-        if self.layout.power.home.layout.is_empty() {
-            self.power_home_move_cursor(1);
-            return;
-        }
-        let Some(si) = self.power_home_cur_section() else {
-            self.power_home_select_first();
-            return;
-        };
-        let m = self.layout.power.home.layout[si].clone();
-        let within = self.home.power_home_cursor - m.flat_start;
-        if within + 1 < m.len {
-            self.home.power_home_cursor += 1;
-            return;
-        }
-        if let Some(next) = self
-            .layout
-            .power
-            .home
-            .layout
-            .iter()
-            .filter(|x| x.col == m.col && x.row > m.row && x.len > 0)
-            .min_by_key(|x| x.row)
-        {
-            self.home.power_home_cursor = next.flat_start;
-        }
+        self.power_home_move_cursor(1);
     }
 
-    /// Grid-aware up: within the current card, else the bottom of the previous
-    /// non-empty card in the same column.
     pub(super) fn power_home_move_up(&mut self) {
-        if self.layout.power.home.layout.is_empty() {
-            self.power_home_move_cursor(-1);
-            return;
-        }
-        let Some(si) = self.power_home_cur_section() else {
-            self.power_home_select_first();
-            return;
-        };
-        let m = self.layout.power.home.layout[si].clone();
-        let within = self.home.power_home_cursor - m.flat_start;
-        if within > 0 {
-            self.home.power_home_cursor -= 1;
-            return;
-        }
-        if let Some(prev) = self
-            .layout
-            .power
-            .home
-            .layout
-            .iter()
-            .filter(|x| x.col == m.col && x.row < m.row && x.len > 0)
-            .max_by_key(|x| x.row)
-        {
-            self.home.power_home_cursor = prev.flat_start + prev.len - 1;
-        }
+        self.power_home_move_cursor(-1);
     }
 
-    /// Cycle the flat cursor to the first item of the previous/next non-empty
-    /// section, wrapping at the ends. `dir` = -1 previous, +1 next.
+    /// Cycle the selected home section, wrapping at the ends. `dir` = -1 previous,
+    /// +1 next.
     pub(super) fn power_home_move_section(&mut self, dir: i64) {
-        let sections: Vec<usize> = self
-            .layout
-            .power
-            .home
-            .layout
-            .iter()
-            .enumerate()
-            .filter(|(_, m)| m.len > 0)
-            .map(|(i, _)| i)
-            .collect();
+        let sections = self.power_home_new_sections();
         if sections.is_empty() {
             return;
         }
-        let pos = self
-            .power_home_cur_section()
-            .and_then(|si| sections.iter().position(|&s| s == si));
+        let pos = sections
+            .iter()
+            .position(|&section_idx| section_idx == self.home.section);
         let next_pos = match pos {
             Some(p) => {
                 let n = sections.len() as i64;
@@ -4508,8 +4512,7 @@ impl App {
             }
             None => 0,
         };
-        let si = sections[next_pos];
-        self.home.power_home_cursor = self.layout.power.home.layout[si].flat_start;
+        self.power_home_select_section(sections[next_pos]);
     }
 
     /// Play the item under the flat power-home cursor.
@@ -5089,6 +5092,8 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::LibraryTab;
+    use std::io::Read;
+    use std::os::fd::{FromRawFd, IntoRawFd};
 
     // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
 
@@ -5337,6 +5342,34 @@ mod tests {
             "restoring a queue from disk is not a local edit — it must not \
              leave a stale dirty flag that could trigger an unwanted \
              save_playlist_to_emby() push on the next consume"
+        );
+    }
+
+    #[test]
+    fn quit_preserves_saved_playlist_source_for_restart_restore() {
+        let _g = XDG_HOME_LOCK.lock().unwrap();
+        let _xdg = XdgHomeGuard::new();
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.player_tab.items = crate::app::tests::make_items(2);
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("playlist-id".into()),
+            name: "Saved Queue".into(),
+        };
+        app.queue_dirty = true;
+
+        assert!(app.try_quit());
+        app.save_queue_state_no_clear();
+
+        let state = crate::config::load_queue_state().expect("queue state should be saved");
+        assert_eq!(
+            state.source,
+            crate::config::QueueSource::Playlist {
+                id: Some("playlist-id".into()),
+                name: "Saved Queue".into(),
+            },
+            "shutdown persistence must keep the saved-playlist association so \
+             a restart can still autosave/consume against the playlist"
         );
     }
 
@@ -5880,5 +5913,43 @@ mod tests {
             "a duplicate call while a fetch is already in flight must not \
              spawn a second fetch or fabricate a cache entry"
         );
+    }
+
+    #[test]
+    fn notify_with_actions_rings_terminal_bell_even_without_system_notifications() {
+        fn capture_stderr<F: FnOnce()>(f: F) -> String {
+            use std::io::Write;
+
+            let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
+            let read_fd = read_fd.into_raw_fd();
+            let write_fd = write_fd.into_raw_fd();
+            let saved_fd = unsafe { libc::dup(libc::STDERR_FILENO) };
+            assert!(saved_fd >= 0);
+
+            unsafe {
+                libc::dup2(write_fd, libc::STDERR_FILENO);
+            }
+            let _ = unsafe { libc::close(write_fd) };
+
+            f();
+            let _ = std::io::stderr().flush();
+
+            unsafe {
+                libc::dup2(saved_fd, libc::STDERR_FILENO);
+                libc::close(saved_fd);
+            }
+
+            let mut reader = unsafe { std::fs::File::from_raw_fd(read_fd) };
+            let mut output = String::new();
+            reader.read_to_string(&mut output).unwrap();
+            output
+        }
+
+        let app = crate::app::tests::make_app_stub();
+        let output = capture_stderr(|| {
+            app.notify_with_actions("mbv", "Next up?", &[("next_up:play", "Play Now")]);
+        });
+
+        assert_eq!(output, "\x07");
     }
 }

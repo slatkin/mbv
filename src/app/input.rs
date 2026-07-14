@@ -1246,20 +1246,11 @@ impl App {
                 true
             }
             KeyCode::Home => {
-                self.home.power_home_cursor = 0;
+                self.power_home_select_start();
                 true
             }
             KeyCode::End => {
-                let total = self.home.continue_items.len()
-                    + self
-                        .home
-                        .latest
-                        .iter()
-                        .map(|(_, _, v, _)| v.len())
-                        .sum::<usize>();
-                if total > 0 {
-                    self.home.power_home_cursor = total - 1;
-                }
+                self.power_home_select_end();
                 true
             }
             KeyCode::Enter if ctrl => {
@@ -1361,7 +1352,7 @@ impl App {
             return false;
         }
 
-        // In power view, bare Left/Right switch focus between the two panels.
+        // In Power View, bare Left/Right switch focus between the two panels.
         // Queue is on the left; library is on the right.
         if self.queue_view == QUEUE_VIEW_POWER && key.modifiers.is_empty() {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
@@ -1404,7 +1395,7 @@ impl App {
             }
         }
 
-        // In power view, route nav keys to the focused library panel.
+        // In Power View, route nav keys to the focused library panel.
         if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left) {
             if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
                 return false;
@@ -2863,7 +2854,7 @@ impl App {
             && self.layout.tabs_area.contains((col, row).into())
         {
             if self.queue_view == QUEUE_VIEW_POWER {
-                // In power view, tab clicks change the left-panel selection, not the app tab.
+                // In Power View, tab clicks change the left-panel selection, not the app tab.
                 if let Some(idx) = self.power_tab_idx_at(col) {
                     self.power_left_tab = idx;
                     if idx > 0 {
@@ -3069,7 +3060,9 @@ impl App {
                 if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
                     for (rect, target) in self.layout.power.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
-                            if self.power_left_tab > 0 {
+                            if self.power_left_tab == 0 {
+                                self.power_home_select_section(target);
+                            } else {
                                 let lib_idx = self.power_left_tab - 1;
                                 if self.is_music_group_view(lib_idx) {
                                     self.select_music_group(lib_idx, target);
@@ -3799,7 +3792,7 @@ mod power_movie_detail_tests {
     #[test]
     fn ctrl_z_while_power_library_panel_focused_does_not_leak_to_queue_undo() {
         // Preserved quirk from the pre-phase-3 `is_lib_key` mirror: while a
-        // library sub-panel has focus in power view, an unmapped
+        // library sub-panel has focus in Power View, an unmapped
         // Ctrl/Alt-modified key (library has no Ctrl+z binding) must be
         // swallowed by the library routing, not fall through to the
         // queue's own Ctrl+z undo binding below it in `handle_queue_key`.
@@ -4260,13 +4253,13 @@ mod power_music_track_focus_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Rendered rows before album 28:
+        // Rendered rows before album 27:
         // 0 artist header, 1 top rule, 2 selected album row, 3-7 inline detail,
-        // 8 bottom rule, 9-36 albums 1-28. One full visible viewport from row 2
-        // lands at row 35, which is album 27.
+        // 8 bottom rule, 9-35 albums 1-27. One full visible viewport from row 2
+        // lands at row 35, which is album 26.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            27,
+            26,
             "PageDown should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -4395,16 +4388,15 @@ mod power_music_track_focus_tests {
         term.draw(|f| app.render(f)).unwrap();
         let out = buffer_to_string(&term);
 
-        // The cursor marker (U+258C) must land on "Track 2"'s row -- proof
-        // that the inline call site in `render_power_library` passed
-        // `album_track_focus` (2) through as `cursor`, not a hardcoded 0.
+        // Track-focus mode reuses the inline album-detail cursor, so the
+        // focused track keeps the selected-row gutter.
         let track_line = out
             .lines()
             .find(|l| l.contains("Track 2"))
             .unwrap_or_else(|| panic!("no 'Track 2' row found in rendered output:\n{out}"));
         assert!(
             track_line.contains('\u{258c}'),
-            "expected cursor marker on the focused track's row, got: {track_line:?}\nfull output:\n{out}"
+            "expected focused track row to keep the selected-row marker, got: {track_line:?}\nfull output:\n{out}"
         );
     }
 

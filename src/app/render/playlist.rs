@@ -9,6 +9,8 @@ use ratatui::widgets::{Cell, Paragraph, Row, Table};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
+const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
+
 impl App {
     pub(super) fn render_combined(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutHome) {
         // Carousel arrow hitboxes and card strips are only ever populated by
@@ -142,26 +144,7 @@ impl App {
             (table_area.width as i32 - if show_ep_cols { 21 } else { 13 }).max(0) as usize;
 
         // Build display rows and window them to the visible height.
-        //
-        // A queue sourced from a saved playlist gets a single header naming the
-        // playlist, rather than the per-album/per-series headers `build_queue_rows`
-        // would otherwise produce -- those make a playlist queue look like it was
-        // built by "play series"/"play album" and hide the fact that it's a curated
-        // playlist (see the "QI XL" show-name header bug: a playlist of episodes
-        // from one show rendered with the show name as if the queue were a
-        // "play series" queue).
-        let playlist_name = self.queue_playlist_name();
-        let (display, group_for_header) = if !playlist_name.is_empty() {
-            let mut rows: Vec<QueueRow> = Vec::with_capacity(items.len() + 1);
-            rows.push(QueueRow::Header);
-            rows.extend((0..items.len()).map(|idx| QueueRow::Track {
-                idx,
-                in_group: false,
-            }));
-            (rows, vec![playlist_name.to_string()])
-        } else {
-            build_queue_rows(&items, self.queue_group)
-        };
+        let (display, group_for_header) = build_queue_rows(&items, self.queue_group);
         let visible = table_area.height as usize;
         let cursor_row = display
             .iter()
@@ -233,7 +216,7 @@ impl App {
                         Cell::from(" ")
                     };
 
-                    // Under a group header, show bare names (mirror the power view).
+                    // Under a group header, show bare names (mirror the Power View).
                     let title = if *in_group && item.is_audio() {
                         if item.index_number > 0 {
                             format!("{:02}. {}", item.index_number, item.name)
@@ -278,16 +261,24 @@ impl App {
                             palette::MUTED
                         };
                         let pct_str = format!(" {pct}%");
-                        let max_title = avail.saturating_sub(pct_str.chars().count());
+                        let pct_w = pct_str.width();
+                        let max_title = avail
+                            .saturating_sub(pct_w)
+                            .saturating_sub(QUEUE_TITLE_QUIET_COLUMNS);
+                        let title_text = trunc_str(&title, max_title);
+                        let pad = avail.saturating_sub(title_text.width() + pct_w);
                         let mut spans: Vec<Span> = Vec::new();
                         if indent > 0 {
                             spans.push(Span::raw(" "));
                         }
-                        spans.push(Span::styled(trunc_str(&title, max_title), title_span_style));
+                        spans.push(Span::styled(title_text, title_span_style));
+                        if pad > 0 {
+                            spans.push(Span::raw(" ".repeat(pad)));
+                        }
                         spans.push(Span::styled(pct_str, Style::default().fg(pct_style)));
                         Cell::from(Line::from(spans))
                     } else {
-                        let max_title = avail;
+                        let max_title = avail.saturating_sub(QUEUE_TITLE_QUIET_COLUMNS);
                         let mut spans: Vec<Span> = Vec::new();
                         if indent > 0 {
                             spans.push(Span::raw(" "));
