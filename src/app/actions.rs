@@ -4414,6 +4414,7 @@ impl App {
         self.power_left_tab = (self.power_left_tab + 1) % n;
         self.last_card_height = 0; // reset stale image height for new view
         if self.power_left_tab > 0 {
+            self.set_power_focus(PowerFocus::Left);
             self.activate_library_position_scope(
                 self.power_left_tab - 1,
                 LibraryPositionScope::Power,
@@ -4428,6 +4429,7 @@ impl App {
         self.power_left_tab = (self.power_left_tab + n - 1) % n;
         self.last_card_height = 0;
         if self.power_left_tab > 0 {
+            self.set_power_focus(PowerFocus::Left);
             self.activate_library_position_scope(
                 self.power_left_tab - 1,
                 LibraryPositionScope::Power,

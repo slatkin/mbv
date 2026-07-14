@@ -2898,6 +2898,7 @@ impl App {
                 if let Some(idx) = self.power_tab_idx_at(col) {
                     self.power_left_tab = idx;
                     if idx > 0 {
+                        self.set_power_focus(PowerFocus::Left);
                         self.activate_library_position_scope(
                             idx - 1,
                             crate::app::LibraryPositionScope::Power,
@@ -5113,5 +5114,82 @@ mod power_library_scope_routing_tests {
             Some(1)
         );
         assert_eq!(app.libs[0].nav_stack.len(), 1);
+    }
+
+    #[test]
+    fn power_view_mouse_tab_selection_from_queue_focus_applies_restore_result() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Queue;
+        app.layout.tabs_area = Rect {
+            x: 0,
+            y: 0,
+            width: 30,
+            height: 1,
+        };
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.collection_type = "movies".into();
+        library.is_folder = true;
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        let power_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Power".into(),
+                focused_item_id: Some("id1".into()),
+                cursor_index: 1,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
+
+        app.handle_mouse(make_power_library_mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            8,
+            0,
+        ));
+
+        assert_eq!(app.power_left_tab, 1);
+        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert_eq!(app.libs[0].nav_stack.len(), 1);
+        assert!(app.libs[0].nav_stack[0].loading);
+
+        app.handle_lib_event(crate::app::LibEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            scope: LibraryPositionScope::Power,
+            position: power_position,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Power restored".into(),
+                items: make_items(2),
+                total_count: 2,
+                cursor: 1,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+        });
+
+        assert_eq!(app.libs[0].nav_stack[0].title, "Power restored");
+        assert!(!app.libs[0].nav_stack[0].loading);
     }
 }
