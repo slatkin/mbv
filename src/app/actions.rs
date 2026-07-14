@@ -863,6 +863,7 @@ impl App {
                 if n > 0 {
                     state.video_cursor =
                         (state.video_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                    self.save_default_library_position(lib_idx);
                 }
             }
             return;
@@ -889,6 +890,7 @@ impl App {
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
+                self.save_default_library_position(lib_idx);
                 if idle {
                     self.maybe_fetch_next_page(lib_idx);
                 }
@@ -908,6 +910,7 @@ impl App {
             let n = lvl.items.len();
             if n > 0 {
                 lvl.cursor = (lvl.cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                self.save_default_library_position(lib_idx);
             }
         }
         if idle {
@@ -924,6 +927,7 @@ impl App {
                 let n = state.selected_len();
                 if n > 0 {
                     state.video_cursor = if to_end { n - 1 } else { 0 };
+                    self.save_default_library_position(lib_idx);
                 }
             }
             return;
@@ -942,6 +946,7 @@ impl App {
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
+                self.save_default_library_position(lib_idx);
                 self.maybe_fetch_next_page(lib_idx);
                 return;
             }
@@ -959,6 +964,7 @@ impl App {
             let n = lvl.items.len();
             if n > 0 {
                 lvl.cursor = if to_end { n - 1 } else { 0 };
+                self.save_default_library_position(lib_idx);
             }
         }
         self.maybe_fetch_next_page(lib_idx);
@@ -2406,6 +2412,7 @@ impl App {
             if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                 *v = 0;
             }
+            self.save_default_library_position(lib_idx);
             self.spawn_browse(
                 lib_idx,
                 item.id,
@@ -2437,6 +2444,7 @@ impl App {
                 if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                     *v = 0;
                 }
+                self.save_default_library_position(lib_idx);
             }
             let fresh = {
                 let c = self.client.lock().unwrap();
@@ -2573,6 +2581,7 @@ impl App {
                 if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                     *v = 0;
                 }
+                self.save_default_library_position(lib_idx);
 
                 // In Power View, skip past the auto-pushed Season level so
                 // a single Escape takes the user back to the series list.
@@ -2603,6 +2612,7 @@ impl App {
                     }
                 }
             }
+            self.save_default_library_position(lib_idx);
         }
     }
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {

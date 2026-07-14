@@ -946,6 +946,7 @@ pub struct App {
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
     confirm_rescan: bool,
+    library_position_state: crate::config::LibraryPositionState,
     queue_scope: QueueScope,
     /// The relay's out-of-band control channel (ADR 0005), present only
     /// when running as a stay-alive inferior under a relay. `None` in bare
@@ -1199,6 +1200,20 @@ impl App {
         true
     }
 
+    fn save_default_library_position(&mut self, lib_idx: usize) {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return;
+        };
+        let library_id = lib.library.id.clone();
+        let position = lib.library_position_snapshot();
+        self.library_position_state
+            .libraries
+            .entry(library_id)
+            .or_default()
+            .default = Some(position);
+        crate::config::save_library_position_state(&self.library_position_state);
+    }
+
     fn remote_slot_state(&self) -> RemoteSlotState {
         if self.connected_session_id.is_some() {
             RemoteSlotState::AttachedSession
@@ -1289,6 +1304,7 @@ impl App {
             system_notifications: init.system_notifications,
             image_protocol: init.image_protocol,
             image_protocol_enabled: init.image_protocol_enabled,
+            library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
             hidden_latest: init.hidden_latest,
             music_levels: init.music_levels,
@@ -3556,6 +3572,94 @@ pub(crate) mod tests {
         assert_eq!(feed.video_scroll, 4);
     }
 
+    #[test]
+    fn save_default_library_position_updates_default_scope_only() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: make_items(3),
+                total_count: 3,
+                cursor: 2,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        app.library_position_state
+            .libraries
+            .entry("lib-movies".into())
+            .or_default()
+            .power = Some(crate::config::LibraryPosition::default());
+
+        app.save_default_library_position(0);
+
+        let views = app
+            .library_position_state
+            .libraries
+            .get("lib-movies")
+            .expect("library position entry");
+        let default = views.default.as_ref().expect("default view position");
+        assert_eq!(default.levels[0].focused_item_id.as_deref(), Some("id2"));
+        assert!(
+            views.power.is_some(),
+            "default writes must not clear power-view position"
+        );
+    }
+
+    #[test]
+    fn move_lib_cursor_persists_default_library_position() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: make_items(3),
+                total_count: 3,
+                cursor: 0,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+
+        app.move_lib_cursor(1);
+
+        let saved = app
+            .library_position_state
+            .libraries
+            .get("lib-movies")
+            .and_then(|views| views.default.as_ref())
+            .expect("default position saved");
+        assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("id1"));
+    }
+
     // ── test helpers ─────────────────────────────────────────────────────────
 
     pub(crate) fn make_items(n: usize) -> Vec<MediaItem> {
@@ -3755,6 +3859,7 @@ pub(crate) mod tests {
             image_protocol: None,
             image_protocol_enabled: false,
             confirm_rescan: false,
+            library_position_state: crate::config::LibraryPositionState::default(),
             queue_scope: QueueScope::Local,
             stay_alive_ctrl: None,
             attached: true,

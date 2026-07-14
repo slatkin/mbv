@@ -47,13 +47,13 @@
 **Description:** Persist default library-view position when logical position changes, including drill-down/back, cursor moves, page/home/end, group/pill changes, and mouse selection.
 
 **Acceptance criteria:**
-- [ ] Default-view navigation writes only the active library's `default` position.
-- [ ] Holding movement keys does not write on render frames.
-- [ ] Hidden library state is not deleted.
+- [x] Default-view navigation writes only the active library's `default` position.
+- [x] Holding movement keys does not write on render frames.
+- [x] Hidden library state is not deleted.
 
 **Verification:**
-- [ ] Focused tests for default-view cursor/drill-down snapshot writes.
-- [ ] Manual review of write call sites confirms no render-frame writes.
+- [x] Focused tests for default-view cursor/drill-down snapshot writes.
+- [x] Manual review of write call sites confirms no render-frame writes.
 
 **Dependencies:** Task 2
 

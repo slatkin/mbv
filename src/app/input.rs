@@ -2600,6 +2600,7 @@ impl App {
                     found
                 };
                 let lib = &mut self.libs[lib_idx];
+                let mut save_position = false;
                 let hit = if let Some(s) = &mut lib.search {
                     if display_pos < s.results.len() {
                         s.cursor = display_pos;
@@ -2610,6 +2611,7 @@ impl App {
                 } else if let Some(lvl) = lib.nav_stack.last_mut() {
                     if display_pos < lvl.items.len() {
                         lvl.cursor = display_pos;
+                        save_position = true;
                         true
                     } else {
                         false
@@ -2617,6 +2619,9 @@ impl App {
                 } else {
                     false
                 };
+                if save_position {
+                    self.save_default_library_position(lib_idx);
+                }
                 return hit;
             }
         }
@@ -3183,6 +3188,7 @@ impl App {
                             let lib = &mut self.libs[self.tab_idx - lib_off];
                             lib.nav_stack.truncate(target_depth);
                             lib.search = None;
+                            self.save_default_library_position(self.tab_idx - lib_off);
                             return;
                         }
                     }
