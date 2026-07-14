@@ -11,6 +11,14 @@ use unicode_width::UnicodeWidthStr;
 
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
 
+fn queue_group_start_row(display: &[QueueRow], row: usize) -> usize {
+    let mut start = row;
+    while start > 0 && !matches!(display[start - 1], QueueRow::Track { .. }) {
+        start -= 1;
+    }
+    start
+}
+
 impl App {
     pub(super) fn render_power_queue(
         &mut self,
@@ -150,7 +158,7 @@ impl App {
         let max_offset = total.saturating_sub(visible);
         self.power_queue_scroll = self.power_queue_scroll.min(max_offset);
         if cursor_row < self.power_queue_scroll {
-            self.power_queue_scroll = cursor_row;
+            self.power_queue_scroll = queue_group_start_row(&display, cursor_row);
         } else if cursor_row >= self.power_queue_scroll + visible {
             self.power_queue_scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
         }
@@ -337,29 +345,77 @@ impl App {
 
         if need_sb {
             let max_off = total.saturating_sub(visible);
-            let sb_x = area.x + area.width.saturating_sub(1);
-            let thumb_h = 2u16.min(area.height);
-            let max_thumb_y = area.height.saturating_sub(thumb_h);
-            let thumb_y = if max_off == 0 {
-                0
-            } else {
-                ((offset * max_thumb_y as usize) + (max_off / 2)) / max_off
-            } as u16;
-            for dy in 0..thumb_h {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        "\u{2590}",
-                        Style::default().fg(palette::SUBTLE),
-                    ))),
-                    Rect {
-                        x: sb_x,
-                        y: area.y + thumb_y + dy,
-                        width: 1,
-                        height: 1,
-                    },
-                );
-            }
+            super::render_power_scrollbar(f, area, max_off, offset);
         }
         header_ys
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_item};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    #[test]
+    fn queue_group_start_row_includes_spacer_and_header() {
+        let mut items = Vec::new();
+        for i in 0..4 {
+            let mut item = make_item(&format!("A{i}"), "Audio");
+            item.id = format!("a-{i}");
+            item.album_id = "album-a".into();
+            item.album = "Album A".into();
+            item.artist = "Artist".into();
+            items.push(item);
+        }
+        for i in 0..4 {
+            let mut item = make_item(&format!("B{i}"), "Audio");
+            item.id = format!("b-{i}");
+            item.album_id = "album-b".into();
+            item.album = "Album B".into();
+            item.artist = "Artist".into();
+            items.push(item);
+        }
+
+        let (display, _) = build_queue_rows(&items, true);
+
+        assert_eq!(queue_group_start_row(&display, 7), 5);
+    }
+
+    #[test]
+    fn render_power_queue_snaps_upward_scroll_to_group_start() {
+        let mut app = make_app_stub();
+        app.power_focus = crate::app::PowerFocus::Queue;
+
+        let mut items = Vec::new();
+        for i in 0..4 {
+            let mut item = make_item(&format!("A{i}"), "Audio");
+            item.id = format!("a-{i}");
+            item.album_id = "album-a".into();
+            item.album = "Album A".into();
+            item.artist = "Artist".into();
+            items.push(item);
+        }
+        for i in 0..4 {
+            let mut item = make_item(&format!("B{i}"), "Audio");
+            item.id = format!("b-{i}");
+            item.album_id = "album-b".into();
+            item.album = "Album B".into();
+            item.artist = "Artist".into();
+            items.push(item);
+        }
+        app.player_tab.set_items(items, 4);
+        app.power_queue_scroll = 9;
+
+        let backend = TestBackend::new(40, 3);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPower::default();
+        term.draw(|f| {
+            app.render_power_queue(f, Rect::new(0, 0, 40, 3), true, &mut layout);
+        })
+        .unwrap();
+
+        assert_eq!(app.power_queue_scroll, 5);
     }
 }
