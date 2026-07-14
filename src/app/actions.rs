@@ -3171,6 +3171,7 @@ impl App {
                     let _ = tx.send(LibEvent::RestoreLibraryPosition {
                         lib_idx,
                         scope,
+                        requested_position: saved,
                         position,
                         nav_stack,
                     });
@@ -3997,10 +3998,11 @@ impl App {
         &mut self,
         lib_idx: usize,
         scope: LibraryPositionScope,
+        requested_position: crate::config::LibraryPosition,
         position: crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
-        if self.saved_library_position(lib_idx, scope).as_ref() != Some(&position) {
+        if self.saved_library_position(lib_idx, scope).as_ref() != Some(&requested_position) {
             return;
         }
         if self.active_library_position_scope_for(lib_idx) != Some(scope) {
@@ -4052,9 +4054,16 @@ impl App {
             LibEvent::RestoreLibraryPosition {
                 lib_idx,
                 scope,
+                requested_position,
                 position,
                 nav_stack,
-            } => self.handle_restored_library_position(lib_idx, scope, position, nav_stack),
+            } => self.handle_restored_library_position(
+                lib_idx,
+                scope,
+                requested_position,
+                position,
+                nav_stack,
+            ),
             LibEvent::SearchItemsLoaded {
                 lib_idx,
                 parent_id,

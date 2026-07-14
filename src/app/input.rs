@@ -5172,6 +5172,7 @@ mod power_library_scope_routing_tests {
         app.handle_lib_event(crate::app::LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
             scope: LibraryPositionScope::Power,
+            requested_position: power_position.clone(),
             position: power_position,
             nav_stack: vec![BrowseLevel {
                 parent_id: "lib-movies".into(),
