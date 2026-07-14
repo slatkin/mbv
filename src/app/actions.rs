@@ -1332,7 +1332,10 @@ impl App {
         self.libs[lib_idx].search = None;
         self.libs[lib_idx].feed_home_video = Some(FeedHomeVideoState {
             loading: true,
-            ..FeedHomeVideoState::default()
+            ..self.libs[lib_idx]
+                .feed_home_video
+                .take()
+                .unwrap_or_default()
         });
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
             parent_id: lib_id.clone(),
@@ -1415,7 +1418,10 @@ impl App {
         self.libs[lib_idx].search = None;
         self.libs[lib_idx].feed_home_video = Some(FeedHomeVideoState {
             loading: true,
-            ..FeedHomeVideoState::default()
+            ..self.libs[lib_idx]
+                .feed_home_video
+                .take()
+                .unwrap_or_default()
         });
         self.libs[lib_idx].nav_stack.push(BrowseLevel {
             parent_id: lib_id.clone(),
@@ -5469,6 +5475,77 @@ mod tests {
         let last = app.libs[0].nav_stack.last().unwrap();
         let names: Vec<&str> = last.items.iter().map(|item| item.name.as_str()).collect();
         assert_eq!(names, vec!["Episode 1", "Episode 2"]);
+    }
+
+    #[test]
+    fn ensure_power_feed_library_preserves_saved_feed_position() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_left_tab = 1;
+        app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+
+        let mut library = crate::app::tests::make_item("YouTube", "CollectionFolder");
+        library.id = "lib-feed".into();
+        library.is_folder = true;
+        library.collection_type = "homevideos".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: Some(FeedHomeVideoState {
+                selected_group: 2,
+                video_cursor: 3,
+                video_scroll: 4,
+                ..Default::default()
+            }),
+            power_detail_item: None,
+            power_detail_scroll: 0,
+
+            album_track_focus: None,
+        });
+
+        app.ensure_lib_loaded_for(0);
+
+        let state = app.libs[0].feed_home_video.as_ref().unwrap();
+        assert!(state.loading);
+        assert_eq!(state.selected_group, 2);
+        assert_eq!(state.video_cursor, 3);
+        assert_eq!(state.video_scroll, 4);
+    }
+
+    #[test]
+    fn ensure_power_podcast_library_preserves_saved_feed_position() {
+        let mut app = crate::app::tests::make_app_stub();
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_left_tab = 1;
+
+        let mut library = crate::app::tests::make_item("Podcasts", "CollectionFolder");
+        library.id = "lib-podcasts".into();
+        library.is_folder = true;
+        library.collection_type = "podcasts".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: Some(FeedHomeVideoState {
+                selected_group: 1,
+                video_cursor: 5,
+                video_scroll: 6,
+                ..Default::default()
+            }),
+            power_detail_item: None,
+            power_detail_scroll: 0,
+
+            album_track_focus: None,
+        });
+
+        app.ensure_lib_loaded_for(0);
+
+        let state = app.libs[0].feed_home_video.as_ref().unwrap();
+        assert!(state.loading);
+        assert_eq!(state.selected_group, 1);
+        assert_eq!(state.video_cursor, 5);
+        assert_eq!(state.video_scroll, 6);
     }
 
     #[test]
