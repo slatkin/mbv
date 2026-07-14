@@ -1356,12 +1356,12 @@ impl App {
         // Queue is on the left; library is on the right.
         if self.queue_view == QUEUE_VIEW_POWER && key.modifiers.is_empty() {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
-                self.power_focus = PowerFocus::Left;
+                self.set_power_focus(PowerFocus::Left);
                 self.last_card_height = 0; // reset stale image height for new view
                 return false;
             }
             if key.code == KeyCode::Left && matches!(self.power_focus, PowerFocus::Left) {
-                self.power_focus = PowerFocus::Queue;
+                self.set_power_focus(PowerFocus::Queue);
                 self.last_card_height = 0;
                 return false;
             }
@@ -1733,7 +1733,7 @@ impl App {
             KeyCode::Char('v') => {
                 self.queue_view = (self.queue_view + 1) % QUEUE_VIEW_COUNT;
                 if self.queue_view == QUEUE_VIEW_POWER {
-                    self.power_focus = PowerFocus::Left;
+                    self.set_power_focus(PowerFocus::Left);
                 }
                 if !self.card_image_states.is_empty() {
                     self.force_clear = true;
@@ -2285,6 +2285,7 @@ impl App {
             "pre_mute_volume": self.pre_mute_volume,
             "tab_idx": self.tab_idx,
             "playlist_view": self.queue_view,
+            "power_focus": self.power_focus.pref_value(),
             "power_left_tab": self.power_left_tab,
             "power_left_width": self.power_left_width,
         });
@@ -2353,7 +2354,7 @@ impl App {
                 if !matches!(self.power_focus, PowerFocus::Queue) {
                     self.last_card_height = 0;
                 }
-                self.power_focus = PowerFocus::Queue;
+                self.set_power_focus(PowerFocus::Queue);
                 let content_y = (row - qa.y) as usize;
                 if let Some(&Some(item_idx)) = self.layout.power.queue_row_map.get(content_y) {
                     self.displayed_queue_mut().queue_cursor = item_idx;
@@ -2366,7 +2367,7 @@ impl App {
                 if !matches!(self.power_focus, PowerFocus::Left) {
                     self.last_card_height = 0;
                 }
-                self.power_focus = PowerFocus::Left;
+                self.set_power_focus(PowerFocus::Left);
                 if self.power_left_tab == 0 {
                     // Home tab: rectangle hit-test the two-column card grid.
                     let pos = (col, row).into();

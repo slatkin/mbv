@@ -273,6 +273,47 @@ impl BrowseLevel {
     }
 }
 
+fn restore_library_position<F>(
+    saved: &crate::config::LibraryPosition,
+    visible_rows: usize,
+    mut fetch_level: F,
+) -> Result<Option<(crate::config::LibraryPosition, Vec<BrowseLevel>)>, String>
+where
+    F: FnMut(&crate::config::LibraryPositionLevel) -> Result<(Vec<MediaItem>, usize), String>,
+{
+    if saved.levels.is_empty() {
+        return Ok(None);
+    }
+
+    let mut restored = crate::config::LibraryPosition {
+        feed_selected_group: saved.feed_selected_group,
+        feed_video_cursor: saved.feed_video_cursor,
+        feed_video_scroll: saved.feed_video_scroll,
+        ..Default::default()
+    };
+    let mut nav_stack = Vec::new();
+
+    for (idx, saved_level) in saved.levels.iter().enumerate() {
+        let (items, total_count) = fetch_level(saved_level)?;
+        let level = BrowseLevel::from_position_level(saved_level, items, total_count, visible_rows);
+        let can_descend = saved
+            .levels
+            .get(idx + 1)
+            .is_some_and(|next| level.items.iter().any(|item| item.id == next.parent_id));
+        restored.levels.push(level.to_position_level());
+        nav_stack.push(level);
+        if !can_descend {
+            break;
+        }
+    }
+
+    if restored.levels.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some((restored, nav_stack)))
+    }
+}
+
 #[derive(Clone)]
 struct FeedHomeVideoGroup {
     folder: MediaItem,
@@ -382,6 +423,12 @@ enum LibEvent {
         nav_stack: Vec<BrowseLevel>,
         switch_tab: bool,
     },
+    RestoreLibraryPosition {
+        lib_idx: usize,
+        scope: LibraryPositionScope,
+        position: crate::config::LibraryPosition,
+        nav_stack: Vec<BrowseLevel>,
+    },
     PlaylistsLoaded(Vec<MediaItem>),
     PlaylistItemsLoaded {
         playlist_id: String,
@@ -399,6 +446,12 @@ enum SessionEvent {
     Loaded(Vec<mbv_core::api::SessionInfo>),
     ItemRefreshed(String, Box<mbv_core::api::MediaItem>), // (item_id, fresh)
     Error(String),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LibraryPositionScope {
+    Default,
+    Power,
 }
 
 #[derive(Clone, Default)]
@@ -1096,6 +1149,23 @@ pub(super) enum PowerFocus {
     Left, // right panel (library browser); driven by power_left_tab
 }
 
+impl PowerFocus {
+    fn from_pref(value: Option<&str>) -> Self {
+        match value {
+            Some("queue_side") => Self::Queue,
+            Some("library_side") => Self::Left,
+            _ => Self::default(),
+        }
+    }
+
+    fn pref_value(self) -> &'static str {
+        match self {
+            Self::Queue => "queue_side",
+            Self::Left => "library_side",
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingKey {
     StayAlive,
@@ -1204,14 +1274,69 @@ impl App {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
+        let scope = self.library_position_scope_for(lib_idx);
         let library_id = lib.library.id.clone();
         let position = lib.library_position_snapshot();
-        self.library_position_state
+        let views = self
+            .library_position_state
             .libraries
             .entry(library_id)
-            .or_default()
-            .default = Some(position);
+            .or_default();
+        match scope {
+            LibraryPositionScope::Default => views.default = Some(position),
+            LibraryPositionScope::Power => views.power = Some(position),
+        }
         crate::config::save_library_position_state(&self.library_position_state);
+    }
+
+    fn library_position_scope_for(&self, lib_idx: usize) -> LibraryPositionScope {
+        if self.queue_view == QUEUE_VIEW_POWER && self.power_left_tab == lib_idx + 1 {
+            LibraryPositionScope::Power
+        } else {
+            LibraryPositionScope::Default
+        }
+    }
+
+    fn saved_library_position(
+        &self,
+        lib_idx: usize,
+        scope: LibraryPositionScope,
+    ) -> Option<crate::config::LibraryPosition> {
+        let library_id = self.libs.get(lib_idx)?.library.id.as_str();
+        let views = self.library_position_state.libraries.get(library_id)?;
+        match scope {
+            LibraryPositionScope::Default => views.default.clone(),
+            LibraryPositionScope::Power => views.power.clone(),
+        }
+    }
+
+    fn replace_saved_library_position(
+        &mut self,
+        lib_idx: usize,
+        scope: LibraryPositionScope,
+        position: crate::config::LibraryPosition,
+    ) {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return;
+        };
+        let views = self
+            .library_position_state
+            .libraries
+            .entry(lib.library.id.clone())
+            .or_default();
+        match scope {
+            LibraryPositionScope::Default => views.default = Some(position),
+            LibraryPositionScope::Power => views.power = Some(position),
+        }
+        crate::config::save_library_position_state(&self.library_position_state);
+    }
+
+    fn set_power_focus(&mut self, focus: PowerFocus) {
+        if self.power_focus == focus {
+            return;
+        }
+        self.power_focus = focus;
+        self.save_prefs();
     }
 
     fn remote_slot_state(&self) -> RemoteSlotState {
@@ -1367,7 +1492,7 @@ impl App {
             next_up_item: None,
             queue_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
             queue_group: true,
-            power_focus: PowerFocus::default(),
+            power_focus: PowerFocus::from_pref(prefs["power_focus"].as_str()),
             power_left_tab: 0,
             power_left_width: prefs["power_left_width"]
                 .as_u64()
@@ -3519,6 +3644,170 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn restore_library_position_keeps_saved_path_when_levels_exist() {
+        let mut root_a = make_item("A", "Folder");
+        root_a.id = "folder-a".into();
+        root_a.is_folder = true;
+        let mut root_b = make_item("B", "Folder");
+        root_b.id = "folder-b".into();
+        root_b.is_folder = true;
+        let mut leaf = make_item("Leaf", "Movie");
+        leaf.id = "leaf-1".into();
+
+        let saved = crate::config::LibraryPosition {
+            levels: vec![
+                crate::config::LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Movies".into(),
+                    focused_item_id: Some("folder-b".into()),
+                    cursor_index: 1,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+                crate::config::LibraryPositionLevel {
+                    parent_id: "folder-b".into(),
+                    title: "B".into(),
+                    focused_item_id: Some("leaf-1".into()),
+                    cursor_index: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let restored =
+            restore_library_position(&saved, 3, |level| match level.parent_id.as_str() {
+                "lib-movies" => Ok((vec![root_a.clone(), root_b.clone()], 2)),
+                "folder-b" => Ok((vec![leaf.clone()], 1)),
+                other => panic!("unexpected level fetch: {other}"),
+            })
+            .expect("restore result")
+            .expect("restored position");
+
+        assert_eq!(restored.0.levels.len(), 2);
+        assert_eq!(
+            restored.0.levels[0].focused_item_id.as_deref(),
+            Some("folder-b")
+        );
+        assert_eq!(
+            restored.0.levels[1].focused_item_id.as_deref(),
+            Some("leaf-1")
+        );
+        assert_eq!(restored.1.len(), 2);
+        assert_eq!(restored.1[0].cursor, 1);
+        assert_eq!(restored.1[1].cursor, 0);
+    }
+
+    #[test]
+    fn restore_library_position_clamps_stale_missing_item_to_nearest_fallback() {
+        let mut root = make_item("B", "Folder");
+        root.id = "folder-b".into();
+        root.is_folder = true;
+        let mut leaf0 = make_item("Leaf 0", "Movie");
+        leaf0.id = "leaf-0".into();
+        let mut leaf1 = make_item("Leaf 1", "Movie");
+        leaf1.id = "leaf-1".into();
+
+        let saved = crate::config::LibraryPosition {
+            levels: vec![
+                crate::config::LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Movies".into(),
+                    focused_item_id: Some("folder-b".into()),
+                    cursor_index: 0,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+                crate::config::LibraryPositionLevel {
+                    parent_id: "folder-b".into(),
+                    title: "B".into(),
+                    focused_item_id: Some("missing".into()),
+                    cursor_index: 1,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let restored =
+            restore_library_position(&saved, 3, |level| match level.parent_id.as_str() {
+                "lib-movies" => Ok((vec![root.clone()], 1)),
+                "folder-b" => Ok((vec![leaf0.clone(), leaf1.clone()], 2)),
+                other => panic!("unexpected level fetch: {other}"),
+            })
+            .expect("restore result")
+            .expect("restored position");
+
+        assert_eq!(
+            restored.0.levels[1].focused_item_id.as_deref(),
+            Some("leaf-1")
+        );
+        assert_eq!(restored.1[1].cursor, 1);
+    }
+
+    #[test]
+    fn restore_library_position_stops_at_deepest_valid_parent() {
+        let mut root_a = make_item("A", "Folder");
+        root_a.id = "folder-a".into();
+        root_a.is_folder = true;
+        let mut root_c = make_item("C", "Folder");
+        root_c.id = "folder-c".into();
+        root_c.is_folder = true;
+
+        let saved = crate::config::LibraryPosition {
+            levels: vec![
+                crate::config::LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Movies".into(),
+                    focused_item_id: Some("missing-folder".into()),
+                    cursor_index: 1,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+                crate::config::LibraryPositionLevel {
+                    parent_id: "missing-folder".into(),
+                    title: "Gone".into(),
+                    focused_item_id: Some("leaf-1".into()),
+                    cursor_index: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+            ],
+            ..Default::default()
+        };
+
+        let restored =
+            restore_library_position(&saved, 3, |level| match level.parent_id.as_str() {
+                "lib-movies" => Ok((vec![root_a.clone(), root_c.clone()], 2)),
+                other => panic!("unexpected level fetch: {other}"),
+            })
+            .expect("restore result")
+            .expect("restored position");
+
+        assert_eq!(restored.0.levels.len(), 1);
+        assert_eq!(
+            restored.0.levels[0].focused_item_id.as_deref(),
+            Some("folder-c")
+        );
+        assert_eq!(restored.1.len(), 1);
+        assert_eq!(restored.1[0].cursor, 1);
+    }
+
+    #[test]
     fn applying_library_position_clears_non_position_ui_state() {
         let mut lib = LibraryTab {
             library: make_item("Movies", "CollectionFolder"),
@@ -3621,6 +3910,56 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn save_default_library_position_updates_power_scope_when_power_library_is_active() {
+        let mut app = make_app_stub();
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_left_tab = 1;
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: make_items(3),
+                total_count: 3,
+                cursor: 1,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        app.library_position_state
+            .libraries
+            .entry("lib-movies".into())
+            .or_default()
+            .default = Some(crate::config::LibraryPosition::default());
+
+        app.save_default_library_position(0);
+
+        let views = app
+            .library_position_state
+            .libraries
+            .get("lib-movies")
+            .expect("library position entry");
+        let power = views.power.as_ref().expect("power view position");
+        assert_eq!(power.levels[0].focused_item_id.as_deref(), Some("id1"));
+        assert!(
+            views.default.is_some(),
+            "power writes must not clear default-view position"
+        );
+    }
+
+    #[test]
     fn move_lib_cursor_persists_default_library_position() {
         let mut app = make_app_stub();
         let mut library = make_item("Movies", "CollectionFolder");
@@ -3658,6 +3997,362 @@ pub(crate) mod tests {
             .and_then(|views| views.default.as_ref())
             .expect("default position saved");
         assert_eq!(saved.levels[0].focused_item_id.as_deref(), Some("id1"));
+    }
+
+    #[test]
+    fn ensure_lib_loaded_for_uses_saved_position_loading_state_without_root_flash() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.collection_type = "movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        app.library_position_state
+            .libraries
+            .entry("lib-movies".into())
+            .or_default()
+            .default = Some(crate::config::LibraryPosition {
+            levels: vec![
+                crate::config::LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Movies".into(),
+                    focused_item_id: Some("folder-b".into()),
+                    cursor_index: 1,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+                crate::config::LibraryPositionLevel {
+                    parent_id: "folder-b".into(),
+                    title: "Folder B".into(),
+                    focused_item_id: Some("leaf-1".into()),
+                    cursor_index: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+            ],
+            ..Default::default()
+        });
+
+        app.ensure_lib_loaded_for(0);
+
+        assert_eq!(app.libs[0].nav_stack.len(), 1);
+        let level = &app.libs[0].nav_stack[0];
+        assert_eq!(level.parent_id, "lib-movies");
+        assert_eq!(level.title, "Movies");
+        assert!(level.loading);
+        assert!(level.items.is_empty());
+        assert_eq!(level.item_types.as_deref(), Some("Movie"));
+    }
+
+    #[test]
+    fn ensure_lib_loaded_for_prefers_power_scope_and_does_not_bootstrap_from_default() {
+        let mut app = make_app_stub();
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_left_tab = 1;
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "lib-music".into();
+        library.collection_type = "music".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        let views = app
+            .library_position_state
+            .libraries
+            .entry("lib-music".into())
+            .or_default();
+        views.default = Some(crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-music".into(),
+                title: "Wrong Default".into(),
+                focused_item_id: None,
+                cursor_index: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "DateCreated".into(),
+                sort_order: "Descending".into(),
+            }],
+            ..Default::default()
+        });
+        views.power = Some(crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-music".into(),
+                title: "Right Power".into(),
+                focused_item_id: None,
+                cursor_index: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        });
+
+        app.ensure_lib_loaded_for(0);
+
+        let level = &app.libs[0].nav_stack[0];
+        assert_eq!(level.title, "Right Power");
+        assert_eq!(level.item_types, None);
+        assert_eq!(level.sort_by, "SortName");
+    }
+
+    #[test]
+    fn build_restores_power_focus_from_prefs_for_both_values() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        for (pref, expected) in [
+            ("queue_side", PowerFocus::Queue),
+            ("library_side", PowerFocus::Left),
+        ] {
+            std::fs::write(
+                crate::config::prefs_path(),
+                serde_json::json!({ "power_focus": pref }).to_string(),
+            )
+            .expect("write prefs");
+
+            let app = make_built_app();
+
+            assert_eq!(app.power_focus, expected);
+        }
+    }
+
+    #[test]
+    fn save_prefs_persists_power_focus_for_both_values() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+
+        app.set_power_focus(PowerFocus::Queue);
+        let queue_prefs: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
+        )
+        .expect("prefs json");
+        assert_eq!(queue_prefs["power_focus"].as_str(), Some("queue_side"));
+
+        app.set_power_focus(PowerFocus::Left);
+        let library_prefs: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
+        )
+        .expect("prefs json");
+        assert_eq!(library_prefs["power_focus"].as_str(), Some("library_side"));
+    }
+
+    #[test]
+    fn building_from_power_focus_prefs_does_not_mutate_saved_library_positions() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let state = crate::config::LibraryPositionState {
+            libraries: std::iter::once((
+                "lib-movies".into(),
+                mbv_core::config::LibraryViewPositions {
+                    default: Some(crate::config::LibraryPosition {
+                        levels: vec![crate::config::LibraryPositionLevel {
+                            parent_id: "lib-movies".into(),
+                            title: "Movies".into(),
+                            focused_item_id: Some("id1".into()),
+                            cursor_index: 1,
+                            item_types: Some("Movie".into()),
+                            unplayed_only: false,
+                            sort_by: "SortName".into(),
+                            sort_order: "Ascending".into(),
+                        }],
+                        ..Default::default()
+                    }),
+                    power: None,
+                },
+            ))
+            .collect(),
+        };
+        crate::config::save_library_position_state(&state);
+        std::fs::write(
+            crate::config::prefs_path(),
+            serde_json::json!({ "power_focus": "queue_side" }).to_string(),
+        )
+        .expect("write prefs");
+
+        let _app = make_built_app();
+
+        assert_eq!(crate::config::load_library_position_state(), state);
+    }
+
+    #[test]
+    fn restored_default_library_fallback_rewrites_state_file_after_success() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: Some(LibSearch {
+                query: "stale".into(),
+                items: make_items(1),
+                results: vec![0],
+                cursor: 0,
+                scroll: 0,
+                loading: false,
+            }),
+            feed_home_video: None,
+            power_detail_item: Some(make_item("Detail", "Movie")),
+            power_detail_scroll: 4,
+            album_track_focus: Some(0),
+        });
+        let stale = crate::config::LibraryPosition {
+            levels: vec![
+                crate::config::LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Movies".into(),
+                    focused_item_id: Some("missing".into()),
+                    cursor_index: 99,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+                crate::config::LibraryPositionLevel {
+                    parent_id: "missing".into(),
+                    title: "Gone".into(),
+                    focused_item_id: Some("id1".into()),
+                    cursor_index: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                },
+            ],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(0, LibraryPositionScope::Default, stale);
+
+        let restored_items = make_items(2);
+        let restored_nav = vec![BrowseLevel {
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            items: restored_items.clone(),
+            total_count: restored_items.len(),
+            cursor: 1,
+            scroll: 0,
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+        }];
+        let restored_position = crate::config::LibraryPosition {
+            levels: vec![restored_nav[0].to_position_level()],
+            ..Default::default()
+        };
+
+        app.handle_lib_event(LibEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            scope: LibraryPositionScope::Default,
+            position: restored_position.clone(),
+            nav_stack: restored_nav,
+        });
+
+        let saved = crate::config::load_library_position_state();
+        assert_eq!(
+            saved
+                .libraries
+                .get("lib-movies")
+                .and_then(|views| views.default.clone()),
+            Some(restored_position)
+        );
+        assert!(app.libs[0].search.is_none());
+        assert!(app.libs[0].power_detail_item.is_none());
+        assert!(app.libs[0].album_track_focus.is_none());
+    }
+
+    #[test]
+    fn restored_power_library_position_does_not_overwrite_default_scope() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        let default_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Default".into(),
+                focused_item_id: Some("id0".into()),
+                cursor_index: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(
+            0,
+            LibraryPositionScope::Default,
+            default_position.clone(),
+        );
+
+        let restored_nav = vec![BrowseLevel {
+            parent_id: "lib-movies".into(),
+            title: "Power".into(),
+            items: make_items(2),
+            total_count: 2,
+            cursor: 1,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "DateCreated".into(),
+            sort_order: "Descending".into(),
+            loading: false,
+            all_items: None,
+        }];
+        let power_position = crate::config::LibraryPosition {
+            levels: vec![restored_nav[0].to_position_level()],
+            ..Default::default()
+        };
+
+        app.handle_lib_event(LibEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            scope: LibraryPositionScope::Power,
+            position: power_position.clone(),
+            nav_stack: restored_nav,
+        });
+
+        let saved = crate::config::load_library_position_state();
+        let views = saved.libraries.get("lib-movies").expect("saved library");
+        assert_eq!(views.default.clone(), Some(default_position));
+        assert_eq!(views.power.clone(), Some(power_position));
+    }
+
+    #[test]
+    fn power_home_navigation_does_not_persist_library_position_state() {
+        let mut app = make_app_stub();
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_left_tab = 0;
+        app.home.continue_items = make_items(3);
+
+        app.power_cw_move_cursor(1);
+
+        assert!(app.library_position_state.libraries.is_empty());
     }
 
     // ── test helpers ─────────────────────────────────────────────────────────
@@ -3864,6 +4559,62 @@ pub(crate) mod tests {
             stay_alive_ctrl: None,
             attached: true,
         }
+    }
+
+    pub(crate) fn make_built_app() -> App {
+        use mbv_core::player::{PlayerProxy, PlayerStatus};
+        use std::sync::{Arc, Mutex};
+
+        let status = Arc::new(Mutex::new(PlayerStatus {
+            volume_max: 100,
+            ..Default::default()
+        }));
+
+        let (_, player_rx) = std::sync::mpsc::channel();
+        let (_, ws_rx) = std::sync::mpsc::channel();
+        let (lib_tx, lib_rx) = std::sync::mpsc::channel();
+        let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
+        let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
+        let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
+        let (search_tx, search_rx) = std::sync::mpsc::channel::<Result<Vec<MediaItem>, String>>();
+
+        let player = PlayerProxy::stub(status);
+
+        use crate::config::Config;
+        use mbv_core::api::EmbyClient;
+        let client = EmbyClient::new(Config::default());
+
+        App::build(AppInit {
+            client: Arc::new(Mutex::new(client)),
+            player,
+            player_rx,
+            ws_rx,
+            ws_send_tx: None,
+            player_tab: PlayerTab::default(),
+            remote_player_tab: None,
+            initial_queue_scope: QueueScope::Local,
+            system_notifications: false,
+            image_protocol: None,
+            image_protocol_enabled: false,
+            hidden_libraries: Vec::new(),
+            hidden_latest: Vec::new(),
+            music_levels: Vec::new(),
+            use_nerd_fonts: false,
+            indicator_style: render::indicators::IndicatorStyle::default(),
+            image_cache_size: 50,
+            start_on_queue: false,
+            lib_tx,
+            lib_rx,
+            sessions_tx,
+            sessions_rx,
+            card_image_tx,
+            card_image_rx,
+            notif_action_tx,
+            notif_action_rx,
+            search_tx,
+            search_rx,
+            stay_alive_ctrl: None,
+        })
     }
 
     // ── wants_terminal_render (#156: detached stay-alive must not touch

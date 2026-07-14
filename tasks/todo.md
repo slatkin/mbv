@@ -68,13 +68,13 @@
 **Description:** Restore a saved default-view library position only when that library tab becomes active, using Emby fetches to rebuild the path before rendering root content.
 
 **Acceptance criteria:**
-- [ ] Saved default position restores across restart.
-- [ ] Stale paths restore the deepest valid prefix and nearest sensible fallback.
-- [ ] Stable stale fallback rewrites the state file after successful restore.
+- [x] Saved default position restores across restart.
+- [x] Stale paths restore the deepest valid prefix and nearest sensible fallback.
+- [x] Stable stale fallback rewrites the state file after successful restore.
 
 **Verification:**
-- [ ] Tests for restart restore, stale missing item, stale missing parent, and no root-first flash state.
-- [ ] Focused app tests around library activation.
+- [x] Tests for restart restore, stale missing item, stale missing parent, and no root-first flash state.
+- [x] Focused app tests around library activation.
 
 **Dependencies:** Tasks 1-3
 
@@ -90,13 +90,13 @@
 **Description:** Persist Power View queue-side vs library-side focus in `prefs.json`, separate from library position.
 
 **Acceptance criteria:**
-- [ ] Queue-side/library-side focus survives restart.
-- [ ] Restoring panel focus does not change saved library position.
-- [ ] User-facing terminology remains queue side/library side; do not document `PowerFocus::Left` as domain language.
+- [x] Queue-side/library-side focus survives restart.
+- [x] Restoring panel focus does not change saved library position.
+- [x] User-facing terminology remains queue side/library side; do not document `PowerFocus::Left` as domain language.
 
 **Verification:**
-- [ ] Focused prefs tests for both focus values.
-- [ ] Existing Power View width/tab prefs tests still pass.
+- [x] Focused prefs tests for both focus values.
+- [x] Existing Power View width/tab prefs tests still pass.
 
 **Dependencies:** None
 
@@ -111,13 +111,13 @@
 **Description:** Persist and lazily restore library-side position in Power View under the `power` scope, independent from the default view.
 
 **Acceptance criteria:**
-- [ ] Power View library position restores across restart.
-- [ ] Home/CW tab selection still uses existing `power_left_tab` prefs, but Home/CW internal dashboard position is not persisted.
-- [ ] Default-view position is not used as bootstrap or fallback for Power View.
+- [x] Power View library position restores across restart.
+- [x] Home/CW tab selection still uses existing `power_left_tab` prefs, but Home/CW internal dashboard position is not persisted.
+- [x] Default-view position is not used as bootstrap or fallback for Power View.
 
 **Verification:**
-- [ ] Tests for Power View restore, Home/CW exclusion, and default/power isolation.
-- [ ] Existing Power View render/navigation tests still pass.
+- [x] Tests for Power View restore, Home/CW exclusion, and default/power isolation.
+- [x] Existing Power View render/navigation tests still pass.
 
 **Dependencies:** Tasks 1, 2, 5
 
