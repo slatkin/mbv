@@ -2058,7 +2058,16 @@ impl App {
         }
     }
 
+    fn ring_terminal_bell() {
+        use std::io::Write;
+
+        let mut stderr = std::io::stderr();
+        let _ = stderr.write_all(b"\x07");
+        let _ = stderr.flush();
+    }
+
     pub(super) fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
+        Self::ring_terminal_bell();
         if !self.system_notifications {
             return;
         }
@@ -2093,12 +2102,14 @@ impl App {
     }
 
     pub(super) fn flash_status(&mut self, msg: String) {
+        Self::ring_terminal_bell();
         self.notify_system(&msg);
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(2));
     }
 
     pub(super) fn flash_status_high(&mut self, msg: String) {
+        Self::ring_terminal_bell();
         self.notify_system(&msg);
         self.status = msg;
         self.status_expires = Some(Instant::now() + Duration::from_secs(5));
@@ -5081,6 +5092,8 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::LibraryTab;
+    use std::io::Read;
+    use std::os::fd::{FromRawFd, IntoRawFd};
 
     // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
 
@@ -5900,5 +5913,43 @@ mod tests {
             "a duplicate call while a fetch is already in flight must not \
              spawn a second fetch or fabricate a cache entry"
         );
+    }
+
+    #[test]
+    fn notify_with_actions_rings_terminal_bell_even_without_system_notifications() {
+        fn capture_stderr<F: FnOnce()>(f: F) -> String {
+            use std::io::Write;
+
+            let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
+            let read_fd = read_fd.into_raw_fd();
+            let write_fd = write_fd.into_raw_fd();
+            let saved_fd = unsafe { libc::dup(libc::STDERR_FILENO) };
+            assert!(saved_fd >= 0);
+
+            unsafe {
+                libc::dup2(write_fd, libc::STDERR_FILENO);
+            }
+            let _ = unsafe { libc::close(write_fd) };
+
+            f();
+            let _ = std::io::stderr().flush();
+
+            unsafe {
+                libc::dup2(saved_fd, libc::STDERR_FILENO);
+                libc::close(saved_fd);
+            }
+
+            let mut reader = unsafe { std::fs::File::from_raw_fd(read_fd) };
+            let mut output = String::new();
+            reader.read_to_string(&mut output).unwrap();
+            output
+        }
+
+        let app = crate::app::tests::make_app_stub();
+        let output = capture_stderr(|| {
+            app.notify_with_actions("mbv", "Next up?", &[("next_up:play", "Play Now")]);
+        });
+
+        assert_eq!(output, "\x07");
     }
 }

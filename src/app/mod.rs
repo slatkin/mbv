@@ -7937,8 +7937,14 @@ pub(crate) mod tests {
             saw_pill_bg |= bg == palette::PILL_BG;
         }
 
-        assert!(saw_row_bg, "expected the status bar row background to be visible");
-        assert!(saw_pill_bg, "expected pill-colored cells to sit on top of the row background");
+        assert!(
+            saw_row_bg,
+            "expected the status bar row background to be visible"
+        );
+        assert!(
+            saw_pill_bg,
+            "expected pill-colored cells to sit on top of the row background"
+        );
     }
 
     #[test]

@@ -473,10 +473,7 @@ impl App {
                 if row + 1 < max_y {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
-                            Span::styled(
-                                "\u{258c}",
-                                Style::default().fg(palette::PINE),
-                            ),
+                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
                             Span::raw(" "),
                         ])),
                         Rect {
