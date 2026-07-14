@@ -4000,6 +4000,12 @@ impl App {
         position: crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
+        if self.saved_library_position(lib_idx, scope).as_ref() != Some(&position) {
+            return;
+        }
+        if self.active_library_position_scope_for(lib_idx) != Some(scope) {
+            return;
+        }
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.apply_library_position(position.clone(), nav_stack);
         }

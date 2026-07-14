@@ -1552,14 +1552,20 @@ impl App {
                                 if !has_focused_track {
                                     return false;
                                 }
-                                // Track already focused (#145 task 4): play
-                                // it. Reuses `select()` (now track-focus
-                                // aware via `current_lib_item()`) rather
-                                // than duplicating queue-build logic here.
-                                let saved = self.tab_idx;
-                                self.tab_idx = self.lib_tab_offset() + lib_idx;
-                                self.select();
-                                self.tab_idx = saved;
+                                self.with_library_position_scope_override(
+                                    lib_idx,
+                                    crate::app::LibraryPositionScope::Power,
+                                    |app| {
+                                        // Track already focused (#145 task 4): play
+                                        // it. Reuses `select()` (now track-focus
+                                        // aware via `current_lib_item()`) rather
+                                        // than duplicating queue-build logic here.
+                                        let saved = app.tab_idx;
+                                        app.tab_idx = app.lib_tab_offset() + lib_idx;
+                                        app.select();
+                                        app.tab_idx = saved;
+                                    },
+                                );
                             }
                             return false;
                         }
@@ -1591,10 +1597,17 @@ impl App {
                 }
 
                 if !is_power_nav {
-                    let saved = self.tab_idx;
-                    self.tab_idx = self.lib_tab_offset() + lib_idx;
-                    let outcome = self.handle_lib_key(lib_idx, key);
-                    self.tab_idx = saved;
+                    let outcome = self.with_library_position_scope_override(
+                        lib_idx,
+                        crate::app::LibraryPositionScope::Power,
+                        |app| {
+                            let saved = app.tab_idx;
+                            app.tab_idx = app.lib_tab_offset() + lib_idx;
+                            let outcome = app.handle_lib_key(lib_idx, key);
+                            app.tab_idx = saved;
+                            outcome
+                        },
+                    );
                     if let Some(quit) = outcome {
                         return quit;
                     }
@@ -4675,5 +4688,142 @@ mod power_music_track_focus_tests {
         // `on_queue_replace_silent` regardless of what `select()` set it to
         // just before, on both the legacy and new track-focus paths. Not a
         // Task-4 regression; queue contents are the correct observable.
+    }
+}
+
+#[cfg(test)]
+mod power_library_scope_routing_tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_item, make_items};
+    use crate::app::{BrowseLevel, LibraryPositionScope, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn make_power_library_app() -> App {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.collection_type = "movies".into();
+        library.is_folder = true;
+
+        let items = make_items(2);
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items,
+                total_count: 2,
+                cursor: 0,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        app
+    }
+
+    #[test]
+    fn power_view_left_panel_movement_saves_power_scope_via_real_key_path() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        let default_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Default".into(),
+                focused_item_id: Some("id0".into()),
+                cursor_index: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(
+            0,
+            LibraryPositionScope::Default,
+            default_position.clone(),
+        );
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+        assert!(!handled);
+        let views = crate::config::load_library_position_state()
+            .libraries
+            .get("lib-movies")
+            .cloned()
+            .expect("saved library");
+        assert_eq!(views.default, Some(default_position));
+        assert_eq!(
+            views
+                .power
+                .as_ref()
+                .and_then(|position| position.levels.first())
+                .and_then(|level| level.focused_item_id.as_deref()),
+            Some("id1")
+        );
+    }
+
+    #[test]
+    fn power_view_left_panel_refresh_clears_power_scope_via_real_key_path() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        let default_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Default".into(),
+                focused_item_id: Some("id0".into()),
+                cursor_index: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        let power_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Power".into(),
+                focused_item_id: Some("id1".into()),
+                cursor_index: 1,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(
+            0,
+            LibraryPositionScope::Default,
+            default_position.clone(),
+        );
+        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
+
+        assert!(!handled);
+        let views = crate::config::load_library_position_state()
+            .libraries
+            .get("lib-movies")
+            .cloned()
+            .expect("saved library");
+        assert_eq!(views.default, Some(default_position));
+        assert!(views.power.is_none());
     }
 }
