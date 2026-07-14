@@ -216,7 +216,7 @@ impl App {
                         Cell::from(" ")
                     };
 
-                    // Under a group header, show bare names (mirror the power view).
+                    // Under a group header, show bare names (mirror the Power View).
                     let title = if *in_group && item.is_audio() {
                         if item.index_number > 0 {
                             format!("{:02}. {}", item.index_number, item.name)

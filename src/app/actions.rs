@@ -674,7 +674,7 @@ impl App {
 
     /// Common guard for kicking off `spawn_feed_home_video_aggregate` (or the
     /// podcast equivalent) once a grouped library's root folder listing has
-    /// fully paginated: power view is showing this library's tab, it's a
+    /// fully paginated: Power View is showing this library's tab, it's a
     /// feed-home-video or podcast library, and its root nav level has loaded
     /// every item. `extra_ok` carries the caller-specific condition (e.g.
     /// which event/level this check is reacting to).
@@ -824,7 +824,7 @@ impl App {
     }
 
     pub(super) fn lib_page_size(&self) -> usize {
-        // In power view the library list is rendered into the right panel, and the
+        // In Power View the library list is rendered into the right panel, and the
         // normal-view per-row height map (`layout.library.lib_row_heights`) is never populated,
         // so it would fall back to 1. Use the panel height directly (rows are single-line;
         // subtract 1 for the count/search header line).
@@ -868,7 +868,7 @@ impl App {
             return;
         }
 
-        // In power view with letter-grouped display, navigate in sorted display order so
+        // In Power View with letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
         if self.queue_view == QUEUE_VIEW_POWER && !self.layout.power.left_sorted_indices.is_empty()
         {
@@ -929,7 +929,7 @@ impl App {
             return;
         }
 
-        // In power view with letter-grouped display, Home/End jump to the first/last item
+        // In Power View with letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
         if self.queue_view == QUEUE_VIEW_POWER && !self.layout.power.left_sorted_indices.is_empty()
         {
@@ -1192,7 +1192,7 @@ impl App {
             .map(|i| i.item_type == "Season")
             .unwrap_or(false)
     }
-    /// True when the power view should show the combined series view:
+    /// True when Power View should show the combined series view:
     /// either at episode level (with a Season level directly above), or at
     /// season level while episodes are still loading.
     pub(super) fn is_series_view(&self, lib_idx: usize) -> bool {
@@ -1239,7 +1239,7 @@ impl App {
             .unwrap_or(false)
     }
 
-    /// True when the power view should show the combined music group view:
+    /// True when Power View should show the combined music group view:
     /// a group-selector bar at top with the album list below.
     /// Activated when `music.levels` starts with `"group"` and the nav stack
     /// has a group level plus an album level above it.
@@ -2563,7 +2563,7 @@ impl App {
                     *v = 0;
                 }
 
-                // In the power view, skip past the auto-pushed Season level so
+                // In Power View, skip past the auto-pushed Season level so
                 // a single Escape takes the user back to the series list.
                 if self.queue_view == QUEUE_VIEW_POWER && self.power_left_tab == lib_idx + 1 {
                     let exposed_seasons = self.libs[lib_idx]
@@ -3671,7 +3671,7 @@ impl App {
     }
 
     fn maybe_auto_push_power_tv_season_level(&mut self, lib_idx: usize) {
-        // In the power view: when a season list arrives for a TV library,
+        // In Power View: when a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.
         let should_auto_push = self.queue_view == QUEUE_VIEW_POWER
@@ -3733,7 +3733,7 @@ impl App {
     }
 
     fn maybe_auto_push_power_music_group_level(&mut self, lib_idx: usize) {
-        // In the power view: when the group list loads for a music library with
+        // In Power View: when the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.
         let should_auto_push_music = self.queue_view == QUEUE_VIEW_POWER
@@ -4267,7 +4267,7 @@ impl App {
         });
     }
 
-    /// Number of selectable left-panel tabs in power view: Home/CW + all libraries.
+    /// Number of selectable left-panel tabs in Power View: Home/CW + all libraries.
     pub(super) fn power_left_tab_count(&self) -> usize {
         1 + self.libs.len()
     }

@@ -1361,7 +1361,7 @@ impl App {
             return false;
         }
 
-        // In power view, bare Left/Right switch focus between the two panels.
+        // In Power View, bare Left/Right switch focus between the two panels.
         // Queue is on the left; library is on the right.
         if self.queue_view == QUEUE_VIEW_POWER && key.modifiers.is_empty() {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
@@ -1404,7 +1404,7 @@ impl App {
             }
         }
 
-        // In power view, route nav keys to the focused library panel.
+        // In Power View, route nav keys to the focused library panel.
         if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left) {
             if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
                 return false;
@@ -2863,7 +2863,7 @@ impl App {
             && self.layout.tabs_area.contains((col, row).into())
         {
             if self.queue_view == QUEUE_VIEW_POWER {
-                // In power view, tab clicks change the left-panel selection, not the app tab.
+                // In Power View, tab clicks change the left-panel selection, not the app tab.
                 if let Some(idx) = self.power_tab_idx_at(col) {
                     self.power_left_tab = idx;
                     if idx > 0 {
@@ -3799,7 +3799,7 @@ mod power_movie_detail_tests {
     #[test]
     fn ctrl_z_while_power_library_panel_focused_does_not_leak_to_queue_undo() {
         // Preserved quirk from the pre-phase-3 `is_lib_key` mirror: while a
-        // library sub-panel has focus in power view, an unmapped
+        // library sub-panel has focus in Power View, an unmapped
         // Ctrl/Alt-modified key (library has no Ctrl+z binding) must be
         // swallowed by the library routing, not fall through to the
         // queue's own Ctrl+z undo binding below it in `handle_queue_key`.

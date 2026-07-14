@@ -104,7 +104,7 @@ impl App {
         let mode = self.panel_mode;
         let playing_panel = show_controls;
         let onerow = playing_panel && mode == crate::config::PanelMode::OneRow;
-        // In power view always reserve the player rows (title + controls) so that
+        // In Power View always reserve the player rows (title + controls) so that
         // content doesn't shift when the player appears or disappears.
         let reserve_player_rows = in_power && mode == crate::config::PanelMode::OneRow;
         let tabs_h: u16 = 1;
@@ -224,7 +224,7 @@ impl App {
                 width: tabs_w.saturating_sub(left_w + right_w),
                 height: tabs_area.height,
             };
-            // In power view, show Home + Libraries (no Queue); selection = power_left_tab.
+            // In Power View, show Home + Libraries (no Queue); selection = power_left_tab.
             // Otherwise, show the full tab list with the normal tab_idx highlight.
             let tab_titles: Vec<Line> = if in_power {
                 let names: Vec<String> = std::iter::once("Home".to_string())
