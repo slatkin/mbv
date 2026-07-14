@@ -543,9 +543,7 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if selected_region_gutter && is_cursor && focused {
-                    Span::raw(" ")
-                } else if selected_region_gutter || (is_cursor && focused) {
+                let marker = if selected_region_gutter || (is_cursor && focused) {
                     Span::styled("\u{258c}", Style::default().fg(palette::PINE))
                 } else {
                     Span::raw(" ")

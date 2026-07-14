@@ -79,6 +79,8 @@ Uses the default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agen
 
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
+- Documentation cleanup is agent-owned work in this repo: keep `CONTEXT.md`, `docs/adr/`, and related domain docs current as part of implementation changes, do not hand that cleanup back to the user, and do not leave doc edits sitting uncommitted at the end of the task.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 

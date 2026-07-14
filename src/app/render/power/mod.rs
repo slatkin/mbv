@@ -1491,8 +1491,8 @@ mod tests {
             .expect("expected focused track row");
 
         assert!(
-            focused_line.starts_with("    2. Focused Track"),
-            "expected focused track row to render without a green selected-row marker:\n{out}"
+            focused_line.starts_with("  \u{258c} 2. Focused Track"),
+            "expected focused track row to keep the green selected-row gutter in track-selection mode:\n{out}"
         );
         assert_eq!(
             layout.cursor_screen_y,
@@ -1530,8 +1530,8 @@ mod tests {
             .expect("expected focused track to render inline");
 
         assert!(
-            focused_line.starts_with("    2. Focused Track"),
-            "expected track-selection row to remain visible while pane is unfocused:\n{out}"
+            focused_line.starts_with("  \u{258c} 2. Focused Track"),
+            "expected track-selection row to keep the green selected-row gutter while pane is unfocused:\n{out}"
         );
     }
 
