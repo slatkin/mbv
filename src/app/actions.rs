@@ -2099,6 +2099,8 @@ impl App {
     }
 
     pub(super) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
+        let scope = self.library_position_scope_for(lib_idx);
+        self.clear_saved_library_position(lib_idx, scope);
         let client = self.client.lock().unwrap().clone();
         let library_id = self.libs[lib_idx].library.id.clone();
         let name = self.libs[lib_idx].library.name.clone();
@@ -2862,6 +2864,8 @@ impl App {
         } else {
             return;
         };
+        let scope = self.library_position_scope_for(lib_idx);
+        self.clear_saved_library_position(lib_idx, scope);
         if self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                 state.loading = true;
@@ -3031,17 +3035,19 @@ impl App {
         if self.tab_idx == 0 {
             self.home.section = 0;
             let _ = self.fetch_home();
+        } else if self.tab_idx == 1 {
+            if self.queue_view == QUEUE_VIEW_POWER && self.power_left_tab > 0 {
+                self.activate_library_position_scope(
+                    self.power_left_tab - 1,
+                    LibraryPositionScope::Power,
+                );
+            }
         } else {
-            self.ensure_library_loaded();
+            self.activate_library_position_scope(
+                self.tab_idx - self.lib_tab_offset(),
+                LibraryPositionScope::Default,
+            );
         }
-    }
-
-    pub(super) fn ensure_library_loaded(&mut self) {
-        if self.tab_idx <= 1 {
-            return;
-        }
-        let idx = self.tab_idx - self.lib_tab_offset();
-        self.ensure_lib_loaded_for(idx);
     }
 
     pub(super) fn ensure_lib_loaded_for(&mut self, idx: usize) {
@@ -3126,7 +3132,7 @@ impl App {
         }
     }
 
-    fn spawn_restore_library_position(
+    pub(super) fn spawn_restore_library_position(
         &self,
         lib_idx: usize,
         scope: LibraryPositionScope,
@@ -4402,7 +4408,10 @@ impl App {
         self.power_left_tab = (self.power_left_tab + 1) % n;
         self.last_card_height = 0; // reset stale image height for new view
         if self.power_left_tab > 0 {
-            self.ensure_lib_loaded_for(self.power_left_tab - 1);
+            self.activate_library_position_scope(
+                self.power_left_tab - 1,
+                LibraryPositionScope::Power,
+            );
         }
         self.save_prefs();
     }
@@ -4413,7 +4422,10 @@ impl App {
         self.power_left_tab = (self.power_left_tab + n - 1) % n;
         self.last_card_height = 0;
         if self.power_left_tab > 0 {
-            self.ensure_lib_loaded_for(self.power_left_tab - 1);
+            self.activate_library_position_scope(
+                self.power_left_tab - 1,
+                LibraryPositionScope::Power,
+            );
         }
         self.save_prefs();
     }

@@ -1734,6 +1734,12 @@ impl App {
                 self.queue_view = (self.queue_view + 1) % QUEUE_VIEW_COUNT;
                 if self.queue_view == QUEUE_VIEW_POWER {
                     self.set_power_focus(PowerFocus::Left);
+                    if self.tab_idx == 1 && self.power_left_tab > 0 {
+                        self.activate_library_position_scope(
+                            self.power_left_tab - 1,
+                            crate::app::LibraryPositionScope::Power,
+                        );
+                    }
                 }
                 if !self.card_image_states.is_empty() {
                     self.force_clear = true;
@@ -2864,7 +2870,10 @@ impl App {
                 if let Some(idx) = self.power_tab_idx_at(col) {
                     self.power_left_tab = idx;
                     if idx > 0 {
-                        self.ensure_lib_loaded_for(idx - 1);
+                        self.activate_library_position_scope(
+                            idx - 1,
+                            crate::app::LibraryPositionScope::Power,
+                        );
                     }
                     self.save_prefs();
                 }

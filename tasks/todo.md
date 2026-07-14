@@ -133,13 +133,13 @@
 **Description:** Ensure switching between default library tabs and Power View activates the appropriate view-scoped position immediately, not only after restart.
 
 **Acceptance criteria:**
-- [ ] Moving in default view does not move Power View's saved/current position for that library.
-- [ ] Moving in Power View does not move default view's saved/current position for that library.
-- [ ] Switching views activates each scope's own last position without visible cross-scope jumps.
+- [x] Moving in default view does not move Power View's saved/current position for that library.
+- [x] Moving in Power View does not move default view's saved/current position for that library.
+- [x] Switching views activates each scope's own last position without visible cross-scope jumps.
 
 **Verification:**
-- [ ] Focused tests that switch views mid-session and assert independent cursors/paths.
-- [ ] Manual inspection of shared `nav_stack` handling, if still shared internally.
+- [x] Focused tests that switch views mid-session and assert independent cursors/paths.
+- [x] Manual inspection of shared `nav_stack` handling, if still shared internally.
 
 **Dependencies:** Tasks 3, 4, 6
 
@@ -155,13 +155,13 @@
 **Description:** Treat manual refresh/rescan as an immediate reset boundary for only the active library/view position.
 
 **Acceptance criteria:**
-- [ ] Refresh/rescan clears the active library's active view scope immediately on request.
-- [ ] Failed refresh/rescan does not restore the old sticky position.
-- [ ] The other view scope for the same library remains intact.
+- [x] Refresh/rescan clears the active library's active view scope immediately on request.
+- [x] Failed refresh/rescan does not restore the old sticky position.
+- [x] The other view scope for the same library remains intact.
 
 **Verification:**
-- [ ] Tests for default refresh clear, Power View refresh clear, failure path, and other-view preservation.
-- [ ] Existing refresh tests still pass.
+- [x] Tests for default refresh clear, Power View refresh clear, failure path, and other-view preservation.
+- [x] Existing refresh tests still pass.
 
 **Dependencies:** Tasks 3, 6
 
@@ -175,14 +175,14 @@
 **Description:** Prove the end-to-end behavior and update docs only if implementation changes domain vocabulary or records a hard-to-reverse trade-off.
 
 **Acceptance criteria:**
-- [ ] Tests cover default/Power isolation, restart restore, lazy no-root-jump behavior, refresh/rescan active-view-only clearing, hidden-library retention, stale fallback rewrite, and panel-focus persistence.
-- [ ] `CONTEXT.md` still matches the shipped behavior.
-- [ ] No unrelated cleanup or adjacent refactors are included.
+- [x] Tests cover default/Power isolation, restart restore, lazy no-root-jump behavior, refresh/rescan active-view-only clearing, hidden-library retention, stale fallback rewrite, and panel-focus persistence.
+- [x] `CONTEXT.md` still matches the shipped behavior.
+- [x] No unrelated cleanup or adjacent refactors are included.
 
 **Verification:**
 - [ ] `cargo test`
-- [ ] GitNexus `detect_changes({scope: "all", repo: "mbv"})`
-- [ ] `git diff --check`
+- [x] GitNexus `detect_changes({scope: "all", repo: "mbv"})`
+- [x] `git diff --check`
 
 **Dependencies:** Tasks 1-8
 
