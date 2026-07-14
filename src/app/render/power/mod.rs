@@ -40,7 +40,8 @@ pub(super) fn render_power_scrollbar_with_viewport(
     viewport_content_length: usize,
     offset: usize,
 ) {
-    if area.height == 0 || viewport_content_length == 0 || content_length <= viewport_content_length {
+    if area.height == 0 || viewport_content_length == 0 || content_length <= viewport_content_length
+    {
         return;
     }
     let max_offset = content_length.saturating_sub(viewport_content_length);
@@ -638,7 +639,10 @@ mod tests {
 
         assert_eq!(top.lines().next(), Some("▐"));
         assert_eq!(bottom.lines().last(), Some("▐"));
-        assert!(top.matches('▐').count() > 2, "expected a proportional thumb:\n{top}");
+        assert!(
+            top.matches('▐').count() > 2,
+            "expected a proportional thumb:\n{top}"
+        );
     }
 
     #[test]
