@@ -5,13 +5,13 @@
 **Description:** Add serializable state types and atomic load/save helpers for `library_position_state.json`, following the existing `queue_state.json` pattern.
 
 **Acceptance criteria:**
-- [ ] State stores positions by library ID and view scope (`default`, `power`).
-- [ ] Path segments store identity/context only, not full item lists.
-- [ ] Corrupt/missing state files fail harmlessly with no user-facing error.
+- [x] State stores positions by library ID and view scope (`default`, `power`).
+- [x] Path segments store identity/context only, not full item lists.
+- [x] Corrupt/missing state files fail harmlessly with no user-facing error.
 
 **Verification:**
-- [ ] Focused config tests cover save/load, missing file, and parse failure.
-- [ ] `cargo test config`
+- [x] Focused config tests cover save/load, missing file, and parse failure.
+- [x] `cargo test config`
 
 **Dependencies:** None
 

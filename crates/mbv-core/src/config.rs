@@ -268,6 +268,10 @@ fn queue_state_path() -> PathBuf {
     state_dir().join("queue_state.json")
 }
 
+fn library_position_state_path() -> PathBuf {
+    state_dir().join("library_position_state.json")
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum QueueSource {
@@ -332,6 +336,77 @@ pub fn load_queue_state() -> Option<QueueState> {
 
 pub fn clear_queue_state() {
     let _ = std::fs::remove_file(queue_state_path());
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryPositionState {
+    #[serde(default)]
+    pub libraries: std::collections::HashMap<String, LibraryViewPositions>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryViewPositions {
+    #[serde(default)]
+    pub default: Option<LibraryPosition>,
+    #[serde(default)]
+    pub power: Option<LibraryPosition>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryPosition {
+    #[serde(default)]
+    pub levels: Vec<LibraryPositionLevel>,
+    #[serde(default)]
+    pub feed_selected_group: usize,
+    #[serde(default)]
+    pub feed_video_cursor: usize,
+    #[serde(default)]
+    pub feed_video_scroll: usize,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct LibraryPositionLevel {
+    pub parent_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub focused_item_id: Option<String>,
+    #[serde(default)]
+    pub cursor_index: usize,
+    #[serde(default)]
+    pub item_types: Option<String>,
+    #[serde(default)]
+    pub unplayed_only: bool,
+    #[serde(default)]
+    pub sort_by: String,
+    #[serde(default)]
+    pub sort_order: String,
+}
+
+pub fn save_library_position_state(state: &LibraryPositionState) {
+    let path = library_position_state_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(json) = serde_json::to_string(state) {
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+pub fn load_library_position_state() -> LibraryPositionState {
+    let text = match std::fs::read_to_string(library_position_state_path()) {
+        Ok(text) => text,
+        Err(_) => return LibraryPositionState::default(),
+    };
+    match serde_json::from_str(&text) {
+        Ok(state) => state,
+        Err(e) => {
+            log::warn!(target: "library_position", "library_position_state.json failed to parse: {e}");
+            LibraryPositionState::default()
+        }
+    }
 }
 
 /// Visibility/size of the now-playing panel, cycled with `h` and remembered across restarts.
@@ -1189,6 +1264,91 @@ hidden_latest = ["Movies", "TV SHOWS"]
         let state = load_queue_state().expect("queue state missing newer fields should still load");
         assert!(state.items.is_empty());
         assert_eq!(state.cursor, 0);
+
+        std::env::remove_var("XDG_STATE_HOME");
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[test]
+    fn library_position_state_round_trips_by_library_and_view() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        let temp = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::env::set_var("XDG_STATE_HOME", &temp);
+
+        let mut state = LibraryPositionState::default();
+        let views = state.libraries.entry("lib-movies".into()).or_default();
+        views.default = Some(LibraryPosition {
+            levels: vec![LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                focused_item_id: Some("movie-2".into()),
+                cursor_index: 7,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            feed_selected_group: 0,
+            feed_video_cursor: 0,
+            feed_video_scroll: 0,
+        });
+        views.power = Some(LibraryPosition {
+            levels: vec![LibraryPositionLevel {
+                parent_id: "genre-action".into(),
+                title: "Action".into(),
+                focused_item_id: Some("movie-9".into()),
+                cursor_index: 2,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            feed_selected_group: 0,
+            feed_video_cursor: 0,
+            feed_video_scroll: 0,
+        });
+
+        save_library_position_state(&state);
+
+        assert_eq!(load_library_position_state(), state);
+
+        std::env::remove_var("XDG_STATE_HOME");
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[test]
+    fn load_library_position_state_defaults_for_missing_or_invalid_file() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        let temp = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_dir = temp.join("mbv");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::env::set_var("XDG_STATE_HOME", &temp);
+
+        assert_eq!(
+            load_library_position_state(),
+            LibraryPositionState::default()
+        );
+
+        std::fs::write(state_dir.join("library_position_state.json"), "{not json").unwrap();
+
+        assert_eq!(
+            load_library_position_state(),
+            LibraryPositionState::default()
+        );
 
         std::env::remove_var("XDG_STATE_HOME");
         let _ = std::fs::remove_dir_all(temp);
