@@ -583,185 +583,117 @@ impl App {
         }
         layout.left_area = area;
 
-        // --- Build sections from the home data (clone to avoid borrow conflicts). ---
         struct Section {
-            title: String,
-            color: Color,
+            section_idx: usize,
             flat_start: usize,
             items: Vec<mbv_core::api::MediaItem>,
+        }
+        enum DisplayRow {
+            Pills,
+            Empty,
+            Item(usize, mbv_core::api::MediaItem),
+            Blank,
         }
 
         let continue_items = self.home.continue_items.clone();
         let latest = self.home.latest.clone();
 
-        let mut sections: Vec<Section> = Vec::new();
-        let mut flat = 0usize;
-        // Keep Watching is always section 0, even when empty.
-        sections.push(Section {
-            title: "Keep Watching".to_string(),
-            color: palette::section_color(0),
-            flat_start: flat,
-            items: continue_items,
-        });
-        flat += sections[0].items.len();
-        let mut color_idx = 1usize;
-        for (title, _lib, items, _cur) in &latest {
+        let mut flat = continue_items.len();
+        let mut new_sections: Vec<Section> = Vec::new();
+        for (idx, (_title, _lib, items, _cur)) in latest.iter().enumerate() {
             if items.is_empty() {
+                flat += items.len();
                 continue;
             }
-            sections.push(Section {
-                title: title.clone(),
-                color: palette::section_color(color_idx),
+            new_sections.push(Section {
+                section_idx: idx + 1,
                 flat_start: flat,
                 items: items.clone(),
             });
             flat += items.len();
-            color_idx += 1;
         }
-        let total = flat;
-        let cursor = if total == 0 {
-            0
+
+        if !new_sections
+            .iter()
+            .any(|section| section.section_idx == self.home.section)
+        {
+            self.home.section = new_sections
+                .first()
+                .map(|section| section.section_idx)
+                .unwrap_or(0);
+        }
+
+        let selected_new = new_sections
+            .iter()
+            .find(|section| section.section_idx == self.home.section);
+
+        let mut rows: Vec<DisplayRow> = Vec::new();
+        if continue_items.is_empty() {
+            rows.push(DisplayRow::Empty);
         } else {
-            self.home.power_home_cursor.min(total - 1)
-        };
-        self.home.power_home_cursor = cursor;
-
-        // --- Grid geometry (heights are width-independent). ---
-        const GAP: u16 = 2; // gutter between the two columns
-        const ROW_GAP: u16 = 1; // blank row between grid rows
-        const CARD_ITEM_CAP: usize = 6; // visible item rows per card before internal scroll
-
-        let cols: usize = if area.width >= 50 { 2 } else { 1 };
-        let n_sections = sections.len();
-        let n_rows = n_sections.div_ceil(cols);
-
-        let card_vis = |s: &Section| -> usize {
-            if s.items.is_empty() {
-                1 // the "(empty)" placeholder row
-            } else {
-                s.items.len().min(CARD_ITEM_CAP)
+            for (idx, item) in continue_items.into_iter().enumerate() {
+                rows.push(DisplayRow::Item(idx, item));
             }
-        };
-        let card_h = |s: &Section| -> u16 { 1 + card_vis(s) as u16 };
-
-        let mut row_heights = vec![0u16; n_rows];
-        for (i, s) in sections.iter().enumerate() {
-            let r = i / cols;
-            row_heights[r] = row_heights[r].max(card_h(s));
         }
-        let mut row_top = vec![0u16; n_rows];
-        let mut acc = 0u16;
-        for r in 0..n_rows {
-            row_top[r] = acc;
-            acc += row_heights[r] + ROW_GAP;
+        if let Some(section) = selected_new {
+            rows.push(DisplayRow::Blank);
+            rows.push(DisplayRow::Pills);
+            for (idx, item) in section.items.iter().cloned().enumerate() {
+                rows.push(DisplayRow::Item(section.flat_start + idx, item));
+            }
         }
-        let total_h = acc.saturating_sub(ROW_GAP); // drop trailing gap
-        let needs_scrollbar = total_h > area.height;
 
-        let grid_w = area
+        let visible_flat_indices: Vec<usize> = rows
+            .iter()
+            .filter_map(|row| match row {
+                DisplayRow::Item(flat_idx, _) => Some(*flat_idx),
+                _ => None,
+            })
+            .collect();
+        if let Some(first) = visible_flat_indices.first() {
+            if !visible_flat_indices.contains(&self.home.power_home_cursor) {
+                self.home.power_home_cursor = *first;
+            }
+        } else {
+            self.home.power_home_cursor = 0;
+        }
+        let cursor = self.home.power_home_cursor;
+
+        let content_h = rows.len().max(1) as u16;
+        let needs_scrollbar = content_h > area.height;
+        let list_w = area
             .width
             .saturating_sub(if needs_scrollbar { 1 } else { 0 });
-        let col_w = if cols == 2 {
-            grid_w.saturating_sub(GAP) / 2
-        } else {
-            grid_w
-        };
-
-        // --- Panel scroll: keep the cursor's grid row visible. ---
-        let cursor_section = sections.iter().position(|s| {
-            !s.items.is_empty() && cursor >= s.flat_start && cursor < s.flat_start + s.items.len()
-        });
-        let cursor_row = cursor_section.map(|i| i / cols).unwrap_or(0);
+        let cursor_row = rows
+            .iter()
+            .position(|row| matches!(row, DisplayRow::Item(flat_idx, _) if *flat_idx == cursor))
+            .unwrap_or(0) as u16;
         let scroll_y = power_home_panel_scroll(
             self.home.power_home_scroll as u16,
-            row_top[cursor_row],
-            row_top[cursor_row] + row_heights[cursor_row],
-            total_h,
+            cursor_row,
+            cursor_row + 1,
+            content_h,
             area.height,
         );
         self.home.power_home_scroll = scroll_y as usize;
 
-        // content_y (in the virtual grid) → on-screen y, or None if clipped out.
-        let screen_y = |content_y: u16| -> Option<u16> {
-            let sy = area.y as i32 + content_y as i32 - scroll_y as i32;
-            if sy < area.y as i32 || sy >= (area.y + area.height) as i32 {
-                None
-            } else {
-                Some(sy as u16)
-            }
-        };
-
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
-        let mut section_metas: Vec<crate::app::layout::PowerHomeSectionMeta> =
-            Vec::with_capacity(n_sections);
-
-        for (i, s) in sections.iter().enumerate() {
-            let r = i / cols;
-            let c = i % cols;
-            section_metas.push(crate::app::layout::PowerHomeSectionMeta {
-                flat_start: s.flat_start,
-                len: s.items.len(),
-                row: r,
-                col: c,
-            });
-
-            let card_x = area.x + c as u16 * (col_w + GAP);
-            let base = row_top[r]; // content-space top of this card
-
-            // Header row: section title as a pill (accent-coloured background,
-            // bold contrasting text) followed by a rule — the same "\u{2500}" line
-            // style used for rules elsewhere in the app — in the accent colour,
-            // filling the rest of the row.
-            if let Some(sy) = screen_y(base) {
-                let label = trunc_str(&s.title, (col_w as usize).saturating_sub(2));
-                let pill_text = format!(" {label} ");
-                let pill_w = (pill_text.width() as u16).min(col_w);
-                let rule_len = col_w.saturating_sub(pill_w);
-                let rule = "\u{2501}".repeat(rule_len as usize);
-                f.render_widget(
-                    Paragraph::new(Line::from(vec![
-                        Span::styled(
-                            pill_text,
-                            Style::default()
-                                .fg(palette::BASE)
-                                .bg(s.color)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                        Span::styled(rule, Style::default().fg(s.color)),
-                    ])),
-                    Rect {
-                        x: card_x,
-                        y: sy,
-                        width: col_w,
-                        height: 1,
-                    },
-                );
-            }
-
-            // Item rows (with internal scroll when this card holds the cursor).
-            let vis = card_vis(s);
-            let item_off = if s.items.len() > CARD_ITEM_CAP && cursor_section == Some(i) {
-                let within = cursor - s.flat_start;
-                within
-                    .saturating_sub(CARD_ITEM_CAP - 1)
-                    .min(s.items.len() - CARD_ITEM_CAP)
-            } else {
-                0
+        layout.selector_tabs = Vec::new();
+        let visible = area.height.min(content_h.saturating_sub(scroll_y));
+        for k in 0..visible {
+            let row_idx = scroll_y as usize + k as usize;
+            let sy = area.y + k;
+            let row_rect = Rect {
+                x: area.x,
+                y: sy,
+                width: list_w,
+                height: 1,
             };
-
-            for k in 0..vis {
-                let content_y = base + 1 + k as u16;
-                let Some(sy) = screen_y(content_y) else {
-                    continue;
-                };
-                let row_rect = Rect {
-                    x: card_x,
-                    y: sy,
-                    width: col_w,
-                    height: 1,
-                };
-
-                if s.items.is_empty() {
+            match &rows[row_idx] {
+                DisplayRow::Pills => {
+                    self.render_power_home_section_pills_row(f, row_rect, layout);
+                }
+                DisplayRow::Empty => {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
                             Span::raw(" "),
@@ -769,63 +701,175 @@ impl App {
                         ])),
                         row_rect,
                     );
-                    continue;
                 }
+                DisplayRow::Blank => {}
+                DisplayRow::Item(flat_idx, item) => {
+                    let selected_row = *flat_idx == cursor;
+                    if selected_row {
+                        layout.cursor_screen_y = Some(sy);
+                    }
 
-                let item_idx = item_off + k;
-                let item = &s.items[item_idx];
-                let flat_idx = s.flat_start + item_idx;
-                let selected = flat_idx == cursor;
-                if selected {
-                    layout.cursor_screen_y = Some(sy);
+                    let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
+                        let mins = (item.runtime_ticks / TICKS_PER_SECOND / 60).max(1);
+                        format!("{}m", mins)
+                    } else {
+                        String::new()
+                    };
+                    let avail = (list_w as usize).saturating_sub(1);
+                    let name_w = avail.saturating_sub(dur_str.width());
+                    let title = trunc_str(&item.display_name(), name_w);
+                    let pad = name_w.saturating_sub(title.width());
+
+                    let fg = if focused {
+                        palette::WHITE
+                    } else {
+                        palette::SUBTLE
+                    };
+                    let mut spans: Vec<Span> = if selected_row && focused {
+                        vec![
+                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                            Span::styled(
+                                title,
+                                Style::default()
+                                    .fg(palette::IRIS)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                        ]
+                    } else {
+                        vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+                    };
+                    if !dur_str.is_empty() {
+                        spans.push(Span::raw(" ".repeat(pad)));
+                        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+                    }
+                    f.render_widget(Paragraph::new(Line::from(spans)), row_rect);
+                    hitmap.push((row_rect, *flat_idx));
                 }
-
-                let dur_str = if !item.is_folder && item.runtime_ticks > 0 {
-                    let mins = (item.runtime_ticks / TICKS_PER_SECOND / 60).max(1);
-                    format!("{}m", mins)
-                } else {
-                    String::new()
-                };
-                let avail = (col_w as usize).saturating_sub(1); // minus 1-col marker
-                let name_w = avail.saturating_sub(dur_str.width());
-                let title = trunc_str(&item.display_name(), name_w);
-                let pad = name_w.saturating_sub(title.width());
-
-                let fg = if focused {
-                    palette::WHITE
-                } else {
-                    palette::SUBTLE
-                };
-                let mut spans: Vec<Span> = if selected && focused {
-                    vec![
-                        Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                        Span::styled(
-                            title,
-                            Style::default()
-                                .fg(palette::IRIS)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ]
-                } else {
-                    vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
-                };
-                if !dur_str.is_empty() {
-                    spans.push(Span::raw(" ".repeat(pad)));
-                    spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
-                }
-                f.render_widget(Paragraph::new(Line::from(spans)), row_rect);
-                hitmap.push((row_rect, flat_idx));
             }
         }
 
         layout.home.hitmap = hitmap;
-        layout.home.layout = section_metas;
 
-        // Panel scrollbar on the far right.
         if needs_scrollbar && focused {
-            let max_off = total_h.saturating_sub(area.height) as usize;
+            let max_off = content_h.saturating_sub(area.height) as usize;
             super::render_power_scrollbar(f, area, max_off, scroll_y as usize);
         }
+    }
+
+    pub(super) fn render_power_home_section_pills_row(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        layout: &mut LayoutPower,
+    ) {
+        if area.width == 0 || area.height == 0 {
+            layout.selector_tabs = Vec::new();
+            return;
+        }
+
+        let mut labels: Vec<(usize, String)> = Vec::new();
+        for (idx, (title, _lib, items, _cur)) in self.home.latest.iter().enumerate() {
+            if !items.is_empty() {
+                labels.push((idx + 1, title.clone()));
+            }
+        }
+        if labels.is_empty() {
+            layout.selector_tabs = Vec::new();
+            return;
+        }
+        if !labels
+            .iter()
+            .any(|(section_idx, _)| *section_idx == self.home.section)
+        {
+            self.home.section = labels[0].0;
+        }
+
+        const MAX_LABEL: usize = 18;
+        let pill_widths: Vec<usize> = labels
+            .iter()
+            .map(|(_, label)| trunc_str(label, MAX_LABEL).width() + 2)
+            .collect();
+        let selected_pos = labels
+            .iter()
+            .position(|(section_idx, _)| *section_idx == self.home.section)
+            .unwrap_or(0);
+        let count_fitting = |start: usize, avail: usize| -> usize {
+            let mut used = 0usize;
+            let mut count = 0usize;
+            for width in pill_widths.iter().skip(start) {
+                let need = if count == 0 { *width } else { 1 + *width };
+                if used + need > avail {
+                    break;
+                }
+                used += need;
+                count += 1;
+            }
+            count
+        };
+
+        let mut scroll_start = 0usize;
+        loop {
+            let avail = (area.width as usize)
+                .saturating_sub(if scroll_start > 0 { 2 } else { 0 })
+                .saturating_sub(2);
+            let count = count_fitting(scroll_start, avail);
+            if count == 0 || scroll_start + count > selected_pos {
+                break;
+            }
+            scroll_start += 1;
+        }
+
+        let has_left = scroll_start > 0;
+        let avail_pills = (area.width as usize)
+            .saturating_sub(if has_left { 2 } else { 0 })
+            .saturating_sub(2);
+        let count = count_fitting(scroll_start, avail_pills);
+        let scroll_end = (scroll_start + count).min(labels.len());
+        let has_right = scroll_end < labels.len();
+
+        let mut spans: Vec<Span> = Vec::new();
+        let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
+        let mut x_cursor = area.x;
+        if has_left {
+            let chunk = "\u{2039} ";
+            spans.push(Span::styled(chunk, Style::default().fg(palette::FOAM)));
+            x_cursor += chunk.width() as u16;
+        }
+        for (idx, (section_idx, label)) in labels[scroll_start..scroll_end].iter().enumerate() {
+            if idx > 0 {
+                spans.push(Span::raw(" "));
+                x_cursor += 1;
+            }
+            let selected = *section_idx == self.home.section;
+            let style = if selected {
+                Style::default()
+                    .fg(palette::YELLOW)
+                    .bg(palette::FOAM)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::BASE).bg(palette::FOAM)
+            };
+            let label = trunc_str(label, MAX_LABEL);
+            let pill = format!(" {label} ");
+            let pill_rect = Rect {
+                x: x_cursor,
+                y: area.y,
+                width: pill.width() as u16,
+                height: 1,
+            };
+            selector_tabs.push((pill_rect, *section_idx));
+            spans.push(Span::styled(pill.clone(), style));
+            x_cursor += pill.width() as u16;
+        }
+        if has_right {
+            spans.push(Span::styled(
+                " \u{203a}",
+                Style::default().fg(palette::FOAM),
+            ));
+        }
+
+        f.render_widget(Paragraph::new(Line::from(spans)), area);
+        layout.selector_tabs = selector_tabs;
     }
 }
 
@@ -833,7 +877,6 @@ impl App {
 mod tests {
     use super::power_home_panel_scroll;
     use crate::app::layout::AppLayout;
-    use crate::app::palette;
     use crate::app::tests::{make_app_stub, make_items};
     use mbv_core::api::TICKS_PER_SECOND;
     use ratatui::backend::TestBackend;
@@ -854,7 +897,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_two_column_card_grid() {
+    fn renders_keep_watching_then_selected_new_section() {
         let mut app = make_app_stub();
 
         let mut cont = make_items(3);
@@ -895,38 +938,19 @@ mod tests {
         let out = buffer_to_string(&term);
         println!("\n{out}");
 
-        // Two columns: New Music header must appear to the right of Keep Watching.
-        let kw_line = out.lines().find(|l| l.contains("Keep Watching")).unwrap();
-        assert!(
-            kw_line.contains("New Music"),
-            "expected 2 columns on header row"
-        );
-        // Section header renders as a pill: the title sits on an accent-coloured
-        // background, followed by a "━" rule filling the rest of the row.
-        assert!(
-            kw_line.contains('\u{2501}'),
-            "expected a rule after the header pill"
-        );
-        let kw_row = out
-            .lines()
-            .position(|l| l.contains("Keep Watching"))
-            .unwrap();
-        let kw_x = kw_line.find("Keep Watching").unwrap() as u16;
-        let buf = term.backend().buffer();
-        assert_eq!(
-            buf[(kw_x, kw_row as u16)].bg,
-            palette::section_color(0),
-            "expected the header pill's background to use the section's accent colour"
-        );
+        assert!(out.contains("Taskmaster"));
+        assert!(out.contains("QI XL"));
+        assert!(out.contains("8 Diagram Pole Fighter"));
+        assert!(out.contains("New Music"));
+        assert!(out.contains("YouTube"));
+        assert!(out.contains("King Of America"));
+        assert!(out.contains("Either/Or"));
+        assert!(!out.contains("NXL Not-E3 Showcase"));
         // Durations render as minutes only, never hours (67m for 4020s, not 1h07m).
         assert!(out.contains("47m"));
         assert!(out.contains("67m"));
         assert!(!out.contains("1h"));
-        // Section titles present.
-        assert!(out.contains("YouTube"));
-        // Grid geometry + hitmap were recorded.
-        assert_eq!(layout.power.home.layout.len(), 3);
-        assert!(!layout.power.home.hitmap.is_empty());
+        assert_eq!(layout.power.home.hitmap.len(), 6);
     }
 
     #[test]

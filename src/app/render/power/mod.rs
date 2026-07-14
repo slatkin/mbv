@@ -11,7 +11,7 @@ use super::super::layout::LayoutPower;
 use super::super::ui_util::{natural_sort_key, trunc_str};
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::Rect;
-use ratatui::style::Style;
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use ratatui::Frame;
@@ -196,7 +196,36 @@ impl App {
             let is_music_group_lib =
                 self.power_left_tab > 0 && self.is_music_group_view(self.power_left_tab - 1);
 
-            if is_music_group_lib {
+            if self.power_left_tab == 0 {
+                layout.breadcrumbs = Vec::new();
+
+                let right_col_w = right_w.saturating_sub(1);
+                let marker_text = " Keep Watching ";
+                let marker_w = (marker_text.width() as u16).min(right_col_w);
+                let left_line_w = area.width.saturating_sub(marker_w);
+
+                f.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::styled(
+                            "\u{2501}".repeat(left_line_w as usize),
+                            Style::default().fg(palette::FOAM),
+                        ),
+                        Span::styled(
+                            marker_text,
+                            Style::default()
+                                .fg(palette::BASE)
+                                .bg(palette::FOAM)
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    ])),
+                    Rect {
+                        x: area.x,
+                        y: crumb_row,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+            } else if is_music_group_lib {
                 layout.breadcrumbs = Vec::new();
                 let lib_idx = self.power_left_tab - 1;
 
@@ -269,31 +298,26 @@ impl App {
                 layout.selector_tabs = Vec::new();
 
                 // Build (display_name, target_truncation_depth) pairs.
-                let crumb_depths: Vec<(String, usize)> = if self.power_left_tab == 0 {
-                    vec![("mbv".to_string(), 0)]
+                let lib_idx = self.power_left_tab - 1;
+                let lib = &self.libs[lib_idx];
+                let skip = if lib
+                    .nav_stack
+                    .first()
+                    .map(|l| l.title == lib.library.name)
+                    .unwrap_or(false)
+                {
+                    1
                 } else {
-                    let lib_idx = self.power_left_tab - 1;
-                    let lib = &self.libs[lib_idx];
-                    let skip = if lib
-                        .nav_stack
-                        .first()
-                        .map(|l| l.title == lib.library.name)
-                        .unwrap_or(false)
-                    {
-                        1
-                    } else {
-                        0
-                    };
-                    let mut cd: Vec<(String, usize)> = vec![(lib.library.name.clone(), skip)];
-                    for (j, lvl) in lib.nav_stack.iter().enumerate().skip(skip) {
-                        cd.push((lvl.title.clone(), j + 1));
-                    }
-                    // Drop the current (deepest) level from the pill unless it's the only one.
-                    if cd.len() > 1 {
-                        cd.pop();
-                    }
-                    cd
+                    0
                 };
+                let mut crumb_depths: Vec<(String, usize)> = vec![(lib.library.name.clone(), skip)];
+                for (j, lvl) in lib.nav_stack.iter().enumerate().skip(skip) {
+                    crumb_depths.push((lvl.title.clone(), j + 1));
+                }
+                // Drop the current (deepest) level from the pill unless it's the only one.
+                if crumb_depths.len() > 1 {
+                    crumb_depths.pop();
+                }
 
                 let pill_style = Style::default().fg(palette::BASE).bg(palette::FOAM);
                 let sep_style = Style::default().fg(palette::WHITE).bg(palette::FOAM);

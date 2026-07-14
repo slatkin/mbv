@@ -1246,20 +1246,11 @@ impl App {
                 true
             }
             KeyCode::Home => {
-                self.home.power_home_cursor = 0;
+                self.power_home_select_start();
                 true
             }
             KeyCode::End => {
-                let total = self.home.continue_items.len()
-                    + self
-                        .home
-                        .latest
-                        .iter()
-                        .map(|(_, _, v, _)| v.len())
-                        .sum::<usize>();
-                if total > 0 {
-                    self.home.power_home_cursor = total - 1;
-                }
+                self.power_home_select_end();
                 true
             }
             KeyCode::Enter if ctrl => {
@@ -3069,7 +3060,9 @@ impl App {
                 if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
                     for (rect, target) in self.layout.power.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
-                            if self.power_left_tab > 0 {
+                            if self.power_left_tab == 0 {
+                                self.power_home_select_section(target);
+                            } else {
                                 let lib_idx = self.power_left_tab - 1;
                                 if self.is_music_group_view(lib_idx) {
                                     self.select_music_group(lib_idx, target);
