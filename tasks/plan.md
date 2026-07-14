@@ -1,111 +1,67 @@
-# Plan: #145 — Power View inline album detail + track-selection mode
+# Implementation Plan: Issue #199 Sticky Library Position
 
-Scope: **Power View music album browsing only.** Do not touch the classic
-tab-based library view or any other album-browsing surface (the issue's
-scope-correction comment broadened this to "all album browsing surfaces";
-per explicit user direction that broadening is rejected — Power View only).
+## Overview
+Implement restart-persistent library browsing position, scoped by library and by view (`default` vs `power`). A library position restores the drill-down path, active selector/group where applicable, and focused item; scroll remains derived/clamped to keep the focused item visible. Power View queue-side vs library-side panel focus is a separate restart-persistent preference.
 
-## Background (from investigation)
+## Architecture Decisions
+- Store library position in a separate `library_position_state.json`, not `prefs.json`, with one file covering all libraries.
+- Persist restore identities and fetch context only, not full item lists. Each path segment records `parent_id`, `focused_item_id`, fallback `cursor_index`, `title`, and fetch context (`item_types`, `unplayed_only`, `sort_by`, `sort_order`).
+- Restore lazily when a library/view becomes active. If saved state exists, avoid rendering root first and then jumping; use existing loading/restoring surfaces until the saved path or fallback is ready.
+- Keep default library view and Power View isolated both across restart and in-session. Switching views should activate that view's independent position for the library, not share one live `nav_stack`.
+- Restore stale state by validating each path segment against current Emby data. Keep the deepest valid prefix, prefer saved item IDs, fall back to clamped indices, and rewrite the state file only after a stable fallback is successfully resolved.
+- Manual refresh/rescan clears the active library/view position immediately on request. Other libraries and the other view scope remain intact.
+- Keep hidden or currently missing library entries in the state file. They are inert while hidden/missing and may restore if the library returns.
+- Do not persist search, detail-panel state, album track-selection focus, or Home/CW internal dashboard position.
 
-- `App::is_viewing_album_folders(lib_idx)` (`src/app/actions.rs`) is true
-  exactly when the current `nav_stack` top level is the album-folder listing
-  (works for both the flat `music_levels = ["album"]` config and the grouped
-  `["group","album"]` config — both are real, supported configs per
-  `crates/mbv-core/src/config.rs` tests). This is the condition for "album
-  list is visible, no track drilldown yet."
-- `App::is_album_level(lib_idx)` is true one level *deeper*: the user has
-  already drilled into an album's track list (today via `Enter` pushing a
-  `BrowseLevel` in `select()`, `src/app/actions.rs:2341`). This is the
-  existing drilldown this issue replaces with inline rendering + a track
-  mode flag instead of a nav_stack push.
-- `render_power_library` (`src/app/render/power/mod.rs:420`) currently picks
-  exactly one renderer for the whole `area`: detail XOR list. `is_album` ->
-  `render_power_album_detail`. Task 2 changes this to split `area` and show
-  both simultaneously when `is_viewing_album_folders(lib_idx)`.
-- `render_power_album_detail` (`src/app/render/power/detail.rs`... actually
-  `src/app/render/power/album.rs`? — verify at implementation time) reads
-  `items`/`cursor` directly from `lib.nav_stack.last()`. It needs to be
-  callable with explicit `items`/`cursor` params so it can render either the
-  legacy pushed-level data (until Task 3 removes the push) or the new
-  proactively-fetched inline cache.
-- Precedent for "proactively fetch data for the render-visible item, cache
-  it, no user action required" already exists: `album_artist_cache` /
-  `album_artist_loading` / `fetch_album_artist` / `spawn_album_artist_fetch`
-  / `LibEvent::AlbumArtistFetched` (`src/app/images.rs`, `src/app/mod.rs`,
-  `src/app/actions.rs`). Mirror this exactly for album *tracks* rather than
-  inventing a new pattern.
-- `is_album_level` is **HIGH risk** upstream per GitNexus impact analysis
-  (touches `handle_lib_event`, `execute_context_action`, `select` — 3
-  execution flows). Changes here need care and full regression testing of
-  existing music/movie/series Power View behavior.
+## Task List
 
-## Tasks
+### Phase 1: Persistence Foundation
+- [ ] Task 1: Add library position state types and config I/O.
+- [ ] Task 2: Add snapshot/restore conversion helpers around existing library view state.
 
-1. **Data model + fetch plumbing.** Add `album_tracks_cache:
-   HashMap<String, Vec<MediaItem>>` and `album_tracks_loading:
-   HashSet<String>` to `App` (mirrors `album_artist_cache`/
-   `album_artist_loading`). Add `fetch_album_tracks`/
-   `spawn_album_tracks_fetch` (mirrors `fetch_album_artist`/
-   `spawn_album_artist_fetch`, but fetches the full track list, not a
-   5-track artist sample) and a new `LibEvent::AlbumTracksFetched { album_id,
-   tracks }` variant handled in `actions.rs`. Refactor
-   `render_power_album_detail` to take `items: &[MediaItem], cursor: usize`
-   explicitly instead of reading `nav_stack` internally, updating its one
-   existing call site to pass the same data it reads today (no behavior
-   change at this call site). Unit tests: cache hit / cache miss triggers
-   fetch once / loading flag prevents duplicate fetch / event handler
-   populates cache and clears loading flag.
+### Checkpoint: Foundation
+- [ ] Focused persistence/helper tests pass.
+- [ ] No UI behavior changes yet.
 
-2. **Render album detail inline.** In `render_power_library`, when
-   `is_viewing_album_folders(lib_idx)` is true, split `area` into an upper
-   sub-rect (album list) and lower sub-rect (album detail) instead of
-   picking one exclusively. Resolve the selected album's id from the
-   album-folder-listing cursor, look it up in `album_tracks_cache` (calling
-   `fetch_album_tracks` on miss, showing a loading state otherwise), and
-   render it via the refactored `render_power_album_detail`. `Enter`/`Escape`
-   keep their **current** (pre-issue) push/pop drilldown behavior in this
-   task — deliberately incomplete but safe and independently revertable.
-   Test: moving the album cursor updates which album's tracks render inline,
-   without a nav_stack push.
+### Phase 2: Default View Sticky Position
+- [ ] Task 3: Save default-view library position on logical navigation changes.
+- [ ] Task 4: Lazily restore default-view library position without root-first flash.
 
-3. **Track-selection mode.** Add `LibraryTab.album_track_focus:
-   Option<usize>` (`Some(idx)` = track-selection mode, focused track index
-   into the inline cache; `None` = normal album-list navigation). `Enter` at
-   the album-folder-listing level sets `Some(0)` instead of pushing
-   nav_stack. `Escape` while `Some(_)` clears it back to `None` (same album
-   still shown inline) instead of calling `go_back()`. Up/Down: route to
-   moving `album_track_focus` within track-cache bounds when `Some(_)`,
-   otherwise move the album cursor as today. Tests: Enter enters mode at
-   idx 0; Up/Down inside mode move only the track focus and leave the album
-   cursor untouched; Escape exits back to album-list mode with the same
-   album still visible; Up/Down outside the mode still move albums exactly
-   as before.
+### Checkpoint: Default View
+- [ ] Default library restart restore works.
+- [ ] Stale default-view fallback works and rewrites only after stable restore.
 
-4. **Scope-correct actions.** Album-list mode: keyboard shortcuts and the
-   context menu (`open_context_menu`/`context_menu_power_lib_idx` in
-   `input.rs`) offer play-all/shuffle/add-all-to-queue against the
-   *selected album* via the existing `play_folder`/`shuffle_folder`/
-   `do_enqueue_folder`. Track-selection mode: `Enter` plays the *focused
-   track* (existing per-track play path); per-track context-menu actions
-   (enqueue, etc.) target the focused track (existing per-track path).
-   Tests: album-scope action fires folder-level call with the selected
-   album's id in list mode; track-scope action fires track-level call with
-   the focused track's id in track mode; context menu offers the right verb
-   set in each mode.
+### Phase 3: Power View Isolation
+- [ ] Task 5: Persist Power View panel focus in `prefs.json`.
+- [ ] Task 6: Save and restore independent Power View library position.
+- [ ] Task 7: Swap isolated default/power positions during in-session view changes.
 
-5. **Regression coverage.** Full pass confirming existing non-music Power
-   View behavior (movies, series, home videos) and other Power View
-   keyboard/queue shortcuts are unchanged; `detect_changes()` compared
-   against `main` before commit/PR.
+### Checkpoint: Power View
+- [ ] Default and Power View positions do not bootstrap from or overwrite each other.
+- [ ] Power View queue-side/library-side focus survives restart independently from library position.
 
-Each task = one RED/GREEN/regression/build/commit cycle per
-`incremental-implementation`. Default `/build` mode: implement the next
-pending task, stop.
+### Phase 4: Reset Boundaries and Regression
+- [ ] Task 8: Clear active-view position immediately on refresh/rescan request.
+- [ ] Task 9: Add acceptance/regression coverage and documentation checks.
 
-## Status
+### Checkpoint: Complete
+- [ ] Full test suite passes.
+- [ ] GitNexus `detect_changes()` shows expected affected symbols/flows before commit.
+- [ ] `CONTEXT.md` remains current; add ADR only if implementation introduces a surprising hard-to-reverse trade-off.
 
-- [x] Task 1 — data model + fetch plumbing
-- [x] Task 2 — render album detail inline
-- [x] Task 3 — track-selection mode
-- [x] Task 4 — scope-correct actions
-- [x] Task 5 — regression coverage
+## Risks and Mitigations
+| Risk | Impact | Mitigation |
+|------|--------|------------|
+| `BrowseLevel` and `App::build` are high-blast-radius symbols. | High | Keep changes additive, avoid signature churn, and test existing navigation/render paths after each slice. |
+| Current code likely uses one in-memory `nav_stack` per library. | High | Introduce explicit view-scoped snapshot/activation helpers before changing user-facing behavior. |
+| Lazy restore requires network fetches and async event sequencing. | High | Build restore as a small state machine with focused tests for success, stale fallback, and error/no-jump behavior. |
+| Opportunistic writes can become chatty. | Medium | Write only on logical position changes; debounce/coalesce only if existing event-loop seams make that simple. |
+| Hidden/missing libraries may look like stale data. | Medium | Treat absent library IDs as inert, not prune candidates. |
+
+## Open Questions
+- None. Remaining issue #199 choices are resolved by the recommended defaults captured above.
+
+## Implementation Notes
+- Before editing existing functions/classes/methods, run GitNexus impact analysis per `AGENTS.md`.
+- Prefer tests that exercise app behavior at existing seams over tests that assert private implementation details.
+- Do not open a PR unless explicitly requested.
