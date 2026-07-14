@@ -190,6 +190,11 @@ _Avoid_: "sorted order" — ambiguous with API order, which is also a sort resul
 A row occupied in a rendered library list. A display row may correspond to a selectable media item, or it may be a structural/detail row such as an artist header, inline album-track row, separator, or loading placeholder.
 _Avoid_: treating display rows and media items as interchangeable; one media item can occupy multiple display rows when inline detail is expanded, and some display rows are not selectable items at all.
 
+**Library position**:
+The per-library, per-view restoration target for returning to a library: the library's drill-down path, the active selector/pill group when that path has one, then the last focused item within that group or level. Default library view and Power View are completely isolated scopes with independent saved positions, and the position persists across app restarts so browsing resumes where the user left off, rather than repeatedly biasing discovery toward the top of alphabetically sorted lists; viewport scroll is secondary and may be clamped to keep that focused item visible. If saved content no longer exists, restore the deepest valid path prefix and focus the nearest sensible fallback without treating the stale position as a user-facing error. Lazy restore should avoid a root-first flash or delayed jump: a library/view with saved position should enter a restoring/loading state until the restored path or fallback is ready to render.
+Manual refresh/rescan is an explicit reset boundary for the active view only: clear that library's saved position for the view where the user requested the reload, rather than trying to carry it across the user-requested reload. The other view's saved position remains isolated and intact.
+_Avoid_: reducing this to raw scroll offset, global tab index, search state, detail-panel state, album track-selection focus, one shared cursor across all libraries, one shared position across default and Power View, or bootstrapping one view's position from the other; "sticky" means restart-persistent in this context, not merely preserved while the process is running.
+
 **Grouped album view**:
 A display mode for an album listing that inserts an artist header row at each artist boundary, built from resolved artist rather than API order. One of several power-list view modes that produce a display order (another being the letter-grouped view, which buckets by first letter instead of artist).
 _Avoid_: conflating with "album level" (whether a navigation level shows albums at all) — grouping is about whether those albums are clustered by resolved artist within that level, an orthogonal concern.
@@ -206,6 +211,10 @@ Its resize controls are keyboard-only: `Shift+Left`/`Shift+Right`, active only w
 Power View text should be laid out from the current frame width after each resize: text that no longer fits must be abbreviated or ellipsized, and text should expand again when there is room.
 Power View is a formal view setting, not a transient keyboard toggle. The `v` key is reserved for the audio visualizer toggle; Power View belongs in the F2 settings surface. The ordinary non-Power View app state is the default view.
 _Avoid_: using "left panel" without qualification when discussing #111, since other views also have left/right areas; the resize target is specifically the Power View left column, not the normal library table split or any modal/sidebar. Also avoid reusing `v` as a Power View toggle.
+
+**Power View panel focus**:
+The restart-persistent focus choice between Power View's queue side and library side. It is separate from **Library position**: restoring the library side's focused item does not imply that the library side itself should have focus, and restoring queue-side focus does not change the saved library position.
+_Avoid_: relying on the current `PowerFocus::Left` name as domain language — visually, Power View has a queue side and a library side, and those are the user-facing concepts to persist.
 
 **Toast**:
 A transient status message rendered over the TUI for short-lived feedback, such as confirming an action or explaining why a keypress had no effect. Power View left-column resize actions should use this existing feedback channel.
