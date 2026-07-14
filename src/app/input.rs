@@ -375,12 +375,24 @@ impl App {
             return None;
         }
         self.confirm_rescan = false;
+        let pending_lib_idx = self.pending_rescan_lib_idx.take();
         self.status.clear();
         if matches!(
             key.code,
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
         ) {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            let lib_idx = pending_lib_idx.unwrap_or_else(|| {
+                if self.tab_idx > 1 {
+                    self.tab_idx - self.lib_tab_offset()
+                } else if self.queue_view == QUEUE_VIEW_POWER
+                    && matches!(self.power_focus, PowerFocus::Left)
+                    && self.power_left_tab > 0
+                {
+                    self.power_left_tab - 1
+                } else {
+                    0
+                }
+            });
             self.trigger_lib_rescan(lib_idx);
         }
         Some(false)
@@ -1059,6 +1071,7 @@ impl App {
                 let name = self.libs[lib_idx].library.name.clone();
                 self.status = format!("Rescan '{name}'? (Y/n)");
                 self.confirm_rescan = true;
+                self.pending_rescan_lib_idx = Some(lib_idx);
             }
             KeyCode::Char('r') => self.refresh_lib(),
             KeyCode::Char('/') => {
@@ -2469,6 +2482,7 @@ impl App {
                                 }
                             }
                         }
+                        self.save_default_library_position(lib_idx);
                     } else if let Some(lvl) = lib.nav_stack.last_mut() {
                         if use_row_map {
                             // Letter-grouped mode: row map gives item index (None = header row).
@@ -2495,6 +2509,7 @@ impl App {
                                 lvl.cursor = clicked;
                             }
                         }
+                        self.save_default_library_position(lib_idx);
                     }
                 }
                 return true;
@@ -2968,10 +2983,16 @@ impl App {
                             self.power_cw_move_cursor(delta);
                         } else {
                             let lib_idx = self.power_left_tab - 1;
-                            let saved = self.tab_idx;
-                            self.tab_idx = self.lib_tab_offset() + lib_idx;
-                            self.move_lib_cursor(delta);
-                            self.tab_idx = saved;
+                            self.with_library_position_scope_override(
+                                lib_idx,
+                                crate::app::LibraryPositionScope::Power,
+                                |app| {
+                                    let saved = app.tab_idx;
+                                    app.tab_idx = app.lib_tab_offset() + lib_idx;
+                                    app.move_lib_cursor(delta);
+                                    app.tab_idx = saved;
+                                },
+                            );
                         }
                     }
                 } else if self.tab_idx == 1 {
@@ -3198,6 +3219,7 @@ impl App {
                         if row == crumb_row && col >= x_start && col < x_end {
                             self.libs[lib_idx].nav_stack.truncate(target_depth);
                             self.libs[lib_idx].search = None;
+                            self.save_default_library_position(lib_idx);
                             return;
                         }
                     }
@@ -4696,7 +4718,10 @@ mod power_library_scope_routing_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use crate::app::{BrowseLevel, LibraryPositionScope, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use crossterm::event::{
+        KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+    };
+    use ratatui::layout::Rect;
 
     fn make_power_library_app() -> App {
         let mut app = make_app_stub();
@@ -4734,6 +4759,15 @@ mod power_library_scope_routing_tests {
             album_track_focus: None,
         });
         app
+    }
+
+    fn make_power_library_mouse_event(kind: MouseEventKind, column: u16, row: u16) -> MouseEvent {
+        MouseEvent {
+            kind,
+            column,
+            row,
+            modifiers: KeyModifiers::NONE,
+        }
     }
 
     #[test]
@@ -4825,5 +4859,259 @@ mod power_library_scope_routing_tests {
             .expect("saved library");
         assert_eq!(views.default, Some(default_position));
         assert!(views.power.is_none());
+    }
+
+    #[test]
+    fn power_view_ctrl_r_confirmation_targets_active_power_library_and_preserves_default() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 2;
+
+        for (lib_id, title) in [("lib-shows", "Shows"), ("lib-movies", "Movies")] {
+            let mut library = make_item(title, "CollectionFolder");
+            library.id = lib_id.into();
+            library.collection_type = "movies".into();
+            library.is_folder = true;
+            app.libs.push(LibraryTab {
+                library,
+                nav_stack: vec![BrowseLevel {
+                    parent_id: lib_id.into(),
+                    title: title.into(),
+                    items: make_items(2),
+                    total_count: 2,
+                    cursor: 0,
+                    scroll: 0,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    all_items: None,
+                }],
+                search: None,
+                feed_home_video: None,
+                power_detail_item: None,
+                power_detail_scroll: 0,
+                album_track_focus: None,
+            });
+        }
+        app.replace_saved_library_position(
+            1,
+            LibraryPositionScope::Default,
+            crate::config::LibraryPosition {
+                levels: vec![crate::config::LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Default".into(),
+                    focused_item_id: Some("id0".into()),
+                    cursor_index: 0,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                }],
+                ..Default::default()
+            },
+        );
+        app.replace_saved_library_position(
+            1,
+            LibraryPositionScope::Power,
+            crate::config::LibraryPosition {
+                levels: vec![crate::config::LibraryPositionLevel {
+                    parent_id: "lib-movies".into(),
+                    title: "Power".into(),
+                    focused_item_id: Some("id1".into()),
+                    cursor_index: 1,
+                    item_types: Some("Movie".into()),
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                }],
+                ..Default::default()
+            },
+        );
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::CONTROL));
+        assert!(!handled);
+        assert!(app.confirm_rescan);
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(!handled);
+        let views = crate::config::load_library_position_state()
+            .libraries
+            .get("lib-movies")
+            .cloned()
+            .expect("saved library");
+        assert!(views.power.is_none());
+        assert_eq!(
+            views
+                .default
+                .as_ref()
+                .and_then(|position| position.levels.first())
+                .and_then(|level| level.focused_item_id.as_deref()),
+            Some("id0")
+        );
+    }
+
+    #[test]
+    fn power_view_left_panel_mouse_scroll_saves_power_scope() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        app.layout.power.left_area = Rect {
+            x: 10,
+            y: 5,
+            width: 20,
+            height: 5,
+        };
+        let default_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Default".into(),
+                focused_item_id: Some("id0".into()),
+                cursor_index: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(
+            0,
+            LibraryPositionScope::Default,
+            default_position.clone(),
+        );
+
+        app.handle_mouse(make_power_library_mouse_event(
+            MouseEventKind::ScrollDown,
+            12,
+            6,
+        ));
+
+        let views = crate::config::load_library_position_state()
+            .libraries
+            .get("lib-movies")
+            .cloned()
+            .expect("saved library");
+        assert_eq!(views.default, Some(default_position));
+        assert_eq!(
+            views
+                .power
+                .as_ref()
+                .and_then(|position| position.levels.first())
+                .and_then(|level| level.focused_item_id.as_deref()),
+            Some("id1")
+        );
+    }
+
+    #[test]
+    fn power_view_left_panel_mouse_click_saves_power_scope() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        app.layout.power.left_area = Rect {
+            x: 10,
+            y: 5,
+            width: 20,
+            height: 5,
+        };
+        let default_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Default".into(),
+                focused_item_id: Some("id0".into()),
+                cursor_index: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(
+            0,
+            LibraryPositionScope::Default,
+            default_position.clone(),
+        );
+
+        app.handle_mouse(make_power_library_mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            12,
+            6,
+        ));
+
+        let views = crate::config::load_library_position_state()
+            .libraries
+            .get("lib-movies")
+            .cloned()
+            .expect("saved library");
+        assert_eq!(views.default, Some(default_position));
+        assert_eq!(
+            views
+                .power
+                .as_ref()
+                .and_then(|position| position.levels.first())
+                .and_then(|level| level.focused_item_id.as_deref()),
+            Some("id1")
+        );
+    }
+
+    #[test]
+    fn power_view_breadcrumb_click_saves_power_scope() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_library_app();
+        app.libs[0].nav_stack.push(BrowseLevel {
+            parent_id: "folder-1".into(),
+            title: "Folder".into(),
+            items: make_items(2),
+            total_count: 2,
+            cursor: 1,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+        });
+        app.layout.power.breadcrumbs = vec![(10, 20, 2, 1)];
+        let default_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Default".into(),
+                focused_item_id: Some("id0".into()),
+                cursor_index: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(
+            0,
+            LibraryPositionScope::Default,
+            default_position.clone(),
+        );
+
+        app.handle_mouse(make_power_library_mouse_event(
+            MouseEventKind::Down(MouseButton::Left),
+            12,
+            2,
+        ));
+
+        let views = crate::config::load_library_position_state()
+            .libraries
+            .get("lib-movies")
+            .cloned()
+            .expect("saved library");
+        assert_eq!(views.default, Some(default_position));
+        assert_eq!(
+            views.power.as_ref().map(|position| position.levels.len()),
+            Some(1)
+        );
+        assert_eq!(app.libs[0].nav_stack.len(), 1);
     }
 }

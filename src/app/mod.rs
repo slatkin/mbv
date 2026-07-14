@@ -1000,6 +1000,7 @@ pub struct App {
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
     confirm_rescan: bool,
+    pending_rescan_lib_idx: Option<usize>,
     library_position_state: crate::config::LibraryPositionState,
     queue_scope: QueueScope,
     /// The relay's out-of-band control channel (ADR 0005), present only
@@ -1676,6 +1677,7 @@ impl App {
             pending_image_fetches: std::collections::VecDeque::new(),
             image_fetches_active: 0,
             confirm_rescan: false,
+            pending_rescan_lib_idx: None,
             queue_scope: init.initial_queue_scope,
             stay_alive_ctrl: init.stay_alive_ctrl,
             attached: true,
@@ -5306,6 +5308,7 @@ pub(crate) mod tests {
             image_protocol: None,
             image_protocol_enabled: false,
             confirm_rescan: false,
+            pending_rescan_lib_idx: None,
             library_position_state: crate::config::LibraryPositionState::default(),
             queue_scope: QueueScope::Local,
             stay_alive_ctrl: None,
