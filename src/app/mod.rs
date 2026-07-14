@@ -222,6 +222,55 @@ impl BrowseLevel {
     fn is_fully_loaded(&self) -> bool {
         self.items.len() >= self.total_count
     }
+
+    fn from_position_level(
+        saved: &crate::config::LibraryPositionLevel,
+        items: Vec<MediaItem>,
+        total_count: usize,
+        visible_rows: usize,
+    ) -> Self {
+        let cursor = saved
+            .focused_item_id
+            .as_ref()
+            .and_then(|id| items.iter().position(|item| &item.id == id))
+            .unwrap_or_else(|| saved.cursor_index.min(items.len().saturating_sub(1)));
+        let scroll = Self::scroll_for_cursor(cursor, visible_rows);
+        Self {
+            parent_id: saved.parent_id.clone(),
+            title: saved.title.clone(),
+            items,
+            total_count,
+            cursor,
+            scroll,
+            item_types: saved.item_types.clone(),
+            unplayed_only: saved.unplayed_only,
+            sort_by: saved.sort_by.clone(),
+            sort_order: saved.sort_order.clone(),
+            loading: false,
+            all_items: None,
+        }
+    }
+
+    fn to_position_level(&self) -> crate::config::LibraryPositionLevel {
+        crate::config::LibraryPositionLevel {
+            parent_id: self.parent_id.clone(),
+            title: self.title.clone(),
+            focused_item_id: self.items.get(self.cursor).map(|item| item.id.clone()),
+            cursor_index: self.cursor,
+            item_types: self.item_types.clone(),
+            unplayed_only: self.unplayed_only,
+            sort_by: self.sort_by.clone(),
+            sort_order: self.sort_order.clone(),
+        }
+    }
+
+    fn scroll_for_cursor(cursor: usize, visible_rows: usize) -> usize {
+        if visible_rows == 0 || cursor < visible_rows {
+            0
+        } else {
+            cursor + 1 - visible_rows
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -681,6 +730,43 @@ struct LibraryTab {
     /// `idx` indexes into that album's cached track list
     /// (`App::album_tracks_cache`). `None` = normal album-list navigation.
     album_track_focus: Option<usize>,
+}
+
+impl LibraryTab {
+    fn library_position_snapshot(&self) -> crate::config::LibraryPosition {
+        let (feed_selected_group, feed_video_cursor, feed_video_scroll) = self
+            .feed_home_video
+            .as_ref()
+            .map(|state| (state.selected_group, state.video_cursor, state.video_scroll))
+            .unwrap_or((0, 0, 0));
+        crate::config::LibraryPosition {
+            levels: self
+                .nav_stack
+                .iter()
+                .map(BrowseLevel::to_position_level)
+                .collect(),
+            feed_selected_group,
+            feed_video_cursor,
+            feed_video_scroll,
+        }
+    }
+
+    fn apply_library_position(
+        &mut self,
+        position: crate::config::LibraryPosition,
+        nav_stack: Vec<BrowseLevel>,
+    ) {
+        self.nav_stack = nav_stack;
+        self.search = None;
+        self.power_detail_item = None;
+        self.power_detail_scroll = 0;
+        self.album_track_focus = None;
+        if let Some(state) = self.feed_home_video.as_mut() {
+            state.selected_group = position.feed_selected_group;
+            state.video_cursor = position.feed_video_cursor;
+            state.video_scroll = position.feed_video_scroll;
+        }
+    }
 }
 
 struct SuspendedLocalSession {
@@ -3336,6 +3422,138 @@ pub(crate) mod tests {
         let items = make_items(3);
         let cursor = super::actions::queue_restore_cursor(&items, 2, None, false);
         assert_eq!(cursor, 2);
+    }
+
+    #[test]
+    fn library_position_snapshot_captures_path_focus_and_feed_group() {
+        let mut lib = LibraryTab {
+            library: make_item("Movies", "CollectionFolder"),
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: make_items(3),
+                total_count: 3,
+                cursor: 1,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: Some(make_items(3)),
+            }],
+            search: Some(LibSearch {
+                query: "ignored".into(),
+                items: make_items(2),
+                results: vec![0],
+                cursor: 0,
+                scroll: 0,
+                loading: false,
+            }),
+            feed_home_video: Some(FeedHomeVideoState {
+                selected_group: 2,
+                video_cursor: 4,
+                video_scroll: 3,
+                ..Default::default()
+            }),
+            power_detail_item: Some(make_item("Ignored detail", "Movie")),
+            power_detail_scroll: 9,
+            album_track_focus: Some(1),
+        };
+        lib.library.id = "lib-movies".into();
+
+        let position = lib.library_position_snapshot();
+
+        assert_eq!(position.levels.len(), 1);
+        assert_eq!(position.levels[0].parent_id, "lib-movies");
+        assert_eq!(position.levels[0].focused_item_id.as_deref(), Some("id1"));
+        assert_eq!(position.levels[0].cursor_index, 1);
+        assert_eq!(position.levels[0].item_types.as_deref(), Some("Movie"));
+        assert_eq!(position.feed_selected_group, 2);
+        assert_eq!(position.feed_video_cursor, 4);
+        assert_eq!(position.feed_video_scroll, 3);
+    }
+
+    #[test]
+    fn browse_level_restore_prefers_item_id_and_clamps_index_fallback() {
+        let mut saved = crate::config::LibraryPositionLevel {
+            parent_id: "lib-movies".into(),
+            title: "Movies".into(),
+            focused_item_id: Some("id3".into()),
+            cursor_index: 99,
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+        };
+
+        let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
+
+        assert_eq!(level.cursor, 3);
+        assert_eq!(level.scroll, 1);
+        assert_eq!(level.item_types.as_deref(), Some("Movie"));
+        assert!(!level.loading);
+        assert!(level.all_items.is_none());
+
+        saved.focused_item_id = Some("missing".into());
+        let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
+
+        assert_eq!(level.cursor, 4);
+        assert_eq!(level.scroll, 2);
+    }
+
+    #[test]
+    fn applying_library_position_clears_non_position_ui_state() {
+        let mut lib = LibraryTab {
+            library: make_item("Movies", "CollectionFolder"),
+            nav_stack: Vec::new(),
+            search: Some(LibSearch {
+                query: "ignored".into(),
+                items: make_items(2),
+                results: vec![0],
+                cursor: 0,
+                scroll: 0,
+                loading: false,
+            }),
+            feed_home_video: Some(FeedHomeVideoState::default()),
+            power_detail_item: Some(make_item("Ignored detail", "Movie")),
+            power_detail_scroll: 9,
+            album_track_focus: Some(2),
+        };
+        let position = crate::config::LibraryPosition {
+            levels: Vec::new(),
+            feed_selected_group: 3,
+            feed_video_cursor: 5,
+            feed_video_scroll: 4,
+        };
+
+        lib.apply_library_position(
+            position,
+            vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: make_items(1),
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+        );
+
+        assert_eq!(lib.nav_stack.len(), 1);
+        assert!(lib.search.is_none());
+        assert!(lib.power_detail_item.is_none());
+        assert_eq!(lib.power_detail_scroll, 0);
+        assert!(lib.album_track_focus.is_none());
+        let feed = lib.feed_home_video.as_ref().unwrap();
+        assert_eq!(feed.selected_group, 3);
+        assert_eq!(feed.video_cursor, 5);
+        assert_eq!(feed.video_scroll, 4);
     }
 
     // ── test helpers ─────────────────────────────────────────────────────────

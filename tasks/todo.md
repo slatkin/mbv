@@ -26,12 +26,12 @@
 **Description:** Add app-level helpers that convert current library state to/from saved library position state without changing navigation behavior yet.
 
 **Acceptance criteria:**
-- [ ] Snapshot captures drill-down path and focused item ID with cursor fallback.
-- [ ] Restore clamps fallback indices and derives scroll from focused item visibility.
-- [ ] Search/detail/album track-selection state is excluded.
+- [x] Snapshot captures drill-down path and focused item ID with cursor fallback.
+- [x] Restore clamps fallback indices and derives scroll from focused item visibility.
+- [x] Search/detail/album track-selection state is excluded.
 
 **Verification:**
-- [ ] Focused app tests for snapshot shape and restore fallback helper behavior.
+- [x] Focused app tests for snapshot shape and restore fallback helper behavior.
 - [ ] `cargo test app::`
 
 **Dependencies:** Task 1

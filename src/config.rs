@@ -1,9 +1,8 @@
 #[cfg(test)]
 pub use mbv_core::config::TestStateDirGuard;
 pub use mbv_core::config::{
-    clear_queue_state, is_system_instance, load_library_position_state, load_queue_state,
-    prefs_path, save_library_position_state, save_queue_state, Config, LibraryPosition,
-    LibraryPositionLevel, LibraryPositionState, LibraryViewPositions, QueueSource, QueueState,
+    clear_queue_state, is_system_instance, load_queue_state, prefs_path, save_queue_state, Config,
+    LibraryPosition, LibraryPositionLevel, QueueSource, QueueState,
 };
 
 use std::path::PathBuf;
