@@ -7701,7 +7701,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn status_bar_right_side_delimits_items_and_keeps_server_rightmost() {
+    fn status_bar_right_side_separates_items_with_spaces_and_keeps_server_rightmost() {
         let mut app = make_app_stub();
         app.tab_idx = 1; // Queue tab
         app.queue_source = crate::config::QueueSource::Playlist {
@@ -7717,13 +7717,11 @@ pub(crate) mod tests {
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
 
+        let autosave_pos = last_line.find("AUTOSAVE").unwrap();
+        let server_pos = last_line.find("emby.local").unwrap();
         assert!(
-            last_line.contains("AUTOSAVE | emby.local"),
-            "expected right-side statuses to use pipe delimiters with server last:\n{last_line}"
-        );
-        assert!(
-            !last_line.contains("emby.local | AUTOSAVE"),
-            "Emby server host should not precede autosave status:\n{last_line}"
+            autosave_pos < server_pos,
+            "expected AUTOSAVE to remain left of the server pill:\n{last_line}"
         );
     }
 
@@ -7774,7 +7772,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn status_bar_separates_left_statuses_with_dot_delimiter() {
+    fn status_bar_separates_left_statuses_with_spaces() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 0;
         app.set_queue_scope(QueueScope::Remote);
@@ -7785,9 +7783,35 @@ pub(crate) mod tests {
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
 
+        let heart_pos = last_line.find('\u{2665}').unwrap();
+        let remote_pos = last_line.find('\u{1F5A7}').unwrap();
+        let playlist_pos = last_line.find('\u{1F5AD}').unwrap();
         assert!(
-            last_line.contains(" \u{2665} | \u{1F5A7}  music.local | \u{1F5AD}  none "),
-            "expected left statuses separated by pipe delimiters:\n{last_line}"
+            heart_pos < remote_pos && remote_pos < playlist_pos,
+            "expected the heart, remote pill, and playlist pill in that order:\n{last_line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_stay_alive_heart_uses_row_background_not_pill_background() {
+        let mut app = make_remote_app_stub(make_items(1), make_items(2));
+        app.tab_idx = 0;
+        app.set_queue_scope(QueueScope::Remote);
+        app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+
+        let term = render_app_to_terminal(&mut app, 80, 24);
+        let buf = term.backend().buffer();
+        let last_y = buf.area().height - 1;
+        let heart_x = (0..buf.area().width)
+            .find(|&x| buf[(x, last_y)].symbol() == "\u{2665}")
+            .unwrap();
+
+        assert_eq!(
+            buf[(heart_x, last_y)].bg,
+            palette::BASE,
+            "expected the stay-alive heart to stay on the row background, not a pill background"
         );
     }
 
@@ -7856,7 +7880,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn status_bar_colors_remote_icon_grey_when_disconnected_and_yellow_when_connected() {
+    fn status_bar_colors_remote_pill_icon_white_and_label_black_or_green() {
         let mut app = make_app_stub();
         app.tab_idx = 0;
 
@@ -7866,7 +7890,14 @@ pub(crate) mod tests {
         let remote_x = (0..buf.area().width)
             .find(|&x| buf[(x, last_y)].symbol() == "\u{1F5A7}")
             .unwrap();
-        assert_eq!(buf[(remote_x, last_y)].fg, palette::SUBTLE);
+        assert_eq!(buf[(remote_x, last_y)].fg, ratatui::style::Color::White);
+        let remote_label_x = (remote_x + 1..buf.area().width)
+            .find(|&x| buf[(x, last_y)].symbol() != " ")
+            .unwrap();
+        assert_eq!(
+            buf[(remote_label_x, last_y)].fg,
+            ratatui::style::Color::Black
+        );
 
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 0;
@@ -7882,25 +7913,32 @@ pub(crate) mod tests {
         let remote_x = (0..buf.area().width)
             .find(|&x| buf[(x, last_y)].symbol() == "\u{1F5A7}")
             .unwrap();
-        assert_eq!(buf[(remote_x, last_y)].fg, palette::YELLOW);
+        assert_eq!(buf[(remote_x, last_y)].fg, ratatui::style::Color::White);
+        let remote_label_x = (remote_x + 1..buf.area().width)
+            .find(|&x| buf[(x, last_y)].symbol() != " ")
+            .unwrap();
+        assert_eq!(buf[(remote_label_x, last_y)].fg, palette::PINE);
     }
 
     #[test]
-    fn status_bar_has_full_width_background() {
+    fn status_bar_has_surrounding_row_background_and_pill_cells() {
         let mut app = make_app_stub();
         app.tab_idx = 0;
 
         let term = render_app_to_terminal(&mut app, 80, 24);
         let buf = term.backend().buffer();
         let last_y = buf.area().height - 1;
+        let mut saw_row_bg = false;
+        let mut saw_pill_bg = false;
 
         for x in 0..buf.area().width {
-            assert_eq!(
-                buf[(x, last_y)].bg,
-                palette::PILL_BG,
-                "expected status bar background at x={x}"
-            );
+            let bg = buf[(x, last_y)].bg;
+            saw_row_bg |= bg == palette::BASE;
+            saw_pill_bg |= bg == palette::PILL_BG;
         }
+
+        assert!(saw_row_bg, "expected the status bar row background to be visible");
+        assert!(saw_pill_bg, "expected pill-colored cells to sit on top of the row background");
     }
 
     #[test]

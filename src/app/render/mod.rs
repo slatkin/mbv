@@ -784,14 +784,9 @@ impl App {
             remote_state,
             super::RemoteSlotState::AttachedSession | super::RemoteSlotState::DirectRemote
         );
-        let mut glyph_style = Style::default().bg(palette::PILL_BG).fg(if remote_on {
-            palette::YELLOW
-        } else {
-            palette::SUBTLE
-        });
-        if remote_on {
-            glyph_style = glyph_style.add_modifier(Modifier::BOLD);
-        }
+        let glyph_style = Style::default()
+            .bg(palette::PILL_BG)
+            .fg(ratatui::style::Color::White);
 
         let target = match remote_state {
             super::RemoteSlotState::Off => None,
@@ -816,18 +811,19 @@ impl App {
             Some(target) => format!("  {target}"),
             None => "  local".to_string(),
         };
-        let label_style = if remote_on {
-            Style::default()
-                .fg(palette::PINE)
-                .bg(palette::PILL_BG)
-                .add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG)
-        };
+        let label_style = Style::default()
+            .fg(if remote_on {
+                palette::PINE
+            } else {
+                ratatui::style::Color::Black
+            })
+            .bg(palette::PILL_BG);
 
         vec![
+            Span::styled(" ", Style::default().bg(palette::PILL_BG)),
             Span::styled("\u{1F5A7}", glyph_style),
             Span::styled(label, label_style),
+            Span::styled(" ", Style::default().bg(palette::PILL_BG)),
         ]
     }
 
@@ -849,8 +845,10 @@ impl App {
             .bg(palette::PILL_BG);
 
         vec![
+            Span::styled(" ", Style::default().bg(palette::PILL_BG)),
             Span::styled("\u{1F5AD}", glyph_style),
             Span::styled(label, label_style),
+            Span::styled(" ", Style::default().bg(palette::PILL_BG)),
         ]
     }
 
@@ -858,13 +856,17 @@ impl App {
         self.playback_display_target()
             .displayed_mute(self)
             .then(|| {
-                vec![Span::styled(
-                    "muted",
-                    Style::default()
-                        .fg(palette::RED)
-                        .bg(palette::PILL_BG)
-                        .add_modifier(Modifier::BOLD),
-                )]
+                vec![
+                    Span::styled(" ", Style::default().bg(palette::PILL_BG)),
+                    Span::styled(
+                        "muted",
+                        Style::default()
+                            .fg(palette::RED)
+                            .bg(palette::PILL_BG)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(" ", Style::default().bg(palette::PILL_BG)),
+                ]
             })
     }
 
@@ -874,10 +876,7 @@ impl App {
 
     fn append_status(spans: &mut Vec<Span<'static>>, status: Vec<Span<'static>>) {
         if !spans.is_empty() {
-            spans.push(Span::styled(
-                " | ",
-                Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG),
-            ));
+            spans.push(Span::raw(" "));
         }
         spans.extend(status);
     }
@@ -898,7 +897,8 @@ impl App {
     /// Persistent bottom status bar. Left side: connection, playlist, stay-alive,
     /// and mute status groups. Right side: queue source/save-state/scope detail.
     fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
-        let bar_style = Style::default().bg(palette::PILL_BG);
+        // Keep the row itself darker so the pills read as segments sitting on top of it.
+        let bar_style = Style::default().bg(palette::BASE);
         f.render_widget(Block::default().style(bar_style), area);
         layout.ind_mu = Rect::default();
 
@@ -914,7 +914,7 @@ impl App {
         let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
             vec![Span::styled(
                 "\u{2665}",
-                Style::default().fg(palette::RED).bg(palette::PILL_BG),
+                Style::default().fg(palette::RED),
             )]
         });
         let mute_status = self.mute_status_spans();
@@ -938,7 +938,7 @@ impl App {
             for width in widths.iter().copied().filter(|w| *w > 0) {
                 total = total.saturating_add(width);
                 if count > 0 {
-                    total = total.saturating_add(3);
+                    total = total.saturating_add(1);
                 }
                 count += 1;
             }
@@ -957,7 +957,6 @@ impl App {
 
         let mut spans: Vec<Span> = Vec::new();
         if let Some(alive) = alive_status {
-            spans.push(Span::raw(" "));
             spans.extend(alive);
         }
         if fits_all || fits_without_alive || fits_without_mute {
@@ -968,8 +967,7 @@ impl App {
         }
         if fits_all || fits_without_alive {
             if let Some(mute) = mute_status {
-                let mute_x =
-                    area.x + Self::status_width(&spans) + if spans.is_empty() { 0 } else { 3 };
+                let mute_x = area.x + Self::status_width(&spans);
                 let mute_w = Self::status_width(&mute);
                 Self::append_status(&mut spans, mute);
                 layout.ind_mu = Rect {
@@ -1023,17 +1021,17 @@ impl App {
             };
             let append_right = |right_spans: &mut Vec<Span<'static>>, span: Span<'static>| {
                 if !right_spans.is_empty() {
-                    right_spans.push(Span::styled(
-                        " | ",
-                        Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG),
-                    ));
+                    right_spans.push(Span::raw(" "));
                 }
                 right_spans.push(span);
             };
             if let Some((label, color)) = source_label {
                 append_right(
                     &mut right_spans,
-                    Span::styled(label, Style::default().fg(color).bg(palette::PILL_BG)),
+                    Span::styled(
+                        format!(" {label} "),
+                        Style::default().fg(color).bg(palette::PILL_BG),
+                    ),
                 );
             }
             let autosave_on = self.tab_idx == 1 && self.queue_is_saved_playlist() && {
@@ -1044,7 +1042,7 @@ impl App {
                 append_right(
                     &mut right_spans,
                     Span::styled(
-                        "UNSAVED",
+                        " UNSAVED ",
                         Style::default()
                             .fg(palette::YELLOW)
                             .bg(palette::PILL_BG)
@@ -1055,7 +1053,7 @@ impl App {
                 append_right(
                     &mut right_spans,
                     Span::styled(
-                        "AUTOSAVE",
+                        " AUTOSAVE ",
                         Style::default().fg(palette::PINE).bg(palette::PILL_BG),
                     ),
                 );
@@ -1064,13 +1062,10 @@ impl App {
                 append_right(
                     &mut right_spans,
                     Span::styled(
-                        server,
+                        format!(" {server} "),
                         Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG),
                     ),
                 );
-            }
-            if !right_spans.is_empty() {
-                right_spans.push(Span::raw(" "));
             }
             // Remote queue scope is omitted here: the active queue is already
             // apparent from the queue UI.
