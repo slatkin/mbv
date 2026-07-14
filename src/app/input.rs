@@ -325,6 +325,10 @@ impl App {
         {
             return None;
         }
+        // Let Power View's shared Tab/BackTab cycling path claim these keys.
+        if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
+            return None;
+        }
         let lib_idx = self.power_left_tab - 1;
         if self.libs[lib_idx].search.is_some() {
             self.handle_lib_search_key(lib_idx, key);
@@ -1609,7 +1613,8 @@ impl App {
                     }
                 }
 
-                if !is_power_nav {
+                // Let Power View's shared Tab/BackTab cycling path run after this block.
+                if !is_power_nav && !matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
                     let outcome = self.with_library_position_scope_override(
                         lib_idx,
                         crate::app::LibraryPositionScope::Power,
@@ -3552,6 +3557,50 @@ mod power_movie_detail_tests {
         app
     }
 
+    fn push_power_library(app: &mut App, id: &str, name: &str) {
+        let mut library = make_item(name, "CollectionFolder");
+        library.id = id.into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let mut item = make_item(&format!("{name} Item"), "Movie");
+        item.id = format!("{id}-item");
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: id.into(),
+                title: name.into(),
+                items: vec![item],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+    }
+
+    fn make_power_tab_cycle_app() -> App {
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+        push_power_library(&mut app, "lib-movies", "Movies");
+        push_power_library(&mut app, "lib-shows", "Shows");
+        app
+    }
+
     fn shift(code: KeyCode) -> KeyEvent {
         KeyEvent::new(code, KeyModifiers::SHIFT)
     }
@@ -3862,6 +3911,104 @@ mod power_movie_detail_tests {
             stack_len_before,
             "Ctrl+z must not pop the queue undo stack while the library panel is focused"
         );
+    }
+
+    #[test]
+    fn power_view_tab_cycles_from_right_panel_when_search_is_closed() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_tab_cycle_app();
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.tab_idx, 1);
+        assert_eq!(app.power_left_tab, 2);
+        assert_eq!(app.power_focus, PowerFocus::Left);
+    }
+
+    #[test]
+    fn power_view_tab_cycles_from_right_panel_with_search_open() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_tab_cycle_app();
+        app.libs[0].search = Some(LibSearch {
+            query: "mov".into(),
+            items: app.libs[0].nav_stack[0].items.clone(),
+            results: vec![0],
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.tab_idx, 1);
+        assert_eq!(app.power_left_tab, 2);
+        assert_eq!(app.power_focus, PowerFocus::Left);
+        let search = app.libs[0]
+            .search
+            .as_ref()
+            .expect("source search state should be untouched");
+        assert_eq!(search.query, "mov");
+        assert_eq!(search.cursor, 0);
+        assert_eq!(search.results, vec![0]);
+    }
+
+    #[test]
+    fn power_view_backtab_cycles_from_right_panel_with_search_open() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_power_tab_cycle_app();
+        app.power_left_tab = 2;
+        app.libs[1].search = Some(LibSearch {
+            query: "sho".into(),
+            items: app.libs[1].nav_stack[0].items.clone(),
+            results: vec![0],
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
+
+        assert!(!handled);
+        assert_eq!(app.tab_idx, 1);
+        assert_eq!(app.power_left_tab, 1);
+        assert_eq!(app.power_focus, PowerFocus::Left);
+        let search = app.libs[1]
+            .search
+            .as_ref()
+            .expect("source search state should be untouched");
+        assert_eq!(search.query, "sho");
+        assert_eq!(search.cursor, 0);
+        assert_eq!(search.results, vec![0]);
+    }
+
+    #[test]
+    fn plain_library_search_does_not_gain_power_view_tab_cycling() {
+        let mut app = make_app_stub();
+        app.tab_idx = 2;
+        push_power_library(&mut app, "lib-movies", "Movies");
+        push_power_library(&mut app, "lib-shows", "Shows");
+        app.libs[0].search = Some(LibSearch {
+            query: "mov".into(),
+            items: app.libs[0].nav_stack[0].items.clone(),
+            results: vec![0],
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.tab_idx, 2);
+        let search = app.libs[0]
+            .search
+            .as_ref()
+            .expect("plain library search should stay open");
+        assert_eq!(search.query, "mov");
+        assert_eq!(search.cursor, 0);
+        assert_eq!(search.results, vec![0]);
     }
 
     #[test]
