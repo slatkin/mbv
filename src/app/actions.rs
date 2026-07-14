@@ -1,8 +1,9 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes, take_chars};
 use super::{
     App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent,
-    LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
-    RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD, QUEUE_VIEW_POWER,
+    LibraryPositionScope, LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus,
+    QueueScope, RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD,
+    QUEUE_VIEW_POWER,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::indicators::IndicatorData;
@@ -863,6 +864,7 @@ impl App {
                 if n > 0 {
                     state.video_cursor =
                         (state.video_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                    self.save_default_library_position(lib_idx);
                 }
             }
             return;
@@ -889,6 +891,7 @@ impl App {
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
+                self.save_default_library_position(lib_idx);
                 if idle {
                     self.maybe_fetch_next_page(lib_idx);
                 }
@@ -908,6 +911,7 @@ impl App {
             let n = lvl.items.len();
             if n > 0 {
                 lvl.cursor = (lvl.cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
+                self.save_default_library_position(lib_idx);
             }
         }
         if idle {
@@ -924,6 +928,7 @@ impl App {
                 let n = state.selected_len();
                 if n > 0 {
                     state.video_cursor = if to_end { n - 1 } else { 0 };
+                    self.save_default_library_position(lib_idx);
                 }
             }
             return;
@@ -942,6 +947,7 @@ impl App {
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
+                self.save_default_library_position(lib_idx);
                 self.maybe_fetch_next_page(lib_idx);
                 return;
             }
@@ -959,6 +965,7 @@ impl App {
             let n = lvl.items.len();
             if n > 0 {
                 lvl.cursor = if to_end { n - 1 } else { 0 };
+                self.save_default_library_position(lib_idx);
             }
         }
         self.maybe_fetch_next_page(lib_idx);
@@ -2098,6 +2105,8 @@ impl App {
     }
 
     pub(super) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
+        let scope = self.library_position_scope_for(lib_idx);
+        self.clear_saved_library_position(lib_idx, scope);
         let client = self.client.lock().unwrap().clone();
         let library_id = self.libs[lib_idx].library.id.clone();
         let name = self.libs[lib_idx].library.name.clone();
@@ -2169,7 +2178,7 @@ impl App {
         self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the power-view library panel.
         if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
-            self.power_focus = PowerFocus::Queue;
+            self.set_power_focus(PowerFocus::Queue);
         }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
@@ -2204,7 +2213,7 @@ impl App {
         self.on_queue_replace_silent();
         // Keep library focus when playing from the power-view library panel.
         if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
-            self.power_focus = PowerFocus::Queue;
+            self.set_power_focus(PowerFocus::Queue);
         }
         let label = item.playback_label();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -2412,6 +2421,7 @@ impl App {
             if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                 *v = 0;
             }
+            self.save_default_library_position(lib_idx);
             self.spawn_browse(
                 lib_idx,
                 item.id,
@@ -2443,6 +2453,7 @@ impl App {
                 if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                     *v = 0;
                 }
+                self.save_default_library_position(lib_idx);
             }
             let fresh = {
                 let c = self.client.lock().unwrap();
@@ -2579,6 +2590,7 @@ impl App {
                 if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                     *v = 0;
                 }
+                self.save_default_library_position(lib_idx);
 
                 // In Power View, skip past the auto-pushed Season level so
                 // a single Escape takes the user back to the series list.
@@ -2609,6 +2621,7 @@ impl App {
                     }
                 }
             }
+            self.save_default_library_position(lib_idx);
         }
     }
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
@@ -2857,6 +2870,8 @@ impl App {
         } else {
             return;
         };
+        let scope = self.library_position_scope_for(lib_idx);
+        self.clear_saved_library_position(lib_idx, scope);
         if self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                 state.loading = true;
@@ -3026,23 +3041,26 @@ impl App {
         if self.tab_idx == 0 {
             self.home.section = 0;
             let _ = self.fetch_home();
+        } else if self.tab_idx == 1 {
+            if self.queue_view == QUEUE_VIEW_POWER && self.power_left_tab > 0 {
+                self.activate_library_position_scope(
+                    self.power_left_tab - 1,
+                    LibraryPositionScope::Power,
+                );
+            }
         } else {
-            self.ensure_library_loaded();
+            self.activate_library_position_scope(
+                self.tab_idx - self.lib_tab_offset(),
+                LibraryPositionScope::Default,
+            );
         }
-    }
-
-    pub(super) fn ensure_library_loaded(&mut self) {
-        if self.tab_idx <= 1 {
-            return;
-        }
-        let idx = self.tab_idx - self.lib_tab_offset();
-        self.ensure_lib_loaded_for(idx);
     }
 
     pub(super) fn ensure_lib_loaded_for(&mut self, idx: usize) {
         if idx >= self.libs.len() {
             return;
         }
+        let scope = self.library_position_scope_for(idx);
         if self.queue_view == QUEUE_VIEW_POWER
             && self.power_left_tab == idx + 1
             && self.is_feed_home_video_library(idx)
@@ -3058,6 +3076,26 @@ impl App {
             return;
         }
         if self.libs[idx].nav_stack.is_empty() {
+            if let Some(saved) = self.saved_library_position(idx, scope) {
+                if let Some(root) = saved.levels.first() {
+                    self.libs[idx].nav_stack.push(BrowseLevel {
+                        parent_id: root.parent_id.clone(),
+                        title: root.title.clone(),
+                        items: Vec::new(),
+                        total_count: 0,
+                        cursor: 0,
+                        item_types: root.item_types.clone(),
+                        unplayed_only: root.unplayed_only,
+                        sort_by: root.sort_by.clone(),
+                        sort_order: root.sort_order.clone(),
+                        loading: true,
+                        scroll: 0,
+                        all_items: None,
+                    });
+                    self.spawn_restore_library_position(idx, scope, saved);
+                    return;
+                }
+            }
             let lib_id = self.libs[idx].library.id.clone();
             let lib_name = self.libs[idx].library.name.clone();
             let is_feed_view = {
@@ -3098,6 +3136,58 @@ impl App {
                 sort_order.into(),
             );
         }
+    }
+
+    pub(super) fn spawn_restore_library_position(
+        &self,
+        lib_idx: usize,
+        scope: LibraryPositionScope,
+        saved: crate::config::LibraryPosition,
+    ) {
+        let visible_rows = self.lib_page_size();
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
+                let (items, total_count) = client.get_items_sorted(
+                    &saved_level.parent_id,
+                    saved_level.item_types.as_deref(),
+                    saved_level.unplayed_only,
+                    0,
+                    PAGE_SIZE,
+                    &saved_level.sort_by,
+                    &saved_level.sort_order,
+                )?;
+                if total_count > items.len() {
+                    client.get_items_sorted(
+                        &saved_level.parent_id,
+                        saved_level.item_types.as_deref(),
+                        saved_level.unplayed_only,
+                        0,
+                        total_count,
+                        &saved_level.sort_by,
+                        &saved_level.sort_order,
+                    )
+                } else {
+                    Ok((items, total_count))
+                }
+            });
+            match restored {
+                Ok(Some((position, nav_stack))) => {
+                    let _ = tx.send(LibEvent::RestoreLibraryPosition {
+                        lib_idx,
+                        scope,
+                        requested_position: saved,
+                        position,
+                        nav_stack,
+                    });
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    let _ = tx.send(LibEvent::Error(e));
+                }
+            }
+        });
     }
 
     pub(super) fn refresh_after_stop(&mut self) {
@@ -3910,6 +4000,35 @@ impl App {
         self.spawn_all_items_prefetch(lib_idx);
     }
 
+    fn handle_restored_library_position(
+        &mut self,
+        lib_idx: usize,
+        scope: LibraryPositionScope,
+        requested_position: crate::config::LibraryPosition,
+        position: crate::config::LibraryPosition,
+        nav_stack: Vec<BrowseLevel>,
+    ) {
+        if self.saved_library_position(lib_idx, scope).as_ref() != Some(&requested_position) {
+            return;
+        }
+        if self.active_library_position_scope_for(lib_idx) != Some(scope) {
+            return;
+        }
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            lib.apply_library_position(position.clone(), nav_stack);
+        }
+        let restored = self
+            .libs
+            .get(lib_idx)
+            .map(|lib| lib.library_position_snapshot());
+        if restored.as_ref() != self.saved_library_position(lib_idx, scope).as_ref() {
+            if let Some(restored) = restored {
+                self.replace_saved_library_position(lib_idx, scope, restored);
+            }
+        }
+        self.spawn_all_items_prefetch(lib_idx);
+    }
+
     pub(super) fn handle_lib_event(&mut self, ev: LibEvent) {
         match ev {
             LibEvent::Loaded {
@@ -3937,6 +4056,19 @@ impl App {
                 unplayed_only,
                 items,
                 total_count,
+            ),
+            LibEvent::RestoreLibraryPosition {
+                lib_idx,
+                scope,
+                requested_position,
+                position,
+                nav_stack,
+            } => self.handle_restored_library_position(
+                lib_idx,
+                scope,
+                requested_position,
+                position,
+                nav_stack,
             ),
             LibEvent::SearchItemsLoaded {
                 lib_idx,
@@ -4297,7 +4429,11 @@ impl App {
         self.power_left_tab = (self.power_left_tab + 1) % n;
         self.last_card_height = 0; // reset stale image height for new view
         if self.power_left_tab > 0 {
-            self.ensure_lib_loaded_for(self.power_left_tab - 1);
+            self.set_power_focus(PowerFocus::Left);
+            self.activate_library_position_scope(
+                self.power_left_tab - 1,
+                LibraryPositionScope::Power,
+            );
         }
         self.save_prefs();
     }
@@ -4308,7 +4444,11 @@ impl App {
         self.power_left_tab = (self.power_left_tab + n - 1) % n;
         self.last_card_height = 0;
         if self.power_left_tab > 0 {
-            self.ensure_lib_loaded_for(self.power_left_tab - 1);
+            self.set_power_focus(PowerFocus::Left);
+            self.activate_library_position_scope(
+                self.power_left_tab - 1,
+                LibraryPositionScope::Power,
+            );
         }
         self.save_prefs();
     }
