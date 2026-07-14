@@ -4388,15 +4388,15 @@ mod power_music_track_focus_tests {
         term.draw(|f| app.render(f)).unwrap();
         let out = buffer_to_string(&term);
 
-        // The focused track row must remain visible even though track-focus
-        // mode does not paint the green selected-row marker there.
+        // Track-focus mode reuses the inline album-detail cursor, so the
+        // focused track keeps the selected-row gutter.
         let track_line = out
             .lines()
             .find(|l| l.contains("Track 2"))
             .unwrap_or_else(|| panic!("no 'Track 2' row found in rendered output:\n{out}"));
         assert!(
-            !track_line.contains('\u{258c}'),
-            "expected focused track row to render without the selected-row marker, got: {track_line:?}\nfull output:\n{out}"
+            track_line.contains('\u{258c}'),
+            "expected focused track row to keep the selected-row marker, got: {track_line:?}\nfull output:\n{out}"
         );
     }
 

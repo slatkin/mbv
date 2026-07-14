@@ -301,6 +301,12 @@ impl App {
             );
         }
 
+        if self.status_expires.is_some_and(|t| t <= Instant::now()) {
+            self.status.clear();
+            self.status_expires = None;
+            self.force_clear = true;
+        }
+
         // Persistent bottom status bar: pill + session/queue segments, or the
         // toast overlay when a message is active. render_status_bar always runs
         // first so its click hitboxes (ind_mu/ind_rc) stay populated every frame,
@@ -328,11 +334,6 @@ impl App {
         } else {
             None
         };
-        if self.status_expires.is_some_and(|t| t <= Instant::now()) {
-            self.status.clear();
-            self.status_expires = None;
-            self.force_clear = true;
-        }
         let title_color = palette::FOAM;
         let now_playing_title: Option<(String, Color)> =
             if playing_panel && mode != crate::config::PanelMode::Hidden {
@@ -881,16 +882,24 @@ impl App {
         spans.extend(status);
     }
 
-    fn render_remote_status_hitbox(&self, layout: &mut LayoutPlayback, area: Rect) {
+    fn render_remote_status_hitbox(
+        &self,
+        layout: &mut LayoutPlayback,
+        area: Rect,
+        remote_x: Option<u16>,
+        remote_w: u16,
+    ) {
         if area.width == 0 {
             layout.ind_rc = Rect::default();
-        } else {
+        } else if let Some(x) = remote_x {
             layout.ind_rc = Rect {
-                x: area.x,
+                x,
                 y: area.y,
-                width: 1,
+                width: remote_w,
                 height: 1,
             };
+        } else {
+            layout.ind_rc = Rect::default();
         }
     }
 
@@ -909,14 +918,11 @@ impl App {
         };
         let remote_status = self.remote_status_spans(remote_state, &daemon_endpoint);
         let playlist_status = self.playlist_status_spans();
-        self.render_remote_status_hitbox(layout, area);
 
-        let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
-            vec![Span::styled(
-                "\u{2665}",
-                Style::default().fg(palette::RED),
-            )]
-        });
+        let alive_status: Option<Vec<Span>> = self
+            .stay_alive_ctrl
+            .is_some()
+            .then(|| vec![Span::styled("\u{2665}", Style::default().fg(palette::RED))]);
         let mute_status = self.mute_status_spans();
 
         // Left-segment overflow priority: mute drops first if the combined
@@ -947,24 +953,33 @@ impl App {
         let fits_all = joined_width(&[remote_w, playlist_w, alive_w, mute_w]) <= available;
         let fits_without_alive =
             !fits_all && joined_width(&[remote_w, playlist_w, mute_w]) <= available;
-        let fits_without_mute = !fits_all
-            && !fits_without_alive
-            && joined_width(&[remote_w, playlist_w]) <= available;
+        let fits_without_mute =
+            !fits_all && !fits_without_alive && joined_width(&[remote_w, playlist_w]) <= available;
         let fits_without_remote = !fits_all
             && !fits_without_alive
             && !fits_without_mute
             && joined_width(&[playlist_w, alive_w]) <= available;
 
+        let show_remote = fits_all || fits_without_alive || fits_without_mute;
+        let show_playlist = show_remote || fits_without_remote;
+        let show_alive =
+            alive_status.is_some() && (fits_all || fits_without_mute || fits_without_remote);
+
         let mut spans: Vec<Span> = Vec::new();
-        if let Some(alive) = alive_status {
-            spans.extend(alive);
+        if show_alive {
+            if let Some(alive) = alive_status.as_ref() {
+                spans.extend(alive.iter().cloned());
+            }
         }
-        if fits_all || fits_without_alive || fits_without_mute {
+        let remote_x =
+            show_remote.then(|| area.x + Self::status_width(&spans) + u16::from(!spans.is_empty()));
+        if show_remote {
             Self::append_status(&mut spans, remote_status);
-            Self::append_status(&mut spans, playlist_status);
-        } else if fits_without_remote {
+        }
+        if show_playlist {
             Self::append_status(&mut spans, playlist_status);
         }
+        self.render_remote_status_hitbox(layout, area, remote_x, remote_w);
         if fits_all || fits_without_alive {
             if let Some(mute) = mute_status {
                 let mute_x = area.x + Self::status_width(&spans);
@@ -1132,6 +1147,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::make_app_stub;
+    use crate::app::RemoteSlotState;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
@@ -1266,5 +1282,87 @@ mod tests {
             "expected status badges to remain right-aligned:\n{line}"
         );
         assert!(layout.next_area.x + layout.next_area.width <= 50);
+    }
+
+    #[test]
+    fn status_bar_remote_hitbox_tracks_visible_pill_after_alive_marker() {
+        let mut app = make_app_stub();
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(crate::app::stay_alive::StayAliveCtrl::for_test(app_end));
+
+        let backend = TestBackend::new(80, 1);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPlayback::default();
+        term.draw(|f| {
+            app.render_status_bar(f, Rect::new(0, 0, 80, 1), &mut layout);
+        })
+        .unwrap();
+
+        let line = buffer_to_string(&term).lines().next().unwrap().to_string();
+        let heart_byte = line.find('\u{2665}').unwrap();
+        let remote_byte = line.find('\u{1F5A7}').unwrap();
+        let heart_x = line[..heart_byte].width() as u16;
+        let remote_x = line[..remote_byte].width() as u16;
+
+        assert!(
+            layout.ind_rc.contains((remote_x, 0).into()),
+            "expected the remote hitbox to cover the rendered remote pill:\n{line}"
+        );
+        assert!(
+            !layout.ind_rc.contains((heart_x, 0).into()),
+            "expected the stay-alive heart to stay outside the sessions hitbox:\n{line}"
+        );
+    }
+
+    #[test]
+    fn status_bar_omits_alive_marker_when_overflow_chooses_without_alive() {
+        let mut app = make_app_stub();
+        let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
+        app.stay_alive_ctrl = Some(crate::app::stay_alive::StayAliveCtrl::for_test(app_end));
+
+        let remote_status = app.remote_status_spans(RemoteSlotState::Off, "");
+        let playlist_status = app.playlist_status_spans();
+        let width = App::status_width(&remote_status) + App::status_width(&playlist_status) + 1;
+
+        let backend = TestBackend::new(width, 1);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPlayback::default();
+        term.draw(|f| {
+            app.render_status_bar(f, Rect::new(0, 0, width, 1), &mut layout);
+        })
+        .unwrap();
+
+        let line = buffer_to_string(&term).lines().next().unwrap().to_string();
+        assert!(
+            !line.contains('\u{2665}'),
+            "expected overflow to drop the stay-alive marker before rendering:\n{line}"
+        );
+        assert!(
+            line.contains('\u{1F5A7}') && line.contains('\u{1F5AD}'),
+            "expected remote and playlist pills to remain visible:\n{line}"
+        );
+    }
+
+    #[test]
+    fn expired_toast_clears_before_status_bar_render_decides_overlay() {
+        let mut app = make_app_stub();
+        app.status = "Saved [Y]".to_string();
+        app.status_expires = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+
+        let backend = TestBackend::new(80, 24);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.render(f)).unwrap();
+
+        let last_line = buffer_to_string(&term).lines().last().unwrap().to_string();
+        assert!(
+            !last_line.contains("Saved"),
+            "expected expired toast text to clear before the status bar chooses its row:\n{last_line}"
+        );
+        assert!(
+            last_line.contains('\u{1F5AD}'),
+            "expected the persistent status bar to render after an expired toast clears:\n{last_line}"
+        );
+        assert!(app.status.is_empty());
+        assert!(app.status_expires.is_none());
     }
 }
