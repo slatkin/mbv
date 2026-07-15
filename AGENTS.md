@@ -65,7 +65,9 @@ Unit tests are an extremely imperfect tool with baked-in assumptions. They are m
 - Use Serena if installed for code exploration and targeted writes.
 - For releases, run `scripts/release.sh X.Y.Z "one-line summary"` instead of reading a separate release checklist.
 - Input handling has one front door: `src/app/input_resolver.rs`'s context-priority registry (keyboard) and the shared `Command`/`dispatch` seam (mouse). Add new shortcuts as `Command`s + bindings there, not as ad hoc key/click checks in view or panel code. Exceptions: text-entry contexts (search boxes, the save-name dialog) and external setup flows (e.g. login), which own local state. See CONTEXT.md's "Input handling" section and `docs/adr/0002-centralized-input-handling.md`.
-- This is a single-user repo — never open a pull request unless explicitly asked to do so; don't run `gh pr create` unless requested. Prefer an isolated worktree/branch for multi-commit feature work rather than committing directly to `main`, and merge back once reviewed; commit directly to `main` only for small, single-shot changes or when explicitly instructed.
+- Treat local `main` as a read-only mirror of `origin/main`: only pull/fetch/reset it to match the remote. Do not commit on `main`, merge into `main`, rebase `main`, or use `main` as an integration branch.
+- Do all code, docs, and workflow edits in isolated worktree branches created from `origin/main`. Push the branch and open a pull request when requested; never merge the branch back locally.
+- Never open a pull request unless explicitly asked to do so; don't run `gh pr create` unless requested.
 
 ## Issue tracker
 
