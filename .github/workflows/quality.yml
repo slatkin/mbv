@@ -15,7 +15,7 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
       - name: Install system dependencies
         run: |
@@ -23,7 +23,7 @@ jobs:
           sudo apt-get install -y nasm libmpv-dev libssl-dev pkg-config
 
       - name: Cache Rust build
-        uses: actions/cache@v6
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
