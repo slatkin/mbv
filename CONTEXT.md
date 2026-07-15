@@ -199,6 +199,10 @@ _Avoid_: reducing this to raw scroll offset, global tab index, search state, det
 A display mode for an album listing that inserts an artist header row at each artist boundary, built from resolved artist rather than API order. One of several power-list view modes that produce a display order (another being the letter-grouped view, which buckets by first letter instead of artist).
 _Avoid_: conflating with "album level" (whether a navigation level shows albums at all) — grouping is about whether those albums are clustered by resolved artist within that level, an orthogonal concern.
 
+**Recursive configured-music album search**:
+When `music.levels` has at least one ancestor level and ends in `album`, each configured music library eagerly builds an in-memory index of leaf albums and their configured ancestor paths on a background worker. Standard Library and Power View search the same local album-only corpus by album or ancestor label; activating a match reconstructs that view's normal album destination. Explicit library refresh rebuilds the relevant index, including one coalesced replacement when refresh overlaps an in-flight build.
+_Avoid_: applying this behavior to absent or album-only `music.levels`, indexing tracks, traversing the server while the user types, persisting the index, polling, or sharing Standard and Power navigation state during activation.
+
 ## UI layout
 
 The subsystem that divides terminal space between mbv's browsing, queue, playback, and overlay surfaces.

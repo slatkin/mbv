@@ -1,9 +1,9 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes, take_chars};
 use super::{
-    App, BrowseLevel, ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent,
-    LibraryPositionScope, LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus,
-    QueueScope, RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD,
-    QUEUE_VIEW_POWER,
+    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, ContextAction,
+    FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryPositionScope, LocalPlaybackTarget,
+    PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope, RemotePlaybackTarget, SessionEvent,
+    UndoEntry, PAGE_SIZE, PREFETCH_AHEAD, QUEUE_VIEW_POWER,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::indicators::IndicatorData;
@@ -16,6 +16,82 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 type BrowseRefresh = (usize, String, Option<String>, bool, String, String, usize);
+type AlbumIndexFetch<'a> =
+    dyn FnMut(&str, usize, usize) -> Result<(Vec<MediaItem>, usize), String> + 'a;
+const ALBUM_INDEX_PAGE_SIZE: usize = 200;
+
+fn recursive_album_search_eligible(collection_type: &str, levels: &[String]) -> bool {
+    collection_type == "music"
+        && levels.len() > 1
+        && levels.last().is_some_and(|level| level == "album")
+}
+
+fn fetch_all_album_index_items(
+    parent_id: &str,
+    fetch: &mut AlbumIndexFetch<'_>,
+) -> Result<Vec<MediaItem>, String> {
+    let mut items = Vec::new();
+    loop {
+        let (page, total) = fetch(parent_id, items.len(), ALBUM_INDEX_PAGE_SIZE)?;
+        if page.is_empty() {
+            break;
+        }
+        items.extend(page);
+        if items.len() >= total {
+            break;
+        }
+    }
+    Ok(items)
+}
+
+fn build_album_index_with(
+    library_id: &str,
+    levels: &[String],
+    fetch: &mut AlbumIndexFetch<'_>,
+) -> Result<Vec<AlbumSearchEntry>, String> {
+    fn visit(
+        parent_id: &str,
+        depth: usize,
+        levels: &[String],
+        ancestors: &mut Vec<AlbumPathPart>,
+        entries: &mut Vec<AlbumSearchEntry>,
+        fetch: &mut AlbumIndexFetch<'_>,
+    ) -> Result<(), String> {
+        let items = fetch_all_album_index_items(parent_id, fetch)?;
+        if depth + 1 == levels.len() {
+            for album in items
+                .into_iter()
+                .filter(|item| item.item_type == "MusicAlbum")
+            {
+                let mut labels: Vec<String> =
+                    ancestors.iter().map(|part| part.name.clone()).collect();
+                labels.push(album.display_name());
+                let display_label = labels.join(" / ");
+                entries.push(AlbumSearchEntry {
+                    album,
+                    ancestors: ancestors.clone(),
+                    search_text: display_label.clone(),
+                    display_label,
+                });
+            }
+            return Ok(());
+        }
+
+        for item in items.into_iter().filter(|item| item.is_folder) {
+            ancestors.push(AlbumPathPart {
+                id: item.id.clone(),
+                name: item.display_name(),
+            });
+            visit(&item.id, depth + 1, levels, ancestors, entries, fetch)?;
+            ancestors.pop();
+        }
+        Ok(())
+    }
+
+    let mut entries = Vec::new();
+    visit(library_id, 0, levels, &mut Vec::new(), &mut entries, fetch)?;
+    Ok(entries)
+}
 
 /// Where playback should resume within a restored queue. Prefers locating
 /// `last_played_item_id` by ID (robust to the saved `cursor` index having
@@ -2870,6 +2946,7 @@ impl App {
         } else {
             return;
         };
+        self.start_album_index(lib_idx, true);
         let scope = self.library_position_scope_for(lib_idx);
         self.clear_saved_library_position(lib_idx, scope);
         if self.is_feed_home_video_group_view(lib_idx) {
@@ -3507,6 +3584,210 @@ impl App {
         });
     }
 
+    pub(super) fn recursive_album_search_enabled(&self, lib_idx: usize) -> bool {
+        self.libs.get(lib_idx).is_some_and(|lib| {
+            recursive_album_search_eligible(&lib.library.collection_type, &self.music_levels)
+        })
+    }
+
+    pub(super) fn start_album_index(&mut self, lib_idx: usize, refresh: bool) {
+        if !self.recursive_album_search_enabled(lib_idx) {
+            return;
+        }
+        let library_id = self.libs[lib_idx].library.id.clone();
+        let should_spawn = match self.album_indexes.get_mut(&library_id) {
+            None => {
+                self.album_indexes.insert(
+                    library_id.clone(),
+                    AlbumIndexState::Loading {
+                        rebuild_pending: false,
+                    },
+                );
+                true
+            }
+            Some(AlbumIndexState::Loading { rebuild_pending }) if refresh => {
+                *rebuild_pending = true;
+                false
+            }
+            Some(state) if refresh => {
+                *state = AlbumIndexState::Loading {
+                    rebuild_pending: false,
+                };
+                true
+            }
+            Some(_) => false,
+        };
+        if refresh {
+            self.sync_recursive_album_search(lib_idx);
+        }
+        if should_spawn {
+            self.spawn_album_index_build(library_id);
+        }
+    }
+
+    fn spawn_album_index_build(&self, library_id: String) {
+        let client = self.client.lock().unwrap().clone();
+        let levels = self.music_levels.clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let mut fetch = |parent_id: &str, start: usize, limit: usize| {
+                client.get_items_sorted(
+                    parent_id,
+                    None,
+                    false,
+                    start,
+                    limit,
+                    "SortName",
+                    "Ascending",
+                )
+            };
+            let result = build_album_index_with(&library_id, &levels, &mut fetch);
+            let _ = tx.send(LibEvent::AlbumIndexBuilt { library_id, result });
+        });
+    }
+
+    pub(super) fn open_recursive_album_search(&mut self, lib_idx: usize) -> bool {
+        if !self.recursive_album_search_enabled(lib_idx) {
+            return false;
+        }
+        self.libs[lib_idx].search = Some(super::LibSearch {
+            query: String::new(),
+            items: Vec::new(),
+            results: Vec::new(),
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+        self.sync_recursive_album_search(lib_idx);
+        true
+    }
+
+    fn sync_recursive_album_search(&mut self, lib_idx: usize) {
+        if !self.recursive_album_search_enabled(lib_idx) || self.libs[lib_idx].search.is_none() {
+            return;
+        }
+        let library_id = self.libs[lib_idx].library.id.clone();
+        let (items, loading) = match self.album_indexes.get(&library_id) {
+            Some(AlbumIndexState::Ready(entries)) => (
+                entries.iter().map(|entry| entry.album.clone()).collect(),
+                false,
+            ),
+            Some(AlbumIndexState::Loading { .. }) => (Vec::new(), true),
+            _ => (Vec::new(), false),
+        };
+        if let Some(search) = self.libs[lib_idx].search.as_mut() {
+            search.items = items;
+            search.loading = loading;
+        }
+        self.update_lib_search(lib_idx);
+    }
+
+    pub(super) fn recursive_album_search_entry(&self, lib_idx: usize) -> Option<AlbumSearchEntry> {
+        if !self.recursive_album_search_enabled(lib_idx) {
+            return None;
+        }
+        let lib = self.libs.get(lib_idx)?;
+        let search = lib.search.as_ref()?;
+        let item_idx = *search.results.get(search.cursor)?;
+        let entries = match self.album_indexes.get(&lib.library.id)? {
+            AlbumIndexState::Ready(entries) => entries,
+            _ => return None,
+        };
+        entries.get(item_idx).cloned()
+    }
+
+    pub(super) fn activate_recursive_album(
+        &mut self,
+        lib_idx: usize,
+        scope: LibraryPositionScope,
+    ) -> bool {
+        let Some(entry) = self.recursive_album_search_entry(lib_idx) else {
+            return false;
+        };
+        let library_id = self.libs[lib_idx].library.id.clone();
+        let library_name = self.libs[lib_idx].library.display_name();
+        let client = self.client.lock().unwrap().clone();
+        let tx = self.lib_tx.clone();
+        std::thread::spawn(move || {
+            let fetch = |parent_id: &str| {
+                let mut call = |id: &str, start: usize, limit: usize| {
+                    client.get_items_sorted(id, None, false, start, limit, "SortName", "Ascending")
+                };
+                fetch_all_album_index_items(parent_id, &mut call)
+            };
+            let mut parents = vec![(library_id.clone(), library_name)];
+            parents.extend(
+                entry
+                    .ancestors
+                    .iter()
+                    .map(|part| (part.id.clone(), part.name.clone())),
+            );
+            let mut targets: Vec<String> =
+                entry.ancestors.iter().map(|part| part.id.clone()).collect();
+            targets.push(entry.album.id.clone());
+            let mut nav_stack = Vec::new();
+            for ((parent_id, title), target_id) in parents.into_iter().zip(targets) {
+                let items = match fetch(&parent_id) {
+                    Ok(items) => items,
+                    Err(error) => {
+                        let _ = tx.send(LibEvent::Error(error));
+                        return;
+                    }
+                };
+                let total_count = items.len();
+                let Some(cursor) = items.iter().position(|item| item.id == target_id) else {
+                    let _ = tx.send(LibEvent::Error(format!(
+                        "Album path changed before activation: missing {target_id}"
+                    )));
+                    return;
+                };
+                nav_stack.push(BrowseLevel {
+                    parent_id,
+                    title,
+                    items,
+                    total_count,
+                    cursor,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    scroll: 0,
+                    all_items: None,
+                });
+            }
+            if scope == LibraryPositionScope::Default {
+                let items = match fetch(&entry.album.id) {
+                    Ok(items) => items,
+                    Err(error) => {
+                        let _ = tx.send(LibEvent::Error(error));
+                        return;
+                    }
+                };
+                nav_stack.push(BrowseLevel {
+                    parent_id: entry.album.id.clone(),
+                    title: entry.album.display_name(),
+                    total_count: items.len(),
+                    items,
+                    cursor: 0,
+                    item_types: None,
+                    unplayed_only: false,
+                    sort_by: "SortName".into(),
+                    sort_order: "Ascending".into(),
+                    loading: false,
+                    scroll: 0,
+                    all_items: None,
+                });
+            }
+            let _ = tx.send(LibEvent::RecursiveAlbumActivated {
+                library_id,
+                scope,
+                nav_stack,
+            });
+        });
+        true
+    }
+
     fn spawn_refresh(
         &self,
         lib_idx: usize,
@@ -4085,6 +4366,71 @@ impl App {
                     }
                 }
                 self.update_lib_search(lib_idx);
+            }
+            LibEvent::AlbumIndexBuilt { library_id, result } => {
+                let rebuild_pending = matches!(
+                    self.album_indexes.get(&library_id),
+                    Some(AlbumIndexState::Loading {
+                        rebuild_pending: true
+                    })
+                );
+                if rebuild_pending {
+                    self.album_indexes.insert(
+                        library_id.clone(),
+                        AlbumIndexState::Loading {
+                            rebuild_pending: false,
+                        },
+                    );
+                    self.spawn_album_index_build(library_id);
+                } else {
+                    match result {
+                        Ok(entries) => {
+                            self.album_indexes
+                                .insert(library_id.clone(), AlbumIndexState::Ready(entries));
+                        }
+                        Err(error) => {
+                            self.album_indexes
+                                .insert(library_id.clone(), AlbumIndexState::Unavailable);
+                            self.flash_status_high(format!("Error: {error}"));
+                        }
+                    }
+                    if let Some(lib_idx) = self
+                        .libs
+                        .iter()
+                        .position(|lib| lib.library.id == library_id)
+                    {
+                        self.sync_recursive_album_search(lib_idx);
+                    }
+                }
+            }
+            LibEvent::RecursiveAlbumActivated {
+                library_id,
+                scope,
+                nav_stack,
+            } => {
+                let Some(lib_idx) = self
+                    .libs
+                    .iter()
+                    .position(|lib| lib.library.id == library_id)
+                else {
+                    return;
+                };
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    lib.nav_stack = nav_stack;
+                    lib.search = None;
+                    lib.album_track_focus = if scope == LibraryPositionScope::Power {
+                        Some(0)
+                    } else {
+                        None
+                    };
+                }
+                self.with_library_position_scope_override(lib_idx, scope, |app| {
+                    app.save_default_library_position(lib_idx);
+                });
+                if scope == LibraryPositionScope::Default {
+                    self.search.close();
+                    self.set_tab(lib_idx + self.lib_tab_offset());
+                }
             }
             LibEvent::AllItemsPrefetched {
                 lib_idx,
@@ -5002,6 +5348,9 @@ impl App {
 
         self.home.continue_items = continue_items;
         self.rebuild_library_tabs_from_views(&all_views);
+        for lib_idx in 0..self.libs.len() {
+            self.start_album_index(lib_idx, false);
+        }
 
         let old_cursors: HashMap<String, usize> = self
             .home
@@ -5211,6 +5560,14 @@ impl App {
             return;
         }
 
+        let recursive_entries = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| self.album_indexes.get(&lib.library.id))
+            .and_then(|state| match state {
+                AlbumIndexState::Ready(entries) => Some(entries),
+                _ => None,
+            });
         let scored: Vec<(i64, usize)> = {
             let items = self.libs[lib_idx]
                 .search
@@ -5222,9 +5579,11 @@ impl App {
                 .iter()
                 .enumerate()
                 .filter_map(|(i, item)| {
-                    matcher
-                        .fuzzy_match(&item.display_name(), &query)
-                        .map(|s| (s, i))
+                    let score = recursive_entries
+                        .and_then(|entries| entries.get(i))
+                        .map(|entry| matcher.fuzzy_match(&entry.search_text, &query))
+                        .unwrap_or_else(|| matcher.fuzzy_match(&item.display_name(), &query));
+                    score.map(|score| (score, i))
                 })
                 .collect()
         };
@@ -5238,14 +5597,361 @@ impl App {
             s.cursor = 0;
         }
     }
+
+    pub(super) fn recursive_album_display_item(
+        &self,
+        lib_idx: usize,
+        item_idx: usize,
+        mut item: MediaItem,
+    ) -> MediaItem {
+        let Some(AlbumIndexState::Ready(entries)) = self
+            .libs
+            .get(lib_idx)
+            .and_then(|lib| self.album_indexes.get(&lib.library.id))
+        else {
+            return item;
+        };
+        if let Some(entry) = entries
+            .get(item_idx)
+            .filter(|entry| entry.album.id == item.id)
+        {
+            item.name = entry.display_label.clone();
+        }
+        item
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::LibraryTab;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{AlbumIndexState, LibraryTab};
     use std::io::Read;
     use std::os::fd::{FromRawFd, IntoRawFd};
+
+    fn folder(id: &str, name: &str) -> MediaItem {
+        let mut item = make_item(name, "Folder");
+        item.id = id.into();
+        item.is_folder = true;
+        item
+    }
+
+    fn album(id: &str, name: &str) -> MediaItem {
+        let mut item = make_item(name, "MusicAlbum");
+        item.id = id.into();
+        item.is_folder = true;
+        item.media_type = "Audio".into();
+        item
+    }
+
+    fn recursive_music_app() -> App {
+        let mut app = make_app_stub();
+        app.music_levels = vec!["group".into(), "artist".into(), "album".into()];
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "music-lib".into();
+        library.collection_type = "music".into();
+        library.is_folder = true;
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        app
+    }
+
+    #[test]
+    fn album_index_eligibility_requires_grouped_music_ending_in_album() {
+        assert!(recursive_album_search_eligible(
+            "music",
+            &["group".into(), "album".into()]
+        ));
+        assert!(recursive_album_search_eligible(
+            "music",
+            &["group".into(), "artist".into(), "album".into()]
+        ));
+        assert!(!recursive_album_search_eligible("music", &[]));
+        assert!(!recursive_album_search_eligible("music", &["album".into()]));
+        assert!(!recursive_album_search_eligible(
+            "music",
+            &["group".into(), "artist".into()]
+        ));
+        assert!(!recursive_album_search_eligible(
+            "movies",
+            &["group".into(), "album".into()]
+        ));
+    }
+
+    #[test]
+    fn album_index_traverses_deep_branches_pages_and_ignores_non_albums() {
+        let mut tree = HashMap::new();
+        tree.insert(
+            "music-lib".to_string(),
+            vec![folder("group-a", "A"), folder("group-b", "B")],
+        );
+        tree.insert(
+            "group-a".to_string(),
+            vec![
+                folder("artist-empty", "Empty"),
+                folder("artist-a", "Artist A"),
+            ],
+        );
+        tree.insert("artist-empty".to_string(), Vec::new());
+        let mut many_albums: Vec<MediaItem> = (0..201)
+            .map(|index| album(&format!("album-a-{index}"), &format!("Record {index}")))
+            .collect();
+        many_albums.push(make_item("Not an album", "Audio"));
+        tree.insert("artist-a".to_string(), many_albums);
+        tree.insert("group-b".to_string(), vec![folder("artist-b", "Artist B")]);
+        tree.insert("artist-b".to_string(), vec![album("album-b", "Record 0")]);
+        let mut calls = Vec::new();
+        let mut fetch = |parent: &str, start: usize, limit: usize| {
+            calls.push((parent.to_string(), start));
+            let all = tree.get(parent).cloned().unwrap_or_default();
+            let page = all.iter().skip(start).take(limit).cloned().collect();
+            Ok((page, all.len()))
+        };
+
+        let entries = build_album_index_with(
+            "music-lib",
+            &["group".into(), "artist".into(), "album".into()],
+            &mut fetch,
+        )
+        .unwrap();
+
+        assert_eq!(entries.len(), 202);
+        assert_eq!(
+            entries.last().unwrap().display_label,
+            "B / Artist B / Record 0"
+        );
+        assert_eq!(
+            entries.last().unwrap().ancestors,
+            vec![
+                AlbumPathPart {
+                    id: "group-b".into(),
+                    name: "B".into()
+                },
+                AlbumPathPart {
+                    id: "artist-b".into(),
+                    name: "Artist B".into()
+                }
+            ]
+        );
+        assert!(calls.contains(&("artist-a".into(), 200)));
+        assert!(entries
+            .iter()
+            .all(|entry| entry.album.item_type == "MusicAlbum"));
+    }
+
+    #[test]
+    fn recursive_album_search_matches_ancestor_labels() {
+        let mut app = recursive_music_app();
+        let target = album("album-1", "Needle Record");
+        app.album_indexes.insert(
+            "music-lib".into(),
+            AlbumIndexState::Ready(vec![AlbumSearchEntry {
+                album: target,
+                ancestors: vec![AlbumPathPart {
+                    id: "group-a".into(),
+                    name: "Deep Group".into(),
+                }],
+                display_label: "Deep Group / Needle Record".into(),
+                search_text: "Deep Group / Needle Record".into(),
+            }]),
+        );
+
+        assert!(app.open_recursive_album_search(0));
+        app.libs[0].search.as_mut().unwrap().query = "deep grp".into();
+        app.update_lib_search(0);
+
+        assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
+        assert_eq!(
+            app.recursive_album_display_item(0, 0, album("album-1", "Needle Record"))
+                .name,
+            "Deep Group / Needle Record"
+        );
+
+        app.libs[0].search.as_mut().unwrap().query = "needle rec".into();
+        app.update_lib_search(0);
+        assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
+    }
+
+    #[test]
+    fn album_only_music_keeps_visible_list_search() {
+        let mut app = recursive_music_app();
+        app.music_levels = vec!["album".into()];
+        app.libs[0].search = Some(super::super::LibSearch {
+            query: "visible rec".into(),
+            items: vec![album("album-1", "Visible Record")],
+            results: Vec::new(),
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+
+        assert!(!app.open_recursive_album_search(0));
+        app.update_lib_search(0);
+
+        assert_eq!(app.libs[0].search.as_ref().unwrap().results, vec![0]);
+    }
+
+    #[test]
+    fn album_index_completion_updates_the_open_current_query() {
+        let mut app = recursive_music_app();
+        app.album_indexes.insert(
+            "music-lib".into(),
+            AlbumIndexState::Loading {
+                rebuild_pending: false,
+            },
+        );
+        assert!(app.open_recursive_album_search(0));
+        app.libs[0].search.as_mut().unwrap().query = "remote group".into();
+
+        app.handle_lib_event(LibEvent::AlbumIndexBuilt {
+            library_id: "music-lib".into(),
+            result: Ok(vec![AlbumSearchEntry {
+                album: album("album-1", "Record"),
+                ancestors: vec![AlbumPathPart {
+                    id: "group-a".into(),
+                    name: "Remote Group".into(),
+                }],
+                display_label: "Remote Group / Record".into(),
+                search_text: "Remote Group / Record".into(),
+            }]),
+        });
+
+        let search = app.libs[0].search.as_ref().unwrap();
+        assert!(!search.loading);
+        assert_eq!(search.query, "remote group");
+        assert_eq!(search.results, vec![0]);
+    }
+
+    #[test]
+    fn failed_album_index_becomes_unavailable_and_clears_search_loading() {
+        let mut app = recursive_music_app();
+        app.album_indexes.insert(
+            "music-lib".into(),
+            AlbumIndexState::Loading {
+                rebuild_pending: false,
+            },
+        );
+        assert!(app.open_recursive_album_search(0));
+
+        app.handle_lib_event(LibEvent::AlbumIndexBuilt {
+            library_id: "music-lib".into(),
+            result: Err("index failed".into()),
+        });
+
+        assert!(matches!(
+            app.album_indexes.get("music-lib"),
+            Some(AlbumIndexState::Unavailable)
+        ));
+        assert!(!app.libs[0].search.as_ref().unwrap().loading);
+        assert!(app.status.contains("index failed"));
+    }
+
+    #[test]
+    fn refresh_while_album_index_loads_coalesces_one_replacement() {
+        let mut app = recursive_music_app();
+        app.album_indexes.insert(
+            "music-lib".into(),
+            AlbumIndexState::Loading {
+                rebuild_pending: false,
+            },
+        );
+
+        app.start_album_index(0, true);
+        app.start_album_index(0, true);
+
+        assert!(matches!(
+            app.album_indexes.get("music-lib"),
+            Some(AlbumIndexState::Loading {
+                rebuild_pending: true
+            })
+        ));
+    }
+
+    #[test]
+    fn power_recursive_activation_keeps_power_view_and_enters_inline_tracks() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = recursive_music_app();
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_left_tab = 1;
+        app.power_focus = PowerFocus::Left;
+        app.libs[0].nav_stack.push(BrowseLevel {
+            parent_id: "group-a".into(),
+            title: "Group A".into(),
+            items: vec![folder("artist-a", "Artist A")],
+            total_count: 1,
+            cursor: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            scroll: 0,
+            all_items: None,
+        });
+        let default_position = app.libs[0].library_position_snapshot();
+        app.library_position_state.libraries.insert(
+            "music-lib".into(),
+            mbv_core::config::LibraryViewPositions {
+                default: Some(default_position.clone()),
+                power: None,
+            },
+        );
+        app.libs[0].search = Some(super::super::LibSearch {
+            query: String::new(),
+            items: Vec::new(),
+            results: Vec::new(),
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+        let level = BrowseLevel {
+            parent_id: "artist-c".into(),
+            title: "Artist C".into(),
+            items: vec![album("album-1", "Record")],
+            total_count: 1,
+            cursor: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            scroll: 0,
+            all_items: None,
+        };
+
+        app.handle_lib_event(LibEvent::RecursiveAlbumActivated {
+            library_id: "music-lib".into(),
+            scope: LibraryPositionScope::Power,
+            nav_stack: vec![level],
+        });
+
+        assert_eq!(app.tab_idx, 1);
+        assert!(app.libs[0].search.is_none());
+        assert_eq!(app.libs[0].album_track_focus, Some(0));
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().parent_id, "artist-c");
+        let positions = app
+            .library_position_state
+            .libraries
+            .get("music-lib")
+            .unwrap();
+        assert_eq!(positions.default.as_ref(), Some(&default_position));
+        assert_eq!(
+            positions
+                .power
+                .as_ref()
+                .and_then(|position| position.levels.last())
+                .map(|level| level.parent_id.as_str()),
+            Some("artist-c")
+        );
+    }
 
     // ── remote_seek_ticks: asymmetric clamp (rewind only) ───────────────────
 

@@ -201,6 +201,27 @@ struct LibSearch {
     loading: bool,       // true while full-library fetch is in flight
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct AlbumPathPart {
+    id: String,
+    name: String,
+}
+
+#[derive(Clone, Debug)]
+struct AlbumSearchEntry {
+    album: MediaItem,
+    ancestors: Vec<AlbumPathPart>,
+    display_label: String,
+    search_text: String,
+}
+
+#[derive(Clone, Debug)]
+enum AlbumIndexState {
+    Unavailable,
+    Loading { rebuild_pending: bool },
+    Ready(Vec<AlbumSearchEntry>),
+}
+
 struct BrowseLevel {
     parent_id: String,
     title: String,
@@ -389,6 +410,15 @@ enum LibEvent {
         lib_idx: usize,
         parent_id: String,
         items: Vec<MediaItem>,
+    },
+    AlbumIndexBuilt {
+        library_id: String,
+        result: Result<Vec<AlbumSearchEntry>, String>,
+    },
+    RecursiveAlbumActivated {
+        library_id: String,
+        scope: LibraryPositionScope,
+        nav_stack: Vec<BrowseLevel>,
     },
     AllItemsPrefetched {
         lib_idx: usize,
@@ -856,6 +886,7 @@ pub struct App {
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
     music_levels: Vec<String>,
+    album_indexes: std::collections::HashMap<String, AlbumIndexState>,
     // Per-frame layout geometry from last render, used for mouse hit-testing.
     // See src/app/layout.rs for the grouping rationale.
     layout: layout::AppLayout,
@@ -1538,6 +1569,7 @@ impl App {
             hidden_libraries: init.hidden_libraries,
             hidden_latest: init.hidden_latest,
             music_levels: init.music_levels,
+            album_indexes: std::collections::HashMap::new(),
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
@@ -5310,6 +5342,7 @@ pub(crate) mod tests {
             hidden_libraries: Vec::new(),
             hidden_latest: Vec::new(),
             music_levels: Vec::new(),
+            album_indexes: std::collections::HashMap::new(),
             player_tab: PlayerTab::default(),
             remote_player_tab: None,
             home: HomePane {

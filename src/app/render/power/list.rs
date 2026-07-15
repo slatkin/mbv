@@ -83,7 +83,11 @@ impl App {
                 let items: Vec<mbv_core::api::MediaItem> = s
                     .results
                     .iter()
-                    .filter_map(|&i| s.items.get(i).cloned())
+                    .filter_map(|&i| {
+                        s.items
+                            .get(i)
+                            .map(|item| self.recursive_album_display_item(lib_idx, i, item.clone()))
+                    })
                     .collect();
                 // Search results are already the full locally-filtered match set,
                 // not paginated, so their length is already the true total.
@@ -186,7 +190,14 @@ impl App {
         if n == 0 {
             let msg = if self.power_left_tab > 0 {
                 let lib_idx = self.power_left_tab - 1;
-                if self.libs[lib_idx]
+                if self.recursive_album_search_enabled(lib_idx)
+                    && self.libs[lib_idx]
+                        .search
+                        .as_ref()
+                        .is_some_and(|search| search.loading)
+                {
+                    "Indexing music library..."
+                } else if self.libs[lib_idx]
                     .nav_stack
                     .last()
                     .map(|l| l.loading)
@@ -725,7 +736,7 @@ mod tests {
     use super::*;
     use crate::app::layout::LayoutPower;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{BrowseLevel, LibraryTab};
+    use crate::app::{AlbumIndexState, BrowseLevel, LibSearch, LibraryTab};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
@@ -816,6 +827,47 @@ mod tests {
         });
 
         app
+    }
+
+    #[test]
+    fn recursive_album_search_loading_message_is_explicit() {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+        app.music_levels = vec!["group".into(), "album".into()];
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "music-lib".into();
+        library.collection_type = "music".into();
+        library.is_folder = true;
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: Some(LibSearch {
+                query: "record".into(),
+                items: Vec::new(),
+                results: Vec::new(),
+                cursor: 0,
+                scroll: 0,
+                loading: true,
+            }),
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        app.album_indexes.insert(
+            "music-lib".into(),
+            AlbumIndexState::Loading {
+                rebuild_pending: false,
+            },
+        );
+
+        let out = render_power_list_to_string(&mut app, &mut LayoutPower::default());
+
+        assert!(out.contains("Indexing music library..."), "{out}");
+
+        app.music_levels.clear();
+        let out = render_power_list_to_string(&mut app, &mut LayoutPower::default());
+        assert!(!out.contains("Indexing music library..."), "{out}");
     }
 
     #[test]
