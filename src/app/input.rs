@@ -331,7 +331,7 @@ impl App {
         }
         let lib_idx = self.power_left_tab - 1;
         if self.libs[lib_idx].search.is_some() {
-            self.handle_lib_search_key(lib_idx, key);
+            self.handle_lib_search_key(lib_idx, key, crate::app::LibraryPositionScope::Power);
             Some(false)
         } else {
             None
@@ -354,7 +354,7 @@ impl App {
             return None;
         }
         let lib_idx = self.tab_idx - self.lib_tab_offset();
-        self.handle_lib_search_key(lib_idx, key);
+        self.handle_lib_search_key(lib_idx, key, crate::app::LibraryPositionScope::Default);
         Some(false)
     }
 
@@ -593,7 +593,12 @@ impl App {
         }
     }
 
-    fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
+    fn handle_lib_search_key(
+        &mut self,
+        lib_idx: usize,
+        key: KeyEvent,
+        scope: crate::app::LibraryPositionScope,
+    ) {
         let saved = self.tab_idx;
         self.tab_idx = self.lib_tab_offset() + lib_idx;
         match key.code {
@@ -624,7 +629,11 @@ impl App {
             }
             KeyCode::Home => self.jump_lib_cursor(false),
             KeyCode::End => self.jump_lib_cursor(true),
-            KeyCode::Enter => self.select(),
+            KeyCode::Enter => {
+                if !self.activate_recursive_album(lib_idx, scope) {
+                    self.select();
+                }
+            }
             KeyCode::Char(c) => {
                 self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
                 self.update_lib_search(lib_idx);
@@ -1079,6 +1088,9 @@ impl App {
             }
             KeyCode::Char('r') => self.refresh_lib(),
             KeyCode::Char('/') => {
+                if self.open_recursive_album_search(lib_idx) {
+                    return Some(false);
+                }
                 let (items, needs_full_load) = if self.is_feed_home_video_group_view(lib_idx) {
                     (self.feed_home_video_selected_items(lib_idx), false)
                 } else {
@@ -3252,7 +3264,13 @@ impl App {
                         .map(|i| i.is_folder)
                         .unwrap_or(false)
                 {
-                    self.select();
+                    let lib_idx = self.tab_idx - self.lib_tab_offset();
+                    if !self.activate_recursive_album(
+                        lib_idx,
+                        crate::app::LibraryPositionScope::Default,
+                    ) {
+                        self.select();
+                    }
                 }
             }
             MouseEventKind::Down(MouseButton::Right) => {

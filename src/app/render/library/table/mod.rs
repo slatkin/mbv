@@ -116,7 +116,14 @@ impl App {
             let items: Vec<(usize, MediaItem)> = s
                 .results
                 .iter()
-                .filter_map(|&i| s.items.get(i).map(|item| (i, item.clone())))
+                .filter_map(|&i| {
+                    s.items.get(i).map(|item| {
+                        (
+                            i,
+                            self.recursive_album_display_item(lib_idx, i, item.clone()),
+                        )
+                    })
+                })
                 .collect();
             let total = items.len();
             (items, s.cursor, total)
@@ -147,12 +154,18 @@ impl App {
         if items_len > 0 {
             return false;
         }
+        let search_loading = self.libs[lib_idx]
+            .search
+            .as_ref()
+            .is_some_and(|search| search.loading);
         let loading = self.libs[lib_idx]
             .nav_stack
             .last()
             .map(|l| l.loading)
             .unwrap_or(false);
-        let msg = if loading {
+        let msg = if search_loading && self.recursive_album_search_enabled(lib_idx) {
+            "  Indexing music library..."
+        } else if loading {
             "  Loading..."
         } else if self.libs[lib_idx].search.is_some() {
             "  (no results)"
@@ -164,5 +177,85 @@ impl App {
             area,
         );
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::{LibSearch, LibraryTab};
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    #[test]
+    fn recursive_album_search_loading_message_is_explicit() {
+        let mut app = make_app_stub();
+        app.music_levels = vec!["group".into(), "album".into()];
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "music-lib".into();
+        library.collection_type = "music".into();
+        library.is_folder = true;
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: Some(LibSearch {
+                query: "record".into(),
+                items: Vec::new(),
+                results: Vec::new(),
+                cursor: 0,
+                scroll: 0,
+                loading: true,
+            }),
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        let backend = TestBackend::new(50, 4);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|frame| {
+                app.render_library_table(
+                    frame,
+                    Rect::new(0, 0, 50, 4),
+                    0,
+                    &mut LayoutLibrary::default(),
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer();
+        let mut output = String::new();
+        for y in 0..buffer.area().height {
+            for x in 0..buffer.area().width {
+                output.push_str(buffer[(x, y)].symbol());
+            }
+        }
+
+        assert!(output.contains("Indexing music library..."), "{output}");
+
+        app.music_levels.clear();
+        terminal
+            .draw(|frame| {
+                app.render_library_table(
+                    frame,
+                    Rect::new(0, 0, 50, 4),
+                    0,
+                    &mut LayoutLibrary::default(),
+                );
+            })
+            .unwrap();
+        let output = buffer_to_string(terminal.backend().buffer());
+        assert!(!output.contains("Indexing music library..."), "{output}");
+    }
+
+    fn buffer_to_string(buffer: &ratatui::buffer::Buffer) -> String {
+        let mut output = String::new();
+        for y in 0..buffer.area().height {
+            for x in 0..buffer.area().width {
+                output.push_str(buffer[(x, y)].symbol());
+            }
+        }
+        output
     }
 }
