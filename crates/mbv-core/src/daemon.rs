@@ -838,6 +838,20 @@ fn handle_ctrl(
                     start_idx,
                 });
             }
+            PlayerCommand::QueueAppend { items: new_items } => {
+                if !new_items.is_empty() {
+                    items.extend(new_items.clone());
+                    broadcast_queue_state(
+                        ctrl_clients,
+                        player,
+                        shared_queue,
+                        items,
+                        *cursor,
+                        source,
+                    );
+                    player.send_command(PlayerCommand::QueueAppend { items: new_items });
+                }
+            }
             PlayerCommand::QueueMove(from, to) => {
                 if from >= items.len() || to >= items.len() {
                     send_to(
@@ -1581,6 +1595,81 @@ mod tests {
                     vec!["item-0", "item-2", "item-1"]
                 );
                 assert_eq!(state.cursor, 2);
+            }
+            _ => panic!("expected queue state update"),
+        }
+    }
+
+    #[test]
+    fn ctrl_queue_append_updates_authoritative_queue_and_broadcasts_state() {
+        let player = cold_player();
+        let player_cmd_rx = player.spy_on_commands();
+        let client = Arc::new(Mutex::new(crate::api::EmbyClient::new(Config::default())));
+        let registry = Arc::new(Mutex::new(CtrlClients::default()));
+        let (_sender_id, sender_rx) = {
+            let mut clients = registry.lock().unwrap();
+            connect_client(&mut clients)
+        };
+        let (reply_tx, _reply_rx) = mpsc::channel();
+        let shared_queue = shared_queue_state();
+        let mut items = vec![
+            item("item-0", "Video", "Movie"),
+            item("item-1", "Video", "Movie"),
+        ];
+        let mut cursor = 1;
+        let mut source = QueueSource::Remote;
+        let appended = vec![item("item-2", "Video", "Movie")];
+
+        handle_ctrl(
+            CtrlCmd::PlayerCmd(WireCommand::from(PlayerCommand::QueueAppend {
+                items: appended.clone(),
+            })),
+            CtrlRequest {
+                reply_tx: &reply_tx,
+            },
+            &client,
+            &player,
+            false,
+            &mut items,
+            &mut cursor,
+            &mut source,
+            &shared_queue,
+            &registry,
+        );
+
+        assert!(matches!(
+            player_cmd_rx.try_recv(),
+            Ok(PlayerCommand::QueueAppend { items })
+                if items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
+                    == appended.iter().map(|i| i.id.as_str()).collect::<Vec<_>>()
+        ));
+        assert_eq!(
+            items.iter().map(|i| i.id.as_str()).collect::<Vec<_>>(),
+            vec!["item-0", "item-1", "item-2"]
+        );
+        assert_eq!(cursor, 1);
+        assert_eq!(
+            shared_queue
+                .items
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|i| i.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["item-0", "item-1", "item-2"]
+        );
+        assert_eq!(*shared_queue.cursor.lock().unwrap(), 1);
+        match recv_event(&sender_rx) {
+            CtrlEvent::State(state) => {
+                assert_eq!(
+                    state
+                        .items
+                        .iter()
+                        .map(|i| i.id.as_str())
+                        .collect::<Vec<_>>(),
+                    vec!["item-0", "item-1", "item-2"]
+                );
+                assert_eq!(state.cursor, 1);
             }
             _ => panic!("expected queue state update"),
         }

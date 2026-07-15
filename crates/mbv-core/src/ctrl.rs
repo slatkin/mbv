@@ -4,7 +4,7 @@ use crate::api::MediaItem;
 use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 2;
+pub const CTRL_PROTOCOL_VERSION: u32 = 3;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -91,6 +91,8 @@ pub enum WireCommand {
     TogglePause,
     #[serde(rename = "JumpTo")]
     JumpTo(usize),
+    #[serde(rename = "QueueAppend")]
+    QueueAppend { items: Vec<MediaItem> },
     #[serde(rename = "PlaylistRemove")]
     QueueRemove(usize),
     #[serde(rename = "PlaylistMove")]
@@ -142,6 +144,7 @@ impl From<PlayerCommand> for WireCommand {
         match cmd {
             PlayerCommand::TogglePause => WireCommand::TogglePause,
             PlayerCommand::JumpTo(idx) => WireCommand::JumpTo(idx),
+            PlayerCommand::QueueAppend { items } => WireCommand::QueueAppend { items },
             PlayerCommand::QueueRemove(idx) => WireCommand::QueueRemove(idx),
             PlayerCommand::QueueMove(from, to) => WireCommand::QueueMove(from, to),
             PlayerCommand::SetVolume(v) => WireCommand::SetVolume(v),
@@ -193,6 +196,7 @@ impl From<WireCommand> for PlayerCommand {
         match cmd {
             WireCommand::TogglePause => PlayerCommand::TogglePause,
             WireCommand::JumpTo(idx) => PlayerCommand::JumpTo(idx),
+            WireCommand::QueueAppend { items } => PlayerCommand::QueueAppend { items },
             WireCommand::QueueRemove(idx) => PlayerCommand::QueueRemove(idx),
             WireCommand::QueueMove(from, to) => PlayerCommand::QueueMove(from, to),
             WireCommand::SetVolume(v) => PlayerCommand::SetVolume(v),
@@ -343,6 +347,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&WireCommand::JumpTo(3)).unwrap(),
             "{\"JumpTo\":3}"
+        );
+        assert_eq!(
+            serde_json::to_string(&WireCommand::QueueAppend { items: vec![] }).unwrap(),
+            "{\"QueueAppend\":{\"items\":[]}}"
         );
         assert_eq!(
             serde_json::to_string(&WireCommand::QueueRemove(2)).unwrap(),

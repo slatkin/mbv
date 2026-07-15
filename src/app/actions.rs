@@ -2342,6 +2342,7 @@ impl App {
             }
             let name = item.display_name();
             let scope = self.visible_queue_scope();
+            let appended = item.clone();
             {
                 self.queue_for_scope_mut(scope).append_item(item);
             }
@@ -2350,6 +2351,7 @@ impl App {
             }
             self.flash_status(format!("Added: {name}"));
             self.persist_local_queue_state_if_needed(scope);
+            self.sync_playback_queue_after_append(scope, vec![appended]);
             self.sync_direct_remote_queue_after_edit(scope);
         } else if self.tab_idx >= 2 {
             let Some(item) = self.current_lib_item() else {
@@ -2364,6 +2366,7 @@ impl App {
             }
             let name = item.display_name();
             let scope = self.visible_queue_scope();
+            let appended = item.clone();
             {
                 self.queue_for_scope_mut(scope).append_item(item);
             }
@@ -2372,6 +2375,7 @@ impl App {
             }
             self.flash_status(format!("Added: {name}"));
             self.persist_local_queue_state_if_needed(scope);
+            self.sync_playback_queue_after_append(scope, vec![appended]);
             self.sync_direct_remote_queue_after_edit(scope);
         }
     }
@@ -2389,6 +2393,7 @@ impl App {
                     return;
                 }
                 let scope = self.visible_queue_scope();
+                let appended = items.clone();
                 {
                     let queue = self.queue_for_scope_mut(scope);
                     queue.append_items(items);
@@ -2401,6 +2406,7 @@ impl App {
                     item.display_name()
                 ));
                 self.persist_local_queue_state_if_needed(scope);
+                self.sync_playback_queue_after_append(scope, appended);
                 self.sync_direct_remote_queue_after_edit(scope);
             }
             Err(e) => {
@@ -6001,6 +6007,81 @@ mod tests {
             rx.try_recv(),
             Ok(PlayerCommand::SeekAbsolute(pos)) if pos == 0.0
         ));
+    }
+
+    #[test]
+    fn power_view_enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
+        use crate::app::action::Command;
+        use crate::app::tests::make_item;
+        use crate::app::{BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+        use crate::player::PlayerCommand;
+
+        let mut app = crate::app::tests::make_app_stub();
+        app.tab_idx = app.lib_tab_offset();
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+        app.player_tab
+            .set_items(vec![make_item("Queued First", "Movie")], 0);
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+            st.current_idx = 0;
+            st.queue_len = 1;
+        }
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let mut queued = make_item("Queued Second", "Movie");
+        queued.id = "movie-2".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![queued.clone()],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+
+        assert_eq!(
+            app.current_lib_item().as_ref().map(|i| i.id.as_str()),
+            Some("movie-2")
+        );
+
+        let rx = app.player.spy_on_commands();
+        app.execute_context_action(Some(crate::app::ContextAction::Enqueue));
+
+        assert_eq!(app.player_tab.items.len(), 2);
+        assert_eq!(app.player_tab.items[1].id, queued.id);
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(PlayerCommand::QueueAppend { items }) if items.len() == 1 && items[0].id == queued.id
+        ));
+
+        app.power_focus = PowerFocus::Queue;
+        app.player_tab.queue_cursor = 1;
+
+        app.dispatch(Command::QueuePlayCursor);
+
+        assert!(matches!(rx.try_recv(), Ok(PlayerCommand::JumpTo(1))));
     }
 
     // ── next_subtitle_entry: shared cycling math (remote/local parity, #86) ─
