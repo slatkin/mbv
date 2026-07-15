@@ -2,10 +2,10 @@
 # Usage: scripts/release.sh <version> "<summary>"
 # Example: scripts/release.sh 0.8.9 "add keyboard shortcuts for playback speed"
 #
-# Standard release entrypoint. Runs tests + clippy, bumps Cargo.toml,
-# commits, pushes main, then tags and pushes the tag.
-# The tag push is what causes GitHub Actions to create the release,
-# upload assets, update PKGBUILD on main, and push to AUR.
+# Standard release-prep entrypoint for the protected-main workflow.
+# Runs tests + clippy, bumps Cargo.toml, updates Cargo.lock, and commits
+# the release change on the current branch. After that branch is merged,
+# tag origin/main and push the tag to trigger the release workflow.
 set -euo pipefail
 
 VERSION="${1?Usage: scripts/release.sh <version> \"<summary>\"}"
@@ -23,6 +23,18 @@ fi
 
 if git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
   echo "error: tag ${TAG} already exists locally"
+  exit 1
+fi
+
+BRANCH="$(git branch --show-current)"
+if [[ -z "${BRANCH}" ]]; then
+  echo "error: detached HEAD is not supported for release prep"
+  exit 1
+fi
+
+if [[ "${BRANCH}" == "main" ]]; then
+  echo "error: release prep must run on a branch, not local main"
+  echo "create a branch from origin/main first"
   exit 1
 fi
 
@@ -50,17 +62,16 @@ git add Cargo.toml Cargo.lock
 git commit -m "Release ${TAG}: ${SUMMARY}"
 
 echo
-echo "==> Pushing..."
-git push origin main
-
+echo "==> Release prep committed on ${BRANCH}."
+echo "==> Next:"
+echo "    1. git push origin ${BRANCH}"
+echo "    2. Open and merge a pull request into main"
+echo "    3. git fetch origin"
+echo "    4. git tag ${TAG} origin/main"
+echo "    5. git push origin ${TAG}"
 echo
-echo "==> Tagging ${TAG} and pushing..."
-git tag "${TAG}"
-git push origin "${TAG}"
-
-echo
-echo "==> Done! The tag-triggered GitHub Action will now:"
+echo "==> The tag-triggered GitHub Action will then:"
 echo "    - Build and test"
-echo "    - Update PKGBUILD sha256 and commit to main"
 echo "    - Create the GitHub release and upload assets"
+echo "    - Update PKGBUILD for AUR"
 echo "    - Push to AUR"
