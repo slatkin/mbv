@@ -2081,6 +2081,15 @@ impl App {
         }
     }
 
+    fn sync_playback_queue_after_append(&self, scope: QueueScope, items: Vec<MediaItem>) {
+        if items.is_empty() || scope != self.playback_target_queue_scope() {
+            return;
+        }
+        let _ = self
+            .player
+            .send_command(crate::player::PlayerCommand::QueueAppend { items });
+    }
+
     fn playback_target_queue_scope(&self) -> QueueScope {
         self.queue_scope_resolution().playback_target()
     }

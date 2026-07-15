@@ -267,6 +267,7 @@ pub enum PlayerEvent {
 pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
+    QueueAppend { items: Vec<MediaItem> },
     QueueRemove(usize),
     QueueMove(usize, usize),
     SetVolume(i64),
@@ -1398,6 +1399,9 @@ impl PlaybackSession {
                     }
                 }
             }
+            PlayerCommand::QueueAppend { items } => {
+                self.cmd_append_queue(items, mpv);
+            }
             PlayerCommand::QueueRemove(idx) => {
                 if let Some(slot_id) = self.slot_id_at(idx) {
                     let active_slot_id = self.active_slot_id();
@@ -1625,6 +1629,35 @@ impl PlaybackSession {
             log::warn!(target: "player", "start_item failed for playlist replace item={}", active_item.id);
         }
         *progress = spawn_progress_reporter(self.reporter.clone());
+    }
+
+    fn append_items_to_queue(&mut self, items: Vec<MediaItem>) {
+        for item in items {
+            self.queue.append(item);
+        }
+        self.status.lock().unwrap().queue_len = self.queue_len();
+    }
+
+    fn cmd_append_queue(&mut self, new_items: Vec<MediaItem>, mpv: &Mpv) {
+        if new_items.is_empty() {
+            return;
+        }
+
+        for item in &new_items {
+            let ep = if item.is_audio() { "Audio" } else { "Videos" };
+            let url = format!(
+                "{}/{}/{}/stream?static=true&api_key={}",
+                self.server_url, ep, item.id, self.token
+            );
+            let title_opt = mpv_title_opt(&item.display_name());
+            if let Err(e) =
+                mpv.command("loadfile", &[url.as_str(), "append-play", "-1", title_opt.as_str()])
+            {
+                log::warn!(target: "player", "QueueAppend loadfile error: {}", mpv_err_str(&e));
+            }
+        }
+
+        self.append_items_to_queue(new_items);
     }
 
     fn cmd_load_new(
@@ -3513,6 +3546,28 @@ input-ipc-server=/tmp/user.sock
 
         assert_eq!(session.current_idx, 2);
         assert_eq!(status.lock().unwrap().current_idx, 2);
+    }
+
+    #[test]
+    fn append_items_to_queue_extends_queue_without_moving_current_idx() {
+        let (mut session, status) = make_queue_session_for_pos_tests(1);
+        let appended = make_media_item("ep4");
+
+        session.append_items_to_queue(vec![appended.clone()]);
+
+        assert_eq!(session.queue_len(), 4);
+        assert_eq!(session.current_idx, 1);
+        let status = status.lock().unwrap();
+        assert_eq!(status.current_idx, 1);
+        assert_eq!(status.queue_len, 4);
+        assert_eq!(
+            session
+                .queue
+                .slots()
+                .last()
+                .map(|slot| slot.item.id.as_str()),
+            Some(appended.id.as_str())
+        );
     }
 
     #[test]
