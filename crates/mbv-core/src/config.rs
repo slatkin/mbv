@@ -272,6 +272,10 @@ fn library_position_state_path() -> PathBuf {
     state_dir().join("library_position_state.json")
 }
 
+fn album_path_index_state_path() -> PathBuf {
+    state_dir().join("album_path_index_state.json")
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum QueueSource {
@@ -382,6 +386,37 @@ pub struct LibraryPositionLevel {
     pub sort_order: String,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+pub struct AlbumPathIndexState {
+    #[serde(default)]
+    pub indexes: Vec<AlbumPathIndex>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AlbumPathIndex {
+    pub version: u32,
+    pub server_url: String,
+    pub username: String,
+    pub library_id: String,
+    pub music_levels: Vec<String>,
+    #[serde(default)]
+    pub entries: Vec<AlbumPathIndexEntry>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AlbumPathIndexEntry {
+    pub album_id: String,
+    pub album_title: String,
+    #[serde(default)]
+    pub group_path: Vec<AlbumPathSegment>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct AlbumPathSegment {
+    pub id: String,
+    pub title: String,
+}
+
 pub fn save_library_position_state(state: &LibraryPositionState) {
     let path = library_position_state_path();
     if let Some(dir) = path.parent() {
@@ -407,6 +442,35 @@ pub fn load_library_position_state() -> LibraryPositionState {
             LibraryPositionState::default()
         }
     }
+}
+
+pub fn save_album_path_index_state(state: &AlbumPathIndexState) {
+    let path = album_path_index_state_path();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(json) = serde_json::to_string(state) {
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+pub fn load_album_path_index_state() -> AlbumPathIndexState {
+    let text = match std::fs::read_to_string(album_path_index_state_path()) {
+        Ok(text) => text,
+        Err(_) => return AlbumPathIndexState::default(),
+    };
+    let mut state: AlbumPathIndexState = match serde_json::from_str(&text) {
+        Ok(state) => state,
+        Err(e) => {
+            log::warn!(target: "album_path_index", "album_path_index_state.json failed to parse: {e}");
+            return AlbumPathIndexState::default();
+        }
+    };
+    state.indexes.retain(|index| index.version == 1);
+    state
 }
 
 /// Visibility/size of the now-playing panel, cycled with `h` and remembered across restarts.
@@ -1348,6 +1412,85 @@ hidden_latest = ["Movies", "TV SHOWS"]
         assert_eq!(
             load_library_position_state(),
             LibraryPositionState::default()
+        );
+
+        std::env::remove_var("XDG_STATE_HOME");
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[test]
+    fn album_path_index_state_round_trips_and_keeps_identity_fields() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        let temp = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::env::set_var("XDG_STATE_HOME", &temp);
+
+        let state = AlbumPathIndexState {
+            indexes: vec![AlbumPathIndex {
+                version: 1,
+                server_url: "http://emby".into(),
+                username: "user".into(),
+                library_id: "lib-music".into(),
+                music_levels: vec!["group".into(), "album".into()],
+                entries: vec![AlbumPathIndexEntry {
+                    album_id: "album-1".into(),
+                    album_title: "Album".into(),
+                    group_path: vec![AlbumPathSegment {
+                        id: "group-1".into(),
+                        title: "Artist".into(),
+                    }],
+                }],
+            }],
+        };
+
+        save_album_path_index_state(&state);
+
+        assert_eq!(load_album_path_index_state(), state);
+
+        std::env::remove_var("XDG_STATE_HOME");
+        let _ = std::fs::remove_dir_all(temp);
+    }
+
+    #[test]
+    fn album_path_index_state_defaults_for_missing_invalid_or_unsupported_version() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        std::env::remove_var("MBV_SYSTEM");
+        let temp = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let state_dir = temp.join("mbv");
+        std::fs::create_dir_all(&state_dir).unwrap();
+        std::env::set_var("XDG_STATE_HOME", &temp);
+
+        assert_eq!(
+            load_album_path_index_state(),
+            AlbumPathIndexState::default()
+        );
+
+        std::fs::write(state_dir.join("album_path_index_state.json"), "{not json").unwrap();
+        assert_eq!(
+            load_album_path_index_state(),
+            AlbumPathIndexState::default()
+        );
+
+        std::fs::write(
+            state_dir.join("album_path_index_state.json"),
+            r#"{"indexes":[{"version":99,"server_url":"s","username":"u","library_id":"l","music_levels":["group","album"],"entries":[]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            load_album_path_index_state(),
+            AlbumPathIndexState::default()
         );
 
         std::env::remove_var("XDG_STATE_HOME");

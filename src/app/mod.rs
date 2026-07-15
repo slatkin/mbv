@@ -195,10 +195,63 @@ impl ContextMenu {
 struct LibSearch {
     query: String,
     items: Vec<mbv_core::api::MediaItem>,
-    results: Vec<usize>, // indices into items, sorted by score desc
-    cursor: usize,       // position within results
-    scroll: usize,       // viewport scroll offset for the results list
-    loading: bool,       // true while full-library fetch is in flight
+    results: Vec<LibSearchResult>,
+    recursive_albums: Vec<crate::config::AlbumPathIndexEntry>,
+    cursor: usize, // position within results
+    scroll: usize, // viewport scroll offset for the results list
+    loading: bool, // true while full-library fetch is in flight
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum LibSearchResult {
+    VisibleItem(usize),
+    RecursiveAlbum(usize),
+}
+
+impl LibSearch {
+    fn visible_item_index_at_cursor(&self) -> Option<usize> {
+        match self.results.get(self.cursor) {
+            Some(LibSearchResult::VisibleItem(idx)) => Some(*idx),
+            _ => None,
+        }
+    }
+
+    fn recursive_album_at_cursor(&self) -> Option<crate::config::AlbumPathIndexEntry> {
+        match self.results.get(self.cursor) {
+            Some(LibSearchResult::RecursiveAlbum(idx)) => self.recursive_albums.get(*idx).cloned(),
+            _ => None,
+        }
+    }
+
+    fn result_label(&self, result: &LibSearchResult) -> Option<String> {
+        match result {
+            LibSearchResult::VisibleItem(idx) => {
+                self.items.get(*idx).map(|item| item.display_name())
+            }
+            LibSearchResult::RecursiveAlbum(idx) => self.recursive_albums.get(*idx).map(|entry| {
+                let mut parts: Vec<String> = entry
+                    .group_path
+                    .iter()
+                    .map(|segment| segment.title.clone())
+                    .collect();
+                parts.push(entry.album_title.clone());
+                parts.join(" / ")
+            }),
+        }
+    }
+
+    fn recursive_album_display_rows(&self) -> Vec<(usize, String)> {
+        self.results
+            .iter()
+            .enumerate()
+            .filter_map(|(row, result)| match result {
+                LibSearchResult::RecursiveAlbum(_) => {
+                    self.result_label(result).map(|label| (row, label))
+                }
+                LibSearchResult::VisibleItem(_) => None,
+            })
+            .collect()
+    }
 }
 
 struct BrowseLevel {
@@ -389,6 +442,12 @@ enum LibEvent {
         lib_idx: usize,
         parent_id: String,
         items: Vec<MediaItem>,
+    },
+    AlbumPathIndexRefreshed {
+        lib_idx: usize,
+        library_id: String,
+        generation: u64,
+        result: Result<crate::config::AlbumPathIndex, String>,
     },
     AllItemsPrefetched {
         lib_idx: usize,
@@ -997,6 +1056,9 @@ pub struct App {
     /// lifetime.
     album_tracks_cache: std::collections::HashMap<String, Vec<MediaItem>>,
     album_tracks_loading: std::collections::HashSet<String>,
+    album_path_index_state: crate::config::AlbumPathIndexState,
+    album_path_refresh_generations: std::collections::HashMap<String, u64>,
+    album_path_refreshing: std::collections::HashSet<String>,
     save_playlist_dialog: Option<SavePlaylistDialog>,
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
@@ -1672,6 +1734,9 @@ impl App {
             album_artist_fetches_active: 0,
             album_tracks_cache: std::collections::HashMap::new(),
             album_tracks_loading: std::collections::HashSet::new(),
+            album_path_index_state: crate::config::load_album_path_index_state(),
+            album_path_refresh_generations: std::collections::HashMap::new(),
+            album_path_refreshing: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
             pending_image_fetches: std::collections::VecDeque::new(),
@@ -3693,7 +3758,8 @@ pub(crate) mod tests {
             search: Some(LibSearch {
                 query: "ignored".into(),
                 items: make_items(2),
-                results: vec![0],
+                results: vec![LibSearchResult::VisibleItem(0)],
+                recursive_albums: Vec::new(),
                 cursor: 0,
                 scroll: 0,
                 loading: false,
@@ -3922,7 +3988,8 @@ pub(crate) mod tests {
             search: Some(LibSearch {
                 query: "ignored".into(),
                 items: make_items(2),
-                results: vec![0],
+                results: vec![LibSearchResult::VisibleItem(0)],
+                recursive_albums: Vec::new(),
                 cursor: 0,
                 scroll: 0,
                 loading: false,
@@ -4013,6 +4080,28 @@ pub(crate) mod tests {
         assert!(
             views.power.is_some(),
             "default writes must not clear power-view position"
+        );
+    }
+
+    #[test]
+    fn active_library_scope_ignores_stale_power_tab_when_standard_library_is_active() {
+        let mut app = make_app_stub();
+        app.libs.push(LibraryTab {
+            library: make_item("Music", "CollectionFolder"),
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_left_tab = 1;
+        app.tab_idx = app.lib_tab_offset();
+
+        assert_eq!(
+            app.active_library_position_scope_for(0),
+            Some(LibraryPositionScope::Default)
         );
     }
 
@@ -4697,7 +4786,8 @@ pub(crate) mod tests {
             search: Some(LibSearch {
                 query: "stale".into(),
                 items: make_items(1),
-                results: vec![0],
+                results: vec![LibSearchResult::VisibleItem(0)],
+                recursive_albums: Vec::new(),
                 cursor: 0,
                 scroll: 0,
                 loading: false,
@@ -5439,6 +5529,9 @@ pub(crate) mod tests {
             album_artist_fetches_active: 0,
             album_tracks_cache: std::collections::HashMap::new(),
             album_tracks_loading: std::collections::HashSet::new(),
+            album_path_index_state: crate::config::AlbumPathIndexState::default(),
+            album_path_refresh_generations: std::collections::HashMap::new(),
+            album_path_refreshing: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
             pending_image_fetches: std::collections::VecDeque::new(),

@@ -199,6 +199,10 @@ _Avoid_: reducing this to raw scroll offset, global tab index, search state, det
 A display mode for an album listing that inserts an artist header row at each artist boundary, built from resolved artist rather than API order. One of several power-list view modes that produce a display order (another being the letter-grouped view, which buckets by first letter instead of artist).
 _Avoid_: conflating with "album level" (whether a navigation level shows albums at all) — grouping is about whether those albums are clustered by resolved artist within that level, an orthogonal concern.
 
+**Album-path index**:
+A versioned, per-server/per-user/per-library/per-music-level cache of recursive album search targets for grouped music libraries. It stores album IDs, album display titles, and group path segments only; it never stores tracks. Cached entries are search hints, not visible browse-level media items: activation must resolve the album ID and group path before navigation, and stale cached entries should be suppressed rather than surfaced as user-facing errors.
+_Avoid_: treating recursive album search results as indices into the current visible library level, queueable/playable items, or a substitute for normal grouped browsing state.
+
 ## UI layout
 
 The subsystem that divides terminal space between mbv's browsing, queue, playback, and overlay surfaces.

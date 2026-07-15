@@ -3,8 +3,8 @@ use super::input_resolver::KeyChord;
 use super::settings::settings_total_rows;
 use super::ui_util::item_text_and_style;
 use super::{
-    App, ContextAction, ContextMenu, LibSearch, PendingQueueAction, QueueScope, SavePlaylistDialog,
-    SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
+    App, ContextAction, ContextMenu, LibSearch, LibSearchResult, PendingQueueAction, QueueScope,
+    SavePlaylistDialog, SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
     POWER_LEFT_WIDTH_DEFAULT, POWER_LEFT_WIDTH_STEP, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
 use super::{PowerFocus, QUEUE_VIEW_COUNT, QUEUE_VIEW_POWER};
@@ -624,7 +624,18 @@ impl App {
             }
             KeyCode::Home => self.jump_lib_cursor(false),
             KeyCode::End => self.jump_lib_cursor(true),
-            KeyCode::Enter => self.select(),
+            KeyCode::Enter => {
+                if self.libs[lib_idx]
+                    .search
+                    .as_ref()
+                    .and_then(|search| search.recursive_album_at_cursor())
+                    .is_some()
+                {
+                    self.activate_recursive_album_result(lib_idx);
+                } else {
+                    self.select();
+                }
+            }
             KeyCode::Char(c) => {
                 self.libs[lib_idx].search.as_mut().unwrap().query.push(c);
                 self.update_lib_search(lib_idx);
@@ -1079,29 +1090,55 @@ impl App {
             }
             KeyCode::Char('r') => self.refresh_lib(),
             KeyCode::Char('/') => {
-                let (items, needs_full_load) = if self.is_feed_home_video_group_view(lib_idx) {
-                    (self.feed_home_video_selected_items(lib_idx), false)
+                let recursive_index = if self.recursive_album_search_enabled(lib_idx) {
+                    self.album_path_index_for(lib_idx)
                 } else {
-                    self.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .map(|l| {
-                            let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
-                            let needs = l.all_items.is_none() && l.items.len() < l.total_count;
-                            (all, needs)
-                        })
-                        .unwrap_or_default()
+                    None
                 };
-                let n = items.len();
+                let (items, recursive_albums, needs_full_load) =
+                    if let Some(index) = recursive_index {
+                        (Vec::new(), index.entries, false)
+                    } else if self.recursive_album_search_enabled(lib_idx) {
+                        (Vec::new(), Vec::new(), true)
+                    } else if self.is_feed_home_video_group_view(lib_idx) {
+                        (
+                            self.feed_home_video_selected_items(lib_idx),
+                            Vec::new(),
+                            false,
+                        )
+                    } else {
+                        let (items, needs) = self.libs[lib_idx]
+                            .nav_stack
+                            .last()
+                            .map(|l| {
+                                let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
+                                let needs = l.all_items.is_none() && l.items.len() < l.total_count;
+                                (all, needs)
+                            })
+                            .unwrap_or_default();
+                        (items, Vec::new(), needs)
+                    };
+                let n = if self.recursive_album_search_enabled(lib_idx) {
+                    recursive_albums.len()
+                } else {
+                    items.len()
+                };
                 self.libs[lib_idx].search = Some(LibSearch {
                     query: String::new(),
                     items,
-                    results: (0..n).collect(),
+                    results: if self.recursive_album_search_enabled(lib_idx) {
+                        (0..n).map(LibSearchResult::RecursiveAlbum).collect()
+                    } else {
+                        (0..n).map(LibSearchResult::VisibleItem).collect()
+                    },
+                    recursive_albums,
                     cursor: 0,
                     scroll: 0,
                     loading: needs_full_load,
                 });
-                if needs_full_load {
+                if self.recursive_album_search_enabled(lib_idx) {
+                    self.spawn_album_path_index_refresh(lib_idx);
+                } else if needs_full_load {
                     self.spawn_search_items_load(lib_idx);
                 }
                 self.update_lib_search(lib_idx);
@@ -2282,7 +2319,7 @@ impl App {
                 .map(|lvl| {
                     lib.search
                         .as_ref()
-                        .and_then(|s| s.results.get(s.cursor).copied())
+                        .and_then(|s| s.visible_item_index_at_cursor())
                         .unwrap_or(lvl.cursor)
                 })
                 .unwrap_or(0);
@@ -3503,8 +3540,9 @@ mod power_movie_detail_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
     use crate::app::{
-        BrowseLevel, LibraryTab, PowerFocus, POWER_LEFT_WIDTH_DEFAULT, QUEUE_VIEW_POWER,
+        BrowseLevel, LibEvent, LibraryTab, PowerFocus, POWER_LEFT_WIDTH_DEFAULT, QUEUE_VIEW_POWER,
     };
+    use crate::config::{AlbumPathIndex, AlbumPathIndexEntry, AlbumPathSegment};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
@@ -3555,6 +3593,278 @@ mod power_movie_detail_tests {
         });
 
         app
+    }
+
+    fn recursive_album_entry(
+        group_id: &str,
+        group: &str,
+        album_id: &str,
+        album: &str,
+    ) -> AlbumPathIndexEntry {
+        AlbumPathIndexEntry {
+            album_id: album_id.into(),
+            album_title: album.into(),
+            group_path: vec![AlbumPathSegment {
+                id: group_id.into(),
+                title: group.into(),
+            }],
+        }
+    }
+
+    fn make_recursive_album_search_app(power: bool) -> App {
+        let mut app = make_app_stub();
+        app.music_levels = vec!["group".into(), "album".into()];
+        app.tab_idx = 2;
+        if power {
+            app.tab_idx = 1;
+            app.queue_view = QUEUE_VIEW_POWER;
+            app.power_focus = PowerFocus::Left;
+            app.power_left_tab = 1;
+        }
+
+        let mut library = make_item("Music", "CollectionFolder");
+        library.id = "lib-music".into();
+        library.collection_type = "music".into();
+        library.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-music".into(),
+                title: "Music".into(),
+                items: vec![],
+                total_count: 0,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: Some(LibSearch {
+                query: "blue".into(),
+                items: Vec::new(),
+                results: vec![
+                    LibSearchResult::RecursiveAlbum(0),
+                    LibSearchResult::RecursiveAlbum(1),
+                ],
+                recursive_albums: vec![
+                    recursive_album_entry("artist-a", "Artist A", "album-a", "Blue"),
+                    recursive_album_entry("artist-b", "Artist B", "album-b", "Blue"),
+                ],
+                cursor: 0,
+                scroll: 0,
+                loading: false,
+            }),
+            feed_home_video: None,
+            power_detail_item: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+        });
+
+        app
+    }
+
+    fn render_app_to_string(app: &mut App, width: u16, height: u16) -> String {
+        let backend = TestBackend::new(width, height);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| app.render(f)).unwrap();
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let mut out = String::new();
+        for y in 0..area.height {
+            for x in 0..area.width {
+                out.push_str(buf[(x, y)].symbol());
+            }
+            out.push('\n');
+        }
+        out
+    }
+
+    #[test]
+    fn standard_recursive_album_search_renders_group_path_labels() {
+        let mut app = make_recursive_album_search_app(false);
+
+        let out = render_app_to_string(&mut app, 90, 20);
+
+        assert!(out.contains("Artist A / Blue"), "rendered output:\n{out}");
+        assert!(out.contains("Artist B / Blue"), "rendered output:\n{out}");
+    }
+
+    #[test]
+    fn standard_recursive_album_search_updates_library_layout_scroll_for_mouse_hits() {
+        let mut app = make_recursive_album_search_app(false);
+        let search = app.libs[0].search.as_mut().unwrap();
+        search.recursive_albums = (0..12)
+            .map(|i| AlbumPathIndexEntry {
+                album_id: format!("album-{i}"),
+                album_title: format!("Album {i}"),
+                group_path: vec![AlbumPathSegment {
+                    id: format!("artist-{i}"),
+                    title: format!("Artist {i}"),
+                }],
+            })
+            .collect();
+        search.results = (0..12).map(LibSearchResult::RecursiveAlbum).collect();
+        search.cursor = 8;
+        app.layout.library.lib_scroll = vec![0];
+        app.layout.library.lib_row_heights = vec![Vec::new()];
+        app.layout.library.lib_table_area = vec![Default::default()];
+
+        let _ = render_app_to_string(&mut app, 90, 8);
+
+        assert_eq!(app.libs[0].search.as_ref().unwrap().scroll, 0);
+        assert!(app.layout.library.lib_scroll[0] > 0);
+    }
+
+    #[test]
+    fn power_recursive_album_search_renders_group_path_labels() {
+        let mut app = make_recursive_album_search_app(true);
+
+        let out = render_app_to_string(&mut app, 90, 20);
+
+        assert!(out.contains("Artist A / Blue"), "rendered output:\n{out}");
+        assert!(out.contains("Artist B / Blue"), "rendered output:\n{out}");
+    }
+
+    #[test]
+    fn recursive_album_search_results_do_not_leak_to_non_enter_actions() {
+        let mut app = make_recursive_album_search_app(false);
+
+        assert!(app.current_lib_item().is_none());
+        app.enqueue_selected();
+        app.toggle_watched();
+        app.open_context_menu();
+
+        assert!(app.player_tab.items.is_empty());
+        assert!(app.context_menu.is_none());
+        assert!(app.libs[0].search.is_some());
+    }
+
+    #[test]
+    fn album_path_refresh_updates_open_recursive_search_results() {
+        let mut app = make_recursive_album_search_app(false);
+        app.libs[0].search.as_mut().unwrap().query = "fresh".into();
+        app.libs[0].search.as_mut().unwrap().recursive_albums = Vec::new();
+        app.libs[0].search.as_mut().unwrap().results = Vec::new();
+        app.libs[0].search.as_mut().unwrap().loading = true;
+        app.album_path_refresh_generations
+            .insert("lib-music".into(), 7);
+        app.album_path_refreshing.insert("lib-music".into());
+
+        app.handle_lib_event(LibEvent::AlbumPathIndexRefreshed {
+            lib_idx: 0,
+            library_id: "lib-music".into(),
+            generation: 7,
+            result: Ok(AlbumPathIndex {
+                version: 1,
+                server_url: String::new(),
+                username: String::new(),
+                library_id: "lib-music".into(),
+                music_levels: vec!["group".into(), "album".into()],
+                entries: vec![recursive_album_entry(
+                    "artist-fresh",
+                    "Artist Fresh",
+                    "album-fresh",
+                    "Fresh Album",
+                )],
+            }),
+        });
+
+        let search = app.libs[0].search.as_ref().unwrap();
+        assert!(!search.loading);
+        assert_eq!(search.results, vec![LibSearchResult::RecursiveAlbum(0)]);
+        assert_eq!(
+            search.result_label(&search.results[0]).as_deref(),
+            Some("Artist Fresh / Fresh Album")
+        );
+    }
+
+    #[test]
+    fn ensure_library_loaded_schedules_album_path_refresh_without_search() {
+        let mut app = make_recursive_album_search_app(false);
+        app.libs[0].search = None;
+
+        app.ensure_lib_loaded_for(0);
+
+        assert!(app.libs[0].search.is_none());
+        assert!(app.album_path_refreshing.contains("lib-music"));
+        assert_eq!(
+            app.album_path_refresh_generations.get("lib-music").copied(),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn album_path_refresh_suppresses_stale_cached_album_id_without_activation() {
+        let mut app = make_recursive_album_search_app(false);
+        app.libs[0].search.as_mut().unwrap().query = "blue".into();
+        app.album_path_refresh_generations
+            .insert("lib-music".into(), 9);
+        app.album_path_refreshing.insert("lib-music".into());
+
+        app.handle_lib_event(LibEvent::AlbumPathIndexRefreshed {
+            lib_idx: 0,
+            library_id: "lib-music".into(),
+            generation: 9,
+            result: Ok(AlbumPathIndex {
+                version: 1,
+                server_url: String::new(),
+                username: String::new(),
+                library_id: "lib-music".into(),
+                music_levels: vec!["group".into(), "album".into()],
+                entries: vec![recursive_album_entry(
+                    "artist-fresh",
+                    "Artist Fresh",
+                    "album-fresh",
+                    "Blue",
+                )],
+            }),
+        });
+
+        let search = app.libs[0].search.as_ref().unwrap();
+        assert_eq!(search.results, vec![LibSearchResult::RecursiveAlbum(0)]);
+        assert_eq!(
+            search.result_label(&search.results[0]).as_deref(),
+            Some("Artist Fresh / Blue")
+        );
+    }
+
+    #[test]
+    fn album_path_refresh_suppresses_stale_cached_group_path_without_activation() {
+        let mut app = make_recursive_album_search_app(false);
+        app.libs[0].search.as_mut().unwrap().query = "blue".into();
+        app.album_path_refresh_generations
+            .insert("lib-music".into(), 10);
+        app.album_path_refreshing.insert("lib-music".into());
+
+        app.handle_lib_event(LibEvent::AlbumPathIndexRefreshed {
+            lib_idx: 0,
+            library_id: "lib-music".into(),
+            generation: 10,
+            result: Ok(AlbumPathIndex {
+                version: 1,
+                server_url: String::new(),
+                username: String::new(),
+                library_id: "lib-music".into(),
+                music_levels: vec!["group".into(), "album".into()],
+                entries: vec![recursive_album_entry(
+                    "artist-correct",
+                    "Correct Artist",
+                    "album-a",
+                    "Blue",
+                )],
+            }),
+        });
+
+        let search = app.libs[0].search.as_ref().unwrap();
+        assert_eq!(search.results, vec![LibSearchResult::RecursiveAlbum(0)]);
+        assert_eq!(
+            search.result_label(&search.results[0]).as_deref(),
+            Some("Correct Artist / Blue")
+        );
     }
 
     fn push_power_library(app: &mut App, id: &str, name: &str) {
@@ -3738,7 +4048,12 @@ mod power_movie_detail_tests {
         app.libs[0].search = Some(LibSearch {
             query: "movie".into(),
             items,
-            results: vec![0, 1, 2],
+            results: vec![
+                LibSearchResult::VisibleItem(0),
+                LibSearchResult::VisibleItem(1),
+                LibSearchResult::VisibleItem(2),
+            ],
+            recursive_albums: Vec::new(),
             cursor: 0,
             scroll: 0,
             loading: false,
@@ -3933,7 +4248,8 @@ mod power_movie_detail_tests {
         app.libs[0].search = Some(LibSearch {
             query: "mov".into(),
             items: app.libs[0].nav_stack[0].items.clone(),
-            results: vec![0],
+            results: vec![LibSearchResult::VisibleItem(0)],
+            recursive_albums: Vec::new(),
             cursor: 0,
             scroll: 0,
             loading: false,
@@ -3951,7 +4267,7 @@ mod power_movie_detail_tests {
             .expect("source search state should be untouched");
         assert_eq!(search.query, "mov");
         assert_eq!(search.cursor, 0);
-        assert_eq!(search.results, vec![0]);
+        assert_eq!(search.results, vec![LibSearchResult::VisibleItem(0)]);
     }
 
     #[test]
@@ -3962,7 +4278,8 @@ mod power_movie_detail_tests {
         app.libs[1].search = Some(LibSearch {
             query: "sho".into(),
             items: app.libs[1].nav_stack[0].items.clone(),
-            results: vec![0],
+            results: vec![LibSearchResult::VisibleItem(0)],
+            recursive_albums: Vec::new(),
             cursor: 0,
             scroll: 0,
             loading: false,
@@ -3980,7 +4297,7 @@ mod power_movie_detail_tests {
             .expect("source search state should be untouched");
         assert_eq!(search.query, "sho");
         assert_eq!(search.cursor, 0);
-        assert_eq!(search.results, vec![0]);
+        assert_eq!(search.results, vec![LibSearchResult::VisibleItem(0)]);
     }
 
     #[test]
@@ -3992,7 +4309,8 @@ mod power_movie_detail_tests {
         app.libs[0].search = Some(LibSearch {
             query: "mov".into(),
             items: app.libs[0].nav_stack[0].items.clone(),
-            results: vec![0],
+            results: vec![LibSearchResult::VisibleItem(0)],
+            recursive_albums: Vec::new(),
             cursor: 0,
             scroll: 0,
             loading: false,
@@ -4008,7 +4326,7 @@ mod power_movie_detail_tests {
             .expect("plain library search should stay open");
         assert_eq!(search.query, "mov");
         assert_eq!(search.cursor, 0);
-        assert_eq!(search.results, vec![0]);
+        assert_eq!(search.results, vec![LibSearchResult::VisibleItem(0)]);
     }
 
     #[test]

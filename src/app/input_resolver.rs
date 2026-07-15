@@ -531,6 +531,7 @@ mod app_level_tests {
                 query: String::new(),
                 items: Vec::new(),
                 results: Vec::new(),
+                recursive_albums: Vec::new(),
                 cursor: 0,
                 scroll: 0,
                 loading: false,

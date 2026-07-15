@@ -22,7 +22,7 @@ impl App {
         }
 
         let item = if let Some(search) = &lib.search {
-            let &idx = search.results.get(search.cursor)?;
+            let idx = search.visible_item_index_at_cursor()?;
             search.items.get(idx)?.clone()
         } else {
             let level = lib.nav_stack.last()?;

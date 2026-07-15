@@ -1,8 +1,8 @@
 use super::super::super::ui_util::*;
 use super::{effective_sort_str, letter_bucket};
 use crate::app::layout::LayoutPower;
-use crate::app::{palette, App};
-use mbv_core::api::TICKS_PER_SECOND;
+use crate::app::{palette, App, LibSearchResult};
+use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -80,10 +80,13 @@ impl App {
             let lib_idx = self.power_left_tab - 1;
             let lib = &self.libs[lib_idx];
             let (items, cur, scroll, total) = if let Some(s) = &lib.search {
-                let items: Vec<mbv_core::api::MediaItem> = s
+                let items: Vec<MediaItem> = s
                     .results
                     .iter()
-                    .filter_map(|&i| s.items.get(i).cloned())
+                    .filter_map(|result| match result {
+                        LibSearchResult::VisibleItem(i) => s.items.get(*i).cloned(),
+                        LibSearchResult::RecursiveAlbum(_) => None,
+                    })
                     .collect();
                 // Search results are already the full locally-filtered match set,
                 // not paginated, so their length is already the true total.
@@ -111,7 +114,8 @@ impl App {
 
         // When at the album level of a music library, group albums under artist headers.
         let show_grouped = if self.power_left_tab > 0 {
-            self.is_viewing_album_folders(self.power_left_tab - 1)
+            let lib_idx = self.power_left_tab - 1;
+            self.is_viewing_album_folders(lib_idx) && self.libs[lib_idx].search.is_none()
         } else {
             false
         };
@@ -180,6 +184,22 @@ impl App {
                     height: content_area.height.saturating_sub(1),
                     ..content_area
                 };
+            }
+        }
+
+        if self.power_left_tab > 0 {
+            let lib_idx = self.power_left_tab - 1;
+            if let Some(final_offset) = self.render_power_recursive_album_search_rows(
+                f,
+                content_area,
+                lib_idx,
+                focused,
+                layout,
+            ) {
+                if let Some(search) = self.libs[lib_idx].search.as_mut() {
+                    search.scroll = final_offset;
+                }
+                return;
             }
         }
 
@@ -717,6 +737,67 @@ impl App {
                 lvl.scroll = final_offset;
             }
         }
+    }
+
+    fn render_power_recursive_album_search_rows(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        focused: bool,
+        layout: &mut LayoutPower,
+    ) -> Option<usize> {
+        let search = self.libs.get(lib_idx)?.search.as_ref()?;
+        let rows = search.recursive_album_display_rows();
+        if rows.is_empty() {
+            return None;
+        }
+
+        let visible = area.height as usize;
+        let cursor = search.cursor.min(rows.len().saturating_sub(1));
+        let offset = search
+            .scroll
+            .clamp(cursor.saturating_sub(visible.saturating_sub(1)), cursor);
+        let fg = if focused {
+            palette::WHITE
+        } else {
+            palette::SUBTLE
+        };
+        let avail = (area.width as usize).saturating_sub(2);
+        let list_items: Vec<ListItem> = rows
+            .iter()
+            .skip(offset)
+            .take(visible)
+            .map(|(_, label)| {
+                let title = trunc_str(label, avail);
+                ListItem::new(Line::from(vec![
+                    Span::raw(" "),
+                    Span::styled(title, Style::default().fg(fg)),
+                ]))
+            })
+            .collect();
+
+        layout.left_row_map = rows
+            .iter()
+            .skip(offset)
+            .take(visible)
+            .map(|(row, _)| Some(*row))
+            .collect();
+
+        let mut state = ListState::default();
+        state.select(Some(cursor.saturating_sub(offset)));
+        layout.cursor_screen_y = Some(area.y + (cursor.saturating_sub(offset)) as u16);
+        f.render_stateful_widget(
+            List::new(list_items).highlight_style(Style::default()),
+            area,
+            &mut state,
+        );
+
+        if focused && rows.len() > visible {
+            let max_off = rows.len().saturating_sub(visible);
+            super::render_power_scrollbar(f, area, max_off, offset);
+        }
+        Some(offset)
     }
 }
 

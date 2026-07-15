@@ -4,11 +4,14 @@ mod row;
 
 use super::super::super::layout::LayoutLibrary;
 use super::super::super::palette;
-use super::super::super::App;
+use super::super::super::{App, LibSearchResult};
 use mbv_core::api::MediaItem;
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::style::{Modifier, Style};
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{
+    List, ListItem, ListState, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+};
 use ratatui::Frame;
 
 pub(super) const LIB_SELECTED_IMG_W: u16 = 32;
@@ -45,6 +48,10 @@ impl App {
         }
         if let Some(v) = layout.lib_table_area.get_mut(lib_idx) {
             *v = area;
+        }
+
+        if self.render_recursive_album_search_rows(f, area, lib_idx, layout) {
+            return;
         }
 
         let (display_items, cursor, total_count) = self.library_display_items(lib_idx);
@@ -116,7 +123,12 @@ impl App {
             let items: Vec<(usize, MediaItem)> = s
                 .results
                 .iter()
-                .filter_map(|&i| s.items.get(i).map(|item| (i, item.clone())))
+                .filter_map(|result| match result {
+                    LibSearchResult::VisibleItem(i) => {
+                        s.items.get(*i).map(|item| (*i, item.clone()))
+                    }
+                    LibSearchResult::RecursiveAlbum(_) => None,
+                })
                 .collect();
             let total = items.len();
             (items, s.cursor, total)
@@ -163,6 +175,72 @@ impl App {
             Paragraph::new(msg).style(Style::default().fg(palette::MUTED)),
             area,
         );
+        true
+    }
+
+    fn render_recursive_album_search_rows(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        layout: &mut LayoutLibrary,
+    ) -> bool {
+        let rows = self.libs[lib_idx]
+            .search
+            .as_ref()
+            .map(|search| search.recursive_album_display_rows())
+            .unwrap_or_default();
+        if rows.is_empty() {
+            return false;
+        }
+
+        let cursor = self.libs[lib_idx]
+            .search
+            .as_ref()
+            .map(|search| search.cursor)
+            .unwrap_or(0);
+        let visible = area.height as usize;
+        let stored_scroll = layout.lib_scroll.get(lib_idx).copied().unwrap_or(0);
+        let offset = stored_scroll.clamp(
+            cursor.saturating_sub(visible.saturating_sub(1)),
+            cursor.min(rows.len().saturating_sub(1)),
+        );
+
+        let list_items: Vec<ListItem> = rows
+            .iter()
+            .skip(offset)
+            .take(visible)
+            .map(|(_, label)| {
+                ListItem::new(Line::from(vec![Span::raw(" "), Span::raw(label.clone())]))
+            })
+            .collect();
+        let mut state = ListState::default();
+        state.select(Some(cursor.saturating_sub(offset)));
+        f.render_stateful_widget(
+            List::new(list_items).highlight_style(Style::default().add_modifier(Modifier::BOLD)),
+            area,
+            &mut state,
+        );
+
+        if let Some(v) = layout.lib_row_heights.get_mut(lib_idx) {
+            *v = vec![1; rows.len().saturating_sub(offset).min(visible)];
+        }
+        if let Some(v) = layout.lib_scroll.get_mut(lib_idx) {
+            *v = offset;
+        }
+        if rows.len() > visible {
+            let mut sb_state = ScrollbarState::new(rows.len()).position(offset);
+            f.render_stateful_widget(
+                Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                    .thumb_symbol("▐")
+                    .track_symbol(Some(" "))
+                    .begin_symbol(None)
+                    .end_symbol(None)
+                    .style(Style::default().fg(palette::SUBTLE)),
+                area,
+                &mut sb_state,
+            );
+        }
         true
     }
 }
