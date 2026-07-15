@@ -6061,7 +6061,10 @@ mod tests {
             album_track_focus: None,
         });
 
-        assert_eq!(app.current_lib_item().as_ref().map(|i| i.id.as_str()), Some("movie-2"));
+        assert_eq!(
+            app.current_lib_item().as_ref().map(|i| i.id.as_str()),
+            Some("movie-2")
+        );
 
         let rx = app.player.spy_on_commands();
         app.execute_context_action(Some(crate::app::ContextAction::Enqueue));

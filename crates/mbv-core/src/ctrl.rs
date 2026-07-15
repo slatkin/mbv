@@ -4,7 +4,7 @@ use crate::api::MediaItem;
 use crate::config::QueueSource;
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
-pub const CTRL_PROTOCOL_VERSION: u32 = 2;
+pub const CTRL_PROTOCOL_VERSION: u32 = 3;
 pub const CTRL_CAP_QUEUE_STATE: &str = "queue-state";
 pub const CTRL_CAP_START_INDEX: &str = "play-items-start-idx";
 pub const CTRL_CAP_STATUS_ONLY: &str = "status-only";
@@ -347,6 +347,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&WireCommand::JumpTo(3)).unwrap(),
             "{\"JumpTo\":3}"
+        );
+        assert_eq!(
+            serde_json::to_string(&WireCommand::QueueAppend { items: vec![] }).unwrap(),
+            "{\"QueueAppend\":{\"items\":[]}}"
         );
         assert_eq!(
             serde_json::to_string(&WireCommand::QueueRemove(2)).unwrap(),

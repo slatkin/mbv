@@ -267,7 +267,9 @@ pub enum PlayerEvent {
 pub enum PlayerCommand {
     TogglePause,
     JumpTo(usize),
-    QueueAppend { items: Vec<MediaItem> },
+    QueueAppend {
+        items: Vec<MediaItem>,
+    },
     QueueRemove(usize),
     QueueMove(usize, usize),
     SetVolume(i64),
@@ -1650,9 +1652,10 @@ impl PlaybackSession {
                 self.server_url, ep, item.id, self.token
             );
             let title_opt = mpv_title_opt(&item.display_name());
-            if let Err(e) =
-                mpv.command("loadfile", &[url.as_str(), "append-play", "-1", title_opt.as_str()])
-            {
+            if let Err(e) = mpv.command(
+                "loadfile",
+                &[url.as_str(), "append-play", "-1", title_opt.as_str()],
+            ) {
                 log::warn!(target: "player", "QueueAppend loadfile error: {}", mpv_err_str(&e));
             }
         }
