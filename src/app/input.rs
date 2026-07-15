@@ -1587,7 +1587,10 @@ impl App {
                 // `is_viewing_album_folders` (so movies/series/home-video
                 // panels, non-power tabs, and the legacy drilled-in
                 // `is_album_level` state are completely unaffected).
-                if !is_power_nav && self.is_viewing_album_folders(lib_idx) {
+                if !is_power_nav
+                    && self.libs[lib_idx].search.is_none()
+                    && self.is_viewing_album_folders(lib_idx)
+                {
                     match key.code {
                         KeyCode::Enter => {
                             if self.libs[lib_idx].album_track_focus.is_none() {
@@ -3727,6 +3730,38 @@ mod power_movie_detail_tests {
 
         assert!(out.contains("Artist A / Blue"), "rendered output:\n{out}");
         assert!(out.contains("Artist B / Blue"), "rendered output:\n{out}");
+    }
+
+    #[test]
+    fn power_recursive_album_search_enter_wins_over_album_track_focus_mode() {
+        let mut app = make_recursive_album_search_app(true);
+        app.libs[0].nav_stack.push(BrowseLevel {
+            parent_id: "artist-current".into(),
+            title: "Current Artist".into(),
+            items: Vec::new(),
+            total_count: 0,
+            cursor: 0,
+            scroll: 0,
+            item_types: None,
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+        });
+        app.libs[0].search.as_mut().unwrap().recursive_albums = vec![AlbumPathIndexEntry {
+            album_id: "stale-album".into(),
+            album_title: "Stale Album".into(),
+            group_path: Vec::new(),
+        }];
+        app.libs[0].search.as_mut().unwrap().results = vec![LibSearchResult::RecursiveAlbum(0)];
+
+        app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(app.libs[0].album_track_focus.is_none());
+        let search = app.libs[0].search.as_ref().unwrap();
+        assert!(search.results.is_empty());
+        assert!(search.recursive_albums.is_empty());
     }
 
     #[test]
