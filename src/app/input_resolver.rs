@@ -204,10 +204,6 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_context_menu,
     },
     ContextEntry {
-        name: "power_queue_alt_m",
-        handler: App::handle_key_power_queue_alt_m,
-    },
-    ContextEntry {
         name: "playback",
         handler: App::handle_playback_key,
     },
@@ -536,7 +532,6 @@ mod app_level_tests {
                 loading: false,
             }),
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -734,7 +729,6 @@ mod app_level_tests {
                 "confirm_next_up",
                 "clear_queue_prompt_c",
                 "context_menu",
-                "power_queue_alt_m",
                 "playback",
                 "ctrl_l_force_clear",
                 "f5_refresh",

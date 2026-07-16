@@ -396,7 +396,7 @@ impl App {
 
     /// Renders the music album detail panel (track list) into `area` — the lib
     /// slot below the card. The card itself already shows the album art (handled
-    /// in `render_power_card`). Mirrors `render_power_detail` for movies.
+    /// in `render_power_card`). Mirrors `render_power_compact_detail` for movies.
     ///
     /// Takes `items`/`cursor` explicitly rather than reading `nav_stack`
     /// internally (#145) so it can render either the legacy drilled-in

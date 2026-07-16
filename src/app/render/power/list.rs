@@ -30,14 +30,11 @@ const COMPACT_BANNER_INDENT: u16 = 2;
 impl App {
     /// Filler-row count to reserve around the selected movie's row in
     /// `lib_idx`'s display-row sequence: `COMPACT_BANNER_TOTAL_ROWS` when a
-    /// leaf movie is selected and expanded detail is not open, else 0 (no
-    /// banner — ordinary list rendering, unchanged from before this feature).
-    /// One of those rows is the opening rule placed immediately *before* the
-    /// selected item's row; the rest (content + closing rule) follow it.
+    /// leaf movie is selected, else 0 (no banner — ordinary list rendering,
+    /// unchanged from before this feature). One of those rows is the opening
+    /// rule placed immediately *before* the selected item's row; the rest
+    /// (content + closing rule) follow it.
     fn compact_banner_rows(&self, lib_idx: usize) -> usize {
-        if self.libs[lib_idx].power_detail_item.is_some() {
-            return 0;
-        }
         if self.power_selected_movie_item(lib_idx).is_some() {
             COMPACT_BANNER_TOTAL_ROWS
         } else {
@@ -820,7 +817,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -850,7 +846,6 @@ mod tests {
                 loading: true,
             }),
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -909,7 +904,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,

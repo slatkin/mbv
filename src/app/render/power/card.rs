@@ -105,24 +105,17 @@ impl App {
     /// `image_loading` is true when a fetch is in-flight (caller should defer
     /// rendering the rest of the view until the image arrives).
     pub(super) fn render_power_card(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
-        // If a movie detail is pinned, show that item's image instead of the queue cursor item.
-        // Only show library-driven images when the library panel has focus; switch back to
+        // If a leaf movie is selected, show that item's image instead of the queue
+        // cursor item (the compact detail banner is showing for it). Only show
+        // library-driven images when the library panel has focus; switch back to
         // the queue selection image when the queue panel is focused.
         let lib_focused = matches!(self.power_focus, PowerFocus::Left);
-        let power_detail_pinned = lib_focused
-            && self.power_left_tab > 0
-            && self.libs[self.power_left_tab - 1]
-                .power_detail_item
-                .is_some();
-        // Compact banner active: a leaf movie is selected in the library list but the
-        // expanded detail view isn't pinned, so the compact banner is what's showing.
         let compact_banner_active = lib_focused
-            && !power_detail_pinned
             && self.power_left_tab > 0
             && self
                 .power_selected_movie_item(self.power_left_tab - 1)
                 .is_some();
-        if power_detail_pinned || compact_banner_active {
+        if compact_banner_active {
             // (handled below)
         } else if lib_focused
             && self.power_left_tab > 0
@@ -286,20 +279,6 @@ impl App {
             }
         }
 
-        if power_detail_pinned {
-            let (detail_id, series_id) = {
-                let lib_idx = self.power_left_tab - 1;
-                let d = self.libs[lib_idx].power_detail_item.as_ref().unwrap();
-                (d.id.clone(), d.series_id.clone())
-            };
-            let img_types: &[&str] = &["Backdrop", "Primary", "Logo"];
-            let cache_key = format!("{}:P", detail_id);
-            if self.images_enabled() {
-                self.fetch_card_image(cache_key.clone(), detail_id, series_id, img_types);
-            }
-            return self.render_card_image(f, area, &cache_key, area.height.min(18));
-        }
-
         let (cursor, items) = {
             let queue = self.playback_queue();
             (queue.queue_cursor, queue.items.clone())
@@ -418,7 +397,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -482,7 +460,6 @@ mod tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });

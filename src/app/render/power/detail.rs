@@ -9,7 +9,6 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
-use unicode_width::UnicodeWidthStr;
 
 impl App {
     pub(crate) fn power_selected_movie_item(
@@ -192,21 +191,39 @@ impl App {
             row += 1;
         }
 
-        if row < max_y && !item.overview.is_empty() {
-            let overview = trunc_overview(&item.overview);
+        // — Overview + Director (single scrollable block, #204) —
+        // Both used to be truncated independently (overview pre-cut to 400
+        // chars, then both hard-clipped to the banner's fixed row count).
+        // Now the banner is the *only* movie-detail surface (the old
+        // Alt+M full-screen view was removed), so it reuses that view's
+        // scroll mechanism instead: the full overview and director text are
+        // always reachable via `power_detail_scroll`, driven by
+        // `Up`/`Down`/`PageUp`/`PageDown` in `input.rs` whenever this block
+        // overflows (`layout.detail_max_scroll > 0`).
+        if row < max_y && (!item.overview.is_empty() || !item.director.is_empty()) {
             let avail = max_y.saturating_sub(row) as usize;
-            let shadow_lines = img_end_row.saturating_sub(row) as usize;
-            let mut all_lines: Vec<String> = Vec::new();
-            let overview_start = row;
+            let ov_start_y = row;
+            let shadow_lines = img_end_row.saturating_sub(ov_start_y) as usize;
 
-            for paragraph in overview.lines() {
+            // When the user has scrolled, lines with index >= shadow_lines may appear
+            // in the on-screen rows that still overlap the image. Wrap using
+            // scroll + shadow_lines as the narrow boundary so every line that
+            // could appear next to the image at the current scroll position is
+            // wrapped at narrow width; `text_dims(row)` (keyed off the actual
+            // on-screen row) picks the final width when rendering.
+            let cur_scroll = self.libs[lib_idx].power_detail_scroll;
+            let shadow_boundary = cur_scroll + shadow_lines;
+
+            let cleaned_overview = clean_overview(&item.overview);
+            let mut all_lines: Vec<String> = Vec::new();
+            for paragraph in cleaned_overview.lines() {
                 let paragraph = if paragraph.trim().is_empty() {
                     " "
                 } else {
                     paragraph.trim()
                 };
                 let line_idx = all_lines.len();
-                let wrap_w = if line_idx < shadow_lines {
+                let wrap_w = if line_idx < shadow_boundary {
                     narrow_w.max(1)
                 } else {
                     inner_w.max(1)
@@ -216,330 +233,15 @@ impl App {
                 }
             }
 
-            if avail > 0 {
-                let clipped = all_lines.len() > avail;
-                for (disp_idx, line_text) in all_lines.iter().take(avail).enumerate() {
-                    let mut line = line_text.clone();
-                    let (tw, tw16) = text_dims(row);
-                    if clipped && disp_idx + 1 == avail {
-                        let base = trunc_str(&line, tw.saturating_sub(1)).to_string();
-                        line = format!("{base}\u{2026}");
-                    }
-                    f.render_widget(
-                        Paragraph::new(Line::from(Span::styled(
-                            trunc_str(&line, tw),
-                            Style::default().fg(text_color),
-                        ))),
-                        Rect {
-                            x: inner_x,
-                            y: row,
-                            width: tw16,
-                            height: 1,
-                        },
-                    );
-                    row += 1;
-                    if row >= max_y {
-                        break;
-                    }
-                }
-            }
-            if row < max_y && row > overview_start && !item.director.is_empty() {
-                row += 1;
-            }
-        }
-
-        if row < max_y && !item.director.is_empty() {
-            let (tw, tw16) = text_dims(row);
-            f.render_widget(
-                Paragraph::new(Line::from(vec![
-                    Span::styled("Director: ", Style::default().fg(palette::SUBTLE)),
-                    Span::styled(
-                        trunc_str(&item.director, tw),
-                        Style::default().fg(palette::TEXT),
-                    ),
-                ])),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: tw16,
-                    height: 1,
-                },
-            );
-        }
-
-        if img_height > 0 {
-            if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
-                type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
-                    Rect {
-                        x: img_x,
-                        y: img_y,
-                        width: img_actual_w,
-                        height: img_height,
-                    },
-                    state,
-                );
-            }
-        }
-    }
-
-    /// Renders the movie detail panel (title, metadata, overview, director) into `area`.
-    /// Called instead of `render_power_list` when `power_detail_item` is Some.
-    pub(super) fn render_power_detail(
-        &mut self,
-        f: &mut Frame,
-        area: Rect,
-        lib_idx: usize,
-        focused: bool,
-        layout: &mut LayoutPower,
-    ) {
-        // Clone so self is free for scroll-state writes below.
-        let item = match self.libs[lib_idx].power_detail_item.clone() {
-            Some(it) => it,
-            None => return,
-        };
-        if area.height == 0 {
-            return;
-        }
-
-        layout.cursor_screen_y = Some(area.y);
-
-        let inner_x = area.x + 1;
-        let inner_w = (area.width as usize).saturating_sub(2);
-        let inner_w16 = area.width.saturating_sub(2);
-        let max_y = area.y + area.height;
-        let mut row = area.y;
-
-        let title_color = if focused {
-            palette::YELLOW
-        } else {
-            palette::SUBTLE
-        };
-        let text_color = if focused {
-            palette::WHITE
-        } else {
-            palette::SUBTLE
-        };
-
-        // — Primary poster image (right-aligned in a bordered block, starts on second row) —
-        const IMG_COLS: u16 = 28;
-        const IMG_MAX_ROWS: u16 = 12;
-        let img_start_row = area.y + 1; // row immediately after title
-
-        // Fetch the Primary image using a key distinct from the backdrop key.
-        let primary_cache_key = format!("{}:det_primary", item.id);
-        if self.images_enabled() {
-            self.fetch_card_image(
-                primary_cache_key.clone(),
-                item.id.clone(),
-                item.series_id.clone(),
-                &["Primary"],
-            );
-        }
-
-        // Pre-compute the *actual* rendered dimensions. size_for() respects aspect ratio so
-        // the image may be narrower than IMG_COLS (e.g. a portrait poster). We need the real
-        // width to position it flush-right and to compute the text shadow width.
-        // The borrow on card_image_states ends at the closing } of this block.
-        let (img_actual_w, img_height): (u16, u16) = {
-            if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
-                let avail = ratatui::layout::Size {
-                    width: IMG_COLS,
-                    height: IMG_MAX_ROWS,
-                };
-                // `size_for` is `None` while resize+encode is in-flight on the
-                // worker thread; treat that the same as no image yet.
-                let actual = state
-                    .size_for(
-                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                        avail,
-                    )
-                    .unwrap_or_default();
-                (actual.width, actual.height)
-            } else {
-                (0, 0)
-            }
-        };
-
-        // Image is flush with the right edge; shadow extends 1 extra row below (bottom padding).
-        let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        // img_end_row is exclusive: image rows + 1 blank padding row below.
-        let img_end_row = img_start_row + img_height + 1;
-        layout.inline_image_rect = if img_height > 0 {
-            Some(Rect {
-                x: img_x,
-                y: img_start_row,
-                width: img_actual_w,
-                height: img_height + 1,
-            })
-        } else {
-            None
-        };
-
-        // Narrow text width: leave 1-col gap to the left of the image.
-        // img_x = area.x + area.width - img_actual_w; text spans [inner_x, inner_x + narrow_w16).
-        // Last text col = inner_x + narrow_w16 - 1; gap col = img_x - 1; so narrow_w16 = img_x - inner_x - 1.
-        // = (area.width - img_actual_w) - 1 - 1 = inner_w16 - img_actual_w - 1 + 1 ... simplify:
-        // narrow_w16 = area.width - img_actual_w - 2 = inner_w16 - img_actual_w
-        let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
-        let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
-
-        // Return the appropriate (char_width, u16_width) for a given absolute row.
-        let text_dims = |r: u16| -> (usize, u16) {
-            if img_height > 0 && r >= img_start_row && r < img_end_row {
-                (narrow_w, narrow_w16)
-            } else {
-                (inner_w, inner_w16)
-            }
-        };
-
-        // — Title (row 0 — full width, image hasn't started yet) —
-        if row < max_y {
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    trunc_str(&item.name, inner_w),
-                    Style::default().fg(title_color),
-                ))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: inner_w16,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
-
-        // — Meta: genre  year  duration (SUBTLE) —
-        if row < max_y {
-            let dur_str = if item.runtime_ticks > 0 {
-                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
-            } else {
-                String::new()
-            };
-            let year_str = if item.production_year > 0 {
-                item.production_year.to_string()
-            } else {
-                String::new()
-            };
-            let meta = [item.genre.as_str(), year_str.as_str(), dur_str.as_str()]
-                .iter()
-                .filter(|s| !s.is_empty())
-                .copied()
-                .collect::<Vec<_>>()
-                .join("  ");
-            let (tw, tw16) = text_dims(row);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    trunc_str(&meta, tw),
-                    Style::default().fg(palette::SUBTLE),
-                ))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: tw16,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
-
-        // — Technical: video_info then audio_info on separate rows (MUTED) —
-        for tech_str in [item.video_info.as_str(), item.audio_info.as_str()] {
-            if row < max_y && !tech_str.is_empty() {
-                let (tw, tw16) = text_dims(row);
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        trunc_str(tech_str, tw),
-                        Style::default().fg(palette::MUTED),
-                    ))),
-                    Rect {
-                        x: inner_x,
-                        y: row,
-                        width: tw16,
-                        height: 1,
-                    },
-                );
-                row += 1;
-            }
-        }
-
-        let playback = self.effective_playback_state();
-        let now_playing_id: Option<String> = if playback.active {
-            self.playback_queue()
-                .items
-                .get(playback.active_idx)
-                .map(|i| i.id.clone())
-        } else {
-            None
-        };
-        if now_playing_id.as_deref() == Some(item.id.as_str()) && row < max_y {
-            let (_tw, tw16) = text_dims(row);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    "Playing",
-                    Style::default()
-                        .fg(palette::FOAM)
-                        .add_modifier(Modifier::BOLD),
-                ))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: tw16,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
-
-        // — Overview + Director (single scrollable block) —
-        // Director flows naturally after the description with a blank separator;
-        // nothing is pinned to the bottom.
-        if (!item.overview.is_empty() || !item.director.is_empty()) && row < max_y {
-            let avail = max_y.saturating_sub(row) as usize;
-            let ov_start_y = row;
-
-            // How many display rows at the top of this block still overlap with the image?
-            let shadow_lines = img_end_row.saturating_sub(ov_start_y) as usize;
-
-            // When the user has scrolled, lines with abs_line_idx >= shadow_lines may appear
-            // in the on-screen rows that still overlap the image (disp_idx < shadow_lines).
-            // Wrap using scroll + shadow_lines as the narrow boundary so that every line
-            // that will appear next to the image on screen is wrapped at narrow width.
-            let cur_scroll = self.libs[lib_idx].power_detail_scroll;
-            let shadow_boundary = cur_scroll + shadow_lines;
-
-            // Word-wrap the overview, switching from narrow to full width at the shadow boundary.
-            let mut all_lines: Vec<String> = Vec::new();
-            let mut cur = String::new();
-            for word in item.overview.split_whitespace() {
-                let line_idx = all_lines.len();
-                let wrap_w = if line_idx < shadow_boundary {
-                    narrow_w
-                } else {
-                    inner_w
-                };
-                let word_w = word.width();
-                if cur.is_empty() {
-                    cur.push_str(word);
-                } else if cur.width() + 1 + word_w <= wrap_w {
-                    cur.push(' ');
-                    cur.push_str(word);
-                } else {
-                    all_lines.push(std::mem::take(&mut cur));
-                    cur.push_str(word);
-                }
-            }
-            if !cur.is_empty() {
-                all_lines.push(cur);
-            }
-
-            // Director flows after the overview: blank gap then the director line.
+            // Director flows after the overview: blank gap then the director
+            // line (rendered specially below so its "Director: " label keeps
+            // its own style, matching the banner's previous look).
             let director_line_idx: Option<usize> = if !item.director.is_empty() {
-                all_lines.push(String::new()); // blank separator
+                if !all_lines.is_empty() {
+                    all_lines.push(String::new());
+                }
                 let idx = all_lines.len();
-                all_lines.push(format!("Director: {}", item.director));
+                all_lines.push(String::new());
                 Some(idx)
             } else {
                 None
@@ -557,24 +259,29 @@ impl App {
                     if row >= max_y {
                         break;
                     }
-                    // Use disp_idx (on-screen position) to pick width: the first shadow_lines
-                    // rows are next to the image regardless of scroll position.
-                    let tw16 = if disp_idx < shadow_lines {
-                        narrow_w16
-                    } else {
-                        inner_w16
-                    };
+                    let (tw, tw16) = text_dims(row);
                     let abs_line_idx = scroll + disp_idx;
-                    let fg = if Some(abs_line_idx) == director_line_idx {
-                        palette::MUTED
-                    } else {
-                        text_color
-                    };
-                    if !line_text.is_empty() {
+                    if Some(abs_line_idx) == director_line_idx {
+                        f.render_widget(
+                            Paragraph::new(Line::from(vec![
+                                Span::styled("Director: ", Style::default().fg(palette::SUBTLE)),
+                                Span::styled(
+                                    trunc_str(&item.director, tw),
+                                    Style::default().fg(palette::TEXT),
+                                ),
+                            ])),
+                            Rect {
+                                x: inner_x,
+                                y: row,
+                                width: tw16,
+                                height: 1,
+                            },
+                        );
+                    } else if !line_text.is_empty() {
                         f.render_widget(
                             Paragraph::new(Line::from(Span::styled(
-                                line_text.clone(),
-                                Style::default().fg(fg),
+                                trunc_str(line_text, tw),
+                                Style::default().fg(text_color),
                             ))),
                             Rect {
                                 x: inner_x,
@@ -587,6 +294,11 @@ impl App {
                     row += 1;
                 }
 
+                // Scroll indicator (#204 review fix): the old truncate-with-
+                // "…" behavior at least hinted more text existed; scrolling
+                // needs an explicit visual cue instead, matching every other
+                // scrollable power-view surface (album/episode/home/list/
+                // queue all call this for their own overflowing content).
                 if max_scroll > 0 {
                     let ov_area = Rect {
                         x: area.x,
@@ -599,20 +311,17 @@ impl App {
             }
         }
 
-        // — Render Primary image last so it layers over text cleanly —
-        // No border drawn; the 1-col left gap and 1-row bottom gap are handled via shadow math.
         if img_height > 0 {
             if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
                 type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-                let img_rect = Rect {
-                    x: img_x,
-                    y: img_start_row,
-                    width: img_actual_w,
-                    height: img_height,
-                };
                 f.render_stateful_widget(
                     SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
-                    img_rect,
+                    Rect {
+                        x: img_x,
+                        y: img_y,
+                        width: img_actual_w,
+                        height: img_height,
+                    },
                     state,
                 );
             }
@@ -641,18 +350,23 @@ mod tests {
         out
     }
 
-    fn render_power_detail_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
+    fn render_power_compact_detail_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
         let backend = TestBackend::new(60, 16);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
-            app.render_power_detail(f, Rect::new(0, 0, 60, 16), 0, true, layout);
+            app.render_power_compact_detail(f, Rect::new(0, 0, 60, 16), 0, true, layout);
         })
         .unwrap();
         buffer_to_string(&term)
     }
 
+    // Alt+M's full-screen detail view (`render_power_detail`) was removed in
+    // #204: the compact banner (`render_power_compact_detail`) is now the
+    // single movie-detail surface, so this exercises that instead. The
+    // "enter prompt" assertions predate both surfaces having ever shown one;
+    // kept as a regression guard.
     #[test]
-    fn expanded_movie_detail_shows_director_without_enter_prompt() {
+    fn compact_movie_detail_shows_director_without_enter_prompt() {
         let mut app = make_app_stub();
 
         let mut library = make_item("Movies", "CollectionFolder");
@@ -662,7 +376,7 @@ mod tests {
 
         let mut movie = make_item("Focused Movie", "Movie");
         movie.id = "movie-1".into();
-        movie.overview = "A long-form overview for the expanded movie detail panel.".into();
+        movie.overview = "A long-form overview for the compact movie detail banner.".into();
         movie.director = "Jane Director".into();
 
         app.libs.push(LibraryTab {
@@ -670,7 +384,7 @@ mod tests {
             nav_stack: vec![BrowseLevel {
                 parent_id: "lib-movies".into(),
                 title: "Movies".into(),
-                items: vec![movie.clone()],
+                items: vec![movie],
                 total_count: 1,
                 cursor: 0,
                 scroll: 0,
@@ -683,14 +397,13 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: Some(movie),
             power_detail_scroll: 0,
 
             album_track_focus: None,
         });
 
         let mut layout = LayoutPower::default();
-        let out = render_power_detail_to_string(&mut app, &mut layout);
+        let out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
         assert!(
             out.contains("Director: Jane Director"),
@@ -703,6 +416,66 @@ mod tests {
         assert!(
             !out.contains("[ENTER]"),
             "enter prompt should be removed:\n{out}"
+        );
+    }
+
+    #[test]
+    fn compact_movie_detail_scrolls_to_reveal_full_overview_and_director() {
+        let mut app = make_app_stub();
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        let mut movie = make_item("Focused Movie", "Movie");
+        movie.id = "movie-1".into();
+        // Well over the old 400-char trunc_overview() cap, and long enough
+        // to overflow the banner's fixed content-row budget.
+        movie.overview = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. "
+            .repeat(12);
+        movie.director = "Very Distinctive Unique Director Name".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: vec![movie],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: 0,
+
+            album_track_focus: None,
+        });
+
+        let mut layout = LayoutPower::default();
+        let top_out = render_power_compact_detail_to_string(&mut app, &mut layout);
+        assert!(
+            !top_out.contains("Very Distinctive Unique Director Name"),
+            "director should not fit on screen before scrolling:\n{top_out}"
+        );
+        assert!(
+            layout.detail_max_scroll > 0,
+            "long overview should overflow the banner and report a scrollable range"
+        );
+
+        app.libs[0].power_detail_scroll = layout.detail_max_scroll;
+        let mut layout = LayoutPower::default();
+        let scrolled_out = render_power_compact_detail_to_string(&mut app, &mut layout);
+        assert!(
+            scrolled_out.contains("Very Distinctive Unique Director Name"),
+            "expected full director text after scrolling to the end:\n{scrolled_out}"
         );
     }
 }
