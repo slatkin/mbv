@@ -21,6 +21,23 @@ static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 // The watchdog's forced exit arms only on this flag so clean q-quits are never raced.
 static TERMINAL_GONE: AtomicBool = AtomicBool::new(false);
 
+#[cfg(test)]
+type DirectConnectFn = fn(
+    &mbv_core::remote_player::DaemonEndpoint,
+    &str,
+) -> Result<
+    (
+        mbv_core::remote_player::RemotePlayer,
+        mpsc::Receiver<PlayerEvent>,
+    ),
+    String,
+>;
+
+#[cfg(test)]
+static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> = Mutex::new(None);
+#[cfg(test)]
+static DIRECT_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 pub(super) const QUEUE_VIEW_POWER: u8 = 1;
 pub(super) const QUEUE_VIEW_COUNT: u8 = 2;
 pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
@@ -2083,13 +2100,24 @@ impl App {
         }
     }
 
-    fn sync_playback_queue_after_append(&self, scope: QueueScope, items: Vec<MediaItem>) {
+    fn sync_playback_queue_after_append(
+        &mut self,
+        scope: QueueScope,
+        items: Vec<MediaItem>,
+    ) -> bool {
         if items.is_empty() || scope != self.playback_target_queue_scope() {
-            return;
+            return true;
         }
-        let _ = self
+        let sent = self
             .player
             .send_command(crate::player::PlayerCommand::QueueAppend { items });
+        if !sent && !self.player.supports_queue_append() {
+            self.flash_status_high(
+                "Remote append is not supported by this direct mbv peer".to_string(),
+            );
+            return false;
+        }
+        true
     }
 
     fn playback_target_queue_scope(&self) -> QueueScope {
@@ -2270,6 +2298,25 @@ impl App {
             .then_some(mbv_core::remote_player::DaemonEndpoint::Local)
     }
 
+    fn connect_direct_endpoint(
+        &self,
+        endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        auth_token: &str,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
+        #[cfg(test)]
+        if let Some(connect) = *DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
+            return connect(endpoint, auth_token);
+        }
+
+        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, auth_token)
+    }
+
     fn switch_to_direct_remote(
         &mut self,
         sess: &mbv_core::api::SessionInfo,
@@ -2378,13 +2425,11 @@ impl App {
     }
 
     fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
+        let mut direct_upgrade_error = None;
         if !self.player.is_remote() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
                 let auth_token = self.client.lock().unwrap().token.clone();
-                match mbv_core::remote_player::RemotePlayer::connect_endpoint(
-                    &endpoint,
-                    &auth_token,
-                ) {
+                match self.connect_direct_endpoint(&endpoint, &auth_token) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_direct_remote(sess, remote, remote_rx);
                         return;
@@ -2396,6 +2441,7 @@ impl App {
                             sess.device_name,
                             e
                         );
+                        direct_upgrade_error = Some(e);
                     }
                 }
             }
@@ -2416,7 +2462,13 @@ impl App {
         self.remote_pos_at = Instant::now();
         self.remote_api_pos_advanced_at = Instant::now();
         self.show_sessions = false;
-        self.flash_status(format!("Connected to {name}"));
+        if let Some(error) = direct_upgrade_error {
+            self.flash_status_high(format!(
+                "Direct mbv control failed: {error}; using attached session {name}"
+            ));
+        } else {
+            self.flash_status(format!("Connected to {name}"));
+        }
         self.spawn_sessions_load();
     }
 
@@ -5809,6 +5861,21 @@ pub(crate) mod tests {
         (app, cmd_rx)
     }
 
+    fn make_v2_remote_app_stub_with_cmd_rx(
+        local_items: Vec<MediaItem>,
+        remote_items: Vec<MediaItem>,
+    ) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+        use crate::config::Config;
+        use mbv_core::api::EmbyClient;
+
+        let (remote, player_rx, cmd_rx) =
+            mbv_core::remote_player::RemotePlayer::stub_v2_with_command_rx(remote_items, 0);
+        let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
+        app.player_tab.items = local_items;
+        app.player_tab.queue_cursor = 0;
+        (app, cmd_rx)
+    }
+
     fn make_local_daemon_app_stub(remote_items: Vec<MediaItem>) -> App {
         use crate::config::Config;
         use mbv_core::api::EmbyClient;
@@ -5997,6 +6064,72 @@ pub(crate) mod tests {
         assert_eq!(
             app.session_direct_endpoint(&sess),
             Some(mbv_core::remote_player::DaemonEndpoint::Local)
+        );
+    }
+
+    #[test]
+    fn connect_to_session_uses_direct_upgrade_success() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+        fn direct_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_success);
+        let mut app = make_app_stub();
+        let mut sess = make_session("remote-mbv", "mbv");
+        sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
+
+        app.connect_to_session(&sess);
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(app.remote_player_tab.is_some());
+        assert!(app.connected_session_id.is_none());
+        assert_eq!(app.status, "Connected directly to remote-mbv");
+    }
+
+    #[test]
+    fn connect_to_session_preserves_direct_upgrade_failure_status_after_fallback() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+        fn direct_failure(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Err("incompatible daemon protocol version: peer=1 local=3".to_string())
+        }
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_failure);
+        let mut app = make_app_stub();
+        let mut sess = make_session("remote-mbv", "mbv");
+        sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
+
+        app.connect_to_session(&sess);
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(app.remote_player_tab.is_none());
+        assert_eq!(app.connected_session_id.as_deref(), Some("sess-1"));
+        assert_eq!(
+            app.status,
+            "Direct mbv control failed: incompatible daemon protocol version: peer=1 local=3; using attached session remote-mbv"
         );
     }
 
@@ -8337,7 +8470,8 @@ pub(crate) mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(3);
-        let mut app = make_remote_app_stub(local_items, remote_items.clone());
+        let (mut app, _cmd_rx) =
+            make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
         app.tab_idx = 0;
         app.queue_scope = QueueScope::Remote;
         app.home.section = 0;
@@ -8361,6 +8495,89 @@ pub(crate) mod tests {
                 .chain(std::iter::once("id0"))
                 .collect::<Vec<_>>()
         );
+    }
+
+    #[test]
+    fn alt_q_rejects_v2_direct_remote_append_without_replace_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let (mut app, cmd_rx) = make_v2_remote_app_stub_with_cmd_rx(local_items, remote_items);
+        app.tab_idx = 0;
+        app.queue_scope = QueueScope::Remote;
+        app.home.section = 0;
+        app.home.continue_items = make_items(1);
+        app.home.continue_cursor = 0;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+
+        assert!(!handled);
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "v2 direct remote append must not fall back to ReplaceQueue"
+        );
+        assert_eq!(
+            app.status,
+            "Remote append is not supported by this direct mbv peer"
+        );
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["id0", "id1", "id2"]
+        );
+    }
+
+    #[test]
+    fn rejected_v2_direct_remote_append_preserves_remote_undo_slot_identity() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let (mut app, _cmd_rx) = make_v2_remote_app_stub_with_cmd_rx(local_items, remote_items);
+        app.set_queue_scope(QueueScope::Remote);
+        app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+
+        app.move_queue_item_up();
+        let moved_slot = app
+            .remote_player_tab
+            .as_ref()
+            .unwrap()
+            .resolve_slot_at(0)
+            .expect("moved slot should be at destination");
+
+        app.tab_idx = 0;
+        app.home.section = 0;
+        app.home.continue_items = make_items(1);
+        app.home.continue_cursor = 0;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+
+        assert!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .slot_id_matches_at(0, moved_slot),
+            "rejected append rollback must preserve existing remote queue slot IDs"
+        );
+
+        app.undo_last_queue_edit(QueueScope::Remote);
+
+        assert_ne!(app.status, "Can't undo move: queue changed since then");
+        assert!(app.remote_queue_undo_stack.is_empty());
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["id0", "id1", "id2"]
+        );
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
     }
 
     #[test]

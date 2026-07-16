@@ -2357,6 +2357,8 @@ impl App {
             let name = item.display_name();
             let scope = self.visible_queue_scope();
             let appended = item.clone();
+            let previous_dirty = self.queue_dirty;
+            let previous_queue = self.queue_for_scope(scope).clone();
             {
                 self.queue_for_scope_mut(scope).append_item(item);
             }
@@ -2364,9 +2366,13 @@ impl App {
                 self.queue_dirty = true;
             }
             self.flash_status(format!("Added: {name}"));
-            self.persist_local_queue_state_if_needed(scope);
-            self.sync_playback_queue_after_append(scope, vec![appended]);
-            self.sync_direct_remote_queue_after_edit(scope);
+            if self.sync_playback_queue_after_append(scope, vec![appended]) {
+                self.sync_direct_remote_queue_after_edit(scope);
+                self.persist_local_queue_state_if_needed(scope);
+            } else {
+                self.queue_dirty = previous_dirty;
+                *self.queue_for_scope_mut(scope) = previous_queue;
+            }
         } else if self.tab_idx >= 2 {
             let Some(item) = self.current_lib_item() else {
                 return;
@@ -2381,6 +2387,8 @@ impl App {
             let name = item.display_name();
             let scope = self.visible_queue_scope();
             let appended = item.clone();
+            let previous_dirty = self.queue_dirty;
+            let previous_queue = self.queue_for_scope(scope).clone();
             {
                 self.queue_for_scope_mut(scope).append_item(item);
             }
@@ -2388,9 +2396,13 @@ impl App {
                 self.queue_dirty = true;
             }
             self.flash_status(format!("Added: {name}"));
-            self.persist_local_queue_state_if_needed(scope);
-            self.sync_playback_queue_after_append(scope, vec![appended]);
-            self.sync_direct_remote_queue_after_edit(scope);
+            if self.sync_playback_queue_after_append(scope, vec![appended]) {
+                self.sync_direct_remote_queue_after_edit(scope);
+                self.persist_local_queue_state_if_needed(scope);
+            } else {
+                self.queue_dirty = previous_dirty;
+                *self.queue_for_scope_mut(scope) = previous_queue;
+            }
         }
     }
 
@@ -2408,6 +2420,8 @@ impl App {
                 }
                 let scope = self.visible_queue_scope();
                 let appended = items.clone();
+                let previous_dirty = self.queue_dirty;
+                let previous_queue = self.queue_for_scope(scope).clone();
                 {
                     let queue = self.queue_for_scope_mut(scope);
                     queue.append_items(items);
@@ -2419,9 +2433,13 @@ impl App {
                     "Enqueued {count} items from {}",
                     item.display_name()
                 ));
-                self.persist_local_queue_state_if_needed(scope);
-                self.sync_playback_queue_after_append(scope, appended);
-                self.sync_direct_remote_queue_after_edit(scope);
+                if self.sync_playback_queue_after_append(scope, appended) {
+                    self.sync_direct_remote_queue_after_edit(scope);
+                    self.persist_local_queue_state_if_needed(scope);
+                } else {
+                    self.queue_dirty = previous_dirty;
+                    *self.queue_for_scope_mut(scope) = previous_queue;
+                }
             }
             Err(e) => {
                 drop(client);
