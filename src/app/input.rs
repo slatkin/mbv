@@ -4244,25 +4244,15 @@ mod power_music_track_focus_tests {
         album.id = "album-beta".into();
         album.artist = "Beta".into();
         album.is_folder = true;
-        app.libs[0]
-            .nav_stack
-            .last_mut()
-            .unwrap()
-            .items
-            .push(album);
+        app.libs[0].nav_stack.last_mut().unwrap().items.push(album);
 
-        // A second Beta album keeps the "Beta" header group's child_count above 1,
-        // since headers for groups with only one child are no longer selectable.
+        // A second Beta album gives the fixture a multi-album artist group for
+        // header-navigation and bulk-action coverage.
         let mut album2 = make_item("Beta Album Two", "MusicAlbum");
         album2.id = "album-beta-2".into();
         album2.artist = "Beta".into();
         album2.is_folder = true;
-        app.libs[0]
-            .nav_stack
-            .last_mut()
-            .unwrap()
-            .items
-            .push(album2);
+        app.libs[0].nav_stack.last_mut().unwrap().items.push(album2);
     }
 
     fn push_tracks(app: &mut App, album_id: &str, count: usize) {
@@ -4502,7 +4492,6 @@ mod power_music_track_focus_tests {
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
             first_album_id: "album-1".into(),
             artist_label: "Unknown Artist".into(),
-            child_count: 2,
         });
         app
     }
@@ -4534,7 +4523,6 @@ mod power_music_track_focus_tests {
             Some(crate::app::ArtistHeaderSelection {
                 first_album_id: "album-beta".into(),
                 artist_label: "Beta".into(),
-                child_count: 2,
             })
         );
         assert_eq!(
@@ -4550,7 +4538,7 @@ mod power_music_track_focus_tests {
     }
 
     #[test]
-    fn single_child_artist_header_is_not_selectable() {
+    fn artist_header_selection_survives_group_size_change() {
         let mut app = make_power_music_album_app();
         let mut zeta_album = make_item("Zeta Album", "MusicAlbum");
         zeta_album.id = "album-zeta".into();
@@ -4562,20 +4550,36 @@ mod power_music_track_focus_tests {
             .unwrap()
             .items
             .push(zeta_album);
-        // Zeta sorts after "Unknown Artist" (album-1, album-2), so its
-        // display index (2) is the last item in the group listing.
-        app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-zeta".into(),
+            artist_label: "Zeta".into(),
+        });
 
-        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        let mut zeta_album_two = make_item("Zeta Album Two", "MusicAlbum");
+        zeta_album_two.id = "album-zeta-2".into();
+        zeta_album_two.artist = "Zeta".into();
+        zeta_album_two.is_folder = true;
+        app.libs[0]
+            .nav_stack
+            .last_mut()
+            .unwrap()
+            .items
+            .push(zeta_album_two);
+
+        render_full_app(&mut app, 100, 24);
 
         assert!(
-            app.libs[0].artist_header_focus.is_none(),
-            "a header for a group with only one child must not become selectable"
+            app.libs[0].artist_header_focus.is_some(),
+            "revalidation should keep the same artist header focused when the \
+             loaded sibling count changes"
         );
         assert_eq!(
-            app.libs[0].nav_stack.last().unwrap().cursor,
-            1,
-            "cursor should skip the non-selectable single-child header and land on the previous album"
+            app.selected_artist_header_album_items(0)
+                .expect("expected Zeta header selection to remain valid")
+                .1
+                .len(),
+            2,
+            "the same focused header should resolve the expanded group after another album loads"
         );
     }
 
@@ -4585,7 +4589,6 @@ mod power_music_track_focus_tests {
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
             first_album_id: "album-1".into(),
             artist_label: "Unknown Artist".into(),
-            child_count: 2,
         });
         let nav_len = app.libs[0].nav_stack.len();
 
@@ -4626,7 +4629,6 @@ mod power_music_track_focus_tests {
             Some(crate::app::ArtistHeaderSelection {
                 first_album_id: "album-beta".into(),
                 artist_label: "Beta".into(),
-                child_count: 2,
             })
         );
         assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
@@ -4638,7 +4640,6 @@ mod power_music_track_focus_tests {
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
             first_album_id: "album-1".into(),
             artist_label: "Unknown Artist".into(),
-            child_count: 2,
         });
 
         app.open_context_menu();
@@ -4659,7 +4660,6 @@ mod power_music_track_focus_tests {
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
             first_album_id: "album-1".into(),
             artist_label: "Unknown Artist".into(),
-            child_count: 2,
         });
 
         let (_, albums) = app
@@ -4680,7 +4680,6 @@ mod power_music_track_focus_tests {
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
             first_album_id: "missing-album".into(),
             artist_label: "Unknown Artist".into(),
-            child_count: 2,
         });
 
         let albums = app.selected_artist_header_album_items(0);
@@ -4910,7 +4909,6 @@ mod power_music_track_focus_tests {
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
             first_album_id: "album-1".into(),
             artist_label: "Unknown Artist".into(),
-            child_count: 2,
         });
 
         app.select_music_group(0, 1);
@@ -4930,7 +4928,6 @@ mod power_music_track_focus_tests {
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
             first_album_id: "album-1".into(),
             artist_label: "Unknown Artist".into(),
-            child_count: 2,
         });
 
         app.switch_music_group(0, 1);

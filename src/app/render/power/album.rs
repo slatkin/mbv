@@ -38,7 +38,7 @@ impl GroupedAlbumDisplayRow {
     fn row_target(&self, selectable_headers: bool) -> Option<PowerLeftRowTarget> {
         match self {
             Self::Album(idx) => Some(PowerLeftRowTarget::Album(*idx)),
-            Self::ArtistHeader(selection) if selectable_headers && selection.child_count > 1 => {
+            Self::ArtistHeader(selection) if selectable_headers => {
                 Some(PowerLeftRowTarget::ArtistHeader(selection.clone()))
             }
             _ => None,
@@ -81,28 +81,15 @@ impl App {
         let mut order: Vec<usize> = (0..album_info.len()).collect();
         order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
 
-        let mut artist_child_counts: std::collections::HashMap<&str, usize> =
-            std::collections::HashMap::new();
-        for &idx in &order {
-            *artist_child_counts
-                .entry(album_info[idx].0.as_str())
-                .or_insert(0) += 1;
-        }
-
         let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
         let mut last_artist = String::new();
         for &idx in &order {
             let artist = &album_info[idx].0;
             if artist != &last_artist {
-                let child_count = artist_child_counts
-                    .get(artist.as_str())
-                    .copied()
-                    .unwrap_or(0);
                 rows.push(GroupedAlbumDisplayRow::ArtistHeader(
                     ArtistHeaderSelection {
                         first_album_id: albums[idx].id.clone(),
                         artist_label: artist.clone(),
-                        child_count,
                     },
                 ));
                 last_artist = artist.clone();

@@ -1004,7 +1004,6 @@ mod tests {
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
             first_album_id: "album-1".into(),
             artist_label: "Alpha".into(),
-            child_count: 1,
         });
 
         let mut layout = LayoutPower::default();
