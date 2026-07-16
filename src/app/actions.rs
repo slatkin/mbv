@@ -1,9 +1,9 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes, take_chars};
 use super::{
-    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, BrowseLevel, ContextAction,
-    FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryPositionScope, LocalPlaybackTarget,
-    PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope, RemotePlaybackTarget, SessionEvent,
-    UndoEntry, PAGE_SIZE, PREFETCH_AHEAD, QUEUE_VIEW_POWER,
+    AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, ArtistHeaderSelection, BrowseLevel,
+    ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryPositionScope,
+    LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
+    RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD, QUEUE_VIEW_POWER,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::indicators::IndicatorData;
@@ -942,6 +942,20 @@ impl App {
         // doesn't overflow.
         self.libs[lib_idx].power_detail_scroll = 0;
 
+        if self.queue_view == QUEUE_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab == lib_idx + 1
+            && self.libs[lib_idx].search.is_none()
+            && self.libs[lib_idx].album_track_focus.is_none()
+            && self.move_power_music_group_display_cursor(lib_idx, delta)
+        {
+            self.save_default_library_position(lib_idx);
+            if idle {
+                self.maybe_fetch_next_page(lib_idx);
+            }
+            return;
+        }
+
         if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                 let n = state.selected_len();
@@ -1015,6 +1029,18 @@ impl App {
         // (already 0) for every non-movie list and for movies whose banner
         // doesn't overflow.
         self.libs[lib_idx].power_detail_scroll = 0;
+
+        if self.queue_view == QUEUE_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab == lib_idx + 1
+            && self.libs[lib_idx].search.is_none()
+            && self.libs[lib_idx].album_track_focus.is_none()
+            && self.jump_power_music_group_display_cursor(lib_idx, to_end)
+        {
+            self.save_default_library_position(lib_idx);
+            self.maybe_fetch_next_page(lib_idx);
+            return;
+        }
 
         if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
@@ -1726,7 +1752,7 @@ impl App {
             return;
         }
 
-        self.libs[lib_idx].album_track_focus = None;
+        self.libs[lib_idx].clear_power_music_focus();
 
         // Pop the album level.
         self.libs[lib_idx].nav_stack.pop();
@@ -1787,7 +1813,7 @@ impl App {
         if group_cursor >= n {
             return;
         }
-        self.libs[lib_idx].album_track_focus = None;
+        self.libs[lib_idx].clear_power_music_focus();
         self.libs[lib_idx].nav_stack.pop();
         if let Some(group_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             group_lvl.cursor = group_cursor;
@@ -2374,6 +2400,9 @@ impl App {
                 *self.queue_for_scope_mut(scope) = previous_queue;
             }
         } else if self.tab_idx >= 2 {
+            if self.enqueue_selected_artist_header() {
+                return;
+            }
             let Some(item) = self.current_lib_item() else {
                 return;
             };
@@ -2404,6 +2433,145 @@ impl App {
                 *self.queue_for_scope_mut(scope) = previous_queue;
             }
         }
+    }
+
+    fn power_artist_header_action_lib_idx(&self) -> Option<usize> {
+        if self.queue_view == QUEUE_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab > 0
+        {
+            Some(self.power_left_tab - 1)
+        } else {
+            None
+        }
+    }
+
+    fn selected_artist_header_action(&mut self) -> Option<(usize, ArtistHeaderSelection)> {
+        let lib_idx = self.power_artist_header_action_lib_idx()?;
+        self.selected_artist_header_album_items(lib_idx)
+            .map(|(selection, _)| (lib_idx, selection))
+    }
+
+    fn resolve_artist_header_playable_items(
+        &mut self,
+        lib_idx: usize,
+        selection: &ArtistHeaderSelection,
+    ) -> Result<Vec<MediaItem>, String> {
+        let albums = self
+            .artist_header_album_items_for_selection(lib_idx, selection)
+            .unwrap_or_default();
+        let client = self.client.lock().unwrap();
+        let mut resolved = Vec::new();
+        for album in albums {
+            let mut items = client.get_all_playable_recursive(&album.id)?;
+            items.retain(|item| !item.is_folder && is_playable(item));
+            sort_audio_tracks(&mut items);
+            resolved.extend(items);
+        }
+        Ok(resolved)
+    }
+
+    fn enqueue_artist_header_selection(
+        &mut self,
+        lib_idx: usize,
+        selection: &ArtistHeaderSelection,
+    ) -> bool {
+        let items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
+            Ok(items) => items,
+            Err(e) => {
+                self.flash_status_high(format!("Error: {e}"));
+                return true;
+            }
+        };
+        let count = items.len();
+        if count == 0 {
+            self.flash_status_high("Nothing to enqueue".into());
+            return true;
+        }
+
+        let scope = self.visible_queue_scope();
+        let appended = items.clone();
+        let previous_dirty = self.queue_dirty;
+        let previous_queue = self.queue_for_scope(scope).clone();
+        {
+            let queue = self.queue_for_scope_mut(scope);
+            queue.append_items(items);
+        }
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        self.flash_status(format!(
+            "Enqueued {count} items from {}",
+            selection.artist_label
+        ));
+        if self.sync_playback_queue_after_append(scope, appended) {
+            self.sync_direct_remote_queue_after_edit(scope);
+            self.persist_local_queue_state_if_needed(scope);
+        } else {
+            self.queue_dirty = previous_dirty;
+            *self.queue_for_scope_mut(scope) = previous_queue;
+        }
+        true
+    }
+
+    fn enqueue_selected_artist_header(&mut self) -> bool {
+        let Some((lib_idx, selection)) = self.selected_artist_header_action() else {
+            return false;
+        };
+        self.enqueue_artist_header_selection(lib_idx, &selection)
+    }
+
+    fn play_artist_header_selection(
+        &mut self,
+        lib_idx: usize,
+        selection: &ArtistHeaderSelection,
+        shuffle: bool,
+    ) -> bool {
+        let mut items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
+            Ok(items) => items,
+            Err(e) => {
+                self.flash_status_high(format!("Error: {e}"));
+                return true;
+            }
+        };
+        let count = items.len();
+        if count == 0 {
+            self.flash_status_high(if shuffle {
+                "Nothing to shuffle".into()
+            } else {
+                "Nothing to play".into()
+            });
+            return true;
+        }
+        if shuffle {
+            items.shuffle(&mut rand::rng());
+        }
+        self.replace_playback_queue(items.clone(), 0);
+        self.tab_idx = 1;
+        self.flash_status(if shuffle {
+            format!("Shuffling {count} items")
+        } else {
+            format!("Playing {count} items")
+        });
+        self.queue_source = if shuffle {
+            crate::config::QueueSource::Shuffle
+        } else {
+            crate::config::QueueSource::Collection {
+                collection_type: self.libs[lib_idx].library.collection_type.clone(),
+            }
+        };
+        if !self.has_direct_remote_queue() {
+            self.save_queue_state();
+        }
+        self.play_items_routed(items, 0);
+        true
+    }
+
+    pub(super) fn play_selected_artist_header(&mut self, shuffle: bool) -> bool {
+        let Some((lib_idx, selection)) = self.selected_artist_header_action() else {
+            return false;
+        };
+        self.play_artist_header_selection(lib_idx, &selection, shuffle)
     }
 
     pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::MediaItem) {
@@ -2777,6 +2945,16 @@ impl App {
             Some(ContextAction::ShuffleFolder(id)) => {
                 self.shuffle_folder(&id);
             }
+            Some(ContextAction::PlayArtistHeader(selection)) => {
+                if let Some(lib_idx) = self.power_artist_header_action_lib_idx() {
+                    self.play_artist_header_selection(lib_idx, &selection, false);
+                }
+            }
+            Some(ContextAction::ShuffleArtistHeader(selection)) => {
+                if let Some(lib_idx) = self.power_artist_header_action_lib_idx() {
+                    self.play_artist_header_selection(lib_idx, &selection, true);
+                }
+            }
             Some(ContextAction::Enqueue) => {
                 if self.queue_view == super::QUEUE_VIEW_POWER
                     && matches!(self.power_focus, PowerFocus::Left)
@@ -2785,6 +2963,11 @@ impl App {
                     self.power_cw_enqueue();
                 } else {
                     self.enqueue_selected();
+                }
+            }
+            Some(ContextAction::EnqueueArtistHeader(selection)) => {
+                if let Some(lib_idx) = self.power_artist_header_action_lib_idx() {
+                    self.enqueue_artist_header_selection(lib_idx, &selection);
                 }
             }
             Some(ContextAction::EnqueueFolder(item)) => self.do_enqueue_folder((*item).clone()),
@@ -3046,6 +3229,9 @@ impl App {
 
     pub(super) fn shuffle_play(&mut self) {
         if self.tab_idx <= 1 {
+            return;
+        }
+        if self.play_selected_artist_header(true) {
             return;
         }
         let lib_idx = self.tab_idx - self.lib_tab_offset();
@@ -5360,6 +5546,7 @@ impl App {
                 power_detail_scroll: detail_scroll,
 
                 album_track_focus: None,
+                artist_header_focus: None,
             });
         }
         let n = self.libs.len();
@@ -5692,6 +5879,7 @@ mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app
     }
@@ -6085,6 +6273,7 @@ mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         assert_eq!(
@@ -6365,6 +6554,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         let level = BrowseLevel {
@@ -6425,6 +6615,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.normalize_current_browse_level_items(0, false);
@@ -6458,6 +6649,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.ensure_lib_loaded_for(0);
@@ -6492,6 +6684,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.ensure_lib_loaded_for(0);

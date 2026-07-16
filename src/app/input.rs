@@ -1,5 +1,6 @@
 use super::action::power_album_track_command_for_key;
 use super::input_resolver::KeyChord;
+use super::layout::PowerLeftRowTarget;
 use super::settings::settings_total_rows;
 use super::ui_util::item_text_and_style;
 use super::{
@@ -1044,6 +1045,9 @@ impl App {
             KeyCode::Home => self.jump_lib_cursor(false),
             KeyCode::End => self.jump_lib_cursor(true),
             KeyCode::Char('p') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.play_selected_artist_header(false) {
+                    return Some(false);
+                }
                 let item = self.current_lib_item();
                 if let Some(item) = item {
                     if item.is_folder {
@@ -1063,6 +1067,9 @@ impl App {
                 self.toggle_watched()
             }
             KeyCode::Char('s') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                if self.play_selected_artist_header(true) {
+                    return Some(false);
+                }
                 self.shuffle_play()
             }
             KeyCode::Char('r') if key.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1527,7 +1534,13 @@ impl App {
                 if !is_power_nav && self.is_viewing_album_folders(lib_idx) {
                     match key.code {
                         KeyCode::Enter => {
+                            if self.libs[lib_idx].artist_header_focus.is_some()
+                                && self.is_music_group_view(lib_idx)
+                            {
+                                return false;
+                            }
                             if self.libs[lib_idx].album_track_focus.is_none() {
+                                self.clear_artist_header_focus(lib_idx);
                                 self.libs[lib_idx].album_track_focus = Some(0);
                             } else {
                                 let has_focused_track = self
@@ -2036,8 +2049,13 @@ impl App {
                 None
             }
         });
+        let artist_header_context = power_lib_idx
+            .and_then(|lib_idx| self.selected_artist_header_album_items(lib_idx))
+            .map(|(selection, _)| selection);
 
-        let current_item = if cw_focused {
+        let current_item = if artist_header_context.is_some() {
+            None
+        } else if cw_focused {
             self.home
                 .continue_items
                 .get(self.home.continue_cursor)
@@ -2059,7 +2077,23 @@ impl App {
             None
         };
 
-        if let Some(ref item) = current_item {
+        if let Some(selection) = artist_header_context {
+            Self::push_context_action(
+                &mut entries,
+                "Play All",
+                ContextAction::PlayArtistHeader(selection.clone()),
+            );
+            Self::push_context_action(
+                &mut entries,
+                "Shuffle",
+                ContextAction::ShuffleArtistHeader(selection.clone()),
+            );
+            Self::push_context_action(
+                &mut entries,
+                "Add to Queue",
+                ContextAction::EnqueueArtistHeader(selection),
+            );
+        } else if let Some(ref item) = current_item {
             if item.is_folder {
                 Self::push_context_action(
                     &mut entries,
@@ -2416,6 +2450,38 @@ impl App {
                     } else {
                         None
                     };
+                    let row_target = self
+                        .layout
+                        .power
+                        .left_row_targets
+                        .get(click_y)
+                        .cloned()
+                        .flatten();
+                    if self.is_music_group_view(lib_idx) {
+                        match row_target {
+                            Some(PowerLeftRowTarget::ArtistHeader(selection)) => {
+                                self.libs[lib_idx].album_track_focus = None;
+                                self.libs[lib_idx].artist_header_focus = Some(selection);
+                                self.save_default_library_position(lib_idx);
+                                return true;
+                            }
+                            Some(PowerLeftRowTarget::Album(item_idx)) => {
+                                let lib = &mut self.libs[lib_idx];
+                                if let Some(lvl) = lib.nav_stack.last_mut() {
+                                    if item_idx < lvl.items.len() {
+                                        if lvl.cursor != item_idx {
+                                            lib.album_track_focus = None;
+                                        }
+                                        lib.artist_header_focus = None;
+                                        lvl.cursor = item_idx;
+                                        self.save_default_library_position(lib_idx);
+                                        return true;
+                                    }
+                                }
+                            }
+                            None => {}
+                        }
+                    }
                     let is_feed_group = self.is_feed_home_video_group_view(lib_idx);
                     let lib = &mut self.libs[lib_idx];
                     if let Some(s) = &mut lib.search {
@@ -2470,6 +2536,7 @@ impl App {
                                     if lvl.cursor != item_idx {
                                         lib.album_track_focus = None;
                                     }
+                                    lib.artist_header_focus = None;
                                     lvl.cursor = item_idx;
                                 }
                             }
@@ -2485,6 +2552,7 @@ impl App {
                                 if lvl.cursor != clicked {
                                     lib.album_track_focus = None;
                                 }
+                                lib.artist_header_focus = None;
                                 lvl.cursor = clicked;
                             }
                         }
@@ -3531,6 +3599,7 @@ mod power_movie_detail_tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app
@@ -3565,6 +3634,7 @@ mod power_movie_detail_tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
     }
 
@@ -3823,6 +3893,7 @@ mod power_movie_detail_tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
         lib.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
         assert!(lib.context_menu.is_some(), "library view");
@@ -3870,6 +3941,7 @@ mod power_movie_detail_tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
@@ -4160,9 +4232,18 @@ mod power_music_track_focus_tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app
+    }
+
+    fn add_beta_album(app: &mut App) {
+        let mut album = make_item("Beta Album", "MusicAlbum");
+        album.id = "album-beta".into();
+        album.artist = "Beta".into();
+        album.is_folder = true;
+        app.libs[0].nav_stack.last_mut().unwrap().items.push(album);
     }
 
     fn push_tracks(app: &mut App, album_id: &str, count: usize) {
@@ -4239,6 +4320,7 @@ mod power_music_track_focus_tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app
@@ -4262,6 +4344,138 @@ mod power_music_track_focus_tests {
         assert!(!handled);
         assert_eq!(app.libs[0].album_track_focus, Some(0));
         assert_eq!(app.libs[0].nav_stack.len(), nav_len_before);
+    }
+
+    #[test]
+    fn selectable_artist_header_keyboard_up_down_selects_headers() {
+        let mut app = make_power_music_album_app();
+        add_beta_album(&mut app);
+        app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
+
+        app.handle_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+
+        assert_eq!(
+            app.libs[0].artist_header_focus,
+            Some(crate::app::ArtistHeaderSelection {
+                first_album_id: "album-beta".into(),
+                artist_label: "Beta".into(),
+            })
+        );
+        assert_eq!(
+            app.libs[0].nav_stack.last().unwrap().cursor,
+            2,
+            "selecting a header must not rewrite the album cursor"
+        );
+
+        app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+        assert!(app.libs[0].artist_header_focus.is_none());
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 2);
+    }
+
+    #[test]
+    fn selectable_artist_header_enter_is_consumed_noop() {
+        let mut app = make_power_music_album_app();
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-1".into(),
+            artist_label: "Unknown Artist".into(),
+        });
+        let nav_len = app.libs[0].nav_stack.len();
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.libs[0].nav_stack.len(), nav_len);
+        assert!(app.libs[0].album_track_focus.is_none());
+        assert!(app.libs[0].artist_header_focus.is_some());
+    }
+
+    #[test]
+    fn selectable_artist_header_mouse_click_selects_header() {
+        let mut app = make_power_music_album_app();
+        add_beta_album(&mut app);
+        render_full_app(&mut app, 100, 24);
+        let row = app
+            .layout
+            .power
+            .left_row_targets
+            .iter()
+            .position(|target| {
+                matches!(
+                    target,
+                    Some(PowerLeftRowTarget::ArtistHeader(selection))
+                        if selection.artist_label == "Beta"
+                )
+            })
+            .expect("expected Beta header row target");
+        let x = app.layout.power.left_area.x;
+        let y = app.layout.power.left_area.y + row as u16;
+
+        let handled = app.click_set_cursor(x, y);
+
+        assert!(handled);
+        assert_eq!(
+            app.libs[0].artist_header_focus,
+            Some(crate::app::ArtistHeaderSelection {
+                first_album_id: "album-beta".into(),
+                artist_label: "Beta".into(),
+            })
+        );
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
+    }
+
+    #[test]
+    fn selectable_artist_header_context_menu_uses_header_actions() {
+        let mut app = make_power_music_album_app();
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-1".into(),
+            artist_label: "Unknown Artist".into(),
+        });
+
+        app.open_context_menu();
+
+        let menu = app.context_menu.as_ref().expect("expected header menu");
+        let labels: Vec<&str> = menu.entries.iter().map(|entry| entry.label).collect();
+        assert_eq!(labels, vec!["Play All", "Shuffle", "Add to Queue"]);
+        assert!(menu
+            .entries
+            .iter()
+            .all(|entry| !matches!(entry.action, Some(ContextAction::PlayFolder(_)))));
+    }
+
+    #[test]
+    fn selectable_artist_header_members_use_current_display_plan_albums_only() {
+        let mut app = make_power_music_album_app();
+        add_beta_album(&mut app);
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-1".into(),
+            artist_label: "Unknown Artist".into(),
+        });
+
+        let (_, albums) = app
+            .selected_artist_header_album_items(0)
+            .expect("expected selected header members");
+        let ids: Vec<&str> = albums.iter().map(|album| album.id.as_str()).collect();
+
+        assert_eq!(
+            ids,
+            vec!["album-1", "album-2"],
+            "member resolution should preserve display album order and exclude Beta"
+        );
+    }
+
+    #[test]
+    fn selectable_artist_header_stale_selection_is_cleared_on_revalidation() {
+        let mut app = make_power_music_album_app();
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "missing-album".into(),
+            artist_label: "Unknown Artist".into(),
+        });
+
+        let albums = app.selected_artist_header_album_items(0);
+
+        assert!(albums.is_none());
+        assert!(app.libs[0].artist_header_focus.is_none());
     }
 
     #[test]
@@ -4331,10 +4545,15 @@ mod power_music_track_focus_tests {
         group2.is_folder = true;
         app.libs[0].nav_stack[0].items.push(group2);
         app.libs[0].album_track_focus = Some(1);
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-1".into(),
+            artist_label: "Unknown Artist".into(),
+        });
 
         app.select_music_group(0, 1);
 
         assert!(app.libs[0].album_track_focus.is_none());
+        assert!(app.libs[0].artist_header_focus.is_none());
     }
 
     #[test]
@@ -4345,10 +4564,15 @@ mod power_music_track_focus_tests {
         group2.is_folder = true;
         app.libs[0].nav_stack[0].items.push(group2);
         app.libs[0].album_track_focus = Some(1);
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-1".into(),
+            artist_label: "Unknown Artist".into(),
+        });
 
         app.switch_music_group(0, 1);
 
         assert!(app.libs[0].album_track_focus.is_none());
+        assert!(app.libs[0].artist_header_focus.is_none());
     }
 
     #[test]
@@ -4831,6 +5055,7 @@ mod power_music_track_focus_tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         assert!(app.is_album_level(0));
@@ -4893,6 +5118,7 @@ mod power_library_scope_routing_tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app
     }
@@ -5031,6 +5257,7 @@ mod power_library_scope_routing_tests {
                 feed_home_video: None,
                 power_detail_scroll: 0,
                 album_track_focus: None,
+                artist_header_focus: None,
             });
         }
         app.replace_saved_library_position(
@@ -5275,6 +5502,7 @@ mod power_library_scope_routing_tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         let power_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
