@@ -3054,6 +3054,13 @@ impl PlayerProxy {
         }
     }
 
+    pub fn supports_queue_append(&self) -> bool {
+        match &self.inner {
+            PlayerProxyInner::Local(_) => true,
+            PlayerProxyInner::Remote(r) => r.supports_queue_append(),
+        }
+    }
+
     pub fn next(&self) -> bool {
         match self.status.lock().unwrap().next_idx() {
             Some(idx) => self.send_command(PlayerCommand::JumpTo(idx)),

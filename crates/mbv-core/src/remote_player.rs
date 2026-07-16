@@ -7,7 +7,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::ctrl::{CtrlCmd, CtrlEvent, CtrlHello, DisconnectReason};
+use crate::ctrl::{CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
@@ -38,6 +38,7 @@ pub struct RemotePlayer {
     pub queue_source: Arc<Mutex<crate::config::QueueSource>>,
     cmd_tx: mpsc::Sender<CtrlCmd>,
     disconnected: Arc<AtomicBool>,
+    ctrl_compatibility: CtrlCompatibility,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -190,7 +191,7 @@ impl Write for ControlStream {
 fn perform_handshake(
     stream: ControlStream,
     auth_token: &str,
-) -> Result<(BufReader<ControlStream>, CtrlEvent), String> {
+) -> Result<(BufReader<ControlStream>, CtrlEvent, CtrlCompatibility), String> {
     let mut reader = BufReader::new(stream);
     let mut first_line = String::new();
     reader
@@ -201,9 +202,10 @@ fn perform_handshake(
     }
     let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end())
         .map_err(|e| format!("invalid daemon protocol hello: {e}"))?;
-    match hello {
+    let ctrl_compatibility = match hello {
         CtrlEvent::Hello(info) => {
             info.validate_peer()?;
+            let compatibility = info.compatibility()?;
             log::info!(
                 target: "remote",
                 "daemon protocol ok: version={} app={} capabilities={:?}",
@@ -211,13 +213,15 @@ fn perform_handshake(
                 info.app_version,
                 info.capabilities
             );
+            compatibility
         }
         _ => {
             return Err("daemon did not send protocol hello".to_string());
         }
-    }
-    let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::current_client(
+    };
+    let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::compatible_client(
         auth_token.into(),
+        ctrl_compatibility,
     )))
     .map_err(|e| e.to_string())?;
     // Write via the same handle the `BufReader` wraps (`get_mut()`) rather
@@ -238,7 +242,7 @@ fn perform_handshake(
     let state_event = serde_json::from_str::<CtrlEvent>(state_line.trim_end())
         .map_err(|e| format!("invalid daemon initial state: {e}"))?;
 
-    Ok((reader, state_event))
+    Ok((reader, state_event, ctrl_compatibility))
 }
 
 fn apply_ctrl_event(
@@ -346,7 +350,7 @@ impl RemotePlayer {
         // thread spawned below; a clone goes to the worker thread instead.
         let handshake_stream = stream.try_clone().map_err(|e| e.to_string())?;
         let auth_token_owned = auth_token.to_string();
-        let (reader, state_event) = crate::bounded::run_with_hard_bound(
+        let (reader, state_event, ctrl_compatibility) = crate::bounded::run_with_hard_bound(
             move || perform_handshake(handshake_stream, &auth_token_owned),
             DAEMON_HANDSHAKE_HARD_BOUND,
         )?;
@@ -437,6 +441,7 @@ impl RemotePlayer {
                 queue_source,
                 cmd_tx,
                 disconnected,
+                ctrl_compatibility,
             },
             event_rx,
         ))
@@ -459,7 +464,21 @@ impl RemotePlayer {
     }
 
     pub fn send_command(&self, cmd: PlayerCommand) -> bool {
-        self.cmd_tx.send(CtrlCmd::PlayerCmd(cmd.into())).is_ok()
+        let wire_cmd = match cmd {
+            PlayerCommand::QueueAppend { items }
+                if !self.ctrl_compatibility.supports_queue_append =>
+            {
+                log::warn!(
+                    target: "remote",
+                    "remote ctrl peer protocol v{} does not support QueueAppend for {} item(s)",
+                    self.ctrl_compatibility.peer_protocol_version,
+                    items.len()
+                );
+                return false;
+            }
+            cmd => cmd.into(),
+        };
+        self.cmd_tx.send(CtrlCmd::PlayerCmd(wire_cmd)).is_ok()
     }
 
     pub fn adopt_queue(
@@ -533,6 +552,10 @@ impl RemotePlayer {
         // No thread to join; daemon keeps running when TUI exits.
     }
 
+    pub fn supports_queue_append(&self) -> bool {
+        self.ctrl_compatibility.supports_queue_append
+    }
+
     fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,
@@ -570,10 +593,21 @@ impl RemotePlayer {
                 queue_source,
                 cmd_tx,
                 disconnected,
+                ctrl_compatibility: CtrlCompatibility::current(),
             },
             event_rx,
             cmd_rx,
         )
+    }
+
+    /// Test helper variant for callers that need a protocol-v2 remote handle.
+    pub fn stub_v2_with_command_rx(
+        items: Vec<MediaItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility = CtrlCompatibility::for_peer(2).unwrap();
+        (remote, event_rx, cmd_rx)
     }
 }
 
@@ -582,6 +616,7 @@ mod tests {
     use super::*;
     use crate::config::QueueSource;
     use crate::ctrl::CtrlState;
+    use crate::ctrl::WireCommand;
 
     fn make_media_item(id: &str) -> MediaItem {
         MediaItem {
@@ -974,12 +1009,112 @@ mod tests {
             Duration::from_secs(5),
         );
 
-        let (_reader, state_event) = match result {
+        let (_reader, state_event, compatibility) = match result {
             Ok(v) => v,
             Err(e) => panic!("expected Ok, got Err({e})"),
         };
         assert!(matches!(state_event, CtrlEvent::State(_)));
+        assert_eq!(
+            compatibility.peer_protocol_version,
+            crate::ctrl::CTRL_PROTOCOL_VERSION
+        );
 
         daemon.join().unwrap();
+    }
+
+    #[test]
+    fn connect_endpoint_sends_v2_client_hello_to_v2_daemon() {
+        use std::io::{BufRead, BufReader};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let daemon = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut writer = stream.try_clone().unwrap();
+            let mut reader = BufReader::new(stream);
+
+            let mut hello = CtrlHello::current();
+            hello.protocol_version = 2;
+            writeln!(
+                writer,
+                "{}",
+                serde_json::to_string(&CtrlEvent::Hello(hello)).unwrap()
+            )
+            .unwrap();
+
+            let mut client_hello = String::new();
+            reader.read_line(&mut client_hello).unwrap();
+            let cmd: CtrlCmd = serde_json::from_str(client_hello.trim_end()).unwrap();
+            match cmd {
+                CtrlCmd::Hello(info) => {
+                    assert_eq!(info.protocol_version, 2);
+                    assert_eq!(info.auth_token.as_deref(), Some("token"));
+                }
+                _ => panic!("expected client hello"),
+            }
+
+            let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
+                status: PlayerStatus::default(),
+                items: Vec::new(),
+                cursor: 0,
+                source: crate::config::QueueSource::Unknown,
+            }))
+            .unwrap();
+            writeln!(writer, "{initial_state}").unwrap();
+        });
+
+        RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+
+        daemon.join().unwrap();
+    }
+
+    #[test]
+    fn v3_peer_sends_queue_append_wire_command() {
+        let existing = vec![make_media_item("1")];
+        let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_with_command_rx(existing, 0);
+
+        assert!(remote.send_command(PlayerCommand::QueueAppend {
+            items: vec![make_media_item("2")]
+        }));
+
+        match cmd_rx.recv().unwrap() {
+            CtrlCmd::PlayerCmd(WireCommand::QueueAppend { items }) => {
+                assert_eq!(
+                    items
+                        .iter()
+                        .map(|item| item.id.as_str())
+                        .collect::<Vec<_>>(),
+                    ["2"]
+                );
+            }
+            _ => panic!("expected QueueAppend"),
+        }
+    }
+
+    #[test]
+    fn v2_peer_rejects_queue_append_without_sending_replace_queue() {
+        let existing = vec![make_media_item("1")];
+        let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_v2_with_command_rx(existing, 0);
+
+        assert!(!remote.send_command(PlayerCommand::QueueAppend {
+            items: vec![make_media_item("2")]
+        }));
+
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "v2 append rejection must not send QueueAppend or ReplaceQueue"
+        );
+        assert_eq!(
+            remote
+                .items
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["1"]
+        );
     }
 }
