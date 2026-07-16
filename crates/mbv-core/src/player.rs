@@ -805,6 +805,26 @@ impl SessionReporter {
             .report_stopped(&id, &msid, pos, &sid, runtime_ticks)
     }
 
+    fn report_stopped_for_shutdown(&self, last_valid_pos: i64, timeout: Duration) -> bool {
+        let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let is_audio = self.is_audio.load(Ordering::Relaxed);
+        let pos = if is_audio { 0 } else { last_valid_pos };
+        let runtime_ticks = self
+            .status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .runtime_ticks;
+        if let Some(ref tx) = self.ws_tx {
+            if tx.is_connected() {
+                let _ = tx.flush(timeout.min(Duration::from_secs(1)));
+            }
+        }
+        log::info!(target: "player", "report_stopped shutdown: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s timeout={}ms",
+            last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND, timeout.as_millis());
+        self.client
+            .report_stopped_for_shutdown(&id, &msid, pos, &sid, runtime_ticks, timeout)
+    }
+
     fn report_ping(&self) {
         let sid = self.ids.lock().unwrap_or_else(|e| e.into_inner()).2.clone();
         self.client.report_ping(&sid);
@@ -1132,6 +1152,7 @@ struct PlaybackSession {
     queue_next_up_armed: bool,
     next_up_jump: bool,
     stopped_near_end: bool,
+    shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
     startup_pause_release_pending: bool,
     startup_pause_events_to_skip: u8,
     // intro
@@ -1165,6 +1186,15 @@ impl PlaybackSession {
     fn set_origin(&self, origin: PlaybackOrigin) {
         self.is_queue_mode
             .store(origin == PlaybackOrigin::Queue, Ordering::Relaxed);
+    }
+
+    fn report_stopped_for_current_context(&self) -> bool {
+        if let Some(timeout) = *self.shutdown_report_timeout.lock().unwrap() {
+            self.reporter
+                .report_stopped_for_shutdown(self.last_valid_pos, timeout)
+        } else {
+            self.reporter.report_stopped(self.last_valid_pos)
+        }
     }
 
     fn sync_status_position(&self) {
@@ -1271,6 +1301,7 @@ impl PlaybackSession {
         event_tx: mpsc::Sender<PlayerEvent>,
         subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
         is_queue_mode: Arc<AtomicBool>,
+        shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
         server_url: String,
         token: String,
         ext_sub_urls: Vec<String>,
@@ -1338,6 +1369,7 @@ impl PlaybackSession {
             queue_next_up_armed: false,
             next_up_jump: false,
             stopped_near_end: false,
+            shutdown_report_timeout,
             startup_pause_release_pending: startup_pause_for_pipe,
             startup_pause_events_to_skip: if startup_pause_for_pipe { 2 } else { 0 },
             intro_start,
@@ -2168,7 +2200,7 @@ impl PlaybackSession {
             self.last_valid_pos, self.stop_reported, self.pending_resume_secs.is_some());
         if !self.stop_reported {
             progress.stop_and_join();
-            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_report_accepted = self.report_stopped_for_current_context();
             self.stop_reported = true;
         }
         let client = self.reporter.client.clone();
@@ -2247,8 +2279,7 @@ impl PlaybackSession {
                 {
                     if !self.stop_reported {
                         progress.stop_and_join();
-                        self.stop_report_accepted =
-                            self.reporter.report_stopped(self.last_valid_pos);
+                        self.stop_report_accepted = self.report_stopped_for_current_context();
                         self.stop_reported = true;
                     }
                     let runtime = self.status.lock().unwrap().runtime_ticks;
@@ -2458,6 +2489,7 @@ impl PlaybackSession {
 #[derive(Clone)]
 pub struct QuitHandle {
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
 }
 
 impl QuitHandle {
@@ -2465,6 +2497,11 @@ impl QuitHandle {
         if let Some(tx) = self.stop_tx.lock().unwrap().take() {
             let _ = tx.send(());
         }
+    }
+
+    pub fn stop_for_shutdown(&self, timeout: Duration) {
+        *self.shutdown_report_timeout.lock().unwrap() = Some(timeout);
+        self.stop();
     }
 }
 
@@ -2484,6 +2521,7 @@ pub struct Player {
     current_is_headless: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
     pub status: Arc<Mutex<PlayerStatus>>,
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
@@ -2516,6 +2554,7 @@ impl Player {
             current_is_headless: Arc::new(AtomicBool::new(false)),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
+            shutdown_report_timeout: Arc::new(Mutex::new(None)),
             cmd_tx: Arc::new(Mutex::new(None)),
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
@@ -2687,6 +2726,7 @@ impl Player {
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
         let is_queue_mode = self.is_queue_mode.clone();
+        let shutdown_report_timeout = self.shutdown_report_timeout.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
@@ -2704,6 +2744,7 @@ impl Player {
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         *self.stop_tx.lock().unwrap() = Some(stop_tx);
+        *self.shutdown_report_timeout.lock().unwrap() = None;
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
@@ -2757,6 +2798,7 @@ impl Player {
                 event_tx,
                 subtitle_prefs,
                 is_queue_mode.clone(),
+                shutdown_report_timeout,
                 server_url,
                 token,
                 info.external_subtitle_urls,
@@ -2823,6 +2865,7 @@ impl Player {
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
         let is_queue_mode = self.is_queue_mode.clone();
+        let shutdown_report_timeout = self.shutdown_report_timeout.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
@@ -2840,6 +2883,7 @@ impl Player {
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         *self.stop_tx.lock().unwrap() = Some(stop_tx);
+        *self.shutdown_report_timeout.lock().unwrap() = None;
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
@@ -2902,6 +2946,7 @@ impl Player {
                 event_tx,
                 subtitle_prefs,
                 is_queue_mode.clone(),
+                shutdown_report_timeout,
                 server_url,
                 token,
                 info.external_subtitle_urls,
@@ -2917,6 +2962,11 @@ impl Player {
         }
         // Don't clear cmd_tx here: a LoadNew command sent after stop() must still
         // reach the thread so it can cancel the quit and load the new file instead.
+    }
+
+    pub fn stop_for_shutdown(&self, timeout: Duration) {
+        *self.shutdown_report_timeout.lock().unwrap() = Some(timeout);
+        self.stop();
     }
 }
 
@@ -3030,6 +3080,13 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.stop(),
             PlayerProxyInner::Remote(r) => r.stop(),
+        }
+    }
+
+    pub fn stop_for_shutdown(&self, timeout: Duration) {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.stop_for_shutdown(timeout),
+            PlayerProxyInner::Remote(_) => {}
         }
     }
 
@@ -3163,6 +3220,7 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p) => Some(QuitHandle {
                 stop_tx: p.stop_tx.clone(),
+                shutdown_report_timeout: p.shutdown_report_timeout.clone(),
             }),
             PlayerProxyInner::Remote(_) => None,
         }
@@ -3505,6 +3563,7 @@ input-ipc-server=/tmp/user.sock
             event_tx,
             Arc::new(Mutex::new(SubtitlePrefs::default())),
             Arc::new(AtomicBool::new(true)),
+            Arc::new(Mutex::new(None)),
             "http://example.test".into(),
             "token".into(),
             Vec::new(),
@@ -3590,6 +3649,38 @@ input-ipc-server=/tmp/user.sock
         let json = serde_json::to_string(&cmd).unwrap();
         let decoded: PlayerCommand = serde_json::from_str(&json).unwrap();
         assert!(matches!(decoded, PlayerCommand::LoadNew { .. }));
+    }
+
+    #[test]
+    fn shutdown_stop_sets_timeout_without_changing_plain_stop() {
+        let (event_tx, _event_rx) = mpsc::channel();
+        let player = Player::new(
+            String::new(),
+            String::new(),
+            false,
+            false,
+            false,
+            false,
+            false,
+            SubtitlePrefs::default(),
+            event_tx,
+            None,
+        );
+
+        let (plain_tx, plain_rx) = mpsc::channel();
+        *player.stop_tx.lock().unwrap() = Some(plain_tx);
+        player.stop();
+        assert!(plain_rx.recv_timeout(Duration::from_millis(50)).is_ok());
+        assert!(player.shutdown_report_timeout.lock().unwrap().is_none());
+
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
+        *player.stop_tx.lock().unwrap() = Some(shutdown_tx);
+        player.stop_for_shutdown(Duration::from_secs(7));
+        assert!(shutdown_rx.recv_timeout(Duration::from_millis(50)).is_ok());
+        assert_eq!(
+            *player.shutdown_report_timeout.lock().unwrap(),
+            Some(Duration::from_secs(7))
+        );
     }
 
     // ── queue_completed_pos / is_near_end ─────────────────────────────────

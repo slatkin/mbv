@@ -45,6 +45,7 @@ pub struct Config {
     pub feed_view_libraries: Vec<String>, // libraries treated as feed view (unplayed, date-sorted)
     pub config_version: u32,   // schema version for future migrations (0 = unversioned)
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
+    pub quit_timeout_secs: u64, // how long quit waits for local player teardown (seconds)
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
     pub daemon_client_endpoint: String, // [daemon.client] endpoint; empty = auto-detect local daemon
     pub daemon_server_tcp_listen: String, // [daemon.server] tcp_listen; empty = unix-only unless system instance default applies
@@ -88,6 +89,7 @@ impl Default for Config {
             feed_view_libraries: vec![],
             config_version: 0,
             progress_interval_secs: 10,
+            quit_timeout_secs: 5,
             daemon_broadcast_ms: 500,
             daemon_client_endpoint: String::new(),
             daemon_server_tcp_listen: String::new(),
@@ -692,6 +694,12 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .map(|v| v.max(1) as u64)
         .unwrap_or(10);
 
+    let quit_timeout_secs = general
+        .and_then(|m| m.get("quit_timeout_secs"))
+        .and_then(|v| v.as_integer())
+        .map(|v| v.max(1) as u64)
+        .unwrap_or(5);
+
     let daemon_broadcast_ms = daemon
         .and_then(|d| d.get("broadcast_ms"))
         .and_then(|v| v.as_integer())
@@ -758,6 +766,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         feed_view_libraries,
         config_version,
         progress_interval_secs,
+        quit_timeout_secs,
         daemon_broadcast_ms,
         daemon_client_endpoint,
         daemon_server_tcp_listen,
@@ -834,6 +843,10 @@ pub fn save_config_settings(cfg: &Config) {
     general.insert(
         "system_notifications".to_string(),
         toml::Value::Boolean(cfg.system_notifications),
+    );
+    general.insert(
+        "quit_timeout_secs".to_string(),
+        toml::Value::Integer(cfg.quit_timeout_secs as i64),
     );
     general.insert(
         "hidden_libraries".to_string(),
@@ -1095,6 +1108,35 @@ tcp_listen = "0.0.0.0:8890"
 
     #[cfg(test)]
     #[test]
+    fn parse_quit_timeout_defaults_and_clamps() {
+        let cfg = parse_config("[server]\nurl = \"http://localhost:8096\"").unwrap();
+        assert_eq!(cfg.quit_timeout_secs, 5);
+
+        let cfg = parse_config(
+            r#"
+[server]
+url = "http://localhost:8096"
+[general]
+quit_timeout_secs = 0
+"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.quit_timeout_secs, 1);
+
+        let cfg = parse_config(
+            r#"
+[server]
+url = "http://localhost:8096"
+[general]
+quit_timeout_secs = -10
+"#,
+        )
+        .unwrap();
+        assert_eq!(cfg.quit_timeout_secs, 1);
+    }
+
+    #[cfg(test)]
+    #[test]
     fn parse_consume_audio_and_autosave_default_to_false() {
         let cfg = parse_config("").unwrap();
         assert!(!cfg.consume_audio);
@@ -1137,12 +1179,14 @@ save_playlist_on_consume_audio = true
         };
         cfg.consume_audio = true;
         cfg.save_playlist_on_consume_audio = true;
+        cfg.quit_timeout_secs = 7;
         save_config_settings(&cfg);
 
         let saved = std::fs::read_to_string(config_path()).unwrap();
         let reparsed = parse_config(&saved).unwrap();
         assert!(reparsed.consume_audio);
         assert!(reparsed.save_playlist_on_consume_audio);
+        assert_eq!(reparsed.quit_timeout_secs, 7);
 
         std::env::remove_var("XDG_CONFIG_HOME");
         std::fs::remove_dir_all(&dir).ok();

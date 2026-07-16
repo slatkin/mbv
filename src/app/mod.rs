@@ -104,7 +104,7 @@ fn stdin_has_hup() -> bool {
 // The forced exit is gated on TERMINAL_GONE (set only by SIGHUP/stdin POLLHUP),
 // never on QUIT_REQUESTED alone. A clean q-quit sets QUIT_REQUESTED but not
 // TERMINAL_GONE, so the watchdog stops mpv but never races report_stopped.
-fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>) {
+fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>, quit_timeout: Duration) {
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(50));
@@ -115,7 +115,7 @@ fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>) {
             if TERMINAL_GONE.load(Ordering::Relaxed) || QUIT_REQUESTED.load(Ordering::Relaxed) {
                 QUIT_REQUESTED.store(true, Ordering::Relaxed);
                 if let Some(ref h) = quit_handle {
-                    h.stop();
+                    h.stop_for_shutdown(quit_timeout);
                 }
                 if TERMINAL_GONE.load(Ordering::Relaxed) {
                     std::thread::sleep(Duration::from_secs(15));
@@ -2559,7 +2559,9 @@ impl App {
         // behavior is the correct fail-safe rather than something to gate
         // off for stay-alive.
         install_signal_handlers();
-        start_quit_watchdog(self.player.quit_handle());
+        let quit_timeout =
+            Duration::from_secs(self.client.lock().unwrap().config.quit_timeout_secs);
+        start_quit_watchdog(self.player.quit_handle(), quit_timeout);
 
         // Stay-alive tray (T7, issue #156): the minimal head that makes an
         // alive session attended. Driven over the existing in-process
@@ -3092,50 +3094,20 @@ impl App {
             }
         }
 
-        // Signal quit (SIGHUP/SIGTERM — terminal closed or process termination).
-        // Stop player and join its thread so the mpv window closes and
-        // report_stopped completes before we exit. The player thread closes
-        // the window before making the HTTP call (see SingleSession/QueueSession
-        // run()), so the window disappears promptly even if the HTTP call takes a
-        // moment.
-        if QUIT_REQUESTED.load(Ordering::Relaxed) {
-            let (was_playing, current_idx, position_ticks, last_valid_pos) = {
-                let st = self.player.status.lock().unwrap();
-                (
-                    st.active,
-                    st.current_idx,
-                    st.position_ticks,
-                    st.last_valid_pos,
-                )
-            };
-            log::info!(target: "player", "quit: was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos}");
-            if was_playing && !self.has_direct_remote_queue() {
-                if let Some(item) = self.player_tab.items.get_mut(current_idx) {
-                    if position_ticks > 0 && !item.is_audio() {
-                        item.playback_position_ticks = position_ticks;
-                    }
-                    self.last_played_item_id = Some(item.id.clone());
-                }
-            }
-            self.save_queue_state_no_clear();
-            if !self.player.is_remote() {
-                self.player.stop();
-                self.player.join_or_timeout(Duration::from_secs(5));
-            }
-            let _ = restore_terminal(terminal);
-            return Ok(());
-        }
-
-        // Leave the daemon's player running when the TUI disconnects; only
-        // stop the player when we own it locally.
-        let (was_playing, current_idx, last_valid_pos) = {
+        let quit_requested = QUIT_REQUESTED.load(Ordering::Relaxed);
+        // Leave the daemon's player running when the TUI disconnects; only stop
+        // and join the player when we own it locally. Both signal-triggered and
+        // in-app quit paths share the same bounded local teardown.
+        let (was_playing, current_idx, position_ticks, last_valid_pos) = {
             let st = self.player.status.lock().unwrap();
-            (st.active, st.current_idx, st.last_valid_pos)
+            (
+                st.active,
+                st.current_idx,
+                st.position_ticks,
+                st.last_valid_pos,
+            )
         };
-        if !self.player.is_remote() {
-            self.player.stop();
-        }
-        self.player.join();
+        log::info!(target: "player", "quit: requested={quit_requested} was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos} timeout={}s", quit_timeout.as_secs());
         // Update the playing item's position before saving — the PlayerEvent::Stopped
         // that carries this update is never processed after we break out of the event loop.
         // Use last_valid_pos (never zeroed during track transitions) rather than
@@ -3149,6 +3121,10 @@ impl App {
             }
         }
         self.save_queue_state_no_clear();
+        if !self.player.is_remote() {
+            self.player.stop_for_shutdown(quit_timeout);
+            self.player.join_or_timeout(quit_timeout);
+        }
         let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
         Ok(())
     }
