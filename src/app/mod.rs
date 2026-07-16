@@ -885,6 +885,7 @@ impl LibraryTab {
 pub(crate) struct ArtistHeaderSelection {
     pub first_album_id: String,
     pub artist_label: String,
+    pub child_count: usize,
 }
 
 struct SuspendedLocalSession {
