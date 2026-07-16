@@ -7,9 +7,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use crate::api::{EmbyClient, MediaItem};
-use crate::ctrl::{
-    CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason, WireCommand,
-};
+use crate::ctrl::{CtrlCmd, CtrlCompatibility, CtrlEvent, CtrlHello, DisconnectReason};
 use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
@@ -470,14 +468,13 @@ impl RemotePlayer {
             PlayerCommand::QueueAppend { items }
                 if !self.ctrl_compatibility.supports_queue_append =>
             {
-                let mut queue = self.items.lock().unwrap();
-                queue.extend(items);
-                let start_idx = self.status.lock().unwrap().current_idx;
-                let items = queue.clone();
-                if let Ok(mut status) = self.status.lock() {
-                    status.queue_len = items.len();
-                }
-                WireCommand::ReplaceQueue { items, start_idx }
+                log::warn!(
+                    target: "remote",
+                    "remote ctrl peer protocol v{} does not support QueueAppend for {} item(s)",
+                    self.ctrl_compatibility.peer_protocol_version,
+                    items.len()
+                );
+                return false;
             }
             cmd => cmd.into(),
         };
@@ -555,6 +552,10 @@ impl RemotePlayer {
         // No thread to join; daemon keeps running when TUI exits.
     }
 
+    pub fn supports_queue_append(&self) -> bool {
+        self.ctrl_compatibility.supports_queue_append
+    }
+
     fn stub_status(current_idx: usize, queue_len: usize) -> PlayerStatus {
         PlayerStatus {
             current_idx,
@@ -597,6 +598,16 @@ impl RemotePlayer {
             event_rx,
             cmd_rx,
         )
+    }
+
+    /// Test helper variant for callers that need a protocol-v2 remote handle.
+    pub fn stub_v2_with_command_rx(
+        items: Vec<MediaItem>,
+        current_idx: usize,
+    ) -> (Self, mpsc::Receiver<PlayerEvent>, mpsc::Receiver<CtrlCmd>) {
+        let (mut remote, event_rx, cmd_rx) = Self::stub_with_command_rx(items, current_idx);
+        remote.ctrl_compatibility = CtrlCompatibility::for_peer(2).unwrap();
+        (remote, event_rx, cmd_rx)
     }
 }
 
@@ -1083,40 +1094,27 @@ mod tests {
     }
 
     #[test]
-    fn v2_peer_translates_queue_append_to_replace_queue() {
+    fn v2_peer_rejects_queue_append_without_sending_replace_queue() {
         let existing = vec![make_media_item("1")];
-        let status = Arc::new(Mutex::new(RemotePlayer::stub_status(0, existing.len())));
-        let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
-        let items = Arc::new(Mutex::new(existing));
-        let queue_source = Arc::new(Mutex::new(crate::config::QueueSource::Unknown));
-        let disconnected = Arc::new(AtomicBool::new(false));
-        let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
-        let remote = RemotePlayer {
-            status,
-            subtitle_prefs,
-            items,
-            queue_source,
-            cmd_tx,
-            disconnected,
-            ctrl_compatibility: crate::ctrl::CtrlCompatibility::for_peer(2).unwrap(),
-        };
+        let (remote, _event_rx, cmd_rx) = RemotePlayer::stub_v2_with_command_rx(existing, 0);
 
-        assert!(remote.send_command(PlayerCommand::QueueAppend {
+        assert!(!remote.send_command(PlayerCommand::QueueAppend {
             items: vec![make_media_item("2")]
         }));
 
-        match cmd_rx.recv().unwrap() {
-            CtrlCmd::PlayerCmd(WireCommand::ReplaceQueue { items, start_idx }) => {
-                assert_eq!(start_idx, 0);
-                assert_eq!(
-                    items
-                        .iter()
-                        .map(|item| item.id.as_str())
-                        .collect::<Vec<_>>(),
-                    ["1", "2"]
-                );
-            }
-            _ => panic!("expected ReplaceQueue"),
-        }
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "v2 append rejection must not send QueueAppend or ReplaceQueue"
+        );
+        assert_eq!(
+            remote
+                .items
+                .lock()
+                .unwrap()
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["1"]
+        );
     }
 }

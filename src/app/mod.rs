@@ -2098,13 +2098,24 @@ impl App {
         }
     }
 
-    fn sync_playback_queue_after_append(&self, scope: QueueScope, items: Vec<MediaItem>) {
+    fn sync_playback_queue_after_append(
+        &mut self,
+        scope: QueueScope,
+        items: Vec<MediaItem>,
+    ) -> bool {
         if items.is_empty() || scope != self.playback_target_queue_scope() {
-            return;
+            return true;
         }
-        let _ = self
+        let sent = self
             .player
             .send_command(crate::player::PlayerCommand::QueueAppend { items });
+        if !sent && !self.player.supports_queue_append() {
+            self.flash_status_high(
+                "Remote append is not supported by this direct mbv peer".to_string(),
+            );
+            return false;
+        }
+        true
     }
 
     fn playback_target_queue_scope(&self) -> QueueScope {
@@ -5871,6 +5882,21 @@ pub(crate) mod tests {
         (app, cmd_rx)
     }
 
+    fn make_v2_remote_app_stub_with_cmd_rx(
+        local_items: Vec<MediaItem>,
+        remote_items: Vec<MediaItem>,
+    ) -> (App, std::sync::mpsc::Receiver<mbv_core::ctrl::CtrlCmd>) {
+        use crate::config::Config;
+        use mbv_core::api::EmbyClient;
+
+        let (remote, player_rx, cmd_rx) =
+            mbv_core::remote_player::RemotePlayer::stub_v2_with_command_rx(remote_items, 0);
+        let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
+        app.player_tab.items = local_items;
+        app.player_tab.queue_cursor = 0;
+        (app, cmd_rx)
+    }
+
     fn make_local_daemon_app_stub(remote_items: Vec<MediaItem>) -> App {
         use crate::config::Config;
         use mbv_core::api::EmbyClient;
@@ -8485,7 +8511,8 @@ pub(crate) mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(3);
-        let mut app = make_remote_app_stub(local_items, remote_items.clone());
+        let (mut app, _cmd_rx) =
+            make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
         app.tab_idx = 0;
         app.queue_scope = QueueScope::Remote;
         app.home.section = 0;
@@ -8508,6 +8535,41 @@ pub(crate) mod tests {
                 .map(|i| i.id.as_str())
                 .chain(std::iter::once("id0"))
                 .collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn alt_q_rejects_v2_direct_remote_append_without_replace_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let (mut app, cmd_rx) = make_v2_remote_app_stub_with_cmd_rx(local_items, remote_items);
+        app.tab_idx = 0;
+        app.queue_scope = QueueScope::Remote;
+        app.home.section = 0;
+        app.home.continue_items = make_items(1);
+        app.home.continue_cursor = 0;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+
+        assert!(!handled);
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "v2 direct remote append must not fall back to ReplaceQueue"
+        );
+        assert_eq!(
+            app.status,
+            "Remote append is not supported by this direct mbv peer"
+        );
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["id0", "id1", "id2"]
         );
     }
 
