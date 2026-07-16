@@ -642,6 +642,15 @@ impl EmbyClient {
             .set("X-Emby-Token", &self.token)
     }
 
+    fn with_request_timeout(&self, timeout: std::time::Duration) -> Self {
+        let mut client = self.clone();
+        client.agent = ureq::AgentBuilder::new()
+            .timeout_connect(timeout)
+            .timeout(timeout)
+            .build();
+        client
+    }
+
     fn delete(&self, path: &str) -> ureq::Request {
         self.agent
             .delete(&self.url(path))
@@ -1213,19 +1222,13 @@ impl EmbyClient {
         session_id: &str,
         runtime_ticks: i64,
     ) -> bool {
-        let body = ureq::json!({
-            "UserId": self.user_id,
-            "ItemId": item_id,
-            "MediaSourceId": media_source_id,
-            "PlaySessionId": session_id,
-            "PositionTicks": position_ticks,
-            "RunTimeTicks": runtime_ticks,
-            "CanSeek": true,
-            "IsPaused": false,
-            "IsMuted": false,
-            "PlayMethod": "DirectPlay",
-            "QueueableMediaTypes": ["Audio", "Video"],
-        });
+        let body = self.stopped_request_body(
+            item_id,
+            media_source_id,
+            position_ticks,
+            session_id,
+            runtime_ticks,
+        );
         log::info!(target: "api", "outbound: Stopped pos={position_ticks}");
         match self
             .post("/Sessions/Playing/Stopped")
@@ -1248,6 +1251,79 @@ impl EmbyClient {
                         false
                     }
                 }
+            }
+        }
+    }
+
+    fn stopped_request_body(
+        &self,
+        item_id: &str,
+        media_source_id: &str,
+        position_ticks: i64,
+        session_id: &str,
+        runtime_ticks: i64,
+    ) -> serde_json::Value {
+        ureq::json!({
+            "UserId": self.user_id,
+            "ItemId": item_id,
+            "MediaSourceId": media_source_id,
+            "PlaySessionId": session_id,
+            "PositionTicks": position_ticks,
+            "RunTimeTicks": runtime_ticks,
+            "CanSeek": true,
+            "IsPaused": false,
+            "IsMuted": false,
+            "PlayMethod": "DirectPlay",
+            "QueueableMediaTypes": ["Audio", "Video"],
+        })
+    }
+
+    pub fn report_stopped_for_shutdown(
+        &self,
+        item_id: &str,
+        media_source_id: &str,
+        position_ticks: i64,
+        session_id: &str,
+        runtime_ticks: i64,
+        hard_bound: std::time::Duration,
+    ) -> bool {
+        let body = self.stopped_request_body(
+            item_id,
+            media_source_id,
+            position_ticks,
+            session_id,
+            runtime_ticks,
+        );
+        let client = self.with_request_timeout(hard_bound);
+        let started = std::time::Instant::now();
+        log::info!(
+            target: "api",
+            "outbound: Stopped shutdown pos={position_ticks} timeout={}ms",
+            hard_bound.as_millis()
+        );
+        let result = crate::bounded::run_with_hard_bound(
+            move || {
+                client
+                    .post("/Sessions/Playing/Stopped")
+                    .send_json(body)
+                    .map(|r| r.status())
+                    .map_err(|e| e.to_string())
+            },
+            hard_bound,
+        );
+        let elapsed_ms = started.elapsed().as_millis();
+        match result {
+            Ok(status) => {
+                log::info!(target: "api", "inbound: {status} Stopped shutdown in {elapsed_ms}ms");
+                true
+            }
+            Err(e) if e.starts_with("timed out after ") => {
+                log::warn!(target: "api", "err: Stopped shutdown timed out after {elapsed_ms}ms: {e}");
+                false
+            }
+            Err(e) => {
+                log::warn!(target: "api", "err: Stopped shutdown failed without retry after {elapsed_ms}ms: {e}");
+                false
             }
         }
     }
@@ -2020,6 +2096,80 @@ mod tests {
         let mut c = EmbyClient::new(cfg);
         c.token = "tok".into();
         c
+    }
+
+    fn local_listener_url() -> (std::net::TcpListener, String) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        (listener, url)
+    }
+
+    fn read_one_request(stream: &mut std::net::TcpStream) -> String {
+        use std::io::Read;
+
+        let mut request = Vec::new();
+        let mut buf = [0_u8; 1024];
+        loop {
+            match stream.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    request.extend_from_slice(&buf[..n]);
+                    if request.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        String::from_utf8_lossy(&request).into_owned()
+    }
+
+    #[test]
+    fn report_stopped_for_shutdown_stalls_with_one_attempt_and_no_retry() {
+        let (listener, url) = local_listener_url();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let attempts_for_thread = attempts.clone();
+        std::thread::spawn(move || {
+            if let Ok((mut stream, _)) = listener.accept() {
+                attempts_for_thread.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let _ = read_one_request(&mut stream);
+                std::thread::sleep(std::time::Duration::from_secs(5));
+            }
+        });
+
+        let started = std::time::Instant::now();
+        let ok = client_with_url(&url).report_stopped_for_shutdown(
+            "item",
+            "msid",
+            123,
+            "sid",
+            456,
+            std::time::Duration::from_millis(150),
+        );
+
+        assert!(!ok);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn ordinary_report_stopped_still_retries_once() {
+        let (listener, url) = local_listener_url();
+        let attempts = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let attempts_for_thread = attempts.clone();
+        std::thread::spawn(move || {
+            for _ in 0..2 {
+                if let Ok((mut stream, _)) = listener.accept() {
+                    attempts_for_thread.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let _ = read_one_request(&mut stream);
+                }
+            }
+        });
+
+        let ok = client_with_url(&url).report_stopped("item", "msid", 123, "sid", 456);
+
+        assert!(!ok);
+        assert_eq!(attempts.load(std::sync::atomic::Ordering::SeqCst), 2);
     }
 
     #[test]

@@ -564,10 +564,28 @@ struct ProgressGuard {
 }
 
 impl ProgressGuard {
-    fn stop_and_join(&mut self) {
+    fn stop_and_join(&mut self, budget: Duration) {
         let _ = self.stop_tx.send(());
         if let Some(h) = self.handle.take() {
-            let _ = h.join();
+            let start = std::time::Instant::now();
+            let result = crate::bounded::run_with_hard_bound(
+                move || {
+                    let _ = h.join();
+                    Ok::<(), String>(())
+                },
+                budget,
+            );
+            let elapsed = start.elapsed();
+            match result {
+                Ok(()) => {
+                    log::info!(target: "player", "progress_join: joined in {}ms (budget={}ms)",
+                    elapsed.as_millis(), budget.as_millis())
+                }
+                Err(e) => {
+                    log::warn!(target: "player", "progress_join: {e} after {}ms (budget={}ms)",
+                    elapsed.as_millis(), budget.as_millis())
+                }
+            }
         }
     }
 }
@@ -803,6 +821,26 @@ impl SessionReporter {
             last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND);
         self.client
             .report_stopped(&id, &msid, pos, &sid, runtime_ticks)
+    }
+
+    fn report_stopped_for_shutdown(&self, last_valid_pos: i64, timeout: Duration) -> bool {
+        let (id, msid, sid) = self.ids.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        let is_audio = self.is_audio.load(Ordering::Relaxed);
+        let pos = if is_audio { 0 } else { last_valid_pos };
+        let runtime_ticks = self
+            .status
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .runtime_ticks;
+        if let Some(ref tx) = self.ws_tx {
+            if tx.is_connected() {
+                let _ = tx.flush(timeout.min(Duration::from_secs(1)));
+            }
+        }
+        log::info!(target: "player", "report_stopped shutdown: item={id} is_audio={is_audio} last_valid_pos={}s sending pos={}s timeout={}ms",
+            last_valid_pos / TICKS_PER_SECOND, pos / TICKS_PER_SECOND, timeout.as_millis());
+        self.client
+            .report_stopped_for_shutdown(&id, &msid, pos, &sid, runtime_ticks, timeout)
     }
 
     fn report_ping(&self) {
@@ -1132,6 +1170,7 @@ struct PlaybackSession {
     queue_next_up_armed: bool,
     next_up_jump: bool,
     stopped_near_end: bool,
+    shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
     startup_pause_release_pending: bool,
     startup_pause_events_to_skip: u8,
     // intro
@@ -1165,6 +1204,61 @@ impl PlaybackSession {
     fn set_origin(&self, origin: PlaybackOrigin) {
         self.is_queue_mode
             .store(origin == PlaybackOrigin::Queue, Ordering::Relaxed);
+    }
+
+    fn report_stopped_for_current_context(&self) -> bool {
+        if let Some(timeout) = *self.shutdown_report_timeout.lock().unwrap() {
+            self.reporter
+                .report_stopped_for_shutdown(self.last_valid_pos, timeout)
+        } else {
+            self.reporter.report_stopped(self.last_valid_pos)
+        }
+    }
+
+    fn report_stopped_for_end_file(&self, reason: EndFileReason) -> bool {
+        match end_file_stop_report_context(reason) {
+            StopReportContext::Ordinary => self.reporter.report_stopped(self.last_valid_pos),
+            StopReportContext::ShutdownAware => self.report_stopped_for_current_context(),
+        }
+    }
+
+    /// Budget for `ProgressGuard::stop_and_join`. During a real quit
+    /// (`shutdown_report_timeout` set via `Player::stop_for_shutdown`),
+    /// this is deliberately *half* of `quit_timeout_secs`, not the full
+    /// value: `report_stopped_for_shutdown` (see
+    /// `report_stopped_for_current_context`) keeps the full
+    /// `quit_timeout_secs` as its own budget per the spec's resolved
+    /// design (it's the session-terminating call and the one worth
+    /// protecting most), so giving this secondary, non-network-critical
+    /// join the same full budget would leave the outer teardown bound
+    /// with only a thin, constant margin over the worst case of the two
+    /// nested calls combined — see `App::teardown`'s `outer_bound` for
+    /// the composition this budget feeds into. Outside of shutdown
+    /// (ordinary track transitions), there is no time pressure, so a
+    /// generous fixed budget (matching the shared agent's own ~30s worst
+    /// case) just guards against a truly stuck thread without adding
+    /// latency to the common fast case.
+    fn progress_join_budget(&self) -> Duration {
+        match *self.shutdown_report_timeout.lock().unwrap() {
+            Some(quit_timeout) => quit_timeout / 2,
+            None => Duration::from_secs(30),
+        }
+    }
+
+    /// Clears any pending-quit state so a `LoadNew`/`ReplaceQueue` command
+    /// that arrives while a quit is in flight fully cancels it — not just
+    /// `quit_at`, but also the shutdown-scoped report budget set by
+    /// `Player::stop_for_shutdown`. Without resetting
+    /// `shutdown_report_timeout` here too, a cancelled quit would leave it
+    /// `Some` for the rest of this `PlaybackSession`'s lifetime (nothing
+    /// else clears it once set), so every subsequent track transition
+    /// would silently keep using the tight shutdown budget/no-retry
+    /// behavior via `progress_join_budget`/`report_stopped_for_current_context`
+    /// instead of the ordinary one — no crash, just quietly degraded
+    /// reliability for the rest of the session.
+    fn cancel_pending_quit(&mut self) {
+        self.quit_at = None;
+        *self.shutdown_report_timeout.lock().unwrap() = None;
     }
 
     fn sync_status_position(&self) {
@@ -1271,6 +1365,7 @@ impl PlaybackSession {
         event_tx: mpsc::Sender<PlayerEvent>,
         subtitle_prefs: Arc<Mutex<SubtitlePrefs>>,
         is_queue_mode: Arc<AtomicBool>,
+        shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
         server_url: String,
         token: String,
         ext_sub_urls: Vec<String>,
@@ -1338,6 +1433,7 @@ impl PlaybackSession {
             queue_next_up_armed: false,
             next_up_jump: false,
             stopped_near_end: false,
+            shutdown_report_timeout,
             startup_pause_release_pending: startup_pause_for_pipe,
             startup_pause_events_to_skip: if startup_pause_for_pipe { 2 } else { 0 },
             intro_start,
@@ -1532,6 +1628,7 @@ impl PlaybackSession {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
+        self.cancel_pending_quit();
         if new_items.is_empty() {
             self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             self.stop_reported = true;
@@ -1624,7 +1721,7 @@ impl PlaybackSession {
 
         // Stop progress reporter during transition to prevent stale reports,
         // then restart for the new item.
-        progress.stop_and_join();
+        progress.stop_and_join(self.progress_join_budget());
         let (urls, ok) = self.reporter.start_item(&active_item);
         self.ext_sub_urls = urls;
         if !ok {
@@ -1671,7 +1768,7 @@ impl PlaybackSession {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        self.quit_at = None;
+        self.cancel_pending_quit();
         self.origin = PlaybackOrigin::Standalone;
         self.set_origin(self.origin);
         // Loading a new item should always start playing it, even if mpv
@@ -1679,7 +1776,7 @@ impl PlaybackSession {
         let _ = mpv.set_property("pause", false);
 
         // Stop progress reporter during transition to prevent stale reports.
-        progress.stop_and_join();
+        progress.stop_and_join(self.progress_join_budget());
         self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
         *progress = spawn_progress_reporter(self.reporter.clone());
 
@@ -1983,8 +2080,8 @@ impl PlaybackSession {
             log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} pending_resume={} stop_reported={}",
                 self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_reported);
             if !self.stop_reported {
-                progress.stop_and_join();
-                self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
+                progress.stop_and_join(self.progress_join_budget());
+                self.stop_report_accepted = self.report_stopped_for_end_file(reason);
                 self.stop_reported = true;
             }
             if (natural_end || near_end) && !completed_is_audio {
@@ -2001,8 +2098,8 @@ impl PlaybackSession {
         if self.origin == PlaybackOrigin::Standalone {
             let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
 
-            progress.stop_and_join();
-            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
+            progress.stop_and_join(self.progress_join_budget());
+            self.stop_report_accepted = self.report_stopped_for_end_file(reason);
             self.stop_reported = true;
 
             if natural_end {
@@ -2037,7 +2134,7 @@ impl PlaybackSession {
         let Some(completed_item) = self.item_at(completed_idx).cloned() else {
             log::warn!(target: "player", "on_end_file: completed_idx={completed_idx} out of bounds (len={}), stopping",
                 self.queue_len());
-            progress.stop_and_join();
+            progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
             self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -2079,7 +2176,7 @@ impl PlaybackSession {
             .unwrap_or(self.current_idx + 1);
 
         if next_idx >= self.queue_len() {
-            progress.stop_and_join();
+            progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
             self.stop_report_accepted = self.reporter.report_stopped(completed_pos);
             if played_out {
@@ -2140,7 +2237,7 @@ impl PlaybackSession {
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
         // Stop progress reporter during transition to prevent stale reports.
-        progress.stop_and_join();
+        progress.stop_and_join(self.progress_join_budget());
         let (urls, ok) = self.reporter.start_item(&next_item);
         self.ext_sub_urls = urls;
         if !ok {
@@ -2167,8 +2264,8 @@ impl PlaybackSession {
         log::warn!(target: "player", "shutdown: last_valid_pos={} stop_reported={} pending_resume={}",
             self.last_valid_pos, self.stop_reported, self.pending_resume_secs.is_some());
         if !self.stop_reported {
-            progress.stop_and_join();
-            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
+            progress.stop_and_join(self.progress_join_budget());
+            self.stop_report_accepted = self.report_stopped_for_current_context();
             self.stop_reported = true;
         }
         let client = self.reporter.client.clone();
@@ -2195,7 +2292,10 @@ impl PlaybackSession {
                     error: None,
                 });
             }
-            // mpv exited on its own (not via our stop command) — tell the app to quit.
+            // mpv exited on its own (not via our stop command, e.g. the user
+            // closed the mpv window directly) — despite the event name,
+            // App::handle_player_event's PlayerEvent::MpvQuit arm does not
+            // quit the app; it just clears some UI state and returns false.
             if self.quit_at.is_none() {
                 let _ = self.event_tx.send(PlayerEvent::MpvQuit);
             }
@@ -2246,9 +2346,8 @@ impl PlaybackSession {
                     .is_some_and(|t| t.elapsed() > Duration::from_secs(2))
                 {
                     if !self.stop_reported {
-                        progress.stop_and_join();
-                        self.stop_report_accepted =
-                            self.reporter.report_stopped(self.last_valid_pos);
+                        progress.stop_and_join(self.progress_join_budget());
+                        self.stop_report_accepted = self.report_stopped_for_current_context();
                         self.stop_reported = true;
                     }
                     let runtime = self.status.lock().unwrap().runtime_ticks;
@@ -2458,6 +2557,7 @@ impl PlaybackSession {
 #[derive(Clone)]
 pub struct QuitHandle {
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
 }
 
 impl QuitHandle {
@@ -2465,6 +2565,11 @@ impl QuitHandle {
         if let Some(tx) = self.stop_tx.lock().unwrap().take() {
             let _ = tx.send(());
         }
+    }
+
+    pub fn stop_for_shutdown(&self, timeout: Duration) {
+        *self.shutdown_report_timeout.lock().unwrap() = Some(timeout);
+        self.stop();
     }
 }
 
@@ -2484,6 +2589,7 @@ pub struct Player {
     current_is_headless: Arc<AtomicBool>,
     pub event_tx: mpsc::Sender<PlayerEvent>,
     stop_tx: Arc<Mutex<Option<mpsc::Sender<()>>>>,
+    shutdown_report_timeout: Arc<Mutex<Option<Duration>>>,
     pub cmd_tx: Arc<Mutex<Option<mpsc::Sender<PlayerCommand>>>>,
     pub status: Arc<Mutex<PlayerStatus>>,
     thread_handle: Mutex<Option<thread::JoinHandle<()>>>,
@@ -2516,6 +2622,7 @@ impl Player {
             current_is_headless: Arc::new(AtomicBool::new(false)),
             event_tx,
             stop_tx: Arc::new(Mutex::new(None)),
+            shutdown_report_timeout: Arc::new(Mutex::new(None)),
             cmd_tx: Arc::new(Mutex::new(None)),
             status: Arc::new(Mutex::new(PlayerStatus::default())),
             thread_handle: Mutex::new(None),
@@ -2687,6 +2794,7 @@ impl Player {
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
         let is_queue_mode = self.is_queue_mode.clone();
+        let shutdown_report_timeout = self.shutdown_report_timeout.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
@@ -2704,6 +2812,7 @@ impl Player {
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         *self.stop_tx.lock().unwrap() = Some(stop_tx);
+        *self.shutdown_report_timeout.lock().unwrap() = None;
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
@@ -2757,6 +2866,7 @@ impl Player {
                 event_tx,
                 subtitle_prefs,
                 is_queue_mode.clone(),
+                shutdown_report_timeout,
                 server_url,
                 token,
                 info.external_subtitle_urls,
@@ -2823,6 +2933,7 @@ impl Player {
         let ws_tx = self.ws_tx.clone();
         let subtitle_prefs = self.subtitle_prefs.clone();
         let is_queue_mode = self.is_queue_mode.clone();
+        let shutdown_report_timeout = self.shutdown_report_timeout.clone();
         let server_url = self.server_url.clone();
         let token = self.token.clone();
         self.current_is_headless.store(headless, Ordering::Relaxed);
@@ -2840,6 +2951,7 @@ impl Player {
 
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         *self.stop_tx.lock().unwrap() = Some(stop_tx);
+        *self.shutdown_report_timeout.lock().unwrap() = None;
         let (cmd_tx, cmd_rx) = mpsc::channel::<PlayerCommand>();
         *self.cmd_tx.lock().unwrap() = Some(cmd_tx);
 
@@ -2902,6 +3014,7 @@ impl Player {
                 event_tx,
                 subtitle_prefs,
                 is_queue_mode.clone(),
+                shutdown_report_timeout,
                 server_url,
                 token,
                 info.external_subtitle_urls,
@@ -2917,6 +3030,11 @@ impl Player {
         }
         // Don't clear cmd_tx here: a LoadNew command sent after stop() must still
         // reach the thread so it can cancel the quit and load the new file instead.
+    }
+
+    pub fn stop_for_shutdown(&self, timeout: Duration) {
+        *self.shutdown_report_timeout.lock().unwrap() = Some(timeout);
+        self.stop();
     }
 }
 
@@ -2953,6 +3071,41 @@ impl PlayerProxy {
             tx,
             None,
         );
+        let subtitle_prefs = player.subtitle_prefs.clone();
+        PlayerProxy {
+            always_play_next: false,
+            status,
+            subtitle_prefs,
+            inner: PlayerProxyInner::Local(player),
+        }
+    }
+
+    /// Like [`stub`](Self::stub), but with a real background thread wired up
+    /// as the local `Player`'s `thread_handle`, which sleeps for `sleep`
+    /// before finishing. Lets root-crate tests prove teardown code that
+    /// calls `join_or_timeout` actually returns within its bound instead of
+    /// blocking for the full `sleep` duration — the previously-unbounded
+    /// normal in-app quit path (#202) is exactly this scenario with a
+    /// hanging player thread.
+    #[cfg(feature = "test-support")]
+    pub fn stub_with_hung_thread(status: Arc<Mutex<PlayerStatus>>, sleep: Duration) -> Self {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let player = Player::new(
+            String::new(),
+            String::new(),
+            false,
+            false,
+            false,
+            false,
+            false,
+            SubtitlePrefs::default(),
+            tx,
+            None,
+        );
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(sleep);
+        });
+        *player.thread_handle.lock().unwrap() = Some(handle);
         let subtitle_prefs = player.subtitle_prefs.clone();
         PlayerProxy {
             always_play_next: false,
@@ -3030,6 +3183,13 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.stop(),
             PlayerProxyInner::Remote(r) => r.stop(),
+        }
+    }
+
+    pub fn stop_for_shutdown(&self, timeout: Duration) {
+        match &self.inner {
+            PlayerProxyInner::Local(p) => p.stop_for_shutdown(timeout),
+            PlayerProxyInner::Remote(_) => {}
         }
     }
 
@@ -3163,6 +3323,7 @@ impl PlayerProxy {
         match &self.inner {
             PlayerProxyInner::Local(p) => Some(QuitHandle {
                 stop_tx: p.stop_tx.clone(),
+                shutdown_report_timeout: p.shutdown_report_timeout.clone(),
             }),
             PlayerProxyInner::Remote(_) => None,
         }
@@ -3230,6 +3391,20 @@ fn quit_timeout_stop_flags(
             false,
         ),
         PlaybackOrigin::Queue => (stopped_near_end, stopped_near_end),
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StopReportContext {
+    Ordinary,
+    ShutdownAware,
+}
+
+fn end_file_stop_report_context(reason: EndFileReason) -> StopReportContext {
+    if reason == mpv_end_file_reason::Quit {
+        StopReportContext::ShutdownAware
+    } else {
+        StopReportContext::Ordinary
     }
 }
 
@@ -3505,11 +3680,42 @@ input-ipc-server=/tmp/user.sock
             event_tx,
             Arc::new(Mutex::new(SubtitlePrefs::default())),
             Arc::new(AtomicBool::new(true)),
+            Arc::new(Mutex::new(None)),
             "http://example.test".into(),
             "token".into(),
             Vec::new(),
         );
         (session, status)
+    }
+
+    #[test]
+    fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
+        // Regression test for a code-review finding: cmd_load_new and
+        // cmd_replace_queue (via the shared cancel_pending_quit helper)
+        // must reset shutdown_report_timeout, not just quit_at, when a
+        // LoadNew/ReplaceQueue command cancels an in-flight quit. Otherwise
+        // App::teardown -> Player::stop_for_shutdown sets
+        // shutdown_report_timeout = Some(quit_timeout) before sending the
+        // stop signal; if that quit then gets cancelled by an
+        // already-queued LoadNew/ReplaceQueue, shutdown_report_timeout
+        // would stay Some for the rest of the session, silently degrading
+        // every later track transition to the tight shutdown budget/no-retry
+        // path instead of the ordinary one. cmd_load_new/cmd_replace_queue
+        // themselves aren't unit-tested directly here since they require a
+        // real Mpv handle; this exercises the exact reset logic they share.
+        let (mut session, _status) = make_queue_session_for_pos_tests(0);
+        session.quit_at = Some(Instant::now());
+        *session.shutdown_report_timeout.lock().unwrap() = Some(Duration::from_secs(5));
+
+        session.cancel_pending_quit();
+
+        assert!(session.quit_at.is_none());
+        assert!(session.shutdown_report_timeout.lock().unwrap().is_none());
+        // progress_join_budget/report_stopped_for_current_context both key off
+        // shutdown_report_timeout being None to behave as ordinary mid-playback
+        // calls again — asserting the None state above is the load-bearing
+        // check; both helpers are exercised directly by other tests.
+        assert_eq!(session.progress_join_budget(), Duration::from_secs(30));
     }
 
     #[test]
@@ -3590,6 +3796,98 @@ input-ipc-server=/tmp/user.sock
         let json = serde_json::to_string(&cmd).unwrap();
         let decoded: PlayerCommand = serde_json::from_str(&json).unwrap();
         assert!(matches!(decoded, PlayerCommand::LoadNew { .. }));
+    }
+
+    #[test]
+    fn shutdown_stop_sets_timeout_without_changing_plain_stop() {
+        let (event_tx, _event_rx) = mpsc::channel();
+        let player = Player::new(
+            String::new(),
+            String::new(),
+            false,
+            false,
+            false,
+            false,
+            false,
+            SubtitlePrefs::default(),
+            event_tx,
+            None,
+        );
+
+        let (plain_tx, plain_rx) = mpsc::channel();
+        *player.stop_tx.lock().unwrap() = Some(plain_tx);
+        player.stop();
+        assert!(plain_rx.recv_timeout(Duration::from_millis(50)).is_ok());
+        assert!(player.shutdown_report_timeout.lock().unwrap().is_none());
+
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
+        *player.stop_tx.lock().unwrap() = Some(shutdown_tx);
+        player.stop_for_shutdown(Duration::from_secs(7));
+        assert!(shutdown_rx.recv_timeout(Duration::from_millis(50)).is_ok());
+        assert_eq!(
+            *player.shutdown_report_timeout.lock().unwrap(),
+            Some(Duration::from_secs(7))
+        );
+    }
+
+    #[test]
+    fn end_file_quit_uses_shutdown_aware_stop_report_context() {
+        assert_eq!(
+            end_file_stop_report_context(mpv_end_file_reason::Quit),
+            StopReportContext::ShutdownAware
+        );
+        assert_eq!(
+            end_file_stop_report_context(mpv_end_file_reason::Eof),
+            StopReportContext::Ordinary
+        );
+        assert_eq!(
+            end_file_stop_report_context(mpv_end_file_reason::Error),
+            StopReportContext::Ordinary
+        );
+    }
+
+    #[test]
+    fn progress_guard_stop_and_join_bounded_when_thread_hangs() {
+        let (stop_tx, _stop_rx) = mpsc::channel();
+        let handle = std::thread::spawn(|| {
+            std::thread::sleep(Duration::from_secs(5));
+        });
+        let mut guard = ProgressGuard {
+            stop_tx,
+            handle: Some(handle),
+        };
+
+        let started = std::time::Instant::now();
+        guard.stop_and_join(Duration::from_millis(150));
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "stop_and_join should return near its 150ms budget, took {elapsed:?}"
+        );
+        assert!(
+            guard.handle.is_none(),
+            "handle should be taken regardless of outcome"
+        );
+    }
+
+    #[test]
+    fn progress_guard_stop_and_join_fast_when_thread_finishes_quickly() {
+        let (stop_tx, _stop_rx) = mpsc::channel();
+        let handle = std::thread::spawn(|| {});
+        let mut guard = ProgressGuard {
+            stop_tx,
+            handle: Some(handle),
+        };
+
+        let started = std::time::Instant::now();
+        guard.stop_and_join(Duration::from_secs(30));
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "a thread that finishes immediately should not add latency, took {elapsed:?}"
+        );
     }
 
     // ── queue_completed_pos / is_near_end ─────────────────────────────────

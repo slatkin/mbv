@@ -104,7 +104,7 @@ fn stdin_has_hup() -> bool {
 // The forced exit is gated on TERMINAL_GONE (set only by SIGHUP/stdin POLLHUP),
 // never on QUIT_REQUESTED alone. A clean q-quit sets QUIT_REQUESTED but not
 // TERMINAL_GONE, so the watchdog stops mpv but never races report_stopped.
-fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>) {
+fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>, quit_timeout: Duration) {
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(50));
@@ -115,7 +115,7 @@ fn start_quit_watchdog(quit_handle: Option<mbv_core::player::QuitHandle>) {
             if TERMINAL_GONE.load(Ordering::Relaxed) || QUIT_REQUESTED.load(Ordering::Relaxed) {
                 QUIT_REQUESTED.store(true, Ordering::Relaxed);
                 if let Some(ref h) = quit_handle {
-                    h.stop();
+                    h.stop_for_shutdown(quit_timeout);
                 }
                 if TERMINAL_GONE.load(Ordering::Relaxed) {
                     std::thread::sleep(Duration::from_secs(15));
@@ -2574,7 +2574,9 @@ impl App {
         // behavior is the correct fail-safe rather than something to gate
         // off for stay-alive.
         install_signal_handlers();
-        start_quit_watchdog(self.player.quit_handle());
+        let quit_timeout =
+            Duration::from_secs(self.client.lock().unwrap().config.quit_timeout_secs);
+        start_quit_watchdog(self.player.quit_handle(), quit_timeout);
 
         // Stay-alive tray (T7, issue #156): the minimal head that makes an
         // alive session attended. Driven over the existing in-process
@@ -3107,50 +3109,44 @@ impl App {
             }
         }
 
-        // Signal quit (SIGHUP/SIGTERM — terminal closed or process termination).
-        // Stop player and join its thread so the mpv window closes and
-        // report_stopped completes before we exit. The player thread closes
-        // the window before making the HTTP call (see SingleSession/QueueSession
-        // run()), so the window disappears promptly even if the HTTP call takes a
-        // moment.
-        if QUIT_REQUESTED.load(Ordering::Relaxed) {
-            let (was_playing, current_idx, position_ticks, last_valid_pos) = {
-                let st = self.player.status.lock().unwrap();
-                (
-                    st.active,
-                    st.current_idx,
-                    st.position_ticks,
-                    st.last_valid_pos,
-                )
-            };
-            log::info!(target: "player", "quit: was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos}");
-            if was_playing && !self.has_direct_remote_queue() {
-                if let Some(item) = self.player_tab.items.get_mut(current_idx) {
-                    if position_ticks > 0 && !item.is_audio() {
-                        item.playback_position_ticks = position_ticks;
-                    }
-                    self.last_played_item_id = Some(item.id.clone());
-                }
-            }
-            self.save_queue_state_no_clear();
-            if !self.player.is_remote() {
-                self.player.stop();
-                self.player.join_or_timeout(Duration::from_secs(5));
-            }
-            let _ = restore_terminal(terminal);
-            return Ok(());
-        }
+        self.teardown(quit_timeout);
+        let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
+        Ok(())
+    }
 
-        // Leave the daemon's player running when the TUI disconnects; only
-        // stop the player when we own it locally.
-        let (was_playing, current_idx, last_valid_pos) = {
+    /// Shared local-player teardown sequence for both the signal-triggered
+    /// quit-watchdog path (SIGHUP/SIGTERM) and the normal in-app quit-key
+    /// path (both now break out of `run()`'s event loop the same way) —
+    /// these two used to diverge, one bounded and one not, which is #202:
+    /// an unbounded join on a hung `report_stopped` call during shutdown
+    /// could hold the single-instance flock indefinitely. `quit_timeout`
+    /// bounds every blocking step below; the player thread's own nested
+    /// bounded calls (`ProgressGuard::stop_and_join`,
+    /// `SessionReporter::report_stopped_for_shutdown`) each derive their
+    /// own budget from the same value via `Player::stop_for_shutdown` —
+    /// see the `outer_bound` comment below for why the outer join needs
+    /// real headroom over those, not an identical `Duration`.
+    ///
+    /// Extracted from `run()`'s tail so it's callable directly against a
+    /// stubbed `App` in tests without a real tty — `run()` itself remains
+    /// untested end-to-end (unchanged status quo, not a regression; it has
+    /// never had test coverage since it unconditionally calls
+    /// `enable_raw_mode()`).
+    fn teardown(&mut self, quit_timeout: Duration) {
+        let quit_requested = QUIT_REQUESTED.load(Ordering::Relaxed);
+        // Leave the daemon's player running when the TUI disconnects; only stop
+        // and join the player when we own it locally. Both signal-triggered and
+        // in-app quit paths share the same bounded local teardown.
+        let (was_playing, current_idx, position_ticks, last_valid_pos) = {
             let st = self.player.status.lock().unwrap();
-            (st.active, st.current_idx, st.last_valid_pos)
+            (
+                st.active,
+                st.current_idx,
+                st.position_ticks,
+                st.last_valid_pos,
+            )
         };
-        if !self.player.is_remote() {
-            self.player.stop();
-        }
-        self.player.join();
+        log::info!(target: "player", "quit: requested={quit_requested} was_playing={was_playing} idx={current_idx} position_ticks={position_ticks} last_valid_pos={last_valid_pos} timeout={}s", quit_timeout.as_secs());
         // Update the playing item's position before saving — the PlayerEvent::Stopped
         // that carries this update is never processed after we break out of the event loop.
         // Use last_valid_pos (never zeroed during track transitions) rather than
@@ -3164,8 +3160,32 @@ impl App {
             }
         }
         self.save_queue_state_no_clear();
-        let _ = restore_terminal(terminal); // ignore errors — terminal may be gone (SIGHUP)
-        Ok(())
+        if !self.player.is_remote() {
+            self.player.stop_for_shutdown(quit_timeout);
+            // The two nested bounded calls inside the player thread's own
+            // shutdown path (on_shutdown, run sequentially) do NOT share an
+            // identical budget: PlaybackSession::progress_join_budget gives
+            // ProgressGuard::stop_and_join only quit_timeout/2 (it's a
+            // secondary, non-network-critical join), while
+            // report_stopped_for_shutdown keeps the full quit_timeout as its
+            // own budget (the session-terminating call, worth protecting
+            // most — see progress_join_budget's doc comment). Worst case the
+            // two together take quit_timeout/2 + quit_timeout =
+            // 1.5*quit_timeout, so the outer bound below is that plus a 3s
+            // cushion — a real, explicit margin for the remaining
+            // bookkeeping and fixed overhead (thread-spawn cost, contended
+            // locks, drop cleanup; mark_played retry is fire-and-forget on a
+            // detached thread and the PlayerEvent::Stopped send is a cheap
+            // channel op), not just "the same Duration racing every layer of
+            // the timeout composition" as an earlier version of this
+            // function did.
+            let outer_bound = quit_timeout + quit_timeout / 2 + Duration::from_secs(3);
+            let started = Instant::now();
+            self.player.join_or_timeout(outer_bound);
+            let elapsed = started.elapsed();
+            log::info!(target: "player", "quit: player join finished in {}ms (bound={}ms)",
+                elapsed.as_millis(), outer_bound.as_millis());
+        }
     }
 
     /// Mirror mpv's actual volume into `ui_volume` and persist it, so volume
@@ -5561,6 +5581,53 @@ pub(crate) mod tests {
             stay_alive_ctrl: None,
             attached: true,
         }
+    }
+
+    // #202: the in-app quit-key path used to join the player thread
+    // unboundedly, so a hanging shutdown-time network call could hold the
+    // single-instance flock indefinitely. `teardown` is the extracted,
+    // testable sequence both the normal quit-key path and the
+    // SIGHUP/SIGTERM watchdog path now share; this proves it actually
+    // returns within its bounded window against a player thread that
+    // hangs well past the configured `quit_timeout`, without needing a
+    // real tty (`run()` itself stays untested end-to-end, unchanged status
+    // quo).
+    #[test]
+    fn teardown_bounds_previously_unbounded_normal_quit_join() {
+        use mbv_core::player::PlayerProxy;
+
+        let mut app = make_app_stub();
+        let status = app.player.status.clone();
+        // Thread hangs for 10s; quit_timeout below is 200ms, so a correctly
+        // bounded teardown (outer_bound = quit_timeout + quit_timeout/2 +
+        // 3s cushion ~= 3.3s here) must return well short of the full hang.
+        app.player = PlayerProxy::stub_with_hung_thread(status, Duration::from_secs(10));
+
+        let started = std::time::Instant::now();
+        app.teardown(Duration::from_millis(200));
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_secs(5),
+            "teardown should return within its bounded window (outer_bound \
+             ~= 3.3s here), took {elapsed:?} — previously unbounded on the \
+             normal in-app quit path, which is the #202 bug"
+        );
+    }
+
+    #[test]
+    fn teardown_fast_when_player_thread_is_not_hung() {
+        let mut app = make_app_stub();
+
+        let started = std::time::Instant::now();
+        app.teardown(Duration::from_secs(5));
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "teardown against a player with no thread to join should return \
+             promptly, not wait anywhere near the quit_timeout budget, took {elapsed:?}"
+        );
     }
 
     pub(crate) fn make_built_app() -> App {

@@ -137,6 +137,7 @@ pub fn run(
                     feed_view_libraries: base_config.feed_view_libraries.clone(),
                     config_version: base_config.config_version,
                     progress_interval_secs: base_config.progress_interval_secs,
+                    quit_timeout_secs: base_config.quit_timeout_secs,
                     daemon_broadcast_ms: base_config.daemon_broadcast_ms,
                     daemon_client_endpoint: base_config.daemon_client_endpoint.clone(),
                     daemon_server_tcp_listen: base_config.daemon_server_tcp_listen.clone(),

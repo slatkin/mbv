@@ -6,6 +6,7 @@
 !assets/*.jpg
 
 # AI assistant artifacts
+.claude/scratch/
 context-snapshot.json
 .worktrees/
 state.md
