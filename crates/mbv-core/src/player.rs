@@ -1215,6 +1215,13 @@ impl PlaybackSession {
         }
     }
 
+    fn report_stopped_for_end_file(&self, reason: EndFileReason) -> bool {
+        match end_file_stop_report_context(reason) {
+            StopReportContext::Ordinary => self.reporter.report_stopped(self.last_valid_pos),
+            StopReportContext::ShutdownAware => self.report_stopped_for_current_context(),
+        }
+    }
+
     /// Budget for `ProgressGuard::stop_and_join`. During a real quit
     /// (`shutdown_report_timeout` set via `Player::stop_for_shutdown`),
     /// this is deliberately *half* of `quit_timeout_secs`, not the full
@@ -2074,7 +2081,7 @@ impl PlaybackSession {
                 self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_reported);
             if !self.stop_reported {
                 progress.stop_and_join(self.progress_join_budget());
-                self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
+                self.stop_report_accepted = self.report_stopped_for_end_file(reason);
                 self.stop_reported = true;
             }
             if (natural_end || near_end) && !completed_is_audio {
@@ -2092,7 +2099,7 @@ impl PlaybackSession {
             let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
 
             progress.stop_and_join(self.progress_join_budget());
-            self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
+            self.stop_report_accepted = self.report_stopped_for_end_file(reason);
             self.stop_reported = true;
 
             if natural_end {
@@ -3387,6 +3394,20 @@ fn quit_timeout_stop_flags(
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StopReportContext {
+    Ordinary,
+    ShutdownAware,
+}
+
+fn end_file_stop_report_context(reason: EndFileReason) -> StopReportContext {
+    if reason == mpv_end_file_reason::Quit {
+        StopReportContext::ShutdownAware
+    } else {
+        StopReportContext::Ordinary
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3806,6 +3827,22 @@ input-ipc-server=/tmp/user.sock
         assert_eq!(
             *player.shutdown_report_timeout.lock().unwrap(),
             Some(Duration::from_secs(7))
+        );
+    }
+
+    #[test]
+    fn end_file_quit_uses_shutdown_aware_stop_report_context() {
+        assert_eq!(
+            end_file_stop_report_context(mpv_end_file_reason::Quit),
+            StopReportContext::ShutdownAware
+        );
+        assert_eq!(
+            end_file_stop_report_context(mpv_end_file_reason::Eof),
+            StopReportContext::Ordinary
+        );
+        assert_eq!(
+            end_file_stop_report_context(mpv_end_file_reason::Error),
+            StopReportContext::Ordinary
         );
     }
 
