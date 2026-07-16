@@ -59,6 +59,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Unit tests are an extremely imperfect tool with baked-in assumptions. They are meant to capture intended code behaviour and not an actual test of product functionality or if a feature actually works. They are not a source of truth for anything.
 
+For reported regressions, follow `docs/agents/debugging-regressions.md` before editing code or writing tests.
+
 ---
 
 # Repo Rules
