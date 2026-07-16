@@ -511,16 +511,13 @@ impl App {
             return;
         }
         let lib_idx = self.power_left_tab.saturating_sub(1);
-        let has_detail = self.power_left_tab > 0 && self.libs[lib_idx].power_detail_item.is_some();
         let is_feed_group = self.power_left_tab > 0 && self.is_feed_home_video_group_view(lib_idx);
         let is_music_group = self.power_left_tab > 0 && self.is_music_group_view(lib_idx);
         let is_album_folders = self.power_left_tab > 0 && self.is_viewing_album_folders(lib_idx);
         let is_album = self.power_left_tab > 0 && self.is_album_level(lib_idx);
         let is_series = self.power_left_tab > 0 && self.is_series_view(lib_idx);
         let is_home_video = self.power_left_tab > 0 && self.is_home_video_view(lib_idx);
-        if has_detail {
-            self.render_power_detail(f, area, lib_idx, focused, layout);
-        } else if is_feed_group {
+        if is_feed_group {
             self.render_power_feed_home_video_group_view(f, area, lib_idx, focused, layout);
         } else if is_album_folders && is_music_group {
             self.render_power_music_group_view(f, area, lib_idx, focused, layout);
@@ -748,7 +745,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -765,7 +761,6 @@ mod tests {
         let out = render_power_library_to_string(&mut app, &mut layout);
         let lines: Vec<&str> = out.lines().collect();
 
-        assert!(app.libs[0].power_detail_item.is_none());
         // Row 0 is the " N items" header that `render_power_list` always draws
         // for a focused, non-search library panel. Row 1 is the banner's
         // opening horizontal rule -- placed directly *above* the selected
@@ -944,7 +939,6 @@ mod tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -1342,7 +1336,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -1717,7 +1710,6 @@ mod tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -1758,7 +1750,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,

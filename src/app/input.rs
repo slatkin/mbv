@@ -488,21 +488,6 @@ impl App {
         Some(false)
     }
 
-    pub(super) fn handle_key_power_queue_alt_m(&mut self, key: KeyEvent) -> Option<bool> {
-        if key.code == KeyCode::Char('m')
-            && key.modifiers.contains(KeyModifiers::ALT)
-            && !key.modifiers.contains(KeyModifiers::CONTROL)
-            && self.tab_idx == 1
-            && self.queue_view == QUEUE_VIEW_POWER
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab > 0
-        {
-            Some(self.handle_queue_key(key))
-        } else {
-            None
-        }
-    }
-
     pub(super) fn handle_key_ctrl_l(&mut self, key: KeyEvent) -> Option<bool> {
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.force_clear = true;
@@ -1432,71 +1417,48 @@ impl App {
             if self.power_left_tab > 0 {
                 let lib_idx = self.power_left_tab - 1;
 
-                // Detail mode: scroll overview, Enter plays, Backspace/Esc dismisses.
-                // Nav keys are consumed to prevent cursor movement in the underlying list.
-                // All other keys (q, /, Tab, etc.) fall through to their normal handlers.
-                if self.libs[lib_idx].power_detail_item.is_some() {
+                // Compact movie-detail banner scrolling (#204): when the
+                // currently selected movie's banner has overflowing overview
+                // or director text (`detail_max_scroll > 0`, set each frame
+                // by `render_power_compact_detail`), Up/Down/PageUp/PageDown
+                // scroll the banner instead of moving the list cursor -- but
+                // only up to the scroll boundary. Once the banner is at the
+                // top or bottom of its content, the same key falls through
+                // to normal list navigation instead of being swallowed, so a
+                // long description never traps the list cursor in place.
+                if self.layout.power.detail_max_scroll > 0 {
                     match key.code {
-                        KeyCode::Enter => {
-                            let saved = self.tab_idx;
-                            self.tab_idx = self.lib_tab_offset() + lib_idx;
-                            self.select();
-                            self.tab_idx = saved;
+                        KeyCode::Up if self.libs[lib_idx].power_detail_scroll > 0 => {
+                            self.libs[lib_idx].power_detail_scroll -= 1;
                             return false;
                         }
-                        KeyCode::Backspace | KeyCode::Esc => {
-                            self.libs[lib_idx].power_detail_item = None;
-                            return false;
-                        }
-                        KeyCode::Char('m')
-                            if key.modifiers.contains(KeyModifiers::ALT)
-                                && !key.modifiers.contains(KeyModifiers::CONTROL) =>
+                        KeyCode::Down
+                            if self.libs[lib_idx].power_detail_scroll
+                                < self.layout.power.detail_max_scroll =>
                         {
-                            self.libs[lib_idx].power_detail_item = None;
-                            return false;
-                        }
-                        KeyCode::Up => {
-                            self.libs[lib_idx].power_detail_scroll =
-                                self.libs[lib_idx].power_detail_scroll.saturating_sub(1);
-                            return false;
-                        }
-                        KeyCode::Down => {
                             self.libs[lib_idx].power_detail_scroll =
                                 (self.libs[lib_idx].power_detail_scroll + 1)
                                     .min(self.layout.power.detail_max_scroll);
                             return false;
                         }
-                        KeyCode::PageUp => {
+                        KeyCode::PageUp if self.libs[lib_idx].power_detail_scroll > 0 => {
                             self.libs[lib_idx].power_detail_scroll = self.libs[lib_idx]
                                 .power_detail_scroll
                                 .saturating_sub(self.layout.power.detail_page_h);
                             return false;
                         }
-                        KeyCode::PageDown => {
+                        KeyCode::PageDown
+                            if self.libs[lib_idx].power_detail_scroll
+                                < self.layout.power.detail_max_scroll =>
+                        {
                             self.libs[lib_idx].power_detail_scroll = (self.libs[lib_idx]
                                 .power_detail_scroll
                                 + self.layout.power.detail_page_h)
                                 .min(self.layout.power.detail_max_scroll);
                             return false;
                         }
-                        // Left/Right/Home/End: swallow to block underlying list nav.
-                        KeyCode::Left | KeyCode::Right | KeyCode::Home | KeyCode::End => {
-                            return false;
-                        }
-                        // Everything else (q, /, Tab, …) falls through to normal handlers.
                         _ => {}
                     }
-                }
-
-                if key.code == KeyCode::Char('m')
-                    && key.modifiers.contains(KeyModifiers::ALT)
-                    && !key.modifiers.contains(KeyModifiers::CONTROL)
-                {
-                    if let Some(item) = self.power_selected_movie_item(lib_idx) {
-                        self.libs[lib_idx].power_detail_item = Some(item);
-                        self.libs[lib_idx].power_detail_scroll = 0;
-                    }
-                    return false;
                 }
 
                 // Season switching: [ = previous season, ] = next season.
@@ -3566,7 +3528,6 @@ mod power_movie_detail_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -3602,7 +3563,6 @@ mod power_movie_detail_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -3630,31 +3590,22 @@ mod power_movie_detail_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
         assert!(!handled);
-        assert!(app.libs[0].power_detail_item.is_none());
         assert_eq!(app.player_tab.items.len(), 1);
         assert_eq!(app.player_tab.items[0].id, "movie-1");
     }
 
+    // Alt+M's full-screen detail view (and its dedicated key binding) was
+    // removed in #204: the compact banner is the only movie-detail surface
+    // now, so Alt+M is just an ordinary (unbound) key press that falls
+    // through without effect.
     #[test]
-    fn alt_m_toggles_power_movie_detail() {
+    fn alt_m_is_a_no_op_in_power_movie_view() {
         let mut app = make_power_movie_app();
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::ALT));
 
         assert!(!handled);
-        assert_eq!(
-            app.libs[0]
-                .power_detail_item
-                .as_ref()
-                .map(|item| item.id.as_str()),
-            Some("movie-1")
-        );
         assert_eq!(app.libs[0].power_detail_scroll, 0);
-
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::ALT));
-
-        assert!(!handled);
-        assert!(app.libs[0].power_detail_item.is_none());
     }
 
     #[test]
@@ -3844,7 +3795,6 @@ mod power_movie_detail_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -3892,7 +3842,6 @@ mod power_movie_detail_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -4184,7 +4133,6 @@ mod power_music_track_focus_tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -4264,7 +4212,6 @@ mod power_music_track_focus_tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -4857,7 +4804,6 @@ mod power_music_track_focus_tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -4920,7 +4866,6 @@ mod power_library_scope_routing_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -5059,7 +5004,6 @@ mod power_library_scope_routing_tests {
                 }],
                 search: None,
                 feed_home_video: None,
-                power_detail_item: None,
                 power_detail_scroll: 0,
                 album_track_focus: None,
             });
@@ -5304,7 +5248,6 @@ mod power_library_scope_routing_tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });

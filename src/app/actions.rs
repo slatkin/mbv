@@ -599,7 +599,7 @@ impl App {
         let feed = lib.feed_home_video.as_ref();
         log::debug!(
             target: "feedhv",
-            "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} root_cursor={} search={} detail={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
+            "{context}: lib_idx={lib_idx} lib={} nav_len={} root_parent={} root_items={} root_loading={} root_cursor={} search={} feed_present={} feed_loading={} selected_group={} groups={} all_items={} video_cursor={} video_scroll={} group_view={}",
             lib.library.name,
             lib.nav_stack.len(),
             root.map(|lvl| lvl.parent_id.as_str()).unwrap_or(""),
@@ -607,7 +607,6 @@ impl App {
             root.map(|lvl| lvl.loading).unwrap_or(false),
             root.map(|lvl| lvl.cursor).unwrap_or(0),
             lib.search.is_some(),
-            lib.power_detail_item.is_some(),
             feed.is_some(),
             feed.map(|state| state.loading).unwrap_or(false),
             feed.map(|state| state.selected_group).unwrap_or(0),
@@ -734,7 +733,7 @@ impl App {
         let Some(lib) = self.libs.get(lib_idx) else {
             return;
         };
-        if lib.nav_stack.len() != 1 || lib.search.is_some() || lib.power_detail_item.is_some() {
+        if lib.nav_stack.len() != 1 || lib.search.is_some() {
             return;
         }
         let ready = lib
@@ -1353,15 +1352,12 @@ impl App {
 
     pub(super) fn is_home_video_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
-        if lib.power_detail_item.is_some() {
-            return false;
-        }
         lib.library.collection_type == "homevideos"
     }
 
     pub(super) fn is_feed_home_video_group_view(&self, lib_idx: usize) -> bool {
         let lib = &self.libs[lib_idx];
-        if lib.power_detail_item.is_some() || lib.search.is_some() {
+        if lib.search.is_some() {
             return false;
         }
         let has_state = lib.feed_home_video.as_ref().is_some_and(|state| {
@@ -5269,13 +5265,12 @@ impl App {
     }
 
     pub(super) fn rebuild_library_tabs_from_views(&mut self, all_views: &[MediaItem]) {
-        // Drain existing libs, preserving nav stacks, the pinned detail item, and scroll pos
-        // so that a UserDataChanged websocket refresh (fired when playback starts) doesn't
-        // silently dismiss the movie detail panel.
+        // Drain existing libs, preserving nav stacks and scroll pos so that a
+        // UserDataChanged websocket refresh (fired when playback starts)
+        // doesn't silently reset the compact movie-detail banner's scroll.
         struct SavedLibState {
             nav_stack: Vec<BrowseLevel>,
             feed_home_video: Option<FeedHomeVideoState>,
-            detail_item: Option<mbv_core::api::MediaItem>,
             detail_scroll: usize,
         }
         let old_libs: HashMap<String, SavedLibState> = self
@@ -5287,7 +5282,6 @@ impl App {
                     SavedLibState {
                         nav_stack: std::mem::take(&mut l.nav_stack),
                         feed_home_video: l.feed_home_video,
-                        detail_item: l.power_detail_item,
                         detail_scroll: l.power_detail_scroll,
                     },
                 )
@@ -5321,14 +5315,12 @@ impl App {
                 })
                 .unwrap_or_default();
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
-            let detail_item = saved.and_then(|s| s.detail_item.clone());
             let detail_scroll = saved.map(|s| s.detail_scroll).unwrap_or(0);
             self.libs.push(super::LibraryTab {
                 library: view.clone(),
                 nav_stack: stack,
                 search: None,
                 feed_home_video,
-                power_detail_item: detail_item,
                 power_detail_scroll: detail_scroll,
 
                 album_track_focus: None,
@@ -5662,7 +5654,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -6056,7 +6047,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
             album_track_focus: None,
         });
@@ -6336,7 +6326,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -6397,7 +6386,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -6431,7 +6419,6 @@ mod tests {
                 video_scroll: 4,
                 ..Default::default()
             }),
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
@@ -6466,7 +6453,6 @@ mod tests {
                 video_scroll: 6,
                 ..Default::default()
             }),
-            power_detail_item: None,
             power_detail_scroll: 0,
 
             album_track_focus: None,
