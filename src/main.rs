@@ -89,7 +89,9 @@ fn classify_auth_failure(server_url: &str, reason: &str) -> Option<String> {
             Some("Your session has expired — please log in again.".to_string())
         }
         "No cached credentials" | "No server URL configured" => None,
-        other => Some(format!("Could not reach {server_url}: {other} — please log in again.")),
+        other => Some(format!(
+            "Could not reach {server_url}: {other} — please log in again."
+        )),
     }
 }
 
@@ -476,10 +478,7 @@ mod tests {
             classify_auth_failure("http://emby.local", "No cached credentials"),
             None
         );
-        assert_eq!(
-            classify_auth_failure("", "No server URL configured"),
-            None
-        );
+        assert_eq!(classify_auth_failure("", "No server URL configured"), None);
     }
 
     #[test]
@@ -500,7 +499,10 @@ mod tests {
     fn classify_auth_failure_hard_join_timeout_flows_through_generic_branch() {
         assert_eq!(
             classify_auth_failure("http://emby.local", "timed out after 15s"),
-            Some("Could not reach http://emby.local: timed out after 15s — please log in again.".to_string())
+            Some(
+                "Could not reach http://emby.local: timed out after 15s — please log in again."
+                    .to_string()
+            )
         );
     }
 }

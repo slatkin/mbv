@@ -682,7 +682,6 @@ impl EmbyClient {
         }
     }
 
-
     /// Hard wall-clock bound for `authenticate_bounded`, independent of
     /// ureq's own connect/total timeouts (see issue #191: those don't
     /// reliably cover every stall mode, e.g. TLS handshake hangs).
@@ -692,7 +691,10 @@ impl EmbyClient {
     /// time. On success, returns the authenticated clone -- callers should
     /// use it in place of the original, since `self` is never mutated. On
     /// timeout (or any other failure), `self` is left untouched.
-    pub fn authenticate_bounded(&self, hard_bound: std::time::Duration) -> Result<EmbyClient, String> {
+    pub fn authenticate_bounded(
+        &self,
+        hard_bound: std::time::Duration,
+    ) -> Result<EmbyClient, String> {
         let mut clone = self.clone();
         crate::bounded::run_with_hard_bound(
             move || clone.authenticate().map(|()| clone),
