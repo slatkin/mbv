@@ -37,13 +37,22 @@ impl CtrlHello {
         hello
     }
 
+    pub fn compatible_client(auth_token: String, compatibility: CtrlCompatibility) -> Self {
+        let mut hello = Self::current_client(auth_token);
+        hello.protocol_version = compatibility.client_protocol_version;
+        hello
+    }
+
     pub fn validate_peer(&self) -> Result<(), String> {
-        if self.protocol_version != CTRL_PROTOCOL_VERSION {
-            return Err(format!(
-                "incompatible daemon protocol version: peer={} local={}",
-                self.protocol_version, CTRL_PROTOCOL_VERSION
-            ));
-        }
+        self.compatibility()?;
+        self.validate_required_capabilities()
+    }
+
+    pub fn compatibility(&self) -> Result<CtrlCompatibility, String> {
+        CtrlCompatibility::for_peer(self.protocol_version)
+    }
+
+    fn validate_required_capabilities(&self) -> Result<(), String> {
         for required in [
             CTRL_CAP_QUEUE_STATE,
             CTRL_CAP_START_INDEX,
@@ -56,6 +65,37 @@ impl CtrlHello {
             }
         }
         Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CtrlCompatibility {
+    pub peer_protocol_version: u32,
+    pub client_protocol_version: u32,
+    pub supports_queue_append: bool,
+}
+
+impl CtrlCompatibility {
+    pub fn for_peer(peer_protocol_version: u32) -> Result<Self, String> {
+        match peer_protocol_version {
+            CTRL_PROTOCOL_VERSION => Ok(Self {
+                peer_protocol_version,
+                client_protocol_version: CTRL_PROTOCOL_VERSION,
+                supports_queue_append: true,
+            }),
+            2 => Ok(Self {
+                peer_protocol_version,
+                client_protocol_version: 2,
+                supports_queue_append: false,
+            }),
+            _ => Err(format!(
+                "incompatible daemon protocol version: peer={peer_protocol_version} local={CTRL_PROTOCOL_VERSION}"
+            )),
+        }
+    }
+
+    pub fn current() -> Self {
+        Self::for_peer(CTRL_PROTOCOL_VERSION).expect("local ctrl protocol version is compatible")
     }
 }
 
@@ -320,10 +360,29 @@ mod tests {
     }
 
     #[test]
+    fn hello_accepts_compatible_v2_protocol_version() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 2;
+
+        hello.validate_peer().unwrap();
+    }
+
+    #[test]
     fn hello_rejects_missing_capability() {
         let mut hello = CtrlHello::current();
         hello.capabilities.retain(|cap| cap != CTRL_CAP_START_INDEX);
         assert!(hello.validate_peer().is_err());
+    }
+
+    #[test]
+    fn compatible_v2_hello_still_rejects_missing_capability() {
+        let mut hello = CtrlHello::current();
+        hello.protocol_version = 2;
+        hello.capabilities.retain(|cap| cap != CTRL_CAP_START_INDEX);
+
+        let err = hello.validate_peer().unwrap_err();
+
+        assert!(err.contains("peer missing daemon protocol capability"));
     }
 
     #[test]
