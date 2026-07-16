@@ -8574,6 +8574,54 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn rejected_v2_direct_remote_append_preserves_remote_undo_slot_identity() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let local_items = make_items(2);
+        let remote_items = make_items(3);
+        let (mut app, _cmd_rx) = make_v2_remote_app_stub_with_cmd_rx(local_items, remote_items);
+        app.set_queue_scope(QueueScope::Remote);
+        app.remote_player_tab.as_mut().unwrap().queue_cursor = 1;
+
+        app.move_queue_item_up();
+        let moved_slot = app
+            .remote_player_tab
+            .as_ref()
+            .unwrap()
+            .resolve_slot_at(0)
+            .expect("moved slot should be at destination");
+
+        app.tab_idx = 0;
+        app.home.section = 0;
+        app.home.continue_items = make_items(1);
+        app.home.continue_cursor = 0;
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+
+        assert!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .slot_id_matches_at(0, moved_slot),
+            "rejected append rollback must preserve existing remote queue slot IDs"
+        );
+
+        app.undo_last_queue_edit(QueueScope::Remote);
+
+        assert_ne!(app.status, "Can't undo move: queue changed since then");
+        assert!(app.remote_queue_undo_stack.is_empty());
+        assert_eq!(
+            app.remote_player_tab
+                .as_ref()
+                .unwrap()
+                .items
+                .iter()
+                .map(|item| item.id.as_str())
+                .collect::<Vec<_>>(),
+            ["id0", "id1", "id2"]
+        );
+        assert_eq!(app.remote_player_tab.as_ref().unwrap().queue_cursor, 1);
+    }
+
+    #[test]
     fn clearing_local_queue_in_direct_remote_mode_leaves_remote_queue_intact() {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);

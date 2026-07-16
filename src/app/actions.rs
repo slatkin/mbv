@@ -2344,10 +2344,7 @@ impl App {
             let scope = self.visible_queue_scope();
             let appended = item.clone();
             let previous_dirty = self.queue_dirty;
-            let (previous_items, previous_cursor) = {
-                let queue = self.queue_for_scope(scope);
-                (queue.items.clone(), queue.queue_cursor)
-            };
+            let previous_queue = self.queue_for_scope(scope).clone();
             {
                 self.queue_for_scope_mut(scope).append_item(item);
             }
@@ -2360,8 +2357,7 @@ impl App {
                 self.persist_local_queue_state_if_needed(scope);
             } else {
                 self.queue_dirty = previous_dirty;
-                self.queue_for_scope_mut(scope)
-                    .set_items(previous_items, previous_cursor);
+                *self.queue_for_scope_mut(scope) = previous_queue;
             }
         } else if self.tab_idx >= 2 {
             let Some(item) = self.current_lib_item() else {
@@ -2378,10 +2374,7 @@ impl App {
             let scope = self.visible_queue_scope();
             let appended = item.clone();
             let previous_dirty = self.queue_dirty;
-            let (previous_items, previous_cursor) = {
-                let queue = self.queue_for_scope(scope);
-                (queue.items.clone(), queue.queue_cursor)
-            };
+            let previous_queue = self.queue_for_scope(scope).clone();
             {
                 self.queue_for_scope_mut(scope).append_item(item);
             }
@@ -2394,8 +2387,7 @@ impl App {
                 self.persist_local_queue_state_if_needed(scope);
             } else {
                 self.queue_dirty = previous_dirty;
-                self.queue_for_scope_mut(scope)
-                    .set_items(previous_items, previous_cursor);
+                *self.queue_for_scope_mut(scope) = previous_queue;
             }
         }
     }
@@ -2415,10 +2407,7 @@ impl App {
                 let scope = self.visible_queue_scope();
                 let appended = items.clone();
                 let previous_dirty = self.queue_dirty;
-                let (previous_items, previous_cursor) = {
-                    let queue = self.queue_for_scope(scope);
-                    (queue.items.clone(), queue.queue_cursor)
-                };
+                let previous_queue = self.queue_for_scope(scope).clone();
                 {
                     let queue = self.queue_for_scope_mut(scope);
                     queue.append_items(items);
@@ -2435,8 +2424,7 @@ impl App {
                     self.persist_local_queue_state_if_needed(scope);
                 } else {
                     self.queue_dirty = previous_dirty;
-                    self.queue_for_scope_mut(scope)
-                        .set_items(previous_items, previous_cursor);
+                    *self.queue_for_scope_mut(scope) = previous_queue;
                 }
             }
             Err(e) => {
