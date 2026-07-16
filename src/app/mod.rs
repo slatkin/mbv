@@ -21,6 +21,23 @@ static QUIT_REQUESTED: AtomicBool = AtomicBool::new(false);
 // The watchdog's forced exit arms only on this flag so clean q-quits are never raced.
 static TERMINAL_GONE: AtomicBool = AtomicBool::new(false);
 
+#[cfg(test)]
+type DirectConnectFn = fn(
+    &mbv_core::remote_player::DaemonEndpoint,
+    &str,
+) -> Result<
+    (
+        mbv_core::remote_player::RemotePlayer,
+        mpsc::Receiver<PlayerEvent>,
+    ),
+    String,
+>;
+
+#[cfg(test)]
+static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> = Mutex::new(None);
+#[cfg(test)]
+static DIRECT_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 pub(super) const QUEUE_VIEW_POWER: u8 = 1;
 pub(super) const QUEUE_VIEW_COUNT: u8 = 2;
 pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
@@ -2268,6 +2285,25 @@ impl App {
             .then_some(mbv_core::remote_player::DaemonEndpoint::Local)
     }
 
+    fn connect_direct_endpoint(
+        &self,
+        endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        auth_token: &str,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
+        #[cfg(test)]
+        if let Some(connect) = *DIRECT_CONNECT_OVERRIDE.lock().unwrap() {
+            return connect(endpoint, auth_token);
+        }
+
+        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, auth_token)
+    }
+
     fn switch_to_direct_remote(
         &mut self,
         sess: &mbv_core::api::SessionInfo,
@@ -2376,13 +2412,11 @@ impl App {
     }
 
     fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
+        let mut direct_upgrade_error = None;
         if !self.player.is_remote() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
                 let auth_token = self.client.lock().unwrap().token.clone();
-                match mbv_core::remote_player::RemotePlayer::connect_endpoint(
-                    &endpoint,
-                    &auth_token,
-                ) {
+                match self.connect_direct_endpoint(&endpoint, &auth_token) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_direct_remote(sess, remote, remote_rx);
                         return;
@@ -2394,6 +2428,7 @@ impl App {
                             sess.device_name,
                             e
                         );
+                        direct_upgrade_error = Some(e);
                     }
                 }
             }
@@ -2414,7 +2449,13 @@ impl App {
         self.remote_pos_at = Instant::now();
         self.remote_api_pos_advanced_at = Instant::now();
         self.show_sessions = false;
-        self.flash_status(format!("Connected to {name}"));
+        if let Some(error) = direct_upgrade_error {
+            self.flash_status_high(format!(
+                "Direct mbv control failed: {error}; using attached session {name}"
+            ));
+        } else {
+            self.flash_status(format!("Connected to {name}"));
+        }
         self.spawn_sessions_load();
     }
 
@@ -6018,6 +6059,72 @@ pub(crate) mod tests {
         assert_eq!(
             app.session_direct_endpoint(&sess),
             Some(mbv_core::remote_player::DaemonEndpoint::Local)
+        );
+    }
+
+    #[test]
+    fn connect_to_session_uses_direct_upgrade_success() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+        fn direct_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_success);
+        let mut app = make_app_stub();
+        let mut sess = make_session("remote-mbv", "mbv");
+        sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
+
+        app.connect_to_session(&sess);
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(app.remote_player_tab.is_some());
+        assert!(app.connected_session_id.is_none());
+        assert_eq!(app.status, "Connected directly to remote-mbv");
+    }
+
+    #[test]
+    fn connect_to_session_preserves_direct_upgrade_failure_status_after_fallback() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+        fn direct_failure(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Err("incompatible daemon protocol version: peer=1 local=3".to_string())
+        }
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_failure);
+        let mut app = make_app_stub();
+        let mut sess = make_session("remote-mbv", "mbv");
+        sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
+
+        app.connect_to_session(&sess);
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(app.remote_player_tab.is_none());
+        assert_eq!(app.connected_session_id.as_deref(), Some("sess-1"));
+        assert_eq!(
+            app.status,
+            "Direct mbv control failed: incompatible daemon protocol version: peer=1 local=3; using attached session remote-mbv"
         );
     }
 
