@@ -1295,12 +1295,13 @@ impl EmbyClient {
             runtime_ticks,
         );
         let client = self.with_request_timeout(hard_bound);
+        let started = std::time::Instant::now();
         log::info!(
             target: "api",
             "outbound: Stopped shutdown pos={position_ticks} timeout={}ms",
             hard_bound.as_millis()
         );
-        match crate::bounded::run_with_hard_bound(
+        let result = crate::bounded::run_with_hard_bound(
             move || {
                 client
                     .post("/Sessions/Playing/Stopped")
@@ -1309,17 +1310,19 @@ impl EmbyClient {
                     .map_err(|e| e.to_string())
             },
             hard_bound,
-        ) {
+        );
+        let elapsed_ms = started.elapsed().as_millis();
+        match result {
             Ok(status) => {
-                log::info!(target: "api", "inbound: {status} Stopped shutdown");
+                log::info!(target: "api", "inbound: {status} Stopped shutdown in {elapsed_ms}ms");
                 true
             }
             Err(e) if e.starts_with("timed out after ") => {
-                log::warn!(target: "api", "err: Stopped shutdown timed out: {e}");
+                log::warn!(target: "api", "err: Stopped shutdown timed out after {elapsed_ms}ms: {e}");
                 false
             }
             Err(e) => {
-                log::warn!(target: "api", "err: Stopped shutdown failed without retry: {e}");
+                log::warn!(target: "api", "err: Stopped shutdown failed without retry after {elapsed_ms}ms: {e}");
                 false
             }
         }

@@ -564,10 +564,28 @@ struct ProgressGuard {
 }
 
 impl ProgressGuard {
-    fn stop_and_join(&mut self) {
+    fn stop_and_join(&mut self, budget: Duration) {
         let _ = self.stop_tx.send(());
         if let Some(h) = self.handle.take() {
-            let _ = h.join();
+            let start = std::time::Instant::now();
+            let result = crate::bounded::run_with_hard_bound(
+                move || {
+                    let _ = h.join();
+                    Ok::<(), String>(())
+                },
+                budget,
+            );
+            let elapsed = start.elapsed();
+            match result {
+                Ok(()) => {
+                    log::info!(target: "player", "progress_join: joined in {}ms (budget={}ms)",
+                    elapsed.as_millis(), budget.as_millis())
+                }
+                Err(e) => {
+                    log::warn!(target: "player", "progress_join: {e} after {}ms (budget={}ms)",
+                    elapsed.as_millis(), budget.as_millis())
+                }
+            }
         }
     }
 }
@@ -1197,6 +1215,23 @@ impl PlaybackSession {
         }
     }
 
+    /// Budget for `ProgressGuard::stop_and_join`. During a real quit
+    /// (`shutdown_report_timeout` set via `Player::stop_for_shutdown`),
+    /// reuses the same `quit_timeout_secs`-derived budget as
+    /// `report_stopped_for_shutdown` — the progress-reporter thread's HTTP
+    /// call is the same kind of hang risk as the shutdown report itself, so
+    /// it must not be allowed to eat the whole outer teardown bound on its
+    /// own. Outside of shutdown (ordinary track transitions), there is no
+    /// time pressure, so a generous fixed budget (matching the shared
+    /// agent's own ~30s worst case) just guards against a truly stuck
+    /// thread without adding latency to the common fast case.
+    fn progress_join_budget(&self) -> Duration {
+        self.shutdown_report_timeout
+            .lock()
+            .unwrap()
+            .unwrap_or(Duration::from_secs(30))
+    }
+
     fn sync_status_position(&self) {
         let mut s = self.status.lock().unwrap();
         s.current_idx = self.current_idx;
@@ -1656,7 +1691,7 @@ impl PlaybackSession {
 
         // Stop progress reporter during transition to prevent stale reports,
         // then restart for the new item.
-        progress.stop_and_join();
+        progress.stop_and_join(self.progress_join_budget());
         let (urls, ok) = self.reporter.start_item(&active_item);
         self.ext_sub_urls = urls;
         if !ok {
@@ -1711,7 +1746,7 @@ impl PlaybackSession {
         let _ = mpv.set_property("pause", false);
 
         // Stop progress reporter during transition to prevent stale reports.
-        progress.stop_and_join();
+        progress.stop_and_join(self.progress_join_budget());
         self.ext_sub_urls = self.reporter.transition_to(&item, self.last_valid_pos);
         *progress = spawn_progress_reporter(self.reporter.clone());
 
@@ -2015,7 +2050,7 @@ impl PlaybackSession {
             log::warn!(target: "player", "quit path: last_valid_pos={} runtime={} pending_resume={} stop_reported={}",
                 self.last_valid_pos, runtime, self.pending_resume_secs.is_some(), self.stop_reported);
             if !self.stop_reported {
-                progress.stop_and_join();
+                progress.stop_and_join(self.progress_join_budget());
                 self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
                 self.stop_reported = true;
             }
@@ -2033,7 +2068,7 @@ impl PlaybackSession {
         if self.origin == PlaybackOrigin::Standalone {
             let natural_end = reason == mpv_end_file_reason::Eof && runtime > 0;
 
-            progress.stop_and_join();
+            progress.stop_and_join(self.progress_join_budget());
             self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             self.stop_reported = true;
 
@@ -2069,7 +2104,7 @@ impl PlaybackSession {
         let Some(completed_item) = self.item_at(completed_idx).cloned() else {
             log::warn!(target: "player", "on_end_file: completed_idx={completed_idx} out of bounds (len={}), stopping",
                 self.queue_len());
-            progress.stop_and_join();
+            progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
             self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             let _ = self.event_tx.send(PlayerEvent::Stopped {
@@ -2111,7 +2146,7 @@ impl PlaybackSession {
             .unwrap_or(self.current_idx + 1);
 
         if next_idx >= self.queue_len() {
-            progress.stop_and_join();
+            progress.stop_and_join(self.progress_join_budget());
             self.status.lock().unwrap().active = false;
             self.stop_report_accepted = self.reporter.report_stopped(completed_pos);
             if played_out {
@@ -2172,7 +2207,7 @@ impl PlaybackSession {
         let _ = mpv.command("script-message", &["mbv-skip-intro-dismiss"]);
 
         // Stop progress reporter during transition to prevent stale reports.
-        progress.stop_and_join();
+        progress.stop_and_join(self.progress_join_budget());
         let (urls, ok) = self.reporter.start_item(&next_item);
         self.ext_sub_urls = urls;
         if !ok {
@@ -2199,7 +2234,7 @@ impl PlaybackSession {
         log::warn!(target: "player", "shutdown: last_valid_pos={} stop_reported={} pending_resume={}",
             self.last_valid_pos, self.stop_reported, self.pending_resume_secs.is_some());
         if !self.stop_reported {
-            progress.stop_and_join();
+            progress.stop_and_join(self.progress_join_budget());
             self.stop_report_accepted = self.report_stopped_for_current_context();
             self.stop_reported = true;
         }
@@ -2227,7 +2262,10 @@ impl PlaybackSession {
                     error: None,
                 });
             }
-            // mpv exited on its own (not via our stop command) — tell the app to quit.
+            // mpv exited on its own (not via our stop command, e.g. the user
+            // closed the mpv window directly) — despite the event name,
+            // App::handle_player_event's PlayerEvent::MpvQuit arm does not
+            // quit the app; it just clears some UI state and returns false.
             if self.quit_at.is_none() {
                 let _ = self.event_tx.send(PlayerEvent::MpvQuit);
             }
@@ -2278,7 +2316,7 @@ impl PlaybackSession {
                     .is_some_and(|t| t.elapsed() > Duration::from_secs(2))
                 {
                     if !self.stop_reported {
-                        progress.stop_and_join();
+                        progress.stop_and_join(self.progress_join_budget());
                         self.stop_report_accepted = self.report_stopped_for_current_context();
                         self.stop_reported = true;
                     }
@@ -3012,6 +3050,41 @@ impl PlayerProxy {
         }
     }
 
+    /// Like [`stub`](Self::stub), but with a real background thread wired up
+    /// as the local `Player`'s `thread_handle`, which sleeps for `sleep`
+    /// before finishing. Lets root-crate tests prove teardown code that
+    /// calls `join_or_timeout` actually returns within its bound instead of
+    /// blocking for the full `sleep` duration — the previously-unbounded
+    /// normal in-app quit path (#202) is exactly this scenario with a
+    /// hanging player thread.
+    #[cfg(feature = "test-support")]
+    pub fn stub_with_hung_thread(status: Arc<Mutex<PlayerStatus>>, sleep: Duration) -> Self {
+        let (tx, _rx) = std::sync::mpsc::channel();
+        let player = Player::new(
+            String::new(),
+            String::new(),
+            false,
+            false,
+            false,
+            false,
+            false,
+            SubtitlePrefs::default(),
+            tx,
+            None,
+        );
+        let handle = std::thread::spawn(move || {
+            std::thread::sleep(sleep);
+        });
+        *player.thread_handle.lock().unwrap() = Some(handle);
+        let subtitle_prefs = player.subtitle_prefs.clone();
+        PlayerProxy {
+            always_play_next: false,
+            status,
+            subtitle_prefs,
+            inner: PlayerProxyInner::Local(player),
+        }
+    }
+
     /// Wires a fresh command channel into the local player and returns the
     /// receiving end, so a test can assert on what `send_command` actually sent
     /// without a real mpv thread running.
@@ -3680,6 +3753,50 @@ input-ipc-server=/tmp/user.sock
         assert_eq!(
             *player.shutdown_report_timeout.lock().unwrap(),
             Some(Duration::from_secs(7))
+        );
+    }
+
+    #[test]
+    fn progress_guard_stop_and_join_bounded_when_thread_hangs() {
+        let (stop_tx, _stop_rx) = mpsc::channel();
+        let handle = std::thread::spawn(|| {
+            std::thread::sleep(Duration::from_secs(5));
+        });
+        let mut guard = ProgressGuard {
+            stop_tx,
+            handle: Some(handle),
+        };
+
+        let started = std::time::Instant::now();
+        guard.stop_and_join(Duration::from_millis(150));
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "stop_and_join should return near its 150ms budget, took {elapsed:?}"
+        );
+        assert!(
+            guard.handle.is_none(),
+            "handle should be taken regardless of outcome"
+        );
+    }
+
+    #[test]
+    fn progress_guard_stop_and_join_fast_when_thread_finishes_quickly() {
+        let (stop_tx, _stop_rx) = mpsc::channel();
+        let handle = std::thread::spawn(|| {});
+        let mut guard = ProgressGuard {
+            stop_tx,
+            handle: Some(handle),
+        };
+
+        let started = std::time::Instant::now();
+        guard.stop_and_join(Duration::from_secs(30));
+        let elapsed = started.elapsed();
+
+        assert!(
+            elapsed < Duration::from_secs(1),
+            "a thread that finishes immediately should not add latency, took {elapsed:?}"
         );
     }
 

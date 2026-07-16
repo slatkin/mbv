@@ -338,6 +338,12 @@ fn main() {
             eprintln!(
                 "mbv: another mbv instance is already running in a foreground terminal (no relay to attach to)."
             );
+            match single_instance::read_pid(&lock_path) {
+                Some(pid) => eprintln!("mbv: that instance's PID is {pid} (per {lock_path:?})."),
+                None => {
+                    eprintln!("mbv: could not determine that instance's PID from {lock_path:?}.")
+                }
+            }
             eprintln!("mbv: only one mbv instance may run at a time. Close it, or use `mbv -q` to stop it.");
             std::process::exit(1);
         }
