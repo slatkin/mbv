@@ -1217,19 +1217,41 @@ impl PlaybackSession {
 
     /// Budget for `ProgressGuard::stop_and_join`. During a real quit
     /// (`shutdown_report_timeout` set via `Player::stop_for_shutdown`),
-    /// reuses the same `quit_timeout_secs`-derived budget as
-    /// `report_stopped_for_shutdown` — the progress-reporter thread's HTTP
-    /// call is the same kind of hang risk as the shutdown report itself, so
-    /// it must not be allowed to eat the whole outer teardown bound on its
-    /// own. Outside of shutdown (ordinary track transitions), there is no
-    /// time pressure, so a generous fixed budget (matching the shared
-    /// agent's own ~30s worst case) just guards against a truly stuck
-    /// thread without adding latency to the common fast case.
+    /// this is deliberately *half* of `quit_timeout_secs`, not the full
+    /// value: `report_stopped_for_shutdown` (see
+    /// `report_stopped_for_current_context`) keeps the full
+    /// `quit_timeout_secs` as its own budget per the spec's resolved
+    /// design (it's the session-terminating call and the one worth
+    /// protecting most), so giving this secondary, non-network-critical
+    /// join the same full budget would leave the outer teardown bound
+    /// with only a thin, constant margin over the worst case of the two
+    /// nested calls combined — see `App::teardown`'s `outer_bound` for
+    /// the composition this budget feeds into. Outside of shutdown
+    /// (ordinary track transitions), there is no time pressure, so a
+    /// generous fixed budget (matching the shared agent's own ~30s worst
+    /// case) just guards against a truly stuck thread without adding
+    /// latency to the common fast case.
     fn progress_join_budget(&self) -> Duration {
-        self.shutdown_report_timeout
-            .lock()
-            .unwrap()
-            .unwrap_or(Duration::from_secs(30))
+        match *self.shutdown_report_timeout.lock().unwrap() {
+            Some(quit_timeout) => quit_timeout / 2,
+            None => Duration::from_secs(30),
+        }
+    }
+
+    /// Clears any pending-quit state so a `LoadNew`/`ReplaceQueue` command
+    /// that arrives while a quit is in flight fully cancels it — not just
+    /// `quit_at`, but also the shutdown-scoped report budget set by
+    /// `Player::stop_for_shutdown`. Without resetting
+    /// `shutdown_report_timeout` here too, a cancelled quit would leave it
+    /// `Some` for the rest of this `PlaybackSession`'s lifetime (nothing
+    /// else clears it once set), so every subsequent track transition
+    /// would silently keep using the tight shutdown budget/no-retry
+    /// behavior via `progress_join_budget`/`report_stopped_for_current_context`
+    /// instead of the ordinary one — no crash, just quietly degraded
+    /// reliability for the rest of the session.
+    fn cancel_pending_quit(&mut self) {
+        self.quit_at = None;
+        *self.shutdown_report_timeout.lock().unwrap() = None;
     }
 
     fn sync_status_position(&self) {
@@ -1599,6 +1621,7 @@ impl PlaybackSession {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
+        self.cancel_pending_quit();
         if new_items.is_empty() {
             self.stop_report_accepted = self.reporter.report_stopped(self.last_valid_pos);
             self.stop_reported = true;
@@ -1738,7 +1761,7 @@ impl PlaybackSession {
         mpv: &Mpv,
         progress: &mut ProgressGuard,
     ) {
-        self.quit_at = None;
+        self.cancel_pending_quit();
         self.origin = PlaybackOrigin::Standalone;
         self.set_origin(self.origin);
         // Loading a new item should always start playing it, even if mpv
@@ -3642,6 +3665,36 @@ input-ipc-server=/tmp/user.sock
             Vec::new(),
         );
         (session, status)
+    }
+
+    #[test]
+    fn cancel_pending_quit_clears_quit_at_and_shutdown_timeout() {
+        // Regression test for a code-review finding: cmd_load_new and
+        // cmd_replace_queue (via the shared cancel_pending_quit helper)
+        // must reset shutdown_report_timeout, not just quit_at, when a
+        // LoadNew/ReplaceQueue command cancels an in-flight quit. Otherwise
+        // App::teardown -> Player::stop_for_shutdown sets
+        // shutdown_report_timeout = Some(quit_timeout) before sending the
+        // stop signal; if that quit then gets cancelled by an
+        // already-queued LoadNew/ReplaceQueue, shutdown_report_timeout
+        // would stay Some for the rest of the session, silently degrading
+        // every later track transition to the tight shutdown budget/no-retry
+        // path instead of the ordinary one. cmd_load_new/cmd_replace_queue
+        // themselves aren't unit-tested directly here since they require a
+        // real Mpv handle; this exercises the exact reset logic they share.
+        let (mut session, _status) = make_queue_session_for_pos_tests(0);
+        session.quit_at = Some(Instant::now());
+        *session.shutdown_report_timeout.lock().unwrap() = Some(Duration::from_secs(5));
+
+        session.cancel_pending_quit();
+
+        assert!(session.quit_at.is_none());
+        assert!(session.shutdown_report_timeout.lock().unwrap().is_none());
+        // progress_join_budget/report_stopped_for_current_context both key off
+        // shutdown_report_timeout being None to behave as ordinary mid-playback
+        // calls again — asserting the None state above is the load-bearing
+        // check; both helpers are exercised directly by other tests.
+        assert_eq!(session.progress_join_budget(), Duration::from_secs(30));
     }
 
     #[test]

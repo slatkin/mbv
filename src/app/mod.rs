@@ -3147,15 +3147,24 @@ impl App {
         self.save_queue_state_no_clear();
         if !self.player.is_remote() {
             self.player.stop_for_shutdown(quit_timeout);
-            // Headroom over the nested bounded calls inside the player
-            // thread's own shutdown path (ProgressGuard::stop_and_join, then
-            // report_stopped_for_shutdown — each independently budgeted up
-            // to quit_timeout), plus a small fixed cushion for the
-            // remaining bookkeeping (mark_played retry is fire-and-forget
-            // on a detached thread; the PlayerEvent::Stopped send is a
-            // cheap channel op) — not the same Duration racing every layer
-            // of the timeout composition.
-            let outer_bound = quit_timeout.saturating_mul(2) + Duration::from_secs(1);
+            // The two nested bounded calls inside the player thread's own
+            // shutdown path (on_shutdown, run sequentially) do NOT share an
+            // identical budget: PlaybackSession::progress_join_budget gives
+            // ProgressGuard::stop_and_join only quit_timeout/2 (it's a
+            // secondary, non-network-critical join), while
+            // report_stopped_for_shutdown keeps the full quit_timeout as its
+            // own budget (the session-terminating call, worth protecting
+            // most — see progress_join_budget's doc comment). Worst case the
+            // two together take quit_timeout/2 + quit_timeout =
+            // 1.5*quit_timeout, so the outer bound below is that plus a 3s
+            // cushion — a real, explicit margin for the remaining
+            // bookkeeping and fixed overhead (thread-spawn cost, contended
+            // locks, drop cleanup; mark_played retry is fire-and-forget on a
+            // detached thread and the PlayerEvent::Stopped send is a cheap
+            // channel op), not just "the same Duration racing every layer of
+            // the timeout composition" as an earlier version of this
+            // function did.
+            let outer_bound = quit_timeout + quit_timeout / 2 + Duration::from_secs(3);
             let started = Instant::now();
             self.player.join_or_timeout(outer_bound);
             let elapsed = started.elapsed();
@@ -5554,19 +5563,20 @@ pub(crate) mod tests {
 
         let mut app = make_app_stub();
         let status = app.player.status.clone();
-        // Thread hangs for 5s; quit_timeout below is 150ms, so a correctly
-        // bounded teardown must return in a small fraction of that.
-        app.player = PlayerProxy::stub_with_hung_thread(status, Duration::from_secs(5));
+        // Thread hangs for 10s; quit_timeout below is 200ms, so a correctly
+        // bounded teardown (outer_bound = quit_timeout + quit_timeout/2 +
+        // 3s cushion ~= 3.3s here) must return well short of the full hang.
+        app.player = PlayerProxy::stub_with_hung_thread(status, Duration::from_secs(10));
 
         let started = std::time::Instant::now();
-        app.teardown(Duration::from_millis(150));
+        app.teardown(Duration::from_millis(200));
         let elapsed = started.elapsed();
 
         assert!(
-            elapsed < Duration::from_secs(2),
-            "teardown should return within its bounded window (outer bound is \
-             quit_timeout*2+1s ~= 1.3s here), took {elapsed:?} — previously \
-             unbounded on the normal in-app quit path, which is the #202 bug"
+            elapsed < Duration::from_secs(5),
+            "teardown should return within its bounded window (outer_bound \
+             ~= 3.3s here), took {elapsed:?} — previously unbounded on the \
+             normal in-app quit path, which is the #202 bug"
         );
     }
 
