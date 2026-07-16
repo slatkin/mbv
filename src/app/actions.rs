@@ -933,6 +933,15 @@ impl App {
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
 
+        // The compact movie-detail banner's scroll offset (#204) is
+        // per-selection state: moving to a different list item must not
+        // carry over a scroll position from whatever was previously
+        // selected, or the newly-selected movie's banner can open already
+        // scrolled partway/fully into its own content. This is a no-op
+        // (already 0) for every non-movie list and for movies whose banner
+        // doesn't overflow.
+        self.libs[lib_idx].power_detail_scroll = 0;
+
         if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                 let n = state.selected_len();
@@ -997,6 +1006,15 @@ impl App {
     pub(super) fn jump_lib_cursor(&mut self, to_end: bool) {
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
+
+        // The compact movie-detail banner's scroll offset (#204) is
+        // per-selection state: moving to a different list item must not
+        // carry over a scroll position from whatever was previously
+        // selected, or the newly-selected movie's banner can open already
+        // scrolled partway/fully into its own content. This is a no-op
+        // (already 0) for every non-movie list and for movies whose banner
+        // doesn't overflow.
+        self.libs[lib_idx].power_detail_scroll = 0;
 
         if self.libs[lib_idx].search.is_none() && self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {

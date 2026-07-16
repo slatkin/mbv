@@ -255,8 +255,7 @@ impl App {
             layout.detail_page_h = avail.max(1);
 
             if avail > 0 {
-                for (disp_idx, line_text) in all_lines.iter().skip(scroll).take(avail).enumerate()
-                {
+                for (disp_idx, line_text) in all_lines.iter().skip(scroll).take(avail).enumerate() {
                     if row >= max_y {
                         break;
                     }
@@ -294,6 +293,21 @@ impl App {
                     }
                     row += 1;
                 }
+
+                // Scroll indicator (#204 review fix): the old truncate-with-
+                // "…" behavior at least hinted more text existed; scrolling
+                // needs an explicit visual cue instead, matching every other
+                // scrollable power-view surface (album/episode/home/list/
+                // queue all call this for their own overflowing content).
+                if max_scroll > 0 {
+                    let ov_area = Rect {
+                        x: area.x,
+                        y: ov_start_y,
+                        width: area.width,
+                        height: avail as u16,
+                    };
+                    super::render_power_scrollbar(f, ov_area, max_scroll, scroll);
+                }
             }
         }
 
@@ -313,7 +327,6 @@ impl App {
             }
         }
     }
-
 }
 
 #[cfg(test)]

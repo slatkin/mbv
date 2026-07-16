@@ -3608,6 +3608,31 @@ mod power_movie_detail_tests {
         assert_eq!(app.libs[0].power_detail_scroll, 0);
     }
 
+    // #204 review fix: moving the list cursor to a different movie must not
+    // carry over the previous movie's compact-banner scroll position — the
+    // newly-selected movie's banner should always open at the top.
+    #[test]
+    fn moving_to_a_different_movie_resets_compact_banner_scroll() {
+        let mut app = make_power_movie_app();
+        app.libs[0].power_detail_scroll = 5;
+
+        // `layout.power.detail_max_scroll` defaults to 0 (no render has run),
+        // so this Down press isn't claimed by the compact-banner scroll gate
+        // and falls straight through to normal list-cursor navigation, same
+        // as it would for a movie whose banner genuinely has no overflow.
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(
+            app.libs[0].nav_stack[0].cursor, 1,
+            "sanity check: cursor should have moved to the second movie"
+        );
+        assert_eq!(
+            app.libs[0].power_detail_scroll, 0,
+            "scroll offset should reset when the selected movie changes"
+        );
+    }
+
     #[test]
     fn shift_right_resizes_power_view_without_switching_focus() {
         let mut app = make_power_movie_app();
