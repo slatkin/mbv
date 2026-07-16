@@ -4245,6 +4245,14 @@ mod power_music_track_focus_tests {
         album.artist = "Beta".into();
         album.is_folder = true;
         app.libs[0].nav_stack.last_mut().unwrap().items.push(album);
+
+        // A second Beta album gives the fixture a multi-album artist group for
+        // header-navigation and bulk-action coverage.
+        let mut album2 = make_item("Beta Album Two", "MusicAlbum");
+        album2.id = "album-beta-2".into();
+        album2.artist = "Beta".into();
+        album2.is_folder = true;
+        app.libs[0].nav_stack.last_mut().unwrap().items.push(album2);
     }
 
     fn push_tracks(app: &mut App, album_id: &str, count: usize) {
@@ -4527,6 +4535,52 @@ mod power_music_track_focus_tests {
 
         assert!(app.libs[0].artist_header_focus.is_none());
         assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 2);
+    }
+
+    #[test]
+    fn artist_header_selection_survives_group_size_change() {
+        let mut app = make_power_music_album_app();
+        let mut zeta_album = make_item("Zeta Album", "MusicAlbum");
+        zeta_album.id = "album-zeta".into();
+        zeta_album.artist = "Zeta".into();
+        zeta_album.is_folder = true;
+        app.libs[0]
+            .nav_stack
+            .last_mut()
+            .unwrap()
+            .items
+            .push(zeta_album);
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-zeta".into(),
+            artist_label: "Zeta".into(),
+        });
+
+        let mut zeta_album_two = make_item("Zeta Album Two", "MusicAlbum");
+        zeta_album_two.id = "album-zeta-2".into();
+        zeta_album_two.artist = "Zeta".into();
+        zeta_album_two.is_folder = true;
+        app.libs[0]
+            .nav_stack
+            .last_mut()
+            .unwrap()
+            .items
+            .push(zeta_album_two);
+
+        render_full_app(&mut app, 100, 24);
+
+        assert!(
+            app.libs[0].artist_header_focus.is_some(),
+            "revalidation should keep the same artist header focused when the \
+             loaded sibling count changes"
+        );
+        assert_eq!(
+            app.selected_artist_header_album_items(0)
+                .expect("expected Zeta header selection to remain valid")
+                .1
+                .len(),
+            2,
+            "the same focused header should resolve the expanded group after another album loads"
+        );
     }
 
     #[test]

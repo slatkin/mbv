@@ -952,6 +952,18 @@ mod tests {
     #[test]
     fn selectable_artist_headers_are_typed_row_targets() {
         let mut app = make_power_music_group_app();
+        // Headers for groups with only one child are not selectable, so give
+        // Alpha a second album to keep it eligible as a typed row target.
+        let mut alpha_album2 = make_item("Second Alpha Album", "MusicAlbum");
+        alpha_album2.id = "album-1b".into();
+        alpha_album2.artist = "Alpha".into();
+        alpha_album2.is_folder = true;
+        app.libs[0]
+            .nav_stack
+            .last_mut()
+            .unwrap()
+            .items
+            .push(alpha_album2);
         let mut beta_album = make_item("Beta Album", "MusicAlbum");
         beta_album.id = "album-2".into();
         beta_album.artist = "Beta".into();
