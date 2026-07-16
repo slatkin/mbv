@@ -4167,6 +4167,7 @@ mod power_music_track_focus_tests {
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
+    use std::io::{Read, Write};
 
     /// Power-view music library sitting on the album-folder-listing nav
     /// level (`is_viewing_album_folders` holds): a grouped `["group",
@@ -4332,6 +4333,161 @@ mod power_music_track_focus_tests {
         term.draw(|f| app.render(f)).unwrap();
     }
 
+    struct RecursiveFetchServer {
+        base_url: String,
+        seen_parent_ids: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+        handle: Option<std::thread::JoinHandle<()>>,
+    }
+
+    impl RecursiveFetchServer {
+        fn start(
+            responses: Vec<(
+                &'static str,
+                Result<Vec<(&'static str, &'static str, i64)>, &'static str>,
+            )>,
+        ) -> Self {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let base_url = format!("http://{}", listener.local_addr().unwrap());
+            let seen_parent_ids = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+            let seen = seen_parent_ids.clone();
+            let handle = std::thread::spawn(move || {
+                let responses: std::collections::HashMap<_, _> = responses.into_iter().collect();
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                let mut last_request_at: Option<std::time::Instant> = None;
+                while std::time::Instant::now() < deadline {
+                    let (mut stream, _) = match listener.accept() {
+                        Ok(accepted) => accepted,
+                        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                            if last_request_at.is_some_and(|last| {
+                                last.elapsed() > std::time::Duration::from_millis(200)
+                            }) {
+                                break;
+                            }
+                            std::thread::sleep(std::time::Duration::from_millis(10));
+                            continue;
+                        }
+                        Err(e) => panic!("recursive fetch test server accept failed: {e}"),
+                    };
+                    last_request_at = Some(std::time::Instant::now());
+                    let mut buf = [0u8; 4096];
+                    let n = stream.read(&mut buf).unwrap();
+                    let request = String::from_utf8_lossy(&buf[..n]);
+                    let first_line = request.lines().next().unwrap_or_default();
+                    let parent_id = first_line
+                        .split_whitespace()
+                        .nth(1)
+                        .and_then(|target| target.split('?').nth(1))
+                        .and_then(|query| {
+                            query
+                                .split('&')
+                                .find_map(|part| part.strip_prefix("ParentId=").map(str::to_string))
+                        })
+                        .unwrap_or_default();
+                    seen.lock().unwrap().push(parent_id.clone());
+
+                    let (status, body) = match responses.get(parent_id.as_str()) {
+                        None => (
+                            "404 Not Found",
+                            serde_json::json!({ "error": format!("unexpected parent id {parent_id}") })
+                                .to_string(),
+                        ),
+                        Some(Ok(items)) => {
+                            let items: Vec<_> = items
+                                .iter()
+                                .map(|(id, name, index_number)| {
+                                    serde_json::json!({
+                                        "Id": id,
+                                        "Name": name,
+                                        "Type": "Audio",
+                                        "MediaType": "Audio",
+                                        "IsFolder": false,
+                                        "IndexNumber": index_number,
+                                        "ParentIndexNumber": 1,
+                                        "SortName": name,
+                                        "UserData": {},
+                                    })
+                                })
+                                .collect();
+                            (
+                                "200 OK",
+                                serde_json::json!({
+                                    "Items": items,
+                                    "TotalRecordCount": items.len(),
+                                })
+                                .to_string(),
+                            )
+                        }
+                        Some(Err(message)) => (
+                            "500 Internal Server Error",
+                            serde_json::json!({ "error": message }).to_string(),
+                        ),
+                    };
+                    let response = format!(
+                        "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    );
+                    stream.write_all(response.as_bytes()).unwrap();
+                }
+                assert!(
+                    {
+                        let seen = seen.lock().unwrap();
+                        responses
+                            .keys()
+                            .all(|parent_id| seen.iter().any(|seen| seen.as_str() == *parent_id))
+                    },
+                    "unused recursive fetch stub responses"
+                );
+            });
+
+            Self {
+                base_url,
+                seen_parent_ids,
+                handle: Some(handle),
+            }
+        }
+
+        fn seen_parent_ids(&self) -> Vec<String> {
+            self.seen_parent_ids.lock().unwrap().clone()
+        }
+
+        fn first_seen_parent_ids(&self) -> Vec<String> {
+            let mut ids = Vec::new();
+            for parent_id in self.seen_parent_ids() {
+                if !ids.contains(&parent_id) {
+                    ids.push(parent_id);
+                }
+            }
+            ids
+        }
+    }
+
+    impl Drop for RecursiveFetchServer {
+        fn drop(&mut self) {
+            if let Some(handle) = self.handle.take() {
+                handle.join().unwrap();
+            }
+        }
+    }
+
+    fn configure_recursive_fetch_server(app: &mut App, server: &RecursiveFetchServer) {
+        let mut client = app.client.lock().unwrap();
+        client.config.server_url = server.base_url.clone();
+        client.user_id = "user-1".into();
+        client.token = "token-1".into();
+    }
+
+    fn make_selectable_artist_header_bulk_app() -> App {
+        let mut app = make_power_music_album_app();
+        add_beta_album(&mut app);
+        app.libs[0].nav_stack.last_mut().unwrap().cursor = 2;
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-1".into(),
+            artist_label: "Unknown Artist".into(),
+        });
+        app
+    }
+
     #[test]
     fn enter_at_album_folder_listing_enters_track_mode_without_nav_push() {
         let mut app = make_power_music_album_app();
@@ -4476,6 +4632,157 @@ mod power_music_track_focus_tests {
 
         assert!(albums.is_none());
         assert!(app.libs[0].artist_header_focus.is_none());
+    }
+
+    #[test]
+    fn selectable_artist_header_direct_enqueue_fetches_header_albums_not_stale_cursor() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_selectable_artist_header_bulk_app();
+        let server = RecursiveFetchServer::start(vec![
+            (
+                "album-1",
+                Ok(vec![("a1-t2", "A1 Track 2", 2), ("a1-t1", "A1 Track 1", 1)]),
+            ),
+            ("album-2", Ok(vec![("a2-t1", "A2 Track 1", 1)])),
+        ]);
+        configure_recursive_fetch_server(&mut app, &server);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
+
+        let queued_ids: Vec<&str> = app
+            .player_tab
+            .items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect();
+        assert_eq!(
+            queued_ids,
+            vec!["a1-t1", "a1-t2", "a2-t1"],
+            "enqueue should preserve display album order and per-album track order"
+        );
+        let mut first_seen = server.first_seen_parent_ids();
+        first_seen.sort();
+        assert_eq!(
+            first_seen,
+            vec!["album-1".to_string(), "album-2".to_string()],
+            "recursive fetches should target the selected header's albums, not stale album-beta"
+        );
+    }
+
+    #[test]
+    fn selectable_artist_header_direct_play_fetches_header_albums_not_stale_cursor() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_selectable_artist_header_bulk_app();
+        let server = RecursiveFetchServer::start(vec![
+            (
+                "album-1",
+                Ok(vec![("a1-t2", "A1 Track 2", 2), ("a1-t1", "A1 Track 1", 1)]),
+            ),
+            ("album-2", Ok(vec![("a2-t1", "A2 Track 1", 1)])),
+        ]);
+        configure_recursive_fetch_server(&mut app, &server);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::CONTROL));
+
+        let queued_ids: Vec<&str> = app
+            .player_tab
+            .items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect();
+        assert_eq!(queued_ids, vec!["a1-t1", "a1-t2", "a2-t1"]);
+        assert_eq!(app.player_tab.queue_cursor, 0);
+        let mut first_seen = server.first_seen_parent_ids();
+        first_seen.sort();
+        assert_eq!(
+            first_seen,
+            vec!["album-1".to_string(), "album-2".to_string()]
+        );
+    }
+
+    #[test]
+    fn selectable_artist_header_context_shuffle_fetches_header_albums_not_stale_cursor() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_selectable_artist_header_bulk_app();
+        let server = RecursiveFetchServer::start(vec![
+            ("album-1", Ok(vec![("a1-t1", "A1 Track 1", 1)])),
+            ("album-2", Ok(vec![("a2-t1", "A2 Track 1", 1)])),
+        ]);
+        configure_recursive_fetch_server(&mut app, &server);
+        app.open_context_menu();
+        let action = app
+            .context_menu
+            .as_ref()
+            .and_then(|menu| {
+                menu.entries
+                    .iter()
+                    .find(|entry| entry.label == "Shuffle")
+                    .and_then(|entry| entry.action.clone())
+            })
+            .expect("expected Shuffle header action");
+
+        app.execute_context_action(Some(action));
+
+        let mut queued_ids: Vec<&str> = app
+            .player_tab
+            .items
+            .iter()
+            .map(|item| item.id.as_str())
+            .collect();
+        queued_ids.sort_unstable();
+        assert_eq!(queued_ids, vec!["a1-t1", "a2-t1"]);
+        let mut first_seen = server.first_seen_parent_ids();
+        first_seen.sort();
+        assert_eq!(
+            first_seen,
+            vec!["album-1".to_string(), "album-2".to_string()]
+        );
+    }
+
+    #[test]
+    fn selectable_artist_header_fetch_error_leaves_queue_and_playback_unchanged() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_selectable_artist_header_bulk_app();
+        let mut existing = make_item("Existing", "Audio");
+        existing.id = "existing-track".into();
+        existing.media_type = "Audio".into();
+        app.player_tab.set_items(vec![existing], 0);
+        let before_ids: Vec<String> = app
+            .player_tab
+            .items
+            .iter()
+            .map(|item| item.id.clone())
+            .collect();
+        let server = RecursiveFetchServer::start(vec![
+            ("album-1", Ok(vec![("a1-t1", "A1 Track 1", 1)])),
+            ("album-2", Err("album fetch failed")),
+        ]);
+        configure_recursive_fetch_server(&mut app, &server);
+
+        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
+
+        let after_ids: Vec<String> = app
+            .player_tab
+            .items
+            .iter()
+            .map(|item| item.id.clone())
+            .collect();
+        assert_eq!(
+            after_ids, before_ids,
+            "enqueue must abort before mutation when any album fetch fails"
+        );
+        assert!(
+            app.status.contains("status code 500"),
+            "expected one surfaced fetch error, got {:?}; seen parent ids: {:?}",
+            app.status,
+            server.seen_parent_ids()
+        );
+        let mut first_seen = server.first_seen_parent_ids();
+        first_seen.sort();
+        assert_eq!(
+            first_seen,
+            vec!["album-1".to_string(), "album-2".to_string()]
+        );
     }
 
     #[test]
