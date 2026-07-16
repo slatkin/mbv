@@ -18,6 +18,7 @@
 //! (e.g. the zero-area guard) -- it can never hold a mix of fields from two
 //! different frames.
 
+use super::ArtistHeaderSelection;
 use ratatui::layout::Rect;
 
 /// Seekbar rect, the two divider status indicators that still have a click
@@ -74,6 +75,7 @@ pub(crate) struct LayoutPowerHome {
 #[derive(Default)]
 pub(crate) struct LayoutPower {
     pub left_row_map: Vec<Option<usize>>,
+    pub left_row_targets: Vec<Option<PowerLeftRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
     /// Geometry for the power-view's own Home sub-tab grid. Distinct from
@@ -92,6 +94,12 @@ pub(crate) struct LayoutPower {
     pub detail_max_scroll: usize,
     /// Visible overview line count for the detail view, set each render frame.
     pub detail_page_h: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum PowerLeftRowTarget {
+    Album(usize),
+    ArtistHeader(ArtistHeaderSelection),
 }
 
 /// Library table/breadcrumb geometry.

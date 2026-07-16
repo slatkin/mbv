@@ -820,6 +820,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app
@@ -848,6 +849,7 @@ mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.album_indexes.insert(
             "music-lib".into(),
@@ -907,6 +909,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         let mut layout = LayoutPower::default();

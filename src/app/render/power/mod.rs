@@ -586,7 +586,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::layout::LayoutPower;
+    use crate::app::layout::{LayoutPower, PowerLeftRowTarget};
     use crate::app::tests::{make_app_stub, make_item};
     use crate::app::{BrowseLevel, LibraryTab};
     use mbv_core::api::MediaItem;
@@ -748,6 +748,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app
@@ -942,9 +943,73 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app
+    }
+
+    #[test]
+    fn selectable_artist_headers_are_typed_row_targets() {
+        let mut app = make_power_music_group_app();
+        let mut beta_album = make_item("Beta Album", "MusicAlbum");
+        beta_album.id = "album-2".into();
+        beta_album.artist = "Beta".into();
+        beta_album.is_folder = true;
+        app.libs[0]
+            .nav_stack
+            .last_mut()
+            .unwrap()
+            .items
+            .push(beta_album);
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+
+        assert!(
+            out.contains("Alpha") && out.contains("Beta"),
+            "expected both artist headers to render:\n{out}"
+        );
+        assert!(
+            matches!(
+                layout.left_row_targets.first().and_then(Option::as_ref),
+                Some(PowerLeftRowTarget::ArtistHeader(selection))
+                    if selection.artist_label == "Alpha"
+                        && selection.first_album_id == "album-1"
+            ),
+            "expected the first custom artist header to be a typed row target"
+        );
+        assert_eq!(
+            layout.left_row_map.first(),
+            Some(&None),
+            "legacy row map must keep headers non-album rows"
+        );
+    }
+
+    #[test]
+    fn selectable_artist_header_renders_focused() {
+        let mut app = make_power_music_group_app();
+        app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
+            first_album_id: "album-1".into(),
+            artist_label: "Alpha".into(),
+        });
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_library_to_string(&mut app, &mut layout);
+        let header = out
+            .lines()
+            .find(|line| line.contains("Alpha"))
+            .expect("expected Alpha header");
+
+        assert!(
+            header.contains('\u{258c}'),
+            "selected artist header should render with the focus gutter:\n{out}"
+        );
+        assert_eq!(
+            layout.cursor_screen_y,
+            Some(0),
+            "selected header should own the screen cursor row"
+        );
     }
 
     #[test]
@@ -1338,6 +1403,7 @@ mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         let mut track = make_item("Opening Track", "Audio");
@@ -1391,6 +1457,13 @@ mod tests {
         assert_eq!(layout.left_row_map.get(2), Some(&Some(0)));
         assert!(layout.left_row_map[3..7].iter().all(Option::is_none));
         assert_eq!(layout.left_row_map.get(7), Some(&Some(1)));
+        assert!(
+            layout
+                .left_row_targets
+                .iter()
+                .all(|target| !matches!(target, Some(PowerLeftRowTarget::ArtistHeader(_)))),
+            "flat/non-custom grouped album headers must remain non-selectable"
+        );
     }
 
     #[test]
@@ -1713,6 +1786,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app
@@ -1753,6 +1827,7 @@ mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app
