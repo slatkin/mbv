@@ -145,6 +145,9 @@ enum ContextAction {
     Play,
     PlayFolder(String),
     ShuffleFolder(String),
+    PlayArtistHeader(ArtistHeaderSelection),
+    ShuffleArtistHeader(ArtistHeaderSelection),
+    EnqueueArtistHeader(ArtistHeaderSelection),
     Enqueue,
     EnqueueFolder(Box<MediaItem>),
     MarkPlayed(String),
@@ -834,9 +837,15 @@ struct LibraryTab {
     /// `idx` indexes into that album's cached track list
     /// (`App::album_tracks_cache`). `None` = normal album-list navigation.
     album_track_focus: Option<usize>,
+    artist_header_focus: Option<ArtistHeaderSelection>,
 }
 
 impl LibraryTab {
+    fn clear_power_music_focus(&mut self) {
+        self.album_track_focus = None;
+        self.artist_header_focus = None;
+    }
+
     fn library_position_snapshot(&self) -> crate::config::LibraryPosition {
         let (feed_selected_group, feed_video_cursor, feed_video_scroll) = self
             .feed_home_video
@@ -863,13 +872,19 @@ impl LibraryTab {
         self.nav_stack = nav_stack;
         self.search = None;
         self.power_detail_scroll = 0;
-        self.album_track_focus = None;
+        self.clear_power_music_focus();
         if let Some(state) = self.feed_home_video.as_mut() {
             state.selected_group = position.feed_selected_group;
             state.video_cursor = position.feed_video_cursor;
             state.video_scroll = position.feed_video_scroll;
         }
     }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct ArtistHeaderSelection {
+    pub first_album_id: String,
+    pub artist_label: String,
 }
 
 struct SuspendedLocalSession {
@@ -3801,6 +3816,7 @@ pub(crate) mod tests {
             }),
             power_detail_scroll: 9,
             album_track_focus: Some(1),
+            artist_header_focus: None,
         };
         lib.library.id = "lib-movies".into();
 
@@ -4024,6 +4040,7 @@ pub(crate) mod tests {
             feed_home_video: Some(FeedHomeVideoState::default()),
             power_detail_scroll: 9,
             album_track_focus: Some(2),
+            artist_header_focus: None,
         };
         let position = crate::config::LibraryPosition {
             levels: Vec::new(),
@@ -4085,6 +4102,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.library_position_state
             .libraries
@@ -4135,6 +4153,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.library_position_state
             .libraries
@@ -4184,6 +4203,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
         app.power_left_tab = 1;
@@ -4236,6 +4256,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -4275,6 +4296,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.library_position_state.libraries.insert(
             "hidden-lib".into(),
@@ -4317,6 +4339,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.library_position_state
             .libraries
@@ -4375,6 +4398,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         let views = app
             .library_position_state
@@ -4433,6 +4457,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         let power_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -4505,6 +4530,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 3,
             album_track_focus: Some(0),
+            artist_header_focus: None,
         });
         let views = app
             .library_position_state
@@ -4579,6 +4605,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         let views = app
             .library_position_state
@@ -4637,6 +4664,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         let power_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -4785,6 +4813,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 4,
             album_track_focus: Some(0),
+            artist_header_focus: None,
         });
         let stale = crate::config::LibraryPosition {
             levels: vec![
@@ -4871,6 +4900,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         let default_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -4942,6 +4972,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let requested = crate::config::LibraryPosition {
@@ -5015,6 +5046,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         let default_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -5104,6 +5136,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
         app.queue_view = QUEUE_VIEW_POWER;
@@ -5180,6 +5213,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = 1;
         app.queue_view = QUEUE_VIEW_POWER;
@@ -5257,6 +5291,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             power_detail_scroll: 0,
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = 1;
         app.queue_view = QUEUE_VIEW_POWER;
@@ -6180,6 +6215,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
         assert!(!app.is_feed_home_video_group_view(0));
 
@@ -6245,6 +6281,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -6295,6 +6332,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.rebuild_library_tabs_from_views(&[library]);
@@ -6343,6 +6381,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         let mut folders = Vec::new();
@@ -6431,6 +6470,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.select_feed_folder_group(0, 1);
@@ -6490,6 +6530,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.select_feed_folder_group(0, 0);
@@ -6564,6 +6605,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.select_feed_folder_group(0, 2);
@@ -6639,6 +6681,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.select_feed_folder_group(0, 2);
@@ -6701,6 +6744,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.go_back();
@@ -6750,6 +6794,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         let mut empty = make_item("Empty Channel", "Folder");
@@ -6877,6 +6922,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.ensure_feed_home_video_group_level(0);
@@ -6940,6 +6986,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.refresh_lib();
@@ -6968,6 +7015,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         assert!(app.is_podcast_library(0));
@@ -6988,6 +7036,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         assert!(app.is_podcast_library(0));
@@ -7027,6 +7076,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -7074,6 +7124,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -7119,6 +7170,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = 1;
         app.queue_view = QUEUE_VIEW_POWER;
@@ -7184,6 +7236,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = 1;
         app.queue_view = QUEUE_VIEW_POWER;
@@ -7286,6 +7339,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
         app.tab_idx = 1;
         app.queue_view = QUEUE_VIEW_POWER;
@@ -7360,6 +7414,7 @@ pub(crate) mod tests {
             power_detail_scroll: 0,
 
             album_track_focus: None,
+            artist_header_focus: None,
         });
 
         app.handle_lib_event(LibEvent::Refreshed {

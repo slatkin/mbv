@@ -1,7 +1,7 @@
 use super::super::super::ui_util::*;
 use super::{natural_sort_key, parse_album_folder_name, strip_article};
-use crate::app::layout::LayoutPower;
-use crate::app::{palette, App};
+use crate::app::layout::{LayoutPower, PowerLeftRowTarget};
+use crate::app::{palette, App, ArtistHeaderSelection};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
@@ -12,7 +12,7 @@ use ratatui::Frame;
 const INLINE_ALBUM_DETAIL_INDENT: u16 = 2;
 
 enum GroupedAlbumDisplayRow {
-    ArtistHeader(String),
+    ArtistHeader(ArtistHeaderSelection),
     AlbumDetailRule,
     Album(usize),
     AlbumDetailStart(usize),
@@ -24,12 +24,23 @@ struct GroupedAlbumDisplayPlan {
     order: Vec<usize>,
     rows: Vec<GroupedAlbumDisplayRow>,
     display_cursor: usize,
+    selected_artist_header_valid: bool,
 }
 
 impl GroupedAlbumDisplayRow {
     fn album_index(&self) -> Option<usize> {
         match self {
             Self::Album(idx) => Some(*idx),
+            _ => None,
+        }
+    }
+
+    fn row_target(&self, selectable_headers: bool) -> Option<PowerLeftRowTarget> {
+        match self {
+            Self::Album(idx) => Some(PowerLeftRowTarget::Album(*idx)),
+            Self::ArtistHeader(selection) if selectable_headers => {
+                Some(PowerLeftRowTarget::ArtistHeader(selection.clone()))
+            }
             _ => None,
         }
     }
@@ -41,6 +52,8 @@ impl App {
         albums: &[mbv_core::api::MediaItem],
         cursor: usize,
         fetch_missing_tracks: bool,
+        selectable_headers: bool,
+        selected_artist_header: Option<&ArtistHeaderSelection>,
     ) -> GroupedAlbumDisplayPlan {
         let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
         for item in albums {
@@ -73,7 +86,12 @@ impl App {
         for &idx in &order {
             let artist = &album_info[idx].0;
             if artist != &last_artist {
-                rows.push(GroupedAlbumDisplayRow::ArtistHeader(artist.clone()));
+                rows.push(GroupedAlbumDisplayRow::ArtistHeader(
+                    ArtistHeaderSelection {
+                        first_album_id: albums[idx].id.clone(),
+                        artist_label: artist.clone(),
+                    },
+                ));
                 last_artist = artist.clone();
             }
             if idx == cursor {
@@ -109,14 +127,216 @@ impl App {
 
         let display_cursor = rows
             .iter()
-            .position(|row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor))
+            .position(|row| {
+                selectable_headers
+                    && matches!(
+                        (row, selected_artist_header),
+                        (
+                            GroupedAlbumDisplayRow::ArtistHeader(selection),
+                            Some(selected)
+                        ) if selection == selected
+                    )
+            })
+            .or_else(|| {
+                rows.iter()
+                    .position(|row| matches!(row, GroupedAlbumDisplayRow::Album(i) if *i == cursor))
+            })
             .unwrap_or(0);
+        let selected_artist_header_valid = selected_artist_header.is_some_and(|selected| {
+            selectable_headers
+                && rows.iter().any(|row| {
+                    matches!(row, GroupedAlbumDisplayRow::ArtistHeader(selection) if selection == selected)
+                })
+        });
 
         GroupedAlbumDisplayPlan {
             order,
             rows,
             display_cursor,
+            selected_artist_header_valid,
         }
+    }
+
+    fn selected_power_music_artist_header(&self, lib_idx: usize) -> Option<ArtistHeaderSelection> {
+        if !self.is_music_group_view(lib_idx) {
+            return None;
+        }
+        self.libs.get(lib_idx)?.artist_header_focus.clone()
+    }
+
+    pub(in crate::app) fn clear_artist_header_focus(&mut self, lib_idx: usize) {
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            lib.artist_header_focus = None;
+        }
+    }
+
+    fn set_artist_header_focus(&mut self, lib_idx: usize, selection: ArtistHeaderSelection) {
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            lib.album_track_focus = None;
+            lib.artist_header_focus = Some(selection);
+        }
+    }
+
+    pub(in crate::app) fn move_power_music_group_display_cursor(
+        &mut self,
+        lib_idx: usize,
+        delta: i64,
+    ) -> bool {
+        if !self.is_music_group_view(lib_idx) {
+            return false;
+        }
+        let Some(level) = self.libs[lib_idx].nav_stack.last() else {
+            return true;
+        };
+        if level.items.is_empty() {
+            self.clear_artist_header_focus(lib_idx);
+            return true;
+        }
+        let cursor = level.cursor;
+        let albums = level.items.clone();
+        let selected = self.selected_power_music_artist_header(lib_idx);
+        let plan =
+            self.build_grouped_album_display_plan(&albums, cursor, false, true, selected.as_ref());
+        if selected.is_some() && !plan.selected_artist_header_valid {
+            self.clear_artist_header_focus(lib_idx);
+        }
+        let selectable: Vec<usize> = plan
+            .rows
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, row)| row.row_target(true).map(|_| idx))
+            .collect();
+        if selectable.is_empty() {
+            return true;
+        }
+        let current_pos = selectable
+            .iter()
+            .position(|row_idx| *row_idx == plan.display_cursor)
+            .unwrap_or(0);
+        let new_pos = (current_pos as i64 + delta).clamp(0, selectable.len() as i64 - 1) as usize;
+        let target = plan.rows[selectable[new_pos]].row_target(true);
+        drop(plan);
+        match target {
+            Some(PowerLeftRowTarget::ArtistHeader(selection)) => {
+                self.set_artist_header_focus(lib_idx, selection);
+            }
+            Some(PowerLeftRowTarget::Album(idx)) => {
+                self.clear_artist_header_focus(lib_idx);
+                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                    if level.cursor != idx {
+                        level.cursor = idx;
+                        self.libs[lib_idx].album_track_focus = None;
+                    }
+                }
+            }
+            None => {}
+        }
+        true
+    }
+
+    pub(in crate::app) fn jump_power_music_group_display_cursor(
+        &mut self,
+        lib_idx: usize,
+        to_end: bool,
+    ) -> bool {
+        if !self.is_music_group_view(lib_idx) {
+            return false;
+        }
+        let Some(level) = self.libs[lib_idx].nav_stack.last() else {
+            return true;
+        };
+        if level.items.is_empty() {
+            self.clear_artist_header_focus(lib_idx);
+            return true;
+        }
+        let albums = level.items.clone();
+        let selected = self.selected_power_music_artist_header(lib_idx);
+        let plan = self.build_grouped_album_display_plan(
+            &albums,
+            level.cursor,
+            false,
+            true,
+            selected.as_ref(),
+        );
+        let target = if to_end {
+            plan.rows.iter().rev().find_map(|row| row.row_target(true))
+        } else {
+            plan.rows.iter().find_map(|row| row.row_target(true))
+        };
+        drop(plan);
+        match target {
+            Some(PowerLeftRowTarget::ArtistHeader(selection)) => {
+                self.set_artist_header_focus(lib_idx, selection);
+            }
+            Some(PowerLeftRowTarget::Album(idx)) => {
+                self.clear_artist_header_focus(lib_idx);
+                if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
+                    level.cursor = idx;
+                    self.libs[lib_idx].album_track_focus = None;
+                }
+            }
+            None => {}
+        }
+        true
+    }
+
+    pub(in crate::app) fn selected_artist_header_album_items(
+        &mut self,
+        lib_idx: usize,
+    ) -> Option<(ArtistHeaderSelection, Vec<mbv_core::api::MediaItem>)> {
+        let selection = self.selected_power_music_artist_header(lib_idx)?;
+        self.artist_header_album_items_for_selection(lib_idx, &selection)
+            .map(|items| (selection, items))
+    }
+
+    pub(in crate::app) fn artist_header_album_items_for_selection(
+        &mut self,
+        lib_idx: usize,
+        selection: &ArtistHeaderSelection,
+    ) -> Option<Vec<mbv_core::api::MediaItem>> {
+        if !self.is_music_group_view(lib_idx) {
+            return None;
+        }
+        let level = self.libs[lib_idx].nav_stack.last()?;
+        let albums = level.items.clone();
+        if albums.is_empty() {
+            self.clear_artist_header_focus(lib_idx);
+            return None;
+        }
+        let plan = self.build_grouped_album_display_plan(
+            &albums,
+            level.cursor,
+            false,
+            true,
+            Some(selection),
+        );
+        if !plan.selected_artist_header_valid {
+            if self.libs[lib_idx]
+                .artist_header_focus
+                .as_ref()
+                .is_some_and(|focused| focused == selection)
+            {
+                self.clear_artist_header_focus(lib_idx);
+            }
+            return None;
+        }
+
+        let mut in_group = false;
+        let mut members = Vec::new();
+        for row in plan.rows {
+            match row {
+                GroupedAlbumDisplayRow::ArtistHeader(header) => {
+                    in_group = header == *selection;
+                }
+                GroupedAlbumDisplayRow::Album(idx) if in_group => {
+                    if let Some(album) = albums.get(idx) {
+                        members.push(album.clone());
+                    }
+                }
+                _ => {}
+            }
+        }
+        Some(members)
     }
 
     pub(in crate::app) fn page_power_grouped_album_cursor(
@@ -147,7 +367,18 @@ impl App {
         let cursor = level.cursor;
         let albums = level.items.clone();
         let page = (self.layout.power.left_area.height as usize).max(1);
-        let plan = self.build_grouped_album_display_plan(&albums, cursor, false);
+        let selected = self.selected_power_music_artist_header(lib_idx);
+        let selectable_headers = self.is_music_group_view(lib_idx);
+        let plan = self.build_grouped_album_display_plan(
+            &albums,
+            cursor,
+            false,
+            selectable_headers,
+            selected.as_ref(),
+        );
+        if selected.is_some() && !plan.selected_artist_header_valid {
+            self.clear_artist_header_focus(lib_idx);
+        }
         let target_row = if page_down {
             (plan.display_cursor + page).min(plan.rows.len().saturating_sub(1))
         } else {
@@ -167,6 +398,7 @@ impl App {
                 .unwrap_or_else(|| plan.order.first().copied().unwrap_or(cursor))
         };
 
+        self.clear_artist_header_focus(lib_idx);
         if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
             if level.cursor != new_cursor {
                 level.cursor = new_cursor;
@@ -215,7 +447,18 @@ impl App {
             album_info.push((artist, year_str, album_name));
         }
 
-        let plan = self.build_grouped_album_display_plan(albums, cursor, true);
+        let selected = self.selected_power_music_artist_header(lib_idx);
+        let selectable_headers = self.is_music_group_view(lib_idx);
+        let plan = self.build_grouped_album_display_plan(
+            albums,
+            cursor,
+            true,
+            selectable_headers,
+            selected.as_ref(),
+        );
+        if selected.is_some() && !plan.selected_artist_header_valid {
+            self.clear_artist_header_focus(lib_idx);
+        }
         layout.left_sorted_indices = plan.order.clone();
         let display_cursor = plan.display_cursor;
         let display_rows = plan.rows;
@@ -250,12 +493,29 @@ impl App {
                 ..row_area
             };
             match row {
-                GroupedAlbumDisplayRow::ArtistHeader(name) => {
-                    let artist_label = trunc_str(name, avail);
+                GroupedAlbumDisplayRow::ArtistHeader(selection) => {
+                    let artist_label = trunc_str(&selection.artist_label, avail);
+                    let selected = selectable_headers
+                        && self.libs[lib_idx]
+                            .artist_header_focus
+                            .as_ref()
+                            .is_some_and(|focused| focused == selection);
+                    let label_style = if selected && focused {
+                        Style::default()
+                            .fg(palette::YELLOW)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(palette::YELLOW)
+                    };
+                    let gutter = if selected {
+                        Span::styled("\u{258c}", Style::default().fg(palette::PINE))
+                    } else {
+                        Span::raw(" ")
+                    };
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
-                            Span::raw(" "),
-                            Span::styled(artist_label, Style::default().fg(palette::YELLOW)),
+                            gutter,
+                            Span::styled(artist_label, label_style),
                         ])),
                         row_area,
                     );
@@ -383,6 +643,12 @@ impl App {
                 | GroupedAlbumDisplayRow::AlbumDetailContinuation
                 | GroupedAlbumDisplayRow::AlbumLoading => None,
             })
+            .collect();
+        layout.left_row_targets = display_rows
+            .iter()
+            .skip(offset)
+            .take(visible)
+            .map(|dr| dr.row_target(selectable_headers))
             .collect();
 
         let display_n = display_rows.len();
