@@ -45,6 +45,7 @@ impl LoginForm {
 pub fn run(
     base_client: EmbyClient,
     ui_config: &UiConfig,
+    initial_error: Option<String>,
 ) -> Result<EmbyClient, Box<dyn std::error::Error>> {
     let base_config = base_client.config.clone();
 
@@ -54,6 +55,9 @@ pub fn run(
     let mut terminal = Terminal::new(CrosstermBackend::new(stdout))?;
 
     let mut form = LoginForm::new(&base_config.server_url, &base_config.username);
+    if let Some(msg) = initial_error {
+        form.error = msg;
+    }
     let mut done: Option<Result<EmbyClient, Box<dyn std::error::Error>>> = None;
 
     while done.is_none() {

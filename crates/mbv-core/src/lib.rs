@@ -1,5 +1,6 @@
 pub mod api;
 pub mod applog;
+pub(crate) mod bounded;
 pub mod config;
 pub mod ctrl;
 pub mod daemon;

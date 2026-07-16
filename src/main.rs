@@ -58,24 +58,41 @@ fn has_flag(args: &[String], flag: &str) -> bool {
     args.iter().any(|arg| arg == flag)
 }
 
-/// Authenticate `client`, falling back to the interactive login TUI on
-/// failure. Only called on the paths that actually go on to use the
-/// resulting client (explicit daemon endpoint, and the branch that runs
-/// `App::new(client).run()`) -- paths that discard `client` (Reattach, and
-/// the stay-alive launcher-becomes-terminal-client branch) must not pay for
-/// this network round-trip since the inferior/relay authenticates on its
-/// own.
-fn authenticate_or_login(mut client: EmbyClient, ui_config: &config::UiConfig) -> EmbyClient {
+fn authenticate_or_login(client: EmbyClient, ui_config: &config::UiConfig) -> EmbyClient {
+    println!("Connecting to {}...", client.config.server_url);
     let t0 = std::time::Instant::now();
-    let auth_result = client.authenticate();
+    let auth_result = client.authenticate_bounded(EmbyClient::AUTHENTICATE_HARD_BOUND);
     log::info!(target: "startup", "authenticate: {}ms result={}", t0.elapsed().as_millis(), if auth_result.is_ok() { "ok" } else { "err" });
-    if auth_result.is_err() {
-        client = match login::run(client, ui_config) {
-            Ok(c) => c,
-            Err(_) => std::process::exit(0),
-        };
+    match auth_result {
+        Ok(authenticated) => authenticated,
+        Err(reason) => {
+            let initial_error = classify_auth_failure(&client.config.server_url, &reason);
+            match login::run(client, ui_config, initial_error) {
+                Ok(c) => c,
+                Err(_) => std::process::exit(0),
+            }
+        }
     }
-    client
+}
+
+/// Maps `authenticate_bounded`'s error string to what the login screen shows
+/// initially, if anything (issue #191 fix #4). Deliberately does not alarm
+/// the user for the expected "your token expired" case, but explains
+/// network/timeout failures clearly since that's the case the issue is
+/// actually about. The hard-join-timeout case flows through the generic
+/// `other` branch too, since `authenticate_bounded` produces
+/// `"timed out after {N}s"` as its `Err` string on timeout -- no
+/// special-casing needed.
+fn classify_auth_failure(server_url: &str, reason: &str) -> Option<String> {
+    match reason {
+        "Cached credentials expired" => {
+            Some("Your session has expired — please log in again.".to_string())
+        }
+        "No cached credentials" | "No server URL configured" => None,
+        other => Some(format!(
+            "Could not reach {server_url}: {other} — please log in again."
+        )),
+    }
 }
 
 fn state_dir() -> std::path::PathBuf {
@@ -287,6 +304,7 @@ fn main() {
     if let Some(endpoint) = explicit_daemon_endpoint {
         let client = authenticate_or_login(client, &ui_config);
         log::info!(target: "startup", "connecting to explicit daemon endpoint {endpoint}");
+        println!("Connecting to daemon at {endpoint}...");
         let auth_token = client.token.clone();
         match remote_player::RemotePlayer::connect_endpoint(&endpoint, &auth_token) {
             Ok((remote, player_rx)) => {
@@ -444,5 +462,47 @@ mod tests {
     fn parse_relay_args_none_without_flag() {
         let args: Vec<String> = vec!["-a".into()];
         assert!(parse_relay_args(&args).is_none());
+    }
+
+    #[test]
+    fn classify_auth_failure_expired_credentials_gets_quiet_wording() {
+        assert_eq!(
+            classify_auth_failure("http://emby.local", "Cached credentials expired"),
+            Some("Your session has expired — please log in again.".to_string())
+        );
+    }
+
+    #[test]
+    fn classify_auth_failure_first_run_cases_stay_silent() {
+        assert_eq!(
+            classify_auth_failure("http://emby.local", "No cached credentials"),
+            None
+        );
+        assert_eq!(classify_auth_failure("", "No server URL configured"), None);
+    }
+
+    #[test]
+    fn classify_auth_failure_network_error_names_the_server() {
+        assert_eq!(
+            classify_auth_failure(
+                "http://emby.local",
+                "Cached credential validation failed: some ureq error"
+            ),
+            Some(
+                "Could not reach http://emby.local: Cached credential validation failed: some ureq error — please log in again."
+                    .to_string()
+            )
+        );
+    }
+
+    #[test]
+    fn classify_auth_failure_hard_join_timeout_flows_through_generic_branch() {
+        assert_eq!(
+            classify_auth_failure("http://emby.local", "timed out after 15s"),
+            Some(
+                "Could not reach http://emby.local: timed out after 15s — please log in again."
+                    .to_string()
+            )
+        );
     }
 }

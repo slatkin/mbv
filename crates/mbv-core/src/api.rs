@@ -600,6 +600,7 @@ impl EmbyClient {
 
     pub fn new(config: Config) -> Self {
         let agent = ureq::AgentBuilder::new()
+            .timeout_connect(std::time::Duration::from_secs(5))
             .timeout(std::time::Duration::from_secs(30))
             .build();
         EmbyClient {
@@ -679,6 +680,26 @@ impl EmbyClient {
                 Err(format!("Cached credential validation failed: {e}"))
             }
         }
+    }
+
+    /// Hard wall-clock bound for `authenticate_bounded`, independent of
+    /// ureq's own connect/total timeouts (see issue #191: those don't
+    /// reliably cover every stall mode, e.g. TLS handshake hangs).
+    pub const AUTHENTICATE_HARD_BOUND: std::time::Duration = std::time::Duration::from_secs(15);
+
+    /// Runs `authenticate()` on a clone, bounded by `hard_bound` wall-clock
+    /// time. On success, returns the authenticated clone -- callers should
+    /// use it in place of the original, since `self` is never mutated. On
+    /// timeout (or any other failure), `self` is left untouched.
+    pub fn authenticate_bounded(
+        &self,
+        hard_bound: std::time::Duration,
+    ) -> Result<EmbyClient, String> {
+        let mut clone = self.clone();
+        crate::bounded::run_with_hard_bound(
+            move || clone.authenticate().map(|()| clone),
+            hard_bound,
+        )
     }
 
     // Authenticate using credentials in self.config (password or api_key).
