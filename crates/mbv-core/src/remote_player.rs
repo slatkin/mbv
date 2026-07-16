@@ -12,6 +12,15 @@ use crate::player::{PlayerCommand, PlayerEvent, PlayerStatus};
 
 const DAEMON_TCP_CONNECT_TIMEOUT: Duration = Duration::from_millis(750);
 
+// Hard wall-clock bound on the post-connect protocol handshake (hello
+// exchange + initial state), independent of `DAEMON_TCP_CONNECT_TIMEOUT`
+// above -- that constant only bounds the initial TCP-level connect, not the
+// blocking `read_line` calls that follow it (issue #191 fix #5). A stalled
+// daemon on localhost/LAN (user-configured, not a public/flaky server) is a
+// rarer and more clearly-broken scenario than a slow Emby server, so this is
+// tighter than `EmbyClient::AUTHENTICATE_HARD_BOUND`.
+const DAEMON_HANDSHAKE_HARD_BOUND: Duration = Duration::from_secs(5);
+
 // A local daemon that was *just* launched (`mbv -d`) may have written its
 // PID file (which is what makes it "detected") slightly before its ctrl
 // socket is bound. Retry briefly rather than immediately falling back to
@@ -171,6 +180,67 @@ impl Write for ControlStream {
     }
 }
 
+/// Performs the daemon control-protocol handshake (hello exchange, then the
+/// initial state) on `stream`, returning a reader ready for the long-running
+/// event-reading loop plus the initial `CtrlEvent::State`. Split out of
+/// `connect_endpoint` so it can run on a worker thread bounded by
+/// `DAEMON_HANDSHAKE_HARD_BOUND` (issue #191 fix #5), and so it can be tested
+/// directly against a real stalled `TcpListener` without going through
+/// `connect_endpoint`'s full setup.
+fn perform_handshake(
+    stream: ControlStream,
+    auth_token: &str,
+) -> Result<(BufReader<ControlStream>, CtrlEvent), String> {
+    let mut reader = BufReader::new(stream);
+    let mut first_line = String::new();
+    reader
+        .read_line(&mut first_line)
+        .map_err(|e| format!("failed to read daemon protocol hello: {e}"))?;
+    if first_line.trim().is_empty() {
+        return Err("daemon closed connection before protocol hello".to_string());
+    }
+    let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end())
+        .map_err(|e| format!("invalid daemon protocol hello: {e}"))?;
+    match hello {
+        CtrlEvent::Hello(info) => {
+            info.validate_peer()?;
+            log::info!(
+                target: "remote",
+                "daemon protocol ok: version={} app={} capabilities={:?}",
+                info.protocol_version,
+                info.app_version,
+                info.capabilities
+            );
+        }
+        _ => {
+            return Err("daemon did not send protocol hello".to_string());
+        }
+    }
+    let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::current_client(
+        auth_token.into(),
+    )))
+    .map_err(|e| e.to_string())?;
+    // Write via the same handle the `BufReader` wraps (`get_mut()`) rather
+    // than a second `try_clone()`'d handle -- the handshake is strictly
+    // sequential (read hello -> write client hello -> read state) with no
+    // concurrent access from another thread during this phase, so there's
+    // nothing a second handle buys here beyond an extra fallible call.
+    writeln!(reader.get_mut(), "{client_hello}")
+        .map_err(|e| format!("failed to send daemon protocol hello: {e}"))?;
+
+    let mut state_line = String::new();
+    reader
+        .read_line(&mut state_line)
+        .map_err(|e| format!("failed to read daemon initial state: {e}"))?;
+    if state_line.trim().is_empty() {
+        return Err("daemon closed connection before initial state".to_string());
+    }
+    let state_event = serde_json::from_str::<CtrlEvent>(state_line.trim_end())
+        .map_err(|e| format!("invalid daemon initial state: {e}"))?;
+
+    Ok((reader, state_event))
+}
+
 fn apply_ctrl_event(
     ev: CtrlEvent,
     status: &Arc<Mutex<PlayerStatus>>,
@@ -256,7 +326,7 @@ impl RemotePlayer {
         endpoint: &DaemonEndpoint,
         auth_token: &str,
     ) -> Result<(Self, mpsc::Receiver<PlayerEvent>), String> {
-        let mut stream = endpoint.connect_stream()?;
+        let stream = endpoint.connect_stream()?;
         log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
 
         let status = Arc::new(Mutex::new(PlayerStatus::default()));
@@ -268,48 +338,18 @@ impl RemotePlayer {
         let (event_tx, event_rx) = mpsc::channel::<PlayerEvent>();
         let (cmd_tx, cmd_rx) = mpsc::channel::<CtrlCmd>();
 
-        let stream_r = stream.try_clone().map_err(|e| e.to_string())?;
-        let mut reader = BufReader::new(stream_r);
-        let mut first_line = String::new();
-        reader
-            .read_line(&mut first_line)
-            .map_err(|e| format!("failed to read daemon protocol hello: {e}"))?;
-        if first_line.trim().is_empty() {
-            return Err("daemon closed connection before protocol hello".to_string());
-        }
-        let hello = serde_json::from_str::<CtrlEvent>(first_line.trim_end())
-            .map_err(|e| format!("invalid daemon protocol hello: {e}"))?;
-        match hello {
-            CtrlEvent::Hello(info) => {
-                info.validate_peer()?;
-                log::info!(
-                    target: "remote",
-                    "daemon protocol ok: version={} app={} capabilities={:?}",
-                    info.protocol_version,
-                    info.app_version,
-                    info.capabilities
-                );
-            }
-            _ => {
-                return Err("daemon did not send protocol hello".to_string());
-            }
-        }
-        let client_hello = serde_json::to_string(&CtrlCmd::Hello(CtrlHello::current_client(
-            auth_token.into(),
-        )))
-        .map_err(|e| e.to_string())?;
-        writeln!(stream, "{client_hello}")
-            .map_err(|e| format!("failed to send daemon protocol hello: {e}"))?;
-
-        let mut state_line = String::new();
-        reader
-            .read_line(&mut state_line)
-            .map_err(|e| format!("failed to read daemon initial state: {e}"))?;
-        if state_line.trim().is_empty() {
-            return Err("daemon closed connection before initial state".to_string());
-        }
-        let state_event = serde_json::from_str::<CtrlEvent>(state_line.trim_end())
-            .map_err(|e| format!("invalid daemon initial state: {e}"))?;
+        // The handshake (hello exchange + initial state) runs on a worker
+        // thread bounded by `DAEMON_HANDSHAKE_HARD_BOUND`, independent of
+        // `DAEMON_TCP_CONNECT_TIMEOUT` above -- that only bounds the initial
+        // TCP-level connect, not these blocking reads (issue #191 fix #5).
+        // `stream` itself is kept untouched on this thread for the writer
+        // thread spawned below; a clone goes to the worker thread instead.
+        let handshake_stream = stream.try_clone().map_err(|e| e.to_string())?;
+        let auth_token_owned = auth_token.to_string();
+        let (reader, state_event) = crate::bounded::run_with_hard_bound(
+            move || perform_handshake(handshake_stream, &auth_token_owned),
+            DAEMON_HANDSHAKE_HARD_BOUND,
+        )?;
         apply_ctrl_event(
             state_event,
             &status,
@@ -856,6 +896,89 @@ mod tests {
         assert!(status.active);
         assert!(!status.paused);
         assert_eq!(status.title, "Song");
+
+        daemon.join().unwrap();
+    }
+
+    #[test]
+    fn perform_handshake_times_out_when_daemon_never_sends_hello() {
+        // #191 fix 5: a daemon that accepts a TCP connection but never
+        // speaks (never sends the protocol hello) must not hang the caller
+        // forever -- the hard bound wrapping `perform_handshake` inside
+        // `connect_endpoint` must kick in. This drives the real bounded
+        // handshake path (real socket, real thread) rather than asserting
+        // on config values, since ureq-style timeout knobs don't have
+        // getters and a real stalled-listener test is the only way to prove
+        // the join-timeout logic actually fires.
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let daemon = std::thread::spawn(move || {
+            // Accept the connection and then say nothing -- long enough to
+            // outlive the test's much shorter hard bound below.
+            let (_stream, _) = listener.accept().unwrap();
+            std::thread::sleep(Duration::from_secs(2));
+        });
+
+        let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+        let result = crate::bounded::run_with_hard_bound(
+            move || perform_handshake(stream, "token"),
+            Duration::from_millis(50),
+        );
+
+        match result {
+            Err(e) => assert_eq!(e, "timed out after 0s"),
+            Ok(_) => panic!("expected perform_handshake to time out, got Ok"),
+        }
+
+        daemon.join().unwrap();
+    }
+
+    #[test]
+    fn perform_handshake_succeeds_promptly_when_daemon_responds() {
+        // Companion to the timeout test above: the fast/success path must
+        // still work end-to-end through the same bounded wrapper used in
+        // `connect_endpoint`, not just in isolation.
+        use std::io::BufRead;
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let daemon = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut writer = stream.try_clone().unwrap();
+            let mut reader = BufReader::new(stream);
+
+            let hello = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap();
+            writeln!(writer, "{hello}").unwrap();
+
+            let mut client_hello = String::new();
+            reader.read_line(&mut client_hello).unwrap();
+
+            let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
+                status: PlayerStatus::default(),
+                items: Vec::new(),
+                cursor: 0,
+                source: crate::config::QueueSource::Unknown,
+            }))
+            .unwrap();
+            writeln!(writer, "{initial_state}").unwrap();
+        });
+
+        let stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+        let result = crate::bounded::run_with_hard_bound(
+            move || perform_handshake(stream, "token"),
+            Duration::from_secs(5),
+        );
+
+        let (_reader, state_event) = match result {
+            Ok(v) => v,
+            Err(e) => panic!("expected Ok, got Err({e})"),
+        };
+        assert!(matches!(state_event, CtrlEvent::State(_)));
 
         daemon.join().unwrap();
     }
