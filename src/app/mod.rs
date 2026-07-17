@@ -6645,10 +6645,8 @@ pub(crate) mod tests {
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let resolved = app.resolve_route_for_library("Music");
         assert_eq!(
             resolved,
@@ -6668,10 +6666,8 @@ pub(crate) mod tests {
     #[test]
     fn resolve_route_for_library_skips_invalid_endpoint() {
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "notascheme://x".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "notascheme://x".to_string());
         assert_eq!(app.resolve_route_for_library("Music"), None);
     }
 
@@ -6683,10 +6679,8 @@ pub(crate) mod tests {
         // called on every resolution attempt, so a per-lookup flash would
         // spam the status bar on repeated plays from the same library.
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "notascheme://x".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "notascheme://x".to_string());
 
         app.resolve_route_for_library("Music");
         assert!(app.status.contains("invalid"));
@@ -6702,10 +6696,8 @@ pub(crate) mod tests {
     #[test]
     fn route_for_active_library_view_uses_nav_state_no_network() {
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -6750,10 +6742,8 @@ pub(crate) mod tests {
         // item's next play/enqueue attempt rather than being stuck at
         // `None` until the process restarts.
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         // No live server in this stub -- `get_ancestors` always errors.
         let first = app.route_for_item_via_ancestors("item-1");
         assert_eq!(first, None);
@@ -6797,10 +6787,8 @@ pub(crate) mod tests {
         // no live server, giving `None`), rather than trusting the stale
         // hit and returning the resolved route.
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.library_route_cache.insert(
             "item-1".to_string(),
             (
@@ -6836,10 +6824,8 @@ pub(crate) mod tests {
 
         // Already routed: the Queue tab must not clear or re-resolve the
         // route out from under an in-progress routed queue.
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.active_route = Some("music".to_string());
         assert_eq!(
             app.resolve_route_for_play(&item).map(|(name, _)| name),
@@ -6856,10 +6842,8 @@ pub(crate) mod tests {
         // user enqueue-recursive's an entire library from its root), so this
         // helper checks the item's own type first.
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_root = make_item("Music", "CollectionFolder");
         lib_root.id = "lib-music".to_string();
 
@@ -7169,15 +7153,16 @@ pub(crate) mod tests {
             ),
             String,
         > {
-            Ok(mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0))
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
         }
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
 
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -7219,10 +7204,8 @@ pub(crate) mod tests {
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
 
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -7249,10 +7232,8 @@ pub(crate) mod tests {
     #[test]
     fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.active_route = Some("music".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
@@ -7329,14 +7310,10 @@ pub(crate) mod tests {
         }
 
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
-        app.daemon_routes.insert(
-            "movies".to_string(),
-            "tcp://127.0.0.1:9001".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.daemon_routes
+            .insert("movies".to_string(), "tcp://127.0.0.1:9001".to_string());
         let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
         app.switch_to_library_route("music", remote, remote_rx);
         assert_eq!(app.active_route.as_deref(), Some("music"));

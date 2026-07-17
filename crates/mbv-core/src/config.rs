@@ -50,7 +50,7 @@ pub struct Config {
     /// settings-panel write-back, matching the `hidden_libraries` value
     /// precedent but without exposing it for in-app editing.
     pub daemon_routes: std::collections::HashMap<String, String>,
-    pub config_version: u32,   // schema version for future migrations (0 = unversioned)
+    pub config_version: u32, // schema version for future migrations (0 = unversioned)
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
     pub quit_timeout_secs: u64, // how long quit waits for local player teardown (seconds)
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
@@ -1596,7 +1596,10 @@ url = "http://host"
     #[test]
     fn resolve_daemon_route_matches_case_insensitively() {
         let mut routes = std::collections::HashMap::new();
-        routes.insert("music".to_string(), "tcp://musicserver.local:9000".to_string());
+        routes.insert(
+            "music".to_string(),
+            "tcp://musicserver.local:9000".to_string(),
+        );
         assert_eq!(
             resolve_daemon_route(&routes, "Music"),
             Some("tcp://musicserver.local:9000")
@@ -1617,7 +1620,10 @@ url = "http://host"
     fn resolve_daemon_route_prefers_exact_match_over_wildcard() {
         let mut routes = std::collections::HashMap::new();
         routes.insert("*".to_string(), "unix:///run/mbvd.sock".to_string());
-        routes.insert("music".to_string(), "tcp://musicserver.local:9000".to_string());
+        routes.insert(
+            "music".to_string(),
+            "tcp://musicserver.local:9000".to_string(),
+        );
         assert_eq!(
             resolve_daemon_route(&routes, "Music"),
             Some("tcp://musicserver.local:9000")

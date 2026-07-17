@@ -7237,10 +7237,8 @@ mod tests {
     #[test]
     fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.active_route = Some("music".to_string());
         let mut movies_item = make_item("Movies", "CollectionFolder");
         movies_item.id = "lib-movies".to_string();
@@ -7331,15 +7329,16 @@ mod tests {
             ),
             String,
         > {
-            Ok(mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0))
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
         }
         *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
 
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -7364,10 +7363,8 @@ mod tests {
     #[test]
     fn play_item_skips_library_routing_when_attached_to_a_session() {
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.connected_session_id = Some("sess-1".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
@@ -7402,10 +7399,8 @@ mod tests {
         // `self.player` out from under the active direct-remote
         // connection without ever clearing `direct_remote_label`.
         let mut app = make_app_stub();
-        app.daemon_routes.insert(
-            "music".to_string(),
-            "tcp://127.0.0.1:9000".to_string(),
-        );
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
         let sess = crate::app::tests::make_session("other-mbv", "mbv");
         app.switch_to_direct_remote(&sess, remote, remote_rx);
