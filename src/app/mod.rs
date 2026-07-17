@@ -4,6 +4,7 @@ pub(crate) mod images;
 mod input;
 mod input_resolver;
 pub(crate) mod layout;
+mod library_route;
 pub(crate) mod palette;
 pub mod render;
 mod search;
@@ -418,12 +419,6 @@ struct SavePlaylistDialog {
 
 const PAGE_SIZE: usize = 100;
 const PREFETCH_AHEAD: usize = 25;
-/// How long a `library_route_cache` entry (#223) stays trusted before a
-/// repeat lookup re-resolves from scratch, so a mid-session library
-/// reorganization on the Emby server self-heals without requiring an app
-/// restart (post-grilling revision item 5; candidate 15-30 minutes,
-/// chosen at the low end of that range as a session-lifetime TUI cache).
-const LIBRARY_ROUTE_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
 
 enum LibEvent {
     Loaded {
@@ -1087,14 +1082,18 @@ pub struct App {
     /// requiring an app restart (#223, post-grilling revision item 5).
     library_route_cache: std::collections::HashMap<String, (Option<String>, Instant)>,
     /// Library names (lowercased/trimmed as passed to
-    /// `resolve_route_for_library`) whose `daemon_routes` entry has
-    /// already surfaced a malformed-endpoint startup warning via
-    /// `flash_status_high` this process. `resolve_route_for_library` is
-    /// called repeatedly (once per resolution attempt), so this set
-    /// gates the flash to once per bad entry rather than once per lookup
-    /// -- the `log::warn!` still fires every time (#223, post-grilling
-    /// revision item 3).
-    daemon_routes_warned: std::collections::HashSet<String>,
+    /// `resolve_route_for_library`) mapped to the `Instant` their
+    /// `daemon_routes` entry last surfaced a malformed-endpoint warning
+    /// via `flash_status_high`. `resolve_route_for_library` is called
+    /// repeatedly (once per resolution attempt), so this gates the flash
+    /// to once per `DAEMON_ROUTE_WARNING_COOLDOWN` per bad entry rather
+    /// than once per lookup -- the `log::warn!` still fires every time
+    /// (#223, post-grilling revision item 3). Re-arming after a cooldown
+    /// (rather than once per process forever) means a user who misses the
+    /// first toast because it fired from a background aggregate-view
+    /// lookup still sees a warning the next time they try to play from
+    /// the affected library directly.
+    daemon_routes_warned: std::collections::HashMap<String, Instant>,
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -1783,7 +1782,7 @@ impl App {
             suspended_local: None,
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
-            daemon_routes_warned: std::collections::HashSet::new(),
+            daemon_routes_warned: std::collections::HashMap::new(),
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -2373,191 +2372,6 @@ impl App {
         sess.device_name
             .eq_ignore_ascii_case(&client.device_name)
             .then_some(mbv_core::remote_player::DaemonEndpoint::Local)
-    }
-
-    /// True when `self.player` is remote for a reason other than library
-    /// routing (#223): a Sessions-panel attached session, or a
-    /// non-library-route direct-remote/local-daemon connection. Library
-    /// routing must never engage -- for play or enqueue -- while this is
-    /// true, since it would otherwise swap `self.player` out from under a
-    /// connection it doesn't own. Still lets library routing run when
-    /// `active_route` is already `Some(..)` (so it can re-evaluate, swap,
-    /// or restore -- that's its job); only skips it when the current
-    /// remote state belongs to a different, non-library-route mechanism.
-    /// Consolidated from three call sites (`play_item`, `play_items_routed`,
-    /// `enqueue_route_conflict`) that previously duplicated this condition
-    /// verbatim.
-    fn in_non_library_thin_client_mode(&self) -> bool {
-        self.connected_session_id.is_some()
-            || (self.player.is_remote() && self.active_route.is_none())
-    }
-
-    /// Resolves the configured daemon route for a library name (#223):
-    /// looks up `daemon_routes` (exact match, then `"*"` wildcard) and
-    /// parses the endpoint string. Returns `(lowercased_library_name,
-    /// endpoint)` on a match with a valid endpoint. A malformed endpoint
-    /// string is logged and treated as no match, rather than failing the
-    /// whole app -- one bad `daemon_routes` entry never blocks other
-    /// routes or local playback. Also surfaces a one-time status-bar
-    /// warning (`daemon_routes_warned` gates it to once per bad library
-    /// name per process, since this method is called on every resolution
-    /// attempt) so a malformed entry is visible in app status, not just
-    /// diagnosable in logs (#223, post-grilling revision item 3).
-    fn resolve_route_for_library(
-        &mut self,
-        library_name: &str,
-    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
-        let name = library_name.trim();
-        if name.is_empty() {
-            return None;
-        }
-        let raw = mbv_core::config::resolve_daemon_route(&self.daemon_routes, name)?;
-        match mbv_core::remote_player::DaemonEndpoint::parse(raw) {
-            Ok(endpoint) => Some((name.to_lowercase(), endpoint)),
-            Err(e) => {
-                log::warn!(
-                    target: "library_route",
-                    "daemon_routes entry for library {name:?} has an invalid endpoint {raw:?}: {e}"
-                );
-                let warn_key = name.to_lowercase();
-                if !self.daemon_routes_warned.contains(&warn_key) {
-                    self.daemon_routes_warned.insert(warn_key);
-                    self.flash_status_high(format!(
-                        "daemon_routes entry for library {name:?} is invalid ({e}); using local playback"
-                    ));
-                }
-                None
-            }
-        }
-    }
-
-    /// Nav-context route resolution for library-scoped views (Library
-    /// tab, Power View, Album/Artist drill-down, in-library search) --
-    /// the active library is already known from navigation state
-    /// (`LibraryTab::library`), so no network call is needed (#223).
-    fn route_for_active_library_view(
-        &mut self,
-        lib_idx: usize,
-    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
-        let name = self.libs.get(lib_idx)?.library.name.clone();
-        self.resolve_route_for_library(&name)
-    }
-
-    /// Cross-library aggregate view (Continue Watching/Next Up, Favorites)
-    /// route resolution: walks the item's ancestor chain via
-    /// `EmbyClient::get_ancestors` to find the owning library
-    /// (`CollectionFolder`), then matches it against `daemon_routes`.
-    /// A *successful* lookup (whether it finds an owning library or
-    /// confirms there isn't one) is cached per item id for the session, so
-    /// a repeated play/enqueue of the same item never re-fetches. A
-    /// *failed* lookup (transient error) is never cached, so it retries
-    /// on the item's next play/enqueue attempt instead of being stuck at
-    /// `None` until the process restarts (#223, post-grilling revision).
-    fn route_for_item_via_ancestors(
-        &mut self,
-        item_id: &str,
-    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
-        // No routes configured at all -- this must be a true no-op for the
-        // common case (no `[daemon_routes]` in config.toml), not just "no
-        // match": every other resolver in this file is a synchronous,
-        // no-network lookup, but this one's `get_ancestors` fallback is a
-        // real HTTP round-trip. Without this guard, every first play of a
-        // distinct Home-tab item (Continue Watching/Next Up/Favorites)
-        // would pay a blocking network call that can never resolve to
-        // anything for a user who never opted into library routing.
-        if self.daemon_routes.is_empty() {
-            return None;
-        }
-        if let Some((cached, cached_at)) = self.library_route_cache.get(item_id) {
-            if Instant::now().duration_since(*cached_at) < LIBRARY_ROUTE_CACHE_TTL {
-                return cached
-                    .clone()
-                    .and_then(|name| self.resolve_route_for_library(&name));
-            }
-            // Expired -- fall through and re-resolve as a normal cache miss,
-            // so a mid-session library reorganization on the Emby server
-            // self-heals without requiring an app restart.
-        }
-        let ancestors = {
-            let client = self.client.lock().unwrap();
-            client.get_ancestors(item_id)
-        };
-        let library_name = match ancestors {
-            Ok(chain) => chain
-                .into_iter()
-                .find(|a| a.item_type == "CollectionFolder")
-                .map(|a| a.name),
-            Err(e) => {
-                log::warn!(
-                    target: "library_route",
-                    "get_ancestors failed for item {item_id:?}: {e}"
-                );
-                // Per #223's post-grilling revision: a transient lookup
-                // failure is never cached -- only a successful
-                // `get_ancestors` call (whether it finds an owning
-                // library or confirms there isn't one) gets memoized.
-                // A failed lookup retries on the item's next
-                // play/enqueue attempt instead of being stuck at `None`
-                // until the process restarts.
-                return None;
-            }
-        };
-        self.library_route_cache
-            .insert(item_id.to_string(), (library_name.clone(), Instant::now()));
-        library_name.and_then(|name| self.resolve_route_for_library(&name))
-    }
-
-    /// Resolves the daemon route (if any) that a play/enqueue of `item`
-    /// should target: nav-scoped lookup for library-scoped views
-    /// (`tab_idx >= 2` -- Library/Power/Album/Artist/in-library search),
-    /// ancestor-lookup for cross-library aggregate views (`tab_idx == 0`
-    /// -- Home tab). No match in either case means local playback,
-    /// unaffected (#223).
-    ///
-    /// `tab_idx == 1` is the Queue tab -- it has no library of its own
-    /// (`lib_tab_offset()` is `2`, so a bare `tab_idx - lib_tab_offset()`
-    /// would underflow and panic here, unlike `enqueue_selected`'s existing
-    /// `tab_idx == 0` / `tab_idx >= 2` split which already avoids this).
-    /// An item played from the Queue tab is already part of whatever queue
-    /// is current, so this keeps whatever route is already active rather
-    /// than re-resolving from nav context (there is none) or treating "no
-    /// nav-scoped resolution" as "no route", which would incorrectly
-    /// restore to local every time the Queue tab is used to play/jump
-    /// within an already-routed queue.
-    fn resolve_route_for_play(
-        &mut self,
-        item: &mbv_core::api::MediaItem,
-    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
-        if self.tab_idx == 0 {
-            self.route_for_item_via_ancestors(&item.id)
-        } else if self.tab_idx >= 2 {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
-            self.route_for_active_library_view(lib_idx)
-        } else {
-            self.active_route
-                .clone()
-                .and_then(|name| self.resolve_route_for_library(&name))
-        }
-    }
-
-    /// Route resolution specifically for `do_enqueue_folder` (#223 follow-up,
-    /// see "Design decisions carried forward from review" above): the item
-    /// being enqueue-recursive'd may itself *be* a library root
-    /// (`item_type == "CollectionFolder"`), in which case `get_ancestors`
-    /// returns no ancestor above it and a plain ancestor-lookup resolver
-    /// always yields `None`. Check the item's own type first; only fall
-    /// back to ancestor lookup for a non-root folder.
-    fn resolve_route_for_enqueue_folder(
-        &mut self,
-        item: &mbv_core::api::MediaItem,
-    ) -> Option<String> {
-        if item.item_type == "CollectionFolder" {
-            return self
-                .resolve_route_for_library(&item.name)
-                .map(|(name, _)| name);
-        }
-        self.route_for_item_via_ancestors(&item.id)
-            .map(|(name, _)| name)
     }
 
     fn connect_direct_endpoint(
@@ -6028,7 +5842,7 @@ pub(crate) mod tests {
             suspended_local: None,
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
-            daemon_routes_warned: std::collections::HashSet::new(),
+            daemon_routes_warned: std::collections::HashMap::new(),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
@@ -6640,230 +6454,6 @@ pub(crate) mod tests {
             app.session_direct_endpoint(&sess),
             Some(mbv_core::remote_player::DaemonEndpoint::Local)
         );
-    }
-
-    #[test]
-    fn resolve_route_for_library_matches_case_insensitively() {
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        let resolved = app.resolve_route_for_library("Music");
-        assert_eq!(
-            resolved,
-            Some((
-                "music".to_string(),
-                mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:9000".parse().unwrap())
-            ))
-        );
-    }
-
-    #[test]
-    fn resolve_route_for_library_returns_none_when_unconfigured() {
-        let mut app = make_app_stub();
-        assert_eq!(app.resolve_route_for_library("Movies"), None);
-    }
-
-    #[test]
-    fn resolve_route_for_library_skips_invalid_endpoint() {
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "notascheme://x".to_string());
-        assert_eq!(app.resolve_route_for_library("Music"), None);
-    }
-
-    #[test]
-    fn resolve_route_for_library_flashes_a_malformed_endpoint_warning_once_per_process() {
-        // #223 post-grilling revision item 3: a malformed `daemon_routes`
-        // entry must be visible in app status (not just diagnosable in
-        // logs), but only flashed once per process -- this method is
-        // called on every resolution attempt, so a per-lookup flash would
-        // spam the status bar on repeated plays from the same library.
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "notascheme://x".to_string());
-
-        app.resolve_route_for_library("Music");
-        assert!(app.status.contains("invalid"));
-
-        app.status = String::new();
-        app.resolve_route_for_library("Music");
-        assert!(
-            app.status.is_empty(),
-            "second lookup for the same bad library must not flash again"
-        );
-    }
-
-    #[test]
-    fn route_for_active_library_view_uses_nav_state_no_network() {
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        let mut lib_item = make_item("Music", "CollectionFolder");
-        lib_item.id = "lib-music".to_string();
-        app.libs.push(LibraryTab {
-            library: lib_item,
-            nav_stack: Vec::new(),
-            search: None,
-            feed_home_video: None,
-            power_detail_scroll: Default::default(),
-            album_track_focus: None,
-            artist_header_focus: None,
-        });
-
-        let resolved = app.route_for_active_library_view(0);
-
-        assert_eq!(resolved.map(|(name, _)| name), Some("music".to_string()));
-    }
-
-    #[test]
-    fn route_for_active_library_view_none_for_unrouted_library() {
-        let mut app = make_app_stub();
-        let mut lib_item = make_item("Movies", "CollectionFolder");
-        lib_item.id = "lib-movies".to_string();
-        app.libs.push(LibraryTab {
-            library: lib_item,
-            nav_stack: Vec::new(),
-            search: None,
-            feed_home_video: None,
-            power_detail_scroll: Default::default(),
-            album_track_focus: None,
-            artist_header_focus: None,
-        });
-
-        assert_eq!(app.route_for_active_library_view(0), None);
-    }
-
-    #[test]
-    fn route_for_item_via_ancestors_does_not_cache_a_failed_lookup() {
-        // Per #223's post-grilling revision (design decision #1): a
-        // transient `get_ancestors` failure must NOT be cached -- only a
-        // successful call (whether it finds an owning library or confirms
-        // there isn't one) gets memoized. A failed lookup retries on the
-        // item's next play/enqueue attempt rather than being stuck at
-        // `None` until the process restarts.
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        // No live server in this stub -- `get_ancestors` always errors.
-        let first = app.route_for_item_via_ancestors("item-1");
-        assert_eq!(first, None);
-        assert!(!app.library_route_cache.contains_key("item-1"));
-
-        // A second call must attempt the lookup again (not short-circuit
-        // on a cached failure) -- still `None` here since the stub still
-        // has no live server, but critically still uncached afterward.
-        let second = app.route_for_item_via_ancestors("item-1");
-        assert_eq!(second, None);
-        assert!(!app.library_route_cache.contains_key("item-1"));
-    }
-
-    #[test]
-    fn route_for_item_via_ancestors_is_a_true_no_op_when_no_routes_are_configured() {
-        // Regression guard: an empty `daemon_routes` (the common case for
-        // a user who never opted into library routing at all) must be a
-        // genuine no-op -- no `get_ancestors` HTTP call, not just "no
-        // match after a network round-trip." If this guard were missing,
-        // every first play/enqueue of a distinct Home-tab item would pay
-        // a blocking network call that could never resolve to anything.
-        let mut app = make_app_stub();
-        assert!(app.daemon_routes.is_empty());
-
-        let resolved = app.route_for_item_via_ancestors("item-1");
-
-        assert_eq!(resolved, None);
-        // No lookup was even attempted, successful or not -- nothing gets
-        // cached, unlike the failed-lookup case above.
-        assert!(!app.library_route_cache.contains_key("item-1"));
-    }
-
-    #[test]
-    fn route_for_item_via_ancestors_does_not_trust_an_expired_cache_entry() {
-        // #223 post-grilling revision item 5: a mid-session library
-        // reorganization on the Emby server must self-heal after
-        // LIBRARY_ROUTE_CACHE_TTL, not require an app restart. Prime the
-        // cache with a stale, EXPIRED entry that (if trusted) would
-        // resolve to "music" -- then confirm the resolver ignores it and
-        // re-attempts the lookup instead (which errors in this stub with
-        // no live server, giving `None`), rather than trusting the stale
-        // hit and returning the resolved route.
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        app.library_route_cache.insert(
-            "item-1".to_string(),
-            (
-                Some("music".to_string()),
-                Instant::now() - LIBRARY_ROUTE_CACHE_TTL - Duration::from_secs(1),
-            ),
-        );
-
-        let resolved = app.route_for_item_via_ancestors("item-1");
-
-        assert_eq!(resolved, None);
-    }
-
-    #[test]
-    fn resolve_route_for_play_does_not_panic_from_the_queue_tab() {
-        // Regression guard: `tab_idx` values are 0 = Home, 1 = Queue tab,
-        // 2.. = library tabs (`lib_tab_offset() == 2`, confirmed against
-        // `src/app/input.rs`). An `if tab_idx == 0 { .. } else { lib_idx =
-        // tab_idx - lib_tab_offset() }` shape (as opposed to `enqueue_selected`'s
-        // existing `tab_idx == 0` / `tab_idx >= 2` split) underflows a `usize`
-        // subtraction (1 - 2) and panics when called from the Queue tab. The
-        // Queue tab has no library of its own -- the item being played is
-        // already part of whatever queue is current, so `resolve_route_for_play`
-        // must fall through to "keep the current `active_route`" instead of
-        // either panicking or wrongly resolving a nav-scoped library.
-        let mut app = make_app_stub();
-        app.tab_idx = 1;
-        let mut item = make_item("Song", "Audio");
-        item.id = "song-1".to_string();
-
-        // Local queue: no route to keep.
-        assert_eq!(app.resolve_route_for_play(&item), None);
-
-        // Already routed: the Queue tab must not clear or re-resolve the
-        // route out from under an in-progress routed queue.
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        app.active_route = Some("music".to_string());
-        assert_eq!(
-            app.resolve_route_for_play(&item).map(|(name, _)| name),
-            Some("music".to_string())
-        );
-    }
-
-    #[test]
-    fn resolve_route_for_enqueue_folder_matches_a_library_root_folder_by_its_own_name() {
-        // #223 follow-up: `get_ancestors` on a library root returns no
-        // `CollectionFolder` ancestor above it (there isn't one), so a plain
-        // ancestor-lookup resolver always yields `None` for the library root
-        // item itself. `do_enqueue_folder` can receive exactly that item (the
-        // user enqueue-recursive's an entire library from its root), so this
-        // helper checks the item's own type first.
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
-        let mut lib_root = make_item("Music", "CollectionFolder");
-        lib_root.id = "lib-music".to_string();
-
-        assert_eq!(
-            app.resolve_route_for_enqueue_folder(&lib_root),
-            Some("music".to_string())
-        );
-    }
-
-    #[test]
-    fn resolve_route_for_enqueue_folder_falls_back_to_ancestor_lookup_for_a_non_root_folder() {
-        let mut app = make_app_stub();
-        let mut sub_folder = make_item("Some Album", "MusicAlbum");
-        sub_folder.id = "album-1".to_string();
-        sub_folder.is_folder = true;
-
-        // No live server in this stub -- `get_ancestors` errors, so this
-        // must fall through to the ancestor-lookup path (not treat every
-        // folder as a library root) and resolve to `None`, not panic.
-        assert_eq!(app.resolve_route_for_enqueue_folder(&sub_folder), None);
     }
 
     #[test]
