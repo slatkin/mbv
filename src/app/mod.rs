@@ -1086,6 +1086,15 @@ pub struct App {
     /// Emby server self-heals after `LIBRARY_ROUTE_CACHE_TTL` instead of
     /// requiring an app restart (#223, post-grilling revision item 5).
     library_route_cache: std::collections::HashMap<String, (Option<String>, Instant)>,
+    /// Library names (lowercased/trimmed as passed to
+    /// `resolve_route_for_library`) whose `daemon_routes` entry has
+    /// already surfaced a malformed-endpoint startup warning via
+    /// `flash_status_high` this process. `resolve_route_for_library` is
+    /// called repeatedly (once per resolution attempt), so this set
+    /// gates the flash to once per bad entry rather than once per lookup
+    /// -- the `log::warn!` still fires every time (#223, post-grilling
+    /// revision item 3).
+    daemon_routes_warned: std::collections::HashSet<String>,
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -1774,6 +1783,7 @@ impl App {
             suspended_local: None,
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
+            daemon_routes_warned: std::collections::HashSet::new(),
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -2388,9 +2398,13 @@ impl App {
     /// endpoint)` on a match with a valid endpoint. A malformed endpoint
     /// string is logged and treated as no match, rather than failing the
     /// whole app -- one bad `daemon_routes` entry never blocks other
-    /// routes or local playback.
+    /// routes or local playback. Also surfaces a one-time status-bar
+    /// warning (`daemon_routes_warned` gates it to once per bad library
+    /// name per process, since this method is called on every resolution
+    /// attempt) so a malformed entry is visible in app status, not just
+    /// diagnosable in logs (#223, post-grilling revision item 3).
     fn resolve_route_for_library(
-        &self,
+        &mut self,
         library_name: &str,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
         let name = library_name.trim();
@@ -2405,6 +2419,13 @@ impl App {
                     target: "library_route",
                     "daemon_routes entry for library {name:?} has an invalid endpoint {raw:?}: {e}"
                 );
+                let warn_key = name.to_lowercase();
+                if !self.daemon_routes_warned.contains(&warn_key) {
+                    self.daemon_routes_warned.insert(warn_key);
+                    self.flash_status_high(format!(
+                        "daemon_routes entry for library {name:?} is invalid ({e}); using local playback"
+                    ));
+                }
                 None
             }
         }
@@ -2415,11 +2436,11 @@ impl App {
     /// the active library is already known from navigation state
     /// (`LibraryTab::library`), so no network call is needed (#223).
     fn route_for_active_library_view(
-        &self,
+        &mut self,
         lib_idx: usize,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
-        let lib = self.libs.get(lib_idx)?;
-        self.resolve_route_for_library(&lib.library.name)
+        let name = self.libs.get(lib_idx)?.library.name.clone();
+        self.resolve_route_for_library(&name)
     }
 
     /// Cross-library aggregate view (Continue Watching/Next Up, Favorites)
@@ -6007,6 +6028,7 @@ pub(crate) mod tests {
             suspended_local: None,
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
+            daemon_routes_warned: std::collections::HashSet::new(),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
@@ -6639,7 +6661,7 @@ pub(crate) mod tests {
 
     #[test]
     fn resolve_route_for_library_returns_none_when_unconfigured() {
-        let app = make_app_stub();
+        let mut app = make_app_stub();
         assert_eq!(app.resolve_route_for_library("Movies"), None);
     }
 
@@ -6651,6 +6673,30 @@ pub(crate) mod tests {
             "notascheme://x".to_string(),
         );
         assert_eq!(app.resolve_route_for_library("Music"), None);
+    }
+
+    #[test]
+    fn resolve_route_for_library_flashes_a_malformed_endpoint_warning_once_per_process() {
+        // #223 post-grilling revision item 3: a malformed `daemon_routes`
+        // entry must be visible in app status (not just diagnosable in
+        // logs), but only flashed once per process -- this method is
+        // called on every resolution attempt, so a per-lookup flash would
+        // spam the status bar on repeated plays from the same library.
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "notascheme://x".to_string(),
+        );
+
+        app.resolve_route_for_library("Music");
+        assert!(app.status.contains("invalid"));
+
+        app.status = String::new();
+        app.resolve_route_for_library("Music");
+        assert!(
+            app.status.is_empty(),
+            "second lookup for the same bad library must not flash again"
+        );
     }
 
     #[test]
