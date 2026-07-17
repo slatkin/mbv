@@ -2261,9 +2261,7 @@ impl App {
     /// unrelated to library routing. Mirrors the same condition Task 9
     /// uses to gate `apply_route_for_playback`.
     pub(super) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
-        let in_other_thin_client_mode = self.connected_session_id.is_some()
-            || (self.player.is_remote() && self.active_route.is_none());
-        if in_other_thin_client_mode {
+        if self.in_non_library_thin_client_mode() {
             return false;
         }
         if resolved_name != self.active_route {
@@ -2320,9 +2318,7 @@ impl App {
     }
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
-        let skip_library_routing = self.connected_session_id.is_some()
-            || (self.player.is_remote() && self.active_route.is_none());
-        if !skip_library_routing {
+        if !self.in_non_library_thin_client_mode() {
             if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
                 let item = item.clone();
                 self.apply_route_for_playback(&item);
@@ -2364,9 +2360,7 @@ impl App {
     }
 
     pub(super) fn play_item(&mut self, item: MediaItem) {
-        let skip_library_routing = self.connected_session_id.is_some()
-            || (self.player.is_remote() && self.active_route.is_none());
-        if !skip_library_routing {
+        if !self.in_non_library_thin_client_mode() {
             self.apply_route_for_playback(&item);
         }
         self.on_queue_replace_silent();

@@ -2356,6 +2356,23 @@ impl App {
             .then_some(mbv_core::remote_player::DaemonEndpoint::Local)
     }
 
+    /// True when `self.player` is remote for a reason other than library
+    /// routing (#223): a Sessions-panel attached session, or a
+    /// non-library-route direct-remote/local-daemon connection. Library
+    /// routing must never engage -- for play or enqueue -- while this is
+    /// true, since it would otherwise swap `self.player` out from under a
+    /// connection it doesn't own. Still lets library routing run when
+    /// `active_route` is already `Some(..)` (so it can re-evaluate, swap,
+    /// or restore -- that's its job); only skips it when the current
+    /// remote state belongs to a different, non-library-route mechanism.
+    /// Consolidated from three call sites (`play_item`, `play_items_routed`,
+    /// `enqueue_route_conflict`) that previously duplicated this condition
+    /// verbatim.
+    fn in_non_library_thin_client_mode(&self) -> bool {
+        self.connected_session_id.is_some()
+            || (self.player.is_remote() && self.active_route.is_none())
+    }
+
     /// Resolves the configured daemon route for a library name (#223):
     /// looks up `daemon_routes` (exact match, then `"*"` wildcard) and
     /// parses the endpoint string. Returns `(lowercased_library_name,
