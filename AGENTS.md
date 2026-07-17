@@ -84,6 +84,7 @@ Uses the default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agen
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
 - Documentation cleanup is agent-owned work in this repo: keep `CONTEXT.md`, `docs/adr/`, and related domain docs current as part of implementation changes, do not hand that cleanup back to the user, and do not leave doc edits sitting uncommitted at the end of the task.
+- Before starting a new ADR, run `ls docs/adr/ | sort -t- -k1 -n | tail -1` against the target merge branch (not just your worktree) at plan-authoring time, and note the reserved number in the plan's header (`**ADR:** 00NN, reserved <date>`) so a concurrently-written sibling plan can grep for it. Two independently-authored plans claiming the same ADR number is a known failure mode here (#222/#223).
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
