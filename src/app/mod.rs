@@ -2426,18 +2426,14 @@ impl App {
         String,
     > {
         let auth_token = self.client.lock().unwrap().token.clone();
-        match self.connect_daemon_route_endpoint(endpoint, &auth_token) {
-            Ok((remote, remote_rx)) => Ok((remote, remote_rx)),
-            Err(e) => {
+        self.connect_daemon_route_endpoint(endpoint, &auth_token)
+            .map_err(|e| {
                 log::warn!(
                     target: "daemon_route",
                     "daemon route connect failed for route={route_label:?} endpoint={endpoint}: {e}"
                 );
-                Err(format!(
-                    "\u{26a0} {route_label} route unreachable, using local playback (mbv.log)"
-                ))
-            }
-        }
+                format!("\u{26a0} {route_label} route unreachable, using local playback (mbv.log)")
+            })
     }
 
     fn switch_to_direct_remote(
