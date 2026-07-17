@@ -418,6 +418,12 @@ struct SavePlaylistDialog {
 
 const PAGE_SIZE: usize = 100;
 const PREFETCH_AHEAD: usize = 25;
+/// How long a `library_route_cache` entry (#223) stays trusted before a
+/// repeat lookup re-resolves from scratch, so a mid-session library
+/// reorganization on the Emby server self-heals without requiring an app
+/// restart (post-grilling revision item 5; candidate 15-30 minutes,
+/// chosen at the low end of that range as a session-lifetime TUI cache).
+const LIBRARY_ROUTE_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
 
 enum LibEvent {
     Loaded {
@@ -1075,8 +1081,11 @@ pub struct App {
     /// Favorites), keyed by item id. `Some(name)` = resolved to that
     /// library (lowercased); `None` = resolved, no owning library route.
     /// Avoids a repeat `get_ancestors` round-trip for the same item
-    /// within a session (#223).
-    library_route_cache: std::collections::HashMap<String, Option<String>>,
+    /// within a session (#223). Each entry also carries the `Instant` it
+    /// was cached at, so a mid-session library reorganization on the
+    /// Emby server self-heals after `LIBRARY_ROUTE_CACHE_TTL` instead of
+    /// requiring an app restart (#223, post-grilling revision item 5).
+    library_route_cache: std::collections::HashMap<String, (Option<String>, Instant)>,
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -2438,10 +2447,15 @@ impl App {
         if self.daemon_routes.is_empty() {
             return None;
         }
-        if let Some(cached) = self.library_route_cache.get(item_id) {
-            return cached
-                .clone()
-                .and_then(|name| self.resolve_route_for_library(&name));
+        if let Some((cached, cached_at)) = self.library_route_cache.get(item_id) {
+            if Instant::now().duration_since(*cached_at) < LIBRARY_ROUTE_CACHE_TTL {
+                return cached
+                    .clone()
+                    .and_then(|name| self.resolve_route_for_library(&name));
+            }
+            // Expired -- fall through and re-resolve as a normal cache miss,
+            // so a mid-session library reorganization on the Emby server
+            // self-heals without requiring an app restart.
         }
         let ancestors = {
             let client = self.client.lock().unwrap();
@@ -2468,7 +2482,7 @@ impl App {
             }
         };
         self.library_route_cache
-            .insert(item_id.to_string(), library_name.clone());
+            .insert(item_id.to_string(), (library_name.clone(), Instant::now()));
         library_name.and_then(|name| self.resolve_route_for_library(&name))
     }
 
@@ -6724,6 +6738,34 @@ pub(crate) mod tests {
         // No lookup was even attempted, successful or not -- nothing gets
         // cached, unlike the failed-lookup case above.
         assert!(!app.library_route_cache.contains_key("item-1"));
+    }
+
+    #[test]
+    fn route_for_item_via_ancestors_does_not_trust_an_expired_cache_entry() {
+        // #223 post-grilling revision item 5: a mid-session library
+        // reorganization on the Emby server must self-heal after
+        // LIBRARY_ROUTE_CACHE_TTL, not require an app restart. Prime the
+        // cache with a stale, EXPIRED entry that (if trusted) would
+        // resolve to "music" -- then confirm the resolver ignores it and
+        // re-attempts the lookup instead (which errors in this stub with
+        // no live server, giving `None`), rather than trusting the stale
+        // hit and returning the resolved route.
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        app.library_route_cache.insert(
+            "item-1".to_string(),
+            (
+                Some("music".to_string()),
+                Instant::now() - LIBRARY_ROUTE_CACHE_TTL - Duration::from_secs(1),
+            ),
+        );
+
+        let resolved = app.route_for_item_via_ancestors("item-1");
+
+        assert_eq!(resolved, None);
     }
 
     #[test]
