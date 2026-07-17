@@ -2668,6 +2668,7 @@ impl App {
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.direct_remote_label = None;
+        self.active_route = None;
         self.session_miss_count = 0;
         self.remote_pos_s = 0;
         self.next_up_item = None;
@@ -9976,6 +9977,19 @@ pub(crate) mod tests {
             "restore_local_mode must rebind MPRIS back to the restored local status"
         );
         assert!(!Arc::ptr_eq(&bound_status, &remote_status));
+    }
+
+    #[test]
+    fn restore_local_mode_clears_active_route() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.switch_to_library_route("music", remote, remote_rx);
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+
+        app.restore_local_mode("Local playback restored");
+
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
     }
 
     #[test]
