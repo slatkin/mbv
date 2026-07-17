@@ -932,6 +932,11 @@ pub struct App {
     status_expires: Option<Instant>,
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
+    /// Library name (lowercased) -> daemon endpoint string, copied from
+    /// `Config.daemon_routes` at startup (#223). Endpoints are parsed
+    /// lazily via `DaemonEndpoint::parse` at connect time, not eagerly, so
+    /// one malformed entry never blocks startup or other routes.
+    daemon_routes: std::collections::HashMap<String, String>,
     music_levels: Vec<String>,
     album_indexes: std::collections::HashMap<String, AlbumIndexState>,
     // Per-frame layout geometry from last render, used for mouse hit-testing.
@@ -1055,6 +1060,23 @@ pub struct App {
     remote_seek_pending_until: Instant, // suppress poll pos-reconcile after a seek
     runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
     suspended_local: Option<SuspendedLocalSession>,
+    /// The library route currently driving playback, if any (#223):
+    /// `Some(name)` holds the lowercased library name whose configured
+    /// daemon is the active player target. `None` means local playback,
+    /// or a Sessions-panel direct remote (`connected_session_id` /
+    /// `direct_remote_label`) -- a separate concept, never conflated with
+    /// this one. Fixed for the life of the current queue: a *new* queue
+    /// re-evaluates it (see `apply_route_for_playback`), but enqueuing
+    /// into the existing queue must match it or be rejected (see
+    /// `enqueue_route_conflict`).
+    active_route: Option<String>,
+    /// Per-item cache of ancestor-lookup library-route resolution for
+    /// cross-library aggregate views (Continue Watching/Next Up,
+    /// Favorites), keyed by item id. `Some(name)` = resolved to that
+    /// library (lowercased); `None` = resolved, no owning library route.
+    /// Avoids a repeat `get_ancestors` round-trip for the same item
+    /// within a session (#223).
+    library_route_cache: std::collections::HashMap<String, Option<String>>,
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -1121,6 +1143,7 @@ struct AppInit {
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
     hidden_libraries: Vec<String>,
+    daemon_routes: std::collections::HashMap<String, String>,
     hidden_latest: Vec<String>,
     music_levels: Vec<String>,
     use_nerd_fonts: bool,
@@ -1614,6 +1637,7 @@ impl App {
             image_protocol_enabled: init.image_protocol_enabled,
             library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
+            daemon_routes: init.daemon_routes,
             hidden_latest: init.hidden_latest,
             music_levels: init.music_levels,
             album_indexes: std::collections::HashMap::new(),
@@ -1739,6 +1763,8 @@ impl App {
             remote_seek_pending_until: Instant::now() - Duration::from_secs(1),
             runtime_zero_since: None,
             suspended_local: None,
+            active_route: None,
+            library_route_cache: std::collections::HashMap::new(),
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -1776,6 +1802,7 @@ impl App {
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
         let hidden_libraries = client.config.hidden_libraries.clone();
+        let daemon_routes = client.config.daemon_routes.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let system_notifications = client.config.system_notifications;
@@ -1851,6 +1878,7 @@ impl App {
             image_protocol,
             image_protocol_enabled,
             hidden_libraries,
+            daemon_routes,
             hidden_latest,
             music_levels,
             use_nerd_fonts,
@@ -1900,6 +1928,7 @@ impl App {
         let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = client.config.hidden_libraries.clone();
+        let daemon_routes = client.config.daemon_routes.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let always_play_next = client.config.always_play_next;
@@ -1986,6 +2015,7 @@ impl App {
             image_protocol,
             image_protocol_enabled,
             hidden_libraries,
+            daemon_routes,
             hidden_latest,
             music_levels,
             use_nerd_fonts,
@@ -5539,6 +5569,7 @@ pub(crate) mod tests {
             ws_rx,
             tab_idx: 0,
             hidden_libraries: Vec::new(),
+            daemon_routes: std::collections::HashMap::new(),
             hidden_latest: Vec::new(),
             music_levels: Vec::new(),
             album_indexes: std::collections::HashMap::new(),
@@ -5661,6 +5692,8 @@ pub(crate) mod tests {
             remote_seek_pending_until: std::time::Instant::now() - Duration::from_secs(1),
             runtime_zero_since: None,
             suspended_local: None,
+            active_route: None,
+            library_route_cache: std::collections::HashMap::new(),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
@@ -5770,6 +5803,7 @@ pub(crate) mod tests {
             image_protocol: None,
             image_protocol_enabled: false,
             hidden_libraries: Vec::new(),
+            daemon_routes: std::collections::HashMap::new(),
             hidden_latest: Vec::new(),
             music_levels: Vec::new(),
             use_nerd_fonts: false,
@@ -9647,6 +9681,14 @@ pub(crate) mod tests {
             app.sessions_overlay_footer(),
             "[↵]conn [r]refresh [Esc]close"
         );
+    }
+
+    #[test]
+    fn app_stub_starts_with_no_active_library_route() {
+        let app = make_app_stub();
+        assert!(app.active_route.is_none());
+        assert!(app.daemon_routes.is_empty());
+        assert!(app.library_route_cache.is_empty());
     }
 
     #[test]
