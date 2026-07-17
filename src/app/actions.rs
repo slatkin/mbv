@@ -2421,25 +2421,7 @@ impl App {
             if self.enqueue_route_conflict(resolved) {
                 return;
             }
-            let name = item.display_name();
-            let scope = self.visible_queue_scope();
-            let appended = item.clone();
-            let previous_dirty = self.queue_dirty;
-            let previous_queue = self.queue_for_scope(scope).clone();
-            {
-                self.queue_for_scope_mut(scope).append_item(item);
-            }
-            if self.local_queue_metadata_applies(scope) {
-                self.queue_dirty = true;
-            }
-            self.flash_status(format!("Added: {name}"));
-            if self.sync_playback_queue_after_append(scope, vec![appended]) {
-                self.sync_direct_remote_queue_after_edit(scope);
-                self.persist_local_queue_state_if_needed(scope);
-            } else {
-                self.queue_dirty = previous_dirty;
-                *self.queue_for_scope_mut(scope) = previous_queue;
-            }
+            self.append_item_to_queue_and_sync(item);
         } else if self.tab_idx >= 2 {
             if self.enqueue_selected_artist_header() {
                 return;
@@ -2459,25 +2441,34 @@ impl App {
             if self.enqueue_route_conflict(resolved) {
                 return;
             }
-            let name = item.display_name();
-            let scope = self.visible_queue_scope();
-            let appended = item.clone();
-            let previous_dirty = self.queue_dirty;
-            let previous_queue = self.queue_for_scope(scope).clone();
-            {
-                self.queue_for_scope_mut(scope).append_item(item);
-            }
-            if self.local_queue_metadata_applies(scope) {
-                self.queue_dirty = true;
-            }
-            self.flash_status(format!("Added: {name}"));
-            if self.sync_playback_queue_after_append(scope, vec![appended]) {
-                self.sync_direct_remote_queue_after_edit(scope);
-                self.persist_local_queue_state_if_needed(scope);
-            } else {
-                self.queue_dirty = previous_dirty;
-                *self.queue_for_scope_mut(scope) = previous_queue;
-            }
+            self.append_item_to_queue_and_sync(item);
+        }
+    }
+
+    /// Shared append/sync/rollback tail for a single-item enqueue
+    /// (extracted from `enqueue_selected`'s two branches, which had
+    /// duplicated this verbatim): appends `item` to the visible queue,
+    /// marks local queue metadata dirty when applicable, flashes a status
+    /// confirmation, and syncs the append to the direct-remote queue /
+    /// local persistence -- rolling the whole append back if the sync
+    /// fails.
+    fn append_item_to_queue_and_sync(&mut self, item: MediaItem) {
+        let name = item.display_name();
+        let scope = self.visible_queue_scope();
+        let appended = item.clone();
+        let previous_dirty = self.queue_dirty;
+        let previous_queue = self.queue_for_scope(scope).clone();
+        self.queue_for_scope_mut(scope).append_item(item);
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        self.flash_status(format!("Added: {name}"));
+        if self.sync_playback_queue_after_append(scope, vec![appended]) {
+            self.sync_direct_remote_queue_after_edit(scope);
+            self.persist_local_queue_state_if_needed(scope);
+        } else {
+            self.queue_dirty = previous_dirty;
+            *self.queue_for_scope_mut(scope) = previous_queue;
         }
     }
 
