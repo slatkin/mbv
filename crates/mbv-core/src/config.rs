@@ -118,6 +118,21 @@ impl Config {
     }
 }
 
+/// Resolves the configured daemon endpoint string for a library name
+/// (#223). Matches case-insensitively (the query is lowercased before
+/// lookup; `routes`' keys are already lowercased by `parse_config`), then
+/// falls back to the `"*"` wildcard "route everything" entry (#222) if
+/// present. Returns `None` if neither matches -- the caller stays local.
+pub fn resolve_daemon_route<'a>(
+    routes: &'a std::collections::HashMap<String, String>,
+    library_name: &str,
+) -> Option<&'a str> {
+    routes
+        .get(&library_name.to_lowercase())
+        .or_else(|| routes.get("*"))
+        .map(|s| s.as_str())
+}
+
 pub fn is_system_instance() -> bool {
     env::var("MBV_SYSTEM").ok().as_deref() == Some("1")
 }
@@ -1576,5 +1591,42 @@ url = "http://host"
         let path = mpv_ipc_path();
         std::env::remove_var("XDG_RUNTIME_DIR");
         assert_eq!(path, "/run/user/1000/mbv-mpv.sock");
+    }
+
+    #[test]
+    fn resolve_daemon_route_matches_case_insensitively() {
+        let mut routes = std::collections::HashMap::new();
+        routes.insert("music".to_string(), "tcp://musicserver.local:9000".to_string());
+        assert_eq!(
+            resolve_daemon_route(&routes, "Music"),
+            Some("tcp://musicserver.local:9000")
+        );
+    }
+
+    #[test]
+    fn resolve_daemon_route_falls_back_to_wildcard() {
+        let mut routes = std::collections::HashMap::new();
+        routes.insert("*".to_string(), "unix:///run/mbvd.sock".to_string());
+        assert_eq!(
+            resolve_daemon_route(&routes, "Movies"),
+            Some("unix:///run/mbvd.sock")
+        );
+    }
+
+    #[test]
+    fn resolve_daemon_route_prefers_exact_match_over_wildcard() {
+        let mut routes = std::collections::HashMap::new();
+        routes.insert("*".to_string(), "unix:///run/mbvd.sock".to_string());
+        routes.insert("music".to_string(), "tcp://musicserver.local:9000".to_string());
+        assert_eq!(
+            resolve_daemon_route(&routes, "Music"),
+            Some("tcp://musicserver.local:9000")
+        );
+    }
+
+    #[test]
+    fn resolve_daemon_route_returns_none_when_unconfigured() {
+        let routes = std::collections::HashMap::new();
+        assert_eq!(resolve_daemon_route(&routes, "Movies"), None);
     }
 }
