@@ -2400,8 +2400,12 @@ impl App {
     /// route resolution: walks the item's ancestor chain via
     /// `EmbyClient::get_ancestors` to find the owning library
     /// (`CollectionFolder`), then matches it against `daemon_routes`.
-    /// Cached per item id for the session so a repeated play/enqueue of
-    /// the same item never re-fetches (#223).
+    /// A *successful* lookup (whether it finds an owning library or
+    /// confirms there isn't one) is cached per item id for the session, so
+    /// a repeated play/enqueue of the same item never re-fetches. A
+    /// *failed* lookup (transient error) is never cached, so it retries
+    /// on the item's next play/enqueue attempt instead of being stuck at
+    /// `None` until the process restarts (#223, post-grilling revision).
     fn route_for_item_via_ancestors(
         &mut self,
         item_id: &str,
