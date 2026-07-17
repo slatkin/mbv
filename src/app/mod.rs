@@ -6424,6 +6424,40 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn app_construction_never_attempts_a_daemon_route_connect() {
+        // #222 acceptance criterion: "No connection attempt happens before
+        // the first play/enqueue action that needs one." There is no
+        // production call site wiring `try_daemon_route_connect` into
+        // startup yet (that wiring is #223's job) -- this test pins the
+        // invariant down as a regression guard so a future startup-time
+        // call is caught immediately instead of silently reintroducing the
+        // eager-connect behavior #222 replaces.
+        static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
+        fn counting_connect(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            Ok(mbv_core::remote_player::RemotePlayer::stub(Vec::new(), 0))
+        }
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(counting_connect);
+        let _app = make_app_stub();
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+        assert_eq!(CALLS.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
     fn remote_position_extrapolation_does_not_round_up_partial_seconds() {
         assert_eq!(
             App::extrapolated_remote_position(10, Duration::from_millis(1600)),
