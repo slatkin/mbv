@@ -97,5 +97,7 @@ per-library routing rather than only the wildcard "route everything" case
   this routing feature depends on) was previously aspirational due to a
   `RemotePlayer` socket/thread leak on route swaps (#233 was identified but
   filed separately). (#233 is now fixed: `RemotePlayer::disconnect()` shuts
-  down the shared socket before a route-to-route swap replaces the old
-  connection, so ADR 0010's framing is now accurate rather than aspirational.)
+  down the shared socket both before a route-to-route (or remote-to-remote)
+  swap replaces the old connection, and in `restore_local_mode`'s
+  return-to-local path, so ADR 0010's framing is now accurate rather than
+  aspirational.)
