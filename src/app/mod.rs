@@ -38,6 +38,19 @@ static DIRECT_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> = Mutex::new(None
 #[cfg(test)]
 static DIRECT_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
 
+// Separate from DIRECT_CONNECT_OVERRIDE above (Sessions-panel "Direct
+// Remote" upgrade, keyed off a discovered SessionInfo): this is issue
+// #222's lazy daemon-route connect primitive, targeting a statically
+// configured DaemonEndpoint with no session discovery. Kept as its own
+// override/lock pair so the two connect paths -- and the App state they
+// eventually drive (`connected_session_id`/`direct_remote_label` vs. a
+// future #223 `active_route`) -- stay independently testable and are
+// never conflated, per #223's explicit "must not be conflated" rule.
+#[cfg(test)]
+static DAEMON_ROUTE_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> = Mutex::new(None);
+#[cfg(test)]
+static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 pub(super) const QUEUE_VIEW_POWER: u8 = 1;
 pub(super) const QUEUE_VIEW_COUNT: u8 = 2;
 pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
@@ -2330,6 +2343,101 @@ impl App {
         }
 
         mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, auth_token)
+    }
+
+    /// Lazy, on-demand connect to a daemon route endpoint (issue #222's
+    /// lifecycle primitive). Unlike `connect_direct_endpoint` (Sessions-panel
+    /// "Direct Remote" upgrade, keyed off a discovered `SessionInfo`), this
+    /// targets a statically configured `DaemonEndpoint` with no session
+    /// discovery involved -- the shape #223's per-library routing needs.
+    ///
+    /// Connecting **is** taking driving-client authority on that daemon
+    /// (ADR 0003, ADR 0007, ADR 0010) -- logged here so it is diagnosable,
+    /// not a hidden side effect.
+    ///
+    /// `#[allow(dead_code)]`: this repo's convention (`mem:conventions`) is
+    /// "fix all compile warnings -- delete unused code, never
+    /// `#[allow(unused)]`" -- but this primitive is a deliberate exception,
+    /// not a suppressed mistake: issue #222's brief requires it to ship with
+    /// *zero* production call sites (the trigger is #223's job, see
+    /// Architecture above), so a plain `cargo build --workspace` (which
+    /// strips `#[cfg(test)]` code, its only current caller) would otherwise
+    /// warn `associated function is never used`. Deleting the primitive to
+    /// silence that would defeat the entire point of this plan -- shipping
+    /// a complete, tested, reusable connect primitive ahead of the issue
+    /// that wires it up. Remove this attribute in the same change that adds
+    /// #223's first call site (`apply_route_for_playback` or equivalent).
+    #[allow(dead_code)]
+    fn connect_daemon_route_endpoint(
+        &self,
+        endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        auth_token: &str,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
+        #[cfg(test)]
+        if let Some(connect) = *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() {
+            return connect(endpoint, auth_token);
+        }
+
+        log::info!(
+            target: "daemon_route",
+            "connecting to daemon route endpoint {endpoint}; this takes driving-client authority on that daemon (see ADR 0003, ADR 0007, ADR 0010)"
+        );
+        mbv_core::remote_player::RemotePlayer::connect_endpoint(endpoint, auth_token)
+    }
+
+    /// Attempts a lazy connect to `endpoint` for the route named
+    /// `route_label` (e.g. a library name from #223's `daemon_routes`, or a
+    /// generic label for the wildcard "route everything" case). On success,
+    /// returns `Ok` with the connected `RemotePlayer` and its event receiver
+    /// for the caller to swap in (mirroring `switch_to_direct_remote`'s
+    /// shape). On failure, per #222: falls back to (stays on) local
+    /// playback and schedules no retry -- but this primitive does NOT flash
+    /// the warning itself. It logs the raw connect error internally
+    /// (`target: "daemon_route"`), then returns `Err(message)` where
+    /// `message` is the fully-formatted, ready-to-display status-bar
+    /// warning text. Flashing is left to the caller deliberately: #223's
+    /// per-library swap function needs to choose *how* to fall back --
+    /// `flash_status_high(message)` directly when it was already local, or
+    /// threading `message` through a `restore_local_mode`-style teardown
+    /// when swapping away from a previously active *different* route -- and
+    /// having this primitive flash unconditionally would risk a second,
+    /// conflicting flash on top of that teardown path's own flash. The
+    /// caller is expected to try again only on its own next natural trigger
+    /// (e.g. the next play/enqueue into this route), never from a
+    /// background timer. See the same `#[allow(dead_code)]` rationale as
+    /// `connect_daemon_route_endpoint` above -- remove both attributes
+    /// together when #223 adds its first call site.
+    #[allow(dead_code)]
+    pub(super) fn try_daemon_route_connect(
+        &mut self,
+        endpoint: &mbv_core::remote_player::DaemonEndpoint,
+        route_label: &str,
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
+        let auth_token = self.client.lock().unwrap().token.clone();
+        match self.connect_daemon_route_endpoint(endpoint, &auth_token) {
+            Ok((remote, remote_rx)) => Ok((remote, remote_rx)),
+            Err(e) => {
+                log::warn!(
+                    target: "daemon_route",
+                    "daemon route connect failed for route={route_label:?} endpoint={endpoint}: {e}"
+                );
+                Err(format!(
+                    "\u{26a0} {route_label} route unreachable, using local playback (mbv.log)"
+                ))
+            }
+        }
     }
 
     fn switch_to_direct_remote(
@@ -6233,6 +6341,86 @@ pub(crate) mod tests {
             app.status,
             "Direct mbv control failed: incompatible daemon protocol version: peer=1 local=3; using attached session remote-mbv"
         );
+    }
+
+    #[test]
+    fn try_daemon_route_connect_returns_remote_player_on_successful_connect() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
+        let mut app = make_app_stub();
+        let endpoint =
+            mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
+                "/tmp/mbv-music.sock",
+            ));
+
+        let result = app.try_daemon_route_connect(&endpoint, "Music");
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn try_daemon_route_connect_returns_a_ready_to_display_warning_without_flashing_on_failure() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_failure(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Err("connection refused".to_string())
+        }
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
+        let mut app = make_app_stub();
+        let endpoint =
+            mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
+                "/tmp/mbv-music.sock",
+            ));
+
+        let result = app.try_daemon_route_connect(&endpoint, "Music");
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+        // `RemotePlayer` derives only `Clone` (no `PartialEq`/`Debug` --
+        // confirmed against `crates/mbv-core/src/remote_player.rs`), so the
+        // whole `Result` can't go through `assert_eq!` directly; match out
+        // the `Err` payload instead.
+        match result {
+            Ok(_) => panic!("expected a connect failure to return Err, got Ok"),
+            Err(message) => {
+                assert_eq!(
+                    message,
+                    "\u{26a0} Music route unreachable, using local playback (mbv.log)"
+                );
+            }
+        }
+        // The primitive itself must never flash -- that is the caller's
+        // job (see Architecture). `make_app_stub()` starts with an empty
+        // status, so this pins down that `try_daemon_route_connect` left
+        // it untouched.
+        assert!(app.status.is_empty());
     }
 
     #[test]
