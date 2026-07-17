@@ -160,6 +160,19 @@ impl ControlStream {
     /// clone's fd duplicate -- `shutdown` acts on the shared underlying
     /// socket in the kernel, so it unblocks a concurrent blocking `read()`
     /// on any other clone of the same connection immediately.
+    ///
+    /// `#[allow(dead_code)]`: this repo's convention (`mem:conventions`) is
+    /// "fix all compile warnings -- delete unused code, never
+    /// `#[allow(unused)]`" -- but this primitive is a deliberate exception,
+    /// not a suppressed mistake: this method is dead code until issue #233's
+    /// Task 2 (`RemotePlayer::disconnect()`) adds its first real (non-test)
+    /// call site. A plain `cargo build --workspace` (which strips
+    /// `#[cfg(test)]` code) would otherwise warn `method is never used`.
+    /// Deleting the method to silence that would defeat the entire point of
+    /// shipping a complete, tested, reusable primitive ahead of the task
+    /// that wires it up. Remove this attribute in the same change that adds
+    /// Task 2's call site to `RemotePlayer::disconnect()`.
+    #[allow(dead_code)]
     fn shutdown(&self) -> io::Result<()> {
         match self {
             Self::Unix(stream) => stream.shutdown(std::net::Shutdown::Both),
