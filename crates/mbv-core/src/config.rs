@@ -43,6 +43,13 @@ pub struct Config {
     pub audio_lang: String,    // full language name, e.g. "English"; "" = any
     pub my_languages: Vec<String>, // user's relevant languages; filters subtitle/audio lang cycling
     pub feed_view_libraries: Vec<String>, // libraries treated as feed view (unplayed, date-sorted)
+    /// Library name (lowercased) -> daemon endpoint string, from
+    /// `[daemon_routes]` (#223). Playback/enqueue resolved to one of these
+    /// libraries swaps the active player to that daemon. `"*"` is a
+    /// wildcard "route everything" entry (#222). TOML-only for v1 -- no
+    /// settings-panel write-back, matching the `hidden_libraries` value
+    /// precedent but without exposing it for in-app editing.
+    pub daemon_routes: std::collections::HashMap<String, String>,
     pub config_version: u32,   // schema version for future migrations (0 = unversioned)
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
     pub quit_timeout_secs: u64, // how long quit waits for local player teardown (seconds)
@@ -87,6 +94,7 @@ impl Default for Config {
             audio_lang: String::new(),
             my_languages: vec![],
             feed_view_libraries: vec![],
+            daemon_routes: std::collections::HashMap::new(),
             config_version: 0,
             progress_interval_secs: 10,
             quit_timeout_secs: 5,
@@ -732,6 +740,17 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         })
         .unwrap_or_default();
 
+    let daemon_routes: std::collections::HashMap<String, String> = doc
+        .get("daemon_routes")
+        .and_then(|v| v.as_table())
+        .map(|table| {
+            table
+                .iter()
+                .filter_map(|(k, v)| v.as_str().map(|s| (k.to_lowercase(), s.to_string())))
+                .collect()
+        })
+        .unwrap_or_default();
+
     Ok(Config {
         server_url: get_str(server, "url").trim_end_matches('/').to_string(),
         username: String::new(),
@@ -764,6 +783,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         audio_lang,
         my_languages,
         feed_view_libraries,
+        daemon_routes,
         config_version,
         progress_interval_secs,
         quit_timeout_secs,
@@ -1228,6 +1248,36 @@ hidden_latest = ["Movies", "TV SHOWS"]
         let toml = "[server]\nurl = \"http://host\"";
         let cfg = parse_config(toml).unwrap();
         assert!(cfg.hidden_latest.is_empty());
+    }
+
+    #[test]
+    fn parse_daemon_routes_lowercased_keys() {
+        let toml = r#"
+[server]
+url = "http://host"
+[daemon_routes]
+Music = "tcp://musicserver.local:9000"
+"*" = "unix:///run/mbvd.sock"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert_eq!(
+            cfg.daemon_routes.get("music").map(String::as_str),
+            Some("tcp://musicserver.local:9000")
+        );
+        assert_eq!(
+            cfg.daemon_routes.get("*").map(String::as_str),
+            Some("unix:///run/mbvd.sock")
+        );
+    }
+
+    #[test]
+    fn parse_default_daemon_routes_when_absent() {
+        let toml = r#"
+[server]
+url = "http://host"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(cfg.daemon_routes.is_empty());
     }
 
     #[test]
