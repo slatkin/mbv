@@ -135,6 +135,7 @@ pub fn run(
                     audio_lang: base_config.audio_lang.clone(),
                     my_languages: base_config.my_languages.clone(),
                     feed_view_libraries: base_config.feed_view_libraries.clone(),
+                    daemon_routes: base_config.daemon_routes.clone(),
                     config_version: base_config.config_version,
                     progress_interval_secs: base_config.progress_interval_secs,
                     quit_timeout_secs: base_config.quit_timeout_secs,

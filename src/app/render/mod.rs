@@ -793,8 +793,10 @@ impl App {
                 })
             }
             super::RemoteSlotState::DirectRemote => self
-                .direct_remote_label
-                .clone()
+                .active_route
+                .as_ref()
+                .map(|name| format!("route:{name}"))
+                .or_else(|| self.direct_remote_label.clone())
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
             super::RemoteSlotState::LocalDaemon => None,
         };
@@ -1331,6 +1333,15 @@ mod tests {
             line.contains('\u{1F5A7}') && line.contains('\u{1F5AD}'),
             "expected remote and playlist pills to remain visible:\n{line}"
         );
+    }
+
+    #[test]
+    fn remote_status_spans_prefers_active_route_label_over_daemon_endpoint() {
+        let mut app = make_app_stub();
+        app.active_route = Some("music".to_string());
+        let spans = app.remote_status_spans(RemoteSlotState::DirectRemote, "tcp://127.0.0.1:9000");
+        let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(text.contains("music"));
     }
 
     #[test]

@@ -4,6 +4,7 @@ pub(crate) mod images;
 mod input;
 mod input_resolver;
 pub(crate) mod layout;
+mod library_route;
 pub(crate) mod palette;
 pub mod render;
 mod search;
@@ -932,6 +933,11 @@ pub struct App {
     status_expires: Option<Instant>,
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
+    /// Library name (lowercased) -> daemon endpoint string, copied from
+    /// `Config.daemon_routes` at startup (#223). Endpoints are parsed
+    /// lazily via `DaemonEndpoint::parse` at connect time, not eagerly, so
+    /// one malformed entry never blocks startup or other routes.
+    daemon_routes: std::collections::HashMap<String, String>,
     music_levels: Vec<String>,
     album_indexes: std::collections::HashMap<String, AlbumIndexState>,
     // Per-frame layout geometry from last render, used for mouse hit-testing.
@@ -1055,6 +1061,39 @@ pub struct App {
     remote_seek_pending_until: Instant, // suppress poll pos-reconcile after a seek
     runtime_zero_since: Option<Instant>, // when runtime_s first became 0 for the current item (fast-poll cap)
     suspended_local: Option<SuspendedLocalSession>,
+    /// The library route currently driving playback, if any (#223):
+    /// `Some(name)` holds the lowercased library name whose configured
+    /// daemon is the active player target. `None` means local playback,
+    /// or a Sessions-panel direct remote (`connected_session_id` /
+    /// `direct_remote_label`) -- a separate concept, never conflated with
+    /// this one. Fixed for the life of the current queue: a *new* queue
+    /// re-evaluates it (see `apply_route_for_playback`), but enqueuing
+    /// into the existing queue must match it or be rejected (see
+    /// `enqueue_route_conflict`).
+    active_route: Option<String>,
+    /// Per-item cache of ancestor-lookup library-route resolution for
+    /// cross-library aggregate views (Continue Watching/Next Up,
+    /// Favorites), keyed by item id. `Some(name)` = resolved to that
+    /// library (lowercased); `None` = resolved, no owning library route.
+    /// Avoids a repeat `get_ancestors` round-trip for the same item
+    /// within a session (#223). Each entry also carries the `Instant` it
+    /// was cached at, so a mid-session library reorganization on the
+    /// Emby server self-heals after `LIBRARY_ROUTE_CACHE_TTL` instead of
+    /// requiring an app restart (#223, post-grilling revision item 5).
+    library_route_cache: std::collections::HashMap<String, (Option<String>, Instant)>,
+    /// Library names (lowercased/trimmed as passed to
+    /// `resolve_route_for_library`) mapped to the `Instant` their
+    /// `daemon_routes` entry last surfaced a malformed-endpoint warning
+    /// via `flash_status_high`. `resolve_route_for_library` is called
+    /// repeatedly (once per resolution attempt), so this gates the flash
+    /// to once per `DAEMON_ROUTE_WARNING_COOLDOWN` per bad entry rather
+    /// than once per lookup -- the `log::warn!` still fires every time
+    /// (#223, post-grilling revision item 3). Re-arming after a cooldown
+    /// (rather than once per process forever) means a user who misses the
+    /// first toast because it fired from a background aggregate-view
+    /// lookup still sees a warning the next time they try to play from
+    /// the affected library directly.
+    daemon_routes_warned: std::collections::HashMap<String, Instant>,
     force_clear: bool,
     tab_scroll: usize,
     ui_volume: u8,
@@ -1121,6 +1160,7 @@ struct AppInit {
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
     hidden_libraries: Vec<String>,
+    daemon_routes: std::collections::HashMap<String, String>,
     hidden_latest: Vec<String>,
     music_levels: Vec<String>,
     use_nerd_fonts: bool,
@@ -1614,6 +1654,7 @@ impl App {
             image_protocol_enabled: init.image_protocol_enabled,
             library_position_state: crate::config::load_library_position_state(),
             hidden_libraries: init.hidden_libraries,
+            daemon_routes: init.daemon_routes,
             hidden_latest: init.hidden_latest,
             music_levels: init.music_levels,
             album_indexes: std::collections::HashMap::new(),
@@ -1739,6 +1780,9 @@ impl App {
             remote_seek_pending_until: Instant::now() - Duration::from_secs(1),
             runtime_zero_since: None,
             suspended_local: None,
+            active_route: None,
+            library_route_cache: std::collections::HashMap::new(),
+            daemon_routes_warned: std::collections::HashMap::new(),
             force_clear: false,
             tab_scroll: 0,
             last_scroll_at: Instant::now() - Duration::from_secs(1),
@@ -1776,6 +1820,7 @@ impl App {
         let server_url = client.config.server_url.clone();
         let token = client.token.clone();
         let hidden_libraries = client.config.hidden_libraries.clone();
+        let daemon_routes = client.config.daemon_routes.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let system_notifications = client.config.system_notifications;
@@ -1851,6 +1896,7 @@ impl App {
             image_protocol,
             image_protocol_enabled,
             hidden_libraries,
+            daemon_routes,
             hidden_latest,
             music_levels,
             use_nerd_fonts,
@@ -1900,6 +1946,7 @@ impl App {
         let (search_tx, search_rx) = mpsc::channel::<Result<Vec<MediaItem>, String>>();
         let ui_config = crate::config::load_ui_config().unwrap_or_default();
         let hidden_libraries = client.config.hidden_libraries.clone();
+        let daemon_routes = client.config.daemon_routes.clone();
         let hidden_latest = client.config.hidden_latest.clone();
         let music_levels = client.config.music_levels.clone();
         let always_play_next = client.config.always_play_next;
@@ -1986,6 +2033,7 @@ impl App {
             image_protocol,
             image_protocol_enabled,
             hidden_libraries,
+            daemon_routes,
             hidden_latest,
             music_levels,
             use_nerd_fonts,
@@ -2367,7 +2415,6 @@ impl App {
     /// a complete, tested, reusable connect primitive ahead of the issue
     /// that wires it up. Remove this attribute in the same change that adds
     /// #223's first call site (`apply_route_for_playback` or equivalent).
-    #[allow(dead_code)]
     fn connect_daemon_route_endpoint(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
@@ -2413,7 +2460,6 @@ impl App {
     /// background timer. See the same `#[allow(dead_code)]` rationale as
     /// `connect_daemon_route_endpoint` above -- remove both attributes
     /// together when #223 adds its first call site.
-    #[allow(dead_code)]
     pub(super) fn try_daemon_route_connect(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
@@ -2507,6 +2553,81 @@ impl App {
         self.flash_status(format!("Connected directly to {}", sess.device_name));
     }
 
+    /// Sibling to `switch_to_direct_remote` for library-scoped daemon
+    /// routing (#223): same suspend-local/connect-remote shape, but
+    /// targets a statically configured `DaemonEndpoint` from
+    /// `daemon_routes` instead of a discovered `SessionInfo`, and tracks
+    /// `active_route` instead of `connected_session_id`/
+    /// `direct_remote_label` -- library routing and the Sessions-panel
+    /// direct-remote flow are two independent ways to end up thin-client
+    /// and must not be conflated in App state. This is a new sibling
+    /// method, not a modification of `switch_to_direct_remote`.
+    fn switch_to_library_route(
+        &mut self,
+        library_name: &str,
+        remote: mbv_core::remote_player::RemotePlayer,
+        remote_rx: mpsc::Receiver<PlayerEvent>,
+    ) {
+        let initial_items = remote.items.lock().unwrap().clone();
+        let has_initial_items = !initial_items.is_empty();
+        let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let always_play_next = self.client.lock().unwrap().config.always_play_next;
+        // Cloned before `remote` is moved into `PlayerProxy::remote` below,
+        // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
+        let mpris_remote = remote.clone();
+
+        if !self.player.is_remote() {
+            self.player.stop();
+            self.player.join_or_timeout(Duration::from_secs(5));
+            let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
+            let suspended = SuspendedLocalSession {
+                player: std::mem::replace(
+                    &mut self.player,
+                    PlayerProxy::remote(remote, always_play_next),
+                ),
+                player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
+                ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
+                ws_send_tx: self.ws_send_tx.take(),
+            };
+            self.suspended_local = Some(suspended);
+        } else {
+            self.player = PlayerProxy::remote(remote, always_play_next);
+            self.player_rx = remote_rx;
+        }
+
+        if let Some(handle) = &self.mpris {
+            let disconnected = mpris_remote.disconnected_flag();
+            crate::mpris::rebind(
+                handle,
+                mpris_remote.status.clone(),
+                move |cmd| {
+                    mpris_remote.send_command(cmd);
+                },
+                Some(disconnected),
+            );
+        }
+
+        self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
+        self.active_route = Some(library_name.to_string());
+        self.remote_pos_s = 0;
+        self.remote_pos_at = Instant::now();
+        self.remote_api_pos_advanced_at = Instant::now() - Duration::from_secs(60);
+        self.remote_seek_pending_until = Instant::now() - Duration::from_secs(1);
+        self.runtime_zero_since = None;
+        self.next_up_item = None;
+        self.skip_intro_end_ticks = None;
+        if has_initial_items {
+            self.set_queue_scope(QueueScope::Remote);
+        } else {
+            self.set_queue_scope(QueueScope::Local);
+        }
+        log::info!(
+            target: "library_route",
+            "switched playback to library route {library_name:?}"
+        );
+        self.flash_status(format!("Routed to {library_name} daemon"));
+    }
+
     fn restore_local_mode(&mut self, status: &str) {
         if !self.player.is_remote() {
             self.player.stop();
@@ -2535,6 +2656,7 @@ impl App {
         self.connected_session_id = None;
         self.connected_session_state = None;
         self.direct_remote_label = None;
+        self.active_route = None;
         self.session_miss_count = 0;
         self.remote_pos_s = 0;
         self.next_up_item = None;
@@ -2543,7 +2665,63 @@ impl App {
         self.flash_status_high(status.to_string());
     }
 
+    /// Applies the route resolved by `resolve_route_for_play` before a
+    /// queue replace (#223): swaps to the routed daemon, restores local,
+    /// or leaves the current target alone if it already matches.
+    /// Connection failure falls back to local playback -- never a hard
+    /// error -- per #222's fallback rule, via `try_daemon_route_connect`
+    /// (#222's plan, Task 1), which already logs the raw failure and
+    /// returns a ready-to-display warning string as its `Err` payload;
+    /// this method decides *where* to surface that string -- a direct
+    /// flash when we were already local, or threaded through
+    /// `restore_local_mode` when we were already on a *different* route
+    /// and must actually swap the player back to local, not just show a
+    /// warning while silently staying connected to the old route.
+    fn apply_route_for_playback(&mut self, item: &mbv_core::api::MediaItem) {
+        let resolved = self.resolve_route_for_play(item);
+        match (resolved, self.active_route.clone()) {
+            (Some((name, _)), Some(current)) if name == current => {}
+            (Some((name, endpoint)), was_routed) => {
+                match self.try_daemon_route_connect(&endpoint, &name) {
+                    Ok((remote, remote_rx)) => {
+                        self.switch_to_library_route(&name, remote, remote_rx);
+                    }
+                    Err(message) => {
+                        log::warn!(
+                            target: "library_route",
+                            "connect to library route {name:?} endpoint {endpoint} failed: {message}"
+                        );
+                        if was_routed.is_some() {
+                            self.restore_local_mode(&message);
+                        } else {
+                            self.flash_status_high(message);
+                        }
+                    }
+                }
+            }
+            (None, Some(_)) => {
+                self.restore_local_mode("Local playback restored");
+            }
+            (None, None) => {}
+        }
+    }
+
     fn connect_to_session(&mut self, sess: &mbv_core::api::SessionInfo) {
+        // Tear down an active library route (#223) before a Sessions-panel
+        // connect: `switch_to_direct_remote`'s already-remote branch (the
+        // only one reachable when `self.player.is_remote()` is already
+        // `true`) is unreachable from here, since the direct-upgrade
+        // attempt below is itself gated on `!self.player.is_remote()` --
+        // so simply clearing `active_route` inline further down would be
+        // dead code for this scenario. Going through `restore_local_mode`
+        // instead runs the real teardown (restores the suspended local
+        // `Player`, clears `active_route`, MPRIS rebind) so the
+        // Sessions-panel path always starts from a clean slate, regardless
+        // of which internal branch this function or `switch_to_direct_remote`
+        // takes next. A no-op when no library route is active.
+        if self.active_route.is_some() {
+            self.restore_local_mode("Local playback restored before connecting to session");
+        }
         let mut direct_upgrade_error = None;
         if !self.player.is_remote() {
             if let Some(endpoint) = self.session_direct_endpoint(sess) {
@@ -5539,6 +5717,7 @@ pub(crate) mod tests {
             ws_rx,
             tab_idx: 0,
             hidden_libraries: Vec::new(),
+            daemon_routes: std::collections::HashMap::new(),
             hidden_latest: Vec::new(),
             music_levels: Vec::new(),
             album_indexes: std::collections::HashMap::new(),
@@ -5661,6 +5840,9 @@ pub(crate) mod tests {
             remote_seek_pending_until: std::time::Instant::now() - Duration::from_secs(1),
             runtime_zero_since: None,
             suspended_local: None,
+            active_route: None,
+            library_route_cache: std::collections::HashMap::new(),
+            daemon_routes_warned: std::collections::HashMap::new(),
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             album_year_cache: std::collections::HashMap::new(),
@@ -5770,6 +5952,7 @@ pub(crate) mod tests {
             image_protocol: None,
             image_protocol_enabled: false,
             hidden_libraries: Vec::new(),
+            daemon_routes: std::collections::HashMap::new(),
             hidden_latest: Vec::new(),
             music_levels: Vec::new(),
             use_nerd_fonts: false,
@@ -6340,6 +6523,101 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn connect_to_session_tears_down_an_active_library_route_via_restore_local_mode() {
+        // Regression guard: `connect_to_session`'s direct-upgrade attempt
+        // is itself gated on `!self.player.is_remote()`, so
+        // `switch_to_direct_remote`'s already-remote branch is never
+        // reached from here -- a bare `self.active_route = None;` right
+        // before that call would be dead code for this scenario. The fix
+        // is to tear down any active library route through
+        // `restore_local_mode` at the top of the function instead, which
+        // both clears `active_route` AND restores the suspended local
+        // `Player` (via the real `switch_to_library_route` path, not a
+        // manually-poked field), so the subsequent `!self.player.is_remote()`
+        // check is true and the direct-upgrade attempt actually runs.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+        fn direct_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_success);
+        let mut app = make_app_stub();
+        // Really go through a library route (#223), not a manually-poked
+        // field, so `suspended_local` is populated the way it is in
+        // production and `restore_local_mode` has real state to restore.
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.switch_to_library_route("music", remote, remote_rx);
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(app.player.is_remote());
+
+        let mut sess = make_session("remote-mbv", "mbv");
+        sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
+
+        app.connect_to_session(&sess);
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(app.active_route.is_none());
+        // The direct-upgrade attempt ran (not skipped) because the library
+        // route's remote player was properly restored to local first, so
+        // the app ends up on the Sessions-panel direct remote, not stuck
+        // on the stale library-route connection.
+        assert!(app.player.is_remote());
+        assert!(app.direct_remote_label.is_some());
+    }
+
+    #[test]
+    fn connect_to_session_is_a_no_op_teardown_when_no_library_route_is_active() {
+        // The new top-of-function teardown must not disturb the existing,
+        // already-covered "plain local player" path when there is no
+        // library route to tear down.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+        fn direct_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_success);
+        let mut app = make_app_stub();
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
+
+        let mut sess = make_session("remote-mbv", "mbv");
+        sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
+
+        app.connect_to_session(&sess);
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(app.active_route.is_none());
+        assert!(app.player.is_remote());
+        assert!(app.direct_remote_label.is_some());
+    }
+
+    #[test]
     fn try_daemon_route_connect_returns_remote_player_on_successful_connect() {
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
@@ -6449,6 +6727,210 @@ pub(crate) mod tests {
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
 
         assert_eq!(CALLS.load(std::sync::atomic::Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn apply_route_for_playback_swaps_to_routed_daemon_on_success() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
+
+        let mut app = make_app_stub();
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        app.apply_route_for_playback(&item);
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(app.player.is_remote());
+    }
+
+    #[test]
+    fn apply_route_for_playback_falls_back_to_local_with_warning_on_connect_failure() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_failure(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Err("connection refused".to_string())
+        }
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
+
+        let mut app = make_app_stub();
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        app.apply_route_for_playback(&item);
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
+        assert!(app.status.contains("unreachable"));
+    }
+
+    #[test]
+    fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
+        let mut app = make_app_stub();
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.active_route = Some("music".to_string());
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        app.apply_route_for_playback(&item);
+
+        // No connect attempt was needed (no DAEMON_ROUTE_CONNECT_OVERRIDE
+        // set, so a real connect attempt would panic/hang if this weren't
+        // a no-op) -- active_route and local-ness are unchanged.
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(!app.player.is_remote());
+    }
+
+    #[test]
+    fn apply_route_for_playback_restores_local_when_item_has_no_route() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.switch_to_library_route("music", remote, remote_rx);
+        let mut movies_item = make_item("Movies", "CollectionFolder");
+        movies_item.id = "lib-movies".to_string();
+        app.libs.push(LibraryTab {
+            library: movies_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Movie", "Movie");
+        item.id = "movie-1".to_string();
+
+        app.apply_route_for_playback(&item);
+
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
+    }
+
+    #[test]
+    fn apply_route_for_playback_restores_local_via_restore_local_mode_when_swap_to_a_different_route_fails(
+    ) {
+        // Regression guard for the `Err` branch's `was_routed.is_some()`
+        // arm: already on a different route ("music"), an item resolving
+        // to a *new* route ("movies") whose connect attempt fails must be
+        // torn down through `restore_local_mode` -- not just flashed a
+        // warning while silently staying attached to the stale "music"
+        // remote player.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_failure(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Err("connection refused".to_string())
+        }
+
+        let mut app = make_app_stub();
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.daemon_routes
+            .insert("movies".to_string(), "tcp://127.0.0.1:9001".to_string());
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.switch_to_library_route("music", remote, remote_rx);
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(app.player.is_remote());
+
+        let mut lib_item = make_item("Movies", "CollectionFolder");
+        lib_item.id = "lib-movies".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Movie", "Movie");
+        item.id = "movie-1".to_string();
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
+        app.apply_route_for_playback(&item);
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
+        assert!(app.status.contains("unreachable"));
     }
 
     #[test]
@@ -9650,6 +10132,14 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn app_stub_starts_with_no_active_library_route() {
+        let app = make_app_stub();
+        assert!(app.active_route.is_none());
+        assert!(app.daemon_routes.is_empty());
+        assert!(app.library_route_cache.is_empty());
+    }
+
+    #[test]
     fn remote_slot_state_is_attached_session_when_connected_to_remote_session() {
         let mut app = make_app_stub();
         app.connected_session_id = Some("session-1".into());
@@ -9744,6 +10234,32 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn switch_to_library_route_sets_active_route_and_suspends_local() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+
+        app.switch_to_library_route("music", remote, remote_rx);
+
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(app.player.is_remote());
+        assert!(app.suspended_local.is_some());
+        assert!(app.remote_player_tab.is_some());
+        // Must stay independent of the Sessions-panel direct-remote fields.
+        assert!(app.connected_session_id.is_none());
+        assert!(app.direct_remote_label.is_none());
+    }
+
+    #[test]
+    fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(2), 0);
+
+        app.switch_to_library_route("music", remote, remote_rx);
+
+        assert!(app.has_direct_remote_queue());
+    }
+
+    #[test]
     fn restore_local_mode_rebinds_mpris_back_to_the_suspended_local_status() {
         // #175 follow-through: after a Direct Remote takeover ends (however
         // it ends -- disconnect, user action, etc.), MPRIS must follow
@@ -9772,6 +10288,19 @@ pub(crate) mod tests {
             "restore_local_mode must rebind MPRIS back to the restored local status"
         );
         assert!(!Arc::ptr_eq(&bound_status, &remote_status));
+    }
+
+    #[test]
+    fn restore_local_mode_clears_active_route() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.switch_to_library_route("music", remote, remote_rx);
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+
+        app.restore_local_mode("Local playback restored");
+
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
     }
 
     #[test]

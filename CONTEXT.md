@@ -29,8 +29,15 @@ A TUI instance whose authoritative playback state comes from a daemon-backed pla
 _Avoid_: treating this as synonymous with **Local daemon** — a thin client can target either a same-machine daemon or a remote daemon.
 
 **Suspended local session**:
-The local player and its event channels, parked in place when control is handed off to a direct remote, so that local playback can be resumed later without rebuilding it from scratch.
-_Avoid_: conflating with remote slot state — that's a classification of the current relationship; this is a stashed resource that exists only during part of one such relationship (direct remote).
+The local player and its event channels, parked in place when control is handed off to a direct remote, so that local playback can be resumed later without rebuilding it from scratch. Used by two independent callers: the Sessions-panel direct-remote upgrade (`switch_to_direct_remote`) and library-scoped daemon routing (`switch_to_library_route`, #223) -- both restore through the same `restore_local_mode`.
+_Avoid_: conflating with remote slot state — that's a classification of the current relationship; this is a stashed resource that exists only during part of one such relationship (direct remote or library route).
+
+**Library route** / **Route table** (`daemon_routes`):
+A `[daemon_routes]` config table mapping library name (matched case-insensitively, same convention as `hidden_libraries`/`feed_view_libraries`) to a daemon endpoint string. A play/enqueue action resolved to a routed library swaps the active player to that daemon via `switch_to_library_route`, a sibling to `switch_to_direct_remote` using the same **Suspended local session** mechanism -- tracked by its own `active_route` field, kept independent of the Sessions-panel direct-remote's `connected_session_id`/`direct_remote_label`. `"*"` is a wildcard "route everything" entry. TOML-only for v1; no settings-panel UI. See #223.
+_Avoid_: conflating a library route with a Sessions-panel **Thin client** connection -- they are two independent ways to end up thin-client, and connecting to either takes driving-client authority over that daemon (ADR 0007) as an accepted consequence, not a hidden side effect.
+
+**Routed queue**:
+A queue whose route (local, or a specific library route) was decided once, from the item(s) that started it, and is fixed for that queue's lifetime (`App::active_route`). Enqueuing an item that resolves to a *different* route than the current queue's is rejected outright with a toast; no auto-clear, no auto-swap. Starting a brand-new queue (replace, not append) re-evaluates the route from scratch. Mid-queue per-track route swapping is explicitly out of scope. See #223.
 
 ## Queue
 

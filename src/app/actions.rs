@@ -2246,6 +2246,34 @@ impl App {
         self.status_expires = Some(Instant::now() + Duration::from_secs(5));
     }
 
+    /// Enforces #223's queue-route invariant: an item whose resolved
+    /// route differs from the queue's current route (`active_route`) is
+    /// rejected with a toast instead of being appended or silently
+    /// swapping the player. Returns `true` if the enqueue was rejected --
+    /// the caller must abort without mutating the queue.
+    ///
+    /// Short-circuits `false` (no conflict) whenever the app is currently
+    /// in a thin-client mode that has nothing to do with library routing
+    /// (a Sessions-panel attached session, or a non-library-route direct
+    /// remote / local-daemon connection) -- both leave `active_route` at
+    /// `None`, so without this check any item resolving to a configured
+    /// `daemon_routes` entry would be wrongly rejected for a reason
+    /// unrelated to library routing. Mirrors the same condition Task 9
+    /// uses to gate `apply_route_for_playback`.
+    pub(super) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
+        if self.in_non_library_thin_client_mode() {
+            return false;
+        }
+        if resolved_name != self.active_route {
+            self.flash_status_high(
+                "Can't mix libraries in a routed queue -- clear queue first".to_string(),
+            );
+            true
+        } else {
+            false
+        }
+    }
+
     pub(super) fn effective_playback_state(&self) -> super::PlaybackState {
         if let Some(ref remote) = self.connected_session_state {
             let maybe_active_idx = remote
@@ -2290,6 +2318,12 @@ impl App {
     }
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
+        if !self.in_non_library_thin_client_mode() {
+            if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
+                let item = item.clone();
+                self.apply_route_for_playback(&item);
+            }
+        }
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the power-view library panel.
@@ -2326,6 +2360,9 @@ impl App {
     }
 
     pub(super) fn play_item(&mut self, item: MediaItem) {
+        if !self.in_non_library_thin_client_mode() {
+            self.apply_route_for_playback(&item);
+        }
         self.on_queue_replace_silent();
         // Keep library focus when playing from the power-view library panel.
         if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
@@ -2380,25 +2417,11 @@ impl App {
             if !is_playable(&item) {
                 return;
             }
-            let name = item.display_name();
-            let scope = self.visible_queue_scope();
-            let appended = item.clone();
-            let previous_dirty = self.queue_dirty;
-            let previous_queue = self.queue_for_scope(scope).clone();
-            {
-                self.queue_for_scope_mut(scope).append_item(item);
+            let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
+            if self.enqueue_route_conflict(resolved) {
+                return;
             }
-            if self.local_queue_metadata_applies(scope) {
-                self.queue_dirty = true;
-            }
-            self.flash_status(format!("Added: {name}"));
-            if self.sync_playback_queue_after_append(scope, vec![appended]) {
-                self.sync_direct_remote_queue_after_edit(scope);
-                self.persist_local_queue_state_if_needed(scope);
-            } else {
-                self.queue_dirty = previous_dirty;
-                *self.queue_for_scope_mut(scope) = previous_queue;
-            }
+            self.append_item_to_queue_and_sync(item);
         } else if self.tab_idx >= 2 {
             if self.enqueue_selected_artist_header() {
                 return;
@@ -2413,25 +2436,39 @@ impl App {
             if !is_playable(&item) {
                 return;
             }
-            let name = item.display_name();
-            let scope = self.visible_queue_scope();
-            let appended = item.clone();
-            let previous_dirty = self.queue_dirty;
-            let previous_queue = self.queue_for_scope(scope).clone();
-            {
-                self.queue_for_scope_mut(scope).append_item(item);
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
+            if self.enqueue_route_conflict(resolved) {
+                return;
             }
-            if self.local_queue_metadata_applies(scope) {
-                self.queue_dirty = true;
-            }
-            self.flash_status(format!("Added: {name}"));
-            if self.sync_playback_queue_after_append(scope, vec![appended]) {
-                self.sync_direct_remote_queue_after_edit(scope);
-                self.persist_local_queue_state_if_needed(scope);
-            } else {
-                self.queue_dirty = previous_dirty;
-                *self.queue_for_scope_mut(scope) = previous_queue;
-            }
+            self.append_item_to_queue_and_sync(item);
+        }
+    }
+
+    /// Shared append/sync/rollback tail for a single-item enqueue
+    /// (extracted from `enqueue_selected`'s two branches, which had
+    /// duplicated this verbatim): appends `item` to the visible queue,
+    /// marks local queue metadata dirty when applicable, flashes a status
+    /// confirmation, and syncs the append to the direct-remote queue /
+    /// local persistence -- rolling the whole append back if the sync
+    /// fails.
+    fn append_item_to_queue_and_sync(&mut self, item: MediaItem) {
+        let name = item.display_name();
+        let scope = self.visible_queue_scope();
+        let appended = item.clone();
+        let previous_dirty = self.queue_dirty;
+        let previous_queue = self.queue_for_scope(scope).clone();
+        self.queue_for_scope_mut(scope).append_item(item);
+        if self.local_queue_metadata_applies(scope) {
+            self.queue_dirty = true;
+        }
+        self.flash_status(format!("Added: {name}"));
+        if self.sync_playback_queue_after_append(scope, vec![appended]) {
+            self.sync_direct_remote_queue_after_edit(scope);
+            self.persist_local_queue_state_if_needed(scope);
+        } else {
+            self.queue_dirty = previous_dirty;
+            *self.queue_for_scope_mut(scope) = previous_queue;
         }
     }
 
@@ -2476,6 +2513,10 @@ impl App {
         lib_idx: usize,
         selection: &ArtistHeaderSelection,
     ) -> bool {
+        let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
+        if self.enqueue_route_conflict(resolved) {
+            return true;
+        }
         let items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
             Ok(items) => items,
             Err(e) => {
@@ -2575,6 +2616,10 @@ impl App {
     }
 
     pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::MediaItem) {
+        let resolved = self.resolve_route_for_enqueue_folder(&item);
+        if self.enqueue_route_conflict(resolved) {
+            return;
+        }
         let client = self.client.lock().unwrap();
         match client.get_all_playable_recursive(&item.id) {
             Ok(mut items) => {
@@ -5845,10 +5890,12 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::tests::{make_app_stub, make_item, make_items};
     use crate::app::{AlbumIndexState, LibraryTab};
+    use mbv_core::player::PlayerEvent;
     use std::io::Read;
     use std::os::fd::{FromRawFd, IntoRawFd};
+    use std::sync::mpsc;
 
     fn folder(id: &str, name: &str) -> MediaItem {
         let mut item = make_item(name, "Folder");
@@ -7176,5 +7223,201 @@ mod tests {
         });
 
         assert_eq!(output, "\x07");
+    }
+
+    #[test]
+    fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
+        let mut app = make_app_stub();
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.active_route = Some("music".to_string());
+        let mut movies_item = make_item("Movies", "CollectionFolder");
+        movies_item.id = "lib-movies".to_string();
+        app.libs.push(LibraryTab {
+            library: movies_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+
+        app.enqueue_selected();
+
+        // `PlayerTab`/`PlaybackQueue`/`MediaItem` implement neither
+        // `PartialEq` nor `Debug` in this codebase (confirmed: `MediaItem`
+        // derives only `Debug, Clone, Serialize, Deserialize`, and
+        // `PlayerTab` derives only `Clone, Default`), so a whole-struct
+        // `assert_eq!` against a captured "before" clone will not compile.
+        // The established idiom elsewhere in this test module (e.g. the
+        // rollback-path tests) is to assert on `.items` directly instead
+        // -- here that's simplest as "still empty", since `make_app_stub`
+        // starts with an empty queue and a rejected enqueue must leave it
+        // that way.
+        assert!(app
+            .queue_for_scope(app.visible_queue_scope())
+            .items
+            .is_empty());
+        assert!(app.status.contains("Can't mix libraries in a routed queue"));
+    }
+
+    #[test]
+    fn enqueue_route_conflict_allows_matching_route() {
+        let mut app = make_app_stub();
+        app.active_route = Some("music".to_string());
+        assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    }
+
+    #[test]
+    fn enqueue_route_conflict_allows_local_queue_local_item() {
+        let mut app = make_app_stub();
+        assert!(!app.enqueue_route_conflict(None));
+    }
+
+    #[test]
+    fn enqueue_route_conflict_rejects_mismatched_route() {
+        let mut app = make_app_stub();
+        app.active_route = Some("music".to_string());
+        assert!(app.enqueue_route_conflict(Some("movies".to_string())));
+        assert!(app.status.contains("Can't mix libraries in a routed queue"));
+    }
+
+    #[test]
+    fn enqueue_route_conflict_allows_enqueue_while_attached_to_a_session() {
+        // A Sessions-panel attached session (`connected_session_id`) has
+        // its own, separate queue-scope rules -- the library-routing
+        // invariant must not fire a "Can't mix libraries" toast for a
+        // reason unrelated to library routing.
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("sess-1".to_string());
+        assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    }
+
+    #[test]
+    fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.player = mbv_core::player::PlayerProxy::remote(remote, false);
+        app.player_rx = remote_rx;
+        // active_route stays None: this is a Sessions-panel direct-remote
+        // connection, not a library route.
+        assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    }
+
+    #[test]
+    fn play_item_swaps_to_library_route_before_replacing_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+        *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
+
+        let mut app = make_app_stub();
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        app.play_item(item);
+
+        *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+    }
+
+    #[test]
+    fn play_item_skips_library_routing_when_attached_to_a_session() {
+        let mut app = make_app_stub();
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.connected_session_id = Some("sess-1".to_string());
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        // No DAEMON_ROUTE_CONNECT_OVERRIDE set -- if library routing
+        // engaged here it would attempt a real connection and this test
+        // would hang/fail rather than reach the assertion below.
+        app.play_item(item);
+
+        assert!(app.active_route.is_none());
+    }
+
+    #[test]
+    fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel() {
+        // Regression guard for the gap `connected_session_id.is_none()`
+        // alone misses: a Sessions-panel "Direct Remote" ctrl-socket
+        // upgrade leaves `connected_session_id` as `None` but
+        // `self.player.is_remote()` `true` and `active_route` `None`.
+        // Library routing must not engage here either -- it would swap
+        // `self.player` out from under the active direct-remote
+        // connection without ever clearing `direct_remote_label`.
+        let mut app = make_app_stub();
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        let sess = crate::app::tests::make_session("other-mbv", "mbv");
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+        assert!(app.player.is_remote());
+        assert!(app.active_route.is_none());
+
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        // No DAEMON_ROUTE_CONNECT_OVERRIDE set -- if library routing
+        // engaged here it would attempt a real connection and this test
+        // would hang/fail rather than reach the assertion below.
+        app.play_item(item);
+
+        assert!(app.active_route.is_none());
     }
 }
