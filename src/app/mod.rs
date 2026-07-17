@@ -2565,6 +2565,81 @@ impl App {
         self.flash_status(format!("Connected directly to {}", sess.device_name));
     }
 
+    /// Sibling to `switch_to_direct_remote` for library-scoped daemon
+    /// routing (#223): same suspend-local/connect-remote shape, but
+    /// targets a statically configured `DaemonEndpoint` from
+    /// `daemon_routes` instead of a discovered `SessionInfo`, and tracks
+    /// `active_route` instead of `connected_session_id`/
+    /// `direct_remote_label` -- library routing and the Sessions-panel
+    /// direct-remote flow are two independent ways to end up thin-client
+    /// and must not be conflated in App state. This is a new sibling
+    /// method, not a modification of `switch_to_direct_remote`.
+    fn switch_to_library_route(
+        &mut self,
+        library_name: &str,
+        remote: mbv_core::remote_player::RemotePlayer,
+        remote_rx: mpsc::Receiver<PlayerEvent>,
+    ) {
+        let initial_items = remote.items.lock().unwrap().clone();
+        let has_initial_items = !initial_items.is_empty();
+        let initial_cursor = remote.status.lock().unwrap().current_idx;
+        let always_play_next = self.client.lock().unwrap().config.always_play_next;
+        // Cloned before `remote` is moved into `PlayerProxy::remote` below,
+        // mirroring `switch_to_direct_remote`'s #175 MPRIS rebind.
+        let mpris_remote = remote.clone();
+
+        if !self.player.is_remote() {
+            self.player.stop();
+            self.player.join_or_timeout(Duration::from_secs(5));
+            let (_dummy_ws_tx, dummy_ws_rx) = mpsc::channel::<WsEvent>();
+            let suspended = SuspendedLocalSession {
+                player: std::mem::replace(
+                    &mut self.player,
+                    PlayerProxy::remote(remote, always_play_next),
+                ),
+                player_rx: std::mem::replace(&mut self.player_rx, remote_rx),
+                ws_rx: std::mem::replace(&mut self.ws_rx, dummy_ws_rx),
+                ws_send_tx: self.ws_send_tx.take(),
+            };
+            self.suspended_local = Some(suspended);
+        } else {
+            self.player = PlayerProxy::remote(remote, always_play_next);
+            self.player_rx = remote_rx;
+        }
+
+        if let Some(handle) = &self.mpris {
+            let disconnected = mpris_remote.disconnected_flag();
+            crate::mpris::rebind(
+                handle,
+                mpris_remote.status.clone(),
+                move |cmd| {
+                    mpris_remote.send_command(cmd);
+                },
+                Some(disconnected),
+            );
+        }
+
+        self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
+        self.active_route = Some(library_name.to_string());
+        self.remote_pos_s = 0;
+        self.remote_pos_at = Instant::now();
+        self.remote_api_pos_advanced_at = Instant::now() - Duration::from_secs(60);
+        self.remote_seek_pending_until = Instant::now() - Duration::from_secs(1);
+        self.runtime_zero_since = None;
+        self.next_up_item = None;
+        self.skip_intro_end_ticks = None;
+        if has_initial_items {
+            self.set_queue_scope(QueueScope::Remote);
+        } else {
+            self.set_queue_scope(QueueScope::Local);
+        }
+        log::info!(
+            target: "library_route",
+            "switched playback to library route {library_name:?}"
+        );
+        self.flash_status(format!("Routed to {library_name} daemon"));
+    }
+
     fn restore_local_mode(&mut self, status: &str) {
         if !self.player.is_remote() {
             self.player.stop();
@@ -9844,6 +9919,32 @@ pub(crate) mod tests {
             "switch_to_direct_remote must rebind MPRIS to the new remote's status"
         );
         assert!(!Arc::ptr_eq(&bound_status, &local_status));
+    }
+
+    #[test]
+    fn switch_to_library_route_sets_active_route_and_suspends_local() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+
+        app.switch_to_library_route("music", remote, remote_rx);
+
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(app.player.is_remote());
+        assert!(app.suspended_local.is_some());
+        assert!(app.remote_player_tab.is_some());
+        // Must stay independent of the Sessions-panel direct-remote fields.
+        assert!(app.connected_session_id.is_none());
+        assert!(app.direct_remote_label.is_none());
+    }
+
+    #[test]
+    fn switch_to_library_route_sets_remote_queue_scope_when_daemon_has_items() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(2), 0);
+
+        app.switch_to_library_route("music", remote, remote_rx);
+
+        assert!(app.has_direct_remote_queue());
     }
 
     #[test]
