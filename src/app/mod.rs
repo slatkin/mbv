@@ -2425,7 +2425,14 @@ impl App {
                     target: "library_route",
                     "get_ancestors failed for item {item_id:?}: {e}"
                 );
-                None
+                // Per #223's post-grilling revision: a transient lookup
+                // failure is never cached -- only a successful
+                // `get_ancestors` call (whether it finds an owning
+                // library or confirms there isn't one) gets memoized.
+                // A failed lookup retries on the item's next
+                // play/enqueue attempt instead of being stuck at `None`
+                // until the process restarts.
+                return None;
             }
         };
         self.library_route_cache
@@ -6589,22 +6596,29 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn route_for_item_via_ancestors_caches_after_first_lookup() {
+    fn route_for_item_via_ancestors_does_not_cache_a_failed_lookup() {
+        // Per #223's post-grilling revision (design decision #1): a
+        // transient `get_ancestors` failure must NOT be cached -- only a
+        // successful call (whether it finds an owning library or confirms
+        // there isn't one) gets memoized. A failed lookup retries on the
+        // item's next play/enqueue attempt rather than being stuck at
+        // `None` until the process restarts.
         let mut app = make_app_stub();
         app.daemon_routes.insert(
             "music".to_string(),
             "tcp://127.0.0.1:9000".to_string(),
         );
-        // No live server in this stub -- `get_ancestors` will error and the
-        // resolver caches a `None` result rather than retrying every call.
+        // No live server in this stub -- `get_ancestors` always errors.
         let first = app.route_for_item_via_ancestors("item-1");
         assert_eq!(first, None);
-        assert!(app.library_route_cache.contains_key("item-1"));
-        // Second call must not attempt another network round-trip; the
-        // cached `None` short-circuits before any client call, so the
-        // result is stable and deterministic in a stub with no server.
+        assert!(!app.library_route_cache.contains_key("item-1"));
+
+        // A second call must attempt the lookup again (not short-circuit
+        // on a cached failure) -- still `None` here since the stub still
+        // has no live server, but critically still uncached afterward.
         let second = app.route_for_item_via_ancestors("item-1");
         assert_eq!(second, None);
+        assert!(!app.library_route_cache.contains_key("item-1"));
     }
 
     #[test]
