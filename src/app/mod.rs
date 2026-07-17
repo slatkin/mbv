@@ -2641,6 +2641,12 @@ impl App {
             self.player.stop();
         }
         self.player.join();
+        // `join()` is a documented no-op for a remote player (it doesn't tear
+        // down the control socket), so without this the old remote's reader
+        // thread would leak here exactly as it did at the two already-fixed
+        // remote-to-remote swap sites (#233). No-op if `self.player` is
+        // already local.
+        self.player.disconnect_remote();
         if let Some(suspended) = self.suspended_local.take() {
             self.player = suspended.player;
             self.player_rx = suspended.player_rx;
@@ -10447,6 +10453,52 @@ pub(crate) mod tests {
 
         assert!(app.active_route.is_none());
         assert!(!app.player.is_remote());
+    }
+
+    #[test]
+    fn restore_local_mode_disconnects_the_remote_before_restoring_local() {
+        // #233 follow-up regression guard: `restore_local_mode` is the
+        // shared "go back to local" tail. `self.player.join()` is a
+        // documented no-op for a remote player, so the subsequent
+        // `self.player = suspended.player` reassignment used to drop the
+        // old RemotePlayer without ever disconnecting it, leaking its
+        // reader thread exactly like the two already-fixed remote-to-remote
+        // swap branches. Uses a real TCP loopback "daemon" (not
+        // RemotePlayer::stub, which has no real socket to observe) so the
+        // daemon's accepted connection can observe its client side actually
+        // closing.
+        use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
+        use std::io::Read as _;
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let daemon = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            crate::app::tests::run_stub_daemon_handshake(stream)
+        });
+
+        let mut app = make_app_stub();
+        let (remote, remote_rx) =
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+        app.switch_to_library_route("music", remote, remote_rx);
+        assert!(!app.player.is_remote_disconnected());
+
+        app.restore_local_mode("test: ending library route session");
+
+        // The OLD (music) connection's daemon-side accept handle should see
+        // its client hang up shortly after `restore_local_mode` runs --
+        // proof the reader thread actually exited instead of leaking.
+        let mut daemon_stream = daemon.join().unwrap();
+        daemon_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut buf = [0u8; 8];
+        let n = daemon_stream.read(&mut buf).unwrap_or(usize::MAX);
+        assert_eq!(
+            n, 0,
+            "old remote's client socket must be shut down after restore_local_mode"
+        );
     }
 
     #[test]
