@@ -3200,6 +3200,19 @@ impl PlayerProxy {
         }
     }
 
+    /// Tears down the underlying connection if this proxy is currently
+    /// remote (#233): a no-op for `Local` (there's no socket to close).
+    /// Call this on the *old* `PlayerProxy` before overwriting it with a
+    /// freshly connected one -- a remote-to-remote swap that skips this
+    /// leaks the old connection's reader thread (see
+    /// `RemotePlayer::disconnect`'s doc comment for why `Drop` alone isn't
+    /// enough).
+    pub fn disconnect_remote(&self) {
+        if let PlayerProxyInner::Remote(r) = &self.inner {
+            r.disconnect();
+        }
+    }
+
     pub fn join_or_timeout(&self, timeout: std::time::Duration) {
         match &self.inner {
             PlayerProxyInner::Local(p) => p.join_or_timeout(timeout),
@@ -4238,5 +4251,31 @@ input-ipc-server=/tmp/user.sock
                 code
             );
         }
+    }
+
+    #[test]
+    fn disconnect_remote_is_a_no_op_for_a_local_player() {
+        let status = Arc::new(Mutex::new(PlayerStatus::default()));
+        let proxy = PlayerProxy::stub(status);
+        assert!(!proxy.is_remote());
+
+        proxy.disconnect_remote(); // must not panic
+    }
+
+    #[test]
+    fn disconnect_remote_disconnects_a_remote_player() {
+        let (remote, _event_rx) = crate::remote_player::RemotePlayer::stub(Vec::new(), 0);
+        let proxy = PlayerProxy {
+            always_play_next: false,
+            status: remote.status.clone(),
+            subtitle_prefs: remote.subtitle_prefs.clone(),
+            inner: PlayerProxyInner::Remote(remote),
+        };
+        assert!(proxy.is_remote());
+
+        proxy.disconnect_remote(); // must not panic; a stub has no real
+                                   // socket, so this only exercises the
+                                   // dispatch, not the shutdown itself
+                                   // (that's covered by Task 2's tests).
     }
 }
