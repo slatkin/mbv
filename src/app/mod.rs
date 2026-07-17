@@ -2513,6 +2513,10 @@ impl App {
             };
             self.suspended_local = Some(suspended);
         } else {
+            // #233: tear down the previous remote connection's socket
+            // before dropping the old PlayerProxy, so its reader thread
+            // observes the shutdown and exits instead of leaking.
+            self.player.disconnect_remote();
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
         }
@@ -2591,6 +2595,10 @@ impl App {
             };
             self.suspended_local = Some(suspended);
         } else {
+            // #233: tear down the previous remote connection's socket
+            // before dropping the old PlayerProxy, so its reader thread
+            // observes the shutdown and exits instead of leaking.
+            self.player.disconnect_remote();
             self.player = PlayerProxy::remote(remote, always_play_next);
             self.player_rx = remote_rx;
         }
@@ -3971,6 +3979,40 @@ pub(crate) mod tests {
             muted: false,
             media_info: mbv_core::api::SessionMediaInfo::default(),
         }
+    }
+
+    /// Minimal daemon-side protocol handshake for tests that need a real
+    /// TCP socket `RemotePlayer::connect_endpoint` can connect to (#233):
+    /// sends the protocol hello, drains the client's hello line, then
+    /// sends an empty initial state. Returns the accepted `TcpStream` so
+    /// the caller can observe what happens to it afterward (e.g. that the
+    /// client shuts it down).
+    pub(crate) fn run_stub_daemon_handshake(stream: std::net::TcpStream) -> std::net::TcpStream {
+        use std::io::{BufRead, BufReader, Write};
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+
+        let hello = serde_json::to_string(&mbv_core::ctrl::CtrlEvent::Hello(
+            mbv_core::ctrl::CtrlHello::current(),
+        ))
+        .unwrap();
+        writeln!(writer, "{hello}").unwrap();
+
+        let mut client_hello = String::new();
+        reader.read_line(&mut client_hello).unwrap();
+
+        let initial_state = serde_json::to_string(&mbv_core::ctrl::CtrlEvent::State(
+            mbv_core::ctrl::CtrlState {
+                status: mbv_core::player::PlayerStatus::default(),
+                items: Vec::new(),
+                cursor: 0,
+                source: crate::config::QueueSource::Unknown,
+            },
+        ))
+        .unwrap();
+        writeln!(writer, "{initial_state}").unwrap();
+
+        stream
     }
 
     // ── fmt_duration ─────────────────────────────────────────────────────────
@@ -10234,6 +10276,55 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn switch_to_direct_remote_disconnects_the_previous_remote_on_a_remote_to_remote_swap() {
+        // Same #233 regression, but for the Sessions-panel direct-remote
+        // path's already-remote branch (a second "Direct Remote" upgrade
+        // while already on one).
+        use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
+        use std::io::Read as _;
+        use std::net::TcpListener;
+
+        let listener_a = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr_a = listener_a.local_addr().unwrap();
+        let daemon_a = std::thread::spawn(move || {
+            let (stream, _) = listener_a.accept().unwrap();
+            crate::app::tests::run_stub_daemon_handshake(stream)
+        });
+
+        let listener_b = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr_b = listener_b.local_addr().unwrap();
+        let daemon_b = std::thread::spawn(move || {
+            let (stream, _) = listener_b.accept().unwrap();
+            crate::app::tests::run_stub_daemon_handshake(stream)
+        });
+
+        let mut app = make_app_stub();
+        let sess_a = make_session("daemon-a", "mbv");
+        let (remote_a, remote_a_rx) =
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a), "token").unwrap();
+        app.switch_to_direct_remote(&sess_a, remote_a, remote_a_rx);
+
+        let sess_b = make_session("daemon-b", "mbv");
+        let (remote_b, remote_b_rx) =
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b), "token").unwrap();
+        app.switch_to_direct_remote(&sess_b, remote_b, remote_b_rx);
+
+        let mut daemon_a_stream = daemon_a.join().unwrap();
+        daemon_a_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut buf = [0u8; 8];
+        let n = daemon_a_stream.read(&mut buf).unwrap_or(usize::MAX);
+        assert_eq!(
+            n, 0,
+            "old direct-remote client socket must be shut down after the swap"
+        );
+
+        drop(daemon_b);
+        let _ = addr_b;
+    }
+
+    #[test]
     fn switch_to_library_route_sets_active_route_and_suspends_local() {
         let mut app = make_app_stub();
         let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
@@ -10257,6 +10348,61 @@ pub(crate) mod tests {
         app.switch_to_library_route("music", remote, remote_rx);
 
         assert!(app.has_direct_remote_queue());
+    }
+
+    #[test]
+    fn switch_to_library_route_disconnects_the_previous_remote_on_a_route_to_route_swap() {
+        // #233 regression guard: swapping from one active library route
+        // straight to another (the already-remote branch) must tear down
+        // the OLD RemotePlayer's connection before replacing it, not just
+        // let it leak via Drop. Uses two real TCP loopback "daemons" (not
+        // RemotePlayer::stub, which has no real socket to observe) so the
+        // first daemon's accepted connection can observe its client side
+        // actually closing.
+        use mbv_core::remote_player::{DaemonEndpoint, RemotePlayer};
+        use std::io::Read as _;
+        use std::net::TcpListener;
+
+        let listener_a = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr_a = listener_a.local_addr().unwrap();
+        let daemon_a = std::thread::spawn(move || {
+            let (stream, _) = listener_a.accept().unwrap();
+            crate::app::tests::run_stub_daemon_handshake(stream)
+        });
+
+        let listener_b = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr_b = listener_b.local_addr().unwrap();
+        let daemon_b = std::thread::spawn(move || {
+            let (stream, _) = listener_b.accept().unwrap();
+            crate::app::tests::run_stub_daemon_handshake(stream)
+        });
+
+        let mut app = make_app_stub();
+        let (remote_a, remote_a_rx) =
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_a), "token").unwrap();
+        app.switch_to_library_route("music", remote_a, remote_a_rx);
+        assert!(!app.player.is_remote_disconnected());
+
+        let (remote_b, remote_b_rx) =
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr_b), "token").unwrap();
+        app.switch_to_library_route("movies", remote_b, remote_b_rx);
+
+        // The OLD (music) connection's daemon-side accept handle should
+        // see its client hang up shortly after the swap -- proof the
+        // reader thread actually exited instead of leaking.
+        let mut daemon_a_stream = daemon_a.join().unwrap();
+        daemon_a_stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut buf = [0u8; 8];
+        let n = daemon_a_stream.read(&mut buf).unwrap_or(usize::MAX);
+        assert_eq!(
+            n, 0,
+            "old library route's client socket must be shut down after the swap"
+        );
+
+        drop(daemon_b);
+        let _ = addr_b; // silence unused warning if daemon_b's thread hasn't been joined
     }
 
     #[test]
