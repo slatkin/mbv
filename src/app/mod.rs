@@ -2356,6 +2356,34 @@ impl App {
             .then_some(mbv_core::remote_player::DaemonEndpoint::Local)
     }
 
+    /// Resolves the configured daemon route for a library name (#223):
+    /// looks up `daemon_routes` (exact match, then `"*"` wildcard) and
+    /// parses the endpoint string. Returns `(lowercased_library_name,
+    /// endpoint)` on a match with a valid endpoint. A malformed endpoint
+    /// string is logged and treated as no match, rather than failing the
+    /// whole app -- one bad `daemon_routes` entry never blocks other
+    /// routes or local playback.
+    fn resolve_route_for_library(
+        &self,
+        library_name: &str,
+    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+        let name = library_name.trim();
+        if name.is_empty() {
+            return None;
+        }
+        let raw = mbv_core::config::resolve_daemon_route(&self.daemon_routes, name)?;
+        match mbv_core::remote_player::DaemonEndpoint::parse(raw) {
+            Ok(endpoint) => Some((name.to_lowercase(), endpoint)),
+            Err(e) => {
+                log::warn!(
+                    target: "library_route",
+                    "daemon_routes entry for library {name:?} has an invalid endpoint {raw:?}: {e}"
+                );
+                None
+            }
+        }
+    }
+
     fn connect_direct_endpoint(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
@@ -6305,6 +6333,39 @@ pub(crate) mod tests {
             app.session_direct_endpoint(&sess),
             Some(mbv_core::remote_player::DaemonEndpoint::Local)
         );
+    }
+
+    #[test]
+    fn resolve_route_for_library_matches_case_insensitively() {
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        let resolved = app.resolve_route_for_library("Music");
+        assert_eq!(
+            resolved,
+            Some((
+                "music".to_string(),
+                mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:9000".parse().unwrap())
+            ))
+        );
+    }
+
+    #[test]
+    fn resolve_route_for_library_returns_none_when_unconfigured() {
+        let app = make_app_stub();
+        assert_eq!(app.resolve_route_for_library("Movies"), None);
+    }
+
+    #[test]
+    fn resolve_route_for_library_skips_invalid_endpoint() {
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "notascheme://x".to_string(),
+        );
+        assert_eq!(app.resolve_route_for_library("Music"), None);
     }
 
     #[test]
