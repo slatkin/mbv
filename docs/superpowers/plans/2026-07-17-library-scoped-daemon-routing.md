@@ -6,7 +6,7 @@
 
 **Architecture:** A new `daemon_routes: HashMap<String, String>` config table (library name, lowercased -> endpoint string) is parsed alongside the existing `hidden_libraries`/`feed_view_libraries` convention. `App` gains `daemon_routes` (copied from config), `active_route: Option<String>` (the lowercased library name currently driving playback via a routed daemon, kept separate from the Sessions-panel `connected_session_id`/`direct_remote_label` concept), and `library_route_cache: HashMap<String, Option<String>>` (per-item ancestor-lookup memoization for cross-library aggregate views). A new `switch_to_library_route` method is a sibling to the existing `switch_to_direct_remote` — same suspend-local/connect-remote shape, reusing `SuspendedLocalSession`/`self.suspended_local`, but targeting a statically configured `DaemonEndpoint` instead of a discovered `SessionInfo`. `restore_local_mode` is extended (not duplicated) to also clear `active_route`, since it is already the single "go back to local" tail for every thin-client path. Route resolution has two paths per the issue: nav-scoped (library tab already known, no network call) and ancestor-lookup (`EmbyClient::get_ancestors`, cached per item) for cross-library aggregate views (Home tab). Both play and enqueue call through a shared resolver; play performs the swap, enqueue enforces the no-mixed-route queue invariant with a rejection toast.
 
-**Tech Stack:** Rust workspace (`crates/mbv-core` shared lib, `src/` `mbv` TUI binary), `cargo test`, plain `#[test]` functions, no mocking framework — reuses the existing `DIRECT_CONNECT_OVERRIDE` test seam in `src/app/mod.rs`.
+**Tech Stack:** Rust workspace (`crates/mbv-core` shared lib, `src/` `mbv` TUI binary), `cargo test`, plain `#[test]` functions, no mocking framework -- Tasks 8-9 reuse #222's `DAEMON_ROUTE_CONNECT_OVERRIDE` test seam in `src/app/mod.rs` for daemon-route connect attempts; the one Sessions-panel regression test added in Task 9 (Step 5) uses the pre-existing, separate `DIRECT_CONNECT_OVERRIDE` seam, deliberately kept apart from the daemon-route one.
 
 ## Global Constraints
 
@@ -18,12 +18,17 @@
 - New log target for library-routing diagnostics: `"library_route"` (distinct from the existing `"sessions"` target used by `switch_to_direct_remote`/`connect_to_session`).
 - `switch_to_library_route` is a new sibling method to `switch_to_direct_remote` — do not modify `switch_to_direct_remote` itself.
 
-## Assumptions (open questions carried forward — see final report)
+## Design decisions carried forward from review
 
-1. **#222 sequencing risk:** as of this plan, no branch or merged code implements #222's connection-lifecycle primitive; `git branch -a` shows no `222`/`lazy-connect`-named branch. This plan does not block on #222 landing first — it reuses the existing `App::connect_direct_endpoint` helper (`src/app/mod.rs:2315-2332`), which already has the exact `fn(&DaemonEndpoint, &str) -> Result<(RemotePlayer, Receiver<PlayerEvent>), String>` shape the task brief described as #222's expected primitive, and already fails over to a caller-driven fallback (no retry loop, no parking) matching #222's rules. If #222 lands first with a differently-named wrapper, swapping the call site in Task 8 is a one-line change.
-2. **Sessions-panel / library-route interaction:** the issue does not say what happens if a Sessions-panel direct-remote (`connected_session_id`) is connected when a play/enqueue would otherwise resolve to a library route. This plan takes the conservative default: library routing is skipped entirely while `connected_session_id.is_some()` (the Sessions-panel path wins). Flagged for follow-up review.
-3. **Enqueuing a library-root folder item itself:** `do_enqueue_folder` resolves its route via ancestor lookup of the folder item's own id. If the folder *is* a library root (`CollectionFolder`), `get_ancestors` returns no ancestors above it, so route resolution yields `None` (treated as local) rather than matching the folder's own name. Not addressed by the issue text; flagged for follow-up review.
-4. **Status-bar visibility:** issue #223's acceptance criteria require the effective route to be "visible in app status and diagnosable in logs." This plan satisfies it by (a) reusing the existing remote-pill mechanism (`remote_status_spans` in `src/app/render/mod.rs`, already shows a label for `RemoteSlotState::DirectRemote`) to prefer `active_route` when set, and (b) `log::info!`/`log::warn!` at every swap/restore/fallback point under the `"library_route"` target — matching the level of persistence `direct_remote_label` already gets today (a pill label, not a dedicated new divider indicator).
+This plan was cross-reviewed against issue #223's text, the actual current codebase (via Serena, not assumed), and the sibling #222 plan (`docs/superpowers/plans/2026-07-17-daemon-connect-lifecycle.md` in a separate worktree, which by the time of this review had already been written). Four points the issue text left open are resolved definitively below, and the review surfaced additional gaps (a `tab_idx` underflow panic, Sessions-panel/direct-remote conflation, a duplicate-text edit hazard, a non-`PartialEq` test assertion, a missed `AppInit` construction site) that are fixed inline in the affected tasks rather than listed here — see each task's own comments for those.
+
+1. **#222 integration (no longer an open question):** #222's plan now exists and defines exactly the primitive this plan needs: `App::try_daemon_route_connect(&mut self, endpoint: &DaemonEndpoint, route_label: &str) -> Result<(RemotePlayer, Receiver<PlayerEvent>), String>` (`src/app/mod.rs`, #222's Task 1). It performs the lazy-connect attempt and, on failure, logs the raw error internally and returns `Err(message)` where `message` is a fully-formatted, ready-to-display status-bar warning -- deliberately *not* flashing it itself, since only the caller (this plan's `apply_route_for_playback`) knows whether to flash directly or route the message through a `restore_local_mode`-style teardown. No retry is ever scheduled -- the exact fallback/no-retry behavior #222 was built to centralize. This plan's Task 8 (`apply_route_for_playback`) calls that primitive directly instead of reusing the Sessions-panel's `connect_direct_endpoint`/`DIRECT_CONNECT_OVERRIDE` seam, and Task 9's tests use the matching `DAEMON_ROUTE_CONNECT_OVERRIDE`/`DAEMON_ROUTE_CONNECT_TEST_LOCK` seam instead -- per #222's own design note, the two connect paths (Sessions-panel direct-remote vs. daemon-route) are kept on independent test seams so neither plan's tests can silently interfere with the other's. **Sequencing dependency:** Tasks 8 and 9 in this plan cannot compile until #222's Task 1 (the `try_daemon_route_connect`/`connect_daemon_route_endpoint` methods and the `DAEMON_ROUTE_CONNECT_OVERRIDE`/`DAEMON_ROUTE_CONNECT_TEST_LOCK` statics) has been implemented and merged into this branch. Tasks 1-7 have no such dependency and can proceed independently.
+2. **Sessions-panel / library-route interaction (resolved):** there are actually *two* directions to this, not one, and the codebase's current behavior only protects one of them:
+   - **Library route while an Emby-remote "attached session" is active** (`connected_session_id.is_some()`): during this mode `self.player` stays local (`play_items_routed`/`play_item` route commands through `do_session_command`/the Emby websocket API, never touching `self.player`), so library routing must be skipped outright -- it must never swap `self.player` while an attached session is being driven via the Emby API.
+   - **Library route while already thin-client for a reason *other* than library routing** (a Sessions-panel "Direct Remote" ctrl-socket upgrade, or local-daemon mode -- both leave `connected_session_id` as `None` but `self.player.is_remote()` `true` and `active_route` `None`): the original plan's guard (`self.connected_session_id.is_none()`) does **not** catch this case, so a play/enqueue action would have silently swapped `self.player` away from an active Sessions-panel direct-remote connection into a library route without ever clearing `direct_remote_label`, conflating the two thin-client concepts exactly as Global Constraint #15 says must never happen. Fixed in Tasks 9 and 10 by gating on `self.connected_session_id.is_some() || (self.player.is_remote() && self.active_route.is_none())` instead of `connected_session_id` alone -- this correctly still *allows* library routing to run when `active_route` is already `Some(..)` (so it can re-evaluate/swap/restore, which is its job), while skipping it whenever the current remote state belongs to a different mechanism entirely.
+   - Additionally, the reverse direction was checked: `switch_to_direct_remote`'s `else` branch (taken when `self.player.is_remote()` is already `true`, i.e. exactly the "was on a library route, now upgrading via Sessions-panel" case) overwrites `self.player`/`self.player_rx` directly without going through `restore_local_mode`, so it would leave a stale `active_route` behind. Per this plan's Global Constraint (do not modify `switch_to_direct_remote` itself), the fix is at its sole caller, `connect_to_session` -- Task 9 adds `self.active_route = None;` there, immediately before the call to `switch_to_direct_remote`, so the Sessions-panel path always starts from a clean slate regardless of which internal branch `switch_to_direct_remote` takes.
+3. **Enqueuing a library-root folder item itself (resolved):** `do_enqueue_folder` receives the full `MediaItem`, not just an id, so it does not need to rely solely on ancestor lookup (which correctly returns no match for a library root, since a library root has no `CollectionFolder` ancestor above it). Task 7 adds `resolve_route_for_enqueue_folder(&mut self, item: &MediaItem) -> Option<String>`, which checks `item.item_type == "CollectionFolder"` first and resolves directly via `resolve_route_for_library(&item.name)` in that case, falling back to the ancestor-lookup resolver otherwise. Task 10 wires `do_enqueue_folder` to call this instead of `route_for_item_via_ancestors` directly.
+4. **Status-bar visibility (resolved, unchanged from the original plan):** satisfied by (a) reusing the existing remote-pill mechanism (`remote_status_spans` in `src/app/render/mod.rs`, already shows a label for `RemoteSlotState::DirectRemote`) to prefer `active_route` when set, and (b) `log::info!`/`log::warn!` at every swap/restore/fallback point under the `"library_route"` target (plus #222's own `"daemon_route"`-target logging inside `try_daemon_route_connect` for the connect attempt itself) -- matching the level of persistence `direct_remote_label` already gets today (a pill label, not a dedicated new divider indicator). No further design work was needed here; this item is settled, not carried forward as open.
 
 ---
 
@@ -348,6 +353,15 @@ In `make_app_stub` (`src/app/mod.rs` ~5401+), add to the `App { ... }` struct li
             active_route: None,
             library_route_cache: std::collections::HashMap::new(),
 ```
+
+There is a **second** test helper that constructs an `App` via `AppInit`, distinct from `make_app_stub`'s raw `App { ... }` literal: `pub(crate) fn make_built_app()` (`src/app/mod.rs`, currently starting at line 5633), which calls `App::build(AppInit { ... })` directly. `AppInit` gained the new `daemon_routes` field earlier in this step, so `make_built_app`'s `AppInit { ... }` literal must also be updated or the crate will fail to compile with a "missing field `daemon_routes`" error -- `cargo build --workspace` in Step 5 below will not silently pass this over; catch it here instead of discovering it as a surprise build failure. In `make_built_app`, immediately after its own `hidden_libraries: Vec::new(),` line (currently line 5668):
+
+```rust
+            hidden_libraries: Vec::new(),
+            daemon_routes: std::collections::HashMap::new(),
+```
+
+(Confirmed via GitNexus: `AppInit` is constructed from exactly three call sites in this codebase -- `App::new`, `App::new_remote`, and `make_built_app` -- all three are covered by this step; there is no fourth site anywhere else in `src/`.)
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -714,6 +728,7 @@ git commit -m "app: restore_local_mode also clears active_route (shared local-re
   - `fn route_for_active_library_view(&self, lib_idx: usize) -> Option<(String, DaemonEndpoint)>`
   - `fn route_for_item_via_ancestors(&mut self, item_id: &str) -> Option<(String, DaemonEndpoint)>`
   - `fn resolve_route_for_play(&mut self, item: &mbv_core::api::MediaItem) -> Option<(String, DaemonEndpoint)>`
+  - `fn resolve_route_for_enqueue_folder(&mut self, item: &mbv_core::api::MediaItem) -> Option<String>`
 
   Tasks 8-10 call these.
 
@@ -782,14 +797,82 @@ Add to `mod tests` in `src/app/mod.rs`:
         let second = app.route_for_item_via_ancestors("item-1");
         assert_eq!(second, None);
     }
+
+    #[test]
+    fn resolve_route_for_play_does_not_panic_from_the_queue_tab() {
+        // Regression guard: `tab_idx` values are 0 = Home, 1 = Queue tab,
+        // 2.. = library tabs (`lib_tab_offset() == 2`, confirmed against
+        // `src/app/input.rs`). An `if tab_idx == 0 { .. } else { lib_idx =
+        // tab_idx - lib_tab_offset() }` shape (as opposed to `enqueue_selected`'s
+        // existing `tab_idx == 0` / `tab_idx >= 2` split) underflows a `usize`
+        // subtraction (1 - 2) and panics when called from the Queue tab. The
+        // Queue tab has no library of its own -- the item being played is
+        // already part of whatever queue is current, so `resolve_route_for_play`
+        // must fall through to "keep the current `active_route`" instead of
+        // either panicking or wrongly resolving a nav-scoped library.
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        // Local queue: no route to keep.
+        assert_eq!(app.resolve_route_for_play(&item), None);
+
+        // Already routed: the Queue tab must not clear or re-resolve the
+        // route out from under an in-progress routed queue.
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        app.active_route = Some("music".to_string());
+        assert_eq!(
+            app.resolve_route_for_play(&item).map(|(name, _)| name),
+            Some("music".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_route_for_enqueue_folder_matches_a_library_root_folder_by_its_own_name() {
+        // #223 follow-up: `get_ancestors` on a library root returns no
+        // `CollectionFolder` ancestor above it (there isn't one), so a plain
+        // ancestor-lookup resolver always yields `None` for the library root
+        // item itself. `do_enqueue_folder` can receive exactly that item (the
+        // user enqueue-recursive's an entire library from its root), so this
+        // helper checks the item's own type first.
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        let mut lib_root = make_item("Music", "CollectionFolder");
+        lib_root.id = "lib-music".to_string();
+
+        assert_eq!(
+            app.resolve_route_for_enqueue_folder(&lib_root),
+            Some("music".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_route_for_enqueue_folder_falls_back_to_ancestor_lookup_for_a_non_root_folder() {
+        let mut app = make_app_stub();
+        let mut sub_folder = make_item("Some Album", "MusicAlbum");
+        sub_folder.id = "album-1".to_string();
+        sub_folder.is_folder = true;
+
+        // No live server in this stub -- `get_ancestors` errors, so this
+        // must fall through to the ancestor-lookup path (not treat every
+        // folder as a library root) and resolve to `None`, not panic.
+        assert_eq!(app.resolve_route_for_enqueue_folder(&sub_folder), None);
+    }
 ```
 
 Note: `LibraryTab` field list must match its current definition at `src/app/mod.rs:824-840` exactly (`library`, `nav_stack`, `search`, `feed_home_video`, `power_detail_scroll`, `album_track_focus`, `artist_header_focus`) — if any field's type doesn't accept the literal shown (e.g. `nav_stack: Vec::new()` vs a different default), match the existing test helper that already builds a `LibraryTab` elsewhere in `mod tests` and copy its exact construction instead of the literal above.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cargo test route_for_active_library_view route_for_item_via_ancestors`
-Expected: FAIL with `no method named 'route_for_active_library_view' found for struct 'App'` (and similarly for the other two).
+Run: `cargo test route_for_active_library_view route_for_item_via_ancestors resolve_route_for_play_does_not_panic resolve_route_for_enqueue_folder`
+Expected: FAIL with `no method named 'route_for_active_library_view' found for struct 'App'` (and similarly for the other three -- `resolve_route_for_play` and `resolve_route_for_enqueue_folder` do not exist yet either).
 
 - [ ] **Step 3: Implement the resolvers**
 
@@ -851,23 +934,58 @@ Add to `src/app/mod.rs`, near `resolve_route_for_library` (Task 4):
     /// ancestor-lookup for cross-library aggregate views (`tab_idx == 0`
     /// -- Home tab). No match in either case means local playback,
     /// unaffected (#223).
+    ///
+    /// `tab_idx == 1` is the Queue tab -- it has no library of its own
+    /// (`lib_tab_offset()` is `2`, so a bare `tab_idx - lib_tab_offset()`
+    /// would underflow and panic here, unlike `enqueue_selected`'s existing
+    /// `tab_idx == 0` / `tab_idx >= 2` split which already avoids this).
+    /// An item played from the Queue tab is already part of whatever queue
+    /// is current, so this keeps whatever route is already active rather
+    /// than re-resolving from nav context (there is none) or treating "no
+    /// nav-scoped resolution" as "no route", which would incorrectly
+    /// restore to local every time the Queue tab is used to play/jump
+    /// within an already-routed queue.
     fn resolve_route_for_play(
         &mut self,
         item: &mbv_core::api::MediaItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
         if self.tab_idx == 0 {
             self.route_for_item_via_ancestors(&item.id)
-        } else {
+        } else if self.tab_idx >= 2 {
             let lib_idx = self.tab_idx - self.lib_tab_offset();
             self.route_for_active_library_view(lib_idx)
+        } else {
+            self.active_route
+                .clone()
+                .and_then(|name| self.resolve_route_for_library(&name))
         }
+    }
+
+    /// Route resolution specifically for `do_enqueue_folder` (#223 follow-up,
+    /// see "Design decisions carried forward from review" above): the item
+    /// being enqueue-recursive'd may itself *be* a library root
+    /// (`item_type == "CollectionFolder"`), in which case `get_ancestors`
+    /// returns no ancestor above it and a plain ancestor-lookup resolver
+    /// always yields `None`. Check the item's own type first; only fall
+    /// back to ancestor lookup for a non-root folder.
+    fn resolve_route_for_enqueue_folder(
+        &mut self,
+        item: &mbv_core::api::MediaItem,
+    ) -> Option<String> {
+        if item.item_type == "CollectionFolder" {
+            return self
+                .resolve_route_for_library(&item.name)
+                .map(|(name, _)| name);
+        }
+        self.route_for_item_via_ancestors(&item.id)
+            .map(|(name, _)| name)
     }
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cargo test route_for_active_library_view route_for_item_via_ancestors`
-Expected: PASS (3 passed)
+Run: `cargo test route_for_active_library_view route_for_item_via_ancestors resolve_route_for_play_does_not_panic resolve_route_for_enqueue_folder`
+Expected: PASS (5 passed)
 
 - [ ] **Step 5: Commit**
 
@@ -880,11 +998,15 @@ git commit -m "app: add nav-scoped and ancestor-lookup route resolvers"
 
 ### Task 8: App — `apply_route_for_playback` orchestration (connect/fallback)
 
+**Prerequisite:** This task calls `App::try_daemon_route_connect`, defined by #222's plan (`docs/superpowers/plans/2026-07-17-daemon-connect-lifecycle.md`, Task 1). That method -- along with `App::connect_daemon_route_endpoint` and the `DAEMON_ROUTE_CONNECT_OVERRIDE`/`DAEMON_ROUTE_CONNECT_TEST_LOCK` `#[cfg(test)]` statics it uses -- must already exist in `src/app/mod.rs` before this task's code will compile. Do not substitute `connect_direct_endpoint`/`DIRECT_CONNECT_OVERRIDE` (the Sessions-panel seam) here: keeping the two connect paths on independent test seams is a deliberate #222/#223 design choice (see "Design decisions carried forward from review" above), not an incidental implementation detail.
+
+**Verified directly against #222's current plan file (not assumed):** `try_daemon_route_connect` returns `Result<(RemotePlayer, Receiver<PlayerEvent>), String>`, not `Option`. On `Err`, the `String` payload is already the fully-formatted, ready-to-display status-bar warning text (`"\u{26a0} {route_label} route unreachable, using local playback (mbv.log)"`) -- the primitive logs the raw connect error internally and deliberately does **not** call `flash_status_high` itself, leaving *how* to surface the message to the caller (a plain flash when already local, vs. threading it through `restore_local_mode` when swapping away from a previously active different route -- exactly the choice this task needs to make). This means `apply_route_for_playback` below needs no separate message-reconstruction helper: it just forwards the `Err` string verbatim to whichever display path applies.
+
 **Files:**
 - Modify: `src/app/mod.rs` — new method near `connect_to_session` (~2441)
 
 **Interfaces:**
-- Consumes: `resolve_route_for_play` (Task 7), `App.active_route` (Task 3), `switch_to_library_route` (Task 5), `restore_local_mode` (Task 6), `connect_direct_endpoint` (existing, `src/app/mod.rs:2315-2332`, reusing the `DIRECT_CONNECT_OVERRIDE` test seam).
+- Consumes: `resolve_route_for_play` (Task 7), `App.active_route` (Task 3), `switch_to_library_route` (Task 5), `restore_local_mode` (Task 6), `App::try_daemon_route_connect(&mut self, endpoint: &DaemonEndpoint, route_label: &str) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String>` (from #222's plan, Task 1 -- already does the connect attempt and the failure log; on `Err`, returns a ready-to-display warning string for this task to surface).
 - Produces: `fn apply_route_for_playback(&mut self, item: &mbv_core::api::MediaItem)` — Task 9 calls this from `play_item`/`play_items_routed`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -895,8 +1017,8 @@ Add to `mod tests` in `src/app/mod.rs`:
     #[test]
     fn apply_route_for_playback_swaps_to_routed_daemon_on_success() {
         let _guard = crate::config::TestStateDirGuard::new();
-        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
-        fn direct_success(
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_success(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
         ) -> Result<
@@ -908,7 +1030,7 @@ Add to `mod tests` in `src/app/mod.rs`:
         > {
             Ok(mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0))
         }
-        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_success);
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
 
         let mut app = make_app_stub();
         app.daemon_routes.insert(
@@ -932,7 +1054,7 @@ Add to `mod tests` in `src/app/mod.rs`:
 
         app.apply_route_for_playback(&item);
 
-        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
         assert_eq!(app.active_route.as_deref(), Some("music"));
         assert!(app.player.is_remote());
     }
@@ -940,8 +1062,8 @@ Add to `mod tests` in `src/app/mod.rs`:
     #[test]
     fn apply_route_for_playback_falls_back_to_local_with_warning_on_connect_failure() {
         let _guard = crate::config::TestStateDirGuard::new();
-        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
-        fn direct_failure(
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_failure(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
         ) -> Result<
@@ -953,7 +1075,7 @@ Add to `mod tests` in `src/app/mod.rs`:
         > {
             Err("connection refused".to_string())
         }
-        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_failure);
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
 
         let mut app = make_app_stub();
         app.daemon_routes.insert(
@@ -977,7 +1099,7 @@ Add to `mod tests` in `src/app/mod.rs`:
 
         app.apply_route_for_playback(&item);
 
-        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
         assert!(app.active_route.is_none());
         assert!(!app.player.is_remote());
         assert!(app.status.contains("unreachable"));
@@ -1008,9 +1130,9 @@ Add to `mod tests` in `src/app/mod.rs`:
 
         app.apply_route_for_playback(&item);
 
-        // No connect attempt was needed (no DIRECT_CONNECT_OVERRIDE set,
-        // so a real connect attempt would panic/hang if this weren't a
-        // no-op) -- active_route and local-ness are unchanged.
+        // No connect attempt was needed (no DAEMON_ROUTE_CONNECT_OVERRIDE
+        // set, so a real connect attempt would panic/hang if this weren't
+        // a no-op) -- active_route and local-ness are unchanged.
         assert_eq!(app.active_route.as_deref(), Some("music"));
         assert!(!app.player.is_remote());
     }
@@ -1055,30 +1177,33 @@ Add to `src/app/mod.rs`, near `connect_to_session` (~line 2441):
     /// Applies the route resolved by `resolve_route_for_play` before a
     /// queue replace (#223): swaps to the routed daemon, restores local,
     /// or leaves the current target alone if it already matches.
-    /// Connection failure falls back to local playback with a
-    /// status-bar warning and a log line -- never a hard error, per
-    /// #222's fallback rule.
+    /// Connection failure falls back to local playback -- never a hard
+    /// error -- per #222's fallback rule, via `try_daemon_route_connect`
+    /// (#222's plan, Task 1), which already logs the raw failure and
+    /// returns a ready-to-display warning string as its `Err` payload;
+    /// this method decides *where* to surface that string -- a direct
+    /// flash when we were already local, or threaded through
+    /// `restore_local_mode` when we were already on a *different* route
+    /// and must actually swap the player back to local, not just show a
+    /// warning while silently staying connected to the old route.
     fn apply_route_for_playback(&mut self, item: &mbv_core::api::MediaItem) {
         let resolved = self.resolve_route_for_play(item);
         match (resolved, self.active_route.clone()) {
             (Some((name, _)), Some(current)) if name == current => {}
-            (Some((name, endpoint)), _) => {
-                let auth_token = self.client.lock().unwrap().token.clone();
-                match self.connect_direct_endpoint(&endpoint, &auth_token) {
+            (Some((name, endpoint)), was_routed) => {
+                match self.try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
                         self.switch_to_library_route(&name, remote, remote_rx);
                     }
-                    Err(e) => {
+                    Err(message) => {
                         log::warn!(
                             target: "library_route",
-                            "connect to library route {name:?} endpoint {endpoint} failed: {e}"
+                            "connect to library route {name:?} endpoint {endpoint} failed: {message}"
                         );
-                        let warning =
-                            format!("{name} route unreachable, using local playback (mbv.log)");
-                        if self.active_route.is_some() {
-                            self.restore_local_mode(&warning);
+                        if was_routed.is_some() {
+                            self.restore_local_mode(&message);
                         } else {
-                            self.flash_status_high(warning);
+                            self.flash_status_high(message);
                         }
                     }
                 }
@@ -1091,16 +1216,25 @@ Add to `src/app/mod.rs`, near `connect_to_session` (~line 2441):
     }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Remove #222's now-obsolete `#[allow(dead_code)]` on the primitive**
+
+#222's plan (Task 1) deliberately shipped `App::connect_daemon_route_endpoint` and `App::try_daemon_route_connect` with a narrow, explicitly-temporary `#[allow(dead_code)]` on each, because that plan produces the primitive with zero production call sites by design (the trigger was left for #223). Its own plan states the removal condition verbatim: "delete both attributes in the same change that adds #223's first call site." This task's `apply_route_for_playback` *is* that first call site, so remove both attributes now, as part of this task's edit (not a separate cleanup task) -- leaving them in place after this task lands would be shipping a stale suppression the sibling plan's own text says must go. In `src/app/mod.rs`, delete the `#[allow(dead_code)]` line immediately above `fn connect_daemon_route_endpoint(` and the one immediately above `pub(super) fn try_daemon_route_connect(`.
+
+- [ ] **Step 5: Run tests to verify they pass**
 
 Run: `cargo test apply_route_for_playback`
 Expected: PASS (4 passed)
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Run `cargo build --workspace` to confirm removing `#[allow(dead_code)]` did not uncover a real warning**
+
+Run: `cargo build --workspace`
+Expected: no warnings. Both methods are now reachable from this task's real `apply_route_for_playback` call site (not just `#[cfg(test)]` code), so `dead_code` should not fire even without the attribute -- if it does, the call site is not actually wired the way this task intends and must be fixed before proceeding, not re-suppressed with the attribute.
+
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/app/mod.rs
-git commit -m "app: add apply_route_for_playback (connect/fallback orchestration)"
+git commit -m "app: add apply_route_for_playback (connect/fallback orchestration); remove #222's temporary dead_code allowances now that this is their first call site"
 ```
 
 ---
@@ -1110,17 +1244,29 @@ git commit -m "app: add apply_route_for_playback (connect/fallback orchestration
 **Files:**
 - Modify: `src/app/actions.rs:2327-2368` (`play_item`), `src/app/actions.rs:2291-2325` (`play_items_routed`)
 
+**Prerequisite:** Same as Task 8 -- this task's tests depend on #222's `DAEMON_ROUTE_CONNECT_OVERRIDE`/`DAEMON_ROUTE_CONNECT_TEST_LOCK` statics already existing in `src/app/mod.rs`.
+
 **Interfaces:**
-- Consumes: `apply_route_for_playback` (Task 8), `App.connected_session_id` (existing).
+- Consumes: `apply_route_for_playback` (Task 8), `App.connected_session_id` (existing), `App.player.is_remote()` (existing), `App.active_route` (Task 3).
 
 - [ ] **Step 1: Run impact analysis before editing**
 
 ```
 impact({target: "play_item", direction: "upstream"})
 impact({target: "play_items_routed", direction: "upstream"})
+impact({target: "connect_to_session", direction: "upstream"})
 ```
 
-Report the caller lists and any HIGH/CRITICAL risk before proceeding — both are called from many nav/input-handling call sites across `src/app/`, so this is an additive guard at the top of each, not a signature or control-flow change for existing callers when no route applies.
+Report the caller lists and any HIGH/CRITICAL risk before proceeding — `play_item`/`play_items_routed` are called from many nav/input-handling call sites across `src/app/`, so this is an additive guard at the top of each, not a signature or control-flow change for existing callers when no route applies. `connect_to_session` gets one additional line (clearing `active_route`) with no signature change.
+
+**Why the guard is not simply `self.connected_session_id.is_none()`:** during review against the actual `remote_slot_state()`/`switch_to_direct_remote` code (not just the issue text), two thin-client modes exist that `connected_session_id` alone does not detect: a Sessions-panel "Direct Remote" ctrl-socket upgrade and local-daemon mode both leave `connected_session_id` as `None` while `self.player.is_remote()` is `true` and `active_route` is `None`. Guarding on `connected_session_id` alone would let library routing silently swap `self.player` away from an active Sessions-panel direct-remote connection -- exactly the state conflation Global Constraint #15 forbids. The correct condition, used throughout this task, is:
+
+```rust
+let skip_library_routing = self.connected_session_id.is_some()
+    || (self.player.is_remote() && self.active_route.is_none());
+```
+
+This still lets library routing run when `active_route` is already `Some(..)` (so `apply_route_for_playback` can re-evaluate/swap/restore -- that is its job), and only skips it when the current remote state belongs to a different, non-library-route mechanism.
 
 - [ ] **Step 2: Write the failing tests**
 
@@ -1130,8 +1276,8 @@ Add to `mod tests` in `src/app/actions.rs`:
     #[test]
     fn play_item_swaps_to_library_route_before_replacing_queue() {
         let _guard = crate::config::TestStateDirGuard::new();
-        let _connect_guard = crate::app::DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
-        fn direct_success(
+        let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_success(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
         ) -> Result<
@@ -1143,7 +1289,7 @@ Add to `mod tests` in `src/app/actions.rs`:
         > {
             Ok(mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0))
         }
-        *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_success);
+        *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
 
         let mut app = make_app_stub();
         app.daemon_routes.insert(
@@ -1167,7 +1313,7 @@ Add to `mod tests` in `src/app/actions.rs`:
 
         app.play_item(item);
 
-        *crate::app::DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
         assert_eq!(app.active_route.as_deref(), Some("music"));
     }
 
@@ -1194,9 +1340,52 @@ Add to `mod tests` in `src/app/actions.rs`:
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
-        // No DIRECT_CONNECT_OVERRIDE set -- if library routing engaged
-        // here it would attempt a real connection and this test would
-        // hang/fail rather than reach the assertion below.
+        // No DAEMON_ROUTE_CONNECT_OVERRIDE set -- if library routing
+        // engaged here it would attempt a real connection and this test
+        // would hang/fail rather than reach the assertion below.
+        app.play_item(item);
+
+        assert!(app.active_route.is_none());
+    }
+
+    #[test]
+    fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel() {
+        // Regression guard for the gap `connected_session_id.is_none()`
+        // alone misses: a Sessions-panel "Direct Remote" ctrl-socket
+        // upgrade leaves `connected_session_id` as `None` but
+        // `self.player.is_remote()` `true` and `active_route` `None`.
+        // Library routing must not engage here either -- it would swap
+        // `self.player` out from under the active direct-remote
+        // connection without ever clearing `direct_remote_label`.
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        let sess = crate::app::tests::make_session("other-mbv", "mbv");
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+        assert!(app.player.is_remote());
+        assert!(app.active_route.is_none());
+
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        // No DAEMON_ROUTE_CONNECT_OVERRIDE set -- if library routing
+        // engaged here it would attempt a real connection and this test
+        // would hang/fail rather than reach the assertion below.
         app.play_item(item);
 
         assert!(app.active_route.is_none());
@@ -1205,16 +1394,18 @@ Add to `mod tests` in `src/app/actions.rs`:
 
 - [ ] **Step 3: Run tests to verify they fail**
 
-Run: `cargo test play_item_swaps_to_library_route_before_replacing_queue play_item_skips_library_routing_when_attached_to_a_session`
-Expected: FAIL — `active_route` stays `None` after `play_item` in the first test (no wiring yet).
+Run: `cargo test play_item_swaps_to_library_route_before_replacing_queue play_item_skips_library_routing_when_attached_to_a_session play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel`
+Expected: FAIL — `active_route` stays `None` after `play_item` in the first test (no wiring yet); the third test compiles but is not yet a meaningful regression guard until Step 4 lands (it would currently pass vacuously since nothing calls `apply_route_for_playback` at all yet -- re-run it after Step 4 together with the others to confirm it still passes for the *right* reason).
 
-- [ ] **Step 4: Wire `apply_route_for_playback` into both functions**
+- [ ] **Step 4: Wire `apply_route_for_playback` into both functions, using the combined skip condition**
 
 In `src/app/actions.rs`, `play_item` (~line 2327), add the guard as the very first line of the function body:
 
 ```rust
     pub(super) fn play_item(&mut self, item: MediaItem) {
-        if self.connected_session_id.is_none() {
+        let skip_library_routing = self.connected_session_id.is_some()
+            || (self.player.is_remote() && self.active_route.is_none());
+        if !skip_library_routing {
             self.apply_route_for_playback(&item);
         }
         self.on_queue_replace_silent();
@@ -1224,7 +1415,9 @@ In `src/app/actions.rs`, `play_items_routed` (~line 2291), add the guard as the 
 
 ```rust
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
-        if self.connected_session_id.is_none() {
+        let skip_library_routing = self.connected_session_id.is_some()
+            || (self.player.is_remote() && self.active_route.is_none());
+        if !skip_library_routing {
             if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
                 let item = item.clone();
                 self.apply_route_for_playback(&item);
@@ -1235,29 +1428,85 @@ In `src/app/actions.rs`, `play_items_routed` (~line 2291), add the guard as the 
 
 Also add `use mbv_core::remote_player::DaemonEndpoint;` style imports only if `src/app/actions.rs` doesn't already reach `App`'s methods without them — since `apply_route_for_playback` is a method on `App` (defined in `mod.rs`, same `impl App` type, different file), no additional import is needed; Rust resolves inherent methods across `impl` blocks in different files automatically for the same crate.
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 5: Fix the reverse conflation: clear `active_route` before a Sessions-panel direct-remote upgrade**
 
-Run: `cargo test play_item_swaps_to_library_route_before_replacing_queue play_item_skips_library_routing_when_attached_to_a_session`
-Expected: PASS (2 passed)
+`switch_to_direct_remote`'s `else` branch (taken when `self.player.is_remote()` is already `true` -- exactly the "was on a library route, now upgrading via Sessions-panel" case) overwrites `self.player`/`self.player_rx` directly without going through `restore_local_mode`, so it never clears a stale `active_route`. Per this plan's Global Constraint against modifying `switch_to_direct_remote` itself, fix this at its sole caller instead. In `src/app/mod.rs`, `connect_to_session` (~line 2442), add `self.active_route = None;` immediately before the successful-upgrade call to `switch_to_direct_remote`:
 
-- [ ] **Step 6: Run the full actions.rs test suite to check for regressions**
+```rust
+                match self.connect_direct_endpoint(&endpoint, &auth_token) {
+                    Ok((remote, remote_rx)) => {
+                        self.active_route = None;
+                        self.switch_to_direct_remote(sess, remote, remote_rx);
+                        return;
+                    }
+```
+
+Add a regression test for this to `mod tests` in `src/app/mod.rs`, near the existing `connect_to_session_uses_direct_upgrade_success` test:
+
+```rust
+    #[test]
+    fn connect_to_session_clears_a_stale_active_route_on_direct_upgrade() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
+        fn direct_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_success);
+        let mut app = make_app_stub();
+        // Simulate already being on a library route (#223) by setting the
+        // player remote directly, mirroring what `switch_to_library_route`
+        // would have done, without depending on that method here.
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.player = mbv_core::player::PlayerProxy::remote(remote, false);
+        app.player_rx = remote_rx;
+        app.active_route = Some("music".to_string());
+        let mut sess = make_session("remote-mbv", "mbv");
+        sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
+
+        app.connect_to_session(&sess);
+
+        *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert!(app.active_route.is_none());
+    }
+```
+
+- [ ] **Step 6: Run tests to verify they pass**
+
+Run: `cargo test play_item_swaps_to_library_route_before_replacing_queue play_item_skips_library_routing_when_attached_to_a_session play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel connect_to_session_clears_a_stale_active_route_on_direct_upgrade`
+Expected: PASS (4 passed)
+
+- [ ] **Step 7: Run the full actions.rs and mod.rs test suites to check for regressions**
 
 Run: `cargo test --lib app::actions::tests`
-Expected: all existing tests still PASS (in particular any existing `play_item`/`play_items_routed` tests that don't configure `daemon_routes` — `apply_route_for_playback` must be a true no-op when `daemon_routes` is empty).
+Run: `cargo test --lib app::mod::tests`
+Expected: all existing tests still PASS (in particular any existing `play_item`/`play_items_routed` tests that don't configure `daemon_routes` — `apply_route_for_playback` must be a true no-op when `daemon_routes` is empty; and all existing `connect_to_session_*`/`switch_to_direct_remote_*` tests, since `active_route` starts `None` for every one of them and clearing an already-`None` value is a no-op).
 
-- [ ] **Step 7: Run `detect_changes` before committing**
+- [ ] **Step 8: Run `detect_changes` before committing**
 
 ```
 detect_changes({scope: "compare", base_ref: "main"})
 ```
 
-Confirm the only behavior-affecting flows touched are `play_item` and `play_items_routed`'s own execution paths, not unrelated ones.
+Confirm the only behavior-affecting flows touched are `play_item`, `play_items_routed`, and `connect_to_session`'s own execution paths, not unrelated ones.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add src/app/actions.rs
-git commit -m "actions: swap to library route before play_item/play_items_routed replace queue"
+git add src/app/actions.rs src/app/mod.rs
+git commit -m "actions: swap to library route before play_item/play_items_routed replace queue; clear stale active_route on Sessions-panel direct-remote upgrade"
 ```
 
 ---
@@ -1268,8 +1517,10 @@ git commit -m "actions: swap to library route before play_item/play_items_routed
 - Modify: `src/app/actions.rs:2370-2435` (`enqueue_selected`), `src/app/actions.rs:2473-2514` (`enqueue_artist_header_selection`), `src/app/actions.rs:2576-2616` (`do_enqueue_folder`)
 
 **Interfaces:**
-- Consumes: `resolve_route_for_play`, `route_for_active_library_view`, `route_for_item_via_ancestors` (Task 7), `App.active_route` (Task 3), `flash_status_high` (existing, `src/app/actions.rs:2241-2246`).
+- Consumes: `resolve_route_for_play`, `route_for_active_library_view`, `route_for_item_via_ancestors`, `resolve_route_for_enqueue_folder` (Task 7), `App.active_route` (Task 3), `App.connected_session_id`, `App.player.is_remote()` (existing), `flash_status_high` (existing, `src/app/actions.rs:2241-2246`).
 - Produces: `fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool` — `true` means the caller must abort without mutating the queue.
+
+**A second gap found during review, fixed here:** the same "which thin-client mode are we actually in" question from Task 9 applies to enqueue. Gating `enqueue_route_conflict` purely on `resolved_name != self.active_route` would fire the "Can't mix libraries" rejection toast even while attached to a Sessions-panel session or a non-library-route direct-remote connection -- both leave `active_route` at `None`, so *any* item that happens to resolve to a configured `daemon_routes` entry would be wrongly rejected, even though the real reason has nothing to do with library routing. `enqueue_route_conflict` itself is fixed below to short-circuit `false` (no conflict, allow the enqueue) whenever we are in one of those other thin-client modes -- centralizing the fix here means all three call sites (`enqueue_selected`'s two branches, `do_enqueue_folder`, `enqueue_artist_header_selection`) get it for free instead of needing the same check repeated at each site.
 
 - [ ] **Step 1: Run impact analysis before editing**
 
@@ -1306,11 +1557,23 @@ Add to `mod tests` in `src/app/actions.rs`:
             artist_header_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
-        let queue_before = app.queue_for_scope(app.visible_queue_scope()).clone();
 
         app.enqueue_selected();
 
-        assert_eq!(app.queue_for_scope(app.visible_queue_scope()), &queue_before);
+        // `PlayerTab`/`PlaybackQueue`/`MediaItem` implement neither
+        // `PartialEq` nor `Debug` in this codebase (confirmed: `MediaItem`
+        // derives only `Debug, Clone, Serialize, Deserialize`, and
+        // `PlayerTab` derives only `Clone, Default`), so a whole-struct
+        // `assert_eq!` against a captured "before" clone will not compile.
+        // The established idiom elsewhere in this test module (e.g. the
+        // rollback-path tests) is to assert on `.items` directly instead
+        // -- here that's simplest as "still empty", since `make_app_stub`
+        // starts with an empty queue and a rejected enqueue must leave it
+        // that way.
+        assert!(app
+            .queue_for_scope(app.visible_queue_scope())
+            .items
+            .is_empty());
         assert!(app.status.contains("Can't mix libraries in a routed queue"));
     }
 
@@ -1334,16 +1597,36 @@ Add to `mod tests` in `src/app/actions.rs`:
         assert!(app.enqueue_route_conflict(Some("movies".to_string())));
         assert!(app.status.contains("Can't mix libraries in a routed queue"));
     }
-```
 
-Note: `queue_for_scope` must return a `&PlaybackQueue`-family type implementing `PartialEq` for the comparison above to compile; if it does not, replace `assert_eq!(app.queue_for_scope(...), &queue_before)` with an equivalent field-by-field comparison already used elsewhere in this test module for queue-unchanged assertions (e.g. compare `.items` and `.len()` the way `enqueue_selected`'s existing rollback-path tests do) — check `src/app/actions.rs`'s existing enqueue tests for the established idiom and match it exactly rather than assuming `PartialEq`.
+    #[test]
+    fn enqueue_route_conflict_allows_enqueue_while_attached_to_a_session() {
+        // A Sessions-panel attached session (`connected_session_id`) has
+        // its own, separate queue-scope rules -- the library-routing
+        // invariant must not fire a "Can't mix libraries" toast for a
+        // reason unrelated to library routing.
+        let mut app = make_app_stub();
+        app.connected_session_id = Some("sess-1".to_string());
+        assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    }
+
+    #[test]
+    fn enqueue_route_conflict_allows_enqueue_while_on_a_non_route_direct_remote() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.player = mbv_core::player::PlayerProxy::remote(remote, false);
+        app.player_rx = remote_rx;
+        // active_route stays None: this is a Sessions-panel direct-remote
+        // connection, not a library route.
+        assert!(!app.enqueue_route_conflict(Some("music".to_string())));
+    }
+```
 
 - [ ] **Step 3: Run tests to verify they fail**
 
 Run: `cargo test enqueue_selected_rejects_item_from_a_different_route enqueue_route_conflict`
 Expected: FAIL — `enqueue_route_conflict` doesn't exist yet (compile error), and the reject test doesn't see the toast.
 
-- [ ] **Step 4: Implement `enqueue_route_conflict` and wire it in**
+- [ ] **Step 4: Implement `enqueue_route_conflict`**
 
 Add to `src/app/actions.rs`, near `flash_status_high` (~line 2241):
 
@@ -1353,7 +1636,21 @@ Add to `src/app/actions.rs`, near `flash_status_high` (~line 2241):
     /// rejected with a toast instead of being appended or silently
     /// swapping the player. Returns `true` if the enqueue was rejected --
     /// the caller must abort without mutating the queue.
+    ///
+    /// Short-circuits `false` (no conflict) whenever the app is currently
+    /// in a thin-client mode that has nothing to do with library routing
+    /// (a Sessions-panel attached session, or a non-library-route direct
+    /// remote / local-daemon connection) -- both leave `active_route` at
+    /// `None`, so without this check any item resolving to a configured
+    /// `daemon_routes` entry would be wrongly rejected for a reason
+    /// unrelated to library routing. Mirrors the same condition Task 9
+    /// uses to gate `apply_route_for_playback`.
     pub(super) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
+        let in_other_thin_client_mode = self.connected_session_id.is_some()
+            || (self.player.is_remote() && self.active_route.is_none());
+        if in_other_thin_client_mode {
+            return false;
+        }
         if resolved_name != self.active_route {
             self.flash_status_high(
                 "Can't mix libraries in a routed queue -- clear queue first".to_string(),
@@ -1365,9 +1662,20 @@ Add to `src/app/actions.rs`, near `flash_status_high` (~line 2241):
     }
 ```
 
-In `enqueue_selected` (~line 2370), guard the home-tab branch: immediately after `let Some(item) = self.current_home_item() else { return; };` and the `is_folder`/`is_playable` checks resolve to the non-folder append path, add the guard right before `let name = item.display_name();` in that branch:
+- [ ] **Step 5: Wire the guard into all three enqueue call sites**
+
+Per this repo's `CLAUDE.md`, use Serena's `replace_symbol_body` for these edits rather than a text-anchored `Edit`/`replace_content` call: `enqueue_selected`'s two branches both end their `is_playable`/`let name = item.display_name();` sequence with byte-identical text (same four lines, same indentation, differing only in how `item` was obtained a few lines earlier), so a plain string-anchored replace of just the `let name = item.display_name();` line is ambiguous -- both occurrences would match the same `old_string`. `replace_symbol_body` on the whole `enqueue_selected` method sidesteps this by targeting the symbol, not a text pattern. The complete new body (identical to the current one except for the two inserted guards) is:
 
 ```rust
+    pub(super) fn enqueue_selected(&mut self) {
+        if self.tab_idx == 0 {
+            let Some(item) = self.current_home_item() else {
+                return;
+            };
+            if item.is_folder {
+                self.do_enqueue_folder(item);
+                return;
+            }
             if !is_playable(&item) {
                 return;
             }
@@ -1376,11 +1684,35 @@ In `enqueue_selected` (~line 2370), guard the home-tab branch: immediately after
                 return;
             }
             let name = item.display_name();
-```
-
-And guard the library-tab branch (`tab_idx >= 2`) the same way, using the nav-scoped resolver instead, immediately before its `let name = item.display_name();`:
-
-```rust
+            let scope = self.visible_queue_scope();
+            let appended = item.clone();
+            let previous_dirty = self.queue_dirty;
+            let previous_queue = self.queue_for_scope(scope).clone();
+            {
+                self.queue_for_scope_mut(scope).append_item(item);
+            }
+            if self.local_queue_metadata_applies(scope) {
+                self.queue_dirty = true;
+            }
+            self.flash_status(format!("Added: {name}"));
+            if self.sync_playback_queue_after_append(scope, vec![appended]) {
+                self.sync_direct_remote_queue_after_edit(scope);
+                self.persist_local_queue_state_if_needed(scope);
+            } else {
+                self.queue_dirty = previous_dirty;
+                *self.queue_for_scope_mut(scope) = previous_queue;
+            }
+        } else if self.tab_idx >= 2 {
+            if self.enqueue_selected_artist_header() {
+                return;
+            }
+            let Some(item) = self.current_lib_item() else {
+                return;
+            };
+            if item.is_folder {
+                self.do_enqueue_folder(item);
+                return;
+            }
             if !is_playable(&item) {
                 return;
             }
@@ -1390,13 +1722,35 @@ And guard the library-tab branch (`tab_idx >= 2`) the same way, using the nav-sc
                 return;
             }
             let name = item.display_name();
+            let scope = self.visible_queue_scope();
+            let appended = item.clone();
+            let previous_dirty = self.queue_dirty;
+            let previous_queue = self.queue_for_scope(scope).clone();
+            {
+                self.queue_for_scope_mut(scope).append_item(item);
+            }
+            if self.local_queue_metadata_applies(scope) {
+                self.queue_dirty = true;
+            }
+            self.flash_status(format!("Added: {name}"));
+            if self.sync_playback_queue_after_append(scope, vec![appended]) {
+                self.sync_direct_remote_queue_after_edit(scope);
+                self.persist_local_queue_state_if_needed(scope);
+            } else {
+                self.queue_dirty = previous_dirty;
+                *self.queue_for_scope_mut(scope) = previous_queue;
+            }
+        }
+    }
 ```
 
-In `do_enqueue_folder` (~line 2576), add the guard as the first line of the function body:
+Use `mcp__serena__replace_symbol_body` with `name_path_pattern: "enqueue_selected"`, `relative_path: "src/app/actions.rs"`, and the body above (everything between, but not including, the outer `{ }` of the function -- follow Serena's existing convention for this tool, i.e. pass the full function including signature as shown, consistent with how this repo's other `replace_symbol_body` calls are made).
+
+In `do_enqueue_folder` (~line 2576), add the guard as the first line of the function body, calling `resolve_route_for_enqueue_folder` (Task 7's library-root-aware resolver) instead of `route_for_item_via_ancestors` directly:
 
 ```rust
     pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::MediaItem) {
-        let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
+        let resolved = self.resolve_route_for_enqueue_folder(&item);
         if self.enqueue_route_conflict(resolved) {
             return;
         }
@@ -1418,23 +1772,23 @@ In `enqueue_artist_header_selection` (~line 2473), add the guard as the first li
         let items = match self.resolve_artist_header_playable_items(lib_idx, selection) {
 ```
 
-- [ ] **Step 5: Run tests to verify they pass**
+- [ ] **Step 6: Run tests to verify they pass**
 
 Run: `cargo test enqueue_selected_rejects_item_from_a_different_route enqueue_route_conflict`
-Expected: PASS (4 passed)
+Expected: PASS (6 passed)
 
-- [ ] **Step 6: Run the full actions.rs test suite to check for regressions**
+- [ ] **Step 7: Run the full actions.rs test suite to check for regressions**
 
 Run: `cargo test --lib app::actions::tests`
-Expected: all existing enqueue tests still PASS (when `active_route` is `None` and `daemon_routes` is empty, `resolved_name` is always `None`, matching `self.active_route == None`, so `enqueue_route_conflict` never fires for existing local-only flows).
+Expected: all existing enqueue tests still PASS (when `active_route` is `None`, `daemon_routes` is empty, `connected_session_id` is `None`, and `self.player.is_remote()` is `false` -- i.e. every existing local-only test's starting state -- `resolved_name` is always `None`, matching `self.active_route == None`, so `enqueue_route_conflict` never fires for existing local-only flows).
 
-- [ ] **Step 7: Run `detect_changes` before committing**
+- [ ] **Step 8: Run `detect_changes` before committing**
 
 ```
 detect_changes({scope: "compare", base_ref: "main"})
 ```
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/app/actions.rs
@@ -1564,8 +1918,10 @@ git commit -m "docs: add Library route / Route table / Routed queue glossary ter
 
 ### Task 13: New ADR — library-scoped daemon routing
 
+**Note on numbering:** #222's sibling plan (`docs/superpowers/plans/2026-07-17-daemon-connect-lifecycle.md`) already claims `docs/adr/0010-lazy-daemon-route-connect-lifecycle.md` for its own new ADR. This task uses `0011` to avoid the collision -- check `ls docs/adr/` immediately before writing this file in case a *different* ADR has landed at 0010 or 0011 in the meantime, and bump further if needed.
+
 **Files:**
-- Create: `docs/adr/0010-library-scoped-daemon-routing.md`
+- Create: `docs/adr/0011-library-scoped-daemon-routing.md`
 
 **Interfaces:** None (documentation only).
 
@@ -1595,13 +1951,20 @@ Route resolution order:
 2. Cross-library aggregate views (Home tab: Continue Watching/Next Up,
    Favorites) resolve via `EmbyClient::get_ancestors`, walking the
    item's ancestor chain to its owning `CollectionFolder`. Cached per
-   item id for the session.
-3. No match in either case means local playback.
+   item id for the session. `do_enqueue_folder` additionally checks
+   whether the enqueued item is itself a library root before falling
+   back to ancestor lookup, since a library root has no `CollectionFolder`
+   ancestor above it for the lookup to find.
+3. The Queue tab (no library context of its own) keeps whatever route is
+   already active rather than re-resolving or clearing it.
+4. No match in any case means local playback.
 
 Connecting to a routed library's daemon **is** takeover of that daemon's
 driving-client slot (ADR 0003/0007) -- an accepted, explicit consequence,
 not a hidden side effect. This matters if multiple devices route to the
-same music-only daemon.
+same music-only daemon. The connect attempt itself, including this
+consequence, is delegated to `App::try_daemon_route_connect`
+(ADR 0010, #222) rather than re-implemented here.
 
 Library routing (`active_route`) is tracked independently of the
 Sessions-panel direct-remote concept (`connected_session_id` /
@@ -1609,16 +1972,26 @@ Sessions-panel direct-remote concept (`connected_session_id` /
 and must never be conflated in `App` state, even though both reuse the
 same suspend/restore machinery (`SuspendedLocalSession`,
 `switch_to_direct_remote`/`switch_to_library_route`,
-`restore_local_mode`).
+`restore_local_mode`). Two specific conflation hazards were identified and
+closed: (1) a play/enqueue action while already thin-client for a reason
+*other* than library routing (Sessions-panel direct-remote, local-daemon
+mode) must not let library routing swap the player out from under that
+other connection; (2) a Sessions-panel direct-remote upgrade while already
+on a library route must clear the stale `active_route`, since
+`switch_to_direct_remote`'s already-remote branch does not itself go
+through `restore_local_mode`.
 
 ## Context
 
-#222 established the connection lifecycle this depends on: fully lazy
-connect (never at startup), fallback to local playback with a status-bar
-warning on a failed connect, no background retry, no connection parking
-(disconnect cleanly on swap-away; reconnect fresh next time). #223 reuses
-that lifecycle for per-library routing rather than only the wildcard
-"route everything" case #222 introduced.
+ADR 0010 (#222) established the connection lifecycle this depends on:
+fully lazy connect (never at startup), fallback to local playback with a
+status-bar warning on a failed connect via `App::try_daemon_route_connect`,
+no background retry, no connection parking (disconnect cleanly on
+swap-away; reconnect fresh next time). This issue (#223) reuses that
+lifecycle -- calling `try_daemon_route_connect` directly, on the same
+`DAEMON_ROUTE_CONNECT_OVERRIDE` test seam ADR 0010 introduced -- for
+per-library routing rather than only the wildcard "route everything" case
+#222 introduced.
 
 ## Consequences
 
@@ -1642,8 +2015,8 @@ that lifecycle for per-library routing rather than only the wildcard
 - [ ] **Step 2: Commit**
 
 ```bash
-git add docs/adr/0010-library-scoped-daemon-routing.md
-git commit -m "docs: add ADR 0010 for library-scoped daemon routing"
+git add docs/adr/0011-library-scoped-daemon-routing.md
+git commit -m "docs: add ADR 0011 for library-scoped daemon routing"
 ```
 
 ---
@@ -1653,19 +2026,23 @@ git commit -m "docs: add ADR 0010 for library-scoped daemon routing"
 **1. Spec coverage against issue #223's acceptance criteria:**
 - "Library-specific remote routing is configurable via `daemon_routes` in `config.toml`" -> Task 1.
 - "Playback/enqueue started from a library-scoped view resolves its route from nav context with no network call; cross-library aggregate views resolve via `get_ancestors`" -> Task 7 (`route_for_active_library_view` vs `route_for_item_via_ancestors`), wired in Tasks 9-10.
-- "Starting playback from a routed library swaps to that daemon (per #222's connect/fallback rules); starting playback from a non-routed library uses local playback, unaffected" -> Tasks 5, 8, 9.
+- "Starting playback from a routed library swaps to that daemon (per #222's connect/fallback rules); starting playback from a non-routed library uses local playback, unaffected" -> Tasks 5, 8, 9, now via #222's actual `App::try_daemon_route_connect` primitive rather than a placeholder reuse of the Sessions-panel connect helper.
 - "Enqueuing an item whose route conflicts with the current queue's route is rejected with an explanatory toast, queue left unchanged" -> Task 10.
-- "The effective route (local vs. which library route) is visible in app status and diagnosable in logs" -> Task 11 (status pill) + `log::info!`/`log::warn!` calls under the `"library_route"` target added in Tasks 4, 5, 7, 8.
-- Docs impact (`CONTEXT.md`, new ADR) -> Tasks 12, 13.
+- "The effective route (local vs. which library route) is visible in app status and diagnosable in logs" -> Task 11 (status pill) + `log::info!`/`log::warn!` calls under the `"library_route"` target added in Tasks 4, 5, 7, 8 (plus #222's own `"daemon_route"`-target logging for the connect attempt itself).
+- Docs impact (`CONTEXT.md`, new ADR) -> Tasks 12, 13 (ADR now numbered 0011 to avoid colliding with #222's ADR 0010).
 - Explicitly out-of-scope items (mid-queue per-track swap, connection parking, config UI, migrating `daemon_client_endpoint`) -> none of the tasks implement these; Task 13's ADR states them explicitly as non-goals.
 
-**2. Placeholder scan:** No "TBD"/"handle appropriately"/"add validation later" language appears in any task. Every step shows the actual code to write. The one caveat is Task 7 Step 1 and Task 10 Step 2's notes about matching `LibraryTab`'s exact field list / the existing queue-comparison idiom if it doesn't line up character-for-character with what's shown -- these are instructions to copy an existing, already-written pattern from the codebase (not "figure it out"), which is consistent with the file paths and existing symbols already cited throughout the plan, not a deferred design decision.
+**2. Placeholder scan:** No "TBD"/"handle appropriately"/"add validation later" language appears in any task. Every step shows the actual code to write. The one caveat is Task 7 Step 1's note about matching `LibraryTab`'s exact field list if it doesn't line up character-for-character with what's shown -- this is an instruction to copy an existing, already-written pattern from the codebase (not "figure it out"), consistent with the file paths and existing symbols already cited throughout the plan, not a deferred design decision. Task 10's original queue-comparison hedge ("if `PartialEq` doesn't hold...") was resolved definitively during this review rather than left conditional -- confirmed via Serena that neither `MediaItem` nor `PlayerTab` derive `PartialEq`/`Debug`, so Task 10's test now asserts on `.items.is_empty()` directly, matching this test module's established idiom, with no "if not" branch left in the plan.
 
 **3. Type/signature consistency check:**
 - `resolve_daemon_route(routes: &HashMap<String, String>, library_name: &str) -> Option<&str>` (Task 2) is called consistently as `mbv_core::config::resolve_daemon_route(&self.daemon_routes, name)` in Task 4 -- same argument order and types.
-- `resolve_route_for_library(&self, library_name: &str) -> Option<(String, DaemonEndpoint)>` (Task 4) is called identically in Task 7's `route_for_active_library_view` and `route_for_item_via_ancestors`, and in Task 8's `resolve_route_for_play`.
-- `resolve_route_for_play(&mut self, item: &MediaItem) -> Option<(String, DaemonEndpoint)>` (Task 7) is called identically in Task 8's `apply_route_for_playback`.
+- `resolve_route_for_library(&self, library_name: &str) -> Option<(String, DaemonEndpoint)>` (Task 4) is called identically in Task 7's `route_for_active_library_view`, `route_for_item_via_ancestors`, `resolve_route_for_play`, and `resolve_route_for_enqueue_folder`.
+- `resolve_route_for_play(&mut self, item: &MediaItem) -> Option<(String, DaemonEndpoint)>` (Task 7) is called identically in Task 8's `apply_route_for_playback`. Its `tab_idx == 1` (Queue tab) branch was added during this review to fix a `usize` underflow panic the original two-way `if tab_idx == 0 { .. } else { .. }` split had -- `lib_tab_offset()` is `2`, so `tab_idx - lib_tab_offset()` for `tab_idx == 1` would have subtracted `2` from `1`.
+- `resolve_route_for_enqueue_folder(&mut self, item: &MediaItem) -> Option<String>` (added to Task 7 during this review) is called identically in Task 10's `do_enqueue_folder` guard, replacing the plan's original direct call to `route_for_item_via_ancestors` there.
+- `App::try_daemon_route_connect(&mut self, endpoint: &DaemonEndpoint, route_label: &str) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String>` (#222's plan, Task 1 -- not defined in this plan, only consumed) is called identically in Task 8's `apply_route_for_playback` (`self.try_daemon_route_connect(&endpoint, &name)`), matched on `Ok(..)`/`Err(message)` -- verified directly against #222's current plan file, which itself was revised from an earlier `Option`-returning shape to this `Result`-returning one for exactly the reason this review's item 1 above describes (the caller needs the message text to route through different display paths depending on `active_route` state).
 - `switch_to_library_route(&mut self, library_name: &str, remote: RemotePlayer, remote_rx: Receiver<PlayerEvent>)` (Task 5) is called identically in Task 8's `apply_route_for_playback` (`self.switch_to_library_route(&name, remote, remote_rx)`), matching the `(String, DaemonEndpoint)` destructure's `name: String` (borrowed as `&name`) against the `&str` parameter.
-- `enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool` (Task 10) is called consistently everywhere it's wired in, always passed `Option<String>` (from `.map(|(n, _)| n)` on a `(String, DaemonEndpoint)` resolver result), matching `active_route: Option<String>`'s type for the `!=` comparison.
+- `enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool` (Task 10) is called consistently everywhere it's wired in, always passed `Option<String>` (from `.map(|(n, _)| n)` on a `(String, DaemonEndpoint)` resolver result, or directly from `resolve_route_for_enqueue_folder`'s own `Option<String>`), matching `active_route: Option<String>`'s type for the `!=` comparison.
 - `active_route` is read/written only as `Option<String>` everywhere (Tasks 3, 5, 6, 7, 8, 9, 10, 11) -- no task treats it as `Option<&str>` or a different shape.
-- Field name `daemon_routes` used consistently on both `Config` (Task 1) and `App`/`AppInit` (Task 3) -- no `App` field is ever called `routes` or `library_routes` elsewhere in the plan.
+- Field name `daemon_routes` used consistently on both `Config` (Task 1) and `App`/`AppInit` (Task 3) -- no `App` field is ever called `routes` or `library_routes` elsewhere in the plan. Confirmed via GitNexus that `AppInit` has exactly three real construction sites (`App::new`, `App::new_remote`, `make_built_app`); Task 3 originally covered only the first two plus the separate raw-`App`-literal `make_app_stub` helper -- `make_built_app`'s own `AppInit { .. }` literal was a missed fourth site, fixed in Task 3 during this review.
+
+**4. Cross-plan consistency with #222 (added during this review pass):** Verified against `docs/superpowers/plans/2026-07-17-daemon-connect-lifecycle.md` directly (not from memory, and re-verified a second time after an earlier pass of this same review had already drafted Task 8 against a stale, `Option`-returning recollection of the signature): the primitive's real, current signature is `App::try_daemon_route_connect(&mut self, endpoint: &DaemonEndpoint, route_label: &str) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String>`. It logs the raw failure internally and returns `Err(message)` -- a fully-formatted, ready-to-display warning (`\u{26a0} {route_label} route unreachable, using local playback (mbv.log)`) -- without flashing it itself, and it introduces its own `DAEMON_ROUTE_CONNECT_OVERRIDE`/`DAEMON_ROUTE_CONNECT_TEST_LOCK` test seam separate from the pre-existing `DIRECT_CONNECT_OVERRIDE`/`DIRECT_CONNECT_TEST_LOCK`. This plan's Task 8/9 now call that primitive directly (previously they reused `connect_direct_endpoint`/`DIRECT_CONNECT_OVERRIDE`, written before #222's plan existed) and match on `Ok`/`Err`, forwarding the `Err` message verbatim to whichever display path `apply_route_for_playback` chooses -- no separate message-formatting helper was needed once the real `Result` contract was confirmed. Task 13's ADR is renumbered `0011` since #222 claims `0010`.
