@@ -7060,6 +7060,68 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn apply_route_for_playback_restores_local_via_restore_local_mode_when_swap_to_a_different_route_fails(
+    ) {
+        // Regression guard for the `Err` branch's `was_routed.is_some()`
+        // arm: already on a different route ("music"), an item resolving
+        // to a *new* route ("movies") whose connect attempt fails must be
+        // torn down through `restore_local_mode` -- not just flashed a
+        // warning while silently staying attached to the stale "music"
+        // remote player.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_failure(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Err("connection refused".to_string())
+        }
+
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        app.daemon_routes.insert(
+            "movies".to_string(),
+            "tcp://127.0.0.1:9001".to_string(),
+        );
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        app.switch_to_library_route("music", remote, remote_rx);
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(app.player.is_remote());
+
+        let mut lib_item = make_item("Movies", "CollectionFolder");
+        lib_item.id = "lib-movies".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Movie", "Movie");
+        item.id = "movie-1".to_string();
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
+        app.apply_route_for_playback(&item);
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
+        assert!(app.status.contains("unreachable"));
+    }
+
+    #[test]
     fn remote_position_extrapolation_does_not_round_up_partial_seconds() {
         assert_eq!(
             App::extrapolated_remote_position(10, Duration::from_millis(1600)),
