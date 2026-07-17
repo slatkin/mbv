@@ -2415,7 +2415,7 @@ impl App {
     /// together when #223 adds its first call site.
     #[allow(dead_code)]
     pub(super) fn try_daemon_route_connect(
-        &mut self,
+        &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
         route_label: &str,
     ) -> Result<
@@ -6360,7 +6360,7 @@ pub(crate) mod tests {
         }
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
-        let mut app = make_app_stub();
+        let app = make_app_stub();
         let endpoint = mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
             "/tmp/mbv-music.sock",
         ));
@@ -6389,7 +6389,7 @@ pub(crate) mod tests {
         }
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
-        let mut app = make_app_stub();
+        let app = make_app_stub();
         let endpoint = mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
             "/tmp/mbv-music.sock",
         ));
