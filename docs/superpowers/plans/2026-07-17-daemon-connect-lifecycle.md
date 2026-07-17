@@ -4,7 +4,7 @@
 
 **Goal:** Give mbv a lazy, fallback-with-warning, no-retry, no-parking daemon-route connect primitive (issue #222) that a future per-library routing trigger (issue #223) can call from inside a suspend/connect/restore swap, without wiring any UI trigger itself.
 
-**Architecture:** Add a small, independently testable pair of `App` methods in `src/app/mod.rs`, modeled directly on the existing `connect_direct_endpoint` / `DIRECT_CONNECT_OVERRIDE` test-injection pattern used by the Sessions-panel "Direct Remote" upgrade (`connect_to_session`, `switch_to_direct_remote`): a thin connect wrapper (`connect_daemon_route_endpoint`, with its own `DAEMON_ROUTE_CONNECT_OVERRIDE` test seam, logging that a successful connect takes driving-client authority) and a fallback-aware caller (`try_daemon_route_connect`) that returns `Option<(RemotePlayer, Receiver<PlayerEvent>)>` on success, or flashes a high-priority status-bar warning and returns `None` on failure — with no retry scheduled anywhere. The existing `--connect-daemon` / `daemon_client_endpoint` startup path in `main.rs` is untouched. No config schema changes are needed for this issue (routing config is #223's addition). Document the lifecycle rules in a new ADR and in `CONTEXT.md` so #223 can build its per-library swap function on top of vocabulary and primitives that already exist.
+**Architecture:** Add a small, independently testable pair of `App` methods in `src/app/mod.rs`, modeled directly on the existing `connect_direct_endpoint` / `DIRECT_CONNECT_OVERRIDE` test-injection pattern used by the Sessions-panel "Direct Remote" upgrade (`connect_to_session`, `switch_to_direct_remote`): a thin connect wrapper (`connect_daemon_route_endpoint`, with its own `DAEMON_ROUTE_CONNECT_OVERRIDE` test seam, logging that a successful connect takes driving-client authority) and a fallback-aware caller (`try_daemon_route_connect`) that returns `Result<(RemotePlayer, Receiver<PlayerEvent>), String>` — `Ok` on a successful connect, or on failure an `Err(String)` holding a fully-formatted, ready-to-display status-bar warning (the raw connect error is logged, not returned) — with no retry scheduled anywhere. This deliberately mirrors `connect_direct_endpoint`'s existing shape (also `Result`-returning, leaving display/flashing to its caller `connect_to_session`) rather than flashing internally: `try_daemon_route_connect`'s one real consumer (#223's per-library swap function) needs to choose *how* to fall back — a plain `flash_status_high` when it was already local, or routing the same message through a `restore_local_mode`-style teardown when swapping away from a previously active *different* route — and a primitive that flashed unconditionally would risk a second, conflicting flash on top of that teardown path. The primitive still makes the warning impossible to forget or reword differently at each call site, since `Result`'s `Err` arm must be handled and already carries the exact canonical text — only *where* it gets displayed is the caller's call. The existing `--connect-daemon` / `daemon_client_endpoint` startup path in `main.rs` is untouched. No config schema changes are needed for this issue (routing config is #223's addition). Document the lifecycle rules in a new ADR and in `CONTEXT.md` so #223 can build its per-library swap function on top of vocabulary and primitives that already exist.
 
 **Tech Stack:** Rust (2021 edition), `cargo test` workspace (`mbv` binary crate at repo root, `mbv-core` lib crate, `mbvd` daemon crate), std `mpsc`/`Mutex`/`AtomicBool` — no external test or mocking framework.
 
@@ -12,7 +12,7 @@
 
 - `main.rs`'s `explicit_daemon_endpoint` branch (`--connect-daemon` / config `daemon_client_endpoint`) must not be modified or behaviorally changed — issue #222 states this path is unaffected.
 - No startup-time daemon connection may be introduced anywhere. The new primitive must have zero production call sites in this plan (the trigger is #223's job) and must not be invoked from `App::new`, `App::new_remote`, or `App::build`.
-- On a failed connect attempt: fall back to (or stay on) local playback, surface a status-bar warning via the existing `flash_status_high` mechanism (`src/app/actions.rs:2241-2246`, 5s expiry), and `log::warn!` the failure. Never hard-fail/exit.
+- On a failed connect attempt: fall back to (or stay on) local playback. `try_daemon_route_connect` never hard-fails/exits; it logs the raw failure via `log::warn!` and returns `Err(String)` holding a ready-to-display warning -- the caller is responsible for actually surfacing it via the existing `flash_status_high` mechanism (`src/app/actions.rs:2242-2247`, 5s expiry), either directly or by threading the message through its own state-teardown path (e.g. #223's `restore_local_mode`).
 - No background retry: a failed attempt schedules nothing. The next attempt only happens when a caller invokes the primitive again on its own natural trigger.
 - No connection parking: swapping away from a route disconnects cleanly (the `RemotePlayer` is simply dropped, never stashed for reuse the way `SuspendedLocalSession` parks a local `Player`).
 - Never call the daemon/`remote_player.rs` mechanism a "remote session" in code comments, docs, or log messages — that term is reserved for the Sessions-panel (`connected_session_id`) feature. See `mem:feedback_remote_session_terminology`.
@@ -29,8 +29,8 @@
 - Test: `src/app/mod.rs` (`mod tests`, after `connect_to_session_preserves_direct_upgrade_failure_status_after_fallback`, currently ending around line 6233)
 
 **Interfaces:**
-- Consumes: `mbv_core::remote_player::{DaemonEndpoint, RemotePlayer}` (existing), `PlayerEvent` (existing import at `src/app/mod.rs:140`), `App::flash_status_high` (`src/app/actions.rs:2241-2246`), the existing `DirectConnectFn` type alias (`src/app/mod.rs:25-34`).
-- Produces: `App::connect_daemon_route_endpoint(&self, endpoint: &DaemonEndpoint, auth_token: &str) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String>` (private) and `App::try_daemon_route_connect(&mut self, endpoint: &DaemonEndpoint, route_label: &str) -> Option<(RemotePlayer, mpsc::Receiver<PlayerEvent>)>` (`pub(super)`) — later tasks and issue #223's swap function call `try_daemon_route_connect`. Also `#[cfg(test)] static DAEMON_ROUTE_CONNECT_OVERRIDE` / `DAEMON_ROUTE_CONNECT_TEST_LOCK`, used by Task 2's regression test.
+- Consumes: `mbv_core::remote_player::{DaemonEndpoint, RemotePlayer}` (existing), `PlayerEvent` (existing import at `src/app/mod.rs:140`), the existing `DirectConnectFn` type alias (`src/app/mod.rs:25-34`). `App::flash_status_high` (`src/app/actions.rs:2242-2247`) is NOT consumed by this primitive -- it is deliberately left to the caller (see Architecture above), so it is a downstream consumer of `try_daemon_route_connect`'s `Err` payload instead.
+- Produces: `App::connect_daemon_route_endpoint(&self, endpoint: &DaemonEndpoint, auth_token: &str) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String>` (private) and `App::try_daemon_route_connect(&mut self, endpoint: &DaemonEndpoint, route_label: &str) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String>` (`pub(super)`) — `Ok` on a successful connect; `Err(message)` on failure, where `message` is a fully-formatted, ready-to-display status-bar warning (the raw connect error is logged internally under `target: "daemon_route"`, not returned) for the caller to surface however fits its own state: a direct `flash_status_high(message)`, or threaded through a state-teardown path like issue #223's `restore_local_mode`. Later tasks and issue #223's per-library swap function call `try_daemon_route_connect` and must handle both arms; the primitive itself never calls `flash_status_high`. Also `#[cfg(test)] static DAEMON_ROUTE_CONNECT_OVERRIDE` / `DAEMON_ROUTE_CONNECT_TEST_LOCK`, used by Task 2's regression test.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -67,11 +67,11 @@ Add these two tests to `src/app/mod.rs`'s `mod tests` block, directly after the 
         let result = app.try_daemon_route_connect(&endpoint, "Music");
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-        assert!(result.is_some());
+        assert!(result.is_ok());
     }
 
     #[test]
-    fn try_daemon_route_connect_falls_back_to_local_and_flashes_warning_on_failure() {
+    fn try_daemon_route_connect_returns_a_ready_to_display_warning_without_flashing_on_failure() {
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
         fn route_connect_failure(
@@ -97,11 +97,24 @@ Add these two tests to `src/app/mod.rs`'s `mod tests` block, directly after the 
         let result = app.try_daemon_route_connect(&endpoint, "Music");
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-        assert!(result.is_none());
-        assert_eq!(
-            app.status,
-            "\u{26a0} Music route unreachable, using local playback (mbv.log)"
-        );
+        // `RemotePlayer` derives only `Clone` (no `PartialEq`/`Debug` --
+        // confirmed against `crates/mbv-core/src/remote_player.rs`), so the
+        // whole `Result` can't go through `assert_eq!` directly; match out
+        // the `Err` payload instead.
+        match result {
+            Ok(_) => panic!("expected a connect failure to return Err, got Ok"),
+            Err(message) => {
+                assert_eq!(
+                    message,
+                    "\u{26a0} Music route unreachable, using local playback (mbv.log)"
+                );
+            }
+        }
+        // The primitive itself must never flash -- that is the caller's
+        // job (see Architecture). `make_app_stub()` starts with an empty
+        // status, so this pins down that `try_daemon_route_connect` left
+        // it untouched.
+        assert!(app.status.is_empty());
     }
 ```
 
@@ -154,6 +167,20 @@ In `src/app/mod.rs`, immediately after `connect_direct_endpoint`'s closing `}` (
     /// Connecting **is** taking driving-client authority on that daemon
     /// (ADR 0003, ADR 0007, ADR 0010) -- logged here so it is diagnosable,
     /// not a hidden side effect.
+    ///
+    /// `#[allow(dead_code)]`: this repo's convention (`mem:conventions`) is
+    /// "fix all compile warnings -- delete unused code, never
+    /// `#[allow(unused)]`" -- but this primitive is a deliberate exception,
+    /// not a suppressed mistake: issue #222's brief requires it to ship with
+    /// *zero* production call sites (the trigger is #223's job, see
+    /// Architecture above), so a plain `cargo build --workspace` (which
+    /// strips `#[cfg(test)]` code, its only current caller) would otherwise
+    /// warn `associated function is never used`. Deleting the primitive to
+    /// silence that would defeat the entire point of this plan -- shipping
+    /// a complete, tested, reusable connect primitive ahead of the issue
+    /// that wires it up. Remove this attribute in the same change that adds
+    /// #223's first call site (`apply_route_for_playback` or equivalent).
+    #[allow(dead_code)]
     fn connect_daemon_route_endpoint(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
@@ -180,33 +207,48 @@ In `src/app/mod.rs`, immediately after `connect_direct_endpoint`'s closing `}` (
     /// Attempts a lazy connect to `endpoint` for the route named
     /// `route_label` (e.g. a library name from #223's `daemon_routes`, or a
     /// generic label for the wildcard "route everything" case). On success,
-    /// returns the connected `RemotePlayer` and its event receiver for the
-    /// caller to swap in (mirroring `switch_to_direct_remote`'s shape). On
-    /// failure, per #222: falls back to (stays on) local playback, surfaces
-    /// a status-bar warning via `flash_status_high`, and logs the failure --
-    /// and schedules no retry. The caller is expected to try again only on
-    /// its own next natural trigger (e.g. the next play/enqueue into this
-    /// route), never from a background timer.
+    /// returns `Ok` with the connected `RemotePlayer` and its event receiver
+    /// for the caller to swap in (mirroring `switch_to_direct_remote`'s
+    /// shape). On failure, per #222: falls back to (stays on) local
+    /// playback and schedules no retry -- but this primitive does NOT flash
+    /// the warning itself. It logs the raw connect error internally
+    /// (`target: "daemon_route"`), then returns `Err(message)` where
+    /// `message` is the fully-formatted, ready-to-display status-bar
+    /// warning text. Flashing is left to the caller deliberately: #223's
+    /// per-library swap function needs to choose *how* to fall back --
+    /// `flash_status_high(message)` directly when it was already local, or
+    /// threading `message` through a `restore_local_mode`-style teardown
+    /// when swapping away from a previously active *different* route -- and
+    /// having this primitive flash unconditionally would risk a second,
+    /// conflicting flash on top of that teardown path's own flash. The
+    /// caller is expected to try again only on its own next natural trigger
+    /// (e.g. the next play/enqueue into this route), never from a
+    /// background timer. See the same `#[allow(dead_code)]` rationale as
+    /// `connect_daemon_route_endpoint` above -- remove both attributes
+    /// together when #223 adds its first call site.
+    #[allow(dead_code)]
     pub(super) fn try_daemon_route_connect(
         &mut self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
         route_label: &str,
-    ) -> Option<(
-        mbv_core::remote_player::RemotePlayer,
-        mpsc::Receiver<PlayerEvent>,
-    )> {
+    ) -> Result<
+        (
+            mbv_core::remote_player::RemotePlayer,
+            mpsc::Receiver<PlayerEvent>,
+        ),
+        String,
+    > {
         let auth_token = self.client.lock().unwrap().token.clone();
         match self.connect_daemon_route_endpoint(endpoint, &auth_token) {
-            Ok((remote, remote_rx)) => Some((remote, remote_rx)),
+            Ok((remote, remote_rx)) => Ok((remote, remote_rx)),
             Err(e) => {
                 log::warn!(
                     target: "daemon_route",
                     "daemon route connect failed for route={route_label:?} endpoint={endpoint}: {e}"
                 );
-                self.flash_status_high(format!(
+                Err(format!(
                     "\u{26a0} {route_label} route unreachable, using local playback (mbv.log)"
-                ));
-                None
+                ))
             }
         }
     }
@@ -215,7 +257,7 @@ In `src/app/mod.rs`, immediately after `connect_direct_endpoint`'s closing `}` (
 - [ ] **Step 5: Run tests to verify they pass**
 
 Run: `cargo test -p mbv try_daemon_route_connect -- --exact`
-Expected: PASS — both `try_daemon_route_connect_returns_remote_player_on_successful_connect` and `try_daemon_route_connect_falls_back_to_local_and_flashes_warning_on_failure` pass.
+Expected: PASS — both `try_daemon_route_connect_returns_remote_player_on_successful_connect` and `try_daemon_route_connect_returns_a_ready_to_display_warning_without_flashing_on_failure` pass.
 
 - [ ] **Step 6: Commit**
 
@@ -316,8 +358,15 @@ branch), which is unaffected by this ADR:
    route is what triggers the first connect attempt.
 2. **Fallback, not hard-fail.** A failed connect attempt falls back to (or
    stays on) local playback. It never hard-fails or exits the process. The
-   failure is surfaced via a status-bar warning (`App::flash_status_high`)
-   and a `log::warn!` line.
+   raw failure is always logged (`log::warn!`, `target: "daemon_route"`).
+   `App::try_daemon_route_connect` returns a fully-formatted, ready-to-
+   display status-bar warning as its `Err` payload rather than flashing it
+   directly -- the caller decides how to surface it (a direct
+   `App::flash_status_high`, or threaded through a state-teardown path),
+   since the right *mechanism* depends on caller-side state this primitive
+   deliberately knows nothing about (e.g. #223's `active_route`). Every
+   call site is still required to surface it somehow: `Result`'s `Err` arm
+   must be handled, so the warning can't be silently dropped by omission.
 3. **No background retry.** A failed attempt schedules nothing further. The
    next attempt happens only on the next natural trigger — the next
    play/enqueue action that resolves to that route (in practice, for the
@@ -357,13 +406,22 @@ Implementation: `App::try_daemon_route_connect` /
 `App::connect_daemon_route_endpoint` in `src/app/mod.rs` (issue #222). No
 production call site exists yet — #223 wires the actual play/enqueue
 trigger and the per-library swap (a sibling to `switch_to_direct_remote` /
-`restore_local_mode`) that calls this primitive.
+`restore_local_mode`) that calls this primitive. Both methods carry a
+scoped `#[allow(dead_code)]` until that call site lands (see the doc
+comments on each in `src/app/mod.rs`) -- this repo's "fix all compile
+warnings, never `#[allow(unused)]`" convention (`mem:conventions`) is
+deliberately overridden in this one, narrow, self-documenting case, not
+silently worked around.
 
 ## Consequences
 
-- `App::try_daemon_route_connect` is the one place fallback + warning +
-  no-retry logic lives; #223's per-library swap function must call it
-  rather than re-implementing connect/fallback logic inline.
+- `App::try_daemon_route_connect` is the one place connect/fallback/
+  no-retry logic and warning-message formatting live; #223's per-library
+  swap function must call it and surface its `Err(message)` rather than
+  re-implementing connect/fallback logic or re-deriving the warning
+  wording inline. The primitive does not flash the warning itself --
+  #223's swap function owns *where* it gets displayed (see rule 2 above),
+  but not *what* it says.
 - A daemon-route `RemotePlayer` is never stored anywhere that outlives the
   swap that created it (no new `SuspendedLocalSession`-style parking
   struct for daemon routes). #223's swap-back path should simply let the
@@ -397,7 +455,7 @@ git commit -m "docs: add ADR 0010 for lazy daemon-route connect lifecycle (#222)
 - Modify: `CONTEXT.md` (Daemon/TUI control seam section, after the existing **Local daemon** entry and before **Daemon responsibility boundary**, currently around line 135-137)
 
 **Interfaces:**
-- Consumes: existing terms **Thin client** (`CONTEXT.md:27-29`), **Local daemon** (`CONTEXT.md:133-135`), **Driving client** (`CONTEXT.md:127-128`), **Daemon contract** (`CONTEXT.md:129-130`), **Suspended local session** (`CONTEXT.md:31-33`).
+- Consumes: existing terms **Thin client** (`CONTEXT.md:27-29`), **Local daemon** (`CONTEXT.md:133-135`), **Driving client** (`CONTEXT.md:121-123`), **Daemon contract** (`CONTEXT.md:125-127`), **Suspended local session** (`CONTEXT.md:31-33`). (Line numbers re-verified against current `main` during cross-review -- the original draft had **Driving client**/**Daemon contract** off by 6 lines each, pointing at **Daemon contract**'s `_Avoid_` line and **Cold daemon**'s body respectively; corrected here.)
 - Produces: four new glossary terms other docs/plans (including #223's) can cite by name: **Lazy daemon route connect**, **Fallback to local playback**, **No background retry**, **No connection parking**.
 
 - [ ] **Step 1: Insert the new glossary entries**
@@ -419,8 +477,8 @@ The connect-timing rule for the daemon-route lifecycle mbv builds beyond the exi
 _Avoid_: confusing this with the existing `explicit_daemon_endpoint` branch in `main.rs`, which still connects (or hard-exits) at startup and is untouched by this rule — the two are separate, additive mechanisms per #222.
 
 **Fallback to local playback** (#222):
-The on-failure behavior of a lazy daemon route connect attempt: stay on (or return to) the local `Player` rather than hard-failing/exiting, and surface a status-bar warning (`App::flash_status_high`, e.g. "⚠ Music route unreachable, using local playback (mbv.log)") plus a `log::warn!` line. Distinct from **Local daemon** — that term is about deployment location, not this failure-mode policy.
-_Avoid_: treating a failed route connect as fatal, or falling back with no user-visible signal — both were true of the pre-#222 startup-time behavior this replaces for the new mechanism.
+The on-failure behavior of a lazy daemon route connect attempt: stay on (or return to) the local `Player` rather than hard-failing/exiting. `App::try_daemon_route_connect` (`src/app/mod.rs`) always logs the raw failure (`log::warn!`) and returns a fully-formatted, ready-to-display warning as its `Err` payload (e.g. "⚠ Music route unreachable, using local playback (mbv.log)"); the caller decides how to surface it -- a direct `App::flash_status_high`, or threaded through a state-teardown path -- since only the caller knows its own routing state. Distinct from **Local daemon** — that term is about deployment location, not this failure-mode policy.
+_Avoid_: treating a failed route connect as fatal, or falling back with no user-visible signal — both were true of the pre-#222 startup-time behavior this replaces for the new mechanism. Also avoid assuming `try_daemon_route_connect` itself calls `flash_status_high` — it deliberately does not (see ADR 0010).
 
 **No background retry** (#222):
 After a failed daemon route connect attempt, mbv does not schedule another attempt on a timer or in the background. The next attempt happens only on the next natural trigger — the next play/enqueue action that resolves to that route (which, for the wildcard case, in practice means the next mbv restart). Not to be confused with `DaemonEndpoint::connect_stream`'s existing bounded retry loop for `DaemonEndpoint::Local` (`crates/mbv-core/src/remote_player.rs`, `LOCAL_DAEMON_CONNECT_RETRY_TIMEOUT`), which waits out a same-machine daemon's startup race *within* one connect attempt and is unrelated/unaffected.
@@ -457,17 +515,17 @@ git commit -m "docs: add lazy-connect/fallback/no-retry/no-parking glossary term
 - [ ] **Step 1: Build the full workspace**
 
 Run: `cargo build --workspace`
-Expected: builds successfully with no errors. `try_daemon_route_connect` is `pub(super)` and `connect_daemon_route_endpoint` is a private method it calls, and both are currently reachable only from `#[cfg(test)]` code — a plain `cargo build` (without compiling tests) may therefore warn that they are never used. If so, confirm the warning names only these two new methods and nothing else; this is expected and acceptable per this plan's explicit scope (a primitive with no UI trigger yet — that's #223's job), not a defect to silently work around.
+Expected: builds successfully with zero warnings. `try_daemon_route_connect` (`pub(super)`) and `connect_daemon_route_endpoint` (private) are currently reachable only from `#[cfg(test)]` code, so a plain `cargo build` (which strips `#[cfg(test)]`) would otherwise warn `associated function is never used` for both -- Task 1 Step 4 already added a scoped `#[allow(dead_code)]` (with an inline comment explaining why, and when to remove it) to each, specifically to prevent this from landing as a build warning. If `cargo build --workspace` still warns about either method, the `#[allow(dead_code)]` was dropped or misplaced during Task 1 -- go back and fix Task 1's code, don't add a second suppression here. Any *other* warning is a real defect and must be fixed, per this repo's "fix all compile warnings" convention (`mem:conventions`).
 
 - [ ] **Step 2: Run the full test suite**
 
 Run: `cargo test --workspace`
-Expected: PASS, including the three new tests from Tasks 1-2 (`try_daemon_route_connect_returns_remote_player_on_successful_connect`, `try_daemon_route_connect_falls_back_to_local_and_flashes_warning_on_failure`, `app_construction_never_attempts_a_daemon_route_connect`) and all pre-existing tests (in particular `crates/mbv-core/src/remote_player.rs`'s existing suite and `src/app/mod.rs`'s existing `connect_to_session`/`switch_to_direct_remote` suite, to confirm the new `DAEMON_ROUTE_CONNECT_OVERRIDE` statics did not collide with or destabilize the existing `DIRECT_CONNECT_OVERRIDE` ones).
+Expected: PASS, including the three new tests from Tasks 1-2 (`try_daemon_route_connect_returns_remote_player_on_successful_connect`, `try_daemon_route_connect_returns_a_ready_to_display_warning_without_flashing_on_failure`, `app_construction_never_attempts_a_daemon_route_connect`) and all pre-existing tests (in particular `crates/mbv-core/src/remote_player.rs`'s existing suite and `src/app/mod.rs`'s existing `connect_to_session`/`switch_to_direct_remote` suite, to confirm the new `DAEMON_ROUTE_CONNECT_OVERRIDE` statics did not collide with or destabilize the existing `DIRECT_CONNECT_OVERRIDE` ones).
 
 - [ ] **Step 3: Run clippy**
 
 Run: `cargo clippy --workspace --all-targets -- -D warnings`
-Expected: no new lint failures attributable to this plan's changes (`src/app/mod.rs`, `docs/adr/0010-lazy-daemon-route-connect-lifecycle.md`, `CONTEXT.md`). `--all-targets` compiles test code too, so the `dead_code` risk noted in Step 1 should not reproduce here. If clippy does flag it, treat this as a real problem to resolve (most likely a short, well-commented `#[allow(dead_code)]` pointing at #223) rather than something to suppress blindly.
+Expected: no new lint failures attributable to this plan's changes (`src/app/mod.rs`, `docs/adr/0010-lazy-daemon-route-connect-lifecycle.md`, `CONTEXT.md`). `--all-targets` compiles test code too, so `dead_code` is a non-issue here regardless (the primitive is reachable from `#[cfg(test)]` in this invocation) -- clippy should be clean with zero special-casing needed. If clippy flags `#[allow(dead_code)]` itself (e.g. `unused_attributes` because the code turns out to be reachable some other way you didn't anticipate), that means the attribute is unnecessary in this exact codebase configuration -- remove it and re-run Step 1's plain `cargo build --workspace` to confirm dead_code still doesn't fire without it before deciding it's safe to drop.
 
 No commit for this task — it verifies the commits already made in Tasks 1-4.
 
@@ -477,8 +535,8 @@ No commit for this task — it verifies the commits already made in Tasks 1-4.
 
 **1. Spec coverage against #222's acceptance criteria:**
 
-- "A failed daemon connect attempt ... falls back to local playback instead of hard-failing/exiting." → Task 1 (`try_daemon_route_connect` returns `None` and never calls `std::process::exit`).
-- "The fallback is surfaced via a status-bar warning, and logged." → Task 1 (`flash_status_high` + `log::warn!`), test asserts exact status text.
+- "A failed daemon connect attempt ... falls back to local playback instead of hard-failing/exiting." → Task 1 (`try_daemon_route_connect` returns `Err(message)` and never calls `std::process::exit`).
+- "The fallback is surfaced via a status-bar warning, and logged." → Task 1: the raw failure is always logged (`log::warn!`), and a ready-to-display warning is always returned via `Err`, so every call site is forced (by the `Result` type) to handle and surface it -- the actual `flash_status_high` call happens at the caller (deliberately, so #223 can route it through a state-teardown path instead when needed; see Architecture and ADR 0010 rule 2). Task 1's failure test asserts the exact `Err` message text and that `App::status` is untouched by the primitive itself.
 - "No connection attempt happens before the first play/enqueue action that needs one." → Task 1's primitive has no eager caller; Task 2 pins this down as an explicit regression test.
 - "No background retry; failure is retried only on the next natural trigger." → Documented as a Global Constraint, in the ADR (Task 3), and structurally true since `try_daemon_route_connect` schedules nothing — there is no timer, thread, or loop anywhere in its implementation.
 - "`--connect-daemon` / `daemon_client_endpoint` behavior is unchanged." → `main.rs` is never touched by this plan (verified by reading `main()` during research; no task modifies it).
@@ -488,14 +546,15 @@ No commit for this task — it verifies the commits already made in Tasks 1-4.
 
 **2. Placeholder scan:** No "TBD"/"handle edge cases"/"similar to Task N" placeholders remain — every step shows complete, copy-pasteable code or an exact shell command with a concrete expected result.
 
-**3. Type/signature consistency:** `try_daemon_route_connect(&mut self, endpoint: &mbv_core::remote_player::DaemonEndpoint, route_label: &str) -> Option<(RemotePlayer, mpsc::Receiver<PlayerEvent>)>` is used identically across Task 1's implementation, Task 1's two tests, and Task 2's test. `connect_daemon_route_endpoint`'s signature matches the existing `DirectConnectFn` type alias exactly (confirmed against `src/app/mod.rs:25-34`), which is why no new type alias was introduced. `DAEMON_ROUTE_CONNECT_OVERRIDE` / `DAEMON_ROUTE_CONNECT_TEST_LOCK` names are used consistently in Tasks 1 and 2.
+**3. Type/signature consistency:** `try_daemon_route_connect(&mut self, endpoint: &mbv_core::remote_player::DaemonEndpoint, route_label: &str) -> Result<(RemotePlayer, mpsc::Receiver<PlayerEvent>), String>` is used identically across Task 1's implementation, Task 1's two tests, and Task 2's test (Task 2 only checks a call counter, so it is agnostic to `Option` vs `Result` and needed no change). `connect_daemon_route_endpoint`'s signature matches the existing `DirectConnectFn` type alias exactly (confirmed against `src/app/mod.rs:25-34`), which is why no new type alias was introduced -- note that `try_daemon_route_connect` itself is intentionally *not* `DirectConnectFn`-shaped (it takes an extra `route_label: &str` and is `&mut self`, not `&self`), so it was never a candidate for that alias. `DAEMON_ROUTE_CONNECT_OVERRIDE` / `DAEMON_ROUTE_CONNECT_TEST_LOCK` names are used consistently in Tasks 1 and 2. `RemotePlayer` derives only `Clone` (confirmed against `crates/mbv-core/src/remote_player.rs:33`), not `PartialEq`/`Debug` -- Task 1's failure test accounts for this by matching out the `Err` payload rather than `assert_eq!`-ing the whole `Result`.
 
 ## Open Questions / Assumptions (flag for follow-up review)
 
-These were not fully pinned down by #222's issue body and required a judgment call during planning:
+These were not fully pinned down by #222's issue body. This plan originally left them as open judgment calls; a subsequent cross-review pass (working from the actual #223 implementation plan -- library-scoped daemon routing, `docs/superpowers/plans/2026-07-17-library-scoped-daemon-routing.md`) resolved each definitively below, since #223's real call-site needs are now known rather than guessed at.
 
-1. **Where the primitive lives.** The issue doesn't say whether the lifecycle primitive should live in `mbv-core` (reusable by `mbvd` too) or in `src/app` (TUI-only). I placed it in `src/app/mod.rs` because #223's design doc explicitly says the per-library swap mechanism it will build on top of this "extends the existing suspend/restore machinery ... in `src/app/mod.rs`" — i.e., the consumer is App-level UI code, mirroring `switch_to_direct_remote`. If a future issue needs `mbvd` itself to lazily connect to another daemon, this placement would need revisiting.
-2. **Exact warning message wording for the wildcard case.** The issue's example message is library-specific ("⚠ Music route unreachable..."). Since #222 introduces no actual trigger (and thus no wildcard-specific caller), I designed `try_daemon_route_connect` to take a `route_label: &str` parameter rather than hardcoding "Music" or inventing wording for the wildcard case — the caller (#223, or a future wildcard trigger) decides the label. This was a judgment call to keep the primitive generic per the parent brief's explicit instruction.
-3. **Log target name.** I used `target: "daemon_route"` for the new log lines, distinct from the existing `target: "remote"` used in `remote_player.rs` and `target: "sessions"` used by `connect_to_session`. Not specified by the issue; chosen for grep-ability and to avoid conflating this with either existing target.
-4. **No new `disconnect_daemon_route` helper.** The issue's "no connection parking" rule is satisfied structurally by never storing a daemon-route `RemotePlayer` anywhere (it simply drops when the caller's local variable goes out of scope) — `RemotePlayer::join()` is already a documented no-op ("daemon keeps running when TUI exits"). I did not add a dedicated teardown function because there is nothing for it to do beyond an ordinary drop, and inventing one with no real logic would be dead ceremony; #223's swap-back function should just let the value drop. Flagging this in case a reviewer believes an explicit named teardown step (for symmetry with `switch_to_direct_remote`/`restore_local_mode`, or for a future explicit-disconnect log line) is wanted instead.
-5. **`cargo build --workspace` dead-code warning risk.** Since this plan intentionally produces a primitive with no production call site (by the parent brief's design), Task 5 Step 1 calls out that a bare `cargo build` (without compiling tests) may warn that `try_daemon_route_connect`/`connect_daemon_route_endpoint` are unused. I did not add `#[allow(dead_code)]` preemptively since I could not verify from static reading alone whether `pub(super)` plus test-only usage actually triggers the warning in this codebase's clippy/rustc configuration — flagged as a concrete thing for the plan executor to check in Task 5 and resolve (most likely by confirming it's test-reachable and therefore not warned; if a warning does appear on plain `cargo build`, the right fix is almost certainly a short `#[allow(dead_code)]` with a comment pointing at #223, not deleting the primitive).
+1. **Where the primitive lives -- RESOLVED: `src/app/mod.rs` is correct.** Confirmed against #223's actual plan: its per-library swap function (`App::switch_to_library_route`) is a sibling to `switch_to_direct_remote`, defined in the same file, and its orchestration function (`App::apply_route_for_playback`) calls the connect primitive directly as an `App` method. Both are App-level UI/state code, not something `mbvd` (a headless daemon with no `App`, no TUI state) would ever call. No further revisiting needed unless a genuinely new consumer (e.g. `mbvd` connecting *outbound* to another daemon) appears, which no current issue proposes.
+2. **Primitive contract vs. #223's actual call site -- RESOLVED: changed `try_daemon_route_connect`'s return type from `Option<(RemotePlayer, Receiver<PlayerEvent>)>` to `Result<(RemotePlayer, Receiver<PlayerEvent>), String>`, and the primitive no longer calls `flash_status_high` itself.** Cross-checking against #223's actual `apply_route_for_playback` orchestration revealed a real mismatch: #223 needs to choose *how* to fall back depending on state the primitive has no business knowing (`active_route`) -- a plain `flash_status_high` when it was already local, versus routing the message through a `restore_local_mode`-style teardown (which itself already calls `flash_status_high`) when swapping away from a previously *active different* route. An unconditional internal flash risked a second, conflicting flash on top of that teardown path's own flash, and forced #223 to duplicate the "`{route} route unreachable...`" wording itself to keep messaging consistent. The fix: the primitive still owns computing the exact warning text and still unconditionally logs the raw error, but returns the formatted text as `Err(String)` for the caller to display via whichever mechanism fits -- exactly mirroring the precedent already set by `connect_direct_endpoint`/`connect_to_session` in this same file (`connect_direct_endpoint` also returns `Result` and lets its caller decide the message/flash). Task 1's implementation and both its tests were updated accordingly (Task 1 Step 4, Step 1 tests).
+3. **Log target name -- RESOLVED: keep `target: "daemon_route"`, distinct from #223's `target: "library_route"`.** #223's plan uses its own `"library_route"` target for its own state-transition logging (`switch_to_library_route`, `restore_local_mode`, the enqueue-rejection guard) -- a deliberate, not accidental, split: `"daemon_route"` here covers only this primitive's own connect attempt/result (issue #222's scope), while `"library_route"` covers #223's higher-level routing decisions and queue-invariant enforcement (issue #223's scope). No consolidation needed; grepping `mbv.log` for either target answers a different question ("did a connect attempt happen and how did it go" vs. "why did mbv route/reject this play/enqueue").
+4. **No new `disconnect_daemon_route` helper -- RESOLVED: confirmed sufficient, including for the route-to-route swap case.** Checked against #223's actual `switch_to_library_route`: when `!self.player.is_remote()` it suspends local exactly like `switch_to_direct_remote`; when already remote (i.e. swapping from one active route straight to another) it takes the simpler `else` branch -- `self.player = PlayerProxy::remote(remote, always_play_next);` -- which is a plain field reassignment. Rust drops the old `PlayerProxy` value (and the `RemotePlayer` `Arc`s/channels it owned) automatically as part of that assignment; there is no code path in #223's design that needs to explicitly tear down a daemon-route connection before replacing it. `RemotePlayer::join()` being a documented no-op confirms there's genuinely no cleanup logic being skipped. No dedicated teardown function is needed now or foreseeably.
+5. **`cargo build --workspace` dead-code warning -- RESOLVED: confirmed it fires, and pre-empted it.** `try_daemon_route_connect` (`pub(super)`) and `connect_daemon_route_endpoint` (private) have no caller outside `#[cfg(test)]` code, which a plain `cargo build` (no `--tests`) strips entirely -- rustc's `dead_code` lint would fire. This repo's convention (`mem:conventions`) is "fix all compile warnings -- delete unused code, never `#[allow(unused)]`," which is in real tension with the parent brief's explicit requirement that this primitive ship with zero production call sites. Resolved in favor of keeping the primitive (deleting fully-designed, fully-tested code to dodge a warning would defeat this plan's purpose) with a narrow, explicitly-justified, temporary `#[allow(dead_code)]` on both methods (added in Task 1 Step 4), each carrying a doc comment explaining why and stating the removal condition: delete both attributes in the same change that adds #223's first call site. This is flagged as the one sanctioned exception to the "never `#[allow(unused)]`" rule in this plan, not a precedent for suppressing warnings generally.
+6. **ADR numbering vs. #223's plan -- RESOLVED: this plan owns ADR 0010; #223's plan must use 0011.** At the time of writing, `docs/adr/` on `main` ends at `0009-v-key-controls-audio-visualizer.md`, so `0010` is the next free number -- and both this plan (`docs/adr/0010-lazy-daemon-route-connect-lifecycle.md`) and the independently-authored #223 plan (`docs/adr/0010-library-scoped-daemon-routing.md`) claimed it. Since #223 depends on #222 (not the reverse), this plan's ADR is logically the earlier decision and keeps `0010`; the #223 plan's ADR must be renumbered to `0011-library-scoped-daemon-routing.md` (including its own self-references and its `CONTEXT.md` task, if any) in that plan's own cross-review pass -- not edited here, per instruction to fix only this plan's file. No other collision was found between the two plans' `CONTEXT.md` glossary insertions: this plan adds **Lazy daemon route connect**, **Fallback to local playback**, **No background retry**, **No connection parking** to the *Daemon/TUI control seam* section (after **Local daemon**); #223's plan adds **Library route**/**Route table**, **Routed queue**, and amends **Suspended local session**, in the *Playback* section -- different terms, different insertion points, and #223's amendment to **Suspended local session** (noting it now has two callers) is consistent with, not contradicted by, anything in this plan.
