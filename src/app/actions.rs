@@ -2290,6 +2290,14 @@ impl App {
     }
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
+        let skip_library_routing = self.connected_session_id.is_some()
+            || (self.player.is_remote() && self.active_route.is_none());
+        if !skip_library_routing {
+            if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
+                let item = item.clone();
+                self.apply_route_for_playback(&item);
+            }
+        }
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the power-view library panel.
@@ -2326,6 +2334,11 @@ impl App {
     }
 
     pub(super) fn play_item(&mut self, item: MediaItem) {
+        let skip_library_routing = self.connected_session_id.is_some()
+            || (self.player.is_remote() && self.active_route.is_none());
+        if !skip_library_routing {
+            self.apply_route_for_playback(&item);
+        }
         self.on_queue_replace_silent();
         // Keep library focus when playing from the power-view library panel.
         if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
@@ -5845,10 +5858,12 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::tests::{make_app_stub, make_item, make_items};
     use crate::app::{AlbumIndexState, LibraryTab};
+    use mbv_core::player::PlayerEvent;
     use std::io::Read;
     use std::os::fd::{FromRawFd, IntoRawFd};
+    use std::sync::mpsc;
 
     fn folder(id: &str, name: &str) -> MediaItem {
         let mut item = make_item(name, "Folder");
@@ -7176,5 +7191,123 @@ mod tests {
         });
 
         assert_eq!(output, "\x07");
+    }
+
+    #[test]
+    fn play_item_swaps_to_library_route_before_replacing_queue() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0))
+        }
+        *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
+
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        app.play_item(item);
+
+        *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+    }
+
+    #[test]
+    fn play_item_skips_library_routing_when_attached_to_a_session() {
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        app.connected_session_id = Some("sess-1".to_string());
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        // No DAEMON_ROUTE_CONNECT_OVERRIDE set -- if library routing
+        // engaged here it would attempt a real connection and this test
+        // would hang/fail rather than reach the assertion below.
+        app.play_item(item);
+
+        assert!(app.active_route.is_none());
+    }
+
+    #[test]
+    fn play_item_skips_library_routing_when_already_direct_remote_via_sessions_panel() {
+        // Regression guard for the gap `connected_session_id.is_none()`
+        // alone misses: a Sessions-panel "Direct Remote" ctrl-socket
+        // upgrade leaves `connected_session_id` as `None` but
+        // `self.player.is_remote()` `true` and `active_route` `None`.
+        // Library routing must not engage here either -- it would swap
+        // `self.player` out from under the active direct-remote
+        // connection without ever clearing `direct_remote_label`.
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        let sess = crate::app::tests::make_session("other-mbv", "mbv");
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+        assert!(app.player.is_remote());
+        assert!(app.active_route.is_none());
+
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = app.lib_tab_offset();
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        // No DAEMON_ROUTE_CONNECT_OVERRIDE set -- if library routing
+        // engaged here it would attempt a real connection and this test
+        // would hang/fail rather than reach the assertion below.
+        app.play_item(item);
+
+        assert!(app.active_route.is_none());
     }
 }
