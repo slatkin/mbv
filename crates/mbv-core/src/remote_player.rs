@@ -39,6 +39,15 @@ pub struct RemotePlayer {
     cmd_tx: mpsc::Sender<CtrlCmd>,
     disconnected: Arc<AtomicBool>,
     ctrl_compatibility: CtrlCompatibility,
+    /// A kept clone of the control socket, used only by `disconnect()`
+    /// (#233) to shut the connection down on demand rather than relying
+    /// on `Drop` -- which only closes this clone's own fd duplicate, not
+    /// the reader/writer threads' separate duplicates of the same
+    /// underlying socket. `Arc<Mutex<..>>` so every `RemotePlayer` clone
+    /// shares one handle and `disconnect()` is safe to call from any of
+    /// them; `Option` so a second call is a no-op instead of a double
+    /// shutdown.
+    control_stream: Arc<Mutex<Option<ControlStream>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -160,19 +169,6 @@ impl ControlStream {
     /// clone's fd duplicate -- `shutdown` acts on the shared underlying
     /// socket in the kernel, so it unblocks a concurrent blocking `read()`
     /// on any other clone of the same connection immediately.
-    ///
-    /// `#[allow(dead_code)]`: this repo's convention (`mem:conventions`) is
-    /// "fix all compile warnings -- delete unused code, never
-    /// `#[allow(unused)]`" -- but this primitive is a deliberate exception,
-    /// not a suppressed mistake: this method is dead code until issue #233's
-    /// Task 2 (`RemotePlayer::disconnect()`) adds its first real (non-test)
-    /// call site. A plain `cargo build --workspace` (which strips
-    /// `#[cfg(test)]` code) would otherwise warn `method is never used`.
-    /// Deleting the method to silence that would defeat the entire point of
-    /// shipping a complete, tested, reusable primitive ahead of the task
-    /// that wires it up. Remove this attribute in the same change that adds
-    /// Task 2's call site to `RemotePlayer::disconnect()`.
-    #[allow(dead_code)]
     fn shutdown(&self) -> io::Result<()> {
         match self {
             Self::Unix(stream) => stream.shutdown(std::net::Shutdown::Both),
@@ -358,6 +354,10 @@ impl RemotePlayer {
         let stream = endpoint.connect_stream()?;
         log::info!(target: "remote", "connected to daemon endpoint {endpoint}");
 
+        // Kept aside for `disconnect()` (#233) -- taken before `stream` is
+        // moved into the writer thread below.
+        let disconnect_stream = stream.try_clone().map_err(|e| e.to_string())?;
+
         let status = Arc::new(Mutex::new(PlayerStatus::default()));
         let subtitle_prefs = Arc::new(Mutex::new(crate::player::SubtitlePrefs::default()));
         let items: Arc<Mutex<Vec<MediaItem>>> = Arc::new(Mutex::new(Vec::new()));
@@ -467,6 +467,7 @@ impl RemotePlayer {
                 cmd_tx,
                 disconnected,
                 ctrl_compatibility,
+                control_stream: Arc::new(Mutex::new(Some(disconnect_stream))),
             },
             event_rx,
         ))
@@ -577,6 +578,21 @@ impl RemotePlayer {
         // No thread to join; daemon keeps running when TUI exits.
     }
 
+    /// Actively tears down the control-socket connection (#233): shuts
+    /// down the shared underlying socket so the reader thread's blocking
+    /// `read()` (inside `reader.lines()` in `connect_endpoint`) observes
+    /// EOF/an error and exits, instead of leaking forever the way it did
+    /// when the only teardown was an implicit `Drop` of one fd duplicate.
+    /// Idempotent: the stored handle is taken out on first use, so a
+    /// second call is a no-op rather than a double `shutdown()`.
+    pub fn disconnect(&self) {
+        if let Some(stream) = self.control_stream.lock().unwrap().take() {
+            if let Err(e) = stream.shutdown() {
+                log::warn!(target: "remote", "control-socket shutdown failed: {e}");
+            }
+        }
+    }
+
     pub fn supports_queue_append(&self) -> bool {
         self.ctrl_compatibility.supports_queue_append
     }
@@ -619,6 +635,7 @@ impl RemotePlayer {
                 cmd_tx,
                 disconnected,
                 ctrl_compatibility: CtrlCompatibility::current(),
+                control_stream: Arc::new(Mutex::new(None)),
             },
             event_rx,
             cmd_rx,
@@ -916,6 +933,75 @@ mod tests {
             0,
             "a shut-down socket must unblock a concurrent read with EOF (Ok(0))"
         );
+    }
+
+    #[test]
+    fn disconnect_causes_the_reader_thread_to_observe_the_shutdown_and_exit() {
+        // #233: the only pre-existing teardown was an implicit Drop of the
+        // writer thread's fd duplicate, which never affected the reader
+        // thread's *separate* duplicate of the same socket -- so the
+        // reader thread's blocking `read()` inside `reader.lines()` never
+        // unblocked, leaking the thread forever. `disconnect()` must fix
+        // this: after calling it, the reader thread must observe EOF/an
+        // error on its own read and exit, which is exactly what flips
+        // `is_disconnected()` to true (see the reader thread's loop-exit
+        // code in `connect_endpoint`).
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let daemon = std::thread::spawn(move || {
+            let (stream, _) = listener.accept().unwrap();
+            let mut writer = stream.try_clone().unwrap();
+            let mut reader = BufReader::new(stream);
+
+            let hello = serde_json::to_string(&CtrlEvent::Hello(CtrlHello::current())).unwrap();
+            writeln!(writer, "{hello}").unwrap();
+            let mut client_hello = String::new();
+            reader.read_line(&mut client_hello).unwrap();
+
+            let initial_state = serde_json::to_string(&CtrlEvent::State(CtrlState {
+                status: PlayerStatus::default(),
+                items: Vec::new(),
+                cursor: 0,
+                source: crate::config::QueueSource::Unknown,
+            }))
+            .unwrap();
+            writeln!(writer, "{initial_state}").unwrap();
+
+            // Keep the daemon-side handle open well past the point the
+            // client calls disconnect(), so the test can distinguish "the
+            // client's shutdown() itself caused the reader to exit" from
+            // "the daemon happened to hang up around the same time."
+            std::thread::sleep(Duration::from_secs(2));
+        });
+
+        let (remote, _event_rx) =
+            RemotePlayer::connect_endpoint(&DaemonEndpoint::Tcp(addr), "token").unwrap();
+        assert!(!remote.is_disconnected());
+
+        remote.disconnect();
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while !remote.is_disconnected() && std::time::Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            remote.is_disconnected(),
+            "reader thread must observe the shutdown and exit, flipping is_disconnected()"
+        );
+
+        drop(daemon); // let the daemon thread's sleep finish in the background
+    }
+
+    #[test]
+    fn disconnect_is_idempotent() {
+        // A second call must not panic (Task 2's Option::take() makes the
+        // stored stream handle single-use).
+        let (remote, _event_rx) = RemotePlayer::stub(Vec::new(), 0);
+        remote.disconnect();
+        remote.disconnect();
     }
 
     #[test]
