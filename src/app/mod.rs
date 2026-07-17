@@ -2410,6 +2410,17 @@ impl App {
         &mut self,
         item_id: &str,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+        // No routes configured at all -- this must be a true no-op for the
+        // common case (no `[daemon_routes]` in config.toml), not just "no
+        // match": every other resolver in this file is a synchronous,
+        // no-network lookup, but this one's `get_ancestors` fallback is a
+        // real HTTP round-trip. Without this guard, every first play of a
+        // distinct Home-tab item (Continue Watching/Next Up/Favorites)
+        // would pay a blocking network call that can never resolve to
+        // anything for a user who never opted into library routing.
+        if self.daemon_routes.is_empty() {
+            return None;
+        }
         if let Some(cached) = self.library_route_cache.get(item_id) {
             return cached
                 .clone()
@@ -6676,6 +6687,25 @@ pub(crate) mod tests {
         // has no live server, but critically still uncached afterward.
         let second = app.route_for_item_via_ancestors("item-1");
         assert_eq!(second, None);
+        assert!(!app.library_route_cache.contains_key("item-1"));
+    }
+
+    #[test]
+    fn route_for_item_via_ancestors_is_a_true_no_op_when_no_routes_are_configured() {
+        // Regression guard: an empty `daemon_routes` (the common case for
+        // a user who never opted into library routing at all) must be a
+        // genuine no-op -- no `get_ancestors` HTTP call, not just "no
+        // match after a network round-trip." If this guard were missing,
+        // every first play/enqueue of a distinct Home-tab item would pay
+        // a blocking network call that could never resolve to anything.
+        let mut app = make_app_stub();
+        assert!(app.daemon_routes.is_empty());
+
+        let resolved = app.route_for_item_via_ancestors("item-1");
+
+        assert_eq!(resolved, None);
+        // No lookup was even attempted, successful or not -- nothing gets
+        // cached, unlike the failed-lookup case above.
         assert!(!app.library_route_cache.contains_key("item-1"));
     }
 
