@@ -2384,6 +2384,108 @@ impl App {
         }
     }
 
+    /// Nav-context route resolution for library-scoped views (Library
+    /// tab, Power View, Album/Artist drill-down, in-library search) --
+    /// the active library is already known from navigation state
+    /// (`LibraryTab::library`), so no network call is needed (#223).
+    fn route_for_active_library_view(
+        &self,
+        lib_idx: usize,
+    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+        let lib = self.libs.get(lib_idx)?;
+        self.resolve_route_for_library(&lib.library.name)
+    }
+
+    /// Cross-library aggregate view (Continue Watching/Next Up, Favorites)
+    /// route resolution: walks the item's ancestor chain via
+    /// `EmbyClient::get_ancestors` to find the owning library
+    /// (`CollectionFolder`), then matches it against `daemon_routes`.
+    /// Cached per item id for the session so a repeated play/enqueue of
+    /// the same item never re-fetches (#223).
+    fn route_for_item_via_ancestors(
+        &mut self,
+        item_id: &str,
+    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+        if let Some(cached) = self.library_route_cache.get(item_id) {
+            return cached
+                .clone()
+                .and_then(|name| self.resolve_route_for_library(&name));
+        }
+        let ancestors = {
+            let client = self.client.lock().unwrap();
+            client.get_ancestors(item_id)
+        };
+        let library_name = match ancestors {
+            Ok(chain) => chain
+                .into_iter()
+                .find(|a| a.item_type == "CollectionFolder")
+                .map(|a| a.name),
+            Err(e) => {
+                log::warn!(
+                    target: "library_route",
+                    "get_ancestors failed for item {item_id:?}: {e}"
+                );
+                None
+            }
+        };
+        self.library_route_cache
+            .insert(item_id.to_string(), library_name.clone());
+        library_name.and_then(|name| self.resolve_route_for_library(&name))
+    }
+
+    /// Resolves the daemon route (if any) that a play/enqueue of `item`
+    /// should target: nav-scoped lookup for library-scoped views
+    /// (`tab_idx >= 2` -- Library/Power/Album/Artist/in-library search),
+    /// ancestor-lookup for cross-library aggregate views (`tab_idx == 0`
+    /// -- Home tab). No match in either case means local playback,
+    /// unaffected (#223).
+    ///
+    /// `tab_idx == 1` is the Queue tab -- it has no library of its own
+    /// (`lib_tab_offset()` is `2`, so a bare `tab_idx - lib_tab_offset()`
+    /// would underflow and panic here, unlike `enqueue_selected`'s existing
+    /// `tab_idx == 0` / `tab_idx >= 2` split which already avoids this).
+    /// An item played from the Queue tab is already part of whatever queue
+    /// is current, so this keeps whatever route is already active rather
+    /// than re-resolving from nav context (there is none) or treating "no
+    /// nav-scoped resolution" as "no route", which would incorrectly
+    /// restore to local every time the Queue tab is used to play/jump
+    /// within an already-routed queue.
+    fn resolve_route_for_play(
+        &mut self,
+        item: &mbv_core::api::MediaItem,
+    ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+        if self.tab_idx == 0 {
+            self.route_for_item_via_ancestors(&item.id)
+        } else if self.tab_idx >= 2 {
+            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            self.route_for_active_library_view(lib_idx)
+        } else {
+            self.active_route
+                .clone()
+                .and_then(|name| self.resolve_route_for_library(&name))
+        }
+    }
+
+    /// Route resolution specifically for `do_enqueue_folder` (#223 follow-up,
+    /// see "Design decisions carried forward from review" above): the item
+    /// being enqueue-recursive'd may itself *be* a library root
+    /// (`item_type == "CollectionFolder"`), in which case `get_ancestors`
+    /// returns no ancestor above it and a plain ancestor-lookup resolver
+    /// always yields `None`. Check the item's own type first; only fall
+    /// back to ancestor lookup for a non-root folder.
+    fn resolve_route_for_enqueue_folder(
+        &mut self,
+        item: &mbv_core::api::MediaItem,
+    ) -> Option<String> {
+        if item.item_type == "CollectionFolder" {
+            return self
+                .resolve_route_for_library(&item.name)
+                .map(|(name, _)| name);
+        }
+        self.route_for_item_via_ancestors(&item.id)
+            .map(|(name, _)| name)
+    }
+
     fn connect_direct_endpoint(
         &self,
         endpoint: &mbv_core::remote_player::DaemonEndpoint,
@@ -6442,6 +6544,135 @@ pub(crate) mod tests {
             "notascheme://x".to_string(),
         );
         assert_eq!(app.resolve_route_for_library("Music"), None);
+    }
+
+    #[test]
+    fn route_for_active_library_view_uses_nav_state_no_network() {
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+
+        let resolved = app.route_for_active_library_view(0);
+
+        assert_eq!(resolved.map(|(name, _)| name), Some("music".to_string()));
+    }
+
+    #[test]
+    fn route_for_active_library_view_none_for_unrouted_library() {
+        let mut app = make_app_stub();
+        let mut lib_item = make_item("Movies", "CollectionFolder");
+        lib_item.id = "lib-movies".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+
+        assert_eq!(app.route_for_active_library_view(0), None);
+    }
+
+    #[test]
+    fn route_for_item_via_ancestors_caches_after_first_lookup() {
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        // No live server in this stub -- `get_ancestors` will error and the
+        // resolver caches a `None` result rather than retrying every call.
+        let first = app.route_for_item_via_ancestors("item-1");
+        assert_eq!(first, None);
+        assert!(app.library_route_cache.contains_key("item-1"));
+        // Second call must not attempt another network round-trip; the
+        // cached `None` short-circuits before any client call, so the
+        // result is stable and deterministic in a stub with no server.
+        let second = app.route_for_item_via_ancestors("item-1");
+        assert_eq!(second, None);
+    }
+
+    #[test]
+    fn resolve_route_for_play_does_not_panic_from_the_queue_tab() {
+        // Regression guard: `tab_idx` values are 0 = Home, 1 = Queue tab,
+        // 2.. = library tabs (`lib_tab_offset() == 2`, confirmed against
+        // `src/app/input.rs`). An `if tab_idx == 0 { .. } else { lib_idx =
+        // tab_idx - lib_tab_offset() }` shape (as opposed to `enqueue_selected`'s
+        // existing `tab_idx == 0` / `tab_idx >= 2` split) underflows a `usize`
+        // subtraction (1 - 2) and panics when called from the Queue tab. The
+        // Queue tab has no library of its own -- the item being played is
+        // already part of whatever queue is current, so `resolve_route_for_play`
+        // must fall through to "keep the current `active_route`" instead of
+        // either panicking or wrongly resolving a nav-scoped library.
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        // Local queue: no route to keep.
+        assert_eq!(app.resolve_route_for_play(&item), None);
+
+        // Already routed: the Queue tab must not clear or re-resolve the
+        // route out from under an in-progress routed queue.
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        app.active_route = Some("music".to_string());
+        assert_eq!(
+            app.resolve_route_for_play(&item).map(|(name, _)| name),
+            Some("music".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_route_for_enqueue_folder_matches_a_library_root_folder_by_its_own_name() {
+        // #223 follow-up: `get_ancestors` on a library root returns no
+        // `CollectionFolder` ancestor above it (there isn't one), so a plain
+        // ancestor-lookup resolver always yields `None` for the library root
+        // item itself. `do_enqueue_folder` can receive exactly that item (the
+        // user enqueue-recursive's an entire library from its root), so this
+        // helper checks the item's own type first.
+        let mut app = make_app_stub();
+        app.daemon_routes.insert(
+            "music".to_string(),
+            "tcp://127.0.0.1:9000".to_string(),
+        );
+        let mut lib_root = make_item("Music", "CollectionFolder");
+        lib_root.id = "lib-music".to_string();
+
+        assert_eq!(
+            app.resolve_route_for_enqueue_folder(&lib_root),
+            Some("music".to_string())
+        );
+    }
+
+    #[test]
+    fn resolve_route_for_enqueue_folder_falls_back_to_ancestor_lookup_for_a_non_root_folder() {
+        let mut app = make_app_stub();
+        let mut sub_folder = make_item("Some Album", "MusicAlbum");
+        sub_folder.id = "album-1".to_string();
+        sub_folder.is_folder = true;
+
+        // No live server in this stub -- `get_ancestors` errors, so this
+        // must fall through to the ancestor-lookup path (not treat every
+        // folder as a library root) and resolve to `None`, not panic.
+        assert_eq!(app.resolve_route_for_enqueue_folder(&sub_folder), None);
     }
 
     #[test]
