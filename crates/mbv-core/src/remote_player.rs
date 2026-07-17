@@ -154,6 +154,18 @@ impl ControlStream {
             Self::Tcp(stream) => stream.try_clone().map(Self::Tcp),
         }
     }
+
+    /// Shuts down the underlying socket for both reads and writes (#233).
+    /// Unlike dropping a `ControlStream` clone -- which only closes *that*
+    /// clone's fd duplicate -- `shutdown` acts on the shared underlying
+    /// socket in the kernel, so it unblocks a concurrent blocking `read()`
+    /// on any other clone of the same connection immediately.
+    fn shutdown(&self) -> io::Result<()> {
+        match self {
+            Self::Unix(stream) => stream.shutdown(std::net::Shutdown::Both),
+            Self::Tcp(stream) => stream.shutdown(std::net::Shutdown::Both),
+        }
+    }
 }
 
 impl Read for ControlStream {
@@ -853,6 +865,44 @@ mod tests {
         let adopted = remote.adopt_queue(vec![make_media_item("1")], 0, QueueSource::Unknown);
 
         assert!(!adopted);
+    }
+
+    #[test]
+    fn control_stream_shutdown_unblocks_a_concurrent_blocking_read() {
+        // #233: shutdown() must affect the *shared underlying socket*, not
+        // just the fd this particular ControlStream clone holds -- that's
+        // the whole point of using shutdown() instead of Drop. Prove it by
+        // shutting down one clone and confirming a DIFFERENT clone's
+        // blocking read unblocks (returns Ok(0), i.e. EOF) as a result.
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let accept_thread = std::thread::spawn(move || listener.accept().unwrap().0);
+
+        let client_stream = ControlStream::Tcp(TcpStream::connect(addr).unwrap());
+        let _server_stream = accept_thread.join().unwrap();
+
+        let reader_clone = client_stream.try_clone().unwrap();
+        let read_thread = std::thread::spawn(move || {
+            let mut reader_clone = reader_clone;
+            let mut buf = [0u8; 8];
+            reader_clone.read(&mut buf)
+        });
+
+        // Give the read thread a moment to actually block in read() before
+        // we shut down the OTHER clone.
+        std::thread::sleep(Duration::from_millis(50));
+        client_stream.shutdown().unwrap();
+
+        let result = read_thread
+            .join()
+            .expect("read thread must exit, not hang, once the socket is shut down");
+        assert_eq!(
+            result.unwrap(),
+            0,
+            "a shut-down socket must unblock a concurrent read with EOF (Ok(0))"
+        );
     }
 
     #[test]
