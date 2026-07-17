@@ -6361,10 +6361,9 @@ pub(crate) mod tests {
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
         let mut app = make_app_stub();
-        let endpoint =
-            mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
-                "/tmp/mbv-music.sock",
-            ));
+        let endpoint = mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
+            "/tmp/mbv-music.sock",
+        ));
 
         let result = app.try_daemon_route_connect(&endpoint, "Music");
 
@@ -6391,10 +6390,9 @@ pub(crate) mod tests {
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
         let mut app = make_app_stub();
-        let endpoint =
-            mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
-                "/tmp/mbv-music.sock",
-            ));
+        let endpoint = mbv_core::remote_player::DaemonEndpoint::Unix(std::path::PathBuf::from(
+            "/tmp/mbv-music.sock",
+        ));
 
         let result = app.try_daemon_route_connect(&endpoint, "Music");
 
