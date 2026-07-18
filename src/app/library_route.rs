@@ -165,12 +165,11 @@ impl App {
     /// (`lib_tab_offset()` is `2`, so a bare `tab_idx - lib_tab_offset()`
     /// would underflow and panic here, unlike `enqueue_selected`'s existing
     /// `tab_idx == 0` / `tab_idx >= 2` split which already avoids this).
-    /// An item played from the Queue tab is already part of whatever queue
-    /// is current, so this keeps whatever route is already active rather
-    /// than re-resolving from nav context (there is none) or treating "no
-    /// nav-scoped resolution" as "no route", which would incorrectly
-    /// restore to local every time the Queue tab is used to play/jump
-    /// within an already-routed queue.
+    /// Queue tab has no library of its own. If a route is already active,
+    /// keep it rather than re-resolving from nav context (there is none);
+    /// otherwise resolve from the queued item itself, so a restored queue
+    /// can still take its configured route when startup auto-reconnect
+    /// missed a live-but-not-yet-visible target session.
     pub(super) fn resolve_route_for_play(
         &mut self,
         item: &mbv_core::api::MediaItem,
@@ -184,6 +183,7 @@ impl App {
             self.active_route
                 .clone()
                 .and_then(|name| self.resolve_route_for_library(&name))
+                .or_else(|| self.route_for_item_via_ancestors(&item.id))
         }
     }
 
@@ -535,6 +535,37 @@ mod tests {
         app.library_routes
             .insert("music".to_string(), "living-room-pc".to_string());
         app.active_route = Some("music".to_string());
+        let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(resolved, Some("music".to_string()));
+    }
+
+    #[test]
+    fn resolve_route_for_play_from_queue_resolves_item_when_no_route_is_active() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut sess = make_session("living-room-pc", "mbv");
+            sess.host = "127.0.0.1".into();
+            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
+            Ok(vec![sess])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
+        app.library_route_cache.insert(
+            "song-1".to_string(),
+            (Some("music".to_string()), Instant::now()),
+        );
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
         let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
 
         *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
