@@ -19,6 +19,9 @@ is_root_checkout() {
 
 case "${HOOK}" in
   pre-commit)
+    if [[ "${MBV_ALLOW_MAIN_COMMIT:-}" == "1" ]]; then
+      exit 0
+    fi
     if [[ -z "${branch}" ]]; then
       exit 0
     fi
