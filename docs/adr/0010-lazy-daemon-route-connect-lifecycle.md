@@ -8,9 +8,16 @@ rules, distinct from the existing startup-only `--connect-daemon` /
 `daemon_client_endpoint` thin-client path (`main.rs`'s `explicit_daemon_endpoint`
 branch), which is unaffected by this ADR:
 
-1. **Lazy connect.** mbv never attempts a daemon-route connection at
-   startup. The first play/enqueue action that resolves to a configured
-   route is what triggers the first connect attempt.
+1. **Lazy connect, with an opt-in startup exception.** By default, mbv
+   never attempts a daemon-route connection at startup — the first
+   play/enqueue action that resolves to a configured route is what
+   triggers the first connect attempt. When `auto_reconnect` is
+   enabled (issue #236), mbv additionally makes one attempt at startup to
+   restore whichever remote connection (library route or Sessions-panel
+   direct-remote/attached session) was active when it last exited. This
+   was #222's original intent — its initial design mistakenly ruled out
+   any startup connection entirely, which #236 corrected. See
+   `App::try_auto_reconnect` (`src/app/mod.rs`).
 2. **Fallback, not hard-fail.** A failed connect attempt falls back to (or
    stays on) local playback. It never hard-fails or exits the process. The
    raw failure is always logged (`log::warn!`, `target: "daemon_route"`).
@@ -93,3 +100,19 @@ silently worked around.
   is unrelated to rule 3 above and is unaffected: it waits out a
   same-machine daemon's own startup race *within* one connect attempt, not
   a retry *after* a whole attempt already failed.
+
+## Correction (#236)
+
+This ADR's original rule 1 stated flatly that mbv "never attempts a
+daemon connection at startup, regardless of config" and that
+`try_daemon_route_connect` "must not be invoked from `App::new`,
+`App::new_remote`, or `App::build`" (from this ADR's originating plan,
+`docs/superpowers/plans/2026-07-17-daemon-connect-lifecycle.md`). That
+was a misreading of issue #222's own title ("auto-reconnect to remote
+client") against its body: #222 was supposed to deliver reconnect-at-
+startup, not rule it out. Issue #236 corrected this: `App::new` now calls
+`App::try_auto_reconnect` once, gated on the new `auto_reconnect`
+config flag (default off), restoring whichever connection was active at
+last exit. `App::new_remote` (the separate, pre-existing
+`--connect-daemon`/`daemon_client_endpoint` path) remains untouched, as
+rule 1 always intended.
