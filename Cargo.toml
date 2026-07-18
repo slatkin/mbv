@@ -3,7 +3,7 @@ members = ["crates/mbv-core", "crates/mbvd"]
 default-members = [".", "crates/mbv-core", "crates/mbvd"]
 
 [workspace.package]
-version = "0.12.6"
+version = "0.13.0"
 edition = "2021"
 
 [workspace.dependencies]
