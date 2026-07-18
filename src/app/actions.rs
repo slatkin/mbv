@@ -4469,7 +4469,7 @@ impl App {
         }
     }
 
-    fn maybe_refresh_feed_groups_after_refresh(&mut self, lib_idx: usize) {
+    pub(super) fn maybe_refresh_feed_groups_after_refresh(&mut self, lib_idx: usize) {
         let should_refresh_feed_groups = self
             .libs
             .get(lib_idx)
@@ -4485,11 +4485,10 @@ impl App {
             })
             .unwrap_or(false);
         if should_refresh_feed_groups {
-            if let Some(state) = self
-                .libs
-                .get_mut(lib_idx)
-                .and_then(|lib| lib.feed_home_video.as_mut())
-            {
+            if let Some(lib) = self.libs.get_mut(lib_idx) {
+                let state = lib
+                    .feed_home_video
+                    .get_or_insert_with(FeedHomeVideoState::default);
                 state.loading = true;
             }
             self.log_feed_home_video_state(lib_idx, "refreshed_before_aggregate");
@@ -4567,6 +4566,7 @@ impl App {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.apply_library_position(position.clone(), nav_stack);
         }
+        self.maybe_refresh_feed_groups_after_refresh(lib_idx);
         let restored = self
             .libs
             .get(lib_idx)

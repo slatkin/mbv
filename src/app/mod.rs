@@ -1558,12 +1558,24 @@ impl App {
         if current.as_ref() == saved.as_ref() {
             if current.is_none() {
                 self.ensure_lib_loaded_for(lib_idx);
+            } else if self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx) {
+                if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    if lib.feed_home_video.is_none() {
+                        lib.feed_home_video = Some(FeedHomeVideoState {
+                            loading: true,
+                            ..FeedHomeVideoState::default()
+                        });
+                    }
+                }
+                self.maybe_refresh_feed_groups_after_refresh(lib_idx);
             }
             return;
         }
         match saved {
             Some(position) if !position.levels.is_empty() => {
                 let root = &position.levels[0];
+                let restore_feed_view =
+                    self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx);
                 let placeholder = BrowseLevel {
                     parent_id: root.parent_id.clone(),
                     title: root.title.clone(),
@@ -1579,6 +1591,11 @@ impl App {
                     all_items: None,
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
+                    if restore_feed_view {
+                        lib.feed_home_video
+                            .get_or_insert_with(FeedHomeVideoState::default)
+                            .loading = true;
+                    }
                     lib.apply_library_position(position.clone(), vec![placeholder]);
                 }
                 self.spawn_restore_library_position(lib_idx, scope, position);
@@ -4945,6 +4962,59 @@ pub(crate) mod tests {
         assert!(level.loading);
         assert!(level.items.is_empty());
         assert_eq!(level.item_types.as_deref(), Some("Movie"));
+    }
+
+    #[test]
+    fn activating_saved_power_position_initializes_feed_home_video_state() {
+        let mut app = make_app_stub();
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.tab_idx = 1;
+        app.power_left_tab = 1;
+        app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+
+        let mut library = make_item("Youtube", "CollectionFolder");
+        library.id = "lib-youtube".into();
+        library.collection_type = "homevideos".into();
+        library.is_folder = true;
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.library_position_state
+            .libraries
+            .entry("lib-youtube".into())
+            .or_default()
+            .power = Some(crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-youtube".into(),
+                title: "Youtube".into(),
+                focused_item_id: None,
+                cursor_index: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            feed_selected_group: 0,
+            feed_video_cursor: 2,
+            feed_video_scroll: 1,
+        });
+
+        app.activate_library_position_scope(0, LibraryPositionScope::Power);
+
+        let feed = app.libs[0]
+            .feed_home_video
+            .as_ref()
+            .expect("saved feed library position should initialize feed state");
+        assert!(feed.loading);
+        assert_eq!(feed.video_cursor, 2);
+        assert_eq!(feed.video_scroll, 1);
+        assert!(app.is_feed_home_video_group_view(0));
     }
 
     #[test]
@@ -8754,6 +8824,62 @@ pub(crate) mod tests {
         assert_eq!(app.libs[0].nav_stack[0].item_types, None);
         assert_eq!(app.libs[0].nav_stack[0].items.len(), 1);
         assert!(app.libs[0].nav_stack[0].items[0].is_folder);
+        assert!(app.is_feed_home_video_group_view(0));
+    }
+
+    #[test]
+    fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
+        let mut app = make_app_stub();
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_left_tab = 1;
+        app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
+
+        let mut library = make_item("YouTube", "CollectionFolder");
+        library.id = "lib-youtube".into();
+        library.collection_type = "homevideos".into();
+        library.is_folder = true;
+        let mut folder = make_item("Channel A", "Folder");
+        folder.id = "folder-a".into();
+        folder.is_folder = true;
+        let mut video = make_item("A1", "Movie");
+        video.id = "video-a1".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-youtube".into(),
+                title: "YouTube".into(),
+                items: vec![folder],
+                total_count: 1,
+                cursor: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                scroll: 0,
+                all_items: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: 0,
+
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+
+        app.handle_lib_event(LibEvent::Refreshed {
+            lib_idx: 0,
+            parent_id: "lib-youtube".into(),
+            item_types: Some("Video".into()),
+            unplayed_only: true,
+            items: vec![video],
+            total_count: 1,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.len(), 1);
+        assert_eq!(app.libs[0].nav_stack[0].item_types, None);
+        assert!(app.libs[0].feed_home_video.as_ref().unwrap().loading);
         assert!(app.is_feed_home_video_group_view(0));
     }
 
