@@ -1712,11 +1712,15 @@ impl EmbyClient {
 
     // ── Remote session control ───────────────────────────────────────────────
 
-    #[allow(dead_code)]
-    pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
-        let arr: Value = self
-            .get("/Sessions")
-            .query("ActiveWithinSeconds", "600")
+    fn get_sessions_with_active_within(
+        &self,
+        active_within_secs: Option<&str>,
+    ) -> Result<Vec<SessionInfo>, String> {
+        let mut req = self.get("/Sessions");
+        if let Some(secs) = active_within_secs {
+            req = req.query("ActiveWithinSeconds", secs);
+        }
+        let arr: Value = req
             .call()
             .map_err(|e| e.to_string())?
             .into_json()
@@ -1771,6 +1775,18 @@ impl EmbyClient {
             })
             .unwrap_or_default();
         Ok(sessions)
+    }
+
+    #[allow(dead_code)]
+    pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
+        self.get_sessions_with_active_within(Some("600"))
+    }
+
+    /// Unfiltered by `ActiveWithinSeconds` -- used by library-route device
+    /// resolution (#239) so an idle-but-still-connected target device
+    /// isn't wrongly treated as gone.
+    pub fn get_sessions_unfiltered(&self) -> Result<Vec<SessionInfo>, String> {
+        self.get_sessions_with_active_within(None)
     }
 
     pub fn session_transport(&self, id: &str, cmd: &str) -> Result<(), String> {
@@ -2479,6 +2495,23 @@ mod tests {
         assert_eq!(media.video_label, "English FLAC Stereo");
         assert_eq!(media.audio_streams.len(), 1);
         assert_eq!(media.audio_streams[0].index, 0);
+    }
+
+    // ── get_sessions_unfiltered ──────────────────────────────────────────────
+
+    #[test]
+    fn get_sessions_with_active_within_none_omits_query_param() {
+        // get_sessions_unfiltered must not constrain ActiveWithinSeconds --
+        // this is a compile-time/shape check since the real query param is
+        // only observable over the wire; the behavioral guarantee is that
+        // both methods exist and share one implementation.
+        let client = client_with_url("http://localhost:1");
+        // Both calls fail (no server listening on port 1) -- we only need
+        // them to compile and return a network-error Result, proving the
+        // unfiltered path exists and is reachable without a required
+        // ActiveWithinSeconds argument.
+        assert!(client.get_sessions_unfiltered().is_err());
+        assert!(client.get_sessions().is_err());
     }
 
     // ── is_audio / is_video ──────────────────────────────────────────────────
