@@ -374,6 +374,65 @@ pub fn clear_queue_state() {
     let _ = std::fs::remove_file(queue_state_path());
 }
 
+/// Which remote connection (if any) was active when mbv last exited
+/// (issue #236). `App::teardown` writes this; `App::new` reads it back at
+/// the next launch when `Config.auto_reconnect` is true. The two
+/// variants mirror `App`'s own separate `active_route` (#223 library
+/// routing) and `connected_session_id`/`connected_session_state`
+/// (Sessions-panel direct-remote/attached) fields -- #222 and #223 were
+/// distinct features and stay distinct here, even though both are
+/// restored under the same on/off switch.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind")]
+pub enum LastRemoteConnection {
+    /// A #223 library route, keyed by the library name that was resolved
+    /// active (`App.active_route`). Re-resolved fresh against current
+    /// `daemon_routes` at startup, not replayed verbatim -- if the config
+    /// changed since the last exit, the new config wins.
+    LibraryRoute { library: String },
+    /// A Sessions-panel direct-remote or attached session, keyed by the
+    /// other device's name (`SessionInfo.device_name`), not its session id
+    /// -- Emby session ids are ephemeral per-connection and would not
+    /// still identify the same device at the next launch.
+    DirectSession { device_name: String },
+}
+
+fn last_remote_connection_path() -> PathBuf {
+    state_dir().join("last_remote_connection.json")
+}
+
+/// Persists (or, given `None`, clears) the connection active at exit.
+/// Called from `App::teardown` only when `auto_reconnect` is
+/// enabled -- when the feature is off, this file is never written or
+/// read, by design (Task 1's `Global Constraints`).
+pub fn save_last_remote_connection(conn: Option<&LastRemoteConnection>) {
+    let path = last_remote_connection_path();
+    let Some(conn) = conn else {
+        let _ = std::fs::remove_file(&path);
+        return;
+    };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(json) = serde_json::to_string(conn) {
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+pub fn load_last_remote_connection() -> Option<LastRemoteConnection> {
+    let text = std::fs::read_to_string(last_remote_connection_path()).ok()?;
+    match serde_json::from_str(&text) {
+        Ok(conn) => Some(conn),
+        Err(e) => {
+            log::warn!(target: "auto_reconnect", "last_remote_connection.json failed to parse, not reconnecting: {e}");
+            None
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct LibraryPositionState {
     #[serde(default)]
@@ -1674,5 +1733,47 @@ url = "http://host"
     fn resolve_daemon_route_returns_none_when_unconfigured() {
         let routes = std::collections::HashMap::new();
         assert_eq!(resolve_daemon_route(&routes, "Movies"), None);
+    }
+
+    #[test]
+    fn save_and_load_last_remote_connection_round_trips_library_route() {
+        let _guard = TestStateDirGuard::new();
+        let conn = LastRemoteConnection::LibraryRoute {
+            library: "music".to_string(),
+        };
+
+        save_last_remote_connection(Some(&conn));
+
+        assert_eq!(load_last_remote_connection(), Some(conn));
+    }
+
+    #[test]
+    fn save_and_load_last_remote_connection_round_trips_direct_session() {
+        let _guard = TestStateDirGuard::new();
+        let conn = LastRemoteConnection::DirectSession {
+            device_name: "living-room-mbv".to_string(),
+        };
+
+        save_last_remote_connection(Some(&conn));
+
+        assert_eq!(load_last_remote_connection(), Some(conn));
+    }
+
+    #[test]
+    fn save_last_remote_connection_none_clears_a_previously_saved_record() {
+        let _guard = TestStateDirGuard::new();
+        save_last_remote_connection(Some(&LastRemoteConnection::LibraryRoute {
+            library: "music".to_string(),
+        }));
+
+        save_last_remote_connection(None);
+
+        assert_eq!(load_last_remote_connection(), None);
+    }
+
+    #[test]
+    fn load_last_remote_connection_returns_none_when_no_file_exists() {
+        let _guard = TestStateDirGuard::new();
+        assert_eq!(load_last_remote_connection(), None);
     }
 }
