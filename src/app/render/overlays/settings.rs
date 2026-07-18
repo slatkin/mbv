@@ -40,6 +40,10 @@ impl App {
                 self.open_multiselect_popup(MultiSelectKind::FeedViewLibraries);
                 return;
             }
+            SettingKey::LibraryRoutes => {
+                self.open_library_routes_popup();
+                return;
+            }
             SettingKey::LogOut => {
                 self.confirm_logout = true;
             }

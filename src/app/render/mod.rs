@@ -385,6 +385,9 @@ impl App {
             if self.multiselect_popup.is_some() {
                 self.render_multiselect_popup(f);
             }
+            if self.library_routes_popup.is_some() {
+                self.render_library_routes_popup(f);
+            }
         }
         if self.save_playlist_dialog.is_some() {
             self.render_save_playlist_dialog(f);

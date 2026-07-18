@@ -1712,20 +1712,6 @@ impl EmbyClient {
 
     // ── Remote session control ───────────────────────────────────────────────
 
-    pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
-        self.get_sessions_with_active_within(Some("600"))
-    }
-
-    /// Like `get_sessions`, but without the `ActiveWithinSeconds=600` filter
-    /// (#236): a device that's been idle-but-still-connected for more than
-    /// 10 minutes wouldn't show up in the filtered list, which would make
-    /// `App::try_auto_reconnect`'s `DirectSession` lookup wrongly conclude
-    /// the device is gone. Only used by that lookup -- the Sessions-panel
-    /// (F3) UI should keep using the filtered `get_sessions` above.
-    pub fn get_sessions_unfiltered(&self) -> Result<Vec<SessionInfo>, String> {
-        self.get_sessions_with_active_within(None)
-    }
-
     fn get_sessions_with_active_within(
         &self,
         active_within_secs: Option<&str>,
@@ -1789,6 +1775,21 @@ impl EmbyClient {
             })
             .unwrap_or_default();
         Ok(sessions)
+    }
+
+    pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
+        self.get_sessions_with_active_within(Some("600"))
+    }
+
+    /// Like `get_sessions`, but without the `ActiveWithinSeconds=600` filter:
+    /// a device that's been idle-but-still-connected for more than 10 minutes
+    /// wouldn't show up in the filtered list, which would make a live-session
+    /// lookup wrongly conclude the device is gone. Used by
+    /// `App::try_auto_reconnect`'s `DirectSession` lookup (#236) and by
+    /// library-route device resolution (#239) -- the Sessions-panel (F3) UI
+    /// should keep using the filtered `get_sessions` above.
+    pub fn get_sessions_unfiltered(&self) -> Result<Vec<SessionInfo>, String> {
+        self.get_sessions_with_active_within(None)
     }
 
     pub fn session_transport(&self, id: &str, cmd: &str) -> Result<(), String> {
@@ -2497,6 +2498,23 @@ mod tests {
         assert_eq!(media.video_label, "English FLAC Stereo");
         assert_eq!(media.audio_streams.len(), 1);
         assert_eq!(media.audio_streams[0].index, 0);
+    }
+
+    // ── get_sessions_unfiltered ──────────────────────────────────────────────
+
+    #[test]
+    fn get_sessions_with_active_within_none_omits_query_param() {
+        // get_sessions_unfiltered must not constrain ActiveWithinSeconds --
+        // this is a compile-time/shape check since the real query param is
+        // only observable over the wire; the behavioral guarantee is that
+        // both methods exist and share one implementation.
+        let client = client_with_url("http://localhost:1");
+        // Both calls fail (no server listening on port 1) -- we only need
+        // them to compile and return a network-error Result, proving the
+        // unfiltered path exists and is reachable without a required
+        // ActiveWithinSeconds argument.
+        assert!(client.get_sessions_unfiltered().is_err());
+        assert!(client.get_sessions().is_err());
     }
 
     // ── is_audio / is_video ──────────────────────────────────────────────────

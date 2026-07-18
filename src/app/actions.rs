@@ -2257,7 +2257,7 @@ impl App {
     /// (a Sessions-panel attached session, or a non-library-route direct
     /// remote / local-daemon connection) -- both leave `active_route` at
     /// `None`, so without this check any item resolving to a configured
-    /// `daemon_routes` entry would be wrongly rejected for a reason
+    /// `library_routes` entry would be wrongly rejected for a reason
     /// unrelated to library routing. Mirrors the same condition Task 9
     /// uses to gate `apply_route_for_playback`.
     pub(super) fn enqueue_route_conflict(&mut self, resolved_name: Option<String>) -> bool {
@@ -7228,8 +7228,8 @@ mod tests {
     #[test]
     fn enqueue_selected_rejects_item_from_a_different_route_than_active_queue() {
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         app.active_route = Some("music".to_string());
         let mut movies_item = make_item("Movies", "CollectionFolder");
         movies_item.id = "lib-movies".to_string();
@@ -7310,6 +7310,7 @@ mod tests {
     fn play_item_swaps_to_library_route_before_replacing_queue() {
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        let _sessions_guard = crate::app::SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
         fn route_connect_success(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
@@ -7326,10 +7327,19 @@ mod tests {
             ))
         }
         *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut sess = crate::app::tests::make_session("living-room-pc", "mbv");
+            sess.host = "127.0.0.1".into();
+            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
+            Ok(vec![sess])
+        }
+        *crate::app::SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
 
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -7348,14 +7358,15 @@ mod tests {
         app.play_item(item);
 
         *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+        *crate::app::SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(app.active_route.as_deref(), Some("music"));
     }
 
     #[test]
     fn play_item_skips_library_routing_when_attached_to_a_session() {
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         app.connected_session_id = Some("sess-1".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
@@ -7390,8 +7401,8 @@ mod tests {
         // `self.player` out from under the active direct-remote
         // connection without ever clearing `direct_remote_label`.
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
         let sess = crate::app::tests::make_session("other-mbv", "mbv");
         app.switch_to_direct_remote(&sess, remote, remote_rx);
