@@ -43,14 +43,19 @@ pub struct Config {
     pub audio_lang: String,    // full language name, e.g. "English"; "" = any
     pub my_languages: Vec<String>, // user's relevant languages; filters subtitle/audio lang cycling
     pub feed_view_libraries: Vec<String>, // libraries treated as feed view (unplayed, date-sorted)
-    /// Library name (lowercased) -> device name, from `[library_routes]`
-    /// (#239, replacing #223's `[daemon_routes]`). Playback/enqueue
-    /// resolved to one of these libraries swaps the active player to
-    /// whichever live session currently has this device name -- resolved
-    /// the same way F3's Sessions panel resolves a device to a
-    /// connection (`App::session_direct_endpoint`). No `"*"` wildcard.
-    /// Editable via the F2 Settings "Library routes" row, and
-    /// hand-editable in `config.toml`.
+    /// Library name (lowercased) -> resolved `tcp://host:port` daemon
+    /// endpoint, from `[library_routes]` (#256, replacing #239's
+    /// device-name values). Playback/enqueue resolved to one of these
+    /// libraries connects straight to this stored endpoint -- no
+    /// `/Sessions` lookup on the play/enqueue path at all. No device name
+    /// is stored; a device's friendly name is used only transiently by
+    /// the F2 "Library Routes" picker to let the user *pick* a device,
+    /// then immediately resolved to an endpoint before being written here.
+    /// A value that isn't a valid `tcp://` endpoint (including a stale
+    /// pre-#256 device-name string) is malformed: logged and skipped by
+    /// `resolve_library_route`, never routed. No `"*"` wildcard. Editable
+    /// via the F2 Settings "Library routes" row, and hand-editable in
+    /// `config.toml`.
     pub library_routes: std::collections::HashMap<String, String>,
     pub config_version: u32, // schema version for future migrations (0 = unversioned)
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
@@ -131,15 +136,42 @@ impl Config {
     }
 }
 
-/// Resolves the configured device name for a library name (#239). Matches
+/// Resolves the configured endpoint for a library name (#256). Matches
 /// case-insensitively (the query is lowercased before lookup; `routes`'
 /// keys are already lowercased by `parse_config`). No wildcard fallback --
 /// returns `None` if the library has no route, and the caller stays local.
-pub fn resolve_library_route<'a>(
-    routes: &'a std::collections::HashMap<String, String>,
+///
+/// Parses the stored string via `DaemonEndpoint::parse` and requires it to
+/// be `Tcp(_)` -- library routing is a remote-only feature (#239 addendum:
+/// "#222 and #223 are remote-connection features only"), so anything else
+/// is malformed: a bare pre-#256 device-name string (which `parse` would
+/// otherwise silently accept as a bogus `Unix(PathBuf)` socket path), a
+/// `unix://` value, or a bare `local`/empty value are all logged and
+/// skipped rather than routed. This is a pure, synchronous, no-network
+/// lookup -- the entire point of #256 is that route resolution on the
+/// play/enqueue path never touches `/Sessions` again.
+pub fn resolve_library_route(
+    routes: &std::collections::HashMap<String, String>,
     library_name: &str,
-) -> Option<&'a str> {
-    routes.get(&library_name.to_lowercase()).map(|s| s.as_str())
+) -> Option<crate::remote_player::DaemonEndpoint> {
+    let raw = routes.get(&library_name.to_lowercase())?;
+    match crate::remote_player::DaemonEndpoint::parse(raw) {
+        Ok(endpoint @ crate::remote_player::DaemonEndpoint::Tcp(_)) => Some(endpoint),
+        Ok(other) => {
+            log::warn!(
+                target: "library_route",
+                "library_routes entry {raw:?} parsed as {other:?}, but library routing is tcp://-only; skipping"
+            );
+            None
+        }
+        Err(e) => {
+            log::warn!(
+                target: "library_route",
+                "library_routes entry {raw:?} is not a valid tcp:// endpoint: {e}; skipping"
+            );
+            None
+        }
+    }
 }
 
 pub fn is_system_instance() -> bool {
@@ -1362,12 +1394,12 @@ hidden_latest = ["Movies", "TV SHOWS"]
 [server]
 url = "http://host"
 [library_routes]
-Music = "living-room-pc"
+Music = "tcp://192.168.0.104:47788"
 "#;
         let cfg = parse_config(toml).unwrap();
         assert_eq!(
             cfg.library_routes.get("music").map(String::as_str),
-            Some("living-room-pc")
+            Some("tcp://192.168.0.104:47788")
         );
     }
 
@@ -1379,12 +1411,12 @@ Music = "living-room-pc"
 [server]
 url = "http://host"
 [library_routes]
-"*" = "living-room-pc"
+"*" = "tcp://192.168.0.104:47788"
 "#;
         let cfg = parse_config(toml).unwrap();
         assert_eq!(
             cfg.library_routes.get("*").map(String::as_str),
-            Some("living-room-pc")
+            Some("tcp://192.168.0.104:47788")
         );
         assert_eq!(resolve_library_route(&cfg.library_routes, "movies"), None);
     }
@@ -1425,11 +1457,37 @@ url = "http://host"
     #[test]
     fn resolve_library_route_has_no_wildcard_fallback() {
         let mut routes = std::collections::HashMap::new();
-        routes.insert("music".to_string(), "living-room-pc".to_string());
+        routes.insert("music".to_string(), "tcp://192.168.0.104:47788".to_string());
         assert_eq!(
             resolve_library_route(&routes, "Music"),
-            Some("living-room-pc")
+            Some(crate::remote_player::DaemonEndpoint::Tcp(
+                "192.168.0.104:47788".parse().unwrap()
+            ))
         );
+        assert_eq!(resolve_library_route(&routes, "movies"), None);
+    }
+
+    #[test]
+    fn resolve_library_route_rejects_a_bare_device_name_as_malformed() {
+        // A stale pre-#256 config entry (device name, no scheme) must
+        // NOT silently resolve -- DaemonEndpoint::parse would otherwise
+        // accept it as a bogus Unix(PathBuf) socket path. Library routing
+        // is tcp://-only (#239 addendum), so anything that doesn't parse
+        // to Tcp(_) is treated as malformed: logged and skipped.
+        let mut routes = std::collections::HashMap::new();
+        routes.insert("music".to_string(), "living-room-pc".to_string());
+        assert_eq!(resolve_library_route(&routes, "music"), None);
+    }
+
+    #[test]
+    fn resolve_library_route_rejects_unix_and_local_endpoints() {
+        // Library routing is remote-only -- a unix:// or bare "local"
+        // value is well-formed as a DaemonEndpoint but not a valid
+        // library route, so it must still resolve to None.
+        let mut routes = std::collections::HashMap::new();
+        routes.insert("music".to_string(), "unix:///run/mbvd.sock".to_string());
+        routes.insert("movies".to_string(), "local".to_string());
+        assert_eq!(resolve_library_route(&routes, "music"), None);
         assert_eq!(resolve_library_route(&routes, "movies"), None);
     }
 

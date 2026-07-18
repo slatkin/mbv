@@ -7308,9 +7308,12 @@ mod tests {
 
     #[test]
     fn play_item_swaps_to_library_route_before_replacing_queue() {
+        // #256: library-route resolution is now a pure config read -- no
+        // live session lookup, no SESSIONS_LOAD_OVERRIDE seam needed here.
+        // DAEMON_ROUTE_CONNECT_OVERRIDE is still needed: apply_route_for_playback
+        // still performs a real connect to the resolved endpoint.
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = crate::app::DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-        let _sessions_guard = crate::app::SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
         fn route_connect_success(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
@@ -7327,19 +7330,10 @@ mod tests {
             ))
         }
         *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = crate::app::tests::make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *crate::app::SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
 
         let mut app = make_app_stub();
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -7358,7 +7352,6 @@ mod tests {
         app.play_item(item);
 
         *crate::app::DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-        *crate::app::SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(app.active_route.as_deref(), Some("music"));
     }
 
