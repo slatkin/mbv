@@ -101,3 +101,16 @@ per-library routing rather than only the wildcard "route everything" case
   swap replaces the old connection, and in `restore_local_mode`'s
   return-to-local path, so ADR 0010's framing is now accurate rather than
   aspirational.)
+
+## Addendum (#239): config renamed to `[library_routes]`, values are device names
+
+The `[daemon_routes]` config table described above required a raw
+`tcp://`/`unix://` connection string per library. #239 replaced it with
+`[library_routes]`: library name -> **device name**, resolved against the
+live Emby session list at connect time via the same mechanism
+`App::session_direct_endpoint` already used for F3's Sessions panel
+(`App::resolve_device_endpoint`, added in #239). No raw address is ever
+typed or displayed. The `"*"` wildcard is gone; there is no migration path
+from the old format -- it's a breaking config change. See
+`docs/superpowers/specs/2026-07-18-library-routes-by-device-name-design.md`
+for the full design.
