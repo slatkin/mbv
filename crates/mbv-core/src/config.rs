@@ -428,6 +428,10 @@ pub fn load_last_remote_connection() -> Option<LastRemoteConnection> {
         Ok(conn) => Some(conn),
         Err(e) => {
             log::warn!(target: "auto_reconnect", "last_remote_connection.json failed to parse, not reconnecting: {e}");
+            // Self-heal immediately rather than leaving a corrupt file that
+            // would silently break auto-reconnect on every future startup
+            // until the next clean teardown happens to overwrite it (#236).
+            let _ = std::fs::remove_file(last_remote_connection_path());
             None
         }
     }
