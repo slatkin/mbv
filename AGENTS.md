@@ -63,6 +63,10 @@ For reported regressions, follow `docs/agents/debugging-regressions.md` before e
 
 # Repo
 
+## Development
+
+Read `docs/agents/worktrees.md` before beginning development. Read `docs/agents/repo.md` for repo setup and configuration. See `docs/CHECKIN.md` for pre-commit steps.
+
 ## Issue tracker
 
 Issues live in GitHub Issues (slatkin/mbv), managed via the `gh` CLI. External PRs are not pulled into triage. See `docs/agents/issue-tracker.md`.
@@ -85,6 +89,5 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 - Never open a pull request unless explicitly asked to do so; don't run `gh pr create` unless requested.
 - Documentation cleanup is agent-owned work in this repo: keep `CONTEXT.md`, `docs/adr/`, and related domain docs current as part of implementation changes, do not hand that cleanup back to the user, and do not leave doc edits sitting uncommitted at the end of the task.
 - Before starting a new ADR, run `ls docs/adr/ | sort -t- -k1 -n | tail -1` against the target merge branch (not just your worktree) at plan-authoring time, and note the reserved number in the plan's header (`**ADR:** 00NN, reserved <date>`) so a concurrently-written sibling plan can grep for it. Two independently-authored plans claiming the same ADR number is a known failure mode here (#222/#223).
-
 
 
