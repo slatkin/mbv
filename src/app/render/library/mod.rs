@@ -26,6 +26,13 @@ impl App {
         if lib_idx >= self.libs.len() {
             return;
         }
+        // Self-heal, mirroring render_power_list's own inline call: the
+        // only other place that triggers a library's load is
+        // set_tab()/activate_library_position_scope(), which never runs
+        // for the tab restored directly as `tab_idx` at startup (#248) --
+        // without this, that tab's nav_stack stays empty forever and
+        // shows "Loading..." with no fetch ever spawned.
+        self.ensure_lib_loaded_for(lib_idx);
         let panel_visible = crumb_area.is_some();
         let is_loading = self.libs[lib_idx]
             .nav_stack
@@ -177,5 +184,58 @@ impl App {
         } else {
             self.render_library_table(f, inner, lib_idx, layout);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::LibraryTab;
+    use ratatui::backend::TestBackend;
+    use ratatui::Terminal;
+
+    /// Issue #248: a library tab that's active from a *restored* `tab_idx`
+    /// at startup never has its content loaded, because `build()` sets
+    /// `tab_idx` as a raw struct field (not via `set_tab()`, which is the
+    /// only thing that calls `ensure_lib_loaded_for` for the plain library
+    /// path). Unlike Power View's `render_power_list` (which calls
+    /// `ensure_lib_loaded_for` on every frame as a self-heal), plain
+    /// `render_library` had no equivalent -- so a library with an empty
+    /// `nav_stack` rendered "Loading..." forever with no fetch ever
+    /// spawned. This asserts rendering alone -- with no prior `set_tab()`
+    /// call -- is enough to kick off the load, exactly like Power View.
+    #[test]
+    fn render_library_triggers_load_for_never_visited_library_with_no_prior_set_tab() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.collection_type = "movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+
+        let backend = TestBackend::new(60, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutLibrary::default();
+        term.draw(|f| {
+            app.render_library(f, Rect::new(0, 0, 60, 20), 0, None, &mut layout);
+        })
+        .unwrap();
+
+        assert_eq!(
+            app.libs[0].nav_stack.len(),
+            1,
+            "render_library must trigger ensure_lib_loaded_for for a never-visited \
+             library, the same way render_power_list does, so a library restored as \
+             the startup tab_idx isn't stuck on \"Loading...\" forever"
+        );
+        assert!(app.libs[0].nav_stack[0].loading);
     }
 }

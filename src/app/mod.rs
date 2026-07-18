@@ -360,6 +360,25 @@ impl BrowseLevel {
     }
 }
 
+/// Resolves the startup `tab_idx` from `prefs.json` (#248). `queue_view`
+/// (`prefs["playlist_view"]`) and `power_left_tab` are Power View's own
+/// saved state and only mean anything if the app actually lands in Power
+/// View -- so when the last session had Power View turned on, that takes
+/// priority over whatever plain tab happened to be active most recently
+/// (e.g. a quick glance at a library tab right before quitting). Without
+/// this, `tab_idx` alone decided the startup tab, silently dropping back
+/// to a plain library view even though Power View was "on" and fully
+/// restorable (`power_left_tab_pending` only ever applies from inside
+/// `render_power_view`, which never runs unless `tab_idx == 1`).
+fn startup_tab_idx(start_on_queue: bool, prefs: &serde_json::Value) -> usize {
+    let queue_view = prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8;
+    if start_on_queue || queue_view == QUEUE_VIEW_POWER {
+        1
+    } else {
+        prefs["tab_idx"].as_u64().unwrap_or(0) as usize
+    }
+}
+
 fn restore_library_position<F>(
     saved: &crate::config::LibraryPosition,
     visible_rows: usize,
@@ -1693,11 +1712,7 @@ impl App {
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
-            tab_idx: if init.start_on_queue {
-                1
-            } else {
-                prefs["tab_idx"].as_u64().unwrap_or(0) as usize
-            },
+            tab_idx: startup_tab_idx(init.start_on_queue, &prefs),
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
             search: SearchSubsystem::new(init.search_tx, init.search_rx),
@@ -4102,6 +4117,33 @@ pub(crate) mod tests {
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use unicode_width::UnicodeWidthStr;
+
+    // Issue #248: Power View not restored at startup even though
+    // queue_view/power_left_tab were correctly persisted, because tab_idx
+    // alone (independent of queue_view) decided the startup tab.
+    #[test]
+    fn startup_tab_idx_prefers_power_view_over_a_stale_plain_tab_idx() {
+        let prefs = serde_json::json!({ "tab_idx": 3, "playlist_view": 1 });
+        assert_eq!(startup_tab_idx(false, &prefs), 1);
+    }
+
+    #[test]
+    fn startup_tab_idx_uses_saved_tab_idx_when_queue_view_is_not_power() {
+        let prefs = serde_json::json!({ "tab_idx": 3, "playlist_view": 0 });
+        assert_eq!(startup_tab_idx(false, &prefs), 3);
+    }
+
+    #[test]
+    fn startup_tab_idx_defaults_to_home_with_no_saved_prefs() {
+        let prefs = serde_json::Value::Null;
+        assert_eq!(startup_tab_idx(false, &prefs), 0);
+    }
+
+    #[test]
+    fn startup_tab_idx_start_on_queue_wins_regardless_of_saved_prefs() {
+        let prefs = serde_json::json!({ "tab_idx": 3, "playlist_view": 0 });
+        assert_eq!(startup_tab_idx(true, &prefs), 1);
+    }
 
     pub(crate) fn make_item(name: &str, item_type: &str) -> MediaItem {
         MediaItem {
