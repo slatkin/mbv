@@ -52,6 +52,13 @@ static DAEMON_ROUTE_CONNECT_OVERRIDE: Mutex<Option<DirectConnectFn>> = Mutex::ne
 #[cfg(test)]
 static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
 
+#[cfg(test)]
+type SessionsLoadFn = fn(&mbv_core::api::EmbyClient) -> Result<Vec<mbv_core::api::SessionInfo>, String>;
+#[cfg(test)]
+static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
+#[cfg(test)]
+static SESSIONS_LOAD_TEST_LOCK: Mutex<()> = Mutex::new(());
+
 pub(super) const QUEUE_VIEW_POWER: u8 = 1;
 pub(super) const QUEUE_VIEW_COUNT: u8 = 2;
 pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
@@ -1916,6 +1923,7 @@ impl App {
             stay_alive_ctrl: stay_alive::StayAliveCtrl::from_env(),
         });
         app.mpris = Some(mpris_handle);
+        app.try_auto_reconnect();
         app
     }
 
@@ -2480,6 +2488,80 @@ impl App {
                 );
                 format!("\u{26a0} {route_label} route unreachable, using local playback (mbv.log)")
             })
+    }
+
+    /// Blocking `GET /Sessions`, factored out only so tests can override it
+    /// (mirrors `connect_daemon_route_endpoint`'s `#[cfg(test)]` seam) --
+    /// `try_auto_reconnect`'s `DirectSession` case is the one caller.
+    fn fetch_sessions_blocking(&self) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+        #[cfg(test)]
+        if let Some(f) = *SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
+            return f(&self.client.lock().unwrap());
+        }
+        self.client.lock().unwrap().get_sessions()
+    }
+
+    /// Restores the remote connection active when mbv last exited (issue
+    /// #236 -- #222's original "auto-reconnect" intent). Called once from
+    /// `App::new` (never `App::new_remote`, whose `--connect-daemon`
+    /// startup path is a separate, unaffected mechanism per ADR 0010). A
+    /// no-op unless `auto_reconnect` is enabled and
+    /// `load_last_remote_connection` has a record. One shot, no retry: a
+    /// failed connect, a route no longer present in `daemon_routes`, or a
+    /// device not found in the current session list all fall back to (stay
+    /// on) local playback, exactly like #222's per-play lazy-connect
+    /// fallback rule -- never a hard failure at startup.
+    fn try_auto_reconnect(&mut self) {
+        if !self.client.lock().unwrap().config.auto_reconnect {
+            return;
+        }
+        let Some(last) = mbv_core::config::load_last_remote_connection() else {
+            return;
+        };
+        match last {
+            mbv_core::config::LastRemoteConnection::LibraryRoute { library } => {
+                let Some((name, endpoint)) = self.resolve_route_for_library(&library) else {
+                    log::info!(
+                        target: "auto_reconnect",
+                        "persisted library route {library:?} no longer resolves; staying local"
+                    );
+                    return;
+                };
+                match self.try_daemon_route_connect(&endpoint, &name) {
+                    Ok((remote, remote_rx)) => {
+                        self.switch_to_library_route(&name, remote, remote_rx)
+                    }
+                    Err(message) => self.flash_status_high(message),
+                }
+            }
+            mbv_core::config::LastRemoteConnection::DirectSession { device_name } => {
+                let sessions = match self.fetch_sessions_blocking() {
+                    Ok(sessions) => sessions,
+                    Err(e) => {
+                        log::warn!(target: "auto_reconnect", "failed to list sessions: {e}");
+                        self.flash_status_high(format!(
+                            "\u{26a0} Auto-reconnect couldn't list sessions ({e}), using local playback"
+                        ));
+                        return;
+                    }
+                };
+                match sessions
+                    .into_iter()
+                    .find(|s| s.device_name.eq_ignore_ascii_case(&device_name))
+                {
+                    Some(sess) => self.connect_to_session(&sess),
+                    None => {
+                        log::info!(
+                            target: "auto_reconnect",
+                            "device {device_name:?} not found in current sessions; staying local"
+                        );
+                        self.flash_status_high(format!(
+                            "\u{26a0} {device_name} not found, using local playback"
+                        ));
+                    }
+                }
+            }
+        }
     }
 
     fn switch_to_direct_remote(
@@ -6793,6 +6875,145 @@ pub(crate) mod tests {
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn try_auto_reconnect_restores_a_persisted_library_route() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
+        fn route_connect_success(
+            _endpoint: &mbv_core::remote_player::DaemonEndpoint,
+            _auth_token: &str,
+        ) -> Result<
+            (
+                mbv_core::remote_player::RemotePlayer,
+                mpsc::Receiver<PlayerEvent>,
+            ),
+            String,
+        > {
+            Ok(mbv_core::remote_player::RemotePlayer::stub(
+                make_items(1),
+                0,
+            ))
+        }
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
+
+        crate::config::save_last_remote_connection(Some(
+            &crate::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string(),
+            },
+        ));
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+
+        app.try_auto_reconnect();
+
+        *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(app.player.is_remote());
+    }
+
+    #[test]
+    fn try_auto_reconnect_falls_back_to_local_when_route_no_longer_configured() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        crate::config::save_last_remote_connection(Some(
+            &crate::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string(),
+            },
+        ));
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+        // No `daemon_routes` entry for "music" this time -- config changed
+        // since the last exit.
+
+        app.try_auto_reconnect();
+
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
+    }
+
+    #[test]
+    fn try_auto_reconnect_restores_a_persisted_direct_session() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn sessions_with_living_room(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            Ok(vec![make_session("living-room-mbv", "mbv")])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(sessions_with_living_room);
+
+        crate::config::save_last_remote_connection(Some(
+            &crate::config::LastRemoteConnection::DirectSession {
+                device_name: "living-room-mbv".to_string(),
+            },
+        ));
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+
+        app.try_auto_reconnect();
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(app.connected_session_id.as_deref(), Some("sess-1"));
+    }
+
+    #[test]
+    fn try_auto_reconnect_falls_back_to_local_when_device_not_found() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn sessions_without_living_room(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            Ok(vec![])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(sessions_without_living_room);
+
+        crate::config::save_last_remote_connection(Some(
+            &crate::config::LastRemoteConnection::DirectSession {
+                device_name: "living-room-mbv".to_string(),
+            },
+        ));
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+
+        app.try_auto_reconnect();
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert!(app.connected_session_id.is_none());
+        assert!(!app.player.is_remote());
+    }
+
+    #[test]
+    fn try_auto_reconnect_is_a_no_op_when_disabled() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        crate::config::save_last_remote_connection(Some(
+            &crate::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string(),
+            },
+        ));
+        let mut app = make_app_stub();
+        assert!(!app.client.lock().unwrap().config.auto_reconnect);
+        app.daemon_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+
+        app.try_auto_reconnect();
+
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
+    }
+
+    #[test]
+    fn try_auto_reconnect_is_a_no_op_when_nothing_was_persisted() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+
+        app.try_auto_reconnect();
+
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
     }
 
     #[test]
