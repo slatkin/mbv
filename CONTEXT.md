@@ -21,8 +21,8 @@ The core model for ordered queue slots, slot identity, active playback slot, que
 _Avoid_: putting UI focus/scroll/cursor concerns or mpv adapter mechanics inside the queue model.
 
 **Remote slot state**:
-A derived classification — recomputed on demand, never stored — of which kind of control relationship the app currently has to a player: none, attached to another session, directly remote, or acting as a local daemon.
-_Avoid_: implying it's a field that gets set; it's computed fresh from other state each time it's read.
+A derived display classification — recomputed on demand, never stored — of which kind of control relationship the app currently has to a player: none, attached to another session, directly remote, or acting as a local daemon.
+_Avoid_: implying it's a field that gets set, or using it as authority for what a user action is allowed to disconnect; it's computed fresh from other state each time it's read.
 
 **Thin client**:
 A TUI instance whose authoritative playback state comes from a daemon-backed player/queue instead of a locally-owned player. This describes the control model, not where the daemon runs.
@@ -32,8 +32,16 @@ _Avoid_: treating this as synonymous with **Local daemon** — a thin client can
 The local player and its event channels, parked in place when control is handed off to a direct remote, so that local playback can be resumed later without rebuilding it from scratch. Used by two independent callers: the Sessions-panel direct-remote upgrade (`switch_to_direct_remote`) and library-scoped daemon routing (`switch_to_library_route`, #223) -- both restore through the same `restore_local_mode`.
 _Avoid_: conflating with remote slot state — that's a classification of the current relationship; this is a stashed resource that exists only during part of one such relationship (direct remote or library route).
 
+**Sessions-panel connection**:
+A playback/control relationship created from F3 by selecting a discovered session. It may attach to an Emby session or directly control another mbv daemon, and F3's disconnect command may disconnect it.
+_Avoid_: using this for route-owned daemon transport just because that transport reaches the same device or endpoint.
+
+**Route-owned transport**:
+The remote daemon connection created as an implementation detail of a library route. It is governed by library route policy, not by F3 session controls.
+_Avoid_: treating it as a Sessions-panel connection or letting F3 disconnect it merely because routed playback is remote.
+
 **Library route** / **Route table** (`library_routes`):
-A `[library_routes]` config table mapping library name (matched case-insensitively, same convention as `hidden_libraries`/`feed_view_libraries`) to a **device name**, resolved against the live Emby session list at connect time (`App::resolve_device_endpoint`) the same way F3's Sessions panel resolves a session to a connection. A play/enqueue action resolved to a routed library swaps the active player to that device via `switch_to_library_route`, a sibling to `switch_to_direct_remote` using the same **Suspended local session** mechanism -- tracked by its own `active_route` field, kept independent of the Sessions-panel direct-remote's `connected_session_id`/`direct_remote_label`. No wildcard. Editable via config.toml or the F2 Settings "Library routes" row. See #223, #239.
+A persistent playback policy in `[library_routes]` mapping library name (matched case-insensitively, same convention as `hidden_libraries`/`feed_view_libraries`) to a **device name**, resolved against the live Emby session list at connect time (`App::resolve_device_endpoint`) the same way F3's Sessions panel resolves a session to a connection. A play/enqueue action resolved to a routed library swaps the active player to that device via `switch_to_library_route`, a sibling to `switch_to_direct_remote` using the same **Suspended local session** mechanism -- tracked by its own `active_route` field, kept independent of the Sessions-panel direct-remote's `connected_session_id`/`direct_remote_label`. No wildcard. Editable via config.toml or the F2 Settings "Library routes" row. See #223, #239.
 _Avoid_: conflating a library route with a Sessions-panel **Thin client** connection -- they are two independent ways to end up thin-client, and connecting to either takes driving-client authority over that daemon (ADR 0007) as an accepted consequence, not a hidden side effect.
 
 **Routed queue**:
