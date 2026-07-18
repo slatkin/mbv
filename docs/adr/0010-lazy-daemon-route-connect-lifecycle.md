@@ -8,9 +8,16 @@ rules, distinct from the existing startup-only `--connect-daemon` /
 `daemon_client_endpoint` thin-client path (`main.rs`'s `explicit_daemon_endpoint`
 branch), which is unaffected by this ADR:
 
-1. **Lazy connect.** mbv never attempts a daemon-route connection at
-   startup. The first play/enqueue action that resolves to a configured
-   route is what triggers the first connect attempt.
+1. **Lazy connect, with an opt-in startup exception.** By default, mbv
+   never attempts a daemon-route connection at startup — the first
+   play/enqueue action that resolves to a configured route is what
+   triggers the first connect attempt. When `auto_reconnect` is
+   enabled (issue #236), mbv additionally makes one attempt at startup to
+   restore whichever remote connection (library route or Sessions-panel
+   direct-remote/attached session) was active when it last exited. This
+   was #222's original intent — its initial design mistakenly ruled out
+   any startup connection entirely, which #236 corrected. See
+   `App::try_auto_reconnect` (`src/app/mod.rs`).
 2. **Fallback, not hard-fail.** A failed connect attempt falls back to (or
    stays on) local playback. It never hard-fails or exits the process. The
    raw failure is always logged (`log::warn!`, `target: "daemon_route"`).
@@ -58,15 +65,16 @@ outside a single issue body, mirroring why ADR 0003 exists (see that ADR's
 or reverse them without leaving a trace.
 
 Implementation: `App::try_daemon_route_connect` /
-`App::connect_daemon_route_endpoint` in `src/app/mod.rs` (issue #222). No
-production call site exists yet — #223 wires the actual play/enqueue
-trigger and the per-library swap (a sibling to `switch_to_direct_remote` /
-`restore_local_mode`) that calls this primitive. Both methods carry a
-scoped `#[allow(dead_code)]` until that call site lands (see the doc
-comments on each in `src/app/mod.rs`) -- this repo's "fix all compile
-warnings, never `#[allow(unused)]`" convention (`mem:conventions`) is
-deliberately overridden in this one, narrow, self-documenting case, not
-silently worked around.
+`App::connect_daemon_route_endpoint` in `src/app/mod.rs` (issue #222). Two
+production call sites now exist: #223's `apply_route_for_playback` (the
+per-library swap, a sibling to `switch_to_direct_remote` /
+`restore_local_mode`, wiring the actual play/enqueue trigger), and #236's
+`try_auto_reconnect` (restoring the last remote connection at startup).
+Both methods carried a scoped `#[allow(dead_code)]` until #223's call site
+landed (see the doc comments on each in `src/app/mod.rs`) -- this repo's
+"fix all compile warnings, never `#[allow(unused)]`" convention
+(`mem:conventions`) was deliberately overridden in that narrow,
+self-documenting case, not silently worked around.
 
 ## Consequences
 
@@ -93,3 +101,19 @@ silently worked around.
   is unrelated to rule 3 above and is unaffected: it waits out a
   same-machine daemon's own startup race *within* one connect attempt, not
   a retry *after* a whole attempt already failed.
+
+## Correction (#236)
+
+This ADR's original rule 1 stated flatly that mbv "never attempts a
+daemon connection at startup, regardless of config" and that
+`try_daemon_route_connect` "must not be invoked from `App::new`,
+`App::new_remote`, or `App::build`" (from this ADR's originating plan,
+`docs/superpowers/plans/2026-07-17-daemon-connect-lifecycle.md`). That
+was a misreading of issue #222's own title ("auto-reconnect to remote
+client") against its body: #222 was supposed to deliver reconnect-at-
+startup, not rule it out. Issue #236 corrected this: `App::new` now calls
+`App::try_auto_reconnect` once, gated on the new `auto_reconnect`
+config flag (default off), restoring whichever connection was active at
+last exit. `App::new_remote` (the separate, pre-existing
+`--connect-daemon`/`daemon_client_endpoint` path) remains untouched, as
+rule 1 always intended.

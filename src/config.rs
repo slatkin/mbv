@@ -1,10 +1,12 @@
-#[cfg(test)]
-pub use mbv_core::config::TestStateDirGuard;
 pub use mbv_core::config::{
     clear_queue_state, is_system_instance, load_library_position_state, load_queue_state,
     prefs_path, save_library_position_state, save_queue_state, Config, LibraryPosition,
     LibraryPositionLevel, LibraryPositionState, QueueSource, QueueState,
 };
+#[cfg(test)]
+pub use mbv_core::config::{load_last_remote_connection, save_last_remote_connection};
+#[cfg(test)]
+pub use mbv_core::config::{LastRemoteConnection, TestStateDirGuard};
 
 use std::path::PathBuf;
 
