@@ -1659,7 +1659,6 @@ impl App {
         if self.connected_session_id.is_some() || self.connected_session_state.is_some() {
             self.connected_session_id = None;
             self.connected_session_state = None;
-            self.direct_remote_connected = false;
             self.session_miss_count = 0;
             self.remote_pos_s = 0;
             self.flash_status("Disconnected from remote session".to_string());
@@ -2933,7 +2932,6 @@ impl App {
         );
         self.connected_session_id = Some(id);
         self.connected_session_state = Some(sess.clone());
-        self.direct_remote_connected = false;
         self.session_miss_count = 0;
         self.remote_pos_s = sess.position_s;
         self.remote_pos_at = Instant::now();
@@ -11241,6 +11239,31 @@ pub(crate) mod tests {
         assert!(app.active_route.is_none());
         assert!(!app.player.is_remote());
         assert_eq!(app.status, "Disconnected from direct remote session");
+    }
+
+    #[test]
+    fn disconnecting_attached_session_preserves_sessions_panel_direct_remote() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        let direct_session = make_session("music", "mbv");
+        let attached_session = make_session("living-room", "Emby");
+
+        app.switch_to_direct_remote(&direct_session, remote, remote_rx);
+        app.connect_to_session(&attached_session);
+
+        assert!(app.direct_remote_connected);
+        assert!(app.connected_session_id.is_some());
+
+        app.disconnect_remote();
+
+        assert!(app.player.is_remote());
+        assert!(app.direct_remote_connected);
+        assert!(app.can_disconnect_remote());
+
+        app.disconnect_remote();
+
+        assert!(!app.player.is_remote());
+        assert!(!app.direct_remote_connected);
     }
 
     #[test]
