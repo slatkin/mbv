@@ -4,7 +4,7 @@
 
 **Goal:** Make F3 disconnect act only on Sessions-panel-owned connections, so route-owned playback cannot be disconnected or de-routed by pressing `d` in F3.
 
-**Architecture:** Preserve the existing remote transport and suspend/restore machinery. Narrow F3 action authority at the `App` caller level: `RemoteSlotState` remains display-oriented, while `can_disconnect_remote()` and `disconnect_remote()` use explicit Sessions-panel-owned state (`connected_session_*` or `direct_remote_label`) instead of inferred remote transport shape.
+**Architecture:** Preserve the existing remote transport and suspend/restore machinery. Narrow F3 action authority at the `App` caller level: `RemoteSlotState` remains display-oriented, while `can_disconnect_remote()` and `disconnect_remote()` use explicit Sessions-panel-owned state (`connected_session_*` or `direct_remote_connected`) instead of inferred remote transport shape. `direct_remote_label` is display/persistence metadata and must not be used as the authority signal.
 
 **Tech Stack:** Rust, existing `src/app/mod.rs` app-level tests, existing `cargo test -p mbv <filter>` workflow, manual mbv runtime repro for #249.
 
@@ -165,6 +165,7 @@ git commit -m "test: pin sessions panel disconnect ownership"
   - `fn has_sessions_panel_connection(&self) -> bool`
   - `fn can_disconnect_remote(&self) -> bool`
   - `fn disconnect_remote(&mut self)`
+  - `direct_remote_connected: bool` as the explicit Sessions-panel ownership marker for the current direct remote transport.
 
 - [ ] **Step 1: Add a Sessions-panel ownership predicate**
 
@@ -174,11 +175,11 @@ Add this helper immediately after `remote_slot_state()`:
 fn has_sessions_panel_connection(&self) -> bool {
     self.connected_session_id.is_some()
         || self.connected_session_state.is_some()
-        || self.direct_remote_label.is_some()
+        || self.direct_remote_connected
 }
 ```
 
-Rationale: attached Emby sessions use `connected_session_*`; F3 direct remote upgrades clear attached-session state but retain `direct_remote_label`. Route-owned transport sets `active_route` and intentionally leaves all Sessions-panel fields empty.
+Rationale: attached Emby sessions use `connected_session_*`; F3 direct remote upgrades set `direct_remote_connected`. Route-owned transport sets `active_route` and intentionally leaves all Sessions-panel authority fields empty. `direct_remote_label` may be empty or missing for display reasons, so it cannot determine disconnect authority.
 
 - [ ] **Step 2: Replace `can_disconnect_remote()`**
 
@@ -213,7 +214,7 @@ fn disconnect_remote(&mut self) {
         self.session_miss_count = 0;
         self.remote_pos_s = 0;
         self.flash_status("Disconnected from remote session".to_string());
-    } else if self.direct_remote_label.is_some() {
+    } else if self.direct_remote_connected {
         self.restore_local_mode("Disconnected from direct remote session");
     } else {
         self.flash_status("No session connected".to_string());
@@ -223,6 +224,42 @@ fn disconnect_remote(&mut self) {
 
 Do not call `restore_local_mode()` from the final `else` branch. That branch covers route-owned transport, local-daemon mode, and fully local playback; none is a Sessions-panel connection.
 
+Keep `direct_remote_connected` true when an attached-session overlay is connected or disconnected on top of an existing F3-created direct remote transport. Clear it only when the direct transport is replaced, routed, explicitly disconnected, or restored to local mode.
+
+- [ ] **Step 3a: Add transition coverage for attached-session overlays**
+
+Add a focused regression test for this sequence:
+
+```rust
+#[test]
+fn disconnecting_attached_session_preserves_underlying_sessions_panel_direct_remote() {
+    let mut app = make_app_stub();
+    let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+    let direct = make_session("music", "mbv");
+    let attached = make_session("phone", "Emby");
+
+    app.switch_to_direct_remote(&direct, remote, remote_rx);
+    assert!(app.direct_remote_connected);
+    assert!(app.can_disconnect_remote());
+
+    app.connect_to_session(&attached);
+    assert!(app.direct_remote_connected);
+    assert!(app.connected_session_id.is_some() || app.connected_session_state.is_some());
+    assert!(app.can_disconnect_remote());
+
+    app.disconnect_remote();
+    assert!(app.direct_remote_connected);
+    assert!(app.player.is_remote());
+    assert!(app.can_disconnect_remote());
+
+    app.disconnect_remote();
+    assert!(!app.direct_remote_connected);
+    assert!(!app.player.is_remote());
+}
+```
+
+Also retain coverage that F3 direct remote remains disconnectable when the daemon reports an empty device name; that is the regression guard proving the authority bit is not inferred from `direct_remote_label`.
+
 - [ ] **Step 4: Run the focused test set**
 
 Run:
@@ -231,6 +268,7 @@ Run:
 cargo test -p mbv remote_slot_state_direct_remote_display_does_not_imply_sessions_panel_disconnect
 cargo test -p mbv route_owned_transport_is_not_sessions_panel_disconnectable
 cargo test -p mbv disconnect_remote_restores_local_for_sessions_panel_direct_remote
+cargo test -p mbv disconnecting_attached_session_preserves_underlying_sessions_panel_direct_remote
 cargo test -p mbv disconnect_remote_does_not_exit_local_daemon_mode
 cargo test -p mbv disconnect_remote_clears_attached_remote_session
 cargo test -p mbv attached_session_state_wins_over_local_daemon_indicator
@@ -355,4 +393,4 @@ git commit -m "test: cover route disconnect runtime boundary"
 
 - Spec coverage: Task 1 and Task 2 cover F3 `d` not clearing `active_route`, reporting `No session connected`, preserving F3 direct disconnect, and preserving F3 `Enter` takeover semantics. Task 3 covers the required real runtime repro check.
 - Placeholder scan: no incomplete markers or fill-in instructions remain; code snippets and commands are explicit.
-- Type consistency: helper names and field names match existing `src/app/mod.rs` state (`connected_session_id`, `connected_session_state`, `direct_remote_label`, `active_route`, `remote_slot_state`, `restore_local_mode`).
+- Type consistency: helper names and field names match existing `src/app/mod.rs` state (`connected_session_id`, `connected_session_state`, `direct_remote_connected`, `direct_remote_label`, `active_route`, `remote_slot_state`, `restore_local_mode`). `direct_remote_label` is display/persistence metadata only, not disconnect authority.
