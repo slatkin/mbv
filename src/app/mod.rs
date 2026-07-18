@@ -3573,7 +3573,7 @@ impl App {
     fn teardown(&mut self, quit_timeout: Duration) {
         // #236: persist whichever remote connection (if any) is active
         // right now, before anything below or in the caller's cleanup
-        // path clears `active_route`/`connected_session_state` -- so the
+        // path clears `active_route` / direct-session identity -- so the
         // next launch's `App::new` can restore it. Mutually exclusive by
         // construction (library routing and Sessions-panel direct-remote
         // are two independent ways to end up thin-client; #223's
@@ -3589,10 +3589,14 @@ impl App {
         if !self.launched_as_remote && self.client.lock().unwrap().config.auto_reconnect {
             let last = if let Some(library) = self.active_route.clone() {
                 Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library })
+            } else if let Some(sess) = self.connected_session_state.as_ref() {
+                Some(mbv_core::config::LastRemoteConnection::DirectSession {
+                    device_name: sess.device_name.clone(),
+                })
             } else {
-                self.connected_session_state.as_ref().map(|sess| {
+                self.direct_remote_label.as_ref().map(|device_name| {
                     mbv_core::config::LastRemoteConnection::DirectSession {
-                        device_name: sess.device_name.clone(),
+                        device_name: device_name.clone(),
                     }
                 })
             };
@@ -6160,6 +6164,25 @@ pub(crate) mod tests {
         app.connected_session_id = Some(sess.id.clone());
         app.connected_session_state = Some(sess);
 
+        app.teardown(Duration::from_secs(1));
+
+        assert_eq!(
+            crate::config::load_last_remote_connection(),
+            Some(crate::config::LastRemoteConnection::DirectSession {
+                device_name: "living-room-mbv".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn teardown_persists_direct_remote_when_auto_reconnect_enabled() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+        let sess = make_session("living-room-mbv", "mbv");
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
         app.teardown(Duration::from_secs(1));
 
         assert_eq!(
