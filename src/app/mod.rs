@@ -3429,6 +3429,27 @@ impl App {
     /// never had test coverage since it unconditionally calls
     /// `enable_raw_mode()`).
     fn teardown(&mut self, quit_timeout: Duration) {
+        // #236: persist whichever remote connection (if any) is active
+        // right now, before anything below or in the caller's cleanup
+        // path clears `active_route`/`connected_session_state` -- so the
+        // next launch's `App::new` can restore it. Mutually exclusive by
+        // construction (library routing and Sessions-panel direct-remote
+        // are two independent ways to end up thin-client; #223's
+        // `restore_local_mode` and `connect_to_session` never let both be
+        // set at once). Gated on `auto_reconnect` so the file is
+        // never written (or read) at all when the feature is off.
+        if self.client.lock().unwrap().config.auto_reconnect {
+            let last = if let Some(library) = self.active_route.clone() {
+                Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library })
+            } else {
+                self.connected_session_state.as_ref().map(|sess| {
+                    mbv_core::config::LastRemoteConnection::DirectSession {
+                        device_name: sess.device_name.clone(),
+                    }
+                })
+            };
+            mbv_core::config::save_last_remote_connection(last.as_ref());
+        }
         let quit_requested = QUIT_REQUESTED.load(Ordering::Relaxed);
         // Leave the daemon's player running when the TUI disconnects; only stop
         // and join the player when we own it locally. Both signal-triggered and
@@ -5961,6 +5982,83 @@ pub(crate) mod tests {
             elapsed < Duration::from_secs(1),
             "teardown against a player with no thread to join should return \
              promptly, not wait anywhere near the quit_timeout budget, took {elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn teardown_persists_active_library_route_when_auto_reconnect_enabled() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+        app.active_route = Some("music".to_string());
+
+        app.teardown(Duration::from_secs(1));
+
+        assert_eq!(
+            crate::config::load_last_remote_connection(),
+            Some(crate::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn teardown_persists_connected_session_when_auto_reconnect_enabled() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+        let sess = make_session("living-room-mbv", "mbv");
+        app.connected_session_id = Some(sess.id.clone());
+        app.connected_session_state = Some(sess);
+
+        app.teardown(Duration::from_secs(1));
+
+        assert_eq!(
+            crate::config::load_last_remote_connection(),
+            Some(crate::config::LastRemoteConnection::DirectSession {
+                device_name: "living-room-mbv".to_string()
+            })
+        );
+    }
+
+    #[test]
+    fn teardown_clears_persisted_connection_when_exiting_local() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        crate::config::save_last_remote_connection(Some(
+            &crate::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string(),
+            },
+        ));
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = true;
+
+        app.teardown(Duration::from_secs(1));
+
+        assert_eq!(crate::config::load_last_remote_connection(), None);
+    }
+
+    #[test]
+    fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        crate::config::save_last_remote_connection(Some(
+            &crate::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string(),
+            },
+        ));
+        let mut app = make_app_stub();
+        assert!(!app.client.lock().unwrap().config.auto_reconnect);
+        app.active_route = None;
+
+        app.teardown(Duration::from_secs(1));
+
+        // Feature is off: the file from before this test's own `app` even
+        // existed must be left exactly as it was, not cleared just because
+        // `active_route` is currently `None`.
+        assert_eq!(
+            crate::config::load_last_remote_connection(),
+            Some(crate::config::LastRemoteConnection::LibraryRoute {
+                library: "music".to_string()
+            })
         );
     }
 
