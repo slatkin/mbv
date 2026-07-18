@@ -1712,7 +1712,6 @@ impl EmbyClient {
 
     // ── Remote session control ───────────────────────────────────────────────
 
-    #[allow(dead_code)]
     pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
         self.get_sessions_with_active_within(Some("600"))
     }
