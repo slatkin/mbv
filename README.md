@@ -77,6 +77,14 @@ Press `F1` for help and keybindings.
 A few knobs have no UI. Edit the file by hand.
 
 ```toml
+[general]
+# Reconnect at startup to whatever remote connection (a routed library, or
+# a Sessions-panel direct-remote/attached session) was active when mbv
+# last exited. Off by default. A failed or impossible reconnect (e.g. the
+# other device is offline) falls back to local playback instead of
+# blocking startup or erroring.
+auto_reconnect = false
+
 [server]
 # Override the server URL. Rarely needed — the login screen sets and persists
 # this after your first successful login.

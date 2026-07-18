@@ -56,6 +56,16 @@ pub struct Config {
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
     pub daemon_client_endpoint: String, // [daemon.client] endpoint; empty = auto-detect local daemon
     pub daemon_server_tcp_listen: String, // [daemon.server] tcp_listen; empty = unix-only unless system instance default applies
+    /// Reconnect at startup to whatever remote connection (a #223 library
+    /// route, or a Sessions-panel direct-remote/attached session) was
+    /// active when mbv last exited (issue #236 -- #222's original
+    /// "auto-reconnect" intent, which #222's own lazy-connect-only design
+    /// never actually implemented). Client-side setting: deliberately
+    /// under `[general]`, not `[daemon.client]`/`[daemon.server]`, since
+    /// this is a routing/reconnect *preference*, not daemon configuration.
+    /// Default off; TOML-only for v1, no settings-panel write-back
+    /// (matching the `daemon_routes` precedent).
+    pub auto_reconnect: bool,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -101,6 +111,7 @@ impl Default for Config {
             daemon_broadcast_ms: 500,
             daemon_client_endpoint: String::new(),
             daemon_server_tcp_listen: String::new(),
+            auto_reconnect: false,
         }
     }
 }
@@ -643,6 +654,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let auto_reconnect = general
+        .and_then(|m| m.get("auto_reconnect"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let save_playlist_on_quit = general
         .and_then(|m| m.get("save_playlist_on_quit"))
         .and_then(|v| v.as_bool())
@@ -805,6 +821,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         daemon_broadcast_ms,
         daemon_client_endpoint,
         daemon_server_tcp_listen,
+        auto_reconnect,
     })
 }
 
@@ -1283,6 +1300,29 @@ Music = "tcp://musicserver.local:9000"
             cfg.daemon_routes.get("*").map(String::as_str),
             Some("unix:///run/mbvd.sock")
         );
+    }
+
+    #[test]
+    fn parse_auto_reconnect_true() {
+        let toml = r#"
+[server]
+url = "http://x"
+
+[general]
+auto_reconnect = true
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(cfg.auto_reconnect);
+    }
+
+    #[test]
+    fn parse_auto_reconnect_defaults_false_when_absent() {
+        let toml = r#"
+[server]
+url = "http://x"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(!cfg.auto_reconnect);
     }
 
     #[test]
