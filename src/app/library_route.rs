@@ -277,6 +277,42 @@ mod tests {
     }
 
     #[test]
+    fn resolve_route_for_library_skips_same_device_non_mbv_sessions() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut browser = make_session("music.local", "Firefox");
+            browser.host = "10.0.0.104".into();
+
+            let mut mbv = make_session("music.local", "mbv");
+            mbv.host = "10.0.0.104".into();
+            mbv.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9100)];
+            Ok(vec![browser, mbv])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
+        let mut app = make_app_stub();
+        app.library_routes
+            .insert("music".to_string(), "music.local".to_string());
+
+        let resolved = app.resolve_route_for_library("Music");
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(
+            resolved,
+            Some((
+                "music".to_string(),
+                mbv_core::remote_player::DaemonEndpoint::Tcp(std::net::SocketAddr::from((
+                    std::net::Ipv4Addr::new(10, 0, 0, 104),
+                    9100
+                )))
+            ))
+        );
+    }
+
+    #[test]
     fn resolve_route_for_library_falls_back_to_local_when_device_offline() {
         let _guard = crate::config::TestStateDirGuard::new();
         let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();

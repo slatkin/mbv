@@ -2451,10 +2451,10 @@ impl App {
         device_name: &str,
     ) -> Option<mbv_core::remote_player::DaemonEndpoint> {
         let sessions = self.fetch_sessions_blocking().ok()?;
-        let sess = sessions
+        sessions
             .iter()
-            .find(|s| s.device_name.eq_ignore_ascii_case(device_name))?;
-        self.session_direct_endpoint(sess)
+            .filter(|s| s.device_name.eq_ignore_ascii_case(device_name))
+            .find_map(|s| self.session_direct_endpoint(s))
     }
 
     fn connect_direct_endpoint(
