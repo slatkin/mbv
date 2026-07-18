@@ -142,7 +142,7 @@ A daemon deployment relationship where the daemon is running on the same machine
 _Avoid_: using this as a full substitute for **Thin client** — same-machine placement and queue/control semantics are different axes.
 
 **Lazy daemon route connect** (#222):
-The connect-timing rule for the daemon-route lifecycle mbv builds beyond the existing startup-only `--connect-daemon`/`daemon_client_endpoint` **Thin client** path (unaffected — see ADR 0010): mbv never attempts a daemon connection at startup for a route. The first play/enqueue action that resolves to a configured route (the wildcard "route everything" case, or a per-library entry — see #223) is what triggers the first connect attempt, via `App::try_daemon_route_connect` (`src/app/mod.rs`).
+The connect-timing rule for the daemon-route lifecycle mbv builds beyond the existing startup-only `--connect-daemon`/`daemon_client_endpoint` **Thin client** path (unaffected — see ADR 0010): by default, mbv never attempts a daemon connection at startup for a route; when `auto_reconnect` is enabled (#236), it additionally makes one startup attempt to restore whichever remote connection was active at last exit, via `App::try_auto_reconnect` (`src/app/mod.rs`) — see ADR 0010's "Correction (#236)" section. The first play/enqueue action that resolves to a configured route (the wildcard "route everything" case, or a per-library entry — see #223) is what triggers the first connect attempt, via `App::try_daemon_route_connect` (`src/app/mod.rs`).
 _Avoid_: confusing this with the existing `explicit_daemon_endpoint` branch in `main.rs`, which still connects (or hard-exits) at startup and is untouched by this rule — the two are separate, additive mechanisms per #222.
 
 **Fallback to local playback** (#222):

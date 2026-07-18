@@ -58,6 +58,16 @@ pub struct Config {
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
     pub daemon_client_endpoint: String, // [daemon.client] endpoint; empty = auto-detect local daemon
     pub daemon_server_tcp_listen: String, // [daemon.server] tcp_listen; empty = unix-only unless system instance default applies
+    /// Reconnect at startup to whatever remote connection (a #223 library
+    /// route, or a Sessions-panel direct-remote/attached session) was
+    /// active when mbv last exited (issue #236 -- #222's original
+    /// "auto-reconnect" intent, which #222's own lazy-connect-only design
+    /// never actually implemented). Client-side setting: deliberately
+    /// under `[general]`, not `[daemon.client]`/`[daemon.server]`, since
+    /// this is a routing/reconnect *preference*, not daemon configuration.
+    /// Default off; TOML-only for v1, no settings-panel write-back
+    /// (matching the `daemon_routes` precedent).
+    pub auto_reconnect: bool,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -103,6 +113,7 @@ impl Default for Config {
             daemon_broadcast_ms: 500,
             daemon_client_endpoint: String::new(),
             daemon_server_tcp_listen: String::new(),
+            auto_reconnect: false,
         }
     }
 }
@@ -359,6 +370,69 @@ pub fn load_queue_state() -> Option<QueueState> {
 
 pub fn clear_queue_state() {
     let _ = std::fs::remove_file(queue_state_path());
+}
+
+/// Which remote connection (if any) was active when mbv last exited
+/// (issue #236). `App::teardown` writes this; `App::new` reads it back at
+/// the next launch when `Config.auto_reconnect` is true. The two
+/// variants mirror `App`'s own separate `active_route` (#223 library
+/// routing) and `connected_session_id`/`connected_session_state`
+/// (Sessions-panel direct-remote/attached) fields -- #222 and #223 were
+/// distinct features and stay distinct here, even though both are
+/// restored under the same on/off switch.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind")]
+pub enum LastRemoteConnection {
+    /// A #223 library route, keyed by the library name that was resolved
+    /// active (`App.active_route`). Re-resolved fresh against current
+    /// `library_routes` at startup, not replayed verbatim -- if the config
+    /// changed since the last exit, the new config wins.
+    LibraryRoute { library: String },
+    /// A Sessions-panel direct-remote or attached session, keyed by the
+    /// other device's name (`SessionInfo.device_name`), not its session id
+    /// -- Emby session ids are ephemeral per-connection and would not
+    /// still identify the same device at the next launch.
+    DirectSession { device_name: String },
+}
+
+fn last_remote_connection_path() -> PathBuf {
+    state_dir().join("last_remote_connection.json")
+}
+
+/// Persists (or, given `None`, clears) the connection active at exit.
+/// Called from `App::teardown` only when `auto_reconnect` is
+/// enabled -- when the feature is off, this file is never written or
+/// read, by design (Task 1's `Global Constraints`).
+pub fn save_last_remote_connection(conn: Option<&LastRemoteConnection>) {
+    let path = last_remote_connection_path();
+    let Some(conn) = conn else {
+        let _ = std::fs::remove_file(&path);
+        return;
+    };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(json) = serde_json::to_string(conn) {
+        let tmp = path.with_extension("json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() {
+            let _ = std::fs::rename(&tmp, &path);
+        }
+    }
+}
+
+pub fn load_last_remote_connection() -> Option<LastRemoteConnection> {
+    let text = std::fs::read_to_string(last_remote_connection_path()).ok()?;
+    match serde_json::from_str(&text) {
+        Ok(conn) => Some(conn),
+        Err(e) => {
+            log::warn!(target: "auto_reconnect", "last_remote_connection.json failed to parse, not reconnecting: {e}");
+            // Self-heal immediately rather than leaving a corrupt file that
+            // would silently break auto-reconnect on every future startup
+            // until the next clean teardown happens to overwrite it (#236).
+            let _ = std::fs::remove_file(last_remote_connection_path());
+            None
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -641,6 +715,11 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let auto_reconnect = general
+        .and_then(|m| m.get("auto_reconnect"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
     let save_playlist_on_quit = general
         .and_then(|m| m.get("save_playlist_on_quit"))
         .and_then(|v| v.as_bool())
@@ -803,6 +882,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         daemon_broadcast_ms,
         daemon_client_endpoint,
         daemon_server_tcp_listen,
+        auto_reconnect,
     })
 }
 
@@ -1310,6 +1390,29 @@ url = "http://host"
     }
 
     #[test]
+    fn parse_auto_reconnect_true() {
+        let toml = r#"
+[server]
+url = "http://x"
+
+[general]
+auto_reconnect = true
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(cfg.auto_reconnect);
+    }
+
+    #[test]
+    fn parse_auto_reconnect_defaults_false_when_absent() {
+        let toml = r#"
+[server]
+url = "http://x"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert!(!cfg.auto_reconnect);
+    }
+
+    #[test]
     fn parse_default_library_routes_when_absent() {
         let toml = r#"
 [server]
@@ -1626,5 +1729,47 @@ url = "http://host"
         let path = mpv_ipc_path();
         std::env::remove_var("XDG_RUNTIME_DIR");
         assert_eq!(path, "/run/user/1000/mbv-mpv.sock");
+    }
+
+    #[test]
+    fn save_and_load_last_remote_connection_round_trips_library_route() {
+        let _guard = TestStateDirGuard::new();
+        let conn = LastRemoteConnection::LibraryRoute {
+            library: "music".to_string(),
+        };
+
+        save_last_remote_connection(Some(&conn));
+
+        assert_eq!(load_last_remote_connection(), Some(conn));
+    }
+
+    #[test]
+    fn save_and_load_last_remote_connection_round_trips_direct_session() {
+        let _guard = TestStateDirGuard::new();
+        let conn = LastRemoteConnection::DirectSession {
+            device_name: "living-room-mbv".to_string(),
+        };
+
+        save_last_remote_connection(Some(&conn));
+
+        assert_eq!(load_last_remote_connection(), Some(conn));
+    }
+
+    #[test]
+    fn save_last_remote_connection_none_clears_a_previously_saved_record() {
+        let _guard = TestStateDirGuard::new();
+        save_last_remote_connection(Some(&LastRemoteConnection::LibraryRoute {
+            library: "music".to_string(),
+        }));
+
+        save_last_remote_connection(None);
+
+        assert_eq!(load_last_remote_connection(), None);
+    }
+
+    #[test]
+    fn load_last_remote_connection_returns_none_when_no_file_exists() {
+        let _guard = TestStateDirGuard::new();
+        assert_eq!(load_last_remote_connection(), None);
     }
 }

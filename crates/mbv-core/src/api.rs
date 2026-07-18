@@ -1782,9 +1782,13 @@ impl EmbyClient {
         self.get_sessions_with_active_within(Some("600"))
     }
 
-    /// Unfiltered by `ActiveWithinSeconds` -- used by library-route device
-    /// resolution (#239) so an idle-but-still-connected target device
-    /// isn't wrongly treated as gone.
+    /// Like `get_sessions`, but without the `ActiveWithinSeconds=600` filter:
+    /// a device that's been idle-but-still-connected for more than 10 minutes
+    /// wouldn't show up in the filtered list, which would make a live-session
+    /// lookup wrongly conclude the device is gone. Used by
+    /// `App::try_auto_reconnect`'s `DirectSession` lookup (#236) and by
+    /// library-route device resolution (#239) -- the Sessions-panel (F3) UI
+    /// should keep using the filtered `get_sessions` above.
     pub fn get_sessions_unfiltered(&self) -> Result<Vec<SessionInfo>, String> {
         self.get_sessions_with_active_within(None)
     }
