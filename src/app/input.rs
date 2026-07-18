@@ -4365,13 +4365,13 @@ mod power_music_track_focus_tests {
         handle: Option<std::thread::JoinHandle<()>>,
     }
 
+    type RecursiveFetchResponses = Vec<(
+        &'static str,
+        Result<Vec<(&'static str, &'static str, i64)>, &'static str>,
+    )>;
+
     impl RecursiveFetchServer {
-        fn start(
-            responses: Vec<(
-                &'static str,
-                Result<Vec<(&'static str, &'static str, i64)>, &'static str>,
-            )>,
-        ) -> Self {
+        fn start(responses: RecursiveFetchResponses) -> Self {
             let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
             listener.set_nonblocking(true).unwrap();
             let base_url = format!("http://{}", listener.local_addr().unwrap());

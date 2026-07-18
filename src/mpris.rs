@@ -183,6 +183,11 @@ fn make_metadata_with_art_resolver(
     m
 }
 
+type StatusAndSender = (
+    Arc<Mutex<PlayerStatus>>,
+    Arc<dyn Fn(PlayerCommand) + Send + Sync>,
+);
+
 impl MediaPlayer2Player {
     /// Clones the current `status`/`send` pair out from behind `self.source`'s
     /// lock, dropping that lock immediately -- so callers below never hold
@@ -194,12 +199,7 @@ impl MediaPlayer2Player {
     /// `#[interface]` macro treats every method in its block as an exposed
     /// D-Bus method/property, and this helper's tuple return type has no
     /// D-Bus marshaling impl.
-    fn status_and_sender(
-        &self,
-    ) -> (
-        Arc<Mutex<PlayerStatus>>,
-        Arc<dyn Fn(PlayerCommand) + Send + Sync>,
-    ) {
+    fn status_and_sender(&self) -> StatusAndSender {
         let source = self.source.lock().unwrap();
         (source.status.clone(), source.send.clone())
     }

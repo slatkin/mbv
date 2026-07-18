@@ -605,7 +605,7 @@ impl App {
         enum DisplayRow {
             Pills,
             Empty,
-            Item(usize, mbv_core::api::MediaItem),
+            Item(usize, Box<mbv_core::api::MediaItem>),
             Blank,
         }
 
@@ -646,14 +646,14 @@ impl App {
             rows.push(DisplayRow::Empty);
         } else {
             for (idx, item) in continue_items.into_iter().enumerate() {
-                rows.push(DisplayRow::Item(idx, item));
+                rows.push(DisplayRow::Item(idx, Box::new(item)));
             }
         }
         if let Some(section) = selected_new {
             rows.push(DisplayRow::Blank);
             rows.push(DisplayRow::Pills);
             for (idx, item) in section.items.iter().cloned().enumerate() {
-                rows.push(DisplayRow::Item(section.flat_start + idx, item));
+                rows.push(DisplayRow::Item(section.flat_start + idx, Box::new(item)));
             }
         }
 
