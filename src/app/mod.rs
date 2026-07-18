@@ -1644,31 +1644,27 @@ impl App {
         }
     }
 
+    fn has_sessions_panel_connection(&self) -> bool {
+        self.connected_session_id.is_some()
+            || self.connected_session_state.is_some()
+            || self.direct_remote_label.is_some()
+    }
+
     fn can_disconnect_remote(&self) -> bool {
-        !matches!(
-            self.remote_slot_state(),
-            RemoteSlotState::Off | RemoteSlotState::LocalDaemon
-        )
+        self.has_sessions_panel_connection()
     }
 
     fn disconnect_remote(&mut self) {
-        match self.remote_slot_state() {
-            RemoteSlotState::AttachedSession => {
-                self.connected_session_id = None;
-                self.connected_session_state = None;
-                self.session_miss_count = 0;
-                self.remote_pos_s = 0;
-                self.flash_status("Disconnected from remote session".to_string());
-            }
-            RemoteSlotState::DirectRemote => {
-                self.restore_local_mode("Disconnected from direct remote session");
-            }
-            RemoteSlotState::LocalDaemon => {
-                self.flash_status("Local daemon mode stays connected".to_string());
-            }
-            RemoteSlotState::Off => {
-                self.flash_status("No remote session to disconnect".to_string());
-            }
+        if self.connected_session_id.is_some() || self.connected_session_state.is_some() {
+            self.connected_session_id = None;
+            self.connected_session_state = None;
+            self.session_miss_count = 0;
+            self.remote_pos_s = 0;
+            self.flash_status("Disconnected from remote session".to_string());
+        } else if self.direct_remote_label.is_some() {
+            self.restore_local_mode("Disconnected from direct remote session");
+        } else {
+            self.flash_status("No session connected".to_string());
         }
     }
 
