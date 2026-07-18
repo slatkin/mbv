@@ -203,6 +203,25 @@ struct MultiSelectPopup {
     cursor: usize,
 }
 
+#[derive(Clone)]
+pub(crate) enum LibraryRouteStage {
+    /// (library_name_lower, display_name, current_device_or_none)
+    PickLibrary {
+        items: Vec<(String, String, Option<String>)>,
+    },
+    /// index 0 is always the synthetic "Local (no route)" entry.
+    PickDevice {
+        library_lower: String,
+        library_display: String,
+        devices: Vec<String>,
+    },
+}
+
+pub(crate) struct LibraryRoutePopup {
+    stage: LibraryRouteStage,
+    cursor: usize,
+}
+
 struct ContextMenu {
     x: u16,
     y: u16,
@@ -1027,6 +1046,7 @@ pub struct App {
     settings_save_at: Option<Instant>,
     confirm_logout: bool,
     multiselect_popup: Option<MultiSelectPopup>,
+    library_routes_popup: Option<LibraryRoutePopup>,
     help_scroll: u16,
     system_notifications: bool,
     notif_failed: bool,
@@ -1309,6 +1329,7 @@ enum SettingKey {
     MyLanguages,
     SubtitleMode,
     FeedViewLibraries,
+    LibraryRoutes,
     SubtitleLanguage,
     AudioLanguage,
     LogOut,
@@ -1328,6 +1349,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::HiddenLibraries,
             SettingKey::HiddenLatest,
             SettingKey::FeedViewLibraries,
+            SettingKey::LibraryRoutes,
         ],
     ),
     (
@@ -1743,6 +1765,7 @@ impl App {
             settings_save_at: None,
             confirm_logout: false,
             multiselect_popup: None,
+            library_routes_popup: None,
             help_scroll: 0,
             notif_failed: false,
             context_menu: None,
@@ -5866,6 +5889,7 @@ pub(crate) mod tests {
             settings_save_at: None,
             confirm_logout: false,
             multiselect_popup: None,
+            library_routes_popup: None,
             help_scroll: 0,
             system_notifications: false,
             notif_failed: false,

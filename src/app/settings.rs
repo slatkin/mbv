@@ -27,6 +27,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::SubtitleLanguage => "Subtitle language",
         SettingKey::AudioLanguage => "Audio language",
         SettingKey::FeedViewLibraries => "Feed view",
+        SettingKey::LibraryRoutes => "Library routes",
         SettingKey::LogOut => "Log out",
     }
 }
@@ -75,6 +76,7 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
             }
         }
         SettingKey::FeedViewLibraries => fmt_feed_view_list(&cfg.feed_view_libraries),
+        SettingKey::LibraryRoutes => fmt_library_routes(&cfg.library_routes),
         SettingKey::LogOut => String::new(),
     }
 }
@@ -100,6 +102,17 @@ pub fn fmt_feed_view_list(list: &[String]) -> String {
         0 => "none".into(),
         1 => list[0].clone(),
         n => format!("{n} libraries"),
+    }
+}
+
+pub fn fmt_library_routes(routes: &std::collections::HashMap<String, String>) -> String {
+    match routes.len() {
+        0 => "none".into(),
+        1 => {
+            let (lib, dev) = routes.iter().next().unwrap();
+            format!("{lib} -> {dev}")
+        }
+        n => format!("{n} routes"),
     }
 }
 

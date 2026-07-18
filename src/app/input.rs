@@ -701,6 +701,24 @@ impl App {
             }
             return Some(false);
         }
+        if self.library_routes_popup.is_some() {
+            match key.code {
+                KeyCode::Esc => {
+                    self.handle_library_routes_esc();
+                }
+                KeyCode::Enter => {
+                    self.handle_library_routes_enter();
+                }
+                KeyCode::Up => {
+                    self.move_library_routes_cursor(-1);
+                }
+                KeyCode::Down => {
+                    self.move_library_routes_cursor(1);
+                }
+                _ => {}
+            }
+            return Some(false);
+        }
         if self.confirm_logout {
             if matches!(key.code, KeyCode::Char('y')) {
                 mbv_core::api::clear_cached_token();
