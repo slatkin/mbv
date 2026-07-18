@@ -938,6 +938,15 @@ pub struct App {
     remote_player_tab: Option<PlayerTab>,
     status: String,
     status_expires: Option<Instant>,
+    /// `true` only for instances built via `App::new_remote` (the
+    /// `--connect-daemon` / local-daemon-auto-detect thin-client launch
+    /// path). Those instances never populate `active_route` or
+    /// `connected_session_state` (those are set by runtime library-route
+    /// switches / session attaches that only apply to `App::new` instances),
+    /// so `teardown`'s auto-reconnect persistence (#236) must skip this flag
+    /// entirely rather than compute (and save) a bogus `None` record that
+    /// would wipe out a real record saved by a different `App::new` session.
+    launched_as_remote: bool,
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
     /// Library name (lowercased) -> daemon endpoint string, copied from
@@ -1811,6 +1820,7 @@ impl App {
             queue_scope: init.initial_queue_scope,
             stay_alive_ctrl: init.stay_alive_ctrl,
             attached: true,
+            launched_as_remote: false,
         }
     }
 
@@ -2061,6 +2071,7 @@ impl App {
             stay_alive_ctrl: None,
         });
         app.mpris = Some(mpris_handle);
+        app.launched_as_remote = true;
         if is_local_daemon {
             let bootstrap = local_daemon_bootstrap.unwrap();
             app.queue_source = bootstrap.queue_source;
@@ -2498,7 +2509,7 @@ impl App {
         if let Some(f) = *SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
             return f(&self.client.lock().unwrap());
         }
-        self.client.lock().unwrap().get_sessions()
+        self.client.lock().unwrap().get_sessions_unfiltered()
     }
 
     /// Restores the remote connection active when mbv last exited (issue
@@ -2915,7 +2926,13 @@ impl App {
         // Initialise image picker after terminal is in raw mode.
         self.image_picker = Some(self.build_image_picker());
 
-        self.status = "Loading...".into();
+        // Don't clobber a still-live flash message (e.g. try_auto_reconnect's
+        // outcome, set during App::new) -- only show "Loading..." if there's
+        // no pending flash, mirroring the render loop's own expiry check.
+        let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
+        if !has_live_flash {
+            self.status = "Loading...".into();
+        }
         self.home_loading = true;
         terminal.draw(|f| self.render(f))?;
 
@@ -2925,7 +2942,12 @@ impl App {
         }
 
         match self.fetch_home() {
-            Ok(()) => self.status.clear(),
+            Ok(()) => {
+                let has_live_flash = self.status_expires.is_some_and(|t| t > Instant::now());
+                if !has_live_flash {
+                    self.status.clear();
+                }
+            }
             Err(e) => self.flash_status_high(format!("Error: {e}")),
         }
         self.home_loading = false;
@@ -3519,8 +3541,14 @@ impl App {
         // are two independent ways to end up thin-client; #223's
         // `restore_local_mode` and `connect_to_session` never let both be
         // set at once). Gated on `auto_reconnect` so the file is
-        // never written (or read) at all when the feature is off.
-        if self.client.lock().unwrap().config.auto_reconnect {
+        // never written (or read) at all when the feature is off. Also
+        // gated on `!launched_as_remote`: `App::new_remote` instances never
+        // populate `active_route`/`connected_session_state` (those are set
+        // only by `App::new`'s runtime library-route-switch / session-attach
+        // mechanisms), so running this block for them would always compute
+        // `None` and wipe out a real record saved by a different `App::new`
+        // session (per ADR 0010, `new_remote`'s path is unaffected by #236).
+        if !self.launched_as_remote && self.client.lock().unwrap().config.auto_reconnect {
             let last = if let Some(library) = self.active_route.clone() {
                 Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library })
             } else {
@@ -5864,6 +5892,7 @@ pub(crate) mod tests {
             client: Arc::new(Mutex::new(client)),
             player,
             mpris: None,
+            launched_as_remote: false,
             player_rx,
             ws_rx,
             tab_idx: 0,

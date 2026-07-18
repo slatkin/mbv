@@ -80,9 +80,11 @@ A few knobs have no UI. Edit the file by hand.
 [general]
 # Reconnect at startup to whatever remote connection (a routed library, or
 # a Sessions-panel direct-remote/attached session) was active when mbv
-# last exited. Off by default. A failed or impossible reconnect (e.g. the
-# other device is offline) falls back to local playback instead of
-# blocking startup or erroring.
+# last exited. Off by default. The reconnect attempt happens synchronously
+# before the first frame renders, so startup may pause briefly while it's
+# tried; a failed or impossible reconnect (e.g. the other device is
+# offline) falls back gracefully to local playback rather than blocking
+# indefinitely or erroring out to you.
 auto_reconnect = false
 
 [server]
