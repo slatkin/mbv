@@ -212,10 +212,17 @@ pub(crate) enum LibraryRouteStage {
         items: Vec<(String, String, Option<String>)>,
     },
     /// index 0 is always the synthetic "Local (no route)" entry.
+    /// Each entry pairs a device's display name (UX only -- #256 never
+    /// persists it) with its live-resolved endpoint (what actually gets
+    /// written to config on commit). `None` means the device is visible
+    /// in the live session list but session_direct_endpoint couldn't
+    /// resolve it to a connectable address (e.g. no advertised
+    /// direct-connect port, or an unparseable host) -- shown greyed out
+    /// with a reason rather than silently omitted, and not committable.
     PickDevice {
         library_lower: String,
         library_display: String,
-        devices: Vec<String>,
+        devices: Vec<(String, Option<mbv_core::remote_player::DaemonEndpoint>)>,
     },
 }
 
