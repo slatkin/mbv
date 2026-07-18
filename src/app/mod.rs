@@ -10838,14 +10838,14 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn remote_slot_state_is_direct_remote_for_network_daemon_mode() {
+    fn remote_slot_state_direct_remote_display_does_not_imply_sessions_panel_disconnect() {
         let app = make_remote_app_stub(make_items(2), make_items(3));
 
         assert_eq!(app.remote_slot_state(), RemoteSlotState::DirectRemote);
-        assert!(app.can_disconnect_remote());
+        assert!(!app.can_disconnect_remote());
         assert_eq!(
             app.sessions_overlay_footer(),
-            "[↵]conn [d]disc [r]refresh [Esc]close"
+            "[↵]conn [r]refresh [Esc]close"
         );
     }
 
@@ -10981,6 +10981,30 @@ pub(crate) mod tests {
         // Must stay independent of the Sessions-panel direct-remote fields.
         assert!(app.connected_session_id.is_none());
         assert!(app.direct_remote_label.is_none());
+    }
+
+    #[test]
+    fn route_owned_transport_is_not_sessions_panel_disconnectable() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+
+        app.switch_to_library_route("music", remote, remote_rx);
+        app.status.clear();
+
+        assert_eq!(app.remote_slot_state(), RemoteSlotState::DirectRemote);
+        assert!(!app.can_disconnect_remote());
+        assert_eq!(
+            app.sessions_overlay_footer(),
+            "[↵]conn [r]refresh [Esc]close"
+        );
+
+        app.disconnect_remote();
+
+        assert_eq!(app.active_route.as_deref(), Some("music"));
+        assert!(app.player.is_remote());
+        assert!(app.suspended_local.is_some());
+        assert!(app.remote_player_tab.is_some());
+        assert_eq!(app.status, "No session connected");
     }
 
     #[test]
@@ -11168,7 +11192,7 @@ pub(crate) mod tests {
         assert_eq!(app.remote_slot_state(), RemoteSlotState::LocalDaemon);
         assert!(app.player.is_remote());
         assert!(!app.can_disconnect_remote());
-        assert_eq!(app.status, "Local daemon mode stays connected");
+        assert_eq!(app.status, "No session connected");
     }
 
     #[test]
@@ -11187,6 +11211,25 @@ pub(crate) mod tests {
         assert_eq!(app.session_miss_count, 0);
         assert_eq!(app.remote_pos_s, 0);
         assert_eq!(app.status, "Disconnected from remote session");
+    }
+
+    #[test]
+    fn disconnect_remote_restores_local_for_sessions_panel_direct_remote() {
+        let mut app = make_app_stub();
+        let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
+        let sess = make_session("music", "mbv");
+
+        app.switch_to_direct_remote(&sess, remote, remote_rx);
+
+        assert_eq!(app.direct_remote_label.as_deref(), Some("music"));
+        assert!(app.can_disconnect_remote());
+
+        app.disconnect_remote();
+
+        assert!(app.direct_remote_label.is_none());
+        assert!(app.active_route.is_none());
+        assert!(!app.player.is_remote());
+        assert_eq!(app.status, "Disconnected from direct remote session");
     }
 
     #[test]
