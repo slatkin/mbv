@@ -16,15 +16,6 @@ use super::*;
 /// restart (post-grilling revision item 5; candidate 15-30 minutes,
 /// chosen at the low end of that range as a session-lifetime TUI cache).
 const LIBRARY_ROUTE_CACHE_TTL: Duration = Duration::from_secs(15 * 60);
-/// How long a malformed-`daemon_routes`-entry status warning stays
-/// suppressed for a given library name before it's allowed to flash again
-/// (`daemon_routes_warned`). A one-time-per-process suppression could mean
-/// a user who never saw the first toast (e.g. it fired from a background
-/// Home-tab ancestor lookup) never gets told why a library never routes,
-/// even after navigating straight to it and trying to play. Re-arming
-/// periodically keeps the warning from spamming on every resolution
-/// attempt while still resurfacing it on a timescale a user would notice.
-const DAEMON_ROUTE_WARNING_COOLDOWN: Duration = Duration::from_secs(5 * 60);
 /// Soft cap on `library_route_cache` size. The cache is otherwise
 /// unbounded (one entry per distinct item id ever played/enqueued from a
 /// cross-library aggregate view), which could grow without limit over a
@@ -53,17 +44,15 @@ impl App {
             || (self.player.is_remote() && self.active_route.is_none())
     }
 
-    /// Resolves the configured daemon route for a library name (#223):
-    /// looks up `daemon_routes` (exact match, then `"*"` wildcard) and
-    /// parses the endpoint string. Returns `(lowercased_library_name,
-    /// endpoint)` on a match with a valid endpoint. A malformed endpoint
-    /// string is logged and treated as no match, rather than failing the
-    /// whole app -- one bad `daemon_routes` entry never blocks other
-    /// routes or local playback. Also surfaces a one-time status-bar
-    /// warning (`daemon_routes_warned` gates it to once per bad library
-    /// name per process, since this method is called on every resolution
-    /// attempt) so a malformed entry is visible in app status, not just
-    /// diagnosable in logs (#223, post-grilling revision item 3).
+    /// Resolves the configured library route for a library name (#239):
+    /// looks up `library_routes` for a device name, then resolves that
+    /// device against the *live* session list via `resolve_device_endpoint`
+    /// -- the same mechanism `session_direct_endpoint` already uses for
+    /// F3. Returns `(lowercased_library_name, endpoint)` on a live match.
+    /// A configured-but-currently-offline device is not an error (no
+    /// warning flashed) -- it's the expected, common case of "not routed
+    /// right now"; #222's existing fallback (stay local, no hard error)
+    /// already covers it via the `None` return.
     pub(super) fn resolve_route_for_library(
         &mut self,
         library_name: &str,
@@ -72,31 +61,9 @@ impl App {
         if name.is_empty() {
             return None;
         }
-        let raw = mbv_core::config::resolve_daemon_route(&self.daemon_routes, name)?;
-        match mbv_core::remote_player::DaemonEndpoint::parse(raw) {
-            Ok(endpoint) => Some((name.to_lowercase(), endpoint)),
-            Err(e) => {
-                log::warn!(
-                    target: "library_route",
-                    "daemon_routes entry for library {name:?} has an invalid endpoint {raw:?}: {e}"
-                );
-                let warn_key = name.to_lowercase();
-                let now = Instant::now();
-                let should_flash = match self.daemon_routes_warned.get(&warn_key) {
-                    Some(last_flashed) => {
-                        now.duration_since(*last_flashed) >= DAEMON_ROUTE_WARNING_COOLDOWN
-                    }
-                    None => true,
-                };
-                if should_flash {
-                    self.daemon_routes_warned.insert(warn_key, now);
-                    self.flash_status_high(format!(
-                        "daemon_routes entry for library {name:?} is invalid ({e}); using local playback"
-                    ));
-                }
-                None
-            }
-        }
+        let device_name = mbv_core::config::resolve_library_route(&self.library_routes, name)?;
+        let endpoint = self.resolve_device_endpoint(device_name)?;
+        Some((name.to_lowercase(), endpoint))
     }
 
     /// Nav-context route resolution for library-scoped views (Library
@@ -114,7 +81,7 @@ impl App {
     /// Cross-library aggregate view (Continue Watching/Next Up, Favorites)
     /// route resolution: walks the item's ancestor chain via
     /// `EmbyClient::get_ancestors` to find the owning library
-    /// (`CollectionFolder`), then matches it against `daemon_routes`.
+    /// (`CollectionFolder`), then matches it against `library_routes`.
     /// A *successful* lookup (whether it finds an owning library or
     /// confirms there isn't one) is cached per item id for the session, so
     /// a repeated play/enqueue of the same item never re-fetches. A
@@ -126,14 +93,14 @@ impl App {
         item_id: &str,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
         // No routes configured at all -- this must be a true no-op for the
-        // common case (no `[daemon_routes]` in config.toml), not just "no
+        // common case (no `[library_routes]` in config.toml), not just "no
         // match": every other resolver in this file is a synchronous,
         // no-network lookup, but this one's `get_ancestors` fallback is a
         // real HTTP round-trip. Without this guard, every first play of a
         // distinct Home-tab item (Continue Watching/Next Up/Favorites)
         // would pay a blocking network call that can never resolve to
         // anything for a user who never opted into library routing.
-        if self.daemon_routes.is_empty() {
+        if self.library_routes.is_empty() {
             return None;
         }
         if self.library_route_cache.len() >= LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD {
@@ -244,15 +211,29 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_item};
+    use crate::app::tests::{make_app_stub, make_item, make_session};
     use crate::app::LibraryTab;
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut sess = make_session("living-room-pc", "mbv");
+            sess.host = "127.0.0.1".into();
+            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
+            Ok(vec![sess])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         let resolved = app.resolve_route_for_library("Music");
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(
             resolved,
             Some((
@@ -263,71 +244,86 @@ mod tests {
     }
 
     #[test]
+    fn resolve_route_for_library_resolves_via_live_device_name() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut sess = make_session("living-room-pc", "mbv");
+            sess.host = "10.0.0.5".into();
+            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9100)];
+            Ok(vec![sess])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
+        let mut app = make_app_stub();
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
+
+        let resolved = app.resolve_route_for_library("Music");
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(
+            resolved,
+            Some((
+                "music".to_string(),
+                mbv_core::remote_player::DaemonEndpoint::Tcp(std::net::SocketAddr::from((
+                    std::net::Ipv4Addr::new(10, 0, 0, 5),
+                    9100
+                )))
+            ))
+        );
+    }
+
+    #[test]
+    fn resolve_route_for_library_falls_back_to_local_when_device_offline() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn empty_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            Ok(vec![])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(empty_sessions);
+
+        let mut app = make_app_stub();
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
+
+        let resolved = app.resolve_route_for_library("Music");
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(resolved, None);
+    }
+
+    #[test]
     fn resolve_route_for_library_returns_none_when_unconfigured() {
         let mut app = make_app_stub();
         assert_eq!(app.resolve_route_for_library("Movies"), None);
     }
 
     #[test]
-    fn resolve_route_for_library_skips_invalid_endpoint() {
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "notascheme://x".to_string());
-        assert_eq!(app.resolve_route_for_library("Music"), None);
-    }
-
-    #[test]
-    fn resolve_route_for_library_flashes_a_malformed_endpoint_warning_once_per_cooldown() {
-        // #223 post-grilling revision item 3: a malformed `daemon_routes`
-        // entry must be visible in app status (not just diagnosable in
-        // logs), but only flashed once per DAEMON_ROUTE_WARNING_COOLDOWN --
-        // this method is called on every resolution attempt, so a
-        // per-lookup flash would spam the status bar on repeated plays
-        // from the same library.
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "notascheme://x".to_string());
-
-        app.resolve_route_for_library("Music");
-        assert!(app.status.contains("invalid"));
-
-        app.status = String::new();
-        app.resolve_route_for_library("Music");
-        assert!(
-            app.status.is_empty(),
-            "a second lookup within the cooldown window must not flash again"
-        );
-    }
-
-    #[test]
-    fn resolve_route_for_library_reflashes_a_malformed_endpoint_warning_after_cooldown() {
-        // Fix for a review gap: a one-time-per-process suppression means a
-        // user who misses the first toast (e.g. it fired from a
-        // background Home-tab ancestor lookup they weren't looking at)
-        // would never be told why a library never routes, even after
-        // navigating straight to it and trying to play. Re-arming after
-        // DAEMON_ROUTE_WARNING_COOLDOWN fixes that.
-        let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "notascheme://x".to_string());
-        app.daemon_routes_warned.insert(
-            "music".to_string(),
-            Instant::now() - DAEMON_ROUTE_WARNING_COOLDOWN - Duration::from_secs(1),
-        );
-
-        app.resolve_route_for_library("Music");
-
-        assert!(
-            app.status.contains("invalid"),
-            "warning must resurface once the cooldown has elapsed"
-        );
-    }
-
-    #[test]
     fn route_for_active_library_view_uses_nav_state_no_network() {
+        // "No network" here means no `get_ancestors` round-trip -- the
+        // active library is already known from nav state. Resolving the
+        // routed device against the live session list is still needed
+        // (#239), hence the SESSIONS_LOAD_OVERRIDE seam.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut sess = make_session("living-room-pc", "mbv");
+            sess.host = "127.0.0.1".into();
+            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
+            Ok(vec![sess])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -342,6 +338,7 @@ mod tests {
 
         let resolved = app.route_for_active_library_view(0);
 
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(resolved.map(|(name, _)| name), Some("music".to_string()));
     }
 
@@ -372,8 +369,8 @@ mod tests {
         // item's next play/enqueue attempt rather than being stuck at
         // `None` until the process restarts.
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         // No live server in this stub -- `get_ancestors` always errors.
         let first = app.route_for_item_via_ancestors("item-1");
         assert_eq!(first, None);
@@ -389,14 +386,14 @@ mod tests {
 
     #[test]
     fn route_for_item_via_ancestors_is_a_true_no_op_when_no_routes_are_configured() {
-        // Regression guard: an empty `daemon_routes` (the common case for
+        // Regression guard: an empty `library_routes` (the common case for
         // a user who never opted into library routing at all) must be a
         // genuine no-op -- no `get_ancestors` HTTP call, not just "no
         // match after a network round-trip." If this guard were missing,
         // every first play/enqueue of a distinct Home-tab item would pay
         // a blocking network call that could never resolve to anything.
         let mut app = make_app_stub();
-        assert!(app.daemon_routes.is_empty());
+        assert!(app.library_routes.is_empty());
 
         let resolved = app.route_for_item_via_ancestors("item-1");
 
@@ -417,8 +414,8 @@ mod tests {
         // no live server, giving `None`), rather than trusting the stale
         // hit and returning the resolved route.
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         app.library_route_cache.insert(
             "item-1".to_string(),
             (
@@ -440,8 +437,8 @@ mod tests {
         // a fresh insert must first drop every already-expired entry
         // rather than growing forever.
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         let expired_at = Instant::now() - LIBRARY_ROUTE_CACHE_TTL - Duration::from_secs(1);
         for i in 0..LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD {
             app.library_route_cache.insert(
@@ -477,6 +474,18 @@ mod tests {
         // already part of whatever queue is current, so `resolve_route_for_play`
         // must fall through to "keep the current `active_route`" instead of
         // either panicking or wrongly resolving a nav-scoped library.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut sess = make_session("living-room-pc", "mbv");
+            sess.host = "127.0.0.1".into();
+            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
+            Ok(vec![sess])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
         let mut app = make_app_stub();
         app.tab_idx = 1;
         let mut item = make_item("Song", "Audio");
@@ -487,13 +496,13 @@ mod tests {
 
         // Already routed: the Queue tab must not clear or re-resolve the
         // route out from under an in-progress routed queue.
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         app.active_route = Some("music".to_string());
-        assert_eq!(
-            app.resolve_route_for_play(&item).map(|(name, _)| name),
-            Some("music".to_string())
-        );
+        let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(resolved, Some("music".to_string()));
     }
 
     #[test]
@@ -504,16 +513,28 @@ mod tests {
         // item itself. `do_enqueue_folder` can receive exactly that item (the
         // user enqueue-recursive's an entire library from its root), so this
         // helper checks the item's own type first.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut sess = make_session("living-room-pc", "mbv");
+            sess.host = "127.0.0.1".into();
+            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
+            Ok(vec![sess])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
         let mut app = make_app_stub();
-        app.daemon_routes
-            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        app.library_routes
+            .insert("music".to_string(), "living-room-pc".to_string());
         let mut lib_root = make_item("Music", "CollectionFolder");
         lib_root.id = "lib-music".to_string();
 
-        assert_eq!(
-            app.resolve_route_for_enqueue_folder(&lib_root),
-            Some("music".to_string())
-        );
+        let resolved = app.resolve_route_for_enqueue_folder(&lib_root);
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert_eq!(resolved, Some("music".to_string()));
     }
 
     #[test]
