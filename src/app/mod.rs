@@ -1114,6 +1114,7 @@ pub struct App {
     sessions_rx: mpsc::Receiver<SessionEvent>,
     connected_session_id: Option<String>,
     connected_session_state: Option<mbv_core::api::SessionInfo>,
+    direct_remote_connected: bool,
     direct_remote_label: Option<String>,
     last_session_poll: Instant,
     session_miss_count: u8, // consecutive polls that didn't find the connected session
@@ -1647,7 +1648,7 @@ impl App {
     fn has_sessions_panel_connection(&self) -> bool {
         self.connected_session_id.is_some()
             || self.connected_session_state.is_some()
-            || self.direct_remote_label.is_some()
+            || self.direct_remote_connected
     }
 
     fn can_disconnect_remote(&self) -> bool {
@@ -1658,10 +1659,11 @@ impl App {
         if self.connected_session_id.is_some() || self.connected_session_state.is_some() {
             self.connected_session_id = None;
             self.connected_session_state = None;
+            self.direct_remote_connected = false;
             self.session_miss_count = 0;
             self.remote_pos_s = 0;
             self.flash_status("Disconnected from remote session".to_string());
-        } else if self.direct_remote_label.is_some() {
+        } else if self.direct_remote_connected {
             self.restore_local_mode("Disconnected from direct remote session");
         } else {
             self.flash_status("No session connected".to_string());
@@ -1832,6 +1834,7 @@ impl App {
             last_capabilities: Instant::now(),
             connected_session_id: None,
             connected_session_state: None,
+            direct_remote_connected: false,
             direct_remote_label: None,
             last_session_poll: Instant::now() - Duration::from_secs(60),
             session_miss_count: 0,
@@ -2695,6 +2698,7 @@ impl App {
         self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
         self.connected_session_id = None;
         self.connected_session_state = None;
+        self.direct_remote_connected = true;
         self.direct_remote_label = {
             let name = sess.device_name.trim();
             (!name.is_empty()).then(|| name.to_string())
@@ -2775,6 +2779,7 @@ impl App {
         }
 
         self.remote_player_tab = Some(PlayerTab::new(initial_items, initial_cursor));
+        self.direct_remote_connected = false;
         self.active_route = Some(library_name.to_string());
         self.remote_pos_s = 0;
         self.remote_pos_at = Instant::now();
@@ -2828,6 +2833,7 @@ impl App {
         self.remote_player_tab = None;
         self.connected_session_id = None;
         self.connected_session_state = None;
+        self.direct_remote_connected = false;
         self.direct_remote_label = None;
         self.active_route = None;
         self.session_miss_count = 0;
@@ -2927,6 +2933,7 @@ impl App {
         );
         self.connected_session_id = Some(id);
         self.connected_session_state = Some(sess.clone());
+        self.direct_remote_connected = false;
         self.session_miss_count = 0;
         self.remote_pos_s = sess.position_s;
         self.remote_pos_at = Instant::now();
@@ -6162,6 +6169,7 @@ pub(crate) mod tests {
             sessions_rx,
             connected_session_id: None,
             connected_session_state: None,
+            direct_remote_connected: false,
             direct_remote_label: None,
             last_session_poll: std::time::Instant::now(),
             session_miss_count: 0,
@@ -6883,7 +6891,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn connect_to_session_uses_direct_upgrade_success() {
+    fn f3_direct_upgrade_with_empty_device_name_remains_disconnectable() {
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = DIRECT_CONNECT_TEST_LOCK.lock().unwrap();
         fn direct_success(
@@ -6904,7 +6912,7 @@ pub(crate) mod tests {
 
         *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = Some(direct_success);
         let mut app = make_app_stub();
-        let mut sess = make_session("remote-mbv", "mbv");
+        let mut sess = make_session("", "mbv");
         sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(47788)];
 
         app.connect_to_session(&sess);
@@ -6912,7 +6920,14 @@ pub(crate) mod tests {
         *DIRECT_CONNECT_OVERRIDE.lock().unwrap() = None;
         assert!(app.remote_player_tab.is_some());
         assert!(app.connected_session_id.is_none());
-        assert_eq!(app.status, "Connected directly to remote-mbv");
+        assert!(app.direct_remote_label.is_none());
+        assert!(app.can_disconnect_remote());
+
+        app.disconnect_remote();
+
+        assert!(!app.player.is_remote());
+        assert!(app.remote_player_tab.is_none());
+        assert_eq!(app.status, "Disconnected from direct remote session");
     }
 
     #[test]
