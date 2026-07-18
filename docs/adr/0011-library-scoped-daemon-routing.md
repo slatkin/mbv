@@ -114,3 +114,63 @@ typed or displayed. The `"*"` wildcard is gone; there is no migration path
 from the old format -- it's a breaking config change. See
 `docs/superpowers/specs/2026-07-18-library-routes-by-device-name-design.md`
 for the full design.
+
+## Addendum (#256): `[library_routes]` values become resolved endpoints, no rediscovery
+
+#239's device-name resolution paid a blocking `GET /Sessions` call on every
+routed play/enqueue attempt -- extra synchronous work #223's original
+raw-endpoint config didn't have, and slower than the F3 Sessions-panel path,
+which starts from an already-discovered `SessionInfo`. #256 replaces the
+stored device name with the endpoint it resolves to: `[library_routes]`
+values become `tcp://host:port` strings again (parsed via the same
+`DaemonEndpoint::parse`/`Display` #223's original config used), and
+`resolve_route_for_library` becomes a pure, synchronous config read with no
+network call on the play/enqueue path at all.
+
+This is a deliberate, explicit trade-off, not an oversight:
+
+- **No device name is persisted anywhere.** The F2 "Library Routes" picker
+  still fetches the live session list to let the user *choose* a device (an
+  unavoidable, already-paid cost of that one screen), but the name is used
+  only for that screen's display and for preselecting the currently-assigned
+  row -- by comparing each candidate's *resolved endpoint* against the
+  stored endpoint, not by name, since an endpoint is a more stable
+  identifier than a hostname. Nothing from that comparison is written back
+  to config.
+- **No automatic rediscovery/self-heal.** If a routed library's cached
+  endpoint stops working (the target device's address changed), that's an
+  ordinary daemon-connect failure: #222's existing fallback applies (fall
+  back to local playback, log a warning, never a hard error) exactly like
+  any other failed connect. There is no special "try re-resolving by name"
+  path. This is a LAN, single-user tool -- a device's address is expected
+  to be stable; if it isn't, the fix is reassigning the route via F2 (which
+  re-resolves live, same as first assignment), not an automatic background
+  mechanism.
+- **Library routing stays tcp://-only / remote-only**, per the #239
+  addendum above -- `resolve_library_route` requires the parsed value to be
+  `DaemonEndpoint::Tcp(_)`; a `unix://`/`local` value or a stale pre-#256
+  device-name string (which `DaemonEndpoint::parse` would otherwise accept
+  as a bogus `Unix(PathBuf)`) is treated as malformed and logged, never
+  routed.
+- **Breaking change, no migration** -- consistent with #239's own
+  precedent: a pre-#256 device-name config entry simply stops resolving
+  (logged as malformed) until the user reassigns it via F2. Same
+  single-user-repo, no-config-compat-guarantee reasoning as #239.
+- **F2 picker: a live device without a resolvable endpoint is shown, not
+  hidden.** Storing an endpoint requires resolving one at pick-time (there
+  is nothing meaningful to write otherwise), so a live "mbv" session that
+  `session_direct_endpoint` can't resolve (no advertised direct-connect
+  port, or an unparseable host) can no longer be *committed* the way it
+  could pre-#256 (which stored the name and deferred resolution to connect
+  time). Rather than silently dropping such a device from the picker list
+  -- which would leave a device visible in F3's Sessions panel mysteriously
+  absent from F2 with no explanation -- it's shown as a greyed-out row
+  suffixed `(not currently routable)`; selecting it flashes that reason
+  and commits nothing.
+
+See `docs/superpowers/plans/2026-07-18-library-route-endpoint-cache.md` for
+the implementation plan. Note this supersedes §4 ("Connect-time resolution
++ error handling") of
+`docs/superpowers/specs/2026-07-18-library-routes-by-device-name-design.md`
+-- that section's "one extra 'list sessions' API call" framing described
+the #239 behavior this addendum replaces.
