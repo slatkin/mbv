@@ -1714,9 +1714,28 @@ impl EmbyClient {
 
     #[allow(dead_code)]
     pub fn get_sessions(&self) -> Result<Vec<SessionInfo>, String> {
-        let arr: Value = self
-            .get("/Sessions")
-            .query("ActiveWithinSeconds", "600")
+        self.get_sessions_with_active_within(Some("600"))
+    }
+
+    /// Like `get_sessions`, but without the `ActiveWithinSeconds=600` filter
+    /// (#236): a device that's been idle-but-still-connected for more than
+    /// 10 minutes wouldn't show up in the filtered list, which would make
+    /// `App::try_auto_reconnect`'s `DirectSession` lookup wrongly conclude
+    /// the device is gone. Only used by that lookup -- the Sessions-panel
+    /// (F3) UI should keep using the filtered `get_sessions` above.
+    pub fn get_sessions_unfiltered(&self) -> Result<Vec<SessionInfo>, String> {
+        self.get_sessions_with_active_within(None)
+    }
+
+    fn get_sessions_with_active_within(
+        &self,
+        active_within_secs: Option<&str>,
+    ) -> Result<Vec<SessionInfo>, String> {
+        let mut req = self.get("/Sessions");
+        if let Some(secs) = active_within_secs {
+            req = req.query("ActiveWithinSeconds", secs);
+        }
+        let arr: Value = req
             .call()
             .map_err(|e| e.to_string())?
             .into_json()
