@@ -43,13 +43,15 @@ pub struct Config {
     pub audio_lang: String,    // full language name, e.g. "English"; "" = any
     pub my_languages: Vec<String>, // user's relevant languages; filters subtitle/audio lang cycling
     pub feed_view_libraries: Vec<String>, // libraries treated as feed view (unplayed, date-sorted)
-    /// Library name (lowercased) -> daemon endpoint string, from
-    /// `[daemon_routes]` (#223). Playback/enqueue resolved to one of these
-    /// libraries swaps the active player to that daemon. `"*"` is a
-    /// wildcard "route everything" entry (#222). TOML-only for v1 -- no
-    /// settings-panel write-back, matching the `hidden_libraries` value
-    /// precedent but without exposing it for in-app editing.
-    pub daemon_routes: std::collections::HashMap<String, String>,
+    /// Library name (lowercased) -> device name, from `[library_routes]`
+    /// (#239, replacing #223's `[daemon_routes]`). Playback/enqueue
+    /// resolved to one of these libraries swaps the active player to
+    /// whichever live session currently has this device name -- resolved
+    /// the same way F3's Sessions panel resolves a device to a
+    /// connection (`App::session_direct_endpoint`). No `"*"` wildcard.
+    /// Editable via the F2 Settings "Library routes" row, and
+    /// hand-editable in `config.toml`.
+    pub library_routes: std::collections::HashMap<String, String>,
     pub config_version: u32, // schema version for future migrations (0 = unversioned)
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
     pub quit_timeout_secs: u64, // how long quit waits for local player teardown (seconds)
@@ -94,7 +96,7 @@ impl Default for Config {
             audio_lang: String::new(),
             my_languages: vec![],
             feed_view_libraries: vec![],
-            daemon_routes: std::collections::HashMap::new(),
+            library_routes: std::collections::HashMap::new(),
             config_version: 0,
             progress_interval_secs: 10,
             quit_timeout_secs: 5,
@@ -118,19 +120,15 @@ impl Config {
     }
 }
 
-/// Resolves the configured daemon endpoint string for a library name
-/// (#223). Matches case-insensitively (the query is lowercased before
-/// lookup; `routes`' keys are already lowercased by `parse_config`), then
-/// falls back to the `"*"` wildcard "route everything" entry (#222) if
-/// present. Returns `None` if neither matches -- the caller stays local.
-pub fn resolve_daemon_route<'a>(
+/// Resolves the configured device name for a library name (#239). Matches
+/// case-insensitively (the query is lowercased before lookup; `routes`'
+/// keys are already lowercased by `parse_config`). No wildcard fallback --
+/// returns `None` if the library has no route, and the caller stays local.
+pub fn resolve_library_route<'a>(
     routes: &'a std::collections::HashMap<String, String>,
     library_name: &str,
 ) -> Option<&'a str> {
-    routes
-        .get(&library_name.to_lowercase())
-        .or_else(|| routes.get("*"))
-        .map(|s| s.as_str())
+    routes.get(&library_name.to_lowercase()).map(|s| s.as_str())
 }
 
 pub fn is_system_instance() -> bool {
@@ -755,8 +753,8 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         })
         .unwrap_or_default();
 
-    let daemon_routes: std::collections::HashMap<String, String> = doc
-        .get("daemon_routes")
+    let library_routes: std::collections::HashMap<String, String> = doc
+        .get("library_routes")
         .and_then(|v| v.as_table())
         .map(|table| {
             table
@@ -798,7 +796,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         audio_lang,
         my_languages,
         feed_view_libraries,
-        daemon_routes,
+        library_routes,
         config_version,
         progress_interval_secs,
         quit_timeout_secs,
@@ -910,6 +908,19 @@ pub fn save_config_settings(cfg: &Config) {
                 .collect(),
         ),
     );
+
+    if cfg.library_routes.is_empty() {
+        table.remove("library_routes");
+    } else {
+        let mut routes_table = toml::map::Map::new();
+        for (library, device) in &cfg.library_routes {
+            routes_table.insert(library.clone(), toml::Value::String(device.clone()));
+        }
+        table.insert(
+            "library_routes".to_string(),
+            toml::Value::Table(routes_table),
+        );
+    }
 
     let queue = section!("queue");
     queue.insert(
@@ -1266,33 +1277,57 @@ hidden_latest = ["Movies", "TV SHOWS"]
     }
 
     #[test]
-    fn parse_daemon_routes_lowercased_keys() {
+    fn parse_library_routes_lowercased_keys() {
         let toml = r#"
 [server]
 url = "http://host"
-[daemon_routes]
-Music = "tcp://musicserver.local:9000"
-"*" = "unix:///run/mbvd.sock"
+[library_routes]
+Music = "living-room-pc"
 "#;
         let cfg = parse_config(toml).unwrap();
         assert_eq!(
-            cfg.daemon_routes.get("music").map(String::as_str),
-            Some("tcp://musicserver.local:9000")
-        );
-        assert_eq!(
-            cfg.daemon_routes.get("*").map(String::as_str),
-            Some("unix:///run/mbvd.sock")
+            cfg.library_routes.get("music").map(String::as_str),
+            Some("living-room-pc")
         );
     }
 
     #[test]
-    fn parse_default_daemon_routes_when_absent() {
+    fn parse_library_routes_ignores_legacy_wildcard_key() {
+        // "*" is no longer a wildcard -- it's just an (unusable) library
+        // name like any other, since #239 dropped the catch-all.
+        let toml = r#"
+[server]
+url = "http://host"
+[library_routes]
+"*" = "living-room-pc"
+"#;
+        let cfg = parse_config(toml).unwrap();
+        assert_eq!(
+            cfg.library_routes.get("*").map(String::as_str),
+            Some("living-room-pc")
+        );
+        assert_eq!(resolve_library_route(&cfg.library_routes, "movies"), None);
+    }
+
+    #[test]
+    fn parse_default_library_routes_when_absent() {
         let toml = r#"
 [server]
 url = "http://host"
 "#;
         let cfg = parse_config(toml).unwrap();
-        assert!(cfg.daemon_routes.is_empty());
+        assert!(cfg.library_routes.is_empty());
+    }
+
+    #[test]
+    fn resolve_library_route_has_no_wildcard_fallback() {
+        let mut routes = std::collections::HashMap::new();
+        routes.insert("music".to_string(), "living-room-pc".to_string());
+        assert_eq!(
+            resolve_library_route(&routes, "Music"),
+            Some("living-room-pc")
+        );
+        assert_eq!(resolve_library_route(&routes, "movies"), None);
     }
 
     #[test]
@@ -1591,48 +1626,5 @@ url = "http://host"
         let path = mpv_ipc_path();
         std::env::remove_var("XDG_RUNTIME_DIR");
         assert_eq!(path, "/run/user/1000/mbv-mpv.sock");
-    }
-
-    #[test]
-    fn resolve_daemon_route_matches_case_insensitively() {
-        let mut routes = std::collections::HashMap::new();
-        routes.insert(
-            "music".to_string(),
-            "tcp://musicserver.local:9000".to_string(),
-        );
-        assert_eq!(
-            resolve_daemon_route(&routes, "Music"),
-            Some("tcp://musicserver.local:9000")
-        );
-    }
-
-    #[test]
-    fn resolve_daemon_route_falls_back_to_wildcard() {
-        let mut routes = std::collections::HashMap::new();
-        routes.insert("*".to_string(), "unix:///run/mbvd.sock".to_string());
-        assert_eq!(
-            resolve_daemon_route(&routes, "Movies"),
-            Some("unix:///run/mbvd.sock")
-        );
-    }
-
-    #[test]
-    fn resolve_daemon_route_prefers_exact_match_over_wildcard() {
-        let mut routes = std::collections::HashMap::new();
-        routes.insert("*".to_string(), "unix:///run/mbvd.sock".to_string());
-        routes.insert(
-            "music".to_string(),
-            "tcp://musicserver.local:9000".to_string(),
-        );
-        assert_eq!(
-            resolve_daemon_route(&routes, "Music"),
-            Some("tcp://musicserver.local:9000")
-        );
-    }
-
-    #[test]
-    fn resolve_daemon_route_returns_none_when_unconfigured() {
-        let routes = std::collections::HashMap::new();
-        assert_eq!(resolve_daemon_route(&routes, "Movies"), None);
     }
 }
