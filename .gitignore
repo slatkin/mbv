@@ -10,5 +10,6 @@
 .claude/scratch/
 context-snapshot.json
 .worktrees/
+.claude/worktrees/
 state.md
 session-log.md
