@@ -344,7 +344,7 @@ impl App {
         lib_idx: usize,
         page_down: bool,
     ) -> bool {
-        if self.queue_view != crate::app::QUEUE_VIEW_POWER
+        if self.view_mode != crate::app::ViewMode::Power
             || self.power_left_tab != lib_idx + 1
             || !matches!(self.power_focus, crate::app::PowerFocus::Left)
             || self.libs[lib_idx].search.is_some()

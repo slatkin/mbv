@@ -191,7 +191,7 @@ impl App {
         item: &mbv_core::api::MediaItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
         log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} tab={}", item.id, item.name, self.tab_idx);
-        if self.queue_view == QUEUE_VIEW_POWER
+        if self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab > 0
         {
@@ -239,7 +239,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+    use crate::app::{LibraryTab, PowerFocus, ViewMode};
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {
@@ -339,7 +339,7 @@ mod tests {
             artist_header_focus: None,
         });
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
         let mut item = make_item("Song", "Audio");
@@ -367,7 +367,7 @@ mod tests {
             artist_header_focus: None,
         });
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Queue;
         app.power_left_tab = 1;
         let mut item = make_item("Song", "Audio");

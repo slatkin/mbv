@@ -5,7 +5,9 @@ use super::super::super::settings::{
 };
 use super::super::super::ui_util::{cycle_lang, next_subtitle_mode};
 use super::super::super::App;
-use super::super::super::{MultiSelectKind, SettingKey, SETTINGS_PANEL_W, SETTING_SECTIONS};
+use super::super::super::{
+    MultiSelectKind, SettingKey, ViewMode, SETTINGS_PANEL_W, SETTING_SECTIONS,
+};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -60,9 +62,16 @@ impl App {
                 self.image_protocol_enabled = !now_none;
                 if now_none {
                     self.home_card_view = false;
-                    self.queue_view = 0;
+                    self.set_view_mode(ViewMode::Standard);
                     self.save_prefs();
                 }
+            }
+            SettingKey::ViewMode => {
+                self.set_view_mode(if self.view_mode == ViewMode::Power {
+                    ViewMode::Standard
+                } else {
+                    ViewMode::Power
+                });
             }
             SettingKey::SystemNotifications => {
                 let new_val = {
