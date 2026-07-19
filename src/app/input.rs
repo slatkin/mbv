@@ -5038,20 +5038,19 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 32,
-            "fixture sanity: expected 32 rendered list rows"
+            viewport_rows, 31,
+            "fixture sanity: expected 31 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Rendered rows before album 27:
-        // 0 artist header, 1 top rule, 2 selected album row, 3-7 inline detail,
-        // 8 bottom rule, 9-35 albums 1-27. One full visible viewport from row 2
-        // lands at row 34, which is album 25.
+        // Viewport is 31 rows (one fewer than before the pill-row gap added in
+        // #261's follow-up), so one full visible viewport from the selected
+        // row lands one row earlier than previously, landing on album 24.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            25,
+            24,
             "PageDown should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -5064,19 +5063,19 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 32,
-            "fixture sanity: expected 32 rendered list rows"
+            viewport_rows, 31,
+            "fixture sanity: expected 31 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Selected album 35 renders on row 37:
-        // row 0 artist header, rows 1-35 albums 0-34, row 36 top rule, row 37 album 35.
-        // Paging up by one 32-row viewport targets row 5, which is album 4.
+        // Viewport is 31 rows (one fewer than before the pill-row gap added in
+        // #261's follow-up), so paging up by one viewport lands one row later
+        // than previously, targeting album 5.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            4,
+            5,
             "PageUp should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
