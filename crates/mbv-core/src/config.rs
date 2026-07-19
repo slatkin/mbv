@@ -1448,7 +1448,7 @@ url = "http://x"
     }
 
     #[test]
-    fn save_config_settings_round_trips_auto_reconnect_true() {
+    fn save_config_settings_round_trips_auto_reconnect_values() {
         let _g = SYS_ENV_LOCK.lock().unwrap();
         let dir = std::env::temp_dir().join(format!(
             "mbv-config-test-{}",
@@ -1461,45 +1461,18 @@ url = "http://x"
         std::env::set_var("XDG_CONFIG_HOME", &dir);
         std::env::remove_var("MBV_SYSTEM");
 
-        let cfg = Config {
-            server_url: "http://localhost:8096".into(),
-            auto_reconnect: true,
-            ..Default::default()
-        };
-        save_config_settings(&cfg);
+        for auto_reconnect in [true, false] {
+            let cfg = Config {
+                server_url: "http://localhost:8096".into(),
+                auto_reconnect,
+                ..Default::default()
+            };
+            save_config_settings(&cfg);
 
-        let saved = std::fs::read_to_string(config_path()).unwrap();
-        let reparsed = parse_config(&saved).unwrap();
-        assert!(reparsed.auto_reconnect);
-
-        std::env::remove_var("XDG_CONFIG_HOME");
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn save_config_settings_round_trips_auto_reconnect_false() {
-        let _g = SYS_ENV_LOCK.lock().unwrap();
-        let dir = std::env::temp_dir().join(format!(
-            "mbv-config-test-{}",
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        ));
-        std::fs::create_dir_all(dir.join("mbv")).unwrap();
-        std::env::set_var("XDG_CONFIG_HOME", &dir);
-        std::env::remove_var("MBV_SYSTEM");
-
-        let cfg = Config {
-            server_url: "http://localhost:8096".into(),
-            auto_reconnect: false,
-            ..Default::default()
-        };
-        save_config_settings(&cfg);
-
-        let saved = std::fs::read_to_string(config_path()).unwrap();
-        let reparsed = parse_config(&saved).unwrap();
-        assert!(!reparsed.auto_reconnect);
+            let saved = std::fs::read_to_string(config_path()).unwrap();
+            let reparsed = parse_config(&saved).unwrap();
+            assert_eq!(reparsed.auto_reconnect, auto_reconnect);
+        }
 
         std::env::remove_var("XDG_CONFIG_HOME");
         std::fs::remove_dir_all(&dir).ok();
