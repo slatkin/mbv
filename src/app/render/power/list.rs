@@ -163,13 +163,15 @@ impl App {
                         )
                     })
                     .collect();
-                for (cache_key, item_id, series_id) in prefetch {
-                    self.fetch_list_card_image_when_idle(
-                        cache_key,
-                        item_id,
-                        series_id,
-                        &["Primary"],
-                    );
+                if self.images_enabled() {
+                    for (cache_key, item_id, series_id) in prefetch {
+                        self.fetch_list_card_image_when_idle(
+                            cache_key,
+                            item_id,
+                            series_id,
+                            &["Primary"],
+                        );
+                    }
                 }
             }
         }
