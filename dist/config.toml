@@ -1,7 +1,7 @@
 [server]
 url = "http://emby.local:8096"
 
-[mbv]
+[general]
 hidden_libraries = ["live tv"]
 show_log_tab = false
 
