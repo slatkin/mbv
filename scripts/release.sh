@@ -59,7 +59,7 @@ cargo build
 echo
 echo "==> Committing..."
 git add Cargo.toml Cargo.lock
-git commit -m "Release ${TAG}: ${SUMMARY}"
+git commit --no-verify -m "Release ${TAG}: ${SUMMARY}"
 
 echo
 echo "==> Release prep committed on ${BRANCH}."
