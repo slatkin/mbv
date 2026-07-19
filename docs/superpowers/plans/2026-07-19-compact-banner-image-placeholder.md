@@ -26,7 +26,7 @@
 - Consumes: existing `App` fields `card_image_loading: HashSet<String>`, `card_image_states: HashMap<String, Option<ThreadProtocol>>`, methods `images_enabled(&self) -> bool`, `list_image_renders_allowed(&self) -> bool`, `fetch_card_image(&mut self, cache_key: String, item_id: String, series_id: String, types: &[&str])`, function `compact_banner_image_cache_key(item_id: &str) -> String` (all already defined in this file / `images.rs`).
 - Produces: new field `CompactBannerLayout.img_is_placeholder: bool` — internal to this file, not consumed elsewhere.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Add this test to the `#[cfg(test)] mod tests` block at the bottom of `src/app/render/power/detail.rs`, right after `compact_movie_detail_shows_full_short_overview_with_no_scrollbar` (before `compact_movie_detail_shows_full_long_overview_with_no_scrollbar`):
 
@@ -66,12 +66,12 @@ Add this test to the `#[cfg(test)] mod tests` block at the bottom of `src/app/re
     }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `cargo test --workspace compact_movie_detail_reserves_placeholder_space_while_image_loads`
 Expected: FAIL — the assertion on `layout.inline_image_rect` fails because the current code reserves `(0, 0)` (i.e. `inline_image_rect` is `None`) while the fetch is in flight, instead of `(18, 12)`.
 
-- [ ] **Step 3: Add the `img_is_placeholder` field to `CompactBannerLayout`**
+- [x] **Step 3: Add the `img_is_placeholder` field to `CompactBannerLayout`**
 
 In `src/app/render/power/detail.rs`, find this struct definition:
 
@@ -110,7 +110,7 @@ pub(super) struct CompactBannerLayout {
 }
 ```
 
-- [ ] **Step 4: Update `compact_banner_layout` to compute and return `img_is_placeholder`**
+- [x] **Step 4: Update `compact_banner_layout` to compute and return `img_is_placeholder`**
 
 Find this block (still in `src/app/render/power/detail.rs`, inside `pub(super) fn compact_banner_layout`):
 
@@ -226,7 +226,7 @@ Replace it with:
     }
 ```
 
-- [ ] **Step 5: Render the placeholder block in `render_power_compact_detail`**
+- [x] **Step 5: Render the placeholder block in `render_power_compact_detail`**
 
 Find this line pair near the top of `render_power_compact_detail`:
 
@@ -301,7 +301,7 @@ Replace it with:
 }
 ```
 
-- [ ] **Step 6: Fix the pre-existing `CompactBannerLayout` struct literals in the `content_rows` test**
+- [x] **Step 6: Fix the pre-existing `CompactBannerLayout` struct literals in the `content_rows` test**
 
 The new `img_is_placeholder` field makes every existing `CompactBannerLayout { ... }` literal in the test module fail to compile. In `src/app/render/power/detail.rs`, inside `fn content_rows_is_never_shorter_than_the_rendered_image_height`, update all three literals:
 
@@ -374,17 +374,17 @@ becomes
         };
 ```
 
-- [ ] **Step 7: Run the new test to verify it passes**
+- [x] **Step 7: Run the new test to verify it passes**
 
 Run: `cargo test --workspace compact_movie_detail_reserves_placeholder_space_while_image_loads`
 Expected: PASS
 
-- [ ] **Step 8: Run the full pre-existing test suite for this file to check for regressions**
+- [x] **Step 8: Run the full pre-existing test suite for this file to check for regressions**
 
 Run: `cargo test --workspace compact_movie_detail`
 Expected: all matching tests in `src/app/render/power/detail.rs` PASS, including `compact_movie_detail_shows_director_without_enter_prompt`, `compact_movie_detail_shows_full_short_overview_with_no_scrollbar`, `compact_movie_detail_shows_full_long_overview_with_no_scrollbar`, and the new `compact_movie_detail_reserves_placeholder_space_while_image_loads`. Then also run `cargo test --workspace content_rows_is_never_shorter_than_the_rendered_image_height` to confirm that struct-literal fix compiles and passes.
 
-- [ ] **Step 9: Run the full pre-commit checklist**
+- [x] **Step 9: Run the full pre-commit checklist**
 
 Run, in order:
 ```bash
@@ -394,7 +394,7 @@ cargo test --workspace
 ```
 Expected: all three commands exit clean (no diffs, no warnings, all tests pass).
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/app/render/power/detail.rs
