@@ -222,7 +222,7 @@ In the same file, update `music_group_pills_scroll_within_reserved_space_when_ov
 Run:
 
 ```bash
-cargo test -p mbv --lib render::power::tests::music_group_pills -- --nocapture
+cargo test -p mbv render::power::tests::music_group_pills -- --nocapture
 ```
 
 Expected: FAIL. The old implementation renders `Alpha` and `Beta` on row 0, so the new `music_group_pills_render_on_row_below_title_marker` assertion that row 0 has no group pills should fail.
@@ -329,7 +329,7 @@ In `src/app/render/power/music.rs`, replace the `render_power_music_group_view` 
 Run:
 
 ```bash
-cargo test -p mbv --lib render::power::tests::music_group_pills -- --nocapture
+cargo test -p mbv render::power::tests::music_group_pills -- --nocapture
 ```
 
 Expected: PASS. Both music group pill tests pass, and their output should show the `Music` marker on row 0 with group pills and selector hitboxes on row 1.
@@ -340,7 +340,7 @@ Run:
 
 ```bash
 cargo fmt --all -- --check
-cargo test -p mbv --lib render::power -- --nocapture
+cargo test -p mbv render::power -- --nocapture
 ```
 
 Expected: both commands PASS.
