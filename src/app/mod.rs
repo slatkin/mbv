@@ -1719,6 +1719,7 @@ impl App {
             "power" => ViewMode::Power,
             _ => ViewMode::Standard,
         };
+        let tab_idx = startup_tab_idx(init.start_on_queue, &prefs);
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         App {
             #[cfg(test)]
@@ -1743,7 +1744,7 @@ impl App {
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
-            tab_idx: startup_tab_idx(init.start_on_queue, &prefs),
+            tab_idx,
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
             search: SearchSubsystem::new(init.search_tx, init.search_rx),
@@ -1797,8 +1798,17 @@ impl App {
             // fully constructed yet and no transition side effects are owed
             // at boot -- persisted `tab_idx` and `view_mode` are restored
             // together, independently of each other (issue #275).
+            //
+            // `pre_power_tab` is seeded from the just-computed `tab_idx`
+            // rather than a bare 0: if the session starts in Power (last
+            // quit persisted `view_mode = "power"`), `tab_idx` already holds
+            // the correct restored Standard tab, and the first exit from
+            // Power must return there, not silently reset to Home. If the
+            // session starts in Standard, this value is never read until
+            // Power is entered, at which point `set_view_mode` overwrites it
+            // with the live `tab_idx` anyway.
             view_mode,
-            pre_power_tab: 0,
+            pre_power_tab: tab_idx,
             queue_group: true,
             power_focus: PowerFocus::from_pref(prefs["power_focus"].as_str()),
             power_left_tab: 0,
@@ -6567,6 +6577,98 @@ pub(crate) mod tests {
             search_rx,
             stay_alive_ctrl: None,
         })
+    }
+
+    // Issue #275 regression: when a session quit while `view_mode` was
+    // `Power`, the next launch restores `view_mode = Power` *and* the
+    // correct pre-Power `tab_idx` from prefs.json independently. Before this
+    // fix, `pre_power_tab` was unconditionally seeded to 0 at boot, so the
+    // first exit from Power (`'v'` or F2 -> View mode) silently reset the
+    // user to the Home tab instead of the Standard tab they were actually
+    // on when they quit.
+    #[test]
+    fn build_starting_in_power_seeds_pre_power_tab_from_restored_tab_idx() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        // tab_idx 1 (Queue) rather than a library tab: library tabs are
+        // populated from `app.libs`, which this test leaves empty, and
+        // `set_tab` -> `ensure_tab_visible` would spin forever trying to
+        // scroll a library tab into view that doesn't exist. Any non-zero
+        // Standard tab is enough to distinguish "restored correctly" from
+        // the bug's "silently reset to 0".
+        let prefs = serde_json::json!({ "tab_idx": 1 });
+        std::fs::write(
+            crate::config::prefs_path(),
+            serde_json::to_string(&prefs).expect("prefs json"),
+        )
+        .expect("write prefs");
+
+        use mbv_core::player::{PlayerProxy, PlayerStatus};
+        use std::sync::{Arc, Mutex};
+
+        let status = Arc::new(Mutex::new(PlayerStatus {
+            volume_max: 100,
+            ..Default::default()
+        }));
+
+        let (_, player_rx) = std::sync::mpsc::channel();
+        let (_, ws_rx) = std::sync::mpsc::channel();
+        let (lib_tx, lib_rx) = std::sync::mpsc::channel();
+        let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
+        let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
+        let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
+        let (search_tx, search_rx) = std::sync::mpsc::channel::<Result<Vec<MediaItem>, String>>();
+
+        let player = PlayerProxy::stub(status);
+
+        use crate::config::Config;
+        use mbv_core::api::EmbyClient;
+        let client = EmbyClient::new(Config::default());
+
+        let mut app = App::build(AppInit {
+            client: Arc::new(Mutex::new(client)),
+            player,
+            player_rx,
+            ws_rx,
+            ws_send_tx: None,
+            player_tab: PlayerTab::default(),
+            remote_player_tab: None,
+            initial_queue_scope: QueueScope::Local,
+            system_notifications: false,
+            image_protocol: None,
+            image_protocol_enabled: false,
+            hidden_libraries: Vec::new(),
+            library_routes: std::collections::HashMap::new(),
+            hidden_latest: Vec::new(),
+            music_levels: Vec::new(),
+            use_nerd_fonts: false,
+            indicator_style: render::indicators::IndicatorStyle::default(),
+            image_cache_size: 50,
+            start_on_queue: false,
+            view_mode: "power".to_string(),
+            lib_tx,
+            lib_rx,
+            sessions_tx,
+            sessions_rx,
+            card_image_tx,
+            card_image_rx,
+            notif_action_tx,
+            notif_action_rx,
+            search_tx,
+            search_rx,
+            stay_alive_ctrl: None,
+        });
+
+        assert_eq!(app.view_mode, ViewMode::Power);
+        assert_eq!(app.tab_idx, 1);
+        assert_eq!(app.pre_power_tab, 1);
+
+        app.set_view_mode(ViewMode::Standard);
+
+        assert_eq!(
+            app.tab_idx, 1,
+            "leaving Power must restore the tab_idx that was correctly \
+             restored at startup, not reset to Home"
+        );
     }
 
     // ── wants_terminal_render (#156: detached stay-alive must not touch
