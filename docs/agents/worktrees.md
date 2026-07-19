@@ -110,6 +110,35 @@ not `EnterWorktree` either (tested, see Step 1a above): Serena's server is a
 separate long-running process with its own fixed cwd, independent of the
 session's own working-directory tracking.
 
+**Proven directly with `ps`/`/proc`, not inferred** (checked while writing
+this doc, after already having called `EnterWorktree` earlier in the same
+session):
+
+```
+$ ps -eo pid,ppid,lstart,args | grep serena
+3932 3886 ... /home/.../serena start-mcp-server --context=claude-code --project-from-cwd
+$ readlink -f /proc/3932/cwd    # Serena (child)
+/home/slatkin/Dev/mbv
+$ readlink -f /proc/3886/cwd    # Claude Code CLI (parent, ppid of 3932)
+/home/slatkin/Dev/mbv/.claude/worktrees/<worktree>
+```
+
+Serena (pid 3932) is a **direct child process of the Claude Code CLI itself**
+(ppid 3886), spawned automatically ~4 seconds after the CLI process starts —
+before any conversation content, before any tool call, before the session
+has any chance to do anything at all. There's no "activate Serena" step
+under a session's control to delay; the harness spawns it as part of MCP
+initialization. And even setting timing aside: the two `readlink`s above
+show the *parent* CLI process's own cwd really did change (confirming
+`EnterWorktree` performs a genuine `chdir` on the CLI process, not just
+internal bookkeeping) while the *child* Serena process's cwd did not move —
+ordinary POSIX semantics: a child doesn't track its parent's cwd after
+`fork`/`exec`, so nothing re-executes Serena when the parent's cwd changes
+later. The only lever that works is which directory the `claude` process
+itself launches from, *before* Serena's child process is spawned — i.e. a
+fresh `cd <worktree> && claude` invocation, not anything achievable from
+inside an already-running session.
+
 Per Serena's own docs, `--context=claude-code` is a "single-project context,"
 and once a project is provided at startup (`--project-from-cwd` counts),
 Serena's `activate_project` tool — which would otherwise allow mid-session
