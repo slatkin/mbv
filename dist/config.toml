@@ -15,3 +15,6 @@ audio_pipe_bitdepth   = 16
 
 [daemon]
 show_systray_icon = true
+# F2 is the normal way to select a friendly device and save its routable endpoint.
+# [library_routes]
+# music = "tcp://192.0.2.10:17831"

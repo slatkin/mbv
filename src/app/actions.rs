@@ -20,6 +20,15 @@ type AlbumIndexFetch<'a> =
     dyn FnMut(&str, usize, usize) -> Result<(Vec<MediaItem>, usize), String> + 'a;
 const ALBUM_INDEX_PAGE_SIZE: usize = 200;
 
+fn enqueue_action_context(item_id: &str, item_name: &str, source: &str, bypass: bool) -> String {
+    let mut context =
+        format!("user action=enqueue item_id={item_id:?} item_name={item_name:?} source={source}");
+    if bypass {
+        context.push_str(" reason=non-library thin-client owns playback");
+    }
+    context
+}
+
 fn recursive_album_search_eligible(collection_type: &str, levels: &[String]) -> bool {
     collection_type == "music"
         && levels.len() > 1
@@ -1966,7 +1975,9 @@ impl App {
         };
         self.player.subtitle_prefs.lock().unwrap().mode = new_mode.clone();
         self.push_subtitle_prefs();
-        crate::config::save_config_settings(&cfg);
+        if let Err(e) = crate::config::save_config_settings(&cfg) {
+            log::warn!(target: "config", "config save failed: {e}");
+        }
         self.flash_status(format!("Subtitle mode: {new_mode}"));
     }
 
@@ -2318,8 +2329,11 @@ impl App {
     }
 
     pub(super) fn play_items_routed(&mut self, items: Vec<MediaItem>, start_idx: usize) {
-        if !self.in_non_library_thin_client_mode() {
-            if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
+        if let Some(item) = items.get(start_idx).or_else(|| items.first()) {
+            log::info!(target: "library_route", "user action=queue-replace item_id={:?} item_name={:?}", item.id, item.name);
+            if self.in_non_library_thin_client_mode() {
+                log::info!(target: "library_route", "route bypass action=queue-replace item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
+            } else {
                 let item = item.clone();
                 self.apply_route_for_playback(&item);
             }
@@ -2360,7 +2374,10 @@ impl App {
     }
 
     pub(super) fn play_item(&mut self, item: MediaItem) {
-        if !self.in_non_library_thin_client_mode() {
+        log::info!(target: "library_route", "user action=play item_id={:?} item_name={:?}", item.id, item.name);
+        if self.in_non_library_thin_client_mode() {
+            log::info!(target: "library_route", "route bypass action=play item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
+        } else {
             self.apply_route_for_playback(&item);
         }
         self.on_queue_replace_silent();
@@ -2417,6 +2434,10 @@ impl App {
             if !is_playable(&item) {
                 return;
             }
+            log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
+            if self.in_non_library_thin_client_mode() {
+                log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
+            }
             let resolved = self.route_for_item_via_ancestors(&item.id).map(|(n, _)| n);
             if self.enqueue_route_conflict(resolved) {
                 return;
@@ -2437,6 +2458,8 @@ impl App {
                 return;
             }
             let lib_idx = self.tab_idx - self.lib_tab_offset();
+            let bypass = self.in_non_library_thin_client_mode();
+            log::info!(target: "library_route", "{}", enqueue_action_context(&item.id, &item.name, "library-view", bypass));
             let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
             if self.enqueue_route_conflict(resolved) {
                 return;
@@ -2513,6 +2536,10 @@ impl App {
         lib_idx: usize,
         selection: &ArtistHeaderSelection,
     ) -> bool {
+        log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?} source=artist-header", selection.first_album_id, selection.artist_label);
+        if self.in_non_library_thin_client_mode() {
+            log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} source=artist-header reason=non-library thin-client owns playback", selection.first_album_id, selection.artist_label);
+        }
         let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
         if self.enqueue_route_conflict(resolved) {
             return true;
@@ -2616,6 +2643,10 @@ impl App {
     }
 
     pub(super) fn do_enqueue_folder(&mut self, item: mbv_core::api::MediaItem) {
+        log::info!(target: "library_route", "user action=enqueue item_id={:?} item_name={:?}", item.id, item.name);
+        if self.in_non_library_thin_client_mode() {
+            log::info!(target: "library_route", "route bypass action=enqueue item_id={:?} item_name={:?} reason=non-library thin-client owns playback", item.id, item.name);
+        }
         let resolved = self.resolve_route_for_enqueue_folder(&item);
         if self.enqueue_route_conflict(resolved) {
             return;
@@ -7439,4 +7470,11 @@ mod tests {
 
         assert!(app.active_route.is_none());
     }
+}
+#[test]
+fn enqueue_action_context_names_action_item_and_thin_client_bypass() {
+    assert_eq!(
+            enqueue_action_context("item-42", "Track", "library-view", true),
+            "user action=enqueue item_id=\"item-42\" item_name=\"Track\" source=library-view reason=non-library thin-client owns playback"
+        );
 }

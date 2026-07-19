@@ -110,6 +110,22 @@ fn crash_log_path() -> std::path::PathBuf {
     state_dir().join("mbv.log")
 }
 
+fn config_diagnostic_summary(config: &config::Config) -> String {
+    let mut routes: Vec<_> = config.library_routes.iter().collect();
+    routes.sort_by(|a, b| a.0.cmp(b.0));
+    let entries = routes
+        .into_iter()
+        .map(|(library, endpoint)| format!("{library}={endpoint}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!(
+        "config loaded: auto_reconnect={} library_routes={} entries=[{}]",
+        config.auto_reconnect,
+        config.library_routes.len(),
+        entries
+    )
+}
+
 fn write_crash_log(msg: &str) {
     let _ = crossterm::terminal::disable_raw_mode();
     let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::LeaveAlternateScreen);
@@ -259,6 +275,11 @@ fn main() {
 
     let alive_requested = has_flag(&args, "-a") || has_flag(&args, "--alive");
 
+    applog::init(
+        config::is_system_instance(),
+        Some(state_dir().join("mbv.log")),
+    );
+
     let config = match load_config() {
         Ok(c) => c,
         Err(e) => {
@@ -266,6 +287,7 @@ fn main() {
             std::process::exit(1);
         }
     };
+    log::info!(target: "startup", "{}", config_diagnostic_summary(&config));
     let ui_config = match config::load_ui_config() {
         Ok(c) => c,
         Err(e) => {
@@ -286,9 +308,6 @@ fn main() {
             })
         });
 
-    let log_stderr = config::is_system_instance();
-    let log_path = Some(state_dir().join("mbv.log"));
-    applog::init(log_stderr, log_path);
     log::info!(target: "startup", "mbv starting");
 
     // Construction only (no network I/O) so `client.config` can be read by
@@ -510,5 +529,24 @@ mod tests {
                     .to_string()
             )
         );
+    }
+
+    #[test]
+    fn config_diagnostic_summary_is_sorted_and_sanitized() {
+        let mut config = config::Config {
+            auto_reconnect: true,
+            password: "secret-token".to_string(),
+            ..config::Config::default()
+        };
+        config
+            .library_routes
+            .insert("music".to_string(), "tcp://192.0.2.10:17831".to_string());
+        config.library_routes.insert(
+            "audiobooks".to_string(),
+            "tcp://192.0.2.11:17831".to_string(),
+        );
+        let summary = config_diagnostic_summary(&config);
+        assert_eq!(summary, "config loaded: auto_reconnect=true library_routes=2 entries=[audiobooks=tcp://192.0.2.11:17831, music=tcp://192.0.2.10:17831]");
+        assert!(!summary.contains("secret-token"));
     }
 }

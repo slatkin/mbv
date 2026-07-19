@@ -59,9 +59,21 @@ impl App {
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
         let name = library_name.trim();
         if name.is_empty() {
+            log::info!(target: "library_route", "route resolution skipped: empty library name");
             return None;
         }
-        let endpoint = mbv_core::config::resolve_library_route(&self.library_routes, name)?;
+        let Some(raw) = self.library_routes.get(&name.to_lowercase()) else {
+            log::info!(target: "library_route", "configured library missing library={name:?}");
+            return None;
+        };
+        let endpoint = match mbv_core::remote_player::DaemonEndpoint::parse(raw) {
+            Ok(endpoint @ mbv_core::remote_player::DaemonEndpoint::Tcp(_)) => endpoint,
+            _ => {
+                log::warn!(target: "library_route", "malformed endpoint library={name:?} endpoint={raw:?}; accepted shape is tcp://host:port");
+                return None;
+            }
+        };
+        log::info!(target: "library_route", "accepted endpoint library={name:?} endpoint={endpoint}");
         Some((name.to_lowercase(), endpoint))
     }
 
@@ -100,6 +112,7 @@ impl App {
         // would pay a blocking network call that can never resolve to
         // anything for a user who never opted into library routing.
         if self.library_routes.is_empty() {
+            log::info!(target: "library_route", "route table empty item_id={item_id:?}; staying local");
             return None;
         }
         if self.library_route_cache.len() >= LIBRARY_ROUTE_CACHE_PRUNE_THRESHOLD {
@@ -116,14 +129,17 @@ impl App {
         }
         if let Some((cached, cached_at)) = self.library_route_cache.get(item_id) {
             if Instant::now().duration_since(*cached_at) < LIBRARY_ROUTE_CACHE_TTL {
+                log::info!(target: "library_route", "ancestor cache hit item_id={item_id:?} library={cached:?}");
                 return cached
                     .clone()
                     .and_then(|name| self.resolve_route_for_library(&name));
             }
+            log::info!(target: "library_route", "ancestor cache expired item_id={item_id:?}");
             // Expired -- fall through and re-resolve as a normal cache miss,
             // so a mid-session library reorganization on the Emby server
             // self-heals without requiring an app restart.
         }
+        log::info!(target: "library_route", "ancestor cache miss item_id={item_id:?}");
         let ancestors = {
             let client = self.client.lock().unwrap();
             client.get_ancestors(item_id)
@@ -150,6 +166,7 @@ impl App {
         };
         self.library_route_cache
             .insert(item_id.to_string(), (library_name.clone(), Instant::now()));
+        log::info!(target: "library_route", "ancestor resolution succeeded item_id={item_id:?} library={library_name:?}");
         library_name.and_then(|name| self.resolve_route_for_library(&name))
     }
 
@@ -173,12 +190,16 @@ impl App {
         &mut self,
         item: &mbv_core::api::MediaItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
+        log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} tab={}", item.id, item.name, self.tab_idx);
         if self.tab_idx == 0 {
+            log::info!(target: "library_route", "resolution path=ancestor item_id={:?}", item.id);
             self.route_for_item_via_ancestors(&item.id)
         } else if self.tab_idx >= 2 {
+            log::info!(target: "library_route", "resolution path=active-library item_id={:?}", item.id);
             let lib_idx = self.tab_idx - self.lib_tab_offset();
             self.route_for_active_library_view(lib_idx)
         } else {
+            log::info!(target: "library_route", "resolution path=queue item_id={:?}", item.id);
             self.active_route
                 .clone()
                 .and_then(|name| self.resolve_route_for_library(&name))
