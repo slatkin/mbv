@@ -268,8 +268,8 @@ impl App {
                     let dur_visible = show_length && !dur.is_empty();
                     let pct_visible = !pct_str.is_empty();
                     let metadata_gap = if dur_visible && pct_visible { 1 } else { 0 };
-                    let metadata_w = dur_visible.then_some(dur.width()).unwrap_or(0)
-                        + pct_visible.then_some(pct_str.width()).unwrap_or(0)
+                    let metadata_w = (if dur_visible { dur.width() } else { 0 })
+                        + (if pct_visible { pct_str.width() } else { 0 })
                         + metadata_gap;
                     let extra = metadata_w;
                     let title_w =

@@ -33,26 +33,45 @@ impl App {
     fn enter_device_stage(&mut self, library_lower: String, library_display: String) {
         let sessions = self.fetch_sessions_blocking().unwrap_or_default();
         let local_device_name = self.client.lock().unwrap().device_name.clone();
-        let mut devices: Vec<String> = sessions
+        let mut devices: Vec<(String, Option<mbv_core::remote_player::DaemonEndpoint>)> = sessions
             .iter()
             .filter(|s| s.client.eq_ignore_ascii_case("mbv"))
             .filter(|s| !s.device_name.eq_ignore_ascii_case(&local_device_name))
-            .map(|s| s.device_name.clone())
+            .map(|s| {
+                // A live mbv session that doesn't yield a resolvable
+                // endpoint (e.g. no advertised direct-connect port, or
+                // an unparseable host) is kept in the list, paired
+                // with None, rather than dropped (#256): omitting it
+                // entirely would leave a device the user can see live
+                // in F3's Sessions panel silently missing here with no
+                // way to tell why. `render_library_routes_popup`
+                // renders a `None` entry greyed out with a reason, and
+                // `commit_device_selection` refuses to commit it.
+                (s.device_name.clone(), self.session_direct_endpoint(s))
+            })
             .collect();
-        devices.sort();
-        devices.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+        devices.sort_by(|a, b| a.0.cmp(&b.0));
+        devices.dedup_by(|a, b| a.0.eq_ignore_ascii_case(&b.0));
 
-        let current = self
+        // Preselect by resolved endpoint, not by name (#256): a hostname
+        // is more likely to change than the address it currently resolves
+        // to, and this comparison is free -- `devices` above already paid
+        // for the live session fetch this stage needs regardless, to let
+        // the user pick a *new* device.
+        let current_endpoint = self
             .client
             .lock()
             .unwrap()
             .config
             .library_routes
             .get(&library_lower)
-            .cloned();
-        let cursor = current
-            .as_ref()
-            .and_then(|dev| devices.iter().position(|d| d.eq_ignore_ascii_case(dev)))
+            .and_then(|raw| mbv_core::remote_player::DaemonEndpoint::parse(raw).ok());
+        let cursor = current_endpoint
+            .and_then(|current| {
+                devices
+                    .iter()
+                    .position(|(_, ep)| ep.as_ref() == Some(&current))
+            })
             .map(|idx| idx + 1) // +1 for the synthetic "Local (no route)" row at index 0
             .unwrap_or(0);
 
@@ -80,14 +99,31 @@ impl App {
         };
         let cursor = popup.cursor;
 
+        if cursor > 0 {
+            if let Some((name, None)) = devices.get(cursor - 1) {
+                // #256: a device shown in this picker without a
+                // resolvable endpoint (greyed out, see enter_device_stage)
+                // can't be committed -- there is nothing meaningful to
+                // write to config for it. Flash the reason and stay on
+                // this stage rather than silently doing nothing.
+                self.flash_status(format!(
+                    "{name} is not currently routable (no resolvable direct-connect endpoint)"
+                ));
+                return;
+            }
+        }
+
         {
             let mut c = self.client.lock().unwrap();
             if cursor == 0 {
                 c.config.library_routes.remove(&library_lower);
-            } else if let Some(device) = devices.get(cursor - 1) {
+            } else if let Some((_, Some(endpoint))) = devices.get(cursor - 1) {
+                // #256: persist the resolved endpoint, never the device
+                // name -- the name was only ever needed to let the user
+                // pick a device in this dialog.
                 c.config
                     .library_routes
-                    .insert(library_lower.clone(), device.clone());
+                    .insert(library_lower.clone(), endpoint.to_string());
             }
         }
         let cfg = self.client.lock().unwrap().config.clone();
@@ -219,19 +255,33 @@ impl App {
                         Style::default().fg(palette::MUTED),
                     )));
                 }
-                let mut rows: Vec<String> = vec![LOCAL_NO_ROUTE.to_string()];
-                rows.extend(devices.iter().cloned());
-                for (i, name) in rows.iter().enumerate() {
+                // (label, routable) -- a device without a resolvable
+                // endpoint (#256) is shown greyed out with its reason
+                // appended, rather than omitted, so a device visible in
+                // F3 but not currently pickable here isn't a silent
+                // mystery. It stays visible via arrow-key navigation but
+                // `commit_device_selection` refuses to commit it.
+                let mut rows: Vec<(String, bool)> = vec![(LOCAL_NO_ROUTE.to_string(), true)];
+                rows.extend(devices.iter().map(|(name, endpoint)| {
+                    if endpoint.is_some() {
+                        (name.clone(), true)
+                    } else {
+                        (format!("{name} (not currently routable)"), false)
+                    }
+                }));
+                for (i, (label, routable)) in rows.iter().enumerate() {
                     let focused = i == popup.cursor;
                     let arrow = if focused { "▸ " } else { "  " };
-                    let name_style = if focused {
+                    let name_style = if !routable {
+                        Style::default().fg(palette::MUTED)
+                    } else if focused {
                         Style::default().fg(palette::TEXT)
                     } else {
                         Style::default().fg(palette::SUBTLE)
                     };
                     lines.push(Line::from(vec![
                         Span::raw(arrow),
-                        Span::styled(name.clone(), name_style),
+                        Span::styled(label.clone(), name_style),
                     ]));
                 }
                 let _ = library_display;
@@ -303,29 +353,23 @@ mod tests {
     }
 
     #[test]
-    fn commit_device_selection_assigns_library_route() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            Ok(vec![make_session("living-room-pc", "mbv")])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
+    fn commit_device_selection_assigns_library_route_as_an_endpoint() {
+        // #256: the config value committed here must be the device's
+        // resolved endpoint, never its name.
         let mut app = make_app_stub();
+        let endpoint =
+            mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:9000".parse().unwrap());
         app.library_routes_popup = Some(LibraryRoutePopup {
             stage: LibraryRouteStage::PickDevice {
                 library_lower: "music".to_string(),
                 library_display: "Music".to_string(),
-                devices: vec!["living-room-pc".to_string()],
+                devices: vec![("living-room-pc".to_string(), Some(endpoint.clone()))],
             },
             cursor: 1, // index 0 is "Local (no route)"; 1 is the device
         });
 
         app.handle_library_routes_enter();
 
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(
             app.client
                 .lock()
@@ -333,12 +377,9 @@ mod tests {
                 .config
                 .library_routes
                 .get("music"),
-            Some(&"living-room-pc".to_string())
+            Some(&endpoint.to_string())
         );
-        assert_eq!(
-            app.library_routes.get("music"),
-            Some(&"living-room-pc".to_string())
-        );
+        assert_eq!(app.library_routes.get("music"), Some(&endpoint.to_string()));
     }
 
     #[test]
@@ -349,14 +390,19 @@ mod tests {
             .unwrap()
             .config
             .library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.library_routes_popup = Some(LibraryRoutePopup {
             stage: LibraryRouteStage::PickDevice {
                 library_lower: "music".to_string(),
                 library_display: "Music".to_string(),
-                devices: vec!["living-room-pc".to_string()],
+                devices: vec![(
+                    "living-room-pc".to_string(),
+                    Some(mbv_core::remote_player::DaemonEndpoint::Tcp(
+                        "127.0.0.1:9000".parse().unwrap(),
+                    )),
+                )],
             },
             cursor: 0, // "Local (no route)"
         });
@@ -373,5 +419,119 @@ mod tests {
             None
         );
         assert_eq!(app.library_routes.get("music"), None);
+    }
+
+    #[test]
+    fn enter_device_stage_preselects_by_resolved_endpoint_not_name() {
+        // #256: preselecting which picker row matches the current
+        // assignment must compare resolved endpoints, not device names --
+        // endpoints are the stable identifier here (a hostname is more
+        // likely to change than the address it currently resolves to).
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            let mut sess = make_session("living-room-pc", "mbv");
+            sess.host = "127.0.0.1".into();
+            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
+            Ok(vec![sess])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
+        let mut app = make_app_stub();
+        app.client
+            .lock()
+            .unwrap()
+            .config
+            .library_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        // enter_device_stage directly, rather than through
+        // open_library_routes_popup -> handle_library_routes_enter: the
+        // latter round-trips through client.get_views(), a live network
+        // call that has nothing to do with what this test verifies
+        // (enter_device_stage's endpoint-based preselection).
+        app.library_routes_popup = Some(LibraryRoutePopup {
+            stage: LibraryRouteStage::PickLibrary { items: vec![] },
+            cursor: 0,
+        });
+        app.enter_device_stage("music".to_string(), "Music".to_string());
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        let popup = app.library_routes_popup.as_ref().unwrap();
+        assert_eq!(popup.cursor, 1); // 0 = "Local (no route)", 1 = the matched device
+    }
+
+    #[test]
+    fn enter_device_stage_lists_an_unresolvable_device_instead_of_omitting_it() {
+        // #256: a live "mbv" session that session_direct_endpoint can't
+        // resolve to an endpoint (here: no advertised direct-connect port)
+        // must still show up in the picker, paired with `None` -- silently
+        // omitting it would leave a device visible in F3's Sessions panel
+        // with no explanation for why it doesn't appear here.
+        let _guard = crate::config::TestStateDirGuard::new();
+        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn fake_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            // No supported_commands entry -> parse_mbv_direct_tcp_port
+            // finds nothing -> session_direct_endpoint returns None.
+            Ok(vec![make_session("no-port-device", "mbv")])
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
+
+        let mut app = make_app_stub();
+        // enter_device_stage directly -- see the comment in
+        // enter_device_stage_preselects_by_resolved_endpoint_not_name for
+        // why this bypasses open_library_routes_popup.
+        app.library_routes_popup = Some(LibraryRoutePopup {
+            stage: LibraryRouteStage::PickLibrary { items: vec![] },
+            cursor: 0,
+        });
+        app.enter_device_stage("music".to_string(), "Music".to_string());
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        let popup = app.library_routes_popup.as_ref().unwrap();
+        let LibraryRouteStage::PickDevice { devices, .. } = &popup.stage else {
+            panic!("expected PickDevice stage");
+        };
+        assert_eq!(devices, &vec![("no-port-device".to_string(), None)]);
+    }
+
+    #[test]
+    fn commit_device_selection_flashes_and_does_not_commit_for_an_unroutable_device() {
+        // #256: selecting a greyed-out (None-endpoint) row must not write
+        // anything to config -- there is nothing meaningful to write --
+        // and must tell the user why, rather than silently doing nothing.
+        let mut app = make_app_stub();
+        app.library_routes_popup = Some(LibraryRoutePopup {
+            stage: LibraryRouteStage::PickDevice {
+                library_lower: "music".to_string(),
+                library_display: "Music".to_string(),
+                devices: vec![("no-port-device".to_string(), None)],
+            },
+            cursor: 1, // index 0 is "Local (no route)"; 1 is the device
+        });
+
+        app.handle_library_routes_enter();
+
+        assert_eq!(
+            app.client
+                .lock()
+                .unwrap()
+                .config
+                .library_routes
+                .get("music"),
+            None
+        );
+        assert_eq!(app.library_routes.get("music"), None);
+        assert!(app.status.contains("no-port-device"));
+        assert!(app.status.contains("not currently routable"));
+        // Still on the PickDevice stage -- a no-op, not silently
+        // reverting to the library list either.
+        assert!(matches!(
+            app.library_routes_popup.as_ref().unwrap().stage,
+            LibraryRouteStage::PickDevice { .. }
+        ));
     }
 }

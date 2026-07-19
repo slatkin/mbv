@@ -935,13 +935,11 @@ impl App {
         let available = area.width;
         let joined_width = |widths: &[u16]| -> u16 {
             let mut total = 0u16;
-            let mut count = 0u16;
-            for width in widths.iter().copied().filter(|w| *w > 0) {
+            for (count, width) in widths.iter().copied().filter(|w| *w > 0).enumerate() {
                 total = total.saturating_add(width);
                 if count > 0 {
                     total = total.saturating_add(1);
                 }
-                count += 1;
             }
             total
         };

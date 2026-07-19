@@ -55,8 +55,8 @@ static DAEMON_ROUTE_CONNECT_TEST_LOCK: Mutex<()> = Mutex::new(());
 // Test seam for live-session-list lookups, mirroring
 // DAEMON_ROUTE_CONNECT_OVERRIDE/_TEST_LOCK above: lets tests inject a fake
 // session list without a real network call. Shared by
-// `try_auto_reconnect`'s `DirectSession` lookup (#236) and
-// `resolve_device_endpoint`'s library-route lookup (#239).
+// `try_auto_reconnect`'s `DirectSession` lookup (#236) and the F2
+// "Library Routes" device picker (`enter_device_stage`, #256).
 #[cfg(test)]
 type SessionsLoadFn =
     fn(&mbv_core::api::EmbyClient) -> Result<Vec<mbv_core::api::SessionInfo>, String>;
@@ -212,10 +212,17 @@ pub(crate) enum LibraryRouteStage {
         items: Vec<(String, String, Option<String>)>,
     },
     /// index 0 is always the synthetic "Local (no route)" entry.
+    /// Each entry pairs a device's display name (UX only -- #256 never
+    /// persists it) with its live-resolved endpoint (what actually gets
+    /// written to config on commit). `None` means the device is visible
+    /// in the live session list but session_direct_endpoint couldn't
+    /// resolve it to a connectable address (e.g. no advertised
+    /// direct-connect port, or an unparseable host) -- shown greyed out
+    /// with a reason rather than silently omitted, and not committable.
     PickDevice {
         library_lower: String,
         library_display: String,
-        devices: Vec<String>,
+        devices: Vec<(String, Option<mbv_core::remote_player::DaemonEndpoint>)>,
     },
 }
 
@@ -993,11 +1000,9 @@ pub struct App {
     launched_as_remote: bool,
     hidden_libraries: Vec<String>,
     hidden_latest: Vec<String>,
-    /// `Config.library_routes` at startup (#239). Values are device names,
-    /// resolved lazily against the *live* session list at connect time via
-    /// `resolve_device_endpoint`, not eagerly -- so a device that's offline
-    /// right now still shows a configured assignment; it just won't
-    /// resolve to a connection until it's live again.
+    /// `Config.library_routes` at startup (#256). Values are resolved
+    /// `tcp://host:port` endpoints, read directly with no live-session
+    /// lookup -- see `mbv_core::config::resolve_library_route`.
     library_routes: std::collections::HashMap<String, String>,
     music_levels: Vec<String>,
     album_indexes: std::collections::HashMap<String, AlbumIndexState>,
@@ -2442,34 +2447,15 @@ impl App {
     /// Blocking `GET /Sessions` (unfiltered), factored out only so tests
     /// can override it via `SESSIONS_LOAD_OVERRIDE` -- mirrors
     /// `connect_daemon_route_endpoint`'s `#[cfg(test)]` seam. Callers:
-    /// `resolve_device_endpoint` (#239's library-route resolution) and
-    /// `try_auto_reconnect`'s `DirectSession` case (#236).
+    /// `try_auto_reconnect`'s `DirectSession` case (#236) and the F2
+    /// "Library Routes" device picker (`enter_device_stage`, #256) --
+    /// library-route *resolution* itself no longer calls this (#256).
     fn fetch_sessions_blocking(&self) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
         #[cfg(test)]
         if let Some(f) = *SESSIONS_LOAD_OVERRIDE.lock().unwrap() {
             return f(&self.client.lock().unwrap());
         }
         self.client.lock().unwrap().get_sessions_unfiltered()
-    }
-
-    /// Resolves a configured `library_routes` device name (#239) to a live
-    /// connection, the same way `session_direct_endpoint` resolves a
-    /// discovered F3 session: fetches the current (unfiltered) session
-    /// list, finds the first mbv session whose `device_name` matches
-    /// case-insensitively, and reuses `session_direct_endpoint`'s own
-    /// endpoint derivation. Returns `None` if the device isn't currently
-    /// live, isn't an mbv session, or the session list fetch itself fails
-    /// -- all three collapse to "no route right now", matching #222's
-    /// existing local-fallback rule; the caller doesn't distinguish them.
-    fn resolve_device_endpoint(
-        &self,
-        device_name: &str,
-    ) -> Option<mbv_core::remote_player::DaemonEndpoint> {
-        let sessions = self.fetch_sessions_blocking().ok()?;
-        sessions
-            .iter()
-            .filter(|s| s.device_name.eq_ignore_ascii_case(device_name))
-            .find_map(|s| self.session_direct_endpoint(s))
     }
 
     fn connect_direct_endpoint(
@@ -7090,9 +7076,10 @@ pub(crate) mod tests {
 
     #[test]
     fn try_auto_reconnect_restores_a_persisted_library_route() {
+        // #256: library-route resolution is now a pure config read -- no
+        // live session lookup, no SESSIONS_LOAD_OVERRIDE seam needed here.
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
         fn route_connect_success(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
@@ -7109,15 +7096,6 @@ pub(crate) mod tests {
             ))
         }
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "10.0.0.5".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9100)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
 
         crate::config::save_last_remote_connection(Some(
             &crate::config::LastRemoteConnection::LibraryRoute {
@@ -7127,12 +7105,11 @@ pub(crate) mod tests {
         let mut app = make_app_stub();
         app.client.lock().unwrap().config.auto_reconnect = true;
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
 
         app.try_auto_reconnect();
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(app.active_route.as_deref(), Some("music"));
         assert!(app.player.is_remote());
     }
@@ -7320,9 +7297,10 @@ pub(crate) mod tests {
 
     #[test]
     fn apply_route_for_playback_swaps_to_routed_daemon_on_success() {
+        // #256: library-route resolution is now a pure config read -- no
+        // live session lookup, no SESSIONS_LOAD_OVERRIDE seam needed here.
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
         fn route_connect_success(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
@@ -7339,19 +7317,10 @@ pub(crate) mod tests {
             ))
         }
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
 
         let mut app = make_app_stub();
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -7370,16 +7339,16 @@ pub(crate) mod tests {
         app.apply_route_for_playback(&item);
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(app.active_route.as_deref(), Some("music"));
         assert!(app.player.is_remote());
     }
 
     #[test]
     fn apply_route_for_playback_falls_back_to_local_with_warning_on_connect_failure() {
+        // #256: library-route resolution is now a pure config read -- no
+        // live session lookup, no SESSIONS_LOAD_OVERRIDE seam needed here.
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
         fn route_connect_failure(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
@@ -7393,19 +7362,10 @@ pub(crate) mod tests {
             Err("connection refused".to_string())
         }
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
 
         let mut app = make_app_stub();
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -7424,7 +7384,6 @@ pub(crate) mod tests {
         app.apply_route_for_playback(&item);
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert!(app.active_route.is_none());
         assert!(!app.player.is_remote());
         assert!(app.status.contains("unreachable"));
@@ -7432,24 +7391,13 @@ pub(crate) mod tests {
 
     #[test]
     fn apply_route_for_playback_is_noop_when_item_already_matches_active_route() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        // Resolution must still succeed against a live device (#239) to
-        // reach the no-op branch (`name == current`), even though this
-        // test's whole point is that no *connect* attempt happens.
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
+        // #256: resolution is now a pure config read -- no live session
+        // lookup, no SESSIONS_LOAD_OVERRIDE seam needed to reach the no-op
+        // branch (`name == current`), even though this test's whole point
+        // is that no *connect* attempt happens.
         let mut app = make_app_stub();
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.active_route = Some("music".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
@@ -7468,7 +7416,6 @@ pub(crate) mod tests {
 
         app.apply_route_for_playback(&item);
 
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         // No connect attempt was needed (no DAEMON_ROUTE_CONNECT_OVERRIDE
         // set, so a real connect attempt would panic/hang if this weren't
         // a no-op) -- active_route and local-ness are unchanged.
@@ -7511,9 +7458,10 @@ pub(crate) mod tests {
         // torn down through `restore_local_mode` -- not just flashed a
         // warning while silently staying attached to the stale "music"
         // remote player.
+        // #256: library-route resolution is now a pure config read -- no
+        // live session lookup, no SESSIONS_LOAD_OVERRIDE seam needed here.
         let _guard = crate::config::TestStateDirGuard::new();
         let _connect_guard = DAEMON_ROUTE_CONNECT_TEST_LOCK.lock().unwrap();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
         fn route_connect_failure(
             _endpoint: &mbv_core::remote_player::DaemonEndpoint,
             _auth_token: &str,
@@ -7526,20 +7474,12 @@ pub(crate) mod tests {
         > {
             Err("connection refused".to_string())
         }
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("movies-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9001)];
-            Ok(vec![sess])
-        }
 
         let mut app = make_app_stub();
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.library_routes
-            .insert("movies".to_string(), "movies-pc".to_string());
+            .insert("movies".to_string(), "tcp://127.0.0.1:9001".to_string());
         let (remote, remote_rx) = mbv_core::remote_player::RemotePlayer::stub(make_items(1), 0);
         app.switch_to_library_route("music", remote, remote_rx);
         assert_eq!(app.active_route.as_deref(), Some("music"));
@@ -7561,10 +7501,8 @@ pub(crate) mod tests {
         item.id = "movie-1".to_string();
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
         app.apply_route_for_playback(&item);
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = None;
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
 
         assert!(app.active_route.is_none());
         assert!(!app.player.is_remote());

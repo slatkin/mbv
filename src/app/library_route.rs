@@ -44,14 +44,14 @@ impl App {
             || (self.player.is_remote() && self.active_route.is_none())
     }
 
-    /// Resolves the configured library route for a library name (#239):
-    /// looks up `library_routes` for a device name, then resolves that
-    /// device against the *live* session list via `resolve_device_endpoint`
-    /// -- the same mechanism `session_direct_endpoint` already uses for
-    /// F3. Returns `(lowercased_library_name, endpoint)` on a live match.
-    /// A configured-but-currently-offline device is not an error (no
-    /// warning flashed) -- it's the expected, common case of "not routed
-    /// right now"; #222's existing fallback (stay local, no hard error)
+    /// Resolves the configured library route for a library name (#256):
+    /// a pure, synchronous `library_routes` config read -- no `/Sessions`
+    /// call, ever, on this path. Returns `(lowercased_library_name,
+    /// endpoint)` when the config has a well-formed `tcp://` entry for
+    /// this library. A missing or malformed entry is not an error (no
+    /// warning flashed, beyond `resolve_library_route`'s own log line for
+    /// the malformed case) -- it's the expected, common case of "not
+    /// routed"; #222's existing fallback (stay local, no hard error)
     /// already covers it via the `None` return.
     pub(super) fn resolve_route_for_library(
         &mut self,
@@ -61,8 +61,7 @@ impl App {
         if name.is_empty() {
             return None;
         }
-        let device_name = mbv_core::config::resolve_library_route(&self.library_routes, name)?;
-        let endpoint = self.resolve_device_endpoint(device_name)?;
+        let endpoint = mbv_core::config::resolve_library_route(&self.library_routes, name)?;
         Some((name.to_lowercase(), endpoint))
     }
 
@@ -211,29 +210,19 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::tests::{make_app_stub, make_item, make_session};
+    use crate::app::tests::{make_app_stub, make_item};
     use crate::app::LibraryTab;
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
+        // #256: resolution is now a pure config read -- no live session
+        // lookup, no SESSIONS_LOAD_OVERRIDE seam needed at all.
         let mut app = make_app_stub();
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+
         let resolved = app.resolve_route_for_library("Music");
 
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(
             resolved,
             Some((
@@ -244,93 +233,15 @@ mod tests {
     }
 
     #[test]
-    fn resolve_route_for_library_resolves_via_live_device_name() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "10.0.0.5".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9100)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
+    fn resolve_route_for_library_returns_none_for_a_malformed_endpoint() {
+        // #256: a config value that isn't a valid tcp:// endpoint (stale
+        // pre-#256 device name, unix://, etc.) resolves to None rather
+        // than being routed or panicking.
         let mut app = make_app_stub();
         app.library_routes
             .insert("music".to_string(), "living-room-pc".to_string());
 
-        let resolved = app.resolve_route_for_library("Music");
-
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
-        assert_eq!(
-            resolved,
-            Some((
-                "music".to_string(),
-                mbv_core::remote_player::DaemonEndpoint::Tcp(std::net::SocketAddr::from((
-                    std::net::Ipv4Addr::new(10, 0, 0, 5),
-                    9100
-                )))
-            ))
-        );
-    }
-
-    #[test]
-    fn resolve_route_for_library_skips_same_device_non_mbv_sessions() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut browser = make_session("music.local", "Firefox");
-            browser.host = "10.0.0.104".into();
-
-            let mut mbv = make_session("music.local", "mbv");
-            mbv.host = "10.0.0.104".into();
-            mbv.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9100)];
-            Ok(vec![browser, mbv])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
-        let mut app = make_app_stub();
-        app.library_routes
-            .insert("music".to_string(), "music.local".to_string());
-
-        let resolved = app.resolve_route_for_library("Music");
-
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
-        assert_eq!(
-            resolved,
-            Some((
-                "music".to_string(),
-                mbv_core::remote_player::DaemonEndpoint::Tcp(std::net::SocketAddr::from((
-                    std::net::Ipv4Addr::new(10, 0, 0, 104),
-                    9100
-                )))
-            ))
-        );
-    }
-
-    #[test]
-    fn resolve_route_for_library_falls_back_to_local_when_device_offline() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn empty_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            Ok(vec![])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(empty_sessions);
-
-        let mut app = make_app_stub();
-        app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
-
-        let resolved = app.resolve_route_for_library("Music");
-
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
-        assert_eq!(resolved, None);
+        assert_eq!(app.resolve_route_for_library("Music"), None);
     }
 
     #[test]
@@ -341,25 +252,13 @@ mod tests {
 
     #[test]
     fn route_for_active_library_view_uses_nav_state_no_network() {
-        // "No network" here means no `get_ancestors` round-trip -- the
-        // active library is already known from nav state. Resolving the
-        // routed device against the live session list is still needed
-        // (#239), hence the SESSIONS_LOAD_OVERRIDE seam.
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
+        // The active library is already known from nav state, and (#256)
+        // resolving its routed endpoint is now a pure config read too --
+        // this is unconditionally no-network, not just "no get_ancestors
+        // round-trip".
         let mut app = make_app_stub();
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_item = make_item("Music", "CollectionFolder");
         lib_item.id = "lib-music".to_string();
         app.libs.push(LibraryTab {
@@ -374,7 +273,6 @@ mod tests {
 
         let resolved = app.route_for_active_library_view(0);
 
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(resolved.map(|(name, _)| name), Some("music".to_string()));
     }
 
@@ -510,18 +408,6 @@ mod tests {
         // already part of whatever queue is current, so `resolve_route_for_play`
         // must fall through to "keep the current `active_route`" instead of
         // either panicking or wrongly resolving a nav-scoped library.
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
         let mut app = make_app_stub();
         app.tab_idx = 1;
         let mut item = make_item("Song", "Audio");
@@ -533,32 +419,19 @@ mod tests {
         // Already routed: the Queue tab must not clear or re-resolve the
         // route out from under an in-progress routed queue.
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.active_route = Some("music".to_string());
         let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
 
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(resolved, Some("music".to_string()));
     }
 
     #[test]
     fn resolve_route_for_play_from_queue_resolves_item_when_no_route_is_active() {
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
         let mut app = make_app_stub();
         app.tab_idx = 1;
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.library_route_cache.insert(
             "song-1".to_string(),
             (Some("music".to_string()), Instant::now()),
@@ -568,7 +441,6 @@ mod tests {
 
         let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
 
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(resolved, Some("music".to_string()));
     }
 
@@ -580,27 +452,14 @@ mod tests {
         // item itself. `do_enqueue_folder` can receive exactly that item (the
         // user enqueue-recursive's an entire library from its root), so this
         // helper checks the item's own type first.
-        let _guard = crate::config::TestStateDirGuard::new();
-        let _sessions_guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
-        fn fake_sessions(
-            _client: &mbv_core::api::EmbyClient,
-        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
-            let mut sess = make_session("living-room-pc", "mbv");
-            sess.host = "127.0.0.1".into();
-            sess.supported_commands = vec![mbv_core::api::mbv_direct_tcp_port_command(9000)];
-            Ok(vec![sess])
-        }
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(fake_sessions);
-
         let mut app = make_app_stub();
         app.library_routes
-            .insert("music".to_string(), "living-room-pc".to_string());
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         let mut lib_root = make_item("Music", "CollectionFolder");
         lib_root.id = "lib-music".to_string();
 
         let resolved = app.resolve_route_for_enqueue_folder(&lib_root);
 
-        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
         assert_eq!(resolved, Some("music".to_string()));
     }
 
