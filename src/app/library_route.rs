@@ -191,7 +191,14 @@ impl App {
         item: &mbv_core::api::MediaItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
         log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} tab={}", item.id, item.name, self.tab_idx);
-        if self.tab_idx == 0 {
+        if self.queue_view == QUEUE_VIEW_POWER
+            && matches!(self.power_focus, PowerFocus::Left)
+            && self.power_left_tab > 0
+        {
+            let lib_idx = self.power_left_tab - 1;
+            log::info!(target: "library_route", "resolution path=power-library item_id={:?} lib_idx={lib_idx}", item.id);
+            self.route_for_active_library_view(lib_idx)
+        } else if self.tab_idx == 0 {
             log::info!(target: "library_route", "resolution path=ancestor item_id={:?}", item.id);
             self.route_for_item_via_ancestors(&item.id)
         } else if self.tab_idx >= 2 {
@@ -232,7 +239,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::LibraryTab;
+    use crate::app::{LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {
@@ -313,6 +320,60 @@ mod tests {
         });
 
         assert_eq!(app.route_for_active_library_view(0), None);
+    }
+
+    #[test]
+    fn resolve_route_for_play_uses_power_library_context_when_library_side_is_focused() {
+        let mut app = make_app_stub();
+        app.library_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Left;
+        app.power_left_tab = 1;
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        let resolved = app.resolve_route_for_play(&item).map(|(name, _)| name);
+
+        assert_eq!(resolved, Some("music".to_string()));
+    }
+
+    #[test]
+    fn resolve_route_for_play_does_not_inherit_power_library_route_from_queue_side() {
+        let mut app = make_app_stub();
+        app.library_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+        let mut lib_item = make_item("Music", "CollectionFolder");
+        lib_item.id = "lib-music".to_string();
+        app.libs.push(LibraryTab {
+            library: lib_item,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: Default::default(),
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        app.tab_idx = 1;
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.power_focus = PowerFocus::Queue;
+        app.power_left_tab = 1;
+        let mut item = make_item("Song", "Audio");
+        item.id = "song-1".to_string();
+
+        assert_eq!(app.resolve_route_for_play(&item), None);
     }
 
     #[test]
