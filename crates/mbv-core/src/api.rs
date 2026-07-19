@@ -937,16 +937,29 @@ impl EmbyClient {
         if unplayed_only {
             req = req.query("Filters", "IsUnplayed");
         }
-        let resp: Value = req
-            .call()
-            .map_err(|e| e.to_string())?
-            .into_json()
-            .map_err(|e| e.to_string())?;
+        let call_started = std::time::Instant::now();
+        let resp_result = req.call();
+        let call_ms = call_started.elapsed().as_millis();
+        let resp = resp_result.map_err(|e| {
+            log::warn!(
+                target: "api",
+                "get_items_sorted: parent={parent_id} types={item_types:?} err after {call_ms}ms: {e}"
+            );
+            e.to_string()
+        })?;
+        let parse_started = std::time::Instant::now();
+        let resp: Value = resp.into_json().map_err(|e| e.to_string())?;
         let total = resp["TotalRecordCount"].as_u64().unwrap_or(0) as usize;
-        let items = resp["Items"]
+        let items: Vec<MediaItem> = resp["Items"]
             .as_array()
             .map(|arr| arr.iter().map(parse_item).collect())
             .unwrap_or_default();
+        let parse_ms = parse_started.elapsed().as_millis();
+        log::info!(
+            target: "api",
+            "get_items_sorted: parent={parent_id} types={item_types:?} start={start_index} limit={limit} -> {} items (total={total}) http={call_ms}ms parse={parse_ms}ms",
+            items.len()
+        );
         Ok((items, total))
     }
 

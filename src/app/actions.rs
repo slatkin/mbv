@@ -3598,6 +3598,7 @@ impl App {
     ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
+        let spawn_started = std::time::Instant::now();
         std::thread::spawn(move || {
             match client.get_items_sorted(
                 &parent_id,
@@ -3609,8 +3610,9 @@ impl App {
                 &sort_order,
             ) {
                 Ok((items, total_count)) => {
-                    log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} first3={:?}",
+                    log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} thread_total={}ms first3={:?}",
                         items.len(),
+                        spawn_started.elapsed().as_millis(),
                         items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
                     let _ = tx.send(LibEvent::Loaded {
                         lib_idx,
@@ -4576,7 +4578,20 @@ impl App {
                 self.replace_saved_library_position(lib_idx, scope, restored);
             }
         }
-        self.spawn_all_items_prefetch(lib_idx);
+        // Deliberately no `spawn_all_items_prefetch` call here (unlike
+        // `handle_lib_loaded`'s sibling call, which is safe): this method
+        // fires for every library restored at app *startup*, all
+        // concurrently. Eagerly fetching+parsing a whole library's worth of
+        // full-field items (People, MediaStreams, ...) here piles CPU-bound
+        // JSON parsing on top of N other libraries' simultaneous restore
+        // fetches and visibly stalls first paint of the default library
+        // (#260). `all_items` is a pure cache for instant `/`-search open
+        // (see `spawn_search_items_load`'s lazy fallback in
+        // `input.rs`/`handle_lib_event`'s `SearchItemsLoaded` handling) --
+        // nothing here requires it to be warm. If you're tempted to add
+        // this back, don't: benchmark against a library with 500+ items
+        // first and check `~/.local/state/mbv/mbv.log` for `parent=<id>`
+        // `http=`/`parse=` timings from `get_items_sorted`.
     }
 
     pub(super) fn handle_lib_event(&mut self, ev: LibEvent) {
