@@ -5128,6 +5128,127 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn restoring_library_position_does_not_eagerly_prefetch_all_items() {
+        use std::io::Read;
+        use std::net::TcpListener;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        // Minimal local server: we're proving *absence* of a request, so we
+        // only need to count accepted connections, not answer them. See
+        // crates/mbv-core/src/api.rs's `local_listener_url()` test helper
+        // for the same non-blocking-accept-with-deadline idiom.
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let connection_count_for_thread = connection_count.clone();
+        let server_handle = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(400);
+            while std::time::Instant::now() < deadline {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        connection_count_for_thread.fetch_add(1, Ordering::SeqCst);
+                        let mut buf = [0u8; 1024];
+                        let _ = stream.read(&mut buf);
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+
+        let mut app = make_app_stub();
+        {
+            let mut client = app.client.lock().unwrap();
+            client.config.server_url = base_url;
+            client.user_id = "user-1".into();
+            client.token = "token-1".into();
+        }
+        app.queue_view = QUEUE_VIEW_POWER;
+        app.tab_idx = 1;
+        app.power_focus = PowerFocus::Queue;
+        app.power_left_tab = 1;
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.collection_type = "movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            power_detail_scroll: 0,
+            album_track_focus: None,
+            artist_header_focus: None,
+        });
+        let power_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Power".into(),
+                focused_item_id: Some("id1".into()),
+                cursor_index: 1,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
+        // Deliberately do NOT call `ensure_lib_loaded_for(0)` here (unlike
+        // the neighboring `..._accepts_restore_from_queue_focus` test): with
+        // an empty nav_stack and a saved position, it spawns its own
+        // background restore fetch (`spawn_restore_library_position`) that
+        // would also connect to the mock server below, confounding the
+        // connection count this test asserts on. It isn't needed for
+        // `handle_restored_library_position`'s guards to pass -- both
+        // `saved_library_position` and `active_library_position_scope_for`
+        // are already satisfied by the state set up above.
+
+        // Restore a level that is NOT fully loaded (2 items out of a
+        // reported 50) -- this is the condition under which
+        // spawn_all_items_prefetch actually does network I/O
+        // (is_fully_loaded() is items.len() >= total_count).
+        app.handle_lib_event(LibEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            scope: LibraryPositionScope::Power,
+            requested_position: power_position.clone(),
+            position: power_position,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Power restored".into(),
+                items: make_items(2),
+                total_count: 50,
+                cursor: 1,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+            }],
+        });
+
+        // Give a background thread every reasonable chance to have
+        // connected by now if the eager prefetch were still wired up.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        server_handle.join().unwrap();
+
+        assert_eq!(
+            connection_count.load(Ordering::SeqCst),
+            0,
+            "restoring a library position must not eagerly fetch all items \
+             (spawn_all_items_prefetch should not be called from \
+             handle_restored_library_position -- see #260)"
+        );
+        assert_eq!(app.libs[0].nav_stack[0].title, "Power restored");
+        assert!(app.libs[0].nav_stack[0].all_items.is_none());
+    }
+
+    #[test]
     fn set_tab_activates_default_scope_placeholder_after_power_scope_use() {
         let mut app = make_app_stub();
         let mut library = make_item("Movies", "CollectionFolder");
