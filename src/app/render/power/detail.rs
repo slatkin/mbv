@@ -42,6 +42,11 @@ pub(super) struct CompactBannerLayout {
     director_line_idx: Option<usize>,
     img_actual_w: u16,
     img_height: u16,
+    /// True when `img_actual_w`/`img_height` describe a reserved-but-not-yet-
+    /// loaded box (fetch in flight, or resize+encode still running on the
+    /// worker thread) rather than a real decoded image. The render pass uses
+    /// this to draw a dim placeholder block instead of `StatefulImage`.
+    img_is_placeholder: bool,
 }
 
 impl CompactBannerLayout {
@@ -108,26 +113,37 @@ impl App {
             );
         }
 
-        let (img_actual_w, img_height): (u16, u16) = {
+        // True while the raw image fetch itself is in flight (before it
+        // lands in `card_image_states`, success or failure). Used below to
+        // reserve a placeholder box the same size as the eventual image
+        // instead of collapsing text to full width and then narrowing it
+        // once the image arrives -- mirrors the pattern already used by the
+        // episode banner's series-image placeholder (episode.rs).
+        let img_loading =
+            self.images_enabled() && self.card_image_loading.contains(&primary_cache_key);
+
+        let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
             if self.list_image_renders_allowed() {
                 if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
                     // `size_for` is `None` while resize+encode is in-flight on
-                    // the worker thread; treat that the same as no image yet.
-                    let actual = state
-                        .size_for(
-                            ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                            ratatui::layout::Size {
-                                width: IMG_COLS,
-                                height: IMG_ROWS,
-                            },
-                        )
-                        .unwrap_or_default();
-                    (actual.width, actual.height)
+                    // the worker thread; treat that the same as still loading.
+                    match state.size_for(
+                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
+                        ratatui::layout::Size {
+                            width: IMG_COLS,
+                            height: IMG_ROWS,
+                        },
+                    ) {
+                        Some(actual) => (actual.width, actual.height, false),
+                        None => (IMG_COLS, IMG_ROWS, true),
+                    }
+                } else if img_loading {
+                    (IMG_COLS, IMG_ROWS, true)
                 } else {
-                    (0, 0)
+                    (0, 0, false)
                 }
             } else {
-                (0, 0)
+                (0, 0, false)
             }
         };
 
@@ -220,6 +236,7 @@ impl App {
             director_line_idx,
             img_actual_w,
             img_height,
+            img_is_placeholder,
         }
     }
 
@@ -256,6 +273,7 @@ impl App {
 
         let img_actual_w = content.img_actual_w;
         let img_height = content.img_height;
+        let img_is_placeholder = content.img_is_placeholder;
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
         // No title row is drawn here anymore (it duplicated the selected list
         // row's title, already shown in green just above the banner), so the
@@ -366,19 +384,31 @@ impl App {
         }
 
         if img_height > 0 {
-            let primary_cache_key = compact_banner_image_cache_key(&item.id);
-            if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
-                type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
-                f.render_stateful_widget(
-                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
-                    Rect {
-                        x: img_x,
-                        y: img_y,
-                        width: img_actual_w,
-                        height: img_height,
-                    },
-                    state,
+            let img_rect = Rect {
+                x: img_x,
+                y: img_y,
+                width: img_actual_w,
+                height: img_height,
+            };
+            if img_is_placeholder {
+                // Image still loading -- draw a dim placeholder block to
+                // hold the space (mirrors episode.rs's series-image
+                // placeholder).
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::OVERLAY)),
+                    img_rect,
                 );
+            } else {
+                let primary_cache_key = compact_banner_image_cache_key(&item.id);
+                if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
+                    type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+                    f.render_stateful_widget(
+                        SImg::default()
+                            .resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
+                        img_rect,
+                        state,
+                    );
+                }
             }
         }
     }
@@ -408,6 +438,7 @@ mod tests {
             director_line_idx: None,
             img_actual_w: 18,
             img_height: 12,
+            img_is_placeholder: false,
         };
         assert_eq!(
             short_text_layout.content_rows(),
@@ -423,6 +454,7 @@ mod tests {
             director_line_idx: None,
             img_actual_w: 18,
             img_height: 12,
+            img_is_placeholder: false,
         };
         assert_eq!(
             tall_text_layout.content_rows(),
@@ -438,6 +470,7 @@ mod tests {
             director_line_idx: None,
             img_actual_w: 0,
             img_height: 0,
+            img_is_placeholder: false,
         };
         assert_eq!(
             no_image_layout.content_rows(),
@@ -566,6 +599,40 @@ mod tests {
         assert!(
             !out.contains('\u{2590}'),
             "no banner scrollbar should be drawn:\n{out}"
+        );
+    }
+
+    // The poster fetch is triggered synchronously inside `compact_banner_layout`
+    // but resolves asynchronously on a background thread; nothing drains that
+    // result in this test, so right after the render the fetch is still "in
+    // flight" (`card_image_loading` contains the key, `card_image_states`
+    // does not yet). The banner must reserve the same IMG_COLS x IMG_ROWS box
+    // the loaded image would use, not collapse to zero width.
+    #[test]
+    fn compact_movie_detail_reserves_placeholder_space_while_image_loads() {
+        let mut app = make_app_stub();
+        app.image_protocol_enabled = true;
+
+        let mut movie = make_item("Focused Movie", "Movie");
+        movie.id = "movie-1".into();
+        movie.overview = "A short overview.".into();
+        push_movie_lib(&mut app, movie);
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_compact_detail_to_string(&mut app, &mut layout);
+
+        assert!(
+            app.card_image_loading.contains("movie-1:cmp_primary"),
+            "expected the poster fetch to have been triggered and still be in flight"
+        );
+        assert!(
+            !app.card_image_states.contains_key("movie-1:cmp_primary"),
+            "fetch must not have resolved yet for this assertion to be meaningful"
+        );
+        assert_eq!(
+            layout.inline_image_rect.map(|r| (r.width, r.height)),
+            Some((18, 12)),
+            "expected the placeholder to reserve the banner's IMG_COLS x IMG_ROWS box:\n{out}"
         );
     }
 
