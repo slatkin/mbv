@@ -636,12 +636,8 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
 
     let misc = doc.get("mpv");
     let daemon = doc.get("daemon");
-    // [general] is the new name; fall back to legacy [mbv] for existing configs.
-    let general = doc.get("general").or_else(|| doc.get("mbv"));
-    // [queue] is the new name; fall back to legacy [mbv.queue] then [mbv] for existing configs.
-    let queue = doc
-        .get("queue")
-        .or_else(|| general.and_then(|m| m.get("queue")));
+    let general = doc.get("general");
+    let queue = doc.get("queue");
     let music = doc.get("music");
 
     let hidden_libraries: Vec<String> = general
@@ -704,11 +700,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     let always_play_next = queue
         .and_then(|q| q.get("always_play_next"))
         .and_then(|v| v.as_bool())
-        .or_else(|| {
-            general
-                .and_then(|m| m.get("always_play_next"))
-                .and_then(|v| v.as_bool())
-        })
         .unwrap_or(false);
 
     let consume_videos = queue
@@ -724,11 +715,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     let start_on_queue = queue
         .and_then(|q| q.get("start_on_queue"))
         .and_then(|v| v.as_bool())
-        .or_else(|| {
-            general
-                .and_then(|m| m.get("start_on_queue"))
-                .and_then(|v| v.as_bool())
-        })
         .unwrap_or(false);
 
     let always_skip_intro = general
@@ -936,31 +922,6 @@ pub fn save_config_settings(cfg: &Config) {
                 .as_table_mut()
                 .unwrap()
         };
-    }
-
-    // Migrate legacy [mbv] keys to new section names.
-    if let Some(old) = table.get_mut("mbv").and_then(|v| v.as_table_mut()) {
-        // `daemon_mode_on_exit` has no successor: its semantics don't map
-        // cleanly onto `stay_alive` (a substantially different feature), so
-        // this is a deliberate drop, not an auto-migration -- but a user
-        // who had it on gets a breadcrumb instead of silently losing the
-        // behavior, since `stay_alive` defaults to false either way.
-        if let Some(old_value) = old.remove("daemon_mode_on_exit") {
-            log::info!(target: "config", "config migration: removed legacy [mbv] daemon_mode_on_exit (no longer supported)");
-            if old_value.as_bool() == Some(true) {
-                log::warn!(target: "config", "note: stay_alive defaults to false; if you relied on daemon-mode-on-exit, opt back in via the `-a` flag or `stay_alive = true` in config.toml");
-            }
-        }
-        for key in &[
-            "always_skip_intro",
-            "hidden_libraries",
-            "hidden_latest",
-            "always_play_next",
-            "start_on_queue",
-            "queue",
-        ] {
-            old.remove(*key);
-        }
     }
 
     if !cfg.server_url.is_empty() {
@@ -1479,6 +1440,49 @@ url = "http://x"
     }
 
     #[test]
+    fn save_config_settings_preserves_general_feed_view_when_auto_reconnect_exists() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("mbv")).unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        std::env::remove_var("MBV_SYSTEM");
+        std::fs::write(
+            config_path(),
+            r#"
+[server]
+url = "http://localhost:8096"
+
+[general]
+auto_reconnect = true
+feed_view_libraries = ["YouTube"]
+"#,
+        )
+        .unwrap();
+
+        let cfg = load_config().unwrap();
+        assert_eq!(cfg.feed_view_libraries, vec!["youtube"]);
+
+        save_config_settings(&cfg);
+
+        let saved = std::fs::read_to_string(config_path()).unwrap();
+        let reparsed = parse_config(&saved).unwrap();
+        assert_eq!(reparsed.feed_view_libraries, vec!["youtube"]);
+        assert!(
+            !saved.contains("feed_view_libraries = []"),
+            "saved config should not overwrite the feed view selection with none:\n{saved}"
+        );
+
+        std::env::remove_var("XDG_CONFIG_HOME");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn parse_default_library_routes_when_absent() {
         let toml = r#"
 [server]
@@ -1557,24 +1561,6 @@ url = "http://host"
         assert!(
             !parse_config(toml).unwrap().always_play_next,
             "always_play_next must be in [queue], not [server]"
-        );
-    }
-
-    #[test]
-    fn parse_always_play_next_legacy_mbv_section_still_works() {
-        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nalways_play_next = true";
-        assert!(
-            parse_config(toml).unwrap().always_play_next,
-            "backward compat: [mbv] fallback"
-        );
-    }
-
-    #[test]
-    fn parse_start_on_queue_legacy_mbv_section_still_works() {
-        let toml = "[server]\nurl = \"http://host\"\n[mbv]\nstart_on_queue = true";
-        assert!(
-            parse_config(toml).unwrap().start_on_queue,
-            "backward compat: [mbv] fallback"
         );
     }
 

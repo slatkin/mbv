@@ -69,7 +69,7 @@ pub fn load_ui_config() -> Result<UiConfig, String> {
 
 fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
     let doc: toml::Value = toml::from_str(text).map_err(|e| e.to_string())?;
-    let general = doc.get("general").or_else(|| doc.get("mbv"));
+    let general = doc.get("general");
 
     let image_protocol = general
         .and_then(|m| {

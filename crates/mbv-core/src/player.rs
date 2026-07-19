@@ -3056,7 +3056,7 @@ pub struct PlayerProxy {
 impl PlayerProxy {
     /// Test helper for root-crate integration tests that need a local player
     /// proxy without starting a real mpv session.
-    #[cfg(feature = "test-support")]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn stub(status: Arc<Mutex<PlayerStatus>>) -> Self {
         let (tx, _rx) = std::sync::mpsc::channel();
         let player = Player::new(
@@ -3087,7 +3087,7 @@ impl PlayerProxy {
     /// blocking for the full `sleep` duration — the previously-unbounded
     /// normal in-app quit path (#202) is exactly this scenario with a
     /// hanging player thread.
-    #[cfg(feature = "test-support")]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn stub_with_hung_thread(status: Arc<Mutex<PlayerStatus>>, sleep: Duration) -> Self {
         let (tx, _rx) = std::sync::mpsc::channel();
         let player = Player::new(
@@ -3119,7 +3119,7 @@ impl PlayerProxy {
     /// receiving end, so a test can assert on what `send_command` actually sent
     /// without a real mpv thread running.
     /// Test helper that exposes the next command sent through a local proxy.
-    #[cfg(feature = "test-support")]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn spy_on_commands(&self) -> mpsc::Receiver<PlayerCommand> {
         let (tx, rx) = mpsc::channel();
         if let PlayerProxyInner::Local(p) = &self.inner {
