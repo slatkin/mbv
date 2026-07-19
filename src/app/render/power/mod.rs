@@ -193,9 +193,9 @@ impl App {
         // it is also the top level). Separator dots are white; the hovered crumb
         // turns white. Clicking a crumb navigates back to that level.
         //
-        // Music-group libraries replace the breadcrumb pill with their group
-        // selector pills, rendered inline on this same rule row, ending in a
-        // fixed `Music` marker pinned to the far right (see #180).
+        // Music-group libraries use the standard right-aligned library title
+        // marker on the header row. Their group selector pills render on their
+        // own row at the top of the right library column below this title row.
         {
             let crumb_row = area.y;
 
@@ -233,14 +233,9 @@ impl App {
                 );
             } else if is_music_group_lib {
                 layout.breadcrumbs = Vec::new();
+                layout.selector_tabs = Vec::new();
                 let lib_idx = self.power_left_tab - 1;
 
-                // Base rule spans the full header row (matches the plain FOAM
-                // dash rule used elsewhere) -- the pills/marker below only
-                // overlay the right-column segment of it, so the dash rule
-                // still shows through underneath/between the pills and over
-                // the left (card/queue) column, which has no selector of its
-                // own.
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
                         "\u{2501}".repeat(area.width as usize),
@@ -254,39 +249,10 @@ impl App {
                     },
                 );
 
-                // Confine the selector to the right column's width -- same
-                // horizontal footprint as the library panel below it.
                 let right_col_x = area.x + left_w + 1;
                 let right_col_w = right_w.saturating_sub(1);
-
                 let marker_text = format!(" {} ", self.libs[lib_idx].library.name);
                 let marker_w = (marker_text.width() as u16).min(right_col_w);
-                let marker_gap_w = if right_col_w > marker_w { 1 } else { 0 };
-                let pills_w = right_col_w.saturating_sub(marker_w + marker_gap_w);
-
-                if pills_w > 0 {
-                    let pills_area = Rect {
-                        x: right_col_x,
-                        y: crumb_row,
-                        width: pills_w,
-                        height: 1,
-                    };
-                    self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
-                } else {
-                    layout.selector_tabs = Vec::new();
-                }
-
-                if marker_gap_w > 0 {
-                    f.render_widget(
-                        Paragraph::new(Line::from(Span::raw(" "))),
-                        Rect {
-                            x: right_col_x + pills_w,
-                            y: crumb_row,
-                            width: marker_gap_w,
-                            height: 1,
-                        },
-                    );
-                }
 
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
@@ -294,7 +260,7 @@ impl App {
                         Style::default().fg(palette::BASE).bg(palette::FOAM),
                     ))),
                     Rect {
-                        x: right_col_x + pills_w + marker_gap_w,
+                        x: right_col_x + right_col_w.saturating_sub(marker_w),
                         y: crumb_row,
                         width: marker_w,
                         height: 1,
@@ -488,8 +454,29 @@ impl App {
             )
         };
 
+        let mut render_lib_area = lib_area;
+        if self.power_left_tab > 0 && self.is_music_group_view(self.power_left_tab - 1) {
+            let lib_idx = self.power_left_tab - 1;
+            if lib_area.height > 0 {
+                let pills_area = Rect {
+                    x: lib_area.x,
+                    y: lib_area.y,
+                    width: lib_area.width,
+                    height: 1,
+                };
+                self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
+                render_lib_area = Rect {
+                    y: lib_area.y + 1,
+                    height: lib_area.height.saturating_sub(1),
+                    ..lib_area
+                };
+            } else {
+                layout.selector_tabs = Vec::new();
+            }
+        }
+
         self.render_power_queue(f, queue_area, queue_focused, layout);
-        self.render_power_library(f, lib_area, left_focused, layout);
+        self.render_power_library(f, render_lib_area, left_focused, layout);
     }
 
     fn render_power_library(
@@ -1025,7 +1012,7 @@ mod tests {
     }
 
     #[test]
-    fn music_group_pills_and_marker_render_on_top_rule_row() {
+    fn music_group_pills_render_on_row_below_title_marker() {
         let mut app = make_power_music_group_app();
         app.power_left_width = 20;
         let width = 100u16;
@@ -1039,31 +1026,30 @@ mod tests {
         .unwrap();
         let out = buffer_to_string(&term);
         let row0 = out.lines().next().unwrap();
+        let row1 = out.lines().nth(1).unwrap();
 
-        // Group pills render inline on row 0 -- the same row as the top rule --
-        // instead of on a separate band below it.
         assert!(
-            row0.contains("Alpha") && row0.contains("Beta"),
-            "expected group pills on the top rule row:\n{out}"
+            !row0.contains("Alpha") && !row0.contains("Beta"),
+            "expected group pills to move off the title row:\n{out}"
+        );
+        assert!(
+            row1.contains("Alpha") && row1.contains("Beta"),
+            "expected group pills on the row below the title:\n{out}"
         );
 
-        // Cell x/y is a column index, not a byte offset -- the dash-rule glyph
-        // is multi-byte UTF-8, so byte offsets from `str::find` would drift.
-        // Convert by counting chars (every glyph in this row is single-width).
-        let char_x = |needle: &str| -> u16 {
-            let byte_idx = row0.find(needle).expect("needle not found in row 0");
-            row0[..byte_idx].chars().count() as u16
+        let rchar_x = |line: &str, needle: &str| -> u16 {
+            let byte_idx = line.rfind(needle).expect("needle not found");
+            line[..byte_idx].chars().count() as u16
         };
-        let rchar_x = |needle: &str| -> u16 {
-            let byte_idx = row0.rfind(needle).expect("needle not found in row 0");
-            row0[..byte_idx].chars().count() as u16
+        let char_x = |line: &str, needle: &str| -> u16 {
+            let byte_idx = line.find(needle).expect("needle not found");
+            line[..byte_idx].chars().count() as u16
         };
 
-        // The fixed `Music` marker sits at the far right of that row.
-        let music_x = rchar_x("Music");
+        let music_x = rchar_x(row0, "Music");
         assert!(
             music_x + "Music".len() as u16 + 1 >= width,
-            "expected the Music marker pinned to the far right of the row:\n{out}"
+            "expected the Music title marker pinned to the far right of the title row:\n{out}"
         );
 
         let buf = term.backend().buffer();
@@ -1078,42 +1064,39 @@ mod tests {
             "expected the Music marker to keep the standard base (black) text"
         );
 
-        // The selector (pills + marker) is confined to the right column's
-        // width -- the segment over the left card/queue column stays a plain
-        // dash rule, not stretched-out pills.
         let right_col_x = app.power_left_width + 1;
         assert!(
             row0.chars()
                 .take(right_col_x as usize)
                 .all(|c| c == '\u{2501}'),
-            "expected a plain dash rule over the left column, not pills:\n{out}"
+            "expected a plain dash rule over the left column on the title row:\n{out}"
+        );
+        assert!(
+            row1.chars().take(right_col_x as usize).all(|c| c == ' '),
+            "expected the pill row to be confined to the right library column:\n{out}"
         );
 
-        // The selected group pill ("Alpha", cursor 0) uses the yellow-text
-        // treatment; a non-selected pill ("Beta") stays blue.
-        let alpha_x = char_x("Alpha");
+        let alpha_x = char_x(row1, "Alpha");
         assert!(
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 0)].bg, palette::FOAM);
+        assert_eq!(buf[(alpha_x, 1)].bg, palette::FOAM);
         assert_eq!(
-            buf[(alpha_x, 0)].fg,
+            buf[(alpha_x, 1)].fg,
             palette::YELLOW,
             "expected the selected group pill to use yellow text"
         );
-        let beta_x = char_x("Beta");
-        assert_eq!(buf[(beta_x, 0)].bg, palette::FOAM);
+        let beta_x = char_x(row1, "Beta");
+        assert_eq!(buf[(beta_x, 1)].bg, palette::FOAM);
         assert_eq!(
-            buf[(beta_x, 0)].fg,
+            buf[(beta_x, 1)].fg,
             palette::BASE,
             "expected a non-selected group pill to stay blue with base text"
         );
 
-        // The gap between the two pills is the dash rule, not a blank space
-        // -- the rule reads as continuous underneath/between the pills.
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));
-        let between: String = row0
+        let between: String = row1
             .chars()
             .skip(gap_start as usize)
             .take((gap_end - gap_start) as usize)
@@ -1123,28 +1106,19 @@ mod tests {
             "expected a dash rule between adjacent pills, not blank space:\n{between:?}"
         );
 
-        // Selector hitboxes are registered on the header row, confined to the
-        // right column, and line up with the rendered pills (not the fixed
-        // Music marker).
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 0, "expected selector hitboxes on the top rule row");
+            assert_eq!(rect.y, 1, "expected selector hitboxes on the pills row");
             assert!(
                 rect.x >= right_col_x,
                 "expected selector hitboxes confined to the right column"
             );
-            assert!(
-                rect.x < music_x,
-                "expected selector hitboxes to stay left of the fixed Music marker"
-            );
         }
 
-        // The album list starts directly below the combined header row --
-        // no leftover blank/pill/blank selector band.
-        let row1 = out.lines().nth(1).unwrap();
+        let row2 = out.lines().nth(2).unwrap();
         assert!(
-            row1.contains("Alpha") || row1.contains("First Album"),
-            "expected album list content to start immediately below the header row:\n{out}"
+            row2.contains("Alpha") || row2.contains("First Album"),
+            "expected album list content to start below the separate pill row:\n{out}"
         );
     }
 
@@ -1163,65 +1137,53 @@ mod tests {
         .unwrap();
         let out = buffer_to_string(&term);
         let row0 = out.lines().next().unwrap();
+        let row1 = out.lines().nth(1).unwrap();
 
-        // Too many groups to fit within the (narrow) right column -- a right
-        // scroll indicator appears on the same row as the pills, and the
-        // fixed Music marker still renders.
         assert!(
-            row0.contains('\u{203a}'),
+            row1.contains('\u{203a}'),
             "expected a right scroll indicator on the pills row:\n{out}"
         );
         assert!(
             row0.contains("Music"),
-            "expected the Music marker to keep rendering when pills overflow:\n{out}"
+            "expected the Music marker to keep rendering on the title row when pills overflow:\n{out}"
         );
 
-        // The Music marker doesn't scroll with the pills: it still sits at
-        // the far right of the (narrow) row.
-        let rchar_x = |needle: &str| -> u16 {
-            let byte_idx = row0.rfind(needle).expect("needle not found in row 0");
-            row0[..byte_idx].chars().count() as u16
+        let rchar_x = |line: &str, needle: &str| -> u16 {
+            let byte_idx = line.rfind(needle).expect("needle not found");
+            line[..byte_idx].chars().count() as u16
         };
 
-        let music_x = rchar_x("Music");
+        let music_x = rchar_x(row0, "Music");
         assert!(
             music_x + "Music".len() as u16 + 1 >= width,
             "expected the Music marker to remain pinned to the far right:\n{out}"
         );
-        let marker_start = music_x.saturating_sub(1);
-        let right_indicator_x = rchar_x("\u{203a}");
-        let gap_before_marker = row0
-            .chars()
-            .nth(marker_start.saturating_sub(1) as usize)
-            .unwrap();
+        let right_indicator_x = rchar_x(row1, "\u{203a}");
         assert!(
-            right_indicator_x < marker_start.saturating_sub(1),
-            "expected at least one column between the right scroll indicator and Music marker:\n{out}"
-        );
-        assert_eq!(
-            gap_before_marker, ' ',
-            "expected a blank gap before the Music marker:\n{out}"
+            right_indicator_x < width,
+            "expected the right scroll indicator to stay inside the pill row:\n{out}"
         );
 
-        // The selector is still confined to the right column -- the segment
-        // over the left card/queue column stays a plain dash rule.
         let right_col_x = (app.power_left_width + 1) as usize;
         assert!(
             row0.chars().take(right_col_x).all(|c| c == '\u{2501}'),
-            "expected a plain dash rule over the left column, not pills:\n{out}"
+            "expected a plain dash rule over the left column on the title row:\n{out}"
+        );
+        assert!(
+            row1.chars().take(right_col_x).all(|c| c == ' '),
+            "expected the pill row to be confined to the right library column:\n{out}"
         );
 
-        // Every registered pill hitbox stays inside the space reserved for
-        // pills, right of the left column and left of Music.
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
+            assert_eq!(rect.y, 1, "expected pill hitboxes on the pills row");
             assert!(
                 rect.x as usize >= right_col_x,
                 "expected pill hitboxes confined to the right column"
             );
             assert!(
-                rect.x + rect.width <= marker_start,
-                "expected pill hitboxes confined to the scrollable area left of Music"
+                rect.x + rect.width <= width,
+                "expected pill hitboxes confined to the visible pill row"
             );
         }
     }

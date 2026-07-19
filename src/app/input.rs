@@ -5038,8 +5038,8 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 33,
-            "fixture sanity: expected 33 rendered list rows"
+            viewport_rows, 32,
+            "fixture sanity: expected 32 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
@@ -5048,10 +5048,10 @@ mod power_music_track_focus_tests {
         // Rendered rows before album 27:
         // 0 artist header, 1 top rule, 2 selected album row, 3-7 inline detail,
         // 8 bottom rule, 9-35 albums 1-27. One full visible viewport from row 2
-        // lands at row 35, which is album 26.
+        // lands at row 34, which is album 25.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            26,
+            25,
             "PageDown should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -5064,8 +5064,8 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 33,
-            "fixture sanity: expected 33 rendered list rows"
+            viewport_rows, 32,
+            "fixture sanity: expected 32 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
@@ -5073,10 +5073,10 @@ mod power_music_track_focus_tests {
         assert!(!handled);
         // Selected album 35 renders on row 37:
         // row 0 artist header, rows 1-35 albums 0-34, row 36 top rule, row 37 album 35.
-        // Paging up by one 33-row viewport targets row 4, which is album 3.
+        // Paging up by one 32-row viewport targets row 5, which is album 4.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            3,
+            4,
             "PageUp should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
