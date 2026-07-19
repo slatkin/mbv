@@ -3598,6 +3598,7 @@ impl App {
     ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
+        let spawn_started = std::time::Instant::now();
         std::thread::spawn(move || {
             match client.get_items_sorted(
                 &parent_id,
@@ -3609,8 +3610,9 @@ impl App {
                 &sort_order,
             ) {
                 Ok((items, total_count)) => {
-                    log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} first3={:?}",
+                    log::info!(target: "browse", "Loaded lib_idx={lib_idx} parent={parent_id} total={total_count} got={} thread_total={}ms first3={:?}",
                         items.len(),
+                        spawn_started.elapsed().as_millis(),
                         items.iter().take(3).map(|i| format!("{}:{}", i.id, i.name)).collect::<Vec<_>>());
                     let _ = tx.send(LibEvent::Loaded {
                         lib_idx,
