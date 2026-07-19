@@ -664,12 +664,11 @@ mod tests {
         layout: &mut LayoutPower,
         focused: bool,
     ) -> Terminal<TestBackend> {
-        // Height is one row taller than the banner's own reserved footprint
-        // (1 selected row + 17 rule/content/gap rows: 1 opening rule + 15
-        // content + 1 closing rule) to also leave room for the " N items"
-        // header row that `render_power_list` now draws unconditionally for a
-        // focused library panel -- there's no separate top-pinned title row
-        // to absorb it now that this goes through the shared catch-all path.
+        // 20 rows is comfortably enough for the " N items" header row (that
+        // `render_power_list` draws unconditionally for a focused library
+        // panel) plus the selected row and the compact banner's
+        // content-dependent height (#263) for the short test overviews used
+        // by callers of this helper.
         let backend = TestBackend::new(60, 20);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
@@ -732,7 +731,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -753,8 +751,10 @@ mod tests {
         // for a focused, non-search library panel. Row 1 is the banner's
         // opening horizontal rule -- placed directly *above* the selected
         // movie's own row (row 2) so the selected title reads as set off from
-        // the row above it. Row 16 closes the banner with another rule before
-        // the next list item (row 17).
+        // the row above it. The closing rule (and everything in between)
+        // grows to fit the selected movie's actual overview/director content
+        // (#263), so its row is found dynamically below rather than assumed
+        // fixed.
         assert!(
             lines[1].contains('\u{2500}'),
             "expected opening rule directly above the selected movie row:\n{out}"
@@ -778,10 +778,6 @@ mod tests {
             "expected the selection indicator to continue through the banner at the indented column:\n{out}"
         );
         assert!(
-            lines[17].contains("Second Movie"),
-            "expected remaining movie list below banner:\n{out}"
-        );
-        assert!(
             out.contains("Director: Director Hidden"),
             "compact banner must show director:\n{out}"
         );
@@ -800,21 +796,36 @@ mod tests {
                 .unwrap_or(false),
             "expected a spacer row before the director line:\n{out}"
         );
-        assert!(
-            lines[16].contains('\u{2500}'),
-            "expected closing rule below banner content:\n{out}"
-        );
+
+        // The closing rule is the first horizontal-rule row after the
+        // director line; everything below it is ordinary list content again.
+        let closing_rule_line = lines
+            .iter()
+            .enumerate()
+            .skip(director_line + 1)
+            .find(|(_, l)| l.contains('\u{2500}'))
+            .map(|(idx, _)| idx)
+            .expect("expected a closing rule below the banner content");
         assert_ne!(
-            lines[16].find('▌'),
+            lines[closing_rule_line].find('▌'),
             Some(2),
             "expected the selection indicator to stop before the banner's closing rule:\n{out}"
         );
         assert!(
-            !lines[1].contains("Focused Movie") && !lines[16].contains("Focused Movie"),
+            !lines[1].contains("Focused Movie")
+                && !lines[closing_rule_line].contains("Focused Movie"),
             "expected selected row's title to appear only once, not repeated on a rule row:\n{out}"
         );
+        let second_movie_line = lines
+            .iter()
+            .position(|l| l.contains("Second Movie"))
+            .expect("expected remaining movie list below banner");
         assert!(
-            !lines[17].contains("Focused Movie"),
+            second_movie_line > closing_rule_line,
+            "expected remaining movie list below the banner's closing rule:\n{out}"
+        );
+        assert!(
+            !lines[second_movie_line].contains("Focused Movie"),
             "expected selected row to stay above banner, not repeat below it:\n{out}"
         );
     }
@@ -927,7 +938,6 @@ mod tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -1385,7 +1395,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -1767,7 +1776,6 @@ mod tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -1808,7 +1816,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,

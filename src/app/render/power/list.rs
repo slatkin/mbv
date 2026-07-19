@@ -21,25 +21,36 @@ use unicode_width::UnicodeWidthStr;
 /// read as a distinct, boxed-off region instead of blending into the
 /// surrounding list.
 const COMPACT_BANNER_RULE_ROWS: usize = 1;
-const COMPACT_BANNER_CONTENT_ROWS: usize = 13;
 const COMPACT_BANNER_GAP_ROWS: usize = 1;
-const COMPACT_BANNER_TOTAL_ROWS: usize =
-    COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_CONTENT_ROWS + COMPACT_BANNER_GAP_ROWS;
 const COMPACT_BANNER_INDENT: u16 = 2;
 
 impl App {
     /// Filler-row count to reserve around the selected movie's row in
-    /// `lib_idx`'s display-row sequence: `COMPACT_BANNER_TOTAL_ROWS` when a
-    /// leaf movie is selected, else 0 (no banner — ordinary list rendering,
-    /// unchanged from before this feature). One of those rows is the opening
-    /// rule placed immediately *before* the selected item's row; the rest
-    /// (content + closing rule) follow it.
-    fn compact_banner_rows(&self, lib_idx: usize) -> usize {
-        if self.power_selected_movie_item(lib_idx).is_some() {
-            COMPACT_BANNER_TOTAL_ROWS
-        } else {
-            0
-        }
+    /// `lib_idx`'s display-row sequence: the banner's rule/gap rows plus its
+    /// actual content height (meta/overview/director wrapped to
+    /// `panel_width`, computed by `compact_banner_layout` — #263 replaced
+    /// the old fixed content-row constant with this, so a longer overview
+    /// grows the reserved space and a shorter one shrinks it) when a leaf
+    /// movie is selected, else 0 (no banner — ordinary list rendering,
+    /// unchanged from before this feature). One of the reserved rows is the
+    /// opening rule placed immediately *before* the selected item's row; the
+    /// rest (content + closing rule) follow it.
+    ///
+    /// This runs as a pre-pass, before the rest of the list's rows are
+    /// positioned around the selected item, so `panel_width` is an estimate
+    /// (always assuming the outer list scrollbar column is reserved) rather
+    /// than the exact final banner rect width — the real rect can end up a
+    /// column wider when the list turns out not to need a scrollbar, which
+    /// only ever makes the actual rendered content shorter than this budget,
+    /// never taller, so the list around it never overlaps the banner.
+    fn compact_banner_rows(&mut self, lib_idx: usize, panel_width: u16) -> usize {
+        let Some(item) = self.power_selected_movie_item(lib_idx) else {
+            return 0;
+        };
+        let content_rows = self
+            .compact_banner_layout(&item, panel_width)
+            .content_rows();
+        COMPACT_BANNER_RULE_ROWS + content_rows + COMPACT_BANNER_GAP_ROWS
     }
 
     /// Renders the Continue/library list items into `area`.
@@ -104,11 +115,25 @@ impl App {
 
         // Reserved filler-row count for the compact movie banner, 0 for every
         // library type/state except "leaf movie selected, detail not pinned".
+        // The width estimate mirrors the final banner rect's width formula
+        // (`content_area.width` minus a pessimistically-always-reserved
+        // scrollbar column, minus the banner's own indent) -- see
+        // `compact_banner_rows`'s doc comment for why an exact match isn't
+        // required here.
         let banner_rows: usize = if self.power_left_tab > 0 {
-            self.compact_banner_rows(self.power_left_tab - 1)
+            let banner_panel_width = content_area
+                .width
+                .saturating_sub(1)
+                .saturating_sub(COMPACT_BANNER_INDENT);
+            self.compact_banner_rows(self.power_left_tab - 1, banner_panel_width)
         } else {
             0
         };
+        // Content-only row count (banner_rows minus its rule/gap rows), used
+        // below to size the banner rect and selection bar to the same
+        // content-dependent height that was reserved for them above.
+        let banner_content_rows: usize =
+            banner_rows.saturating_sub(COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_GAP_ROWS);
 
         // When at the album level of a music library, group albums under artist headers.
         let show_grouped = if self.power_left_tab > 0 {
@@ -447,8 +472,7 @@ impl App {
                 } else {
                     content_area.width
                 };
-                let banner_h =
-                    (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
+                let banner_h = (banner_content_rows as u16).min(bottom.saturating_sub(banner_y));
                 if banner_h > 0 {
                     let banner_rect = Rect {
                         x: content_area.x + COMPACT_BANNER_INDENT,
@@ -471,8 +495,7 @@ impl App {
             if banner_rows > 0 && display_cursor >= offset && display_cursor < offset + visible {
                 let selected_y = content_area.y + (display_cursor - offset) as u16;
                 let bottom = content_area.y + content_area.height;
-                let bar_h =
-                    (1 + COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(selected_y));
+                let bar_h = (1 + banner_content_rows as u16).min(bottom.saturating_sub(selected_y));
                 if bar_h > 0 {
                     let selection_bar =
                         vec![
@@ -671,8 +694,7 @@ impl App {
                 } else {
                     content_area.width
                 };
-                let banner_h =
-                    (COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(banner_y));
+                let banner_h = (banner_content_rows as u16).min(bottom.saturating_sub(banner_y));
                 if banner_h > 0 {
                     let banner_rect = Rect {
                         x: content_area.x + COMPACT_BANNER_INDENT,
@@ -699,8 +721,7 @@ impl App {
             if banner_rows > 0 && display_cursor >= offset && display_cursor < offset + visible {
                 let selected_y = content_area.y + (display_cursor - offset) as u16;
                 let bottom = content_area.y + content_area.height;
-                let bar_h =
-                    (1 + COMPACT_BANNER_CONTENT_ROWS as u16).min(bottom.saturating_sub(selected_y));
+                let bar_h = (1 + banner_content_rows as u16).min(bottom.saturating_sub(selected_y));
                 if bar_h > 0 {
                     let selection_bar =
                         vec![
@@ -827,7 +848,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -857,7 +877,6 @@ mod tests {
                 loading: true,
             }),
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -916,7 +935,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -1145,8 +1163,9 @@ mod tests {
             banner_pos > selected_row_pos,
             "banner content expected after the selected row:\n{out}"
         );
-        // Third item pushed down by the 14 reserved banner rows (13 content + 1 gap),
-        // so it should not appear on the row immediately after the selected row.
+        // Third item pushed down by the banner's reserved rows (content-
+        // dependent since #263, not a fixed constant), so it should not
+        // appear on the row immediately after the selected row.
         assert!(
             !lines[selected_row_line + 1].contains("Third"),
             "Third should not appear immediately after Second Selected:\n{out}"
@@ -1155,9 +1174,76 @@ mod tests {
             .iter()
             .position(|l| l.contains("Third"))
             .expect("Third item expected further down, pushed below the banner");
+        let banner_panel_width = 40u16
+            .saturating_sub(1)
+            .saturating_sub(COMPACT_BANNER_INDENT);
+        let expected_banner_rows = app.compact_banner_rows(0, banner_panel_width);
         assert!(
-            third_line >= selected_row_line + COMPACT_BANNER_TOTAL_ROWS,
-            "Third expected pushed below the reserved banner rows (row {third_line}, selected row {selected_row_line}):\n{out}"
+            expected_banner_rows > 0,
+            "expected the selected movie to reserve banner rows"
+        );
+        assert!(
+            third_line >= selected_row_line + expected_banner_rows,
+            "Third expected pushed below the reserved banner rows (row {third_line}, selected row {selected_row_line}, reserved {expected_banner_rows}):\n{out}"
+        );
+    }
+
+    // #263: the banner's reserved row budget must track the selected movie's
+    // actual overview length, not a fixed constant -- a longer overview
+    // should reserve more rows (and so push the rest of the list down
+    // further) than a shorter one.
+    #[test]
+    fn compact_banner_rows_grows_with_a_longer_overview() {
+        let mut app = make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
+        app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+        let panel_width = 40u16
+            .saturating_sub(1)
+            .saturating_sub(COMPACT_BANNER_INDENT);
+
+        app.libs[0].nav_stack.last_mut().unwrap().items[1].overview = "Short.".into();
+        let short_rows = app.compact_banner_rows(0, panel_width);
+
+        app.libs[0].nav_stack.last_mut().unwrap().items[1].overview = "Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ".repeat(6);
+        let long_rows = app.compact_banner_rows(0, panel_width);
+
+        assert!(
+            long_rows > short_rows,
+            "long overview ({long_rows} rows) should reserve more rows than short overview ({short_rows} rows)"
+        );
+    }
+
+    // #263: the rest of the list must lay out around the banner's *actual*
+    // rendered height -- a longer overview should visibly push later rows
+    // further down than a shorter one, not just change an internal row
+    // count that never reaches the screen.
+    #[test]
+    fn list_rows_lay_out_further_below_a_longer_overview_than_a_shorter_one() {
+        let build = |overview: &str| {
+            let mut app = make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
+            app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
+            app.libs[0].nav_stack.last_mut().unwrap().items[1].overview = overview.into();
+            let mut layout = LayoutPower::default();
+            let out = render_power_list_to_string_sized(&mut app, &mut layout, 40, 60);
+            let lines: Vec<&str> = out.lines().collect();
+            let selected_line = lines
+                .iter()
+                .position(|l| l.contains("Second Selected"))
+                .expect("selected row should render");
+            let third_line = lines
+                .iter()
+                .position(|l| l.contains("Third"))
+                .expect("Third item should still be visible on screen");
+            third_line - selected_line
+        };
+
+        let short_gap = build("Short.");
+        let long_gap = build(
+            &"Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ".repeat(6),
+        );
+
+        assert!(
+            long_gap > short_gap,
+            "a longer overview should push Third further down (short gap {short_gap}, long gap {long_gap})"
         );
     }
 }

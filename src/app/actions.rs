@@ -942,15 +942,6 @@ impl App {
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
 
-        // The compact movie-detail banner's scroll offset (#204) is
-        // per-selection state: moving to a different list item must not
-        // carry over a scroll position from whatever was previously
-        // selected, or the newly-selected movie's banner can open already
-        // scrolled partway/fully into its own content. This is a no-op
-        // (already 0) for every non-movie list and for movies whose banner
-        // doesn't overflow.
-        self.libs[lib_idx].power_detail_scroll = 0;
-
         if self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab == lib_idx + 1
@@ -1028,15 +1019,6 @@ impl App {
     pub(super) fn jump_lib_cursor(&mut self, to_end: bool) {
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
-
-        // The compact movie-detail banner's scroll offset (#204) is
-        // per-selection state: moving to a different list item must not
-        // carry over a scroll position from whatever was previously
-        // selected, or the newly-selected movie's banner can open already
-        // scrolled partway/fully into its own content. This is a no-op
-        // (already 0) for every non-movie list and for movies whose banner
-        // doesn't overflow.
-        self.libs[lib_idx].power_detail_scroll = 0;
 
         if self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
@@ -1702,9 +1684,6 @@ impl App {
         if let Some(season_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
             season_lvl.cursor = new_cursor;
         }
-
-        // Reset per-episode scroll/detail state.
-        self.libs[lib_idx].power_detail_scroll = 0;
 
         // Collect the new season's identity.
         let (season_id, season_name) = self.libs[lib_idx]
@@ -5626,11 +5605,10 @@ impl App {
     pub(super) fn rebuild_library_tabs_from_views(&mut self, all_views: &[MediaItem]) {
         // Drain existing libs, preserving nav stacks and scroll pos so that a
         // UserDataChanged websocket refresh (fired when playback starts)
-        // doesn't silently reset the compact movie-detail banner's scroll.
+        // doesn't silently reset list scroll position.
         struct SavedLibState {
             nav_stack: Vec<BrowseLevel>,
             feed_home_video: Option<FeedHomeVideoState>,
-            detail_scroll: usize,
         }
         let old_libs: HashMap<String, SavedLibState> = self
             .libs
@@ -5641,7 +5619,6 @@ impl App {
                     SavedLibState {
                         nav_stack: std::mem::take(&mut l.nav_stack),
                         feed_home_video: l.feed_home_video,
-                        detail_scroll: l.power_detail_scroll,
                     },
                 )
             })
@@ -5674,13 +5651,11 @@ impl App {
                 })
                 .unwrap_or_default();
             let feed_home_video = saved.and_then(|s| s.feed_home_video.clone());
-            let detail_scroll = saved.map(|s| s.detail_scroll).unwrap_or(0);
             self.libs.push(super::LibraryTab {
                 library: view.clone(),
                 nav_stack: stack,
                 search: None,
                 feed_home_video,
-                power_detail_scroll: detail_scroll,
 
                 album_track_focus: None,
                 artist_header_focus: None,
@@ -6016,7 +5991,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -6410,7 +6384,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -6690,7 +6663,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -6751,7 +6723,6 @@ mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -6785,7 +6756,6 @@ mod tests {
                 video_scroll: 4,
                 ..Default::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -6820,7 +6790,6 @@ mod tests {
                 video_scroll: 6,
                 ..Default::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -7330,7 +7299,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -7433,7 +7401,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -7460,7 +7427,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -7501,7 +7467,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });

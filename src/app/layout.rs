@@ -90,10 +90,6 @@ pub(crate) struct LayoutPower {
     pub queue_cursor_screen_y: Option<u16>,
     pub selector_tabs: Vec<(Rect, usize)>,
     pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
-    /// Max valid scroll for the detail-view overview text, set each render frame.
-    pub detail_max_scroll: usize,
-    /// Visible overview line count for the detail view, set each render frame.
-    pub detail_page_h: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
