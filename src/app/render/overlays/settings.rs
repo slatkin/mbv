@@ -106,6 +106,7 @@ impl App {
                 let mut c = self.client.lock().unwrap();
                 match key {
                     SettingKey::StayAlive => c.config.stay_alive = !c.config.stay_alive,
+                    SettingKey::AutoReconnect => c.config.auto_reconnect = !c.config.auto_reconnect,
                     SettingKey::SavePlaylistOnQuit => {
                         c.config.save_playlist_on_quit = !c.config.save_playlist_on_quit
                     }

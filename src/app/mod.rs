@@ -1345,6 +1345,7 @@ impl PowerFocus {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingKey {
     StayAlive,
+    AutoReconnect,
     SavePlaylistOnQuit,
     StartOnQueue,
     AlwaysPlayNext,
@@ -1378,6 +1379,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
         "[general]",
         &[
             SettingKey::StayAlive,
+            SettingKey::AutoReconnect,
             SettingKey::SavePlaylistOnQuit,
             SettingKey::AlwaysSkipIntro,
             SettingKey::SystemNotifications,
@@ -6529,6 +6531,40 @@ pub(crate) mod tests {
         let mut buf = [0u8; 32];
         let n = relay_end.take(32).read(&mut buf).unwrap_or(0);
         assert_eq!(&buf[..n], b"DETACH\n");
+    }
+
+    #[test]
+    fn auto_reconnect_settings_row_displays_and_toggles_current_session() {
+        let mut app = make_app_stub();
+        app.client.lock().unwrap().config.auto_reconnect = false;
+        app.settings_cursor = (0..settings::settings_total_rows())
+            .find(|&idx| settings::settings_cursor_to_key(idx) == SettingKey::AutoReconnect)
+            .expect("AutoReconnect setting row must exist");
+
+        let cfg = app.client.lock().unwrap().config.clone();
+        assert_eq!(
+            settings::setting_label(SettingKey::AutoReconnect),
+            "Auto reconnect"
+        );
+        assert_eq!(
+            settings::setting_value(SettingKey::AutoReconnect, &cfg, &app.ui_config_snapshot()),
+            "off"
+        );
+
+        app.handle_settings_activate();
+        let cfg = app.client.lock().unwrap().config.clone();
+        assert!(cfg.auto_reconnect);
+        assert_eq!(
+            settings::setting_value(SettingKey::AutoReconnect, &cfg, &app.ui_config_snapshot()),
+            "on"
+        );
+        assert!(
+            app.settings_save_at.is_some(),
+            "settings toggle must use the delayed save path"
+        );
+
+        app.handle_settings_activate();
+        assert!(!app.client.lock().unwrap().config.auto_reconnect);
     }
 
     fn left_down(col: u16, row: u16) -> MouseEvent {
