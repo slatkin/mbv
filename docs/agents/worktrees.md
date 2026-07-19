@@ -6,6 +6,15 @@ Step 1a native tools → Step 1b git fallback); this file adds mbv-specific
 convention (`.claude/worktrees/`, Rust setup/test commands) and a Serena
 caveat learned the hard way (see #260 / PR #265 / PR #266).
 
+> ⚠️ **Before you touch a second worktree in this session: Serena will not
+> follow you there.** It's a separate process, bound to a directory once, at
+> session start — nothing you do mid-session moves it, including the native
+> `EnterWorktree` tool. Using Serena's symbolic edit tools
+> (`replace_symbol_body` and friends) against the wrong worktree silently
+> edits the wrong tree with no error. This bit mbv issue #260 / PR #265.
+> **Read Step 2 below before running any Serena edit tool once more than one
+> worktree is in play.**
+
 ## Required Start
 
 Announce: `I'm using the using-git-worktrees skill to set up an isolated workspace.`
@@ -51,8 +60,8 @@ this repo (2026-07-19, while writing this doc):**
    `Bash` cwd correctly moved there, then called a Serena symbolic tool
    (`find_symbol`) on a file that differs between the worktree and the main
    checkout — it returned the **main checkout's** version, not the
-   worktree's. See "Serena and worktrees" below before trusting Serena's
-   tools after switching.
+   worktree's. See Step 2 below before trusting Serena's tools after
+   switching.
 
 ## Step 1b: Git Worktree Fallback
 
@@ -98,7 +107,7 @@ call does not carry over to the next call. Either use the full worktree path
 every tool that respects it) follow you there for the rest of the session —
 remembering that Serena is the one thing that won't follow (next section).
 
-## Serena and worktrees
+## Step 2: Watch out for Serena — it will not follow you into the worktree
 
 Serena is launched here as `serena start-mcp-server --context=claude-code
 --project-from-cwd` (see the `serena` entry in the Claude Code MCP config).
@@ -266,7 +275,7 @@ Report:
 - Serena status: whether this session's Serena is bound to this worktree
   (started here), or whether a fresh session should be started here and
   Serena's symbolic edit tools are being avoided for this worktree in the
-  meantime per "Serena and worktrees" above
+  meantime per Step 2 above
 
 ## Integration
 
