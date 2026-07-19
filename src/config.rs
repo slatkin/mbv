@@ -106,12 +106,14 @@ fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
     })
 }
 
-pub fn save_config_settings(cfg: &Config) {
-    mbv_core::config::save_config_settings(cfg);
+pub fn save_config_settings(cfg: &Config) -> Result<(), String> {
+    mbv_core::config::save_config_settings(cfg)
 }
 
 pub fn save_config_with_ui(cfg: &Config, ui: &UiConfig) {
-    mbv_core::config::save_config_settings(cfg);
+    if let Err(e) = mbv_core::config::save_config_settings(cfg) {
+        log::warn!(target: "config", "config save failed: {e}");
+    }
     save_ui_config(ui);
 }
 

@@ -2557,8 +2557,12 @@ impl App {
         ),
         String,
     > {
+        log::info!(target: "daemon_route", "daemon route attempt start route={route_label:?} endpoint={endpoint}");
         let auth_token = self.client.lock().unwrap().token.clone();
         self.connect_daemon_route_endpoint(endpoint, &auth_token)
+            .inspect(|_| {
+                log::info!(target: "daemon_route", "daemon route attempt succeeded route={route_label:?} endpoint={endpoint}");
+            })
             .map_err(|e| {
                 log::warn!(
                     target: "daemon_route",
@@ -2580,13 +2584,24 @@ impl App {
     /// fallback rule -- never a hard failure at startup.
     fn try_auto_reconnect(&mut self) {
         if !self.client.lock().unwrap().config.auto_reconnect {
+            log::info!(target: "auto_reconnect", "auto-reconnect disabled; staying local");
             return;
         }
-        let Some(last) = mbv_core::config::load_last_remote_connection() else {
-            return;
+        log::info!(target: "auto_reconnect", "auto-reconnect enabled; loading state");
+        let last = match mbv_core::config::load_last_remote_connection() {
+            Ok(Some(last)) => last,
+            Ok(None) => {
+                log::info!(target: "auto_reconnect", "state missing; staying local");
+                return;
+            }
+            Err(e) => {
+                log::warn!(target: "auto_reconnect", "state load failed; staying local: {e}");
+                return;
+            }
         };
         match last {
             mbv_core::config::LastRemoteConnection::LibraryRoute { library } => {
+                log::info!(target: "auto_reconnect", "state loaded variant=library-route library={library:?}");
                 let Some((name, endpoint)) = self.resolve_route_for_library(&library) else {
                     log::info!(
                         target: "auto_reconnect",
@@ -2602,6 +2617,7 @@ impl App {
                 }
             }
             mbv_core::config::LastRemoteConnection::DirectSession { device_name } => {
+                log::info!(target: "auto_reconnect", "state loaded variant=direct-session device={device_name:?}");
                 let sessions = match self.fetch_sessions_blocking() {
                     Ok(sessions) => sessions,
                     Err(e) => {
@@ -2616,7 +2632,17 @@ impl App {
                     .into_iter()
                     .find(|s| s.device_name.eq_ignore_ascii_case(&device_name))
                 {
-                    Some(sess) => self.connect_to_session(&sess),
+                    Some(sess) => {
+                        log::info!(target: "auto_reconnect", "direct-session resolved device={device_name:?} session_id={:?}; connecting", sess.id);
+                        self.connect_to_session(&sess);
+                        if self.direct_remote_connected {
+                            log::info!(target: "auto_reconnect", "direct-session connection succeeded device={device_name:?} outcome=direct-daemon-upgrade");
+                        } else if self.connected_session_id.is_some() {
+                            log::info!(target: "auto_reconnect", "direct-session connection initiated device={device_name:?} outcome=emby-session-control");
+                        } else {
+                            log::warn!(target: "auto_reconnect", "direct-session connection failed device={device_name:?}; staying local");
+                        }
+                    }
                     None => {
                         log::info!(
                             target: "auto_reconnect",
@@ -2722,6 +2748,7 @@ impl App {
         remote: mbv_core::remote_player::RemotePlayer,
         remote_rx: mpsc::Receiver<PlayerEvent>,
     ) {
+        let previous_route = self.active_route.clone();
         let initial_items = remote.items.lock().unwrap().clone();
         let has_initial_items = !initial_items.is_empty();
         let initial_cursor = remote.status.lock().unwrap().current_idx;
@@ -2782,12 +2809,14 @@ impl App {
         }
         log::info!(
             target: "library_route",
-            "switched playback to library route {library_name:?}"
+            "switched playback route previous={previous_route:?} next={library_name:?}"
         );
         self.flash_status(format!("Routed to {library_name} daemon"));
     }
 
     fn restore_local_mode(&mut self, status: &str) {
+        let previous_route = self.active_route.clone();
+        log::info!(target: "library_route", "restoring local playback previous_route={previous_route:?} reason={status:?}");
         if !self.player.is_remote() {
             self.player.stop();
         }
@@ -2846,7 +2875,9 @@ impl App {
     fn apply_route_for_playback(&mut self, item: &mbv_core::api::MediaItem) {
         let resolved = self.resolve_route_for_play(item);
         match (resolved, self.active_route.clone()) {
-            (Some((name, _)), Some(current)) if name == current => {}
+            (Some((name, _)), Some(current)) if name == current => {
+                log::info!(target: "library_route", "already-active route no-op route={name:?} item_id={:?}", item.id);
+            }
             (Some((name, endpoint)), was_routed) => {
                 match self.try_daemon_route_connect(&endpoint, &name) {
                     Ok((remote, remote_rx)) => {
@@ -2865,10 +2896,13 @@ impl App {
                     }
                 }
             }
-            (None, Some(_)) => {
+            (None, Some(current)) => {
+                log::info!(target: "library_route", "no route resolved while routed current={current:?}; restoring local item_id={:?}", item.id);
                 self.restore_local_mode("Local playback restored");
             }
-            (None, None) => {}
+            (None, None) => {
+                log::info!(target: "library_route", "no route resolved while local item_id={:?}; staying local", item.id)
+            }
         }
     }
 
@@ -3607,21 +3641,31 @@ impl App {
         // mechanisms), so running this block for them would always compute
         // `None` and wipe out a real record saved by a different `App::new`
         // session (per ADR 0010, `new_remote`'s path is unaffected by #236).
-        if !self.launched_as_remote && self.client.lock().unwrap().config.auto_reconnect {
+        if self.launched_as_remote {
+            log::info!(target: "auto_reconnect", "teardown persistence skipped: launched as remote");
+        } else if !self.client.lock().unwrap().config.auto_reconnect {
+            log::info!(target: "auto_reconnect", "teardown persistence skipped: auto-reconnect disabled");
+        } else {
             let last = if let Some(library) = self.active_route.clone() {
+                log::info!(target: "auto_reconnect", "teardown decision=save-library-route library={library:?}");
                 Some(mbv_core::config::LastRemoteConnection::LibraryRoute { library })
             } else if let Some(sess) = self.connected_session_state.as_ref() {
+                log::info!(target: "auto_reconnect", "teardown decision=save-direct-session device={:?}", sess.device_name);
                 Some(mbv_core::config::LastRemoteConnection::DirectSession {
                     device_name: sess.device_name.clone(),
                 })
             } else {
+                log::info!(target: "auto_reconnect", "teardown decision={}", if self.direct_remote_label.is_some() { "save-direct-session" } else { "clear" });
                 self.direct_remote_label.as_ref().map(|device_name| {
                     mbv_core::config::LastRemoteConnection::DirectSession {
                         device_name: device_name.clone(),
                     }
                 })
             };
-            mbv_core::config::save_last_remote_connection(last.as_ref());
+            match mbv_core::config::save_last_remote_connection(last.as_ref()) {
+                Ok(()) => log::info!(target: "auto_reconnect", "state persistence succeeded"),
+                Err(e) => log::warn!(target: "auto_reconnect", "state persistence failed: {e}"),
+            }
         }
         let quit_requested = QUIT_REQUESTED.load(Ordering::Relaxed);
         // Leave the daemon's player running when the TUI disconnects; only stop
@@ -6371,7 +6415,7 @@ pub(crate) mod tests {
         app.teardown(Duration::from_secs(1));
 
         assert_eq!(
-            crate::config::load_last_remote_connection(),
+            crate::config::load_last_remote_connection().unwrap(),
             Some(crate::config::LastRemoteConnection::LibraryRoute {
                 library: "music".to_string()
             })
@@ -6390,7 +6434,7 @@ pub(crate) mod tests {
         app.teardown(Duration::from_secs(1));
 
         assert_eq!(
-            crate::config::load_last_remote_connection(),
+            crate::config::load_last_remote_connection().unwrap(),
             Some(crate::config::LastRemoteConnection::DirectSession {
                 device_name: "living-room-mbv".to_string()
             })
@@ -6409,7 +6453,7 @@ pub(crate) mod tests {
         app.teardown(Duration::from_secs(1));
 
         assert_eq!(
-            crate::config::load_last_remote_connection(),
+            crate::config::load_last_remote_connection().unwrap(),
             Some(crate::config::LastRemoteConnection::DirectSession {
                 device_name: "living-room-mbv".to_string()
             })
@@ -6419,7 +6463,7 @@ pub(crate) mod tests {
     #[test]
     fn teardown_clears_persisted_connection_when_exiting_local() {
         let _guard = crate::config::TestStateDirGuard::new();
-        crate::config::save_last_remote_connection(Some(
+        let _ = crate::config::save_last_remote_connection(Some(
             &crate::config::LastRemoteConnection::LibraryRoute {
                 library: "music".to_string(),
             },
@@ -6429,13 +6473,13 @@ pub(crate) mod tests {
 
         app.teardown(Duration::from_secs(1));
 
-        assert_eq!(crate::config::load_last_remote_connection(), None);
+        assert_eq!(crate::config::load_last_remote_connection().unwrap(), None);
     }
 
     #[test]
     fn teardown_never_touches_persisted_state_when_auto_reconnect_disabled() {
         let _guard = crate::config::TestStateDirGuard::new();
-        crate::config::save_last_remote_connection(Some(
+        let _ = crate::config::save_last_remote_connection(Some(
             &crate::config::LastRemoteConnection::LibraryRoute {
                 library: "music".to_string(),
             },
@@ -6450,7 +6494,7 @@ pub(crate) mod tests {
         // existed must be left exactly as it was, not cleared just because
         // `active_route` is currently `None`.
         assert_eq!(
-            crate::config::load_last_remote_connection(),
+            crate::config::load_last_remote_connection().unwrap(),
             Some(crate::config::LastRemoteConnection::LibraryRoute {
                 library: "music".to_string()
             })
@@ -7254,7 +7298,7 @@ pub(crate) mod tests {
         }
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_success);
 
-        crate::config::save_last_remote_connection(Some(
+        let _ = crate::config::save_last_remote_connection(Some(
             &crate::config::LastRemoteConnection::LibraryRoute {
                 library: "music".to_string(),
             },
@@ -7274,7 +7318,7 @@ pub(crate) mod tests {
     #[test]
     fn try_auto_reconnect_falls_back_to_local_when_route_no_longer_configured() {
         let _guard = crate::config::TestStateDirGuard::new();
-        crate::config::save_last_remote_connection(Some(
+        let _ = crate::config::save_last_remote_connection(Some(
             &crate::config::LastRemoteConnection::LibraryRoute {
                 library: "music".to_string(),
             },
@@ -7301,7 +7345,7 @@ pub(crate) mod tests {
         }
         *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(sessions_with_living_room);
 
-        crate::config::save_last_remote_connection(Some(
+        let _ = crate::config::save_last_remote_connection(Some(
             &crate::config::LastRemoteConnection::DirectSession {
                 device_name: "living-room-mbv".to_string(),
             },
@@ -7326,7 +7370,7 @@ pub(crate) mod tests {
         }
         *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(sessions_without_living_room);
 
-        crate::config::save_last_remote_connection(Some(
+        let _ = crate::config::save_last_remote_connection(Some(
             &crate::config::LastRemoteConnection::DirectSession {
                 device_name: "living-room-mbv".to_string(),
             },
@@ -7344,7 +7388,7 @@ pub(crate) mod tests {
     #[test]
     fn try_auto_reconnect_is_a_no_op_when_disabled() {
         let _guard = crate::config::TestStateDirGuard::new();
-        crate::config::save_last_remote_connection(Some(
+        let _ = crate::config::save_last_remote_connection(Some(
             &crate::config::LastRemoteConnection::LibraryRoute {
                 library: "music".to_string(),
             },

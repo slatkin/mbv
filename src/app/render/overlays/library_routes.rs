@@ -9,10 +9,75 @@ use ratatui::Frame;
 
 const LOCAL_NO_ROUTE: &str = "Local (no route)";
 
+#[cfg(test)]
+thread_local! {
+    static ROUTE_CONFIG_SAVE_CAPTURE: std::cell::RefCell<Vec<crate::config::Config>> = const { std::cell::RefCell::new(Vec::new()) };
+    static ROUTE_CONFIG_SAVE_RESULT: std::cell::RefCell<Result<(), String>> = const { std::cell::RefCell::new(Ok(())) };
+}
+
+#[cfg(test)]
+struct RouteConfigSaveResultGuard(Result<(), String>);
+
+#[cfg(test)]
+impl RouteConfigSaveResultGuard {
+    fn set(result: Result<(), String>) -> Self {
+        let previous = ROUTE_CONFIG_SAVE_RESULT.with(|current| current.replace(result));
+        Self(previous)
+    }
+}
+
+#[cfg(test)]
+impl Drop for RouteConfigSaveResultGuard {
+    fn drop(&mut self) {
+        ROUTE_CONFIG_SAVE_RESULT.with(|current| {
+            let _ = current.replace(self.0.clone());
+        });
+    }
+}
+
+#[cfg(not(test))]
+fn save_route_config(cfg: &crate::config::Config) -> Result<(), String> {
+    crate::config::save_config_settings(cfg)
+}
+
+#[cfg(test)]
+fn save_route_config(cfg: &crate::config::Config) -> Result<(), String> {
+    ROUTE_CONFIG_SAVE_CAPTURE.with(|captured| captured.borrow_mut().push(cfg.clone()));
+    ROUTE_CONFIG_SAVE_RESULT.with(|result| result.borrow().clone())
+}
+
 impl App {
+    fn finish_route_config_save(&mut self, result: Result<(), String>) -> bool {
+        match result {
+            Ok(()) => {
+                log::info!(target: "library_route", "config save succeeded");
+                true
+            }
+            Err(e) => {
+                log::warn!(target: "library_route", "config save failed: {e}");
+                self.flash_status_high(format!(
+                    "⚠ Library route changed but config save failed ({e})"
+                ));
+                false
+            }
+        }
+    }
+
     pub(crate) fn open_library_routes_popup(&mut self) {
+        log::info!(target: "library_route", "F2 route picker opened");
         let client = self.client.lock().unwrap();
-        let all = client.get_views().unwrap_or_default();
+        let all = match client.get_views() {
+            Ok(all) => {
+                log::info!(target: "library_route", "F2 library fetch succeeded count={}", all.len());
+                all
+            }
+            Err(e) => {
+                log::warn!(target: "library_route", "F2 library fetch failed: {e}");
+                drop(client);
+                self.flash_status_high(format!("⚠ Library routes couldn't load libraries ({e})"));
+                return;
+            }
+        };
         let routes = client.config.library_routes.clone();
         let items: Vec<(String, String, Option<String>)> = all
             .iter()
@@ -31,7 +96,17 @@ impl App {
     }
 
     fn enter_device_stage(&mut self, library_lower: String, library_display: String) {
-        let sessions = self.fetch_sessions_blocking().unwrap_or_default();
+        let sessions = match self.fetch_sessions_blocking() {
+            Ok(sessions) => {
+                log::info!(target: "library_route", "F2 session fetch succeeded count={}", sessions.len());
+                sessions
+            }
+            Err(e) => {
+                log::warn!(target: "library_route", "F2 session fetch failed library={library_lower:?}: {e}");
+                self.flash_status_high(format!("⚠ Library routes couldn't load devices ({e})"));
+                return;
+            }
+        };
         let local_device_name = self.client.lock().unwrap().device_name.clone();
         let mut devices: Vec<(String, Option<mbv_core::remote_player::DaemonEndpoint>)> = sessions
             .iter()
@@ -47,11 +122,18 @@ impl App {
                 // way to tell why. `render_library_routes_popup`
                 // renders a `None` entry greyed out with a reason, and
                 // `commit_device_selection` refuses to commit it.
-                (s.device_name.clone(), self.session_direct_endpoint(s))
+                let endpoint = self.session_direct_endpoint(s);
+                if let Some(endpoint) = &endpoint {
+                    log::info!(target: "library_route", "F2 endpoint eligible device={:?} endpoint={endpoint}", s.device_name);
+                } else {
+                    log::info!(target: "library_route", "F2 endpoint rejected device={:?} reason=no resolvable direct-connect endpoint", s.device_name);
+                }
+                (s.device_name.clone(), endpoint)
             })
             .collect();
         devices.sort_by(|a, b| a.0.cmp(&b.0));
         devices.dedup_by(|a, b| a.0.eq_ignore_ascii_case(&b.0));
+        log::info!(target: "library_route", "F2 candidate count={} library={library_lower:?}", devices.len());
 
         // Preselect by resolved endpoint, not by name (#256): a hostname
         // is more likely to change than the address it currently resolves
@@ -117,6 +199,7 @@ impl App {
             let mut c = self.client.lock().unwrap();
             if cursor == 0 {
                 c.config.library_routes.remove(&library_lower);
+                log::info!(target: "library_route", "F2 route removed library={library_lower:?}");
             } else if let Some((_, Some(endpoint))) = devices.get(cursor - 1) {
                 // #256: persist the resolved endpoint, never the device
                 // name -- the name was only ever needed to let the user
@@ -124,6 +207,7 @@ impl App {
                 c.config
                     .library_routes
                     .insert(library_lower.clone(), endpoint.to_string());
+                log::info!(target: "library_route", "F2 endpoint persisted library={library_lower:?} endpoint={endpoint}");
             }
         }
         let cfg = self.client.lock().unwrap().config.clone();
@@ -133,10 +217,24 @@ impl App {
         // effect until the next app restart, exactly like `MultiSelectKind`'s
         // hidden_libraries/hidden_latest mirrors in multiselect.rs.
         self.library_routes = cfg.library_routes.clone();
-        crate::config::save_config_settings(&cfg);
+        log::info!(target: "library_route", "runtime route table synchronized count={}", self.library_routes.len());
+        let save_result = save_route_config(&cfg);
+        if !self.finish_route_config_save(save_result) {
+            return;
+        }
 
         // Return to the library list, refreshed with the new assignment.
-        let all = self.client.lock().unwrap().get_views().unwrap_or_default();
+        let refresh_result = { self.client.lock().unwrap().get_views() };
+        let all = match refresh_result {
+            Ok(all) => all,
+            Err(e) => {
+                log::warn!(target: "library_route", "F2 post-save library refresh failed: {e}");
+                self.flash_status_high(format!(
+                    "⚠ Library route saved but couldn't refresh libraries ({e})"
+                ));
+                return;
+            }
+        };
         let routes = cfg.library_routes.clone();
         let items: Vec<(String, String, Option<String>)> = all
             .iter()
@@ -345,11 +443,102 @@ mod tests {
     use crate::app::{SESSIONS_LOAD_OVERRIDE, SESSIONS_LOAD_TEST_LOCK};
 
     #[test]
-    fn open_library_routes_popup_starts_on_pick_library_stage() {
+    fn open_library_routes_popup_shows_high_priority_status_when_library_fetch_fails() {
         let mut app = make_app_stub();
         app.open_library_routes_popup();
-        let popup = app.library_routes_popup.as_ref().unwrap();
-        assert!(matches!(popup.stage, LibraryRouteStage::PickLibrary { .. }));
+        assert!(app.library_routes_popup.is_none());
+        assert!(app.status.contains("couldn't load libraries"));
+        assert!(
+            app.status_expires.unwrap()
+                >= std::time::Instant::now() + std::time::Duration::from_secs(4)
+        );
+    }
+
+    #[test]
+    fn enter_device_stage_shows_high_priority_status_when_session_fetch_fails() {
+        let _guard = SESSIONS_LOAD_TEST_LOCK.lock().unwrap();
+        fn failed_sessions(
+            _client: &mbv_core::api::EmbyClient,
+        ) -> Result<Vec<mbv_core::api::SessionInfo>, String> {
+            Err("session service unavailable".to_string())
+        }
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = Some(failed_sessions);
+        let mut app = make_app_stub();
+        app.library_routes_popup = Some(LibraryRoutePopup {
+            stage: LibraryRouteStage::PickLibrary { items: vec![] },
+            cursor: 0,
+        });
+
+        app.enter_device_stage("music".to_string(), "Music".to_string());
+
+        *SESSIONS_LOAD_OVERRIDE.lock().unwrap() = None;
+        assert!(app.status.contains("couldn't load devices"));
+        assert!(
+            app.status_expires.unwrap()
+                >= std::time::Instant::now() + std::time::Duration::from_secs(4)
+        );
+    }
+
+    #[test]
+    fn failed_route_config_save_preserves_persistence_warning_and_stops_refresh() {
+        let mut app = make_app_stub();
+        let should_refresh =
+            app.finish_route_config_save(Err("write /blocked/config.toml: denied".to_string()));
+        assert!(!should_refresh);
+        assert!(app.status.contains("config save failed"));
+        assert!(app.status.contains("write /blocked/config.toml: denied"));
+    }
+
+    #[test]
+    fn route_config_save_is_captured_without_targeting_production_config() {
+        ROUTE_CONFIG_SAVE_CAPTURE.with(|captured| captured.borrow_mut().clear());
+        let mut cfg = crate::config::Config::default();
+        cfg.library_routes
+            .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
+
+        assert!(save_route_config(&cfg).is_ok());
+
+        ROUTE_CONFIG_SAVE_CAPTURE.with(|captured| {
+            let captured = captured.borrow();
+            assert_eq!(captured.len(), 1);
+            assert_eq!(captured[0].library_routes, cfg.library_routes);
+        });
+    }
+
+    #[test]
+    fn route_config_save_result_guard_restores_previous_result() {
+        ROUTE_CONFIG_SAVE_RESULT.with(|result| assert!(result.borrow().is_ok()));
+        {
+            let _guard = RouteConfigSaveResultGuard::set(Err("simulated".to_string()));
+            ROUTE_CONFIG_SAVE_RESULT.with(|result| assert!(result.borrow().is_err()));
+        }
+        ROUTE_CONFIG_SAVE_RESULT.with(|result| assert!(result.borrow().is_ok()));
+    }
+
+    #[test]
+    fn commit_device_selection_preserves_save_failure_warning_without_refresh() {
+        let _save_result =
+            RouteConfigSaveResultGuard::set(Err("write isolated config: denied".to_string()));
+        let mut app = make_app_stub();
+        let endpoint =
+            mbv_core::remote_player::DaemonEndpoint::Tcp("127.0.0.1:9000".parse().unwrap());
+        app.library_routes_popup = Some(LibraryRoutePopup {
+            stage: LibraryRouteStage::PickDevice {
+                library_lower: "music".to_string(),
+                library_display: "Music".to_string(),
+                devices: vec![("living-room-pc".to_string(), Some(endpoint))],
+            },
+            cursor: 1,
+        });
+
+        app.handle_library_routes_enter();
+
+        assert!(app.status.contains("config save failed"));
+        assert!(app.status.contains("write isolated config: denied"));
+        assert!(matches!(
+            app.library_routes_popup.as_ref().unwrap().stage,
+            LibraryRouteStage::PickDevice { .. }
+        ));
     }
 
     #[test]
@@ -369,6 +558,12 @@ mod tests {
         });
 
         app.handle_library_routes_enter();
+
+        assert!(app.status.contains("couldn't refresh libraries"));
+        assert!(
+            app.status_expires.unwrap()
+                >= std::time::Instant::now() + std::time::Duration::from_secs(4)
+        );
 
         assert_eq!(
             app.client

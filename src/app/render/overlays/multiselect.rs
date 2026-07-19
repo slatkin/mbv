@@ -108,7 +108,9 @@ impl App {
                 p.subtitle_lang = cfg.subtitle_lang.clone();
                 p.audio_lang = cfg.audio_lang.clone();
             }
-            crate::config::save_config_settings(&cfg);
+            if let Err(e) = crate::config::save_config_settings(&cfg) {
+                log::warn!(target: "config", "config save failed: {e}");
+            }
             return;
         }
 
@@ -138,7 +140,9 @@ impl App {
             MultiSelectKind::MyLanguages => unreachable!(),
         }
         let cfg = self.client.lock().unwrap().config.clone();
-        crate::config::save_config_settings(&cfg);
+        if let Err(e) = crate::config::save_config_settings(&cfg) {
+            log::warn!(target: "config", "config save failed: {e}");
+        }
         let _ = self.fetch_home();
     }
 

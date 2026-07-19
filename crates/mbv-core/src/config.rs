@@ -434,36 +434,61 @@ fn last_remote_connection_path() -> PathBuf {
 /// Called from `App::teardown` only when `auto_reconnect` is
 /// enabled -- when the feature is off, this file is never written or
 /// read, by design (Task 1's `Global Constraints`).
-pub fn save_last_remote_connection(conn: Option<&LastRemoteConnection>) {
-    let path = last_remote_connection_path();
+fn save_last_remote_connection_at(
+    path: &std::path::Path,
+    conn: Option<&LastRemoteConnection>,
+) -> Result<(), String> {
     let Some(conn) = conn else {
-        let _ = std::fs::remove_file(&path);
-        return;
+        return match std::fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("remove {}: {e}", path.display())),
+        };
     };
     if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("create directory {}: {e}", dir.display()))?;
     }
-    if let Ok(json) = serde_json::to_string(conn) {
-        let tmp = path.with_extension("json.tmp");
-        if std::fs::write(&tmp, &json).is_ok() {
-            let _ = std::fs::rename(&tmp, &path);
+    let json =
+        serde_json::to_string(conn).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    let tmp = path.with_extension("json.tmp");
+    std::fs::write(&tmp, &json).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, path)
+        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+}
+
+pub fn save_last_remote_connection(conn: Option<&LastRemoteConnection>) -> Result<(), String> {
+    save_last_remote_connection_at(&last_remote_connection_path(), conn)
+}
+
+fn load_last_remote_connection_at(
+    path: &std::path::Path,
+) -> Result<Option<LastRemoteConnection>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("read {}: {e}", path.display())),
+    };
+    match serde_json::from_str(&text) {
+        Ok(conn) => Ok(Some(conn)),
+        Err(e) => {
+            std::fs::remove_file(path).map_err(|remove_error| {
+                format!(
+                    "parse {}: {e}; remove corrupt {}: {remove_error}",
+                    path.display(),
+                    path.display()
+                )
+            })?;
+            Err(format!(
+                "parse {}: {e}; corrupt file removed",
+                path.display()
+            ))
         }
     }
 }
 
-pub fn load_last_remote_connection() -> Option<LastRemoteConnection> {
-    let text = std::fs::read_to_string(last_remote_connection_path()).ok()?;
-    match serde_json::from_str(&text) {
-        Ok(conn) => Some(conn),
-        Err(e) => {
-            log::warn!(target: "auto_reconnect", "last_remote_connection.json failed to parse, not reconnecting: {e}");
-            // Self-heal immediately rather than leaving a corrupt file that
-            // would silently break auto-reconnect on every future startup
-            // until the next clean teardown happens to overwrite it (#236).
-            let _ = std::fs::remove_file(last_remote_connection_path());
-            None
-        }
-    }
+pub fn load_last_remote_connection() -> Result<Option<LastRemoteConnection>, String> {
+    load_last_remote_connection_at(&last_remote_connection_path())
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -903,15 +928,17 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     })
 }
 
-pub fn save_config_settings(cfg: &Config) {
-    let path = config_path();
-    let mut doc: toml::Value = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|s| toml::from_str(&s).ok())
-        .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
+fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), String> {
+    let mut doc: toml::Value = match std::fs::read_to_string(path) {
+        Ok(text) => toml::from_str(&text).map_err(|e| format!("parse {}: {e}", path.display()))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            toml::Value::Table(toml::map::Map::new())
+        }
+        Err(e) => return Err(format!("read {}: {e}", path.display())),
+    };
     let table = match doc.as_table_mut() {
         Some(t) => t,
-        None => return,
+        None => return Err(format!("update {}: root is not a table", path.display())),
     };
 
     macro_rules! section {
@@ -1129,12 +1156,23 @@ pub fn save_config_settings(cfg: &Config) {
             ),
         );
     }
-    if let Ok(s) = toml::to_string(&doc) {
-        let tmp = path.with_extension("toml.tmp");
-        if std::fs::write(&tmp, &s).is_ok() {
-            let _ = std::fs::rename(&tmp, &path);
-        }
+    let s = toml::to_string(&doc).map_err(|e| format!("serialize {}: {e}", path.display()))?;
+    write_config_text_at(path, &s)
+}
+
+fn write_config_text_at(path: &std::path::Path, text: &str) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("create directory {}: {e}", parent.display()))?;
     }
+    let tmp = path.with_extension("toml.tmp");
+    std::fs::write(&tmp, text).map_err(|e| format!("write {}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, path)
+        .map_err(|e| format!("rename {} to {}: {e}", tmp.display(), path.display()))
+}
+
+pub fn save_config_settings(cfg: &Config) -> Result<(), String> {
+    save_config_settings_at(cfg, &config_path())
 }
 
 #[cfg(any(test, feature = "test-support"))]
@@ -1302,7 +1340,7 @@ save_playlist_on_consume_audio = true
         cfg.consume_audio = true;
         cfg.save_playlist_on_consume_audio = true;
         cfg.quit_timeout_secs = 7;
-        save_config_settings(&cfg);
+        save_config_settings(&cfg).unwrap();
 
         let saved = std::fs::read_to_string(config_path()).unwrap();
         let reparsed = parse_config(&saved).unwrap();
@@ -1428,7 +1466,7 @@ url = "http://x"
                 auto_reconnect,
                 ..Default::default()
             };
-            save_config_settings(&cfg);
+            save_config_settings(&cfg).unwrap();
 
             let saved = std::fs::read_to_string(config_path()).unwrap();
             let reparsed = parse_config(&saved).unwrap();
@@ -1468,7 +1506,7 @@ feed_view_libraries = ["YouTube"]
         let cfg = load_config().unwrap();
         assert_eq!(cfg.feed_view_libraries, vec!["youtube"]);
 
-        save_config_settings(&cfg);
+        save_config_settings(&cfg).unwrap();
 
         let saved = std::fs::read_to_string(config_path()).unwrap();
         let reparsed = parse_config(&saved).unwrap();
@@ -1816,9 +1854,9 @@ url = "http://host"
             library: "music".to_string(),
         };
 
-        save_last_remote_connection(Some(&conn));
+        assert!(save_last_remote_connection(Some(&conn)).is_ok());
 
-        assert_eq!(load_last_remote_connection(), Some(conn));
+        assert_eq!(load_last_remote_connection().unwrap(), Some(conn));
     }
 
     #[test]
@@ -1828,26 +1866,100 @@ url = "http://host"
             device_name: "living-room-mbv".to_string(),
         };
 
-        save_last_remote_connection(Some(&conn));
+        assert!(save_last_remote_connection(Some(&conn)).is_ok());
 
-        assert_eq!(load_last_remote_connection(), Some(conn));
+        assert_eq!(load_last_remote_connection().unwrap(), Some(conn));
     }
 
     #[test]
     fn save_last_remote_connection_none_clears_a_previously_saved_record() {
         let _guard = TestStateDirGuard::new();
-        save_last_remote_connection(Some(&LastRemoteConnection::LibraryRoute {
-            library: "music".to_string(),
-        }));
+        assert!(
+            save_last_remote_connection(Some(&LastRemoteConnection::LibraryRoute {
+                library: "music".to_string(),
+            }))
+            .is_ok()
+        );
 
-        save_last_remote_connection(None);
+        assert!(save_last_remote_connection(None).is_ok());
 
-        assert_eq!(load_last_remote_connection(), None);
+        assert_eq!(load_last_remote_connection().unwrap(), None);
     }
 
     #[test]
     fn load_last_remote_connection_returns_none_when_no_file_exists() {
         let _guard = TestStateDirGuard::new();
-        assert_eq!(load_last_remote_connection(), None);
+        assert_eq!(load_last_remote_connection().unwrap(), None);
+    }
+
+    #[test]
+    fn save_last_remote_connection_reports_remove_failure_with_path() {
+        let dir =
+            std::env::temp_dir().join(format!("mbv-save-state-error-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let error = save_last_remote_connection_at(&dir, None).unwrap_err();
+        assert!(error.contains("remove"));
+        assert!(error.contains(dir.to_str().unwrap()));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn load_last_remote_connection_reports_read_failure_with_path() {
+        let dir =
+            std::env::temp_dir().join(format!("mbv-load-state-error-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let error = load_last_remote_connection_at(&dir).unwrap_err();
+        assert!(error.starts_with("read "));
+        assert!(error.contains(dir.to_str().unwrap()));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn save_config_settings_reports_rename_failure_with_path() {
+        let dir =
+            std::env::temp_dir().join(format!("mbv-save-config-error-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let error = write_config_text_at(&dir, "").unwrap_err();
+        assert!(error.contains("rename"));
+        assert!(error.contains(dir.to_str().unwrap()));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn save_config_settings_reports_read_failure_with_path() {
+        let dir =
+            std::env::temp_dir().join(format!("mbv-read-config-error-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let error = save_config_settings_at(&Config::default(), &dir).unwrap_err();
+        assert!(error.contains("read"));
+        assert!(error.contains(dir.to_str().unwrap()));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn save_config_settings_reports_parse_failure_with_path() {
+        let dir =
+            std::env::temp_dir().join(format!("mbv-parse-config-error-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "this = [is malformed").unwrap();
+        let error = save_config_settings_at(&Config::default(), &path).unwrap_err();
+        assert!(error.contains("parse"));
+        assert!(error.contains(path.to_str().unwrap()));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn save_config_settings_reports_write_failure_with_path() {
+        let dir =
+            std::env::temp_dir().join(format!("mbv-write-config-error-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "").unwrap();
+        std::fs::create_dir(path.with_extension("toml.tmp")).unwrap();
+        let error = save_config_settings_at(&Config::default(), &path).unwrap_err();
+        assert!(error.contains("write"));
+        assert!(error.contains(path.with_extension("toml.tmp").to_str().unwrap()));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
