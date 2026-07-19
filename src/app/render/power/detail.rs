@@ -13,6 +13,16 @@ use textwrap::wrap;
 const IMG_COLS: u16 = 18;
 const IMG_ROWS: u16 = 12;
 
+/// Cache key for the compact movie banner's poster image, under which
+/// `fetch_card_image`/`fetch_list_card_image_when_idle` store and look up the
+/// resized/encoded image state. Shared by the eager fetch in
+/// `compact_banner_layout` and the prefetch loop in `list.rs`'s
+/// `render_power_list` (#287) so the two can never format the key
+/// differently and silently miss each other's cache entries.
+pub(super) fn compact_banner_image_cache_key(item_id: &str) -> String {
+    format!("{item_id}:cmp_primary")
+}
+
 /// Everything content-dependent about the compact movie-detail banner: the
 /// meta line, the "Playing" indicator, and the overview + director text
 /// wrapped to the banner's actual panel width. Computed once by
@@ -88,7 +98,7 @@ impl App {
     ) -> CompactBannerLayout {
         let inner_w = (panel_width as usize).saturating_sub(2);
 
-        let primary_cache_key = format!("{}:cmp_primary", item.id);
+        let primary_cache_key = compact_banner_image_cache_key(&item.id);
         if self.images_enabled() {
             self.fetch_card_image(
                 primary_cache_key.clone(),
@@ -356,7 +366,7 @@ impl App {
         }
 
         if img_height > 0 {
-            let primary_cache_key = format!("{}:cmp_primary", item.id);
+            let primary_cache_key = compact_banner_image_cache_key(&item.id);
             if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
                 type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
                 f.render_stateful_widget(
