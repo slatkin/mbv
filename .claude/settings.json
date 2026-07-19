@@ -15,10 +15,13 @@
       "Bash(find *)",
       "Bash(gh repo *)",
       "Bash(git fetch)",
+      "Bash(gh pr *)",
+      "Bash(cargo clippy *)",
       "mcp__serena__find_symbol",
       "mcp__serena__read_memory",
       "mcp__serena__get_symbols_overview",
-      "mcp__serena__initial_instructions"
+      "mcp__serena__initial_instructions",
+      "mcp__serena__find_referencing_symbols"
     ]
   },
   "enabledPlugins": {
