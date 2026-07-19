@@ -113,39 +113,50 @@ impl App {
             );
         }
 
-        // True while the raw image fetch itself is in flight (before it
-        // lands in `card_image_states`, success or failure). Used below to
-        // reserve a placeholder box the same size as the eventual image
-        // instead of collapsing text to full width and then narrowing it
-        // once the image arrives -- mirrors the pattern already used by the
-        // episode banner's series-image placeholder (episode.rs).
-        let img_loading =
-            self.images_enabled() && self.card_image_loading.contains(&primary_cache_key);
+        // `list_image_renders_allowed()` (the 150ms nav-idle debounce) exists
+        // to stop the *real* poster from flickering in and out while rapidly
+        // scrolling through many different movies -- it must keep gating
+        // which image is actually substituted in. But the placeholder box's
+        // size is fixed (IMG_COLS x IMG_ROWS) regardless of which movie is
+        // selected, so reserving it doesn't cause that flicker; gating the
+        // reservation itself only desynced the poster's placeholder from the
+        // rest of the banner's content (meta line, overview), which renders
+        // at its final layout immediately, on the very first frame. So the
+        // placeholder is reserved unconditionally here whenever a real image
+        // isn't yet ready to show, and only the "is it the real image or the
+        // placeholder" choice below still depends on the nav-idle gate.
+        let nav_gate_open = self.list_image_renders_allowed();
 
-        let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
-            if self.list_image_renders_allowed() {
-                if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
-                    // `size_for` is `None` while resize+encode is in-flight on
-                    // the worker thread; treat that the same as still loading.
-                    match state.size_for(
-                        ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
-                        ratatui::layout::Size {
-                            width: IMG_COLS,
-                            height: IMG_ROWS,
-                        },
-                    ) {
-                        Some(actual) => (actual.width, actual.height, false),
-                        None => (IMG_COLS, IMG_ROWS, true),
-                    }
-                } else if img_loading {
-                    (IMG_COLS, IMG_ROWS, true)
-                } else {
-                    (0, 0, false)
-                }
-            } else {
+        let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) =
+            if !self.images_enabled() {
                 (0, 0, false)
-            }
-        };
+            } else {
+                match self.card_image_states.get_mut(&primary_cache_key) {
+                    // Fetch resolved with no image for this movie -- nothing to
+                    // reserve space for.
+                    Some(None) => (0, 0, false),
+                    // Fetch resolved with a real image, and the nav-idle gate is
+                    // open: show it (or, if resize+encode is still running on
+                    // the worker thread -- `size_for` is `None` -- keep showing
+                    // the placeholder a beat longer).
+                    Some(Some(state)) if nav_gate_open => {
+                        match state.size_for(
+                            ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
+                            ratatui::layout::Size {
+                                width: IMG_COLS,
+                                height: IMG_ROWS,
+                            },
+                        ) {
+                            Some(actual) => (actual.width, actual.height, false),
+                            None => (IMG_COLS, IMG_ROWS, true),
+                        }
+                    }
+                    // Either the fetch is still in flight (no entry yet), or a
+                    // real image already resolved but the nav-idle gate hasn't
+                    // opened yet -- either way, reserve the placeholder now.
+                    _ => (IMG_COLS, IMG_ROWS, true),
+                }
+            };
 
         let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
 
@@ -633,6 +644,39 @@ mod tests {
             layout.inline_image_rect.map(|r| (r.width, r.height)),
             Some((18, 12)),
             "expected the placeholder to reserve the banner's IMG_COLS x IMG_ROWS box:\n{out}"
+        );
+    }
+
+    // The rest of the banner's content (meta line, overview text) is never
+    // gated on `last_nav_at` -- it renders at its final layout on the very
+    // first frame after navigating to a movie. The poster placeholder must
+    // match that: reserved on the same first frame, not held back until
+    // `list_image_renders_allowed()`'s 150ms nav-idle window has passed.
+    // Gating the placeholder behind that timer (inherited from the timer's
+    // original purpose -- avoiding real-image flicker while rapidly
+    // scrolling through many different posters) produced a small but real
+    // desync where the description text appeared immediately but the grey
+    // box visibly lagged behind it by a beat.
+    #[test]
+    fn compact_movie_detail_reserves_placeholder_space_even_during_the_nav_idle_window() {
+        let mut app = make_app_stub();
+        app.image_protocol_enabled = true;
+        // Simulate having just navigated: the nav-idle gate is still closed.
+        app.last_nav_at = std::time::Instant::now();
+
+        let mut movie = make_item("Focused Movie", "Movie");
+        movie.id = "movie-1".into();
+        movie.overview = "A short overview.".into();
+        push_movie_lib(&mut app, movie);
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_compact_detail_to_string(&mut app, &mut layout);
+
+        assert_eq!(
+            layout.inline_image_rect.map(|r| (r.width, r.height)),
+            Some((18, 12)),
+            "expected the placeholder to be reserved on the same frame as the rest of \
+             the banner's content, even while the nav-idle gate is still closed:\n{out}"
         );
     }
 
