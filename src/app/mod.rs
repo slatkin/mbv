@@ -900,11 +900,6 @@ struct LibraryTab {
     nav_stack: Vec<BrowseLevel>,
     search: Option<LibSearch>,
     feed_home_video: Option<FeedHomeVideoState>,
-    /// Scroll offset into the compact movie-detail banner's overview/director
-    /// lines (`render_power_compact_detail`). Previously also drove the
-    /// Alt+M full-screen detail view, removed in #204 -- the banner is now
-    /// the only movie-detail surface.
-    power_detail_scroll: usize,
     /// `Some(idx)` = track-selection mode is active for the album currently
     /// shown inline at the album-folder-listing nav level (#145 task 3);
     /// `idx` indexes into that album's cached track list
@@ -944,7 +939,6 @@ impl LibraryTab {
     ) {
         self.nav_stack = nav_stack;
         self.search = None;
-        self.power_detail_scroll = 0;
         self.clear_power_music_focus();
         if let Some(state) = self.feed_home_video.as_mut() {
             state.selected_group = position.feed_selected_group;
@@ -1035,7 +1029,7 @@ pub struct App {
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
     // Power-view UI scalars. NOTE: this is NOT the whole of Power's state — Power also reuses
-    // shared self.libs and self.queue_group, and per-library LibraryTab::power_detail_scroll.
+    // shared self.libs and self.queue_group.
     // All runtime mode transitions go through set_view_mode().
     view_mode: ViewMode,
     /// The Standard `tab_idx` to return to when leaving Power (set by
@@ -1767,13 +1761,7 @@ impl App {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            layout: layout::AppLayout {
-                power: layout::LayoutPower {
-                    detail_page_h: 5,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
+            layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,
 
@@ -4452,7 +4440,6 @@ pub(crate) mod tests {
                 video_scroll: 3,
                 ..Default::default()
             }),
-            power_detail_scroll: 9,
             album_track_focus: Some(1),
             artist_header_focus: None,
         };
@@ -4676,7 +4663,6 @@ pub(crate) mod tests {
                 loading: false,
             }),
             feed_home_video: Some(FeedHomeVideoState::default()),
-            power_detail_scroll: 9,
             album_track_focus: Some(2),
             artist_header_focus: None,
         };
@@ -4707,7 +4693,6 @@ pub(crate) mod tests {
 
         assert_eq!(lib.nav_stack.len(), 1);
         assert!(lib.search.is_none());
-        assert_eq!(lib.power_detail_scroll, 0);
         assert!(lib.album_track_focus.is_none());
         let feed = lib.feed_home_video.as_ref().unwrap();
         assert_eq!(feed.selected_group, 3);
@@ -4738,7 +4723,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -4789,7 +4773,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -4837,7 +4820,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -4890,7 +4872,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -4930,7 +4911,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -4973,7 +4953,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5035,7 +5014,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5085,7 +5063,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5144,7 +5121,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5246,7 +5222,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5338,7 +5313,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 3,
             album_track_focus: Some(0),
             artist_header_focus: None,
         });
@@ -5413,7 +5387,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5472,7 +5445,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5621,7 +5593,6 @@ pub(crate) mod tests {
                 loading: false,
             }),
             feed_home_video: None,
-            power_detail_scroll: 4,
             album_track_focus: Some(0),
             artist_header_focus: None,
         });
@@ -5708,7 +5679,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5780,7 +5750,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5854,7 +5823,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5944,7 +5912,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -6019,7 +5986,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -6097,7 +6063,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -6241,13 +6206,7 @@ pub(crate) mod tests {
             libs: Vec::new(),
             status: String::new(),
             status_expires: None,
-            layout: layout::AppLayout {
-                power: layout::LayoutPower {
-                    detail_page_h: 5,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
+            layout: layout::AppLayout::default(),
             terminal_width: 80,
             terminal_height: 24,
 
@@ -7642,7 +7601,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -7687,7 +7645,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -7720,7 +7677,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -7749,7 +7705,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -7806,7 +7761,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -7867,7 +7821,6 @@ pub(crate) mod tests {
                 loading: true,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -7933,7 +7886,6 @@ pub(crate) mod tests {
                 loading: false,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -7984,7 +7936,6 @@ pub(crate) mod tests {
                 loading: false,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8033,7 +7984,6 @@ pub(crate) mod tests {
                 loading: true,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8122,7 +8072,6 @@ pub(crate) mod tests {
                 loading: false,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8182,7 +8131,6 @@ pub(crate) mod tests {
                 selected_group: 1,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8257,7 +8205,6 @@ pub(crate) mod tests {
                 loading: false,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8333,7 +8280,6 @@ pub(crate) mod tests {
                 selected_group: 1,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8396,7 +8342,6 @@ pub(crate) mod tests {
                 selected_group: 1,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8446,7 +8391,6 @@ pub(crate) mod tests {
                 loading: true,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8574,7 +8518,6 @@ pub(crate) mod tests {
                 selected_group: 5,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8638,7 +8581,6 @@ pub(crate) mod tests {
                 selected_group: 1,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8667,7 +8609,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8688,7 +8629,6 @@ pub(crate) mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8728,7 +8668,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8776,7 +8715,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8822,7 +8760,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8888,7 +8825,6 @@ pub(crate) mod tests {
                 selected_group: 1,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -8991,7 +8927,6 @@ pub(crate) mod tests {
                 selected_group: 0,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -9066,7 +9001,6 @@ pub(crate) mod tests {
                 loading: false,
                 ..FeedHomeVideoState::default()
             }),
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -9123,7 +9057,6 @@ pub(crate) mod tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,

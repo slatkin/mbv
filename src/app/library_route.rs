@@ -294,7 +294,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -314,7 +313,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -334,7 +332,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -362,7 +359,6 @@ mod tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: Default::default(),
             album_track_focus: None,
             artist_header_focus: None,
         });

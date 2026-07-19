@@ -1442,50 +1442,6 @@ impl App {
             if self.power_left_tab > 0 {
                 let lib_idx = self.power_left_tab - 1;
 
-                // Compact movie-detail banner scrolling (#204): when the
-                // currently selected movie's banner has overflowing overview
-                // or director text (`detail_max_scroll > 0`, set each frame
-                // by `render_power_compact_detail`), Up/Down/PageUp/PageDown
-                // scroll the banner instead of moving the list cursor -- but
-                // only up to the scroll boundary. Once the banner is at the
-                // top or bottom of its content, the same key falls through
-                // to normal list navigation instead of being swallowed, so a
-                // long description never traps the list cursor in place.
-                if self.layout.power.detail_max_scroll > 0 {
-                    match key.code {
-                        KeyCode::Up if self.libs[lib_idx].power_detail_scroll > 0 => {
-                            self.libs[lib_idx].power_detail_scroll -= 1;
-                            return false;
-                        }
-                        KeyCode::Down
-                            if self.libs[lib_idx].power_detail_scroll
-                                < self.layout.power.detail_max_scroll =>
-                        {
-                            self.libs[lib_idx].power_detail_scroll =
-                                (self.libs[lib_idx].power_detail_scroll + 1)
-                                    .min(self.layout.power.detail_max_scroll);
-                            return false;
-                        }
-                        KeyCode::PageUp if self.libs[lib_idx].power_detail_scroll > 0 => {
-                            self.libs[lib_idx].power_detail_scroll = self.libs[lib_idx]
-                                .power_detail_scroll
-                                .saturating_sub(self.layout.power.detail_page_h);
-                            return false;
-                        }
-                        KeyCode::PageDown
-                            if self.libs[lib_idx].power_detail_scroll
-                                < self.layout.power.detail_max_scroll =>
-                        {
-                            self.libs[lib_idx].power_detail_scroll = (self.libs[lib_idx]
-                                .power_detail_scroll
-                                + self.layout.power.detail_page_h)
-                                .min(self.layout.power.detail_max_scroll);
-                            return false;
-                        }
-                        _ => {}
-                    }
-                }
-
                 // Season switching: [ = previous season, ] = next season.
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT)
@@ -3601,7 +3557,6 @@ mod power_movie_detail_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -3637,7 +3592,6 @@ mod power_movie_detail_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -3680,31 +3634,23 @@ mod power_movie_detail_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::ALT));
 
         assert!(!handled);
-        assert_eq!(app.libs[0].power_detail_scroll, 0);
     }
 
-    // #204 review fix: moving the list cursor to a different movie must not
-    // carry over the previous movie's compact-banner scroll position — the
-    // newly-selected movie's banner should always open at the top.
+    // #263: the compact movie-detail banner's old fixed-height-with-scroll
+    // behavior (and the Up/Down/PageUp/PageDown banner-scroll key handling
+    // that came with it) was removed -- these keys must always move the
+    // list cursor, regardless of the selected movie's banner content, never
+    // get intercepted to scroll the banner instead.
     #[test]
-    fn moving_to_a_different_movie_resets_compact_banner_scroll() {
+    fn down_always_moves_the_list_cursor_never_scrolls_the_banner() {
         let mut app = make_power_movie_app();
-        app.libs[0].power_detail_scroll = 5;
 
-        // `layout.power.detail_max_scroll` defaults to 0 (no render has run),
-        // so this Down press isn't claimed by the compact-banner scroll gate
-        // and falls straight through to normal list-cursor navigation, same
-        // as it would for a movie whose banner genuinely has no overflow.
         let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
         assert!(!handled);
         assert_eq!(
             app.libs[0].nav_stack[0].cursor, 1,
-            "sanity check: cursor should have moved to the second movie"
-        );
-        assert_eq!(
-            app.libs[0].power_detail_scroll, 0,
-            "scroll offset should reset when the selected movie changes"
+            "Down should move the list cursor to the second movie"
         );
     }
 
@@ -3895,7 +3841,6 @@ mod power_movie_detail_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -3943,7 +3888,6 @@ mod power_movie_detail_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
 
             album_track_focus: None,
             artist_header_focus: None,
@@ -4236,7 +4180,6 @@ mod power_music_track_focus_tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -4332,7 +4275,6 @@ mod power_music_track_focus_tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5418,7 +5360,6 @@ mod power_music_track_focus_tests {
             ],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5481,7 +5422,6 @@ mod power_library_scope_routing_tests {
             }],
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
@@ -5620,7 +5560,6 @@ mod power_library_scope_routing_tests {
                 }],
                 search: None,
                 feed_home_video: None,
-                power_detail_scroll: 0,
                 album_track_focus: None,
                 artist_header_focus: None,
             });
@@ -5865,7 +5804,6 @@ mod power_library_scope_routing_tests {
             nav_stack: Vec::new(),
             search: None,
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });

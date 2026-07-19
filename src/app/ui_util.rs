@@ -96,9 +96,10 @@ pub fn trunc_overview(s: &str) -> String {
 }
 
 /// URL-stripped, trimmed overview text with no length cap. Used by the power
-/// view's compact movie-detail banner, which scrolls instead of truncating
-/// (#204) -- unlike `trunc_overview`, still used by the legacy library table
-/// row and the power-view home-video list, which have no scrolling surface.
+/// view's compact movie-detail banner, which grows to fit its full content
+/// instead of truncating (#204, #263) -- unlike `trunc_overview`, still used
+/// by the legacy library table row and the power-view home-video list, which
+/// render through a fixed-height surface.
 pub fn clean_overview(s: &str) -> String {
     regex_strip_urls(s).trim().to_string()
 }

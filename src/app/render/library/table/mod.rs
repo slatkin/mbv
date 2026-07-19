@@ -208,7 +208,6 @@ mod tests {
                 loading: true,
             }),
             feed_home_video: None,
-            power_detail_scroll: 0,
             album_track_focus: None,
             artist_header_focus: None,
         });
