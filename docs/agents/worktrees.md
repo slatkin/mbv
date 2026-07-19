@@ -114,7 +114,24 @@ Per Serena's own docs, `--context=claude-code` is a "single-project context,"
 and once a project is provided at startup (`--project-from-cwd` counts),
 Serena's `activate_project` tool — which would otherwise allow mid-session
 project switching — is deliberately disabled for the session's lifetime. This
-is intentional Serena behavior for this context, not a bug.
+much *is* documented Serena behavior for this context, not a bug
+(`02-usage/050_configuration.html`'s "contexts" section: single-project
+contexts disable `activate_project` "since changing the active project
+ceases to be a relevant operation in this case").
+
+**What is not documented anywhere in Serena's docs is the specific failure
+mode this section exists to prevent:** an already-running MCP server whose
+*client* redirects its own working directory mid-session (e.g. via
+`EnterWorktree`) without restarting the server. Checked the workflow,
+additional-usage, and configuration pages, and the site's top-level nav —
+there is no troubleshooting/FAQ page, no mention of multiple simultaneous
+Serena instances, no guidance on restarting/reconnecting to pick up a new
+directory, and no discussion of what happens to in-flight tool calls when
+the client's cwd and the server's cwd disagree. The silent-wrong-file-edit
+behavior described below (mbv issue #260 / PR #265) was found by direct
+testing in this repo, not by reading published guidance — treat it as
+empirically confirmed for this Serena version/config, not as a stated
+guarantee that will necessarily hold across Serena updates.
 
 **The actual fix is to do worktree work from a separate Claude Code session
 whose own cwd is the worktree from the start** — a fresh `claude` process
