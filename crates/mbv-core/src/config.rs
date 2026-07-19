@@ -191,6 +191,20 @@ pub fn default_daemon_server_tcp_listen() -> String {
 }
 
 fn config_dir() -> PathBuf {
+    // See `TEST_CONFIG_DIR_OVERRIDE` / `TestStateDirGuard`: without this,
+    // `config_dir()` (and therefore `config_path()`/`save_config_settings`)
+    // had no test isolation at all -- unlike `state_dir()`, *every* call in
+    // a test build hit the real `$XDG_CONFIG_HOME`/`~/.config/mbv` on disk.
+    // Any App-level test that reached a synchronous config-saving path
+    // (e.g. `set_view_mode`, `cycle_subtitle_mode`, closing a multiselect
+    // settings popup) would silently clobber the developer's real
+    // config.toml. `TestStateDirGuard` already attaches to every `App`
+    // built in test mode, so piggybacking the override there closes this
+    // for the whole suite at once.
+    #[cfg(any(test, feature = "test-support"))]
+    if let Some(dir) = TEST_CONFIG_DIR_OVERRIDE.with(|c| c.borrow().clone()) {
+        return dir;
+    }
     if is_system_instance() {
         return PathBuf::from("/etc/mbv");
     }
@@ -238,6 +252,21 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
+// `config_dir()` (config.toml, via `save_config_settings`) gets the exact
+// same treatment as `state_dir()` above, for the exact same reason: some
+// App-level settings toggles (`set_view_mode`, `cycle_subtitle_mode`,
+// closing a multiselect settings popup) write to disk synchronously rather
+// than through the debounced `settings_save_at` path, so any unguarded test
+// that reaches one of them writes straight into the developer's real
+// config.toml. `TestStateDirGuard` sets this override alongside its own so
+// every test that already uses it (including, automatically, every `App`
+// built in a test binary via `_test_state_dir_guard`) gets both for free.
+#[cfg(any(test, feature = "test-support"))]
+thread_local! {
+    static TEST_CONFIG_DIR_OVERRIDE: std::cell::RefCell<Option<PathBuf>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 #[cfg(test)]
 static TEST_DEFAULT_STATE_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
@@ -257,11 +286,15 @@ impl TestStateDirGuard {
         Self::new_at(dir)
     }
 
-    /// Points `state_dir()` at `dir` for the lifetime of this guard.
+    /// Points `state_dir()` (and `config_dir()`) at `dir` for the lifetime
+    /// of this guard. Both point at the same directory -- their file names
+    /// never collide (`config.toml` vs. `prefs.json`/`token.json`/
+    /// `queue_state.json`) -- so one guard, one tempdir, one cleanup.
     pub fn new_at(dir: impl Into<PathBuf>) -> Self {
         let dir = dir.into();
         let _ = std::fs::create_dir_all(&dir);
-        TEST_STATE_DIR_OVERRIDE.with(|c| *c.borrow_mut() = Some(dir));
+        TEST_STATE_DIR_OVERRIDE.with(|c| *c.borrow_mut() = Some(dir.clone()));
+        TEST_CONFIG_DIR_OVERRIDE.with(|c| *c.borrow_mut() = Some(dir));
         TestStateDirGuard
     }
 
@@ -287,7 +320,13 @@ impl Default for TestStateDirGuard {
 #[cfg(any(test, feature = "test-support"))]
 impl Drop for TestStateDirGuard {
     fn drop(&mut self) {
+        // Both overrides point at the same physical directory (see
+        // `new_at`) and are always set/cleared together, so only one
+        // `take()` needs to delete the directory -- but both thread-locals
+        // must be cleared regardless, or the config override would keep
+        // pointing at a directory this guard is about to delete.
         let dir = TEST_STATE_DIR_OVERRIDE.with(|c| c.borrow_mut().take());
+        TEST_CONFIG_DIR_OVERRIDE.with(|c| c.borrow_mut().take());
         if let Some(dir) = dir {
             let _ = std::fs::remove_dir_all(&dir);
         }
