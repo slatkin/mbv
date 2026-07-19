@@ -3029,6 +3029,27 @@ impl App {
             && (had_events || self.force_clear || last_render.elapsed() >= render_interval)
     }
 
+    /// How often the run loop should repaint while otherwise idle (no key
+    /// events, no completed fetches to react to). Fast (150 ms) whenever
+    /// something is visibly in motion -- active local/remote playback, or a
+    /// card image fetch in flight -- so states that only resolve with the
+    /// passage of time (like a loading placeholder swapping in once its box
+    /// should be reserved) actually get painted instead of being skipped
+    /// between "just started" and "just finished" with nothing in between.
+    /// Falls back to a slow 1 s cadence when nothing is changing, to avoid
+    /// spinning the terminal for no reason.
+    fn render_interval(&self) -> Duration {
+        let playback = self.effective_playback_state();
+        if playback.active
+            || self.connected_session_state.is_some()
+            || !self.card_image_loading.is_empty()
+        {
+            Duration::from_millis(150)
+        } else {
+            Duration::from_secs(1)
+        }
+    }
+
     pub fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let mut terminal = init_terminal()?;
         terminal.clear()?;
@@ -3591,18 +3612,8 @@ impl App {
 
             self.sync_volume_from_player();
 
-            // Keep active playback/progress responsive at ~150 ms whenever a
-            // local player is active or a remote session is connected; fall
-            // back to 1 s when fully idle. Remote queue views need the fast
-            // cadence even if the active item match is temporarily unavailable.
-            let render_interval = {
-                let playback = self.effective_playback_state();
-                if playback.active || self.connected_session_state.is_some() {
-                    Duration::from_millis(150)
-                } else {
-                    Duration::from_secs(1)
-                }
-            };
+            // See `render_interval`'s doc comment for the fast/slow cadence rules.
+            let render_interval = self.render_interval();
             if self.wants_terminal_render(had_events, last_render, render_interval) {
                 if self.force_clear {
                     self.force_clear = false;
@@ -6662,6 +6673,30 @@ pub(crate) mod tests {
         app.attached = false;
         let recent = Instant::now();
         assert!(!app.wants_terminal_render(false, recent, Duration::from_secs(1)));
+    }
+
+    // A compact-banner poster fetch (or any list-image prefetch) can easily
+    // outlast the idle render cadence: with nothing playing and no remote
+    // session, the run loop only repaints once a second unless something
+    // sets `had_events` (a key/mouse event, or the fetch itself completing).
+    // That meant a loading placeholder was computed correctly by
+    // `compact_banner_layout` but never actually painted -- the only two
+    // frames drawn were "just navigated, fetch not even started yet" and
+    // "fetch just completed", with nothing in between showing the reserved
+    // placeholder box. Treating an in-flight image fetch the same as active
+    // playback (fast 150ms cadence instead of the 1s idle one) gives the
+    // loop a reason to repaint while the placeholder should be visible.
+    #[test]
+    fn render_interval_is_fast_while_a_card_image_fetch_is_in_flight() {
+        let mut app = make_app_stub();
+        app.card_image_loading.insert("movie-1:cmp_primary".into());
+        assert_eq!(app.render_interval(), Duration::from_millis(150));
+    }
+
+    #[test]
+    fn render_interval_is_slow_when_idle_with_no_fetches_in_flight() {
+        let app = make_app_stub();
+        assert_eq!(app.render_interval(), Duration::from_secs(1));
     }
 
     #[test]
