@@ -4,6 +4,7 @@ use crate::config::{Config, UiConfig};
 pub fn setting_label(key: SettingKey) -> &'static str {
     match key {
         SettingKey::StayAlive => "Stay alive on exit",
+        SettingKey::AutoReconnect => "Auto reconnect",
         SettingKey::SavePlaylistOnQuit => "Save playlist on quit",
         SettingKey::StartOnQueue => "Start on queue",
         SettingKey::AlwaysPlayNext => "Always play next",
@@ -35,6 +36,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
 pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
     match key {
         SettingKey::StayAlive => bool_val(cfg.stay_alive),
+        SettingKey::AutoReconnect => bool_val(cfg.auto_reconnect),
         SettingKey::SavePlaylistOnQuit => bool_val(cfg.save_playlist_on_quit),
         SettingKey::StartOnQueue => bool_val(cfg.start_on_queue),
         SettingKey::AlwaysPlayNext => bool_val(cfg.always_play_next),

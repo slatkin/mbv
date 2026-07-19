@@ -70,8 +70,7 @@ pub struct Config {
     /// never actually implemented). Client-side setting: deliberately
     /// under `[general]`, not `[daemon.client]`/`[daemon.server]`, since
     /// this is a routing/reconnect *preference*, not daemon configuration.
-    /// Default off; TOML-only for v1, no settings-panel write-back
-    /// (matching the `daemon_routes` precedent).
+    /// Default off; editable from config.toml or the F2 Settings panel.
     pub auto_reconnect: bool,
 }
 
@@ -978,6 +977,10 @@ pub fn save_config_settings(cfg: &Config) {
         toml::Value::Boolean(cfg.stay_alive),
     );
     general.insert(
+        "auto_reconnect".to_string(),
+        toml::Value::Boolean(cfg.auto_reconnect),
+    );
+    general.insert(
         "save_playlist_on_quit".to_string(),
         toml::Value::Boolean(cfg.save_playlist_on_quit),
     );
@@ -1442,6 +1445,64 @@ url = "http://x"
 "#;
         let cfg = parse_config(toml).unwrap();
         assert!(!cfg.auto_reconnect);
+    }
+
+    #[test]
+    fn save_config_settings_round_trips_auto_reconnect_true() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("mbv")).unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        std::env::remove_var("MBV_SYSTEM");
+
+        let cfg = Config {
+            server_url: "http://localhost:8096".into(),
+            auto_reconnect: true,
+            ..Default::default()
+        };
+        save_config_settings(&cfg);
+
+        let saved = std::fs::read_to_string(config_path()).unwrap();
+        let reparsed = parse_config(&saved).unwrap();
+        assert!(reparsed.auto_reconnect);
+
+        std::env::remove_var("XDG_CONFIG_HOME");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn save_config_settings_round_trips_auto_reconnect_false() {
+        let _g = SYS_ENV_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!(
+            "mbv-config-test-{}",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(dir.join("mbv")).unwrap();
+        std::env::set_var("XDG_CONFIG_HOME", &dir);
+        std::env::remove_var("MBV_SYSTEM");
+
+        let cfg = Config {
+            server_url: "http://localhost:8096".into(),
+            auto_reconnect: false,
+            ..Default::default()
+        };
+        save_config_settings(&cfg);
+
+        let saved = std::fs::read_to_string(config_path()).unwrap();
+        let reparsed = parse_config(&saved).unwrap();
+        assert!(!reparsed.auto_reconnect);
+
+        std::env::remove_var("XDG_CONFIG_HOME");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
