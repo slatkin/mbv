@@ -460,14 +460,14 @@ impl App {
             if lib_area.height > 0 {
                 let pills_area = Rect {
                     x: lib_area.x,
-                    y: lib_area.y + 1,
+                    y: lib_area.y,
                     width: lib_area.width,
                     height: 1,
                 };
                 self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
                 render_lib_area = Rect {
-                    y: lib_area.y + 2,
-                    height: lib_area.height.saturating_sub(2),
+                    y: lib_area.y + 1,
+                    height: lib_area.height.saturating_sub(1),
                     ..lib_area
                 };
             } else {
@@ -1027,19 +1027,14 @@ mod tests {
         let out = buffer_to_string(&term);
         let row0 = out.lines().next().unwrap();
         let row1 = out.lines().nth(1).unwrap();
-        let row2 = out.lines().nth(2).unwrap();
 
         assert!(
             !row0.contains("Alpha") && !row0.contains("Beta"),
             "expected group pills to move off the title row:\n{out}"
         );
         assert!(
-            !row1.contains("Alpha") && !row1.contains("Beta"),
-            "expected a blank gap row between the title and the pills:\n{out}"
-        );
-        assert!(
-            row2.contains("Alpha") && row2.contains("Beta"),
-            "expected group pills two rows below the title:\n{out}"
+            row1.contains("Alpha") && row1.contains("Beta"),
+            "expected group pills on the row below the title:\n{out}"
         );
 
         let rchar_x = |line: &str, needle: &str| -> u16 {
@@ -1077,31 +1072,31 @@ mod tests {
             "expected a plain dash rule over the left column on the title row:\n{out}"
         );
         assert!(
-            row2.chars().take(right_col_x as usize).all(|c| c == ' '),
+            row1.chars().take(right_col_x as usize).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
-        let alpha_x = char_x(row2, "Alpha");
+        let alpha_x = char_x(row1, "Alpha");
         assert!(
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 2)].bg, palette::FOAM);
+        assert_eq!(buf[(alpha_x, 1)].bg, palette::FOAM);
         assert_eq!(
-            buf[(alpha_x, 2)].fg,
+            buf[(alpha_x, 1)].fg,
             palette::YELLOW,
             "expected the selected group pill to use yellow text"
         );
-        let beta_x = char_x(row2, "Beta");
-        assert_eq!(buf[(beta_x, 2)].bg, palette::FOAM);
+        let beta_x = char_x(row1, "Beta");
+        assert_eq!(buf[(beta_x, 1)].bg, palette::FOAM);
         assert_eq!(
-            buf[(beta_x, 2)].fg,
+            buf[(beta_x, 1)].fg,
             palette::BASE,
             "expected a non-selected group pill to stay blue with base text"
         );
 
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));
-        let between: String = row2
+        let between: String = row1
             .chars()
             .skip(gap_start as usize)
             .take((gap_end - gap_start) as usize)
@@ -1113,16 +1108,16 @@ mod tests {
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 2, "expected selector hitboxes on the pills row");
+            assert_eq!(rect.y, 1, "expected selector hitboxes on the pills row");
             assert!(
                 rect.x >= right_col_x,
                 "expected selector hitboxes confined to the right column"
             );
         }
 
-        let row3 = out.lines().nth(3).unwrap();
+        let row2 = out.lines().nth(2).unwrap();
         assert!(
-            row3.contains("Alpha") || row3.contains("First Album"),
+            row2.contains("Alpha") || row2.contains("First Album"),
             "expected album list content to start below the separate pill row:\n{out}"
         );
     }
@@ -1143,14 +1138,9 @@ mod tests {
         let out = buffer_to_string(&term);
         let row0 = out.lines().next().unwrap();
         let row1 = out.lines().nth(1).unwrap();
-        let row2 = out.lines().nth(2).unwrap();
 
         assert!(
-            !row1.contains('\u{203a}'),
-            "expected a blank gap row between the title and the pills:\n{out}"
-        );
-        assert!(
-            row2.contains('\u{203a}'),
+            row1.contains('\u{203a}'),
             "expected a right scroll indicator on the pills row:\n{out}"
         );
         assert!(
@@ -1168,7 +1158,7 @@ mod tests {
             music_x + "Music".len() as u16 + 1 >= width,
             "expected the Music marker to remain pinned to the far right:\n{out}"
         );
-        let right_indicator_x = rchar_x(row2, "\u{203a}");
+        let right_indicator_x = rchar_x(row1, "\u{203a}");
         assert!(
             right_indicator_x < width,
             "expected the right scroll indicator to stay inside the pill row:\n{out}"
@@ -1180,13 +1170,13 @@ mod tests {
             "expected a plain dash rule over the left column on the title row:\n{out}"
         );
         assert!(
-            row2.chars().take(right_col_x).all(|c| c == ' '),
+            row1.chars().take(right_col_x).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 2, "expected pill hitboxes on the pills row");
+            assert_eq!(rect.y, 1, "expected pill hitboxes on the pills row");
             assert!(
                 rect.x as usize >= right_col_x,
                 "expected pill hitboxes confined to the right column"
