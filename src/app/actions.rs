@@ -20,6 +20,21 @@ type AlbumIndexFetch<'a> =
     dyn FnMut(&str, usize, usize) -> Result<(Vec<MediaItem>, usize), String> + 'a;
 const ALBUM_INDEX_PAGE_SIZE: usize = 200;
 
+// #286: `App::ring_terminal_bell()` writes to a thread-local buffer instead
+// of real stderr in test builds, so tests never touch the process-wide
+// STDERR_FILENO fd. The test that verifies the bell rings used to redirect
+// that fd directly via `libc::dup2`, which raced against *any other test*
+// ringing the bell concurrently on a different thread (e.g. one that calls
+// `flash_status`/`flash_status_high`, both of which also ring the bell) and
+// produced flaky doubled "\x07\x07" captures. `cargo test` runs each test
+// on its own OS thread, so a thread-local is naturally isolated per test
+// with no locking required -- this removes the race at its root instead of
+// serializing around it.
+#[cfg(test)]
+thread_local! {
+    static TEST_BELL_LOG: std::cell::RefCell<Vec<u8>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 fn enqueue_action_context(item_id: &str, item_name: &str, source: &str, bypass: bool) -> String {
     let mut context =
         format!("user action=enqueue item_id={item_id:?} item_name={item_name:?} source={source}");
@@ -2175,12 +2190,20 @@ impl App {
         }
     }
 
+    #[cfg(not(test))]
     fn ring_terminal_bell() {
         use std::io::Write;
 
         let mut stderr = std::io::stderr();
         let _ = stderr.write_all(b"\x07");
         let _ = stderr.flush();
+    }
+
+    // See the `TEST_BELL_LOG` doc comment above for why test builds don't
+    // touch real stderr here.
+    #[cfg(test)]
+    fn ring_terminal_bell() {
+        TEST_BELL_LOG.with(|log| log.borrow_mut().push(b'\x07'));
     }
 
     pub(super) fn notify_with_actions(&self, title: &str, body: &str, actions: &[(&str, &str)]) {
@@ -5960,8 +5983,6 @@ mod tests {
     use crate::app::tests::{make_app_stub, make_item, make_items};
     use crate::app::{AlbumIndexState, LibraryTab};
     use mbv_core::player::PlayerEvent;
-    use std::io::Read;
-    use std::os::fd::{FromRawFd, IntoRawFd};
     use std::sync::mpsc;
 
     fn folder(id: &str, name: &str) -> MediaItem {
@@ -7248,42 +7269,21 @@ mod tests {
         );
     }
 
+    // #286: this used to redirect the process-wide STDERR_FILENO fd to
+    // capture the bell byte, which raced against any other test ringing the
+    // bell concurrently on a different thread (flash_status/flash_status_high
+    // also ring it) and produced flaky doubled "\x07\x07" captures. Reading
+    // `TEST_BELL_LOG` (thread-local, cleared per test thread) instead avoids
+    // touching real stderr at all, so there's nothing left to race against.
     #[test]
     fn notify_with_actions_rings_terminal_bell_even_without_system_notifications() {
-        fn capture_stderr<F: FnOnce()>(f: F) -> String {
-            use std::io::Write;
-
-            let (read_fd, write_fd) = nix::unistd::pipe().unwrap();
-            let read_fd = read_fd.into_raw_fd();
-            let write_fd = write_fd.into_raw_fd();
-            let saved_fd = unsafe { libc::dup(libc::STDERR_FILENO) };
-            assert!(saved_fd >= 0);
-
-            unsafe {
-                libc::dup2(write_fd, libc::STDERR_FILENO);
-            }
-            let _ = unsafe { libc::close(write_fd) };
-
-            f();
-            let _ = std::io::stderr().flush();
-
-            unsafe {
-                libc::dup2(saved_fd, libc::STDERR_FILENO);
-                libc::close(saved_fd);
-            }
-
-            let mut reader = unsafe { std::fs::File::from_raw_fd(read_fd) };
-            let mut output = String::new();
-            reader.read_to_string(&mut output).unwrap();
-            output
-        }
+        TEST_BELL_LOG.with(|log| log.borrow_mut().clear());
 
         let app = crate::app::tests::make_app_stub();
-        let output = capture_stderr(|| {
-            app.notify_with_actions("mbv", "Next up?", &[("next_up:play", "Play Now")]);
-        });
+        app.notify_with_actions("mbv", "Next up?", &[("next_up:play", "Play Now")]);
 
-        assert_eq!(output, "\x07");
+        let rung = TEST_BELL_LOG.with(|log| log.borrow().clone());
+        assert_eq!(rung, b"\x07");
     }
 
     #[test]
