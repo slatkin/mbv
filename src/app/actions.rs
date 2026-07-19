@@ -3,7 +3,7 @@ use super::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, ArtistHeaderSelection, BrowseLevel,
     ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryPositionScope,
     LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
-    RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD, ViewMode,
+    RemotePlaybackTarget, SessionEvent, UndoEntry, ViewMode, PAGE_SIZE, PREFETCH_AHEAD,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::indicators::IndicatorData;
@@ -979,8 +979,7 @@ impl App {
 
         // In Power View with letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
-        if self.view_mode == ViewMode::Power && !self.layout.power.left_sorted_indices.is_empty()
-        {
+        if self.view_mode == ViewMode::Power && !self.layout.power.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.last().is_some();
             if needs_sorted {
@@ -1064,8 +1063,7 @@ impl App {
 
         // In Power View with letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
-        if self.view_mode == ViewMode::Power && !self.layout.power.left_sorted_indices.is_empty()
-        {
+        if self.view_mode == ViewMode::Power && !self.layout.power.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && !self.layout.power.left_sorted_indices.is_empty();
             if needs_sorted {

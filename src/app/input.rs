@@ -3266,9 +3266,7 @@ impl App {
                 }
 
                 // Power-view header breadcrumb clicks.
-                if self.tab_idx == 1
-                    && self.view_mode == ViewMode::Power
-                    && self.power_left_tab > 0
+                if self.tab_idx == 1 && self.view_mode == ViewMode::Power && self.power_left_tab > 0
                 {
                     let crumbs = self.layout.power.breadcrumbs.clone();
                     let lib_idx = self.power_left_tab - 1;
@@ -3559,9 +3557,7 @@ mod playback_header_mouse_tests {
 mod power_movie_detail_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{
-        BrowseLevel, LibraryTab, PowerFocus, POWER_LEFT_WIDTH_DEFAULT, ViewMode,
-    };
+    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, ViewMode, POWER_LEFT_WIDTH_DEFAULT};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
