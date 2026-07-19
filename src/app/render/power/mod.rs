@@ -460,14 +460,14 @@ impl App {
             if lib_area.height > 0 {
                 let pills_area = Rect {
                     x: lib_area.x,
-                    y: lib_area.y,
+                    y: lib_area.y + 1,
                     width: lib_area.width,
                     height: 1,
                 };
                 self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
                 render_lib_area = Rect {
-                    y: lib_area.y + 1,
-                    height: lib_area.height.saturating_sub(1),
+                    y: lib_area.y + 2,
+                    height: lib_area.height.saturating_sub(2),
                     ..lib_area
                 };
             } else {
