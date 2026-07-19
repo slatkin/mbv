@@ -1,4 +1,5 @@
 use super::super::super::ui_util::*;
+use super::detail::compact_banner_image_cache_key;
 use super::{effective_sort_str, letter_bucket};
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
@@ -134,6 +135,44 @@ impl App {
         // content-dependent height that was reserved for them above.
         let banner_content_rows: usize =
             banner_rows.saturating_sub(COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_GAP_ROWS);
+
+        // Pre-warm nearby movies' poster images so they're already cached by
+        // the time the cursor reaches them (#287) -- mirrors the prefetch
+        // window `render_power_card` already uses for the home-card
+        // carousel. Only applies when a movie banner is actually showing
+        // (i.e. this is a movies library with a leaf Movie selected); if
+        // there's no banner, there's nothing to prefetch for.
+        if self.power_left_tab > 0 {
+            let lib_idx = self.power_left_tab - 1;
+            if self.power_selected_movie_item(lib_idx).is_some() {
+                const PREFETCH_AHEAD: usize = 3;
+                const PREFETCH_BEHIND: usize = 1;
+                let start = cursor.saturating_sub(PREFETCH_BEHIND);
+                let end = (cursor + PREFETCH_AHEAD + 1).min(items.len());
+                let prefetch: Vec<(String, String, String)> = items[start..end]
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, item)| {
+                        start + i != cursor && item.item_type == "Movie" && !item.is_folder
+                    })
+                    .map(|(_, item)| {
+                        (
+                            compact_banner_image_cache_key(&item.id),
+                            item.id.clone(),
+                            item.series_id.clone(),
+                        )
+                    })
+                    .collect();
+                for (cache_key, item_id, series_id) in prefetch {
+                    self.fetch_list_card_image_when_idle(
+                        cache_key,
+                        item_id,
+                        series_id,
+                        &["Primary"],
+                    );
+                }
+            }
+        }
 
         // When at the album level of a music library, group albums under artist headers.
         let show_grouped = if self.power_left_tab > 0 {
@@ -854,6 +893,56 @@ mod tests {
         });
 
         app
+    }
+
+    // #287: nearby movies' poster images should be prefetched before the
+    // cursor reaches them, mirroring render_power_card's existing home-card
+    // -carousel prefetch window (PREFETCH_AHEAD = 3 / PREFETCH_BEHIND = 1).
+    #[test]
+    fn compact_banner_prefetches_nearby_movies_but_not_beyond_the_window() {
+        // 6 movies, cursor on item 0. PREFETCH_AHEAD = 3 / PREFETCH_BEHIND = 1
+        // means the window covers indices 0..=3 (cursor has no items behind
+        // it here, so PREFETCH_BEHIND has nothing to reach). Item 0 itself is
+        // excluded from the prefetch loop (it's covered by its own eager
+        // fetch), so movies 1-3 should be prefetched and movie 4 should not.
+        let titles: Vec<&str> = vec![
+            "Movie 0", "Movie 1", "Movie 2", "Movie 3", "Movie 4", "Movie 5",
+        ];
+        let mut app = make_power_movie_list_app(titles);
+        app.image_protocol_enabled = true;
+
+        let mut layout = LayoutPower::default();
+        let _ = render_power_list_to_string(&mut app, &mut layout);
+
+        let fetch_triggered = |app: &App, key: &str| {
+            app.card_image_loading.contains(key) || app.card_image_states.contains_key(key)
+        };
+
+        // The currently-selected item's own eager fetch (unchanged existing
+        // behavior, from compact_banner_layout).
+        let selected_key = compact_banner_image_cache_key("movie-0");
+        assert!(
+            fetch_triggered(&app, &selected_key),
+            "expected the selected movie's own image fetch to still be triggered"
+        );
+
+        // Prefetch window: movies 1-3 (within PREFETCH_AHEAD = 3) should be
+        // prefetched.
+        for i in 1..=3 {
+            let key = compact_banner_image_cache_key(&format!("movie-{i}"));
+            assert!(
+                fetch_triggered(&app, &key),
+                "expected movie-{i} to be prefetched (within the prefetch window)"
+            );
+        }
+
+        // Movie 4 sits just outside the PREFETCH_AHEAD = 3 window and should
+        // not be prefetched.
+        let outside_key = compact_banner_image_cache_key("movie-4");
+        assert!(
+            !fetch_triggered(&app, &outside_key),
+            "movie-4 is outside the prefetch window and should not have been fetched"
+        );
     }
 
     #[test]
