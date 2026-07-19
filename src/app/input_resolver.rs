@@ -629,7 +629,7 @@ mod app_level_tests {
     fn power_lib_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = crate::app::QUEUE_VIEW_POWER;
+        app.view_mode = crate::app::ViewMode::Power;
         app.power_focus = crate::app::PowerFocus::Left;
         app.power_left_tab = 1;
         app.libs.push(test_lib_with_search());

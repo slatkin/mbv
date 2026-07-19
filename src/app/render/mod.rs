@@ -101,7 +101,7 @@ impl App {
 
         let active = self.player.status.lock().unwrap().active;
         let show_controls = active || self.connected_session_id.is_some();
-        let in_power = self.tab_idx == 1 && self.queue_view == super::QUEUE_VIEW_POWER;
+        let in_power = self.view_mode == super::ViewMode::Power;
         // The 3-state panel toggle (`h`) only applies while something is playing/connected.
         let mode = self.panel_mode;
         let playing_panel = show_controls;
@@ -353,20 +353,28 @@ impl App {
             // The one-row now-playing header: "▶ Title │ time … badges".
             self.render_title_row(f, title_area, title, color, &mut layout.playback);
         }
-        if self.tab_idx == 0 {
-            self.render_combined(f, main_area, &mut layout.home);
-        } else if self.tab_idx == 1 && self.queue_view == super::QUEUE_VIEW_POWER {
-            self.render_power_view(f, main_area, &mut layout.power);
-        } else if self.tab_idx == 1 {
-            self.render_queue_panel(f, main_area, &mut layout.queue);
-        } else {
-            self.render_library(
-                f,
-                main_area,
-                self.tab_idx - self.lib_tab_offset(),
-                None,
-                &mut layout.library,
-            );
+        // Top-level render dispatch (issue #275): Power owns its own nav via
+        // `power_left_tab` and ignores `tab_idx` entirely; `tab_idx` is
+        // meaningful only in Standard mode.
+        match self.view_mode {
+            super::ViewMode::Power => {
+                self.render_power_view(f, main_area, &mut layout.power);
+            }
+            super::ViewMode::Standard => {
+                if self.tab_idx == 0 {
+                    self.render_combined(f, main_area, &mut layout.home);
+                } else if self.tab_idx == 1 {
+                    self.render_queue_panel(f, main_area, &mut layout.queue);
+                } else {
+                    self.render_library(
+                        f,
+                        main_area,
+                        self.tab_idx - self.lib_tab_offset(),
+                        None,
+                        &mut layout.library,
+                    );
+                }
+            }
         }
 
         self.render_context_menu(f, &mut layout);

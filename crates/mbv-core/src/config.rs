@@ -72,6 +72,10 @@ pub struct Config {
     /// this is a routing/reconnect *preference*, not daemon configuration.
     /// Default off; editable from config.toml or the F2 Settings panel.
     pub auto_reconnect: bool,
+    /// Top-level view mode ("standard" | "power"), replacing the old
+    /// `prefs.json["playlist_view"]` flag (issue #275). Read at startup and
+    /// written whenever the mode changes via `App::set_view_mode`.
+    pub view_mode: String,
 }
 
 pub const DEFAULT_SYSTEM_DAEMON_TCP_LISTEN: &str = "0.0.0.0:47788";
@@ -118,6 +122,7 @@ impl Default for Config {
             daemon_client_endpoint: String::new(),
             daemon_server_tcp_listen: String::new(),
             auto_reconnect: false,
+            view_mode: "standard".to_string(),
         }
     }
 }
@@ -762,6 +767,12 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let view_mode = queue
+        .and_then(|q| q.get("view_mode"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("standard")
+        .to_string();
+
     let save_playlist_on_quit = general
         .and_then(|m| m.get("save_playlist_on_quit"))
         .and_then(|v| v.as_bool())
@@ -925,6 +936,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         daemon_client_endpoint,
         daemon_server_tcp_listen,
         auto_reconnect,
+        view_mode,
     })
 }
 
@@ -1026,6 +1038,10 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
     }
 
     let queue = section!("queue");
+    queue.insert(
+        "view_mode".to_string(),
+        toml::Value::String(cfg.view_mode.clone()),
+    );
     queue.insert(
         "always_play_next".to_string(),
         toml::Value::Boolean(cfg.always_play_next),

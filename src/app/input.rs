@@ -8,7 +8,7 @@ use super::{
     SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
     POWER_LEFT_WIDTH_DEFAULT, POWER_LEFT_WIDTH_STEP, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
-use super::{PowerFocus, QUEUE_VIEW_COUNT, QUEUE_VIEW_POWER};
+use super::{PowerFocus, ViewMode};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
@@ -37,7 +37,7 @@ impl App {
 
     fn context_menu_power_lib_idx(&self) -> Option<usize> {
         if self.tab_idx == 1
-            && self.queue_view == QUEUE_VIEW_POWER
+            && self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab > 0
         {
@@ -149,7 +149,7 @@ impl App {
     }
 
     fn active_power_album_track_lib_idx(&self) -> Option<usize> {
-        if self.tab_idx != 1 || self.queue_view != QUEUE_VIEW_POWER || self.power_left_tab == 0 {
+        if self.view_mode != ViewMode::Power || self.power_left_tab == 0 {
             return None;
         }
         let lib_idx = self.power_left_tab - 1;
@@ -317,7 +317,7 @@ impl App {
     }
 
     pub(super) fn handle_key_power_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
-        if self.queue_view != QUEUE_VIEW_POWER
+        if self.view_mode != ViewMode::Power
             || key.modifiers.contains(KeyModifiers::ALT)
             || key.modifiers.contains(KeyModifiers::CONTROL)
             || self.context_menu_open()
@@ -389,7 +389,7 @@ impl App {
             let lib_idx = pending_lib_idx.unwrap_or_else(|| {
                 if self.tab_idx > 1 {
                     self.tab_idx - self.lib_tab_offset()
-                } else if self.queue_view == QUEUE_VIEW_POWER
+                } else if self.view_mode == ViewMode::Power
                     && matches!(self.power_focus, PowerFocus::Left)
                     && self.power_left_tab > 0
                 {
@@ -520,8 +520,8 @@ impl App {
 
     /// Global view keys shared by all three top-level view handlers
     /// (`handle_combined_key`, `handle_lib_key`, `handle_queue_key`): quit,
-    /// tab cycling (incl. the power-queue-view override, since `self.tab_idx`
-    /// and `self.queue_view` are read directly instead of being faked by the
+    /// tab cycling (incl. the Power-view override, since `self.tab_idx`
+    /// and `self.view_mode` are read directly instead of being faked by the
     /// caller), digit tab-jump, and the context-menu key. Each handler calls
     /// this at the point in its own precedence order where these keys used
     /// to be independently matched; genuinely per-view behavior (`/` search,
@@ -531,7 +531,7 @@ impl App {
         match key.code {
             KeyCode::Char('q') if key.modifiers.is_empty() => Some(self.try_quit()),
             KeyCode::Tab => {
-                if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
+                if self.view_mode == ViewMode::Power {
                     self.power_left_tab_next();
                 } else {
                     let n = (self.tab_idx + 1) % self.tab_count();
@@ -540,7 +540,7 @@ impl App {
                 Some(false)
             }
             KeyCode::BackTab => {
-                if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
+                if self.view_mode == ViewMode::Power {
                     self.power_left_tab_prev();
                 } else {
                     let n = self.tab_count();
@@ -1340,7 +1340,7 @@ impl App {
     }
 
     fn power_view_active(&self) -> bool {
-        self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER
+        self.view_mode == ViewMode::Power
     }
 
     fn handle_power_left_width_key(&mut self, key: KeyEvent) -> bool {
@@ -1393,7 +1393,7 @@ impl App {
 
         // In Power View, bare Left/Right switch focus between the two panels.
         // Queue is on the left; library is on the right.
-        if self.queue_view == QUEUE_VIEW_POWER && key.modifiers.is_empty() {
+        if self.view_mode == ViewMode::Power && key.modifiers.is_empty() {
             if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
                 self.set_power_focus(PowerFocus::Left);
                 self.last_card_height = 0; // reset stale image height for new view
@@ -1410,7 +1410,7 @@ impl App {
         // Local/Remote scope switching, while the left panel keeps its
         // section/season/group bracket actions.
         if self.tab_idx == 1
-            && self.queue_view == QUEUE_VIEW_POWER
+            && self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Queue)
         {
             match key.code {
@@ -1435,7 +1435,7 @@ impl App {
         }
 
         // In Power View, route nav keys to the focused library panel.
-        if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left) {
+        if self.view_mode == ViewMode::Power && matches!(self.power_focus, PowerFocus::Left) {
             if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
                 return false;
             }
@@ -1639,7 +1639,7 @@ impl App {
         }
 
         // Power view queue focus: PageUp/PageDown use the actual queue panel height.
-        if self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Queue) {
+        if self.view_mode == ViewMode::Power && matches!(self.power_focus, PowerFocus::Queue) {
             let page = self.layout.power.queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
                 KeyCode::PageUp => {
@@ -1660,7 +1660,7 @@ impl App {
         }
 
         // Non-power queue view: scope switching via [ / ].
-        if self.tab_idx == 1 && self.queue_view != QUEUE_VIEW_POWER {
+        if self.view_mode == ViewMode::Standard && self.tab_idx == 1 {
             match key.code {
                 KeyCode::Char('[')
                     if self.has_direct_remote_queue()
@@ -1767,21 +1767,13 @@ impl App {
                 return false;
             }
             KeyCode::Char('v') => {
-                self.queue_view = (self.queue_view + 1) % QUEUE_VIEW_COUNT;
-                if self.queue_view == QUEUE_VIEW_POWER {
-                    self.set_power_focus(PowerFocus::Left);
-                    if self.tab_idx == 1 && self.power_left_tab > 0 {
-                        self.activate_library_position_scope(
-                            self.power_left_tab - 1,
-                            crate::app::LibraryPositionScope::Power,
-                        );
-                    }
-                }
-                if !self.card_image_states.is_empty() {
-                    self.force_clear = true;
-                }
+                self.set_view_mode(if self.view_mode == ViewMode::Power {
+                    ViewMode::Standard
+                } else {
+                    ViewMode::Power
+                });
             }
-            KeyCode::Char('g') if self.tab_idx == 1 && self.queue_view != QUEUE_VIEW_POWER => {
+            KeyCode::Char('g') if self.view_mode == ViewMode::Standard && self.tab_idx == 1 => {
                 self.queue_group = !self.queue_group;
             }
             KeyCode::Char('p') => {
@@ -1811,13 +1803,13 @@ impl App {
                 }
             }
             KeyCode::Left | KeyCode::Up
-                if self.queue_view == QUEUE_VIEW_POWER
+                if self.view_mode == ViewMode::Power
                     && key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.power_left_tab_prev();
             }
             KeyCode::Right | KeyCode::Down
-                if self.queue_view == QUEUE_VIEW_POWER
+                if self.view_mode == ViewMode::Power
                     && key.modifiers.contains(KeyModifiers::ALT) =>
             {
                 self.power_left_tab_next();
@@ -2050,7 +2042,7 @@ impl App {
     pub(super) fn open_context_menu(&mut self) {
         let mut entries: Vec<super::ContextMenuEntry> = vec![];
 
-        let cw_focused = self.queue_view == QUEUE_VIEW_POWER
+        let cw_focused = self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab == 0;
         let power_lib_idx = self.context_menu_power_lib_idx();
@@ -2255,7 +2247,7 @@ impl App {
             let center = self.layout.home.carousel_slots[1].1;
             return (center.x + center.width / 2, center.y + center.height / 2);
         }
-        if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
+        if self.view_mode == ViewMode::Power {
             match self.power_focus {
                 PowerFocus::Left => {
                     let area = self.layout.power.left_area;
@@ -2347,7 +2339,6 @@ impl App {
             "mute_on": self.mute_on,
             "pre_mute_volume": self.pre_mute_volume,
             "tab_idx": self.tab_idx,
-            "playlist_view": self.queue_view,
             "power_focus": self.power_focus.pref_value(),
             "power_left_tab": self.power_left_tab,
             "power_left_width": self.power_left_width,
@@ -2390,7 +2381,7 @@ impl App {
     }
 
     fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
-        if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
+        if self.view_mode == ViewMode::Power {
             if self.has_direct_remote_queue() {
                 if self
                     .layout
@@ -2958,7 +2949,7 @@ impl App {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout.tabs_area.contains((col, row).into())
         {
-            if self.queue_view == QUEUE_VIEW_POWER {
+            if self.view_mode == ViewMode::Power {
                 // In Power View, tab clicks change the left-panel selection, not the app tab.
                 if let Some(idx) = self.power_tab_idx_at(col) {
                     self.power_left_tab = idx;
@@ -3032,7 +3023,7 @@ impl App {
                             self.move_home_cursor(delta);
                         }
                     }
-                } else if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
+                } else if self.view_mode == ViewMode::Power {
                     // Scroll in whichever power-view panel the mouse is over.
                     let queue_area = self.layout.power.queue_area;
                     let left_area = self.layout.power.left_area;
@@ -3172,7 +3163,7 @@ impl App {
                 self.last_click_time = now;
                 self.last_click_pos = (col, row);
 
-                if self.tab_idx == 1 && self.queue_view == QUEUE_VIEW_POWER {
+                if self.view_mode == ViewMode::Power {
                     for (rect, target) in self.layout.power.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
                             if self.power_left_tab == 0 {
@@ -3275,9 +3266,7 @@ impl App {
                 }
 
                 // Power-view header breadcrumb clicks.
-                if self.tab_idx == 1
-                    && self.queue_view == QUEUE_VIEW_POWER
-                    && self.power_left_tab > 0
+                if self.tab_idx == 1 && self.view_mode == ViewMode::Power && self.power_left_tab > 0
                 {
                     let crumbs = self.layout.power.breadcrumbs.clone();
                     let lib_idx = self.power_left_tab - 1;
@@ -3568,9 +3557,7 @@ mod playback_header_mouse_tests {
 mod power_movie_detail_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{
-        BrowseLevel, LibraryTab, PowerFocus, POWER_LEFT_WIDTH_DEFAULT, QUEUE_VIEW_POWER,
-    };
+    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, ViewMode, POWER_LEFT_WIDTH_DEFAULT};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
@@ -3578,7 +3565,7 @@ mod power_movie_detail_tests {
     fn make_power_movie_app() -> App {
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -3659,7 +3646,7 @@ mod power_movie_detail_tests {
     fn make_power_tab_cycle_app() -> App {
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
         push_power_library(&mut app, "lib-movies", "Movies");
@@ -4180,7 +4167,7 @@ mod power_movie_detail_tests {
 mod power_music_track_focus_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, ViewMode};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
@@ -4194,7 +4181,7 @@ mod power_music_track_focus_tests {
     fn make_power_music_album_app() -> App {
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
         app.music_levels = vec!["group".into(), "album".into()];
@@ -4287,7 +4274,7 @@ mod power_music_track_focus_tests {
     fn make_power_music_album_list_app(album_count: usize, cursor: usize) -> App {
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
         app.music_levels = vec!["group".into(), "album".into()];
@@ -5457,7 +5444,7 @@ mod power_music_track_focus_tests {
 mod power_library_scope_routing_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item, make_items};
-    use crate::app::{BrowseLevel, LibraryPositionScope, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+    use crate::app::{BrowseLevel, LibraryPositionScope, LibraryTab, PowerFocus, ViewMode};
     use crossterm::event::{
         KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     };
@@ -5466,7 +5453,7 @@ mod power_library_scope_routing_tests {
     fn make_power_library_app() -> App {
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -5606,7 +5593,7 @@ mod power_library_scope_routing_tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 2;
 
@@ -5860,7 +5847,7 @@ mod power_library_scope_routing_tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Queue;
         app.layout.tabs_area = Rect {
             x: 0,

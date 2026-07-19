@@ -143,6 +143,7 @@ pub fn run(
                     daemon_client_endpoint: base_config.daemon_client_endpoint.clone(),
                     daemon_server_tcp_listen: base_config.daemon_server_tcp_listen.clone(),
                     auto_reconnect: base_config.auto_reconnect,
+                    view_mode: base_config.view_mode.clone(),
                 };
                 let mut client = EmbyClient::new(config);
                 match client.authenticate_credentials() {

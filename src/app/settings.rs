@@ -29,6 +29,7 @@ pub fn setting_label(key: SettingKey) -> &'static str {
         SettingKey::AudioLanguage => "Audio language",
         SettingKey::FeedViewLibraries => "Feed view",
         SettingKey::LibraryRoutes => "Library routes",
+        SettingKey::ViewMode => "View mode",
         SettingKey::LogOut => "Log out",
     }
 }
@@ -79,6 +80,13 @@ pub fn setting_value(key: SettingKey, cfg: &Config, ui: &UiConfig) -> String {
         }
         SettingKey::FeedViewLibraries => fmt_feed_view_list(&cfg.feed_view_libraries),
         SettingKey::LibraryRoutes => fmt_library_routes(&cfg.library_routes),
+        SettingKey::ViewMode => {
+            if cfg.view_mode == "power" {
+                "Power".into()
+            } else {
+                "Standard".into()
+            }
+        }
         SettingKey::LogOut => String::new(),
     }
 }

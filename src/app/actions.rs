@@ -3,7 +3,7 @@ use super::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, ArtistHeaderSelection, BrowseLevel,
     ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryPositionScope,
     LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
-    RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD, QUEUE_VIEW_POWER,
+    RemotePlaybackTarget, SessionEvent, UndoEntry, ViewMode, PAGE_SIZE, PREFETCH_AHEAD,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::indicators::IndicatorData;
@@ -768,7 +768,7 @@ impl App {
         lib_idx: usize,
         extra_ok: impl FnOnce(&BrowseLevel) -> bool,
     ) -> bool {
-        self.queue_view == QUEUE_VIEW_POWER
+        self.view_mode == ViewMode::Power
             && self.power_left_tab == lib_idx + 1
             && (self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
             && self
@@ -913,7 +913,7 @@ impl App {
         // normal-view per-row height map (`layout.library.lib_row_heights`) is never populated,
         // so it would fall back to 1. Use the panel height directly (rows are single-line;
         // subtract 1 for the count/search header line).
-        if self.queue_view == QUEUE_VIEW_POWER {
+        if self.view_mode == ViewMode::Power {
             return (self.layout.power.left_area.height as usize)
                 .saturating_sub(1)
                 .max(1);
@@ -951,7 +951,7 @@ impl App {
         // doesn't overflow.
         self.libs[lib_idx].power_detail_scroll = 0;
 
-        if self.queue_view == QUEUE_VIEW_POWER
+        if self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab == lib_idx + 1
             && self.libs[lib_idx].search.is_none()
@@ -979,8 +979,7 @@ impl App {
 
         // In Power View with letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
-        if self.queue_view == QUEUE_VIEW_POWER && !self.layout.power.left_sorted_indices.is_empty()
-        {
+        if self.view_mode == ViewMode::Power && !self.layout.power.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.last().is_some();
             if needs_sorted {
@@ -1039,7 +1038,7 @@ impl App {
         // doesn't overflow.
         self.libs[lib_idx].power_detail_scroll = 0;
 
-        if self.queue_view == QUEUE_VIEW_POWER
+        if self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab == lib_idx + 1
             && self.libs[lib_idx].search.is_none()
@@ -1064,8 +1063,7 @@ impl App {
 
         // In Power View with letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
-        if self.queue_view == QUEUE_VIEW_POWER && !self.layout.power.left_sorted_indices.is_empty()
-        {
+        if self.view_mode == ViewMode::Power && !self.layout.power.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && !self.layout.power.left_sorted_indices.is_empty();
             if needs_sorted {
@@ -2341,7 +2339,7 @@ impl App {
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the power-view library panel.
-        if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
+        if !(self.view_mode == ViewMode::Power && matches!(self.power_focus, PowerFocus::Left)) {
             self.set_power_focus(PowerFocus::Queue);
         }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -2382,7 +2380,7 @@ impl App {
         }
         self.on_queue_replace_silent();
         // Keep library focus when playing from the power-view library panel.
-        if !(self.queue_view == QUEUE_VIEW_POWER && matches!(self.power_focus, PowerFocus::Left)) {
+        if !(self.view_mode == ViewMode::Power && matches!(self.power_focus, PowerFocus::Left)) {
             self.set_power_focus(PowerFocus::Queue);
         }
         let label = item.playback_label();
@@ -2496,7 +2494,7 @@ impl App {
     }
 
     fn power_artist_header_action_lib_idx(&self) -> Option<usize> {
-        if self.queue_view == QUEUE_VIEW_POWER
+        if self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab > 0
         {
@@ -2915,7 +2913,7 @@ impl App {
             // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is
             // no list above to go back to. Search-clearing still falls through
             // because this guard only fires when search is None.
-            if self.queue_view == QUEUE_VIEW_POWER
+            if self.view_mode == ViewMode::Power
                 && self.power_left_tab == lib_idx + 1
                 && self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.len() == 2
@@ -2952,7 +2950,7 @@ impl App {
 
                 // In Power View, skip past the auto-pushed Season level so
                 // a single Escape takes the user back to the series list.
-                if self.queue_view == QUEUE_VIEW_POWER && self.power_left_tab == lib_idx + 1 {
+                if self.view_mode == ViewMode::Power && self.power_left_tab == lib_idx + 1 {
                     let exposed_seasons = self.libs[lib_idx]
                         .nav_stack
                         .last()
@@ -2985,7 +2983,7 @@ impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
         match action {
             Some(ContextAction::Play) => {
-                if self.queue_view == super::QUEUE_VIEW_POWER
+                if self.view_mode == ViewMode::Power
                     && matches!(self.power_focus, PowerFocus::Left)
                     && self.power_left_tab == 0
                 {
@@ -3032,7 +3030,7 @@ impl App {
                 }
             }
             Some(ContextAction::Enqueue) => {
-                if self.queue_view == super::QUEUE_VIEW_POWER
+                if self.view_mode == ViewMode::Power
                     && matches!(self.power_focus, PowerFocus::Left)
                     && self.power_left_tab == 0
                 {
@@ -3109,7 +3107,7 @@ impl App {
                 if played {
                     let lib_idx_opt = if self.tab_idx >= self.lib_tab_offset() {
                         Some(self.tab_idx - self.lib_tab_offset())
-                    } else if self.queue_view == super::QUEUE_VIEW_POWER
+                    } else if self.view_mode == ViewMode::Power
                         && matches!(self.power_focus, PowerFocus::Left)
                         && self.power_left_tab > 0
                     {
@@ -3235,7 +3233,7 @@ impl App {
     pub(super) fn refresh_lib(&mut self) {
         let lib_idx = if self.tab_idx > 1 {
             self.tab_idx - self.lib_tab_offset()
-        } else if self.queue_view == QUEUE_VIEW_POWER
+        } else if self.view_mode == ViewMode::Power
             && matches!(self.power_focus, PowerFocus::Left)
             && self.power_left_tab > 0
         {
@@ -3419,7 +3417,7 @@ impl App {
             self.home.section = 0;
             let _ = self.fetch_home();
         } else if self.tab_idx == 1 {
-            if self.queue_view == QUEUE_VIEW_POWER && self.power_left_tab > 0 {
+            if self.view_mode == ViewMode::Power && self.power_left_tab > 0 {
                 self.activate_library_position_scope(
                     self.power_left_tab - 1,
                     LibraryPositionScope::Power,
@@ -3433,19 +3431,67 @@ impl App {
         }
     }
 
+    /// Single owner of every *runtime* view-mode transition (issue #275):
+    /// both the `'v'` key and the F2 Settings "View mode" row call this, so
+    /// entry/exit side effects (focus, scope restoration, config
+    /// persistence) happen exactly once, in exactly one place, regardless of
+    /// which entry point triggered the switch.
+    pub(super) fn set_view_mode(&mut self, mode: ViewMode) {
+        if mode == self.view_mode {
+            return;
+        }
+        match mode {
+            ViewMode::Power => {
+                self.pre_power_tab = self.tab_idx;
+                self.set_power_focus(PowerFocus::Left);
+                if self.power_left_tab > 0 {
+                    self.activate_library_position_scope(
+                        self.power_left_tab - 1,
+                        LibraryPositionScope::Power,
+                    );
+                }
+            }
+            ViewMode::Standard => {
+                // set_tab already owns library-position-scope restoration.
+                self.set_tab(self.pre_power_tab);
+            }
+        }
+        self.view_mode = mode;
+        if !self.card_image_states.is_empty() {
+            self.force_clear = true;
+        }
+        self.save_config_view_mode();
+    }
+
+    /// Persists the current `view_mode` into `config.toml` (issue #275),
+    /// replacing the old `prefs.json["playlist_view"]` scheme.
+    fn save_config_view_mode(&mut self) {
+        let cfg = {
+            let mut c = self.client.lock().unwrap();
+            c.config.view_mode = match self.view_mode {
+                ViewMode::Power => "power".to_string(),
+                ViewMode::Standard => "standard".to_string(),
+            };
+            c.config.clone()
+        };
+        if let Err(e) = crate::config::save_config_settings(&cfg) {
+            log::warn!(target: "config", "view_mode config save failed: {e}");
+        }
+    }
+
     pub(super) fn ensure_lib_loaded_for(&mut self, idx: usize) {
         if idx >= self.libs.len() {
             return;
         }
         let scope = self.library_position_scope_for(idx);
-        if self.queue_view == QUEUE_VIEW_POWER
+        if self.view_mode == ViewMode::Power
             && self.power_left_tab == idx + 1
             && self.is_feed_home_video_library(idx)
         {
             self.ensure_feed_home_video_root_loaded(idx);
             return;
         }
-        if self.queue_view == QUEUE_VIEW_POWER
+        if self.view_mode == ViewMode::Power
             && self.power_left_tab == idx + 1
             && self.is_podcast_library(idx)
         {
@@ -4364,7 +4410,7 @@ impl App {
         // In Power View: when a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.
-        let should_auto_push = self.queue_view == QUEUE_VIEW_POWER
+        let should_auto_push = self.view_mode == ViewMode::Power
             && self.power_left_tab == lib_idx + 1
             && self
                 .libs
@@ -4426,7 +4472,7 @@ impl App {
         // In Power View: when the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.
-        let should_auto_push_music = self.queue_view == QUEUE_VIEW_POWER
+        let should_auto_push_music = self.view_mode == ViewMode::Power
             && self.power_left_tab == lib_idx + 1
             && self
                 .libs
@@ -4507,7 +4553,7 @@ impl App {
             .libs
             .get(lib_idx)
             .map(|lib| {
-                self.queue_view == QUEUE_VIEW_POWER
+                self.view_mode == ViewMode::Power
                     && self.power_left_tab == lib_idx + 1
                     && (self.is_feed_home_video_library(lib_idx)
                         || self.is_podcast_library(lib_idx))
@@ -6193,7 +6239,7 @@ mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = recursive_music_app();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.power_focus = PowerFocus::Left;
         app.libs[0].nav_stack.push(BrowseLevel {
@@ -6321,12 +6367,12 @@ mod tests {
     fn power_view_enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
         use crate::app::action::Command;
         use crate::app::tests::make_item;
-        use crate::app::{BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+        use crate::app::{BrowseLevel, LibraryTab, PowerFocus, ViewMode};
         use crate::player::PlayerCommand;
 
         let mut app = crate::app::tests::make_app_stub();
         app.tab_idx = app.lib_tab_offset();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
         app.player_tab
@@ -6721,7 +6767,7 @@ mod tests {
     #[test]
     fn ensure_power_feed_library_preserves_saved_feed_position() {
         let mut app = crate::app::tests::make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -6757,7 +6803,7 @@ mod tests {
     #[test]
     fn ensure_power_podcast_library_preserves_saved_feed_position() {
         let mut app = crate::app::tests::make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
 
         let mut library = crate::app::tests::make_item("Podcasts", "CollectionFolder");

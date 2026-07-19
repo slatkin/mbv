@@ -65,8 +65,15 @@ static SESSIONS_LOAD_OVERRIDE: Mutex<Option<SessionsLoadFn>> = Mutex::new(None);
 #[cfg(test)]
 static SESSIONS_LOAD_TEST_LOCK: Mutex<()> = Mutex::new(());
 
-pub(super) const QUEUE_VIEW_POWER: u8 = 1;
-pub(super) const QUEUE_VIEW_COUNT: u8 = 2;
+/// Top-level rendering mode: Standard (tab-based navigation) or Power (a
+/// dedicated, tab_idx-independent full-screen view). Replaces the old
+/// `queue_view: u8` flag that conflated Power with a variant of the Queue tab.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum ViewMode {
+    Standard,
+    Power,
+}
+
 pub(super) const POWER_LEFT_WIDTH_DEFAULT: u16 = 40;
 pub(super) const POWER_LEFT_WIDTH_STEP: u16 = 5;
 /// Width reserved on the right of the tab bar for the volume badge (+ gap/arrow).
@@ -367,19 +374,13 @@ impl BrowseLevel {
     }
 }
 
-/// Resolves the startup `tab_idx` from `prefs.json` (#248). `queue_view`
-/// (`prefs["playlist_view"]`) and `power_left_tab` are Power View's own
-/// saved state and only mean anything if the app actually lands in Power
-/// View -- so when the last session had Power View turned on, that takes
-/// priority over whatever plain tab happened to be active most recently
-/// (e.g. a quick glance at a library tab right before quitting). Without
-/// this, `tab_idx` alone decided the startup tab, silently dropping back
-/// to a plain library view even though Power View was "on" and fully
-/// restorable (`power_left_tab_pending` only ever applies from inside
-/// `render_power_view`, which never runs unless `tab_idx == 1`).
+/// Resolves the startup `tab_idx` from `prefs.json`. Since #275, `tab_idx` is
+/// a Standard-only concept, independent of `view_mode`/Power View -- Power no
+/// longer requires `tab_idx == 1` to render, so this no longer needs to peek
+/// at the persisted view mode at all; it just restores the last plain tab
+/// (or forces the Queue tab when `-q`/`--queue` was passed).
 fn startup_tab_idx(start_on_queue: bool, prefs: &serde_json::Value) -> usize {
-    let queue_view = prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8;
-    if start_on_queue || queue_view == QUEUE_VIEW_POWER {
+    if start_on_queue {
         1
     } else {
         prefs["tab_idx"].as_u64().unwrap_or(0) as usize
@@ -1033,7 +1034,13 @@ pub struct App {
     pending_remote_move_cursor: Option<usize>,
     skip_intro_end_ticks: Option<i64>,
     next_up_item: Option<MediaItem>,
-    queue_view: u8,
+    // Power-view UI scalars. NOTE: this is NOT the whole of Power's state — Power also reuses
+    // shared self.libs and self.queue_group, and per-library LibraryTab::power_detail_scroll.
+    // All runtime mode transitions go through set_view_mode().
+    view_mode: ViewMode,
+    /// The Standard `tab_idx` to return to when leaving Power (set by
+    /// `set_view_mode` on Power entry, consumed on Standard entry).
+    pre_power_tab: usize,
     queue_group: bool, // list view: group audio by album / episodes by series
     power_focus: PowerFocus,
     power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
@@ -1222,6 +1229,9 @@ struct AppInit {
     indicator_style: render::indicators::IndicatorStyle,
     image_cache_size: usize,
     start_on_queue: bool,
+    /// Persisted view mode ("standard" | "power") from `Config::view_mode`
+    /// (issue #275); parsed into `ViewMode` in `build()`.
+    view_mode: String,
     lib_tx: mpsc::Sender<LibEvent>,
     lib_rx: mpsc::Receiver<LibEvent>,
     sessions_tx: mpsc::Sender<SessionEvent>,
@@ -1369,6 +1379,7 @@ enum SettingKey {
     LibraryRoutes,
     SubtitleLanguage,
     AudioLanguage,
+    ViewMode,
     LogOut,
 }
 
@@ -1399,6 +1410,7 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::ConsumeAudio,
             SettingKey::SavePlaylistOnConsume,
             SettingKey::SavePlaylistOnConsumeAudio,
+            SettingKey::ViewMode,
         ],
     ),
     (
@@ -1475,10 +1487,7 @@ impl App {
                 return scope;
             }
         }
-        if self.tab_idx == 1
-            && self.queue_view == QUEUE_VIEW_POWER
-            && self.power_left_tab == lib_idx + 1
-        {
+        if self.view_mode == ViewMode::Power && self.power_left_tab == lib_idx + 1 {
             LibraryPositionScope::Power
         } else {
             LibraryPositionScope::Default
@@ -1488,10 +1497,7 @@ impl App {
     fn active_library_position_scope_for(&self, lib_idx: usize) -> Option<LibraryPositionScope> {
         if self.tab_idx > 1 && self.tab_idx - self.lib_tab_offset() == lib_idx {
             Some(LibraryPositionScope::Default)
-        } else if self.tab_idx == 1
-            && self.queue_view == QUEUE_VIEW_POWER
-            && self.power_left_tab == lib_idx + 1
-        {
+        } else if self.view_mode == ViewMode::Power && self.power_left_tab == lib_idx + 1 {
             Some(LibraryPositionScope::Power)
         } else {
             None
@@ -1709,6 +1715,11 @@ impl App {
 
     fn build(init: AppInit) -> Self {
         let prefs = Self::load_prefs();
+        let view_mode = match init.view_mode.as_str() {
+            "power" => ViewMode::Power,
+            _ => ViewMode::Standard,
+        };
+        let tab_idx = startup_tab_idx(init.start_on_queue, &prefs);
         let (resize_register_tx, resize_response_rx) = spawn_resize_worker();
         App {
             #[cfg(test)]
@@ -1733,7 +1744,7 @@ impl App {
             use_nerd_fonts: init.use_nerd_fonts,
             indicator_style: init.indicator_style,
             image_cache_size: init.image_cache_size,
-            tab_idx: startup_tab_idx(init.start_on_queue, &prefs),
+            tab_idx,
             lib_tx: init.lib_tx,
             lib_rx: init.lib_rx,
             search: SearchSubsystem::new(init.search_tx, init.search_rx),
@@ -1783,7 +1794,21 @@ impl App {
             pending_remote_move_cursor: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
-            queue_view: prefs["playlist_view"].as_u64().unwrap_or(0).min(1) as u8,
+            // Startup deliberately bypasses `set_view_mode`: the App isn't
+            // fully constructed yet and no transition side effects are owed
+            // at boot -- persisted `tab_idx` and `view_mode` are restored
+            // together, independently of each other (issue #275).
+            //
+            // `pre_power_tab` is seeded from the just-computed `tab_idx`
+            // rather than a bare 0: if the session starts in Power (last
+            // quit persisted `view_mode = "power"`), `tab_idx` already holds
+            // the correct restored Standard tab, and the first exit from
+            // Power must return there, not silently reset to Home. If the
+            // session starts in Standard, this value is never read until
+            // Power is entered, at which point `set_view_mode` overwrites it
+            // with the live `tab_idx` anyway.
+            view_mode,
+            pre_power_tab: tab_idx,
             queue_group: true,
             power_focus: PowerFocus::from_pref(prefs["power_focus"].as_str()),
             power_left_tab: 0,
@@ -1901,6 +1926,7 @@ impl App {
         let indicator_style: render::indicators::IndicatorStyle =
             ui_config.indicator_style.parse().unwrap_or_default();
         let start_on_queue = client.config.start_on_queue;
+        let view_mode = client.config.view_mode.clone();
         let always_play_next = client.config.always_play_next;
         let always_skip_intro = client.config.always_skip_intro;
         crate::config::evict_old_image_cache();
@@ -1973,6 +1999,7 @@ impl App {
             indicator_style,
             image_cache_size,
             start_on_queue,
+            view_mode,
             lib_tx,
             lib_rx,
             sessions_tx,
@@ -2022,6 +2049,7 @@ impl App {
         let music_levels = client.config.music_levels.clone();
         let always_play_next = client.config.always_play_next;
         let start_on_queue = client.config.start_on_queue;
+        let view_mode = client.config.view_mode.clone();
         let image_protocol = ui_config.image_protocol.clone();
         let image_protocol_enabled = image_protocol.is_some();
         let image_cache_size = ui_config.image_cache_size;
@@ -2111,6 +2139,7 @@ impl App {
             indicator_style,
             image_cache_size,
             start_on_queue,
+            view_mode,
             lib_tx,
             lib_rx,
             sessions_tx,
@@ -4168,18 +4197,12 @@ pub(crate) mod tests {
     use ratatui::Terminal;
     use unicode_width::UnicodeWidthStr;
 
-    // Issue #248: Power View not restored at startup even though
-    // queue_view/power_left_tab were correctly persisted, because tab_idx
-    // alone (independent of queue_view) decided the startup tab.
+    // Issue #275: tab_idx is now a Standard-only concept, independent of
+    // view_mode/Power View -- Power no longer requires tab_idx == 1 to
+    // render, so startup_tab_idx just restores the saved plain tab.
     #[test]
-    fn startup_tab_idx_prefers_power_view_over_a_stale_plain_tab_idx() {
-        let prefs = serde_json::json!({ "tab_idx": 3, "playlist_view": 1 });
-        assert_eq!(startup_tab_idx(false, &prefs), 1);
-    }
-
-    #[test]
-    fn startup_tab_idx_uses_saved_tab_idx_when_queue_view_is_not_power() {
-        let prefs = serde_json::json!({ "tab_idx": 3, "playlist_view": 0 });
+    fn startup_tab_idx_uses_saved_tab_idx_regardless_of_view_mode() {
+        let prefs = serde_json::json!({ "tab_idx": 3 });
         assert_eq!(startup_tab_idx(false, &prefs), 3);
     }
 
@@ -4191,7 +4214,7 @@ pub(crate) mod tests {
 
     #[test]
     fn startup_tab_idx_start_on_queue_wins_regardless_of_saved_prefs() {
-        let prefs = serde_json::json!({ "tab_idx": 3, "playlist_view": 0 });
+        let prefs = serde_json::json!({ "tab_idx": 3 });
         assert_eq!(startup_tab_idx(true, &prefs), 1);
     }
 
@@ -4743,7 +4766,7 @@ pub(crate) mod tests {
     #[test]
     fn save_default_library_position_updates_power_scope_when_power_library_is_active() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 1;
         app.power_left_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
@@ -4792,10 +4815,8 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn save_default_library_position_uses_default_scope_on_library_tab_even_if_power_view_is_enabled(
-    ) {
+    fn save_default_library_position_uses_default_scope_on_library_tab() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         app.libs.push(LibraryTab {
@@ -5000,7 +5021,7 @@ pub(crate) mod tests {
     #[test]
     fn activating_saved_power_position_initializes_feed_home_video_state() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 1;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -5053,7 +5074,7 @@ pub(crate) mod tests {
     #[test]
     fn ensure_lib_loaded_for_prefers_power_scope_and_does_not_bootstrap_from_default() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 1;
         app.power_left_tab = 1;
         let mut library = make_item("Music", "CollectionFolder");
@@ -5111,7 +5132,7 @@ pub(crate) mod tests {
     #[test]
     fn ensure_lib_loaded_for_visible_power_library_accepts_restore_from_queue_focus() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 1;
         app.power_focus = PowerFocus::Queue;
         app.power_left_tab = 1;
@@ -5213,7 +5234,7 @@ pub(crate) mod tests {
             client.user_id = "user-1".into();
             client.token = "token-1".into();
         }
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 1;
         app.power_focus = PowerFocus::Queue;
         app.power_left_tab = 1;
@@ -5352,7 +5373,7 @@ pub(crate) mod tests {
             }],
             ..Default::default()
         });
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 1;
         app.power_left_tab = 1;
 
@@ -5427,7 +5448,7 @@ pub(crate) mod tests {
             }],
             ..Default::default()
         });
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 1;
         app.power_left_tab = 0;
 
@@ -5470,7 +5491,7 @@ pub(crate) mod tests {
         };
         app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Queue;
         app.power_left_tab = 0;
 
@@ -5730,7 +5751,7 @@ pub(crate) mod tests {
         };
         app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -5928,8 +5949,6 @@ pub(crate) mod tests {
             artist_header_focus: None,
         });
         app.tab_idx = app.lib_tab_offset();
-        app.queue_view = QUEUE_VIEW_POWER;
-        app.power_left_tab = 1;
         app.replace_saved_library_position(
             0,
             LibraryPositionScope::Default,
@@ -6005,7 +6024,7 @@ pub(crate) mod tests {
             artist_header_focus: None,
         });
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
         app.replace_saved_library_position(
@@ -6083,7 +6102,7 @@ pub(crate) mod tests {
             artist_header_focus: None,
         });
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.replace_saved_library_position(
             0,
@@ -6134,7 +6153,7 @@ pub(crate) mod tests {
     #[test]
     fn power_home_navigation_does_not_persist_library_position_state() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 0;
         app.home.continue_items = make_items(3);
 
@@ -6249,7 +6268,8 @@ pub(crate) mod tests {
             pending_remote_move_cursor: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
-            queue_view: 0,
+            view_mode: ViewMode::Standard,
+            pre_power_tab: 0,
             queue_group: true,
             power_focus: PowerFocus::default(),
             power_left_tab: 0,
@@ -6544,6 +6564,7 @@ pub(crate) mod tests {
             indicator_style: render::indicators::IndicatorStyle::default(),
             image_cache_size: 50,
             start_on_queue: false,
+            view_mode: "standard".to_string(),
             lib_tx,
             lib_rx,
             sessions_tx,
@@ -6556,6 +6577,98 @@ pub(crate) mod tests {
             search_rx,
             stay_alive_ctrl: None,
         })
+    }
+
+    // Issue #275 regression: when a session quit while `view_mode` was
+    // `Power`, the next launch restores `view_mode = Power` *and* the
+    // correct pre-Power `tab_idx` from prefs.json independently. Before this
+    // fix, `pre_power_tab` was unconditionally seeded to 0 at boot, so the
+    // first exit from Power (`'v'` or F2 -> View mode) silently reset the
+    // user to the Home tab instead of the Standard tab they were actually
+    // on when they quit.
+    #[test]
+    fn build_starting_in_power_seeds_pre_power_tab_from_restored_tab_idx() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        // tab_idx 1 (Queue) rather than a library tab: library tabs are
+        // populated from `app.libs`, which this test leaves empty, and
+        // `set_tab` -> `ensure_tab_visible` would spin forever trying to
+        // scroll a library tab into view that doesn't exist. Any non-zero
+        // Standard tab is enough to distinguish "restored correctly" from
+        // the bug's "silently reset to 0".
+        let prefs = serde_json::json!({ "tab_idx": 1 });
+        std::fs::write(
+            crate::config::prefs_path(),
+            serde_json::to_string(&prefs).expect("prefs json"),
+        )
+        .expect("write prefs");
+
+        use mbv_core::player::{PlayerProxy, PlayerStatus};
+        use std::sync::{Arc, Mutex};
+
+        let status = Arc::new(Mutex::new(PlayerStatus {
+            volume_max: 100,
+            ..Default::default()
+        }));
+
+        let (_, player_rx) = std::sync::mpsc::channel();
+        let (_, ws_rx) = std::sync::mpsc::channel();
+        let (lib_tx, lib_rx) = std::sync::mpsc::channel();
+        let (card_image_tx, card_image_rx) = std::sync::mpsc::channel();
+        let (notif_action_tx, notif_action_rx) = std::sync::mpsc::channel::<String>();
+        let (sessions_tx, sessions_rx) = std::sync::mpsc::channel();
+        let (search_tx, search_rx) = std::sync::mpsc::channel::<Result<Vec<MediaItem>, String>>();
+
+        let player = PlayerProxy::stub(status);
+
+        use crate::config::Config;
+        use mbv_core::api::EmbyClient;
+        let client = EmbyClient::new(Config::default());
+
+        let mut app = App::build(AppInit {
+            client: Arc::new(Mutex::new(client)),
+            player,
+            player_rx,
+            ws_rx,
+            ws_send_tx: None,
+            player_tab: PlayerTab::default(),
+            remote_player_tab: None,
+            initial_queue_scope: QueueScope::Local,
+            system_notifications: false,
+            image_protocol: None,
+            image_protocol_enabled: false,
+            hidden_libraries: Vec::new(),
+            library_routes: std::collections::HashMap::new(),
+            hidden_latest: Vec::new(),
+            music_levels: Vec::new(),
+            use_nerd_fonts: false,
+            indicator_style: render::indicators::IndicatorStyle::default(),
+            image_cache_size: 50,
+            start_on_queue: false,
+            view_mode: "power".to_string(),
+            lib_tx,
+            lib_rx,
+            sessions_tx,
+            sessions_rx,
+            card_image_tx,
+            card_image_rx,
+            notif_action_tx,
+            notif_action_rx,
+            search_tx,
+            search_rx,
+            stay_alive_ctrl: None,
+        });
+
+        assert_eq!(app.view_mode, ViewMode::Power);
+        assert_eq!(app.tab_idx, 1);
+        assert_eq!(app.pre_power_tab, 1);
+
+        app.set_view_mode(ViewMode::Standard);
+
+        assert_eq!(
+            app.tab_idx, 1,
+            "leaving Power must restore the tab_idx that was correctly \
+             restored at startup, not reset to Home"
+        );
     }
 
     // ── wants_terminal_render (#156: detached stay-alive must not touch
@@ -7890,7 +8003,7 @@ pub(crate) mod tests {
     #[test]
     fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -8241,7 +8354,7 @@ pub(crate) mod tests {
     #[test]
     fn go_back_keeps_feed_home_video_group_view_intact() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 2;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -8303,7 +8416,7 @@ pub(crate) mod tests {
     #[test]
     fn feed_home_video_root_filters_groups_from_all_video_paths() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -8420,7 +8533,7 @@ pub(crate) mod tests {
         // A stale selected group from a prior aggregation run with more groups
         // must clamp to the groups that actually exist now.
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -8482,7 +8595,7 @@ pub(crate) mod tests {
     #[test]
     fn refresh_lib_targets_power_feed_selection() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.tab_idx = 1;
         app.power_left_tab = 1;
         app.power_focus = PowerFocus::Left;
@@ -8715,7 +8828,7 @@ pub(crate) mod tests {
             artist_header_focus: None,
         });
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -8781,7 +8894,7 @@ pub(crate) mod tests {
             artist_header_focus: None,
         });
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -8884,7 +8997,7 @@ pub(crate) mod tests {
             artist_header_focus: None,
         });
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
 
@@ -8913,7 +9026,7 @@ pub(crate) mod tests {
     #[test]
     fn refreshed_does_not_overwrite_feed_root_with_video_items() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -8978,7 +9091,7 @@ pub(crate) mod tests {
     #[test]
     fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
         let mut app = make_app_stub();
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_left_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
@@ -9103,7 +9216,7 @@ pub(crate) mod tests {
         let remote_items = make_items(2);
         let mut app = make_remote_app_stub(local_items, remote_items);
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         app.queue_scope = QueueScope::Remote;
 
         assert!(app.has_direct_remote_queue());
@@ -9119,7 +9232,7 @@ pub(crate) mod tests {
         let remote_items = make_items(2);
         let mut app = make_remote_app_stub(local_items, remote_items);
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         app.queue_scope = QueueScope::Local;
 
         assert!(app.has_direct_remote_queue());
@@ -9133,7 +9246,7 @@ pub(crate) mod tests {
     fn power_queue_renders_scope_pills_and_hitboxes_for_direct_remote() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.set_queue_scope(QueueScope::Local);
 
@@ -9155,7 +9268,7 @@ pub(crate) mod tests {
     fn power_queue_scope_switch_via_keyboard_works_from_queue_focus() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Queue;
         app.set_queue_scope(QueueScope::Local);
 
@@ -9172,7 +9285,7 @@ pub(crate) mod tests {
     fn power_left_focus_brackets_do_not_switch_queue_scope() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.set_queue_scope(QueueScope::Local);
 
@@ -9186,7 +9299,7 @@ pub(crate) mod tests {
     fn power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.set_queue_scope(QueueScope::Local);
         let _ = render_app_to_string(&mut app, 90, 28);
@@ -9204,7 +9317,7 @@ pub(crate) mod tests {
     fn non_power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         app.set_queue_scope(QueueScope::Local);
         let _ = render_app_to_string(&mut app, 90, 24);
 
@@ -9221,7 +9334,7 @@ pub(crate) mod tests {
     fn non_power_remote_queue_row_click_updates_remote_cursor() {
         let mut app = make_remote_app_stub(make_items(2), make_items(3));
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         app.set_queue_scope(QueueScope::Remote);
         let _ = render_app_to_string(&mut app, 90, 24);
 
@@ -9236,7 +9349,7 @@ pub(crate) mod tests {
     fn power_scope_keys_are_ignored_outside_queue_tab() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 0;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.set_queue_scope(QueueScope::Local);
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
@@ -9250,7 +9363,7 @@ pub(crate) mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Queue;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
@@ -9269,7 +9382,7 @@ pub(crate) mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
 
@@ -9283,7 +9396,7 @@ pub(crate) mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.show_help = true;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
@@ -9299,7 +9412,7 @@ pub(crate) mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::SHIFT));
         assert!(!handled);
@@ -9326,7 +9439,6 @@ pub(crate) mod tests {
     fn power_view_render_normalizes_saved_left_width_and_updates_layout() {
         let _guard = crate::config::TestStateDirGuard::new();
         let prefs = serde_json::json!({
-            "playlist_view": QUEUE_VIEW_POWER,
             "tab_idx": 1,
             "power_left_width": 70,
         });
@@ -9338,7 +9450,7 @@ pub(crate) mod tests {
 
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
 
         let _ = render_app_to_string(&mut app, 70, 28);
 
@@ -9355,7 +9467,7 @@ pub(crate) mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
 
         let _ = render_app_to_string(&mut app, 100, 28);
         assert_eq!(app.layout.power.queue_area.width, 40);
@@ -9371,7 +9483,7 @@ pub(crate) mod tests {
     fn non_power_queue_scope_switch_ignored_without_direct_remote() {
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         app.queue_scope = QueueScope::Local;
 
         assert!(!app.has_direct_remote_queue());
@@ -9388,7 +9500,7 @@ pub(crate) mod tests {
     fn local_daemon_queue_has_no_scope_affordance_or_remote_switch() {
         let mut app = make_local_daemon_app_stub(make_items(2));
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         let rendered = render_app_to_string(&mut app, 90, 24);
 
         assert!(!app.has_direct_remote_queue());
@@ -9416,7 +9528,7 @@ pub(crate) mod tests {
         app.connected_session_id = Some("session-1".into());
         app.connected_session_state = Some(make_session("remote-host", "Emby"));
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         let rendered = render_app_to_string(&mut app, 90, 24);
 
         assert!(!app.has_direct_remote_queue());
@@ -10422,7 +10534,7 @@ pub(crate) mod tests {
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         app.set_queue_scope(QueueScope::Remote);
         app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
@@ -10459,7 +10571,7 @@ pub(crate) mod tests {
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
         app.tab_idx = 1;
-        app.queue_view = 0;
+        app.view_mode = ViewMode::Standard;
         app.set_queue_scope(QueueScope::Remote);
         app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 

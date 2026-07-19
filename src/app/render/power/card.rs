@@ -359,7 +359,7 @@ impl App {
 mod tests {
     use super::{power_card_source, PowerCardSource};
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{App, BrowseLevel, LibraryTab, PowerFocus, QUEUE_VIEW_POWER};
+    use crate::app::{App, BrowseLevel, LibraryTab, PowerFocus, ViewMode};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
@@ -409,7 +409,7 @@ mod tests {
     fn make_inline_album_app() -> App {
         let mut app = make_app_stub();
         app.tab_idx = 1;
-        app.queue_view = QUEUE_VIEW_POWER;
+        app.view_mode = ViewMode::Power;
         app.power_focus = PowerFocus::Left;
         app.power_left_tab = 1;
         app.music_levels = vec!["group".into(), "album".into()];
