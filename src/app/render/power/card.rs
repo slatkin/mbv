@@ -1,7 +1,9 @@
 use super::POWER_RENDER_FILTER;
 use crate::app::images::POWER_CARD_PLACEHOLDER_KEY;
-use crate::app::{App, PowerFocus};
+use crate::app::{palette, App, PowerFocus};
 use ratatui::layout::Rect;
+use ratatui::style::Style;
+use ratatui::widgets::Block;
 use ratatui::Frame;
 
 /// Which source drives the Power View media card's content.
@@ -97,6 +99,23 @@ impl App {
         } else {
             self.last_card_height
         };
+        // The reserved area above was otherwise left visually blank while
+        // loading -- paint a dim block over it instead, matching the
+        // compact movie banner's own poster placeholder. Image aspect
+        // ratios vary too widely here (backdrop, poster, album art,
+        // thumbnail) to estimate a tighter width the way the banner does
+        // for posters specifically, so this fills the full reserved area.
+        if image_loading && placeholder > 0 {
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::OVERLAY)),
+                Rect {
+                    x: area.x,
+                    y: area.y,
+                    width: area.width,
+                    height: placeholder,
+                },
+            );
+        }
         (placeholder, image_loading)
     }
 
@@ -359,7 +378,7 @@ impl App {
 mod tests {
     use super::{power_card_source, PowerCardSource};
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{App, BrowseLevel, LibraryTab, PowerFocus, ViewMode};
+    use crate::app::{palette, App, BrowseLevel, LibraryTab, PowerFocus, ViewMode};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
@@ -552,6 +571,34 @@ mod tests {
         // cache key must not have been marked as "no image" — that only
         // happens once the fetch resolves to nothing.
         assert!(!matches!(app.card_image_states.get(&cache_key), Some(None)));
+    }
+
+    // The card reserved a row-height while its image was loading (so the
+    // queue panel below it doesn't expand/collapse once the image lands),
+    // but never actually painted anything into that reserved area -- it
+    // stayed visually blank rather than showing a loading placeholder, the
+    // way the compact movie banner's own poster does.
+    #[test]
+    fn compact_banner_loading_image_paints_a_dim_placeholder_instead_of_blank_space() {
+        let mut app = make_compact_banner_movie_app();
+        app.image_protocol_enabled = true;
+
+        let backend = TestBackend::new(30, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_power_card(f, Rect::new(0, 0, 30, 20));
+        })
+        .unwrap();
+
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let painted =
+            (0..area.width).any(|x| (0..area.height).any(|y| buf[(x, y)].bg == palette::OVERLAY));
+        assert!(
+            painted,
+            "expected a dim placeholder block to be painted over the reserved \
+             card area while the image is loading, not left blank"
+        );
     }
 
     #[test]
