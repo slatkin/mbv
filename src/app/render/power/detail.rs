@@ -23,6 +23,30 @@ pub(super) fn compact_banner_image_cache_key(item_id: &str) -> String {
     format!("{item_id}:cmp_primary")
 }
 
+/// Estimated placeholder size for a poster that hasn't been fetched/decoded
+/// yet. Emby/TMDb primary movie art is overwhelmingly a 2:3 (width:height)
+/// aspect ratio, so fitting that ratio into the same `IMG_COLS x IMG_ROWS`
+/// pixel bounding box a real image would be fit into -- via the exact same
+/// `Resize::size_for` math `ThreadProtocol`/`StatefulProtocol` use for a real
+/// decoded image -- gives a reserved width that matches what a real poster
+/// resolves to almost exactly, instead of reserving the full bounding-box
+/// width and causing a second, smaller reflow once the real image swaps in.
+/// Only the ratio of the dummy image matters here, not its absolute size, so
+/// it's kept tiny (2x3 px) to make the allocation this runs once per render
+/// frame effectively free.
+fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
+    let canonical_poster_aspect = image::DynamicImage::new_rgb8(2, 3);
+    let size = ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)).size_for(
+        &canonical_poster_aspect,
+        font_size,
+        ratatui::layout::Size {
+            width: IMG_COLS,
+            height: IMG_ROWS,
+        },
+    );
+    (size.width, size.height)
+}
+
 /// Everything content-dependent about the compact movie-detail banner: the
 /// meta line, the "Playing" indicator, and the overview + director text
 /// wrapped to the banner's actual panel width. Computed once by
@@ -126,6 +150,15 @@ impl App {
         // isn't yet ready to show, and only the "is it the real image or the
         // placeholder" choice below still depends on the nav-idle gate.
         let nav_gate_open = self.list_image_renders_allowed();
+        // `image_picker` is only `None` before the run loop's one-time init
+        // (or in tests that don't set one up) -- fall back to the full
+        // bounding box in that case, since there's no real font metrics yet
+        // to fit the canonical poster aspect ratio against.
+        let (placeholder_w, placeholder_h) = self
+            .image_picker
+            .as_ref()
+            .map(|picker| poster_placeholder_size(picker.font_size()))
+            .unwrap_or((IMG_COLS, IMG_ROWS));
 
         let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) =
             if !self.images_enabled() {
@@ -148,13 +181,13 @@ impl App {
                             },
                         ) {
                             Some(actual) => (actual.width, actual.height, false),
-                            None => (IMG_COLS, IMG_ROWS, true),
+                            None => (placeholder_w, placeholder_h, true),
                         }
                     }
                     // Either the fetch is still in flight (no entry yet), or a
                     // real image already resolved but the nav-idle gate hasn't
                     // opened yet -- either way, reserve the placeholder now.
-                    _ => (IMG_COLS, IMG_ROWS, true),
+                    _ => (placeholder_w, placeholder_h, true),
                 }
             };
 
@@ -677,6 +710,44 @@ mod tests {
             Some((18, 12)),
             "expected the placeholder to be reserved on the same frame as the rest of \
              the banner's content, even while the nav-idle gate is still closed:\n{out}"
+        );
+    }
+
+    // With no `image_picker` set up (as in every other test in this file --
+    // `make_app_stub` leaves it `None`), the placeholder falls back to the
+    // full IMG_COLS x IMG_ROWS bounding box, since there's no real font
+    // metrics yet to fit a poster's aspect ratio against. Once a picker is
+    // available, the placeholder should narrow to match what a real 2:3
+    // poster would actually resolve to at that font size -- reserving the
+    // full bounding box was 2 columns wider than any real poster ever
+    // renders at, causing a second, smaller reflow when the real image
+    // swapped in even after the nav-idle-gate fix above.
+    #[test]
+    fn compact_movie_detail_placeholder_matches_typical_poster_aspect_ratio() {
+        let mut app = make_app_stub();
+        app.image_protocol_enabled = true;
+        // `halfblocks()` needs no real terminal query and uses a fixed,
+        // documented 10x20px font size -- exactly what the width math below
+        // assumes.
+        app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+
+        let mut movie = make_item("Focused Movie", "Movie");
+        movie.id = "movie-1".into();
+        movie.overview = "A short overview.".into();
+        push_movie_lib(&mut app, movie);
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_compact_detail_to_string(&mut app, &mut layout);
+
+        // IMG_COLS x IMG_ROWS = 18 x 12 cells at a 10x20px font is an
+        // 180x240px box. Fitting a 2:3 poster into that box is
+        // height-constrained (240/3 = 80 < 180/2 = 90), giving a fitted
+        // 160x240px image -> ceil(160/10) x ceil(240/20) = 16 x 12 cells.
+        assert_eq!(
+            layout.inline_image_rect.map(|r| (r.width, r.height)),
+            Some((16, 12)),
+            "expected the placeholder to match a typical 2:3 poster's fitted \
+             width at this font size, not the full IMG_COLS bounding box:\n{out}"
         );
     }
 
