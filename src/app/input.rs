@@ -525,7 +525,7 @@ impl App {
     /// caller), digit tab-jump, and the context-menu key. Each handler calls
     /// this at the point in its own precedence order where these keys used
     /// to be independently matched; genuinely per-view behavior (`/` search,
-    /// `Ctrl+q`/`Alt+q` enqueue) stays local. See
+    /// `Ctrl+a` enqueue) stays local. See
     /// docs/adr/0002-centralized-input-handling.md, phase 3 (#132).
     fn handle_global_view_key(&mut self, key: KeyEvent) -> Option<bool> {
         match key.code {
@@ -563,15 +563,21 @@ impl App {
         }
     }
 
-    /// `Ctrl+q`/`Alt+q`: enqueue the current selection. Shared by
+    /// `Ctrl+a`: enqueue the current selection. Shared by
     /// `handle_combined_key` and `handle_lib_key` — the queue view has no
     /// "enqueue selected" concept, so `handle_queue_key` does not call this.
+    ///
+    /// Issue #209: `a` (no modifier) is the playback-context audio-track
+    /// binding (`playback_command_for_key`'s `ToggleMuteOrCycleAudio`,
+    /// guarded `!ctrl` there so Ctrl+a never reaches it). Previously Ctrl+a
+    /// fell through this front door unbound and hit that playback binding
+    /// unguarded, muting/cycling audio instead of enqueuing. This arm is
+    /// the actual fix: Ctrl+a now means "enqueue" here, before the playback
+    /// context even sees the key. Replaces the old `Ctrl+q`/`Alt+q`
+    /// bindings, which no longer enqueue.
     fn handle_enqueue_selected_key(&mut self, key: KeyEvent) -> Option<bool> {
         match key.code {
-            KeyCode::Char('q')
-                if key.modifiers.contains(KeyModifiers::CONTROL)
-                    || key.modifiers == KeyModifiers::ALT =>
-            {
+            KeyCode::Char('a') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.enqueue_selected();
                 Some(false)
             }
@@ -1300,11 +1306,11 @@ impl App {
                 self.power_home_play();
                 true
             }
-            KeyCode::Char('q') if ctrl => {
-                self.power_home_enqueue();
-                true
-            }
-            KeyCode::Char('q') if key.modifiers == KeyModifiers::ALT => {
+            // Ctrl+a: enqueue (issue #209). Replaces the old Ctrl+q/Alt+q
+            // bindings, which no longer enqueue — see
+            // `handle_enqueue_selected_key`'s doc comment for why Ctrl+a
+            // specifically had to become the enqueue key here.
+            KeyCode::Char('a') if ctrl => {
                 self.power_home_enqueue();
                 true
             }
@@ -3859,10 +3865,10 @@ mod power_movie_detail_tests {
     }
 
     #[test]
-    fn alt_q_enqueues_selected_from_library_view() {
-        // `Ctrl+q`/`Alt+q` enqueue is shared by combined and library views
-        // via `handle_enqueue_selected_key` (the queue view has no
-        // "enqueue selected" concept and does not wire this in).
+    fn ctrl_a_enqueues_selected_from_library_view() {
+        // `Ctrl+a` enqueue is shared by combined and library views via
+        // `handle_enqueue_selected_key` (the queue view has no "enqueue
+        // selected" concept and does not wire this in). See issue #209.
         let mut app = make_app_stub();
         app.tab_idx = 2;
         let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
@@ -3893,12 +3899,12 @@ mod power_movie_detail_tests {
             artist_header_focus: None,
         });
 
-        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
         assert_eq!(
             app.player_tab.items.len(),
             1,
-            "Alt+q enqueues from library view"
+            "Ctrl+a enqueues from library view"
         );
         assert_eq!(app.player_tab.items[0].id, "movie-1");
     }
@@ -4648,7 +4654,7 @@ mod power_music_track_focus_tests {
         ]);
         configure_recursive_fetch_server(&mut app, &server);
 
-        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
         let queued_ids: Vec<&str> = app
             .player_tab
@@ -4760,7 +4766,7 @@ mod power_music_track_focus_tests {
         ]);
         configure_recursive_fetch_server(&mut app, &server);
 
-        app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::CONTROL));
+        app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
         let after_ids: Vec<String> = app
             .player_tab

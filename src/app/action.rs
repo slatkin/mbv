@@ -124,7 +124,7 @@ pub(super) fn playback_command_for_key(
         KeyCode::Char('m') => Some(Command::ToggleMute),
         KeyCode::Char('-') => Some(Command::AdjustVolume(-5)),
         KeyCode::Char('+') | KeyCode::Char('=') => Some(Command::AdjustVolume(5)),
-        KeyCode::Char('a') if gated => Some(Command::ToggleMuteOrCycleAudio),
+        KeyCode::Char('a') if gated && !ctrl => Some(Command::ToggleMuteOrCycleAudio),
         _ => None,
     }
 }
@@ -772,6 +772,14 @@ mod tests {
     fn a_does_not_fire_when_neither_active_nor_remote() {
         assert_eq!(
             playback_command_for_key(key(KeyCode::Char('a')), false, false),
+            None
+        );
+    }
+
+    #[test]
+    fn ctrl_a_does_not_fire() {
+        assert_eq!(
+            playback_command_for_key(key_ctrl(KeyCode::Char('a')), true, true),
             None
         );
     }
