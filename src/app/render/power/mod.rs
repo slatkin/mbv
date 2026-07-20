@@ -466,8 +466,8 @@ impl App {
                 };
                 self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
                 render_lib_area = Rect {
-                    y: lib_area.y + 2,
-                    height: lib_area.height.saturating_sub(2),
+                    y: lib_area.y + 3,
+                    height: lib_area.height.saturating_sub(3),
                     ..lib_area
                 };
             } else {
@@ -1011,8 +1011,12 @@ mod tests {
             .expect("expected Alpha header");
 
         assert!(
-            header.contains('\u{258c}'),
-            "selected artist header should render with the focus gutter:\n{out}"
+            !header.contains('\u{258c}'),
+            "selected artist header should no longer render the left focus gutter:\n{out}"
+        );
+        assert!(
+            header.contains('\u{f037b}'),
+            "selected artist header should render the trailing focus icon:\n{out}"
         );
         assert_eq!(
             layout.cursor_screen_y,
@@ -1117,8 +1121,8 @@ mod tests {
             .take((gap_end - gap_start) as usize)
             .collect();
         assert!(
-            between.contains('\u{2501}'),
-            "expected a dash rule between adjacent pills, not blank space:\n{between:?}"
+            !between.contains('\u{2501}'),
+            "expected a blank gap between adjacent pills, not a dash rule:\n{between:?}"
         );
 
         assert!(!layout.selector_tabs.is_empty());
@@ -1130,10 +1134,17 @@ mod tests {
             );
         }
 
+        // Row 3 is now a blank spacer between the pill row and the album
+        // list (added so the pills don't sit flush against the list).
         let row3 = out.lines().nth(3).unwrap();
         assert!(
-            row3.contains("Alpha") || row3.contains("First Album"),
-            "expected album list content to start below the separate pill row:\n{out}"
+            row3.trim().is_empty(),
+            "expected a blank spacer row between the pills and the album list:\n{out}"
+        );
+        let row4 = out.lines().nth(4).unwrap();
+        assert!(
+            row4.contains("Alpha") || row4.contains("First Album"),
+            "expected album list content to start below the pill/spacer rows:\n{out}"
         );
     }
 
@@ -1281,6 +1292,10 @@ mod tests {
         track.artist = "Alpha".into();
         track.index_number = 1;
         app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        // In the music-group (pill selector) view, inline tracks only render
+        // once track-selection mode has been entered (Enter pressed).
+        app.libs[0].album_track_focus = Some(0);
 
         let mut layout = LayoutPower::default();
         let out = render_power_library_to_string(&mut app, &mut layout);
@@ -1474,6 +1489,11 @@ mod tests {
         assert!(!app.album_tracks_cache.contains_key("album-1"));
         assert!(!app.album_tracks_loading.contains("album-1"));
 
+        // In the music-group (pill selector) view, inline tracks (and the
+        // fetch that populates them) only happen once track-selection mode
+        // has been entered (Enter pressed).
+        app.libs[0].album_track_focus = Some(0);
+
         let mut layout = LayoutPower::default();
         let out = render_power_library_to_string(&mut app, &mut layout);
         let lines: Vec<&str> = out.lines().collect();
@@ -1520,7 +1540,7 @@ mod tests {
     }
 
     #[test]
-    fn album_folder_inline_detail_is_muted_until_track_selection_mode() {
+    fn album_folder_inline_detail_is_hidden_until_track_selection_mode() {
         let mut app = make_power_music_group_app();
 
         let mut track = make_item("Opening Track", "Audio");
@@ -1545,34 +1565,30 @@ mod tests {
             "expected no duplicate inline album title row:\n{out}"
         );
 
+        assert!(
+            !out.contains("Opening Track"),
+            "expected inline tracks to stay hidden until track-selection mode is entered \
+             (Enter pressed):\n{out}"
+        );
+
         let hint_y = lines
             .iter()
             .position(|line| line.contains("^P: Play"))
             .expect("expected inline action hint row");
+        assert!(
+            // The full hint text is wider than this fixture's terminal, so
+            // it's truncated with an ellipsis -- just check for the
+            // still-visible prefix.
+            lines[hint_y].contains("ENTER: Show"),
+            "expected the collapsed hint row to prompt Enter to show tracks:\n{out}"
+        );
         let hint_x = lines[hint_y]
             .find("^P: Play")
             .expect("expected hint x position");
         assert_eq!(
             buf[(hint_x as u16, hint_y as u16)].fg,
             palette::MUTED,
-            "expected inline action hints to render darker than unfocused track text:\n{out}"
-        );
-
-        let track_y = lines
-            .iter()
-            .position(|line| line.contains("Opening Track"))
-            .expect("expected inline track row");
-        let track_x = lines[track_y]
-            .find("Opening Track")
-            .expect("expected track x position");
-        assert!(
-            lines[track_y].contains("1. Opening Track"),
-            "expected inactive inline track list to still render the track row:\n{out}"
-        );
-        assert_eq!(
-            buf[(track_x as u16, track_y as u16)].fg,
-            palette::SUBTLE,
-            "expected inactive inline track list to render muted/subtle:\n{out}"
+            "expected inline action hints to render muted:\n{out}"
         );
     }
 
@@ -1703,6 +1719,11 @@ mod tests {
             selected.id, "album-2",
             "expected the raw items[cursor] entry, not a sorted/display-order lookup"
         );
+
+        // In the music-group (pill selector) view, the inline-detail fetch
+        // (and thus this test's target assertion) only happens once
+        // track-selection mode has been entered.
+        app.libs[0].album_track_focus = Some(0);
 
         let mut layout = LayoutPower::default();
         let _ = render_power_library_to_string(&mut app, &mut layout);

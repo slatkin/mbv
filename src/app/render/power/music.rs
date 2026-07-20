@@ -24,11 +24,10 @@ impl App {
 
     /// Renders the music-group selector pills (with horizontal scroll
     /// indicators) inside `row_area`. Gaps between pills, and any unused
-    /// trailing width, are filled with the same dash rule used by the
-    /// standard breadcrumb header row, so the row still reads as the top
-    /// divider underneath/between the pills. `row_area` must already be
-    /// confined to the right column and exclude the fixed `Music` marker
-    /// reserved by the caller (#180).
+    /// trailing width, are filled with blank space so the pills float free
+    /// rather than appearing to sit on a divider line. `row_area` must
+    /// already be confined to the right column and exclude the fixed
+    /// `Music` marker reserved by the caller (#180).
     pub(super) fn render_power_music_group_pills_row(
         &mut self,
         f: &mut Frame,
@@ -41,9 +40,8 @@ impl App {
             layout.selector_tabs = Vec::new();
             if row_area.width > 0 {
                 f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        "\u{2501}".repeat(row_area.width as usize),
-                        Style::default().fg(palette::FOAM),
+                    Paragraph::new(Line::from(Span::raw(
+                        " ".repeat(row_area.width as usize),
                     ))),
                     row_area,
                 );
@@ -109,9 +107,9 @@ impl App {
         }
         for (idx, label) in tab_labels[scroll_start..scroll_end].iter().enumerate() {
             if idx > 0 {
-                // Dash rule (not a blank space) so the top divider still
-                // reads as continuous underneath/between the pills.
-                spans.push(Span::styled("\u{2501}", Style::default().fg(palette::FOAM)));
+                // Blank gap so the pills float free rather than sitting on
+                // a continuous divider line.
+                spans.push(Span::raw(" "));
                 x_cursor += 1;
             }
             let abs_idx = scroll_start + idx;
@@ -143,14 +141,11 @@ impl App {
             x_cursor += chunk.width() as u16;
         }
 
-        // Fill any remaining width with the standard dash rule so the row
-        // still reads as the top divider when the pills don't fill it.
+        // Fill any remaining width with blank space so the pills stand
+        // alone instead of appearing to sit on a divider line.
         let used_w = (x_cursor - row_area.x) as usize;
         if used_w < bar_w {
-            spans.push(Span::styled(
-                "\u{2501}".repeat(bar_w - used_w),
-                Style::default().fg(palette::FOAM),
-            ));
+            spans.push(Span::raw(" ".repeat(bar_w - used_w)));
         }
 
         f.render_widget(Paragraph::new(Line::from(spans)), row_area);
