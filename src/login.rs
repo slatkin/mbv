@@ -136,7 +136,6 @@ pub fn run(
                     my_languages: base_config.my_languages.clone(),
                     feed_view_libraries: base_config.feed_view_libraries.clone(),
                     library_routes: base_config.library_routes.clone(),
-                    config_version: base_config.config_version,
                     progress_interval_secs: base_config.progress_interval_secs,
                     quit_timeout_secs: base_config.quit_timeout_secs,
                     daemon_broadcast_ms: base_config.daemon_broadcast_ms,

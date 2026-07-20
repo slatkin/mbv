@@ -18,7 +18,6 @@ pub mod tests {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiConfig {
     pub image_protocol: Option<String>, // "auto" | "halfblocks" | "sixel" | "kitty" | "iterm2"
-    pub show_log_tab: bool,
     pub image_cache_size: usize,
     pub use_nerd_fonts: bool,
     pub indicator_style: String, // chips|brackets|outlined|dots|pipes|keyvalue|powerline
@@ -28,7 +27,6 @@ impl Default for UiConfig {
     fn default() -> Self {
         Self {
             image_protocol: None,
-            show_log_tab: false,
             image_cache_size: 50,
             use_nerd_fonts: false,
             indicator_style: "keyvalue".into(),
@@ -69,29 +67,25 @@ pub fn load_ui_config() -> Result<UiConfig, String> {
 
 fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
     let doc: toml::Value = toml::from_str(text).map_err(|e| e.to_string())?;
-    let general = doc.get("general");
+    let display = doc.get("display");
 
-    let image_protocol = general
+    let image_protocol = display
         .and_then(|m| {
             m.get("image_protocol")
                 .or_else(|| m.get("card_image_protocol"))
         })
         .and_then(|v| v.as_str())
         .map(str::to_string);
-    let show_log_tab = general
-        .and_then(|m| m.get("show_log_tab"))
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let image_cache_size = general
+    let image_cache_size = display
         .and_then(|m| m.get("image_cache_size"))
         .and_then(|v| v.as_integer())
         .map(|v| v.max(1) as usize)
         .unwrap_or(50);
-    let use_nerd_fonts = general
+    let use_nerd_fonts = display
         .and_then(|m| m.get("use_nerd_fonts"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let indicator_style = general
+    let indicator_style = display
         .and_then(|m| m.get("indicator_style"))
         .and_then(|v| v.as_str())
         .unwrap_or("keyvalue")
@@ -99,7 +93,6 @@ fn parse_ui_config(text: &str) -> Result<UiConfig, String> {
 
     Ok(UiConfig {
         image_protocol,
-        show_log_tab,
         image_cache_size,
         use_nerd_fonts,
         indicator_style,
@@ -127,38 +120,34 @@ pub fn save_ui_config(ui: &UiConfig) {
         return;
     };
 
-    let general = table
-        .entry("general".to_string())
+    let display = table
+        .entry("display".to_string())
         .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
         .as_table_mut()
         .unwrap();
 
-    general.insert(
-        "show_log_tab".to_string(),
-        toml::Value::Boolean(ui.show_log_tab),
-    );
-    general.insert(
+    display.insert(
         "image_cache_size".to_string(),
         toml::Value::Integer(ui.image_cache_size as i64),
     );
-    general.insert(
+    display.insert(
         "use_nerd_fonts".to_string(),
         toml::Value::Boolean(ui.use_nerd_fonts),
     );
-    general.insert(
+    display.insert(
         "indicator_style".to_string(),
         toml::Value::String(ui.indicator_style.clone()),
     );
     match &ui.image_protocol {
         Some(protocol) => {
-            general.insert(
+            display.insert(
                 "image_protocol".to_string(),
                 toml::Value::String(protocol.clone()),
             );
         }
         None => {
-            general.remove("image_protocol");
-            general.remove("card_image_protocol");
+            display.remove("image_protocol");
+            display.remove("card_image_protocol");
         }
     }
 

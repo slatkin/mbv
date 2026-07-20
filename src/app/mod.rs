@@ -1381,18 +1381,29 @@ enum SettingKey {
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     (
-        "[general]",
+        "[session]",
         &[
             SettingKey::StayAlive,
             SettingKey::AutoReconnect,
             SettingKey::SavePlaylistOnQuit,
             SettingKey::AlwaysSkipIntro,
-            SettingKey::SystemNotifications,
-            SettingKey::ImageProtocol,
+        ],
+    ),
+    (
+        "[library]",
+        &[
             SettingKey::HiddenLibraries,
             SettingKey::HiddenLatest,
             SettingKey::FeedViewLibraries,
             SettingKey::LibraryRoutes,
+        ],
+    ),
+    (
+        "[display]",
+        &[
+            SettingKey::SystemNotifications,
+            SettingKey::ImageProtocol,
+            SettingKey::ViewMode,
         ],
     ),
     (
@@ -1404,7 +1415,6 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::ConsumeAudio,
             SettingKey::SavePlaylistOnConsume,
             SettingKey::SavePlaylistOnConsumeAudio,
-            SettingKey::ViewMode,
         ],
     ),
     (
@@ -1423,9 +1433,10 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::SubtitleMode,
             SettingKey::SubtitleLanguage,
             SettingKey::AudioLanguage,
+            SettingKey::ShowSysTrayIcon,
         ],
     ),
-    ("[daemon]", &[SettingKey::ShowSysTrayIcon]),
+    ("[mbvd]", &[]),
     ("[actions]", &[SettingKey::LogOut]),
 ];
 
@@ -1700,7 +1711,6 @@ impl App {
         };
         crate::config::UiConfig {
             image_protocol: self.image_protocol.clone(),
-            show_log_tab: false,
             image_cache_size: self.image_cache_size,
             use_nerd_fonts: self.use_nerd_fonts,
             indicator_style: indicator_style.to_string(),
