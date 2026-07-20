@@ -10192,7 +10192,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn alt_q_enqueues_from_home_view() {
+    fn ctrl_a_enqueues_from_home_view() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         app.tab_idx = 0;
@@ -10200,7 +10200,7 @@ pub(crate) mod tests {
         app.home.continue_items = make_items(1);
         app.home.continue_cursor = 0;
 
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
         assert!(!handled);
         assert_eq!(app.player_tab.items.len(), 1);
@@ -10208,7 +10208,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn alt_q_appends_to_direct_remote_queue() {
+    fn ctrl_a_appends_to_direct_remote_queue() {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(3);
@@ -10220,7 +10220,7 @@ pub(crate) mod tests {
         app.home.continue_items = make_items(1);
         app.home.continue_cursor = 0;
 
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
         assert!(!handled);
         assert_eq!(
@@ -10240,7 +10240,7 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn alt_q_rejects_v2_direct_remote_append_without_replace_queue() {
+    fn ctrl_a_rejects_v2_direct_remote_append_without_replace_queue() {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(3);
@@ -10251,7 +10251,7 @@ pub(crate) mod tests {
         app.home.continue_items = make_items(1);
         app.home.continue_cursor = 0;
 
-        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::ALT));
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
 
         assert!(!handled);
         assert!(

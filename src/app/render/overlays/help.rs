@@ -86,7 +86,7 @@ impl App {
             section("[home]"),
             mk("Alt+↑ / ↓", "Switch sections"),
             mk("Ctrl+W", "Toggle watched"),
-            mk("Alt+Q", "Add to Queue"),
+            mk("Ctrl+A", "Add to Queue"),
             blank(),
         ];
         let sec_library = vec![
@@ -96,7 +96,7 @@ impl App {
             mk("Ctrl+W", "Toggle watched"),
             mk("Ctrl+S", "Shuffle"),
             mk("Ctrl+P", "Play all"),
-            mk("Alt+Q", "Add to Queue"),
+            mk("Ctrl+A", "Add to Queue"),
             mk("r", "Refresh library"),
             mk("Ctrl+R", "Rescan"),
             blank(),

@@ -3326,33 +3326,15 @@ impl App {
                 .or_else(|| lib.nav_stack.last().map(|l| l.parent_id.clone()))
                 .unwrap_or_else(|| lib.library.id.clone())
         };
-        let client = self.client.lock().unwrap();
-        match client.get_all_videos_recursive(&parent_id) {
-            Ok(mut items) => {
-                items.retain(|i| !i.is_folder);
-                if items.is_empty() {
-                    drop(client);
-                    self.flash_status_high("Nothing to shuffle".into());
-                    return;
-                }
-                items.shuffle(&mut rand::rng());
-                let count = items.len();
-                drop(client);
-                self.replace_playback_queue(items.clone(), 0);
-                self.tab_idx = 1;
-                self.flash_status(format!("Shuffling {count} items"));
-                self.queue_source = crate::config::QueueSource::Shuffle;
-                if !self.has_direct_remote_queue() {
-                    self.save_queue_state();
-                }
-                self.play_items_routed(items, 0);
-            }
-            Err(e) => {
-                let msg = format!("Error: {e}");
-                drop(client);
-                self.flash_status_high(msg);
-            }
-        }
+        // Delegate to the same fetch the context menu's Shuffle action uses
+        // (`ContextAction::ShuffleFolder` -> `shuffle_folder`), rather than
+        // duplicating this logic against `get_all_videos_recursive`, which
+        // only requests Episode/Movie/Video types and so silently excludes
+        // Audio -- Ctrl+S on a music album (all-Audio contents) always
+        // fetched zero items and reported "Nothing to shuffle" even though
+        // the album had playable tracks, while the context menu (already on
+        // `get_all_playable_recursive`, which includes Audio) worked fine.
+        self.shuffle_folder(&parent_id);
     }
 
     pub(super) fn play_folder(&mut self, folder_id: &str) {
