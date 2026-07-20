@@ -688,11 +688,7 @@ impl App {
                 palette::PINE,
             )
         };
-        let stop_glyph = if self.use_nerd_fonts {
-            "\u{f04d}"
-        } else {
-            "X"
-        };
+        let stop_glyph = if self.use_nerd_fonts { "\u{f04d}" } else { "X" };
         let stop_gap = " ";
 
         let next_glyph = if self.use_nerd_fonts {
@@ -707,8 +703,8 @@ impl App {
         } else {
             palette::MUTED
         };
-        let stop_avail = self.connected_session_id.is_some()
-            || self.player.status.lock().unwrap().active;
+        let stop_avail =
+            self.connected_session_id.is_some() || self.player.status.lock().unwrap().active;
         let stop_color = if stop_avail {
             palette::RED
         } else {
