@@ -1381,12 +1381,30 @@ enum SettingKey {
 // LogOut is rendered separately as a plain line below the grid.
 static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
     (
+        "[playback]",
+        &[
+            SettingKey::SubtitleMode,
+            SettingKey::SubtitleLanguage,
+            SettingKey::AudioLanguage,
+            SettingKey::MyLanguages,
+        ],
+    ),
+    (
+        "[display]",
+        &[
+            SettingKey::ImageProtocol,
+            SettingKey::SystemNotifications,
+            SettingKey::ViewMode,
+        ],
+    ),
+    (
         "[session]",
         &[
             SettingKey::StayAlive,
             SettingKey::AutoReconnect,
-            SettingKey::SavePlaylistOnQuit,
             SettingKey::AlwaysSkipIntro,
+            SettingKey::SavePlaylistOnQuit,
+            SettingKey::ShowSysTrayIcon,
         ],
     ),
     (
@@ -1396,14 +1414,6 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::HiddenLatest,
             SettingKey::FeedViewLibraries,
             SettingKey::LibraryRoutes,
-        ],
-    ),
-    (
-        "[display]",
-        &[
-            SettingKey::SystemNotifications,
-            SettingKey::ImageProtocol,
-            SettingKey::ViewMode,
         ],
     ),
     (
@@ -1426,17 +1436,6 @@ static SETTING_SECTIONS: &[(&str, &[SettingKey])] = &[
             SettingKey::Autoload,
         ],
     ),
-    (
-        "[playback]",
-        &[
-            SettingKey::MyLanguages,
-            SettingKey::SubtitleMode,
-            SettingKey::SubtitleLanguage,
-            SettingKey::AudioLanguage,
-            SettingKey::ShowSysTrayIcon,
-        ],
-    ),
-    ("[mbvd]", &[]),
     ("[actions]", &[SettingKey::LogOut]),
 ];
 
