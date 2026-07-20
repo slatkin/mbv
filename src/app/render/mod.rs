@@ -664,6 +664,7 @@ impl App {
     ) {
         if area.height == 0 || area.width == 0 {
             layout.play_pause_area = Rect::default();
+            layout.stop_area = Rect::default();
             layout.next_area = Rect::default();
             return;
         }
@@ -674,19 +675,21 @@ impl App {
 
         let (glyph, gcolor): (&str, Color) = if paused {
             (
+                if self.use_nerd_fonts { "\u{f04b}" } else { ">" },
+                palette::YELLOW,
+            )
+        } else {
+            (
                 if self.use_nerd_fonts {
                     "\u{f04c}"
                 } else {
                     "||"
                 },
-                palette::YELLOW,
-            )
-        } else {
-            (
-                if self.use_nerd_fonts { "\u{f04b}" } else { ">" },
                 palette::PINE,
             )
         };
+        let stop_glyph = if self.use_nerd_fonts { "\u{f04d}" } else { "X" };
+        let stop_gap = " ";
 
         let next_glyph = if self.use_nerd_fonts {
             "\u{f051}"
@@ -700,9 +703,16 @@ impl App {
         } else {
             palette::MUTED
         };
+        let stop_avail =
+            self.connected_session_id.is_some() || self.player.status.lock().unwrap().active;
+        let stop_color = if stop_avail {
+            palette::RED
+        } else {
+            palette::MUTED
+        };
         let right = self.build_status_indicator_spans().unwrap_or_default();
 
-        // Left: glyph  next  title  │  elapsed / total
+        // Left: glyph  stop  next  title  │  elapsed / total
         // A running `x` cursor tracks where each clickable glyph lands in the
         // rendered `Line`, so `layout.*_area` exactly matches what's on screen
         // rather than an estimate.
@@ -723,6 +733,18 @@ impl App {
             Style::default().fg(gcolor).add_modifier(Modifier::BOLD),
         ));
 
+        let stop_w = stop_glyph.width() as u16;
+        layout.stop_area = Rect {
+            x,
+            y: area.y,
+            width: stop_w,
+            height: 1,
+        };
+        x += stop_w;
+        left.push(Span::styled(stop_glyph, Style::default().fg(stop_color)));
+        left.push(Span::raw(stop_gap));
+        x += stop_gap.width() as u16;
+
         let next_w = next_glyph.width() as u16;
         layout.next_area = Rect {
             x,
@@ -739,6 +761,8 @@ impl App {
         let post_time_gap = "  ";
         let right_w: u16 = right.iter().map(|s| s.content.width() as u16).sum();
         let fixed_w = glyph_w as usize
+            + stop_w as usize
+            + stop_gap.width()
             + next_w as usize
             + next_gap.width()
             + sep_text.width()
@@ -1222,8 +1246,8 @@ mod tests {
         assert_eq!(layout.next_area.x, next_x);
         assert_eq!(layout.next_area.width, next_glyph.width() as u16);
         assert!(
-            line.starts_with("> >> Title"),
-            "expected next glyph between play/pause and title:\n{line}"
+            line.starts_with("|| X >> Title"),
+            "expected stop then next glyph between play/pause and title:\n{line}"
         );
     }
 
@@ -1277,13 +1301,13 @@ mod tests {
             st.audio_lang = "en".into();
         }
 
-        let backend = TestBackend::new(50, 1);
+        let backend = TestBackend::new(53, 1);
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPlayback::default();
         term.draw(|f| {
             app.render_title_row(
                 f,
-                Rect::new(0, 0, 50, 1),
+                Rect::new(0, 0, 53, 1),
                 "This is an extremely long title that would otherwise push controls away",
                 palette::FOAM,
                 &mut layout,
@@ -1305,7 +1329,7 @@ mod tests {
             line.ends_with("RES 1080p  AUD en  SUB off"),
             "expected status badges to remain right-aligned:\n{line}"
         );
-        assert!(layout.next_area.x + layout.next_area.width <= 50);
+        assert!(layout.next_area.x + layout.next_area.width <= 53);
     }
 
     #[test]

@@ -34,6 +34,9 @@ pub(crate) struct LayoutPlayback {
     pub ind_mu: Rect,
     /// Playback header play/pause glyph; always clickable when the row renders.
     pub play_pause_area: Rect,
+    /// Playback header stop glyph; only wired to the action when
+    /// `App::transport_stop_available()` is true.
+    pub stop_area: Rect,
     /// Playback header next glyph; only wired to the action when
     /// `App::transport_prev_next_available().1` is true.
     pub next_area: Rect,

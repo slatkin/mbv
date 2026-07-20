@@ -3213,6 +3213,14 @@ impl App {
                     self.dispatch(super::action::Command::TogglePlayPause);
                     return;
                 }
+                if self.layout.playback.stop_area.contains((col, row).into()) {
+                    let stop_avail = self.connected_session_id.is_some()
+                        || self.player.status.lock().unwrap().active;
+                    if stop_avail {
+                        self.dispatch(super::action::Command::Stop);
+                    }
+                    return;
+                }
                 if self.layout.playback.next_area.contains((col, row).into()) {
                     if self.transport_prev_next_available().1 {
                         self.dispatch(super::action::Command::NextTrack);
