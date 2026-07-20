@@ -248,6 +248,17 @@ impl App {
                                         .add_modifier(Modifier::BOLD),
                                 ),
                             ])
+                        } else if i == 0 {
+                            // First tab keeps the same indicator-column width as
+                            // the focused state (dimmed instead of pine) so the
+                            // label doesn't jump left/right when focus moves.
+                            Line::from(vec![
+                                Span::styled("▐", Style::default().fg(palette::MUTED)),
+                                Span::styled(
+                                    format!(" {n}  "),
+                                    Style::default().fg(palette::SUBTLE),
+                                ),
+                            ])
                         } else {
                             Line::from(Span::styled(
                                 format!("  {n}  "),
@@ -281,6 +292,18 @@ impl App {
                                     Style::default()
                                         .fg(palette::WHITE)
                                         .add_modifier(Modifier::BOLD),
+                                ),
+                            ])
+                        } else if i == 0 && !has_left {
+                            // First visible tab (when not scrolled) keeps the
+                            // same indicator-column width as the focused state
+                            // (dimmed instead of pine) so the label doesn't jump
+                            // left/right when focus moves.
+                            Line::from(vec![
+                                Span::styled("▐", Style::default().fg(palette::MUTED)),
+                                Span::styled(
+                                    format!(" {n}  "),
+                                    Style::default().fg(palette::SUBTLE),
                                 ),
                             ])
                         } else {
