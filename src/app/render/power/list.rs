@@ -23,7 +23,7 @@ use unicode_width::UnicodeWidthStr;
 /// surrounding list.
 const COMPACT_BANNER_RULE_ROWS: usize = 1;
 const COMPACT_BANNER_GAP_ROWS: usize = 1;
-const COMPACT_BANNER_INDENT: u16 = 2;
+const COMPACT_BANNER_INDENT: u16 = 0;
 
 impl App {
     /// Filler-row count to reserve around the selected movie's row in

@@ -768,8 +768,8 @@ mod tests {
         );
         assert_eq!(
             lines[2].find('▌'),
-            Some(2),
-            "expected the selected-row indicator to be indented two spaces:\n{out}"
+            Some(0),
+            "expected the selected-row indicator at column 0:\n{out}"
         );
         assert!(
             out.contains("compact movie banner"),
@@ -777,8 +777,8 @@ mod tests {
         );
         assert_eq!(
             lines[3].find('▌'),
-            Some(2),
-            "expected the selection indicator to continue through the banner at the indented column:\n{out}"
+            Some(0),
+            "expected the selection indicator to continue through the banner at column 0:\n{out}"
         );
         assert!(
             out.contains("Director: Director Hidden"),
@@ -792,9 +792,8 @@ mod tests {
             lines
                 .get(director_line.saturating_sub(1))
                 .map(|l| {
-                    l.find('▌') == Some(2)
-                        && l.chars().take(2).all(|c| c == ' ')
-                        && l.chars().skip(3).all(|c| c == ' ')
+                    l.find('▌') == Some(0)
+                        && l.chars().skip(1).all(|c| c == ' ')
                 })
                 .unwrap_or(false),
             "expected a spacer row before the director line:\n{out}"
