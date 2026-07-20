@@ -22,6 +22,9 @@ use unicode_width::UnicodeWidthStr;
 pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
     ratatui_image::FilterType::Triangle;
 
+/// Columns of empty space between the left and right panels in power view.
+const POWER_VIEW_GAP: u16 = 2;
+
 pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usize, offset: usize) {
     let visible = area.height as usize;
     render_power_scrollbar_with_viewport(
@@ -205,7 +208,7 @@ impl App {
             if self.power_left_tab == 0 {
                 layout.breadcrumbs = Vec::new();
 
-                let right_col_w = right_w.saturating_sub(1);
+                let right_col_w = right_w.saturating_sub(POWER_VIEW_GAP);
                 let marker_text = " Keep Watching ";
                 let marker_w = (marker_text.width() as u16).min(right_col_w);
                 let left_line_w = area.width.saturating_sub(marker_w);
@@ -249,8 +252,8 @@ impl App {
                     },
                 );
 
-                let right_col_x = area.x + left_w + 1;
-                let right_col_w = right_w.saturating_sub(1);
+                let right_col_x = area.x + left_w + POWER_VIEW_GAP;
+                let right_col_w = right_w.saturating_sub(POWER_VIEW_GAP);
                 let marker_text = format!(" {} ", self.libs[lib_idx].library.name);
                 let marker_w = (marker_text.width() as u16).min(right_col_w);
 
@@ -393,9 +396,9 @@ impl App {
             height: content_h,
         };
         let right_area = Rect {
-            x: area.x + left_w + 1,
+            x: area.x + left_w + POWER_VIEW_GAP,
             y: area.y + 1,
-            width: right_w.saturating_sub(1),
+            width: right_w.saturating_sub(POWER_VIEW_GAP),
             height: content_h,
         };
 
@@ -1083,7 +1086,7 @@ mod tests {
             "expected the Music marker to keep the standard base (black) text"
         );
 
-        let right_col_x = app.power_left_width + 1;
+        let right_col_x = app.power_left_width + POWER_VIEW_GAP;
         assert!(
             row0.chars()
                 .take(right_col_x as usize)
@@ -1195,7 +1198,7 @@ mod tests {
             "expected the right scroll indicator to stay inside the pill row:\n{out}"
         );
 
-        let right_col_x = (app.power_left_width + 1) as usize;
+        let right_col_x = (app.power_left_width + POWER_VIEW_GAP) as usize;
         assert!(
             row0.chars().take(right_col_x).all(|c| c == '\u{2501}'),
             "expected a plain dash rule over the left column on the title row:\n{out}"
