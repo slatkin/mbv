@@ -32,11 +32,7 @@ if [[ -z "${BRANCH}" ]]; then
   exit 1
 fi
 
-if [[ "${BRANCH}" == "main" ]]; then
-  echo "error: release prep must run on a branch, not local main"
-  echo "create a branch from origin/main first"
-  exit 1
-fi
+
 
 echo "==> Releasing ${TAG}: ${SUMMARY}"
 
@@ -63,12 +59,19 @@ git commit --no-verify -m "Release ${TAG}: ${SUMMARY}"
 
 echo
 echo "==> Release prep committed on ${BRANCH}."
-echo "==> Next:"
-echo "    1. git push origin ${BRANCH}"
-echo "    2. Open and merge a pull request into main"
-echo "    3. git fetch origin"
-echo "    4. git tag ${TAG} origin/main"
-echo "    5. git push origin ${TAG}"
+if [[ "${BRANCH}" == "main" ]]; then
+  echo "==> Next:"
+  echo "    1. git push origin main"
+  echo "    2. git tag ${TAG}"
+  echo "    3. git push origin ${TAG}"
+else
+  echo "==> Next:"
+  echo "    1. git push origin ${BRANCH}"
+  echo "    2. Open and merge a pull request into main"
+  echo "    3. git fetch origin"
+  echo "    4. git tag ${TAG} origin/main"
+  echo "    5. git push origin ${TAG}"
+fi
 echo
 echo "==> The tag-triggered GitHub Action will then:"
 echo "    - Build and test"
