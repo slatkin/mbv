@@ -2,10 +2,9 @@
 # Usage: scripts/release.sh <version> "<summary>"
 # Example: scripts/release.sh 0.8.9 "add keyboard shortcuts for playback speed"
 #
-# Standard release-prep entrypoint for the protected-main workflow.
-# Runs tests + clippy, bumps Cargo.toml, updates Cargo.lock, and commits
-# the release change on the current branch. After that branch is merged,
-# tag origin/main and push the tag to trigger the release workflow.
+# Runs tests + clippy, bumps Cargo.toml, updates Cargo.lock, commits,
+# and pushes. On main: pushes, tags, and pushes the tag. On a branch:
+# commits only; merge via PR then tag manually.
 set -euo pipefail
 
 VERSION="${1?Usage: scripts/release.sh <version> \"<summary>\"}"
@@ -60,10 +59,17 @@ git commit --no-verify -m "Release ${TAG}: ${SUMMARY}"
 echo
 echo "==> Release prep committed on ${BRANCH}."
 if [[ "${BRANCH}" == "main" ]]; then
-  echo "==> Next:"
-  echo "    1. git push origin main"
-  echo "    2. git tag ${TAG}"
-  echo "    3. git push origin ${TAG}"
+  echo
+  echo "==> git push origin main..."
+  git push origin main
+
+  echo
+  echo "==> git tag ${TAG}..."
+  git tag "${TAG}"
+
+  echo
+  echo "==> git push origin ${TAG}..."
+  git push origin "${TAG}"
 else
   echo "==> Next:"
   echo "    1. git push origin ${BRANCH}"
