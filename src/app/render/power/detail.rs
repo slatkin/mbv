@@ -96,7 +96,8 @@ impl App {
         lib_idx: usize,
     ) -> Option<mbv_core::api::MediaItem> {
         let lib = self.libs.get(lib_idx)?;
-        if lib.library.collection_type != "movies" {
+        let coll = lib.library.collection_type.as_str();
+        if coll != "movies" && coll != "homevideos" && coll != "podcasts" {
             return None;
         }
 
@@ -108,11 +109,14 @@ impl App {
             level.items.get(level.cursor)?.clone()
         };
 
-        if item.is_folder || item.item_type != "Movie" {
-            None
-        } else {
-            Some(item)
+        if item.is_folder {
+            return None;
         }
+        if coll == "movies" && item.item_type != "Movie" {
+            return None;
+        }
+
+        Some(item)
     }
 
     /// Computes the compact banner's content for `item`, given the panel
