@@ -676,7 +676,7 @@ impl App {
         let (glyph, gcolor): (&str, Color) = if paused {
             (
                 if self.use_nerd_fonts { "\u{f04b}" } else { ">" },
-                palette::YELLOW,
+                palette::PINE,
             )
         } else {
             (
@@ -685,7 +685,7 @@ impl App {
                 } else {
                     "||"
                 },
-                palette::PINE,
+                palette::YELLOW,
             )
         };
         let stop_glyph = if self.use_nerd_fonts { "\u{f04d}" } else { "X" };
@@ -858,9 +858,10 @@ impl App {
                 .or_else(|| daemon_endpoint_label(daemon_endpoint)),
             super::RemoteSlotState::LocalDaemon => None,
         };
+        let gap = if self.use_nerd_fonts { " " } else { "  " };
         let label = match target {
-            Some(target) => format!("  {target}"),
-            None => "  local".to_string(),
+            Some(target) => format!("{gap}{target}"),
+            None => format!("{gap}local"),
         };
         let label_style = Style::default()
             .fg(if remote_on {
@@ -872,32 +873,42 @@ impl App {
 
         vec![
             Span::styled(" ", Style::default().bg(palette::PILL_BG)),
-            Span::styled("\u{1F5A7}", glyph_style),
+            Span::styled(
+                if self.use_nerd_fonts {
+                    "\u{f1616}"
+                } else {
+                    "\u{1F5A7}"
+                },
+                glyph_style,
+            ),
             Span::styled(label, label_style),
             Span::styled(" ", Style::default().bg(palette::PILL_BG)),
         ]
     }
 
     fn playlist_status_spans(&self) -> Vec<Span<'static>> {
+        let gap = if self.use_nerd_fonts { " " } else { "  " };
         let (label, on) = match &self.queue_source {
-            crate::config::QueueSource::Playlist { name, .. } => (format!("  {name}"), true),
-            _ => ("  none".to_string(), false),
+            crate::config::QueueSource::Playlist { name, .. } => (format!("{gap}{name}"), true),
+            _ => (format!("{gap}none"), false),
         };
         let glyph_style = Style::default()
             .bg(palette::PILL_BG)
-            .fg(if on { palette::YELLOW } else { palette::FOAM })
-            .add_modifier(if on {
-                Modifier::BOLD
-            } else {
-                Modifier::empty()
-            });
+            .fg(ratatui::style::Color::White);
         let label_style = Style::default()
             .fg(if on { palette::FOAM } else { palette::SUBTLE })
             .bg(palette::PILL_BG);
 
         vec![
             Span::styled(" ", Style::default().bg(palette::PILL_BG)),
-            Span::styled("\u{1F5AD}", glyph_style),
+            Span::styled(
+                if self.use_nerd_fonts {
+                    "\u{f03a}"
+                } else {
+                    "\u{1F5AD}"
+                },
+                glyph_style,
+            ),
             Span::styled(label, label_style),
             Span::styled(" ", Style::default().bg(palette::PILL_BG)),
         ]
@@ -957,7 +968,7 @@ impl App {
     /// and mute status groups. Right side: queue source/save-state/scope detail.
     fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
-        let bar_style = Style::default().bg(palette::BASE);
+        let bar_style = Style::default().bg(palette::BAR_BG);
         f.render_widget(Block::default().style(bar_style), area);
         layout.ind_mu = Rect::default();
 
@@ -969,10 +980,19 @@ impl App {
         let remote_status = self.remote_status_spans(remote_state, &daemon_endpoint);
         let playlist_status = self.playlist_status_spans();
 
-        let alive_status: Option<Vec<Span>> = self
-            .stay_alive_ctrl
-            .is_some()
-            .then(|| vec![Span::styled("\u{2665}", Style::default().fg(palette::RED))]);
+        let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
+            vec![
+                Span::raw(" "),
+                Span::styled(
+                    if self.use_nerd_fonts {
+                        "\u{f004}"
+                    } else {
+                        "\u{2665}"
+                    },
+                    Style::default().fg(palette::RED),
+                ),
+            ]
+        });
         let mute_status = self.mute_status_spans();
 
         // Left-segment overflow priority: mute drops first if the combined

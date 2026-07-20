@@ -11878,6 +11878,7 @@ pub(crate) mod tests {
         app.set_queue_scope(QueueScope::Remote);
         app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
         app.client.lock().unwrap().config.server_url = "http://emby.local:8096".into();
+        app.use_nerd_fonts = false;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
@@ -12039,6 +12040,7 @@ pub(crate) mod tests {
         app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
         let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
         app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+        app.use_nerd_fonts = false;
 
         let rendered = render_app_to_string(&mut app, 80, 24);
         let last_line = rendered.lines().last().unwrap();
@@ -12060,6 +12062,7 @@ pub(crate) mod tests {
         app.client.lock().unwrap().config.daemon_client_endpoint = "tcp://music.local:8097".into();
         let (app_end, _relay_end) = std::os::unix::net::UnixStream::pair().unwrap();
         app.stay_alive_ctrl = Some(stay_alive::StayAliveCtrl::for_test(app_end));
+        app.use_nerd_fonts = false;
 
         let term = render_app_to_terminal(&mut app, 80, 24);
         let buf = term.backend().buffer();
@@ -12070,7 +12073,7 @@ pub(crate) mod tests {
 
         assert_eq!(
             buf[(heart_x, last_y)].bg,
-            palette::BASE,
+            palette::BAR_BG,
             "expected the stay-alive heart to stay on the row background, not a pill background"
         );
     }
@@ -12193,13 +12196,13 @@ pub(crate) mod tests {
 
         for x in 0..buf.area().width {
             let bg = buf[(x, last_y)].bg;
-            saw_row_bg |= bg == palette::BASE;
+            saw_row_bg |= bg == palette::BAR_BG;
             saw_pill_bg |= bg == palette::PILL_BG;
         }
 
         assert!(
             saw_row_bg,
-            "expected the status bar row background to be visible"
+            "expected the status bar row background Rgb(40,40,40) to be visible"
         );
         assert!(
             saw_pill_bg,
