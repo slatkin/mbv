@@ -3,7 +3,7 @@
 Create an isolated branch workspace with safe defaults. This mirrors the
 current `superpowers:using-git-worktrees` skill's structure (Step 0 detect →
 Step 1a native tools → Step 1b git fallback); this file adds mbv-specific
-convention (`.claude/worktrees/`, Rust setup/test commands) and a Serena
+convention (`.worktrees/`, Rust setup/test commands) and a Serena
 caveat learned the hard way (see #260 / PR #265 / PR #266).
 
 > ⚠️ **Before you touch a second worktree in this session: Serena will not
@@ -39,7 +39,7 @@ If a native worktree tool is available in this session — in Claude Code this
 is the `EnterWorktree` tool — prefer it over raw `git worktree add` for
 **switching this session's own working directory** into a worktree, or for
 creating a throwaway one where the forced branch-name pattern (below) doesn't
-matter. It handles directory placement (`.claude/worktrees/<name>/`) and
+matter. It handles directory placement (`.worktrees/<name>/`) and
 cleanup (`ExitWorktree`) for you, and moves the session's working directory,
 write access, and project configuration (`CLAUDE.md`, settings) to the
 target.
@@ -70,7 +70,7 @@ name doesn't fit (mbv's common case).
 
 ### Directory Selection
 
-1. This repo's established convention is `.claude/worktrees/<branch-name>/`
+1. This repo's established convention is `.worktrees/<branch-name>/`
    — matching Claude Code's own native default path for `EnterWorktree`/
    `--worktree` (see Step 1a), so a worktree created manually here looks and
    behaves the same as one Claude Code would have created natively. Use it
@@ -85,10 +85,10 @@ Verify the worktree directory is actually ignored before creating anything
 under it:
 
 ```bash
-git check-ignore -q .claude/worktrees 2>/dev/null
+git check-ignore -q .worktrees 2>/dev/null
 ```
 
-`.claude/worktrees/` is already listed in this repo's `.gitignore` — if that
+`.worktrees/` is already listed in this repo's `.gitignore` — if that
 check fails (e.g. someone removed the entry, or you're using a different
 directory), add the appropriate line and commit it before proceeding. An
 uncommitted ignore entry is easy to lose and leaves worktree contents exposed
@@ -97,7 +97,7 @@ to accidental staging.
 ### Create the Worktree
 
 ```bash
-git worktree add .claude/worktrees/<BRANCH_NAME> -b <BRANCH_NAME>
+git worktree add .worktrees/<BRANCH_NAME> -b <BRANCH_NAME>
 ```
 
 Note the `cd`-doesn't-persist caveat: a `cd <path>` inside one `Bash` tool
@@ -129,7 +129,7 @@ $ ps -eo pid,ppid,lstart,args | grep serena
 $ readlink -f /proc/3932/cwd    # Serena (child)
 /home/slatkin/Dev/mbv
 $ readlink -f /proc/3886/cwd    # Claude Code CLI (parent, ppid of 3932)
-/home/slatkin/Dev/mbv/.claude/worktrees/<worktree>
+/home/slatkin/Dev/mbv/.worktrees/<worktree>
 ```
 
 Serena (pid 3932) is a **direct child process of the Claude Code CLI itself**
