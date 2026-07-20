@@ -3362,9 +3362,53 @@ impl App {
         }
     }
 
+    pub(crate) fn is_tvshows_library(&self, lib_idx: usize) -> bool {
+        self.libs[lib_idx].library.collection_type == "tvshows"
+    }
+
+    /// Whether the currently focused library tab is a tvshows library.
+    /// Same bounds-check-then-delegate shape as `is_in_podcast_library`,
+    /// and correct in both the standard and Power views since
+    /// `lib_tab_offset()` is view-mode-independent.
+    ///
+    /// Caveat: this reads the *active tab*, not the folder actually being
+    /// shuffled -- `shuffle_folder`'s `folder_id` argument is not consulted
+    /// here. That's fine for its two current callers (`shuffle_play`, only
+    /// reachable once `tab_idx` is already on a library tab; and the
+    /// context menu's Shuffle action, only offered for a folder while
+    /// browsing a library tab), but it would silently pick the wrong fetch
+    /// for a folder reached some other way -- e.g. a future caller
+    /// shuffling a folder surfaced by the global search overlay, or a
+    /// Home-tab aggregate (Continue Watching/Latest), while a *different*
+    /// library tab happens to be focused underneath. A robust fix for that
+    /// case would resolve `folder_id`'s owning library via
+    /// `get_ancestors`, the way `route_for_item_via_ancestors` in
+    /// `library_route.rs` already does for the analogous "which library
+    /// actually owns this item" problem in route resolution.
+    fn active_lib_is_tvshows(&self) -> bool {
+        let lib_off = self.lib_tab_offset();
+        if self.tab_idx < lib_off {
+            return false;
+        }
+        let lib_idx = self.tab_idx - lib_off;
+        lib_idx < self.libs.len() && self.is_tvshows_library(lib_idx)
+    }
+
     pub(super) fn shuffle_folder(&mut self, folder_id: &str) {
+        // TV libraries shuffle from a video-only fetch (Episode/Movie/Video)
+        // so a season/series shuffle can't pull in stray Audio items (e.g.
+        // theme songs); every other library type keeps the broader
+        // playable-items fetch used for enqueue/play-all, which does
+        // include Audio (needed for music libraries -- see the bug this
+        // replaced).
+        let is_tvshows = self.active_lib_is_tvshows();
         let client = self.client.lock().unwrap();
-        match client.get_all_playable_recursive(folder_id) {
+        let fetch = if is_tvshows {
+            client.get_all_videos_recursive(folder_id)
+        } else {
+            client.get_all_playable_recursive(folder_id)
+        };
+        match fetch {
             Ok(mut items) => {
                 items.retain(|i| !i.is_folder);
                 if items.is_empty() {
@@ -7462,6 +7506,57 @@ mod tests {
         app.play_item(item);
 
         assert!(app.active_route.is_none());
+    }
+
+    fn lib_tab(collection_type: &str) -> LibraryTab {
+        let mut library = make_item("Lib", "CollectionFolder");
+        library.id = "lib-1".into();
+        library.collection_type = collection_type.into();
+        LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            album_track_focus: None,
+            artist_header_focus: None,
+        }
+    }
+
+    #[test]
+    fn active_lib_is_tvshows_true_only_on_a_tvshows_library_tab() {
+        // `shuffle_folder` (issue: TV libraries should shuffle from a
+        // video-only fetch, everything else from the broader playable-items
+        // fetch) branches on this. Covers both view modes indirectly, since
+        // `lib_tab_offset()` is view-mode-independent -- the tab_idx math is
+        // identical whether the active library tab was reached through the
+        // standard tab bar or Power View's left panel.
+        let mut app = make_app_stub();
+        app.libs.push(lib_tab("tvshows"));
+        app.libs.push(lib_tab("music"));
+
+        app.tab_idx = app.lib_tab_offset();
+        assert!(
+            app.active_lib_is_tvshows(),
+            "tab_idx on the tvshows library tab"
+        );
+
+        app.tab_idx = app.lib_tab_offset() + 1;
+        assert!(
+            !app.active_lib_is_tvshows(),
+            "tab_idx on the music library tab"
+        );
+    }
+
+    #[test]
+    fn active_lib_is_tvshows_false_outside_any_library_tab() {
+        let mut app = make_app_stub();
+        app.libs.push(lib_tab("tvshows"));
+
+        app.tab_idx = 0; // home
+        assert!(!app.active_lib_is_tvshows());
+
+        app.tab_idx = 1; // queue
+        assert!(!app.active_lib_is_tvshows());
     }
 }
 #[test]
