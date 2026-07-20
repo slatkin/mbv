@@ -1,4 +1,5 @@
 use super::super::super::ui_util::*;
+use super::POWER_RENDER_FILTER;
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
@@ -585,6 +586,225 @@ impl App {
         }
     }
 
+    /// Image types to request for the Keep Watching hero panel, mirroring
+    /// the per-type conventions used for the queue card (`render_power_card`).
+    fn keep_watching_hero_image_types(item: &mbv_core::api::MediaItem) -> &'static [&'static str] {
+        match item.item_type.as_str() {
+            "Movie" => &["Backdrop", "Primary", "Logo"],
+            _ => &["Primary", "Backdrop"],
+        }
+    }
+
+    /// Computes the row count `render_keep_watching_hero_meta` needs to
+    /// show the full overview for `item` without clipping it, given the
+    /// meta column's width. Mirrors that function's row accounting exactly
+    /// (title wrap lines, then one row each for the show-name line, the
+    /// duration/progress line, and the blank separator, then the wrapped
+    /// overview) so the hero panel can be sized to fit before rendering.
+    fn keep_watching_hero_meta_height(item: &mbv_core::api::MediaItem, text_w: usize) -> u16 {
+        if text_w == 0 {
+            return 0;
+        }
+        let mut h = wrap(&item.name, text_w).len() as u16; // title (wraps)
+        h += 1; // show name row
+        h += 1; // duration / progress row
+        h += 1; // blank separator row
+        if !item.overview.is_empty() {
+            h += wrap(&clean_overview(&item.overview), text_w).len() as u16;
+        }
+        h
+    }
+
+    /// Renders the Keep Watching hero panel's image column into `area`,
+    /// top-aligned (with a one-row pad so it isn't flush against the top of
+    /// the panel) and horizontally centered. The column is a fixed reserved
+    /// box (unlike the queue card's growing/shrinking slot), so a dim
+    /// placeholder simply fills it while no artwork is ready yet.
+    fn render_keep_watching_hero_image(&mut self, f: &mut Frame, area: Rect, cache_key: &str) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+        let top_pad = 1u16.min(area.height.saturating_sub(1));
+        let img_area = Rect {
+            x: area.x,
+            y: area.y + top_pad,
+            width: area.width,
+            height: area.height - top_pad,
+        };
+        if let Some(Some(state)) = self.card_image_states.get_mut(cache_key) {
+            type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+            let avail = Size {
+                width: img_area.width,
+                height: img_area.height,
+            };
+            if let Some(actual) = state.size_for(
+                ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
+                avail,
+            ) {
+                let img_rect = Rect {
+                    x: img_area.x + img_area.width.saturating_sub(actual.width) / 2,
+                    y: img_area.y,
+                    width: actual.width,
+                    height: actual.height,
+                };
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
+                    img_rect,
+                    state,
+                );
+                return;
+            }
+        }
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::OVERLAY)),
+            img_area,
+        );
+    }
+
+    /// Renders the Keep Watching hero panel's metadata column for the
+    /// focused item: episode title (yellow, wraps), show name (green), a
+    /// duration/percent-watched line, a blank separator row, then the full
+    /// overview (the caller sizes the panel via
+    /// `keep_watching_hero_meta_height` so nothing here gets clipped).
+    fn render_keep_watching_hero_meta(
+        &self,
+        f: &mut Frame,
+        area: Rect,
+        item: &mbv_core::api::MediaItem,
+        focused: bool,
+    ) {
+        if area.width == 0 || area.height == 0 {
+            return;
+        }
+        let text_w = area.width as usize;
+        let mut row = area.y;
+        let max_y = area.y + area.height;
+
+        for line in wrap(&item.name, text_w.max(1)) {
+            if row >= max_y {
+                break;
+            }
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    line.to_string(),
+                    Style::default()
+                        .fg(palette::YELLOW)
+                        .add_modifier(Modifier::BOLD),
+                )),
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
+
+        if row < max_y {
+            let show_name = if item.item_type == "Episode" {
+                item.series_name.as_str()
+            } else {
+                ""
+            };
+            if !show_name.is_empty() {
+                f.render_widget(
+                    Paragraph::new(Span::styled(
+                        trunc_str(show_name, text_w),
+                        Style::default().fg(palette::PINE),
+                    )),
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+            }
+            row += 1;
+        }
+
+        if row < max_y {
+            let dur_str = if item.runtime_ticks > 0 {
+                fmt_duration_approx(item.runtime_ticks / TICKS_PER_SECOND)
+            } else {
+                String::new()
+            };
+            let progress_span =
+                if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
+                    let pct =
+                        (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
+                    Some(Span::styled(
+                        format!("{}% watched", pct),
+                        Style::default().fg(palette::FOAM),
+                    ))
+                } else if !item.played {
+                    Some(Span::styled(
+                        "Unwatched",
+                        Style::default().fg(palette::MUTED),
+                    ))
+                } else {
+                    None
+                };
+
+            let mut spans: Vec<Span> = Vec::new();
+            if !dur_str.is_empty() {
+                spans.push(Span::styled(
+                    trunc_str(&dur_str, text_w),
+                    Style::default().fg(palette::SUBTLE),
+                ));
+            }
+            if let Some(progress_span) = progress_span {
+                if !spans.is_empty() {
+                    spans.push(Span::raw("  "));
+                }
+                spans.push(progress_span);
+            }
+            if !spans.is_empty() {
+                f.render_widget(
+                    Paragraph::new(Line::from(spans)),
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+            }
+            row += 1;
+        }
+
+        row += 1; // blank separator row
+
+        if !item.overview.is_empty() && row < max_y {
+            let ov_text = clean_overview(&item.overview);
+            let wrapped = wrap(&ov_text, text_w.max(1));
+            let ov_color = if focused {
+                palette::WHITE
+            } else {
+                palette::MUTED
+            };
+            for line in wrapped.iter() {
+                if row >= max_y {
+                    break;
+                }
+                f.render_widget(
+                    Paragraph::new(Span::styled(
+                        line.to_string(),
+                        Style::default().fg(ov_color),
+                    )),
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+                row += 1;
+            }
+        }
+    }
+
     pub(super) fn render_power_home_list(
         &mut self,
         f: &mut Frame,
@@ -595,7 +815,6 @@ impl App {
         if area.height == 0 || area.width == 0 {
             return;
         }
-        layout.left_area = area;
 
         struct Section {
             section_idx: usize,
@@ -611,6 +830,103 @@ impl App {
 
         let continue_items = self.home.continue_items.clone();
         let latest = self.home.latest.clone();
+
+        // --- Keep Watching hero panel -------------------------------------
+        // A carousel-like image + metadata panel above the Keep Watching
+        // list, reflecting the item currently under the cursor, separated
+        // from the list below by a grey divider row. The panel is sized to
+        // fit its metadata column's content (title + show name + duration
+        // line + full overview) rather than a fixed height, so the overview
+        // never gets clipped; it's still capped by how much of `area` can be
+        // spared without starving the list underneath.
+        let hero_item = if continue_items.is_empty() || area.width < 24 {
+            None
+        } else {
+            continue_items
+                .get(self.home.power_home_cursor)
+                .or_else(|| continue_items.first())
+                .cloned()
+        };
+        let hero_img_w = hero_item.as_ref().map(|_| {
+            ((area.width as u32 * 2 / 5) as u16)
+                .clamp(12, 32)
+                .min(area.width.saturating_sub(12))
+        });
+        let hero_h: u16 = match (&hero_item, hero_img_w) {
+            (Some(item), Some(img_w)) => {
+                let meta_w = area.width.saturating_sub(img_w + 1) as usize;
+                let needed_h = Self::keep_watching_hero_meta_height(item, meta_w);
+                let max_allowed = area.height.saturating_sub(7); // leave room for blank + divider + list
+                let h = needed_h.min(max_allowed);
+                if h < 4 {
+                    0
+                } else {
+                    h
+                }
+            }
+            _ => 0,
+        };
+
+        let list_area = if hero_h > 0 {
+            Rect {
+                y: area.y + hero_h + 2,
+                height: area.height.saturating_sub(hero_h + 2),
+                ..area
+            }
+        } else {
+            area
+        };
+        layout.left_area = list_area;
+
+        if let (true, Some(item), Some(img_w)) = (hero_h > 0, &hero_item, hero_img_w) {
+            let hero_area = Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: hero_h,
+            };
+            let meta_area = Rect {
+                x: hero_area.x,
+                y: hero_area.y,
+                width: hero_area.width.saturating_sub(img_w + 1),
+                height: hero_h,
+            };
+            let img_area = Rect {
+                x: hero_area.x + hero_area.width.saturating_sub(img_w),
+                y: hero_area.y,
+                width: img_w,
+                height: hero_h,
+            };
+
+            let cache_key = format!("{}:pwr_kw", item.id);
+            if self.images_enabled() {
+                let img_types = Self::keep_watching_hero_image_types(item);
+                self.fetch_card_image(
+                    cache_key.clone(),
+                    item.id.clone(),
+                    item.series_id.clone(),
+                    img_types,
+                );
+            }
+            self.render_keep_watching_hero_image(f, img_area, &cache_key);
+            self.render_keep_watching_hero_meta(f, meta_area, item, focused);
+
+            // Grey divider between the hero panel and the Keep Watching list,
+            // matching the style of the other list dividers in this view.
+            // One blank row above it separates it from the hero's content.
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    "\u{2500}".repeat(area.width as usize),
+                    Style::default().fg(palette::MUTED),
+                ))),
+                Rect {
+                    x: area.x,
+                    y: area.y + hero_h + 1,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+        }
 
         let mut flat = continue_items.len();
         let mut new_sections: Vec<Section> = Vec::new();
@@ -674,8 +990,8 @@ impl App {
         let cursor = self.home.power_home_cursor;
 
         let content_h = rows.len().max(1) as u16;
-        let needs_scrollbar = content_h > area.height;
-        let list_w = area
+        let needs_scrollbar = content_h > list_area.height;
+        let list_w = list_area
             .width
             .saturating_sub(if needs_scrollbar { 1 } else { 0 });
         let cursor_row = rows
@@ -687,18 +1003,18 @@ impl App {
             cursor_row,
             cursor_row + 1,
             content_h,
-            area.height,
+            list_area.height,
         );
         self.home.power_home_scroll = scroll_y as usize;
 
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
         layout.selector_tabs = Vec::new();
-        let visible = area.height.min(content_h.saturating_sub(scroll_y));
+        let visible = list_area.height.min(content_h.saturating_sub(scroll_y));
         for k in 0..visible {
             let row_idx = scroll_y as usize + k as usize;
-            let sy = area.y + k;
+            let sy = list_area.y + k;
             let row_rect = Rect {
-                x: area.x,
+                x: list_area.x,
                 y: sy,
                 width: list_w,
                 height: 1,
@@ -730,9 +1046,19 @@ impl App {
                         String::new()
                     };
                     let avail = (list_w as usize).saturating_sub(1);
-                    let name_w = avail.saturating_sub(dur_str.width());
+                    // Reserve a 6-column gap before the duration column so the title
+                    // truncates well before running up against it, plus a 1-column
+                    // pad after the duration so it isn't flush against the right edge.
+                    const DUR_GAP: usize = 6;
+                    let dur_reserve = if dur_str.is_empty() {
+                        0
+                    } else {
+                        dur_str.width() + DUR_GAP + 1
+                    };
+                    let name_w = avail.saturating_sub(dur_reserve);
                     let title = trunc_str(&item.display_name(), name_w);
-                    let pad = name_w.saturating_sub(title.width());
+                    let pad = name_w.saturating_sub(title.width())
+                        + if dur_str.is_empty() { 0 } else { DUR_GAP };
 
                     let fg = if focused {
                         palette::WHITE
@@ -765,8 +1091,8 @@ impl App {
         layout.home.hitmap = hitmap;
 
         if needs_scrollbar && focused {
-            let max_off = content_h.saturating_sub(area.height) as usize;
-            super::render_power_scrollbar(f, area, max_off, scroll_y as usize);
+            let max_off = content_h.saturating_sub(list_area.height) as usize;
+            super::render_power_scrollbar(f, list_area, max_off, scroll_y as usize);
         }
     }
 
