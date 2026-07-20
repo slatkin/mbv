@@ -40,9 +40,7 @@ impl App {
             layout.selector_tabs = Vec::new();
             if row_area.width > 0 {
                 f.render_widget(
-                    Paragraph::new(Line::from(Span::raw(
-                        " ".repeat(row_area.width as usize),
-                    ))),
+                    Paragraph::new(Line::from(Span::raw(" ".repeat(row_area.width as usize)))),
                     row_area,
                 );
             }

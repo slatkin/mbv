@@ -396,8 +396,7 @@ impl App {
         let page = (self.layout.power.left_area.height as usize).max(1);
         let selected = self.selected_power_music_artist_header(lib_idx);
         let selectable_headers = self.is_music_group_view(lib_idx);
-        let expand_selected =
-            !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
+        let expand_selected = !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
         let plan = self.build_grouped_album_display_plan(
             &albums,
             cursor,
@@ -488,8 +487,7 @@ impl App {
         // to enter track-selection mode (`album_track_focus`); elsewhere
         // (plain album-folder browsing) the existing always-expand behavior
         // is unchanged.
-        let expand_selected =
-            !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
+        let expand_selected = !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
         let plan = self.build_grouped_album_display_plan(
             albums,
             cursor,
@@ -549,8 +547,7 @@ impl App {
                     } else {
                         Style::default().fg(palette::YELLOW)
                     };
-                    let mut spans =
-                        vec![Span::raw(" "), Span::styled(artist_label, label_style)];
+                    let mut spans = vec![Span::raw(" "), Span::styled(artist_label, label_style)];
                     if selected {
                         spans.push(Span::raw(" "));
                         spans.push(Span::styled(
