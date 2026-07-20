@@ -71,16 +71,7 @@ if [[ "${BRANCH}" == "main" ]]; then
   echo "==> git push origin ${TAG}..."
   git push origin "${TAG}"
 else
-  echo "==> Next:"
-  echo "    1. git push origin ${BRANCH}"
-  echo "    2. Open and merge a pull request into main"
-  echo "    3. git fetch origin"
-  echo "    4. git tag ${TAG} origin/main"
-  echo "    5. git push origin ${TAG}"
+  echo
+  echo "==> Release committed on ${BRANCH} (not main)."
+  echo "    PR-merge into main, then tag ${TAG} and push the tag manually."
 fi
-echo
-echo "==> The tag-triggered GitHub Action will then:"
-echo "    - Build and test"
-echo "    - Create the GitHub release and upload assets"
-echo "    - Update PKGBUILD for AUR"
-echo "    - Push to AUR"
