@@ -1,4 +1,11 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "lsp": true
+  "lsp": true,
+  "mcp": {
+    "serena": {
+      "type": "local",
+      "command": ["serena", "start-mcp-server", "--context", "ide", "--project-from-cwd"],
+      "enabled": true
+    }
+  }
 }
