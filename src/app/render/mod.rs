@@ -676,7 +676,7 @@ impl App {
         let (glyph, gcolor): (&str, Color) = if paused {
             (
                 if self.use_nerd_fonts { "\u{f04b}" } else { ">" },
-                palette::YELLOW,
+                palette::PINE,
             )
         } else {
             (
@@ -685,7 +685,7 @@ impl App {
                 } else {
                     "||"
                 },
-                palette::PINE,
+                palette::YELLOW,
             )
         };
         let stop_glyph = if self.use_nerd_fonts { "\u{f04d}" } else { "X" };
@@ -903,7 +903,7 @@ impl App {
             Span::styled(" ", Style::default().bg(palette::PILL_BG)),
             Span::styled(
                 if self.use_nerd_fonts {
-                    "\u{f0411}"
+                    "\u{f03a}"
                 } else {
                     "\u{1F5AD}"
                 },
