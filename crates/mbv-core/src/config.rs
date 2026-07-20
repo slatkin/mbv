@@ -57,9 +57,8 @@ pub struct Config {
     /// via the F2 Settings "Library routes" row, and hand-editable in
     /// `config.toml`.
     pub library_routes: std::collections::HashMap<String, String>,
-    pub config_version: u32, // schema version for future migrations (0 = unversioned)
     pub progress_interval_secs: u64, // how often to report playback progress to Emby (seconds)
-    pub quit_timeout_secs: u64, // how long quit waits for local player teardown (seconds)
+    pub quit_timeout_secs: u64,      // how long quit waits for local player teardown (seconds)
     pub daemon_broadcast_ms: u64, // how often the daemon broadcasts status to connected TUIs (ms)
     pub daemon_client_endpoint: String, // [daemon.client] endpoint; empty = auto-detect local daemon
     pub daemon_server_tcp_listen: String, // [daemon.server] tcp_listen; empty = unix-only unless system instance default applies
@@ -115,7 +114,6 @@ impl Default for Config {
             my_languages: vec![],
             feed_view_libraries: vec![],
             library_routes: std::collections::HashMap::new(),
-            config_version: 0,
             progress_interval_secs: 10,
             quit_timeout_secs: 5,
             daemon_broadcast_ms: 500,
@@ -704,12 +702,15 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
     };
 
     let misc = doc.get("mpv");
-    let daemon = doc.get("daemon");
-    let general = doc.get("general");
+    let mbvd = doc.get("mbvd");
+    let session = doc.get("session");
+    let library = doc.get("library");
+    let display = doc.get("display");
+    let playback = doc.get("playback");
     let queue = doc.get("queue");
-    let music = doc.get("music");
+    let music = doc.get("library").and_then(|l| l.get("music"));
 
-    let hidden_libraries: Vec<String> = general
+    let hidden_libraries: Vec<String> = library
         .and_then(|m| m.get("hidden_libraries"))
         .and_then(|v| v.as_array())
         .map(|arr| {
@@ -720,7 +721,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         })
         .unwrap_or_else(|| vec!["live tv".into()]);
 
-    let hidden_latest: Vec<String> = general
+    let hidden_latest: Vec<String> = library
         .and_then(|m| m.get("hidden_latest"))
         .and_then(|v| v.as_array())
         .map(|arr| {
@@ -786,33 +787,33 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let always_skip_intro = general
+    let always_skip_intro = session
         .and_then(|m| m.get("always_skip_intro"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let show_systray_icon = daemon
+    let show_systray_icon = playback
         .and_then(|d| d.get("show_systray_icon"))
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
 
-    let stay_alive = general
+    let stay_alive = session
         .and_then(|m| m.get("stay_alive"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let auto_reconnect = general
+    let auto_reconnect = session
         .and_then(|m| m.get("auto_reconnect"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
-    let view_mode = queue
-        .and_then(|q| q.get("view_mode"))
+    let view_mode = display
+        .and_then(|d| d.get("view_mode"))
         .and_then(|v| v.as_str())
         .unwrap_or("standard")
         .to_string();
 
-    let save_playlist_on_quit = general
+    let save_playlist_on_quit = session
         .and_then(|m| m.get("save_playlist_on_quit"))
         .and_then(|v| v.as_bool())
         .unwrap_or(true);
@@ -838,7 +839,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         })
         .unwrap_or_default();
 
-    let system_notifications = general
+    let system_notifications = display
         .and_then(|m| m.get("system_notifications"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
@@ -852,7 +853,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .and_then(|q| q.get("save_playlist_on_consume_audio"))
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
-    let playback = doc.get("playback");
+
     let subtitle_mode = playback
         .and_then(|p| p.get("subtitle_mode"))
         .and_then(|v| v.as_str())
@@ -878,33 +879,31 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
                 .collect()
         })
         .unwrap_or_default();
-    let config_version = doc.get("version").and_then(|v| v.as_integer()).unwrap_or(0) as u32;
-
-    let progress_interval_secs = general
+    let progress_interval_secs = session
         .and_then(|m| m.get("progress_interval_secs"))
         .and_then(|v| v.as_integer())
         .map(|v| v.max(1) as u64)
         .unwrap_or(10);
 
-    let quit_timeout_secs = general
+    let quit_timeout_secs = session
         .and_then(|m| m.get("quit_timeout_secs"))
         .and_then(|v| v.as_integer())
         .map(|v| v.max(1) as u64)
         .unwrap_or(5);
 
-    let daemon_broadcast_ms = daemon
+    let daemon_broadcast_ms = mbvd
         .and_then(|d| d.get("broadcast_ms"))
         .and_then(|v| v.as_integer())
         .map(|v| v.max(100) as u64)
         .unwrap_or(500);
 
-    let daemon_client_endpoint = daemon
+    let daemon_client_endpoint = mbvd
         .and_then(|d| d.get("client"))
         .and_then(|c| c.get("endpoint"))
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    let daemon_server_tcp_listen = daemon
+    let daemon_server_tcp_listen = mbvd
         .and_then(|d| d.get("server"))
         .and_then(|s| s.get("tcp_listen"))
         .and_then(|v| v.as_str())
@@ -913,7 +912,7 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         .map(str::to_string)
         .unwrap_or_else(default_daemon_server_tcp_listen);
 
-    let feed_view_libraries: Vec<String> = general
+    let feed_view_libraries: Vec<String> = library
         .and_then(|m| m.get("feed_view_libraries"))
         .and_then(|v| v.as_array())
         .map(|arr| {
@@ -968,7 +967,6 @@ pub fn parse_config(text: &str) -> Result<Config, String> {
         my_languages,
         feed_view_libraries,
         library_routes,
-        config_version,
         progress_interval_secs,
         quit_timeout_secs,
         daemon_broadcast_ms,
@@ -1010,32 +1008,34 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         );
     }
 
-    let general = section!("general");
-    general.insert(
+    let session = section!("session");
+    session.insert(
         "stay_alive".to_string(),
         toml::Value::Boolean(cfg.stay_alive),
     );
-    general.insert(
+    session.insert(
         "auto_reconnect".to_string(),
         toml::Value::Boolean(cfg.auto_reconnect),
     );
-    general.insert(
+    session.insert(
         "save_playlist_on_quit".to_string(),
         toml::Value::Boolean(cfg.save_playlist_on_quit),
     );
-    general.insert(
+    session.insert(
         "always_skip_intro".to_string(),
         toml::Value::Boolean(cfg.always_skip_intro),
     );
-    general.insert(
-        "system_notifications".to_string(),
-        toml::Value::Boolean(cfg.system_notifications),
-    );
-    general.insert(
+    session.insert(
         "quit_timeout_secs".to_string(),
         toml::Value::Integer(cfg.quit_timeout_secs as i64),
     );
-    general.insert(
+    session.insert(
+        "progress_interval_secs".to_string(),
+        toml::Value::Integer(cfg.progress_interval_secs as i64),
+    );
+
+    let library = section!("library");
+    library.insert(
         "hidden_libraries".to_string(),
         toml::Value::Array(
             cfg.hidden_libraries
@@ -1044,7 +1044,7 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
                 .collect(),
         ),
     );
-    general.insert(
+    library.insert(
         "hidden_latest".to_string(),
         toml::Value::Array(
             cfg.hidden_latest
@@ -1053,7 +1053,7 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
                 .collect(),
         ),
     );
-    general.insert(
+    library.insert(
         "feed_view_libraries".to_string(),
         toml::Value::Array(
             cfg.feed_view_libraries
@@ -1062,6 +1062,34 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
                 .collect(),
         ),
     );
+
+    let display = section!("display");
+    display.insert(
+        "system_notifications".to_string(),
+        toml::Value::Boolean(cfg.system_notifications),
+    );
+    display.insert(
+        "view_mode".to_string(),
+        toml::Value::String(cfg.view_mode.clone()),
+    );
+
+    if !cfg.music_levels.is_empty() {
+        let library = section!("library");
+        let music = library
+            .entry("music".to_string())
+            .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
+            .as_table_mut()
+            .unwrap();
+        music.insert(
+            "levels".to_string(),
+            toml::Value::Array(
+                cfg.music_levels
+                    .iter()
+                    .map(|s| toml::Value::String(s.clone()))
+                    .collect(),
+            ),
+        );
+    }
 
     if cfg.library_routes.is_empty() {
         table.remove("library_routes");
@@ -1077,10 +1105,6 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
     }
 
     let queue = section!("queue");
-    queue.insert(
-        "view_mode".to_string(),
-        toml::Value::String(cfg.view_mode.clone()),
-    );
     queue.insert(
         "always_play_next".to_string(),
         toml::Value::Boolean(cfg.always_play_next),
@@ -1120,60 +1144,60 @@ fn save_config_settings_at(cfg: &Config, path: &std::path::Path) -> Result<(), S
         toml::Value::Boolean(cfg.no_scripts),
     );
     mpv.insert("autoload".to_string(), toml::Value::Boolean(cfg.autoload));
-    mpv.insert(
-        "audio_pipe_enabled".to_string(),
-        toml::Value::Boolean(cfg.audio_pipe_enabled),
-    );
-    mpv.insert(
-        "audio_pipe_path".to_string(),
-        toml::Value::String(cfg.audio_pipe_path.clone()),
-    );
-    mpv.insert(
-        "audio_pipe_samplerate".to_string(),
-        toml::Value::Integer(cfg.audio_pipe_samplerate as i64),
-    );
-    mpv.insert(
-        "audio_pipe_bitdepth".to_string(),
-        toml::Value::Integer(cfg.audio_pipe_bitdepth as i64),
-    );
 
-    let daemon = section!("daemon");
-    daemon.insert(
-        "show_systray_icon".to_string(),
-        toml::Value::Boolean(cfg.show_systray_icon),
-    );
-    daemon.insert(
+    let mbvd = section!("mbvd");
+    mbvd.insert(
         "broadcast_ms".to_string(),
         toml::Value::Integer(cfg.daemon_broadcast_ms as i64),
     );
-    let daemon_client = daemon
+    mbvd.insert(
+        "audio_pipe_enabled".to_string(),
+        toml::Value::Boolean(cfg.audio_pipe_enabled),
+    );
+    mbvd.insert(
+        "audio_pipe_path".to_string(),
+        toml::Value::String(cfg.audio_pipe_path.clone()),
+    );
+    mbvd.insert(
+        "audio_pipe_samplerate".to_string(),
+        toml::Value::Integer(cfg.audio_pipe_samplerate as i64),
+    );
+    mbvd.insert(
+        "audio_pipe_bitdepth".to_string(),
+        toml::Value::Integer(cfg.audio_pipe_bitdepth as i64),
+    );
+    let mbvd_client = mbvd
         .entry("client".to_string())
         .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
         .as_table_mut()
         .unwrap();
     if cfg.daemon_client_endpoint.trim().is_empty() {
-        daemon_client.remove("endpoint");
+        mbvd_client.remove("endpoint");
     } else {
-        daemon_client.insert(
+        mbvd_client.insert(
             "endpoint".to_string(),
             toml::Value::String(cfg.daemon_client_endpoint.clone()),
         );
     }
-    let daemon_server = daemon
+    let mbvd_server = mbvd
         .entry("server".to_string())
         .or_insert_with(|| toml::Value::Table(toml::map::Map::new()))
         .as_table_mut()
         .unwrap();
     if cfg.daemon_server_tcp_listen.trim().is_empty() {
-        daemon_server.remove("tcp_listen");
+        mbvd_server.remove("tcp_listen");
     } else {
-        daemon_server.insert(
+        mbvd_server.insert(
             "tcp_listen".to_string(),
             toml::Value::String(cfg.daemon_server_tcp_listen.clone()),
         );
     }
 
     let playback = section!("playback");
+    playback.insert(
+        "show_systray_icon".to_string(),
+        toml::Value::Boolean(cfg.show_systray_icon),
+    );
     if cfg.subtitle_mode.is_empty() {
         playback.remove("subtitle_mode");
     } else {
@@ -1243,7 +1267,7 @@ pub mod tests {
         let toml = r#"
 [server]
 url = "http://localhost:8096/"
-[general]
+[library]
 hidden_libraries = ["Live TV", "Podcasts", "Music"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -1301,7 +1325,7 @@ audio_pipe_bitdepth = 16
         let toml = r#"
 [server]
 url = "http://localhost:8096"
-[daemon.client]
+[mbvd.client]
 endpoint = "unix:///tmp/mbv.sock"
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -1314,7 +1338,7 @@ endpoint = "unix:///tmp/mbv.sock"
         let toml = r#"
 [server]
 url = "http://localhost:8096"
-[daemon.server]
+[mbvd.server]
 tcp_listen = "0.0.0.0:8890"
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -1331,7 +1355,7 @@ tcp_listen = "0.0.0.0:8890"
             r#"
 [server]
 url = "http://localhost:8096"
-[general]
+[session]
 quit_timeout_secs = 0
 "#,
         )
@@ -1342,7 +1366,7 @@ quit_timeout_secs = 0
             r#"
 [server]
 url = "http://localhost:8096"
-[general]
+[session]
 quit_timeout_secs = -10
 "#,
         )
@@ -1412,7 +1436,7 @@ save_playlist_on_consume_audio = true
         let toml = r#"
 [server]
 url = "http://host"
-[general]
+[library]
 hidden_libraries = ["Live TV", "MOVIES"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -1431,7 +1455,7 @@ hidden_libraries = ["Live TV", "MOVIES"]
         let toml = r#"
 [server]
 url = "http://host"
-[general]
+[library]
 hidden_latest = ["Movies", "TV SHOWS"]
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -1484,7 +1508,7 @@ url = "http://host"
 [server]
 url = "http://x"
 
-[general]
+[session]
 auto_reconnect = true
 "#;
         let cfg = parse_config(toml).unwrap();
@@ -1551,8 +1575,10 @@ url = "http://x"
 [server]
 url = "http://localhost:8096"
 
-[general]
+[session]
 auto_reconnect = true
+
+[library]
 feed_view_libraries = ["YouTube"]
 "#,
         )
@@ -1629,14 +1655,15 @@ url = "http://host"
 
     #[test]
     fn parse_music_levels_group_album() {
-        let toml = "[server]\nurl = \"http://host\"\n[music]\nlevels = [\"group\", \"album\"]";
+        let toml =
+            "[server]\nurl = \"http://host\"\n[library.music]\nlevels = [\"group\", \"album\"]";
         let cfg = parse_config(toml).unwrap();
         assert_eq!(cfg.music_levels, vec!["group", "album"]);
     }
 
     #[test]
     fn parse_music_levels_album_only() {
-        let toml = "[server]\nurl = \"http://host\"\n[music]\nlevels = [\"album\"]";
+        let toml = "[server]\nurl = \"http://host\"\n[library.music]\nlevels = [\"album\"]";
         let cfg = parse_config(toml).unwrap();
         assert_eq!(cfg.music_levels, vec!["album"]);
     }
