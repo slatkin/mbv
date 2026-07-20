@@ -63,6 +63,10 @@ pub(super) enum KeyResolution {
 pub(super) struct InputSnapshot {
     pub player_active: bool,
     pub has_remote_session: bool,
+    /// Power-view inline album track-selection mode is active (`album_track_focus`
+    /// is `Some`). While active, Esc must exit track-selection mode rather than
+    /// stop playback -- see the `Stop` special-case in `resolve_key`.
+    pub track_select_active: bool,
 }
 
 /// Resolve a chord within a single context. Pure: no `App`/`Player` access.
@@ -88,6 +92,14 @@ pub(super) fn resolve_key(
                 snapshot.player_active,
                 snapshot.has_remote_session,
             ) {
+                // Esc's Stop binding must not fire while inline album
+                // track-selection mode is active -- fall through so the
+                // lower-priority `power_album_track_mode` context can treat
+                // Esc as "exit track-selection mode" instead (same as
+                // Backspace).
+                Some(super::action::Command::Stop) if snapshot.track_select_active => {
+                    KeyResolution::FallThrough
+                }
                 Some(cmd) => KeyResolution::Command(cmd),
                 None => KeyResolution::FallThrough,
             }
@@ -102,6 +114,7 @@ impl App {
         InputSnapshot {
             player_active: self.player.status.lock().unwrap().active,
             has_remote_session: self.connected_session_id.is_some(),
+            track_select_active: self.active_power_album_track_lib_idx().is_some(),
         }
     }
 }
@@ -234,6 +247,7 @@ mod tests {
         InputSnapshot {
             player_active: active,
             has_remote_session: remote,
+            track_select_active: false,
         }
     }
 
@@ -255,10 +269,12 @@ mod tests {
         let a = InputSnapshot {
             player_active: true,
             has_remote_session: true,
+            track_select_active: false,
         };
         let b = InputSnapshot {
             player_active: false,
             has_remote_session: false,
+            track_select_active: false,
         };
         assert_ne!(a, b, "the snapshots must differ to prove Help ignores them");
         let chord = KeyChord::new(KeyCode::Esc, KeyModifiers::NONE);
@@ -295,6 +311,34 @@ mod tests {
             InputContext::Playback,
             &snap(true, false),
             KeyChord::new(KeyCode::Char('x'), KeyModifiers::NONE),
+        );
+        assert_eq!(r, KeyResolution::FallThrough);
+    }
+
+    #[test]
+    fn playback_context_esc_stops_when_track_select_inactive() {
+        let mut snapshot = snap(true, false);
+        snapshot.track_select_active = false;
+        let r = resolve_key(
+            InputContext::Playback,
+            &snapshot,
+            KeyChord::new(KeyCode::Esc, KeyModifiers::NONE),
+        );
+        assert_eq!(r, KeyResolution::Command(Command::Stop));
+    }
+
+    #[test]
+    fn playback_context_esc_falls_through_when_track_select_active() {
+        // Esc must not stop a playing track while inline album
+        // track-selection mode is active -- it should fall through so the
+        // `power_album_track_mode` context can treat it as "exit
+        // track-selection mode" instead (same as Backspace).
+        let mut snapshot = snap(true, false);
+        snapshot.track_select_active = true;
+        let r = resolve_key(
+            InputContext::Playback,
+            &snapshot,
+            KeyChord::new(KeyCode::Esc, KeyModifiers::NONE),
         );
         assert_eq!(r, KeyResolution::FallThrough);
     }

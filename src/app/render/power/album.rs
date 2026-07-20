@@ -15,6 +15,10 @@ enum GroupedAlbumDisplayRow {
     ArtistHeader(ArtistHeaderSelection),
     AlbumDetailRule,
     Album(usize),
+    /// Action-hint row shown directly under the selected album's title when
+    /// it is *not* expanded into full track-selection mode (`AlbumDetailStart`
+    /// covers the hint once expanded).
+    AlbumActionHint,
     AlbumDetailStart(usize),
     AlbumDetailContinuation,
     AlbumLoading,
@@ -54,6 +58,7 @@ impl App {
         fetch_missing_tracks: bool,
         selectable_headers: bool,
         selected_artist_header: Option<&ArtistHeaderSelection>,
+        expand_selected: bool,
     ) -> GroupedAlbumDisplayPlan {
         let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
         for item in albums {
@@ -81,6 +86,12 @@ impl App {
         let mut order: Vec<usize> = (0..album_info.len()).collect();
         order.sort_by_key(|&i| natural_sort_key(strip_article(&album_info[i].0)));
 
+        // When an artist header itself is the focused row, no album beneath
+        // it should still render as "selected" -- otherwise the album under
+        // the cursor (which the header focus was entered from) keeps showing
+        // its selected styling/hint/expansion alongside the header.
+        let header_selected = selectable_headers && selected_artist_header.is_some();
+
         let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
         let mut last_artist = String::new();
         for &idx in &order {
@@ -94,7 +105,12 @@ impl App {
                 ));
                 last_artist = artist.clone();
             }
-            if idx == cursor {
+            if idx == cursor && header_selected {
+                rows.push(GroupedAlbumDisplayRow::Album(idx));
+            } else if idx == cursor && !expand_selected {
+                rows.push(GroupedAlbumDisplayRow::Album(idx));
+                rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
+            } else if idx == cursor {
                 match self.album_tracks_cache.get(&albums[idx].id) {
                     Some(tracks) if !tracks.is_empty() => {
                         let detail_rows = 2 + tracks.len();
@@ -195,8 +211,15 @@ impl App {
         let cursor = level.cursor;
         let albums = level.items.clone();
         let selected = self.selected_power_music_artist_header(lib_idx);
-        let plan =
-            self.build_grouped_album_display_plan(&albums, cursor, false, true, selected.as_ref());
+        let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
+        let plan = self.build_grouped_album_display_plan(
+            &albums,
+            cursor,
+            false,
+            true,
+            selected.as_ref(),
+            expand_selected,
+        );
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);
         }
@@ -251,12 +274,14 @@ impl App {
         }
         let albums = level.items.clone();
         let selected = self.selected_power_music_artist_header(lib_idx);
+        let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
         let plan = self.build_grouped_album_display_plan(
             &albums,
             level.cursor,
             false,
             true,
             selected.as_ref(),
+            expand_selected,
         );
         let target = if to_end {
             plan.rows.iter().rev().find_map(|row| row.row_target(true))
@@ -303,12 +328,14 @@ impl App {
             self.clear_artist_header_focus(lib_idx);
             return None;
         }
+        let expand_selected = self.libs[lib_idx].album_track_focus.is_some();
         let plan = self.build_grouped_album_display_plan(
             &albums,
             level.cursor,
             false,
             true,
             Some(selection),
+            expand_selected,
         );
         if !plan.selected_artist_header_valid {
             if self.libs[lib_idx]
@@ -369,12 +396,15 @@ impl App {
         let page = (self.layout.power.left_area.height as usize).max(1);
         let selected = self.selected_power_music_artist_header(lib_idx);
         let selectable_headers = self.is_music_group_view(lib_idx);
+        let expand_selected =
+            !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
         let plan = self.build_grouped_album_display_plan(
             &albums,
             cursor,
             false,
             selectable_headers,
             selected.as_ref(),
+            expand_selected,
         );
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);
@@ -449,12 +479,24 @@ impl App {
 
         let selected = self.selected_power_music_artist_header(lib_idx);
         let selectable_headers = self.is_music_group_view(lib_idx);
+        // When an artist header is the focused row, the album under the
+        // cursor must not also render as selected -- only one row group
+        // (header or album) is ever the actual focus target at a time.
+        let header_selected = selected.is_some();
+        // Inline track expansion for the selected album: in the music-group
+        // (pill selector) view, only expand once the user has pressed Enter
+        // to enter track-selection mode (`album_track_focus`); elsewhere
+        // (plain album-folder browsing) the existing always-expand behavior
+        // is unchanged.
+        let expand_selected =
+            !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
         let plan = self.build_grouped_album_display_plan(
             albums,
             cursor,
             true,
             selectable_headers,
             selected.as_ref(),
+            expand_selected,
         );
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);
@@ -507,18 +549,16 @@ impl App {
                     } else {
                         Style::default().fg(palette::YELLOW)
                     };
-                    let gutter = if selected {
-                        Span::styled("\u{258c}", Style::default().fg(palette::PINE))
-                    } else {
-                        Span::raw(" ")
-                    };
-                    f.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            gutter,
-                            Span::styled(artist_label, label_style),
-                        ])),
-                        row_area,
-                    );
+                    let mut spans =
+                        vec![Span::raw(" "), Span::styled(artist_label, label_style)];
+                    if selected {
+                        spans.push(Span::raw(" "));
+                        spans.push(Span::styled(
+                            "\u{f037b}", // 󰍻
+                            Style::default().fg(palette::FOAM),
+                        ));
+                    }
+                    f.render_widget(Paragraph::new(Line::from(spans)), row_area);
                 }
                 GroupedAlbumDisplayRow::AlbumDetailRule => {
                     let detail_avail = (detail_row_area.width as usize).saturating_sub(2);
@@ -534,7 +574,7 @@ impl App {
                     );
                 }
                 GroupedAlbumDisplayRow::Album(idx) => {
-                    let selected = *idx == cursor;
+                    let selected = *idx == cursor && !header_selected;
                     let (_, year_str, album_name) = &album_info[*idx];
                     let prefix_w = if year_str.is_empty() {
                         3
@@ -584,6 +624,21 @@ impl App {
                     spans.push(Span::styled(trunc_name.to_string(), name_style));
                     let album_area = if selected { detail_row_area } else { row_area };
                     f.render_widget(Paragraph::new(Line::from(spans)), album_area);
+                }
+                GroupedAlbumDisplayRow::AlbumActionHint => {
+                    let hint_w = (detail_row_area.width as usize).saturating_sub(2);
+                    let hint = trunc_str(
+                        "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
+                        hint_w,
+                    );
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                            Span::raw(" "),
+                            Span::styled(hint.to_string(), Style::default().fg(palette::MUTED)),
+                        ])),
+                        detail_row_area,
+                    );
                 }
                 GroupedAlbumDisplayRow::AlbumDetailStart(idx) => {
                     let height = visible_rows[row_idx..]
@@ -639,7 +694,8 @@ impl App {
                 GroupedAlbumDisplayRow::ArtistHeader(_)
                 | GroupedAlbumDisplayRow::AlbumDetailRule => None,
                 GroupedAlbumDisplayRow::Album(idx) => Some(*idx),
-                GroupedAlbumDisplayRow::AlbumDetailStart(_)
+                GroupedAlbumDisplayRow::AlbumActionHint
+                | GroupedAlbumDisplayRow::AlbumDetailStart(_)
                 | GroupedAlbumDisplayRow::AlbumDetailContinuation
                 | GroupedAlbumDisplayRow::AlbumLoading => None,
             })
@@ -721,7 +777,18 @@ impl App {
         if row < max_y {
             if selected_region_gutter {
                 let hint_w = (area.width as usize).saturating_sub(gutter_w);
-                let hint = trunc_str("^P: Play | ^A: Enqueue | ^S: Shuffle", hint_w);
+                // `focused` mirrors `album_track_focus.is_some()` at the call
+                // site: once track-selection mode is entered, swap the
+                // "show tracks" hint for the exit hint.
+                let trailing_hint = if focused {
+                    "BACK: Exit"
+                } else {
+                    "ENTER: Show tracks"
+                };
+                let hint = trunc_str(
+                    &format!("^P: Play | ^A: Enqueue | ^S: Shuffle | {trailing_hint}"),
+                    hint_w,
+                );
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
                         Span::styled("\u{258c}", Style::default().fg(palette::PINE)),

@@ -7,6 +7,7 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
+use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
@@ -182,7 +183,15 @@ impl App {
         let mut list_items: Vec<ListItem> = Vec::new();
         let mut header_ys: Vec<u16> = Vec::new();
 
-        for (row_idx, entry) in display.iter().skip(offset).take(visible).enumerate() {
+        // Line-based cursor (not item-based): group headers can wrap into more
+        // than one screen line, so the on-screen row a given `display` entry
+        // lands on isn't always the same as its index in `display`.
+        let mut line_offset: u16 = 0;
+
+        for entry in display.iter().skip(offset) {
+            if line_offset as usize >= visible {
+                break;
+            }
             match entry {
                 QueueRow::Header => {
                     let group = group_for_header
@@ -190,19 +199,43 @@ impl App {
                         .map(|s| s.as_str())
                         .unwrap_or("");
                     header_idx += 1;
-                    header_ys.push(area.y + row_idx as u16);
-                    let label = trunc_str(group, render_w.saturating_sub(1));
-                    list_items.push(ListItem::new(Line::from(Span::styled(
-                        format!(" {}", label),
-                        Style::default()
-                            .fg(palette::YELLOW)
-                            .add_modifier(Modifier::BOLD),
-                    ))));
-                    layout.queue_row_map.push(None);
+                    header_ys.push(area.y + line_offset);
+                    // Long group headers wrap onto additional lines instead of
+                    // being truncated, so the full artist/series name is
+                    // always visible.
+                    let wrap_w = render_w.saturating_sub(1).max(1);
+                    let wrapped = wrap(group, wrap_w);
+                    let lines: Vec<Line> = if wrapped.is_empty() {
+                        vec![Line::from(Span::styled(
+                            " ",
+                            Style::default()
+                                .fg(palette::YELLOW)
+                                .add_modifier(Modifier::BOLD),
+                        ))]
+                    } else {
+                        wrapped
+                            .iter()
+                            .map(|seg| {
+                                Line::from(Span::styled(
+                                    format!(" {seg}"),
+                                    Style::default()
+                                        .fg(palette::YELLOW)
+                                        .add_modifier(Modifier::BOLD),
+                                ))
+                            })
+                            .collect()
+                    };
+                    let n_lines = lines.len() as u16;
+                    list_items.push(ListItem::new(Text::from(lines)));
+                    for _ in 0..n_lines {
+                        layout.queue_row_map.push(None);
+                    }
+                    line_offset += n_lines;
                 }
                 QueueRow::Spacer => {
                     list_items.push(ListItem::new(Line::raw("")));
                     layout.queue_row_map.push(None);
+                    line_offset += 1;
                 }
                 QueueRow::Track { idx, in_group: _ } => {
                     let i = *idx;
@@ -327,6 +360,7 @@ impl App {
 
                     list_items.push(ListItem::new(Line::from(spans)).style(row_style));
                     layout.queue_row_map.push(Some(i));
+                    line_offset += 1;
                 }
             }
         }

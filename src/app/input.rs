@@ -148,7 +148,7 @@ impl App {
         None
     }
 
-    fn active_power_album_track_lib_idx(&self) -> Option<usize> {
+    pub(super) fn active_power_album_track_lib_idx(&self) -> Option<usize> {
         if self.view_mode != ViewMode::Power || self.power_left_tab == 0 {
             return None;
         }
@@ -4967,19 +4967,20 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 31,
-            "fixture sanity: expected 31 rendered list rows"
+            viewport_rows, 30,
+            "fixture sanity: expected 30 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Viewport is 31 rows (one fewer than before the pill-row gap added in
-        // #261's follow-up), so one full visible viewport from the selected
-        // row lands one row earlier than previously, landing on album 24.
+        // Display rows: 0 = artist header, 1 = selected album 0, 2 = its
+        // collapsed action-hint row (tracks stay hidden until Enter is
+        // pressed), 3.. = the remaining albums one row each. A 30-row page
+        // from display row 1 lands on display row 31 = album 29.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            24,
+            29,
             "PageDown should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -4992,16 +4993,17 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 31,
-            "fixture sanity: expected 31 rendered list rows"
+            viewport_rows, 30,
+            "fixture sanity: expected 30 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Viewport is 31 rows (one fewer than before the pill-row gap added in
-        // #261's follow-up), so paging up by one viewport lands one row later
-        // than previously, targeting album 5.
+        // Display row 0 is the artist header, then one row per album (the
+        // collapsed action-hint row that appears under the *selected* album
+        // sits well past this window, so it doesn't shift this target). A
+        // 30-row page up from album 35's row lands on album 5.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
             5,
@@ -5048,40 +5050,43 @@ mod power_music_track_focus_tests {
     }
 
     #[test]
-    fn paging_from_non_selectable_loading_and_rule_rows_chooses_nearest_album_by_direction() {
+    fn paging_from_non_selectable_hint_and_header_rows_chooses_nearest_album_by_direction() {
+        // Inline tracks (and the rule/loading rows around them) no longer
+        // render in the music-group view until track-selection mode is
+        // entered (Enter pressed), so paging can no longer land on those --
+        // browsing-mode paging is disabled entirely once track-selection
+        // mode is active (see `page_power_grouped_album_cursor`'s
+        // `album_track_focus.is_some()` guard). The two non-selectable rows
+        // paging can still land on while merely *browsing* the album list
+        // are: the artist header, and the collapsed action-hint row that
+        // sits directly under the selected album.
         let mut down_app = make_power_music_album_list_app(10, 0);
         render_full_app(&mut down_app, 100, 40);
-        assert!(
-            down_app.album_tracks_loading.contains("album-0"),
-            "fixture sanity: initial render should request tracks and show a loading placeholder"
-        );
-        down_app.layout.power.left_area.height = 2;
+        assert!(down_app.libs[0].album_track_focus.is_none());
+        down_app.layout.power.left_area.height = 1;
 
         let handled = down_app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Selected album 0 with a loading placeholder renders:
-        // row 0 artist header, row 1 top rule, row 2 album 0, row 3 loading, row 4 bottom rule.
-        // With a 2-row page, PageDown targets row 4 (bottom rule), so paging must resolve
-        // forward to the next selectable album row at row 5 => album 1.
+        // Display rows: 0 artist header, 1 selected album 0, 2 its collapsed
+        // action-hint row, 3 album 1. With a 1-row page, PageDown targets
+        // row 2 (the hint row, non-selectable), so paging must resolve
+        // forward to the next selectable album row at row 3 => album 1.
         assert_eq!(down_app.libs[0].nav_stack.last().unwrap().cursor, 1);
 
         let mut up_app = make_power_music_album_list_app(10, 3);
         render_full_app(&mut up_app, 100, 40);
-        assert!(
-            up_app.album_tracks_loading.contains("album-3"),
-            "fixture sanity: initial render should request tracks and show a loading placeholder"
-        );
-        up_app.layout.power.left_area.height = 1;
+        assert!(up_app.libs[0].album_track_focus.is_none());
+        up_app.layout.power.left_area.height = 4;
 
         let handled = up_app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Selected album 3 with a loading placeholder renders:
-        // row 0 artist header, rows 1-3 albums 0-2, row 4 top rule, row 5 album 3.
-        // With a 1-row page, PageUp targets row 4 (top rule), so paging must resolve
-        // backward to the previous selectable album row at row 3 => album 2.
-        assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 2);
+        // Display rows: 0 artist header, 1-3 albums 0-2, 4 selected album 3.
+        // With a 4-row page, PageUp targets row 0 (the artist header,
+        // non-selectable). No album row precedes it, so paging must resolve
+        // to the first album in display order => album 0.
+        assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 0);
     }
 
     fn buffer_to_string(term: &ratatui::Terminal<ratatui::backend::TestBackend>) -> String {
