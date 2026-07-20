@@ -978,7 +978,7 @@ impl EmbyClient {
         self.fetch_items(&format!("/Users/{}/Items/Resume", self.user_id), &[
             ("UserId",     &self.user_id),
             ("Limit",      &limit),
-            ("Fields",     "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,Overview"),
+            ("Fields",     "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,Overview,PremiereDate"),
             ("MediaTypes", "Video"),
         ])
     }
