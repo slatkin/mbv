@@ -408,7 +408,9 @@ pub fn run_with_options(client: EmbyClient, audio_only: bool, hooks: DaemonRunti
         Some(prefs) => (true, prefs),
         None => (false, crate::player::SubtitlePrefs::default()),
     };
-    let client_locked = client.lock().unwrap().clone();
+    let mut client_locked = client.lock().unwrap().clone();
+    // Daemon always runs headless — ignore user's show_audio_window setting.
+    client_locked.config.show_audio_window = false;
     let player = Player::new(
         client_locked.config.server_url.clone(),
         client_locked.token.clone(),
