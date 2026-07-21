@@ -12,6 +12,7 @@ use super::super::ui_util::natural_sort_key;
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::Style;
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 
@@ -219,7 +220,21 @@ impl App {
             width: left_area.width.saturating_sub(4),
             height: left_area.height.saturating_sub(4),
         };
-        // Blank row, queue title row, blank spacer row, then card image.
+        // Blank row, queue title row, lower-one-eighth rule, then card image.
+        let rule_row = Rect {
+            x: left_area.x + 1,
+            y: left_area.y + 2,
+            width: left_area.width.saturating_sub(2),
+            height: 1,
+        };
+        let rule_line: String = "▔".repeat(rule_row.width as usize);
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                rule_line,
+                Style::default().fg(palette::PILL),
+            ))),
+            rule_row,
+        );
         self.render_power_queue_title(
             f,
             Rect {
