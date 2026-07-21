@@ -30,7 +30,8 @@ impl App {
             Paragraph::new(Line::from(vec![Span::styled(
                 " Queue ",
                 Style::default().fg(palette::BASE).bg(palette::FOAM),
-            )])),
+            )]))
+            .style(Style::default().bg(palette::STATUS_PILL_BG)),
             Rect {
                 x: area.x,
                 y: area.y,
