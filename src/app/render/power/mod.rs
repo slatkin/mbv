@@ -215,15 +215,26 @@ impl App {
         // Inner content area with padding inside the colored box (queue uses this).
         let left_content = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 1,
+            y: left_area.y + 3,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(2),
+            height: left_area.height.saturating_sub(4),
         };
-        // Card area: top/bottom padding only, full width (no left/right padding).
+        // Blank row, queue title row, blank spacer row, then card image.
+        self.render_power_queue_title(
+            f,
+            Rect {
+                x: left_area.x + 1,
+                y: left_area.y + 1,
+                width: left_area.width.saturating_sub(2),
+                height: 1,
+            },
+            layout,
+        );
         let card_area = Rect {
-            y: left_area.y + 1,
-            height: left_area.height.saturating_sub(2),
-            ..left_area
+            x: left_area.x + 2,
+            y: left_area.y + 3,
+            width: left_area.width.saturating_sub(4),
+            height: left_area.height.saturating_sub(4),
         };
 
         let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
@@ -303,6 +314,15 @@ impl App {
             let max_q = h.saturating_sub(MIN_LIST_ROWS).max(min_q);
             let queue_h = (h / 3).clamp(min_q, max_q);
             let lib_h = h.saturating_sub(queue_h);
+            // Render title (with scope pills) at the top of the relocated queue area.
+            self.render_power_queue_title(
+                f,
+                Rect {
+                    height: 1,
+                    ..right_area
+                },
+                layout,
+            );
             (
                 Rect {
                     height: lib_h,
@@ -333,14 +353,14 @@ impl App {
             if lib_area.height > 0 {
                 let pills_area = Rect {
                     x: lib_area.x,
-                    y: lib_area.y + 1,
+                    y: lib_area.y,
                     width: lib_area.width,
                     height: 1,
                 };
                 self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
                 render_lib_area = Rect {
-                    y: lib_area.y + 3,
-                    height: lib_area.height.saturating_sub(3),
+                    y: lib_area.y + 2,
+                    height: lib_area.height.saturating_sub(2),
                     ..lib_area
                 };
             } else {
@@ -348,7 +368,13 @@ impl App {
             }
         }
 
-        self.render_power_queue(f, queue_area, queue_focused, layout);
+        // Queue list: title row at top, rest is the list.
+        let queue_list_area = Rect {
+            y: queue_area.y + 1,
+            height: queue_area.height.saturating_sub(1),
+            ..queue_area
+        };
+        self.render_power_queue(f, queue_list_area, queue_focused, layout);
         self.render_power_library(f, render_lib_area, left_focused, layout);
 
         // Status bar + toast overlay at the bottom of the right panel.
@@ -947,14 +973,14 @@ mod tests {
         let row0 = out.lines().next().unwrap();
         let _row1 = out.lines().nth(1).unwrap();
 
-        let row4 = out.lines().nth(4).unwrap();
+        let row3 = out.lines().nth(3).unwrap();
 
         assert!(
             !row0.contains("Alpha") && !row0.contains("Beta"),
             "expected pills not on the first row:\n{out}"
         );
         assert!(
-            row4.contains("Alpha") && row4.contains("Beta"),
+            row3.contains("Alpha") && row3.contains("Beta"),
             "expected group pills below the tab bar (no header row):\n{out}"
         );
 
@@ -970,31 +996,31 @@ mod tests {
         let right_col_x = app.power_left_width + POWER_VIEW_GAP;
         let buf = term.backend().buffer();
         assert!(
-            row4.chars().take(right_col_x as usize).all(|c| c == ' '),
+            row3.chars().take(right_col_x as usize).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
-        let alpha_x = char_x(row4, "Alpha");
+        let alpha_x = char_x(row3, "Alpha");
         assert!(
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 4)].bg, palette::FOAM);
+        assert_eq!(buf[(alpha_x, 3)].bg, palette::FOAM);
         assert_eq!(
-            buf[(alpha_x, 4)].fg,
+            buf[(alpha_x, 3)].fg,
             palette::YELLOW,
             "expected the selected group pill to use yellow text"
         );
-        let beta_x = char_x(row4, "Beta");
-        assert_eq!(buf[(beta_x, 4)].bg, palette::FOAM);
+        let beta_x = char_x(row3, "Beta");
+        assert_eq!(buf[(beta_x, 3)].bg, palette::FOAM);
         assert_eq!(
-            buf[(beta_x, 4)].fg,
+            buf[(beta_x, 3)].fg,
             palette::BASE,
             "expected a non-selected group pill to stay blue with base text"
         );
 
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));
-        let between: String = row4
+        let between: String = row3
             .chars()
             .skip(gap_start as usize)
             .take((gap_end - gap_start) as usize)
@@ -1006,20 +1032,20 @@ mod tests {
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 4, "expected selector hitboxes on the pills row");
+            assert_eq!(rect.y, 3, "expected selector hitboxes on the pills row");
             assert!(
                 rect.x >= right_col_x,
                 "expected selector hitboxes confined to the right column"
             );
         }
 
-        // Row 3 is a blank spacer between the pill row and the album list.
-        let spacer_row = out.lines().nth(5).unwrap();
+        // Row 4 is a blank spacer between the pill row and the album list.
+        let spacer_row = out.lines().nth(4).unwrap();
         assert!(
             spacer_row.trim().is_empty(),
             "expected a blank spacer row between the pills and the album list:\n{out}"
         );
-        let album_row = out.lines().nth(6).unwrap();
+        let album_row = out.lines().nth(5).unwrap();
         assert!(
             album_row.contains("Alpha") || album_row.contains("First Album"),
             "expected album list content to start below the pill/spacer rows:\n{out}"
@@ -1052,11 +1078,11 @@ mod tests {
         let out = buffer_to_string(&term);
         let _row0 = out.lines().next().unwrap();
 
-        let row4 = out.lines().nth(4).unwrap();
-        let _row5 = out.lines().nth(4).unwrap();
+        let row3 = out.lines().nth(3).unwrap();
+        let _row4 = out.lines().nth(4).unwrap();
 
         assert!(
-            row4.contains('\u{203a}'),
+            row3.contains('\u{203a}'),
             "expected a right scroll indicator on the pills row (no header gap):\n{out}"
         );
 
@@ -1065,7 +1091,7 @@ mod tests {
             line[..byte_idx].chars().count() as u16
         };
 
-        let right_indicator_x = rchar_x(row4, "\u{203a}");
+        let right_indicator_x = rchar_x(row3, "\u{203a}");
         assert!(
             right_indicator_x < width,
             "expected the right scroll indicator to stay inside the pill row:\n{out}"
@@ -1073,13 +1099,13 @@ mod tests {
 
         let right_col_x = (app.power_left_width + POWER_VIEW_GAP) as usize;
         assert!(
-            row4.chars().take(right_col_x).all(|c| c == ' '),
+            row3.chars().take(right_col_x).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 4, "expected pill hitboxes on the pills row");
+            assert_eq!(rect.y, 3, "expected pill hitboxes on the pills row");
             assert!(
                 rect.x as usize >= right_col_x,
                 "expected pill hitboxes confined to the right column"

@@ -21,6 +21,99 @@ fn queue_group_start_row(display: &[QueueRow], row: usize) -> usize {
 }
 
 impl App {
+    /// Renders the "Queue" title pill (and optional Local/Remote scope pills)
+    /// at the top of the queue column on a single row.
+    pub(super) fn render_power_queue_title(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        layout: &mut LayoutPower,
+    ) {
+        if area.height < 1 {
+            return;
+        }
+
+        layout.queue_scope_local_area = Rect::default();
+        layout.queue_scope_remote_area = Rect::default();
+
+        let mut spans = Vec::new();
+        let mbv_label = if self.use_nerd_fonts {
+            "\u{F0AFE} mbv "
+        } else {
+            " mbv "
+        };
+        spans.push(Span::styled(
+            mbv_label,
+            Style::default()
+                .fg(palette::FOAM)
+                .add_modifier(Modifier::BOLD),
+        ));
+
+        if self.has_direct_remote_queue() {
+            let local_selected = self.visible_queue_scope() == QueueScope::Local;
+            let nf_icon = if self.use_nerd_fonts { "\u{F03A} " } else { "" };
+            let local_label = if local_selected {
+                format!(" {nf_icon}LOCAL ")
+            } else {
+                " LOCAL ".to_string()
+            };
+            let remote_label = if local_selected {
+                " REMOTE ".to_string()
+            } else {
+                format!(" {nf_icon}REMOTE ")
+            };
+            let local_w = local_label.width() as u16;
+            let remote_w = remote_label.width() as u16;
+            let gap = 1u16;
+            let scope_block_w = local_w + gap + remote_w;
+            let queue_w = mbv_label.width() as u16;
+            let scope_start = area.width.saturating_sub(scope_block_w);
+            let pad = scope_start.saturating_sub(queue_w);
+            if pad > 0 {
+                spans.push(Span::raw(" ".repeat(pad as usize)));
+            }
+            let local_x = area.x + area.width.saturating_sub(scope_block_w);
+            let remote_x = local_x + local_w + gap;
+            layout.queue_scope_local_area = Rect {
+                x: local_x,
+                y: area.y,
+                width: local_w,
+                height: 1,
+            };
+            layout.queue_scope_remote_area = Rect {
+                x: remote_x,
+                y: area.y,
+                width: remote_w,
+                height: 1,
+            };
+            let inactive = Style::default().fg(palette::MUTED);
+            let active = Style::default()
+                .fg(palette::YELLOW)
+                .add_modifier(Modifier::BOLD);
+            spans.push(Span::styled(
+                local_label,
+                if local_selected { active } else { inactive },
+            ));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                remote_label,
+                if local_selected { inactive } else { active },
+            ));
+        }
+
+        f.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            },
+        );
+    }
+
+    /// Renders the queue list (track items, group headers, scrollbar). The
+    /// header pill row is rendered separately by `render_power_queue_header`.
     pub(super) fn render_power_queue(
         &mut self,
         f: &mut Frame,
@@ -33,89 +126,6 @@ impl App {
         }
 
         layout.queue_cursor_screen_y = None;
-
-        let show_remote_scope = self.has_direct_remote_queue();
-        layout.queue_scope_local_area = Rect::default();
-        layout.queue_scope_remote_area = Rect::default();
-
-        // Queue header row: default FOAM rule when there is only one scope,
-        // or scope pills plus Queue pill when both Local/Remote scopes exist.
-        if area.height > 0 {
-            if show_remote_scope {
-                let queue_label = " Queue ";
-                let queue_w = queue_label.width() as u16;
-                let queue_x = area.x + area.width.saturating_sub(queue_w);
-                let mut spans = Vec::new();
-                let local_selected = self.visible_queue_scope() == QueueScope::Local;
-                let local_label = " Local ";
-                let remote_label = " Remote ";
-                let local_w = local_label.width() as u16;
-                let remote_w = remote_label.width() as u16;
-                let gap = 1u16;
-                layout.queue_scope_local_area = Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: local_w,
-                    height: 1,
-                };
-                layout.queue_scope_remote_area = Rect {
-                    x: area.x + local_w + gap,
-                    y: area.y,
-                    width: remote_w,
-                    height: 1,
-                };
-                let inactive = Style::default().fg(palette::MUTED).bg(palette::PILL_BG);
-                let active = Style::default().fg(palette::BASE).bg(palette::FOAM);
-                spans.push(Span::styled(
-                    local_label,
-                    if local_selected { active } else { inactive },
-                ));
-                spans.push(Span::raw(" "));
-                spans.push(Span::styled(
-                    remote_label,
-                    if local_selected { inactive } else { active },
-                ));
-                let header_used =
-                    spans.iter().map(|span| span.content.width()).sum::<usize>() as u16;
-                let gap_to_queue = queue_x.saturating_sub(area.x + header_used);
-                spans.push(Span::raw(" ".repeat(gap_to_queue as usize)));
-                spans.push(Span::styled(
-                    queue_label,
-                    Style::default().fg(palette::BASE).bg(palette::FOAM),
-                ));
-                f.render_widget(
-                    Paragraph::new(Line::from(spans)),
-                    Rect {
-                        x: area.x,
-                        y: area.y,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-            } else {
-                let pill = " Queue ";
-                let pill_w = pill.width();
-                let left = (area.width as usize).saturating_sub(pill_w);
-                f.render_widget(
-                    Paragraph::new(Line::from(vec![
-                        Span::styled("━".repeat(left), Style::default().fg(palette::FOAM)),
-                        Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
-                    ])),
-                    Rect {
-                        x: area.x,
-                        y: area.y,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-            }
-        }
-        let area = Rect {
-            y: area.y + 2,
-            height: area.height.saturating_sub(2),
-            ..area
-        };
-        // Store the content area (after header) so mouse clicks map to the right rows.
         layout.queue_area = area;
 
         let (items, cursor) = {

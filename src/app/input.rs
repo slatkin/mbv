@@ -5017,7 +5017,7 @@ mod power_music_track_focus_tests {
         // Display row 0 is the artist header, then one row per album (the
         // collapsed action-hint row that appears under the *selected* album
         // sits well past this window, so it doesn't shift this target). A
-        // 30-row page up from album 35's row lands on album 5.
+        // 31-row page up from album 35's row lands on album 4.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
             4,

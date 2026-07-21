@@ -9230,13 +9230,10 @@ pub(crate) mod tests {
         let rendered = render_app_to_string(&mut app, 90, 28);
 
         assert!(
-            rendered.contains(" Local ") && rendered.contains(" Remote "),
+            rendered.contains(" LOCAL ") && rendered.contains(" REMOTE "),
             "expected power queue scope pills in rendered output:\n{rendered}"
         );
-        assert!(
-            rendered.contains(" Queue "),
-            "expected queue pill:\n{rendered}"
-        );
+        assert!(rendered.contains(" mbv "), "expected mbv pill:\n{rendered}");
         assert!(app.layout.power.queue_scope_local_area.width >= " Local ".width() as u16);
         assert!(app.layout.power.queue_scope_remote_area.width >= " Remote ".width() as u16);
     }
