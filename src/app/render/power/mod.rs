@@ -110,11 +110,11 @@ pub(super) fn render_selected_block_borders(
     if let Some(top_border) = top_pad_abs.checked_sub(1) {
         if top_border >= offset && top_border < offset + visible {
             let top_y = area.y + (top_border - offset) as u16;
-            let top_spans: Vec<Span> = (0..area.width)
-                .map(|_| Span::styled("\u{2581}", border_style))
-                .collect();
             f.render_widget(
-                Paragraph::new(Line::from(top_spans)),
+                Paragraph::new(Line::from(Span::styled(
+                    "\u{2581}".repeat(area.width as usize),
+                    border_style,
+                ))),
                 Rect {
                     x: area.x,
                     y: top_y,
@@ -128,11 +128,11 @@ pub(super) fn render_selected_block_borders(
     let bot_border = bottom_pad_abs + 1;
     if bot_border >= offset && bot_border < offset + visible {
         let bot_y = area.y + (bot_border - offset) as u16;
-        let bot_spans: Vec<Span> = (0..area.width)
-            .map(|_| Span::styled("\u{2594}", border_style))
-            .collect();
         f.render_widget(
-            Paragraph::new(Line::from(bot_spans)),
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2594}".repeat(area.width as usize),
+                border_style,
+            ))),
             Rect {
                 x: area.x,
                 y: bot_y,

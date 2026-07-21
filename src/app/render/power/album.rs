@@ -644,7 +644,7 @@ impl App {
                         if !year_str.is_empty() {
                             spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
                             spans.push(Span::styled(
-                                year_str.clone(),
+                                year_str.as_str(),
                                 Style::default().fg(palette::PINE),
                             ));
                             spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
@@ -659,7 +659,7 @@ impl App {
                         } else {
                             Style::default().fg(palette::YELLOW)
                         };
-                        spans.push(Span::styled(trunc_name.to_string(), title_style));
+                        spans.push(Span::styled(trunc_name, title_style));
                     } else {
                         // Legacy style spacing
                         if selected {
@@ -674,7 +674,7 @@ impl App {
                         }
                         if !year_str.is_empty() {
                             spans.push(Span::styled(
-                                year_str.clone(),
+                                year_str.as_str(),
                                 Style::default().fg(palette::PINE),
                             ));
                             spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
@@ -685,7 +685,7 @@ impl App {
                         } else {
                             Style::default().fg(name_color)
                         };
-                        spans.push(Span::styled(trunc_name.to_string(), title_style));
+                        spans.push(Span::styled(trunc_name, title_style));
                     }
 
                     let album_area = if has_block { detail_row_area } else { row_area };

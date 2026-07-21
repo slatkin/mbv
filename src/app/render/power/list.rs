@@ -28,6 +28,56 @@ const COMPACT_BANNER_RULE_ROWS: usize = 1;
 const COMPACT_BANNER_GAP_ROWS: usize = 1;
 const COMPACT_BANNER_INDENT: u16 = 1;
 
+/// Builds the title (+ optional duration) spans for one list row, shared by
+/// both the letter-grouped and plain-list rendering branches (identical
+/// styling logic, only how `title`/`dur_str`/`avail` are computed differs
+/// between the two call sites).
+fn build_list_row_spans(
+    title: String,
+    dur_str: String,
+    selected: bool,
+    selected_has_banner: bool,
+    focused: bool,
+    fg: Color,
+) -> Vec<Span<'static>> {
+    let mut spans: Vec<Span> = if selected {
+        if selected_has_banner {
+            // Colored-block look: 1-col leading pad inside the
+            // MEDIA_SELECTED_BG block, no green `▌` gutter. Title is Emby
+            // green (BOLD when focused) and the row omits the duration --
+            // it lives in the banner's metadata row below.
+            let title_style = if focused {
+                Style::default()
+                    .fg(palette::YELLOW)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::YELLOW)
+            };
+            vec![Span::raw(" "), Span::styled(title, title_style)]
+        } else {
+            // Otherwise keep the green gutter for selected list rows
+            // without an inline banner.
+            let title_style = if focused {
+                Style::default()
+                    .fg(palette::IRIS)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(fg)
+            };
+            vec![
+                Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                Span::styled(title, title_style),
+            ]
+        }
+    } else {
+        vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
+    };
+    if !selected_has_banner && !dur_str.is_empty() {
+        spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
+    }
+    spans
+}
+
 impl App {
     /// Filler-row count to reserve around the selected movie's row in
     /// `lib_idx`'s display-row sequence: the colored block's top/bottom
@@ -420,21 +470,15 @@ impl App {
             // paint their own cells and the block's background shows through
             // on the side padding cols and on the top/bottom padding rows.
             if banner_rows > 0 {
-                let vis_top = banner_rule_top.max(offset);
-                let vis_bot = banner_rule_bottom.min(offset + visible - 1);
-                if vis_top <= vis_bot {
-                    let block_y = content_area.y + (vis_top - offset) as u16;
-                    let block_h = (vis_bot - vis_top + 1) as u16;
-                    f.render_widget(
-                        Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
-                        Rect {
-                            x: content_area.x,
-                            y: block_y,
-                            width: content_area.width,
-                            height: block_h,
-                        },
-                    );
-                }
+                super::render_selected_block_background(
+                    f,
+                    content_area,
+                    offset,
+                    visible,
+                    banner_rule_top,
+                    banner_rule_bottom,
+                    palette::MEDIA_SELECTED_BG,
+                );
             }
 
             // Width available to title + duration on a normal list row (with a
@@ -503,42 +547,14 @@ impl App {
                         } else {
                             palette::SUBTLE
                         };
-                        let mut spans: Vec<Span> = if selected {
-                            if selected_has_banner {
-                                // Colored-block look: 1-col leading pad inside
-                                // the MEDIA_SELECTED_BG block, no green
-                                // `▌` gutter. Title is Emby green (BOLD when
-                                // focused) and the row omits the duration --
-                                // it lives in the banner's metadata row below.
-                                let title_style = if focused {
-                                    Style::default()
-                                        .fg(palette::YELLOW)
-                                        .add_modifier(Modifier::BOLD)
-                                } else {
-                                    Style::default().fg(palette::YELLOW)
-                                };
-                                vec![Span::raw(" "), Span::styled(title, title_style)]
-                            } else {
-                                // Otherwise keep the green gutter for selected
-                                // list rows without an inline banner.
-                                let title_style = if focused {
-                                    Style::default()
-                                        .fg(palette::IRIS)
-                                        .add_modifier(Modifier::BOLD)
-                                } else {
-                                    Style::default().fg(fg)
-                                };
-                                vec![
-                                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                                    Span::styled(title, title_style),
-                                ]
-                            }
-                        } else {
-                            vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
-                        };
-                        if !selected_has_banner && !dur_str.is_empty() {
-                            spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
-                        }
+                        let spans = build_list_row_spans(
+                            title,
+                            dur_str,
+                            selected,
+                            selected_has_banner,
+                            focused,
+                            fg,
+                        );
                         ListItem::new(Line::from(spans))
                     }
                 })
@@ -589,39 +605,14 @@ impl App {
             }
 
             if banner_rows > 0 {
-                let border_style = Style::default().fg(palette::SOFT_WHITE);
-                if let Some(top_border) = banner_rule_top.checked_sub(1) {
-                    if top_border >= offset && top_border < offset + visible {
-                        let top_y = content_area.y + (top_border - offset) as u16;
-                        let top_spans: Vec<Span> = (0..content_area.width)
-                            .map(|_| Span::styled("\u{2581}", border_style))
-                            .collect();
-                        f.render_widget(
-                            Paragraph::new(Line::from(top_spans)),
-                            Rect {
-                                x: content_area.x,
-                                y: top_y,
-                                width: content_area.width,
-                                height: 1,
-                            },
-                        );
-                    }
-                }
-                if banner_rule_bottom + 1 >= offset && banner_rule_bottom + 1 < offset + visible {
-                    let bot_y = content_area.y + (banner_rule_bottom + 1 - offset) as u16;
-                    let bot_spans: Vec<Span> = (0..content_area.width)
-                        .map(|_| Span::styled("\u{2594}", border_style))
-                        .collect();
-                    f.render_widget(
-                        Paragraph::new(Line::from(bot_spans)),
-                        Rect {
-                            x: content_area.x,
-                            y: bot_y,
-                            width: content_area.width,
-                            height: 1,
-                        },
-                    );
-                }
+                super::render_selected_block_borders(
+                    f,
+                    content_area,
+                    offset,
+                    visible,
+                    banner_rule_top,
+                    banner_rule_bottom,
+                );
             }
         } else {
             enum DisplayRow {
@@ -689,21 +680,15 @@ impl App {
             // paint their own cells and the block's background shows through
             // on the side padding cols and on the top/bottom padding rows.
             if banner_rows > 0 {
-                let vis_top = banner_rule_top.max(offset);
-                let vis_bot = banner_rule_bottom.min(offset + visible - 1);
-                if vis_top <= vis_bot {
-                    let block_y = content_area.y + (vis_top - offset) as u16;
-                    let block_h = (vis_bot - vis_top + 1) as u16;
-                    f.render_widget(
-                        Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
-                        Rect {
-                            x: content_area.x,
-                            y: block_y,
-                            width: content_area.width,
-                            height: block_h,
-                        },
-                    );
-                }
+                super::render_selected_block_background(
+                    f,
+                    content_area,
+                    offset,
+                    visible,
+                    banner_rule_top,
+                    banner_rule_bottom,
+                    palette::MEDIA_SELECTED_BG,
+                );
             }
 
             let list_items: Vec<ListItem> = display_rows
@@ -762,42 +747,14 @@ impl App {
                             palette::SUBTLE
                         };
 
-                        let mut spans: Vec<Span> = if selected {
-                            if selected_has_banner {
-                                // Colored-block look: 1-col leading pad inside
-                                // the MEDIA_SELECTED_BG block, no green
-                                // `▌` gutter. Title is Emby green (BOLD when
-                                // focused) and the row omits the duration --
-                                // it lives in the banner's metadata row below.
-                                let title_style = if focused {
-                                    Style::default()
-                                        .fg(palette::YELLOW)
-                                        .add_modifier(Modifier::BOLD)
-                                } else {
-                                    Style::default().fg(palette::YELLOW)
-                                };
-                                vec![Span::raw(" "), Span::styled(title, title_style)]
-                            } else {
-                                // Otherwise keep the green gutter for selected
-                                // list rows without an inline banner.
-                                let title_style = if focused {
-                                    Style::default()
-                                        .fg(palette::IRIS)
-                                        .add_modifier(Modifier::BOLD)
-                                } else {
-                                    Style::default().fg(fg)
-                                };
-                                vec![
-                                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                                    Span::styled(title, title_style),
-                                ]
-                            }
-                        } else {
-                            vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
-                        };
-                        if !selected_has_banner && !dur_str.is_empty() {
-                            spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
-                        }
+                        let spans = build_list_row_spans(
+                            title,
+                            dur_str,
+                            selected,
+                            selected_has_banner,
+                            focused,
+                            fg,
+                        );
                         ListItem::new(Line::from(spans))
                     }
                 })
@@ -863,39 +820,14 @@ impl App {
 
             // White unicode borders at the block's top and bottom padding
             // rows, rendering inside the coloured block.
-            let border_style = Style::default().fg(palette::SOFT_WHITE);
-            if let Some(top_border) = banner_rule_top.checked_sub(1) {
-                if top_border >= offset && top_border < offset + visible {
-                    let top_y = content_area.y + (top_border - offset) as u16;
-                    let top_spans: Vec<Span> = (0..content_area.width)
-                        .map(|_| Span::styled("\u{2581}", border_style))
-                        .collect();
-                    f.render_widget(
-                        Paragraph::new(Line::from(top_spans)),
-                        Rect {
-                            x: content_area.x,
-                            y: top_y,
-                            width: content_area.width,
-                            height: 1,
-                        },
-                    );
-                }
-            }
-            if banner_rule_bottom + 1 >= offset && banner_rule_bottom + 1 < offset + visible {
-                let bot_y = content_area.y + (banner_rule_bottom + 1 - offset) as u16;
-                let bot_spans: Vec<Span> = (0..content_area.width)
-                    .map(|_| Span::styled("\u{2594}", border_style))
-                    .collect();
-                f.render_widget(
-                    Paragraph::new(Line::from(bot_spans)),
-                    Rect {
-                        x: content_area.x,
-                        y: bot_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
-            }
+            super::render_selected_block_borders(
+                f,
+                content_area,
+                offset,
+                visible,
+                banner_rule_top,
+                banner_rule_bottom,
+            );
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
