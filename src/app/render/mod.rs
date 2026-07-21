@@ -113,7 +113,7 @@ impl App {
         // view instead of as full-width rows above the content area.
         let (seek_h, _gap_h, title_h, controls_h): (u16, u16, u16, u16) =
             if onerow || reserve_player_rows {
-                (1, 0, 1, 0)
+                (1, 0, 1, 1)
             } else {
                 (1, 0, 0, 0)
             };

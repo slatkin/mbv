@@ -4981,8 +4981,8 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 31,
-            "fixture sanity: expected 31 rendered list rows"
+            viewport_rows, 30,
+            "fixture sanity: expected 30 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
@@ -4990,11 +4990,11 @@ mod power_music_track_focus_tests {
         assert!(!handled);
         // Display rows: 0 = artist header, 1 = selected album 0, 2 = its
         // collapsed action-hint row (tracks stay hidden until Enter is
-        // pressed), 3.. = the remaining albums one row each. A 31-row page
-        // from display row 1 lands on display row 32 = album 30.
+        // pressed), 3.. = the remaining albums one row each. A 30-row page
+        // from display row 1 lands on display row 31 = album 29.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            30,
+            29,
             "PageDown should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -5007,8 +5007,8 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 31,
-            "fixture sanity: expected 31 rendered list rows"
+            viewport_rows, 30,
+            "fixture sanity: expected 30 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
@@ -5020,7 +5020,7 @@ mod power_music_track_focus_tests {
         // 30-row page up from album 35's row lands on album 5.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            4,
+            5,
             "PageUp should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
