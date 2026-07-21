@@ -4981,8 +4981,8 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 32,
-            "fixture sanity: expected 32 rendered list rows"
+            viewport_rows, 31,
+            "fixture sanity: expected 31 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
@@ -4990,11 +4990,11 @@ mod power_music_track_focus_tests {
         assert!(!handled);
         // Display rows: 0 = artist header, 1 = selected album 0, 2 = its
         // collapsed action-hint row (tracks stay hidden until Enter is
-        // pressed), 3.. = the remaining albums one row each. A 32-row page
-        // from display row 1 lands on display row 33 = album 31.
+        // pressed), 3.. = the remaining albums one row each. A 31-row page
+        // from display row 1 lands on display row 32 = album 30.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            31,
+            30,
             "PageDown should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -5007,8 +5007,8 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 40);
         let viewport_rows = app.layout.power.left_area.height as usize;
         assert_eq!(
-            viewport_rows, 32,
-            "fixture sanity: expected 32 rendered list rows"
+            viewport_rows, 31,
+            "fixture sanity: expected 31 rendered list rows"
         );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
@@ -5017,10 +5017,10 @@ mod power_music_track_focus_tests {
         // Display row 0 is the artist header, then one row per album (the
         // collapsed action-hint row that appears under the *selected* album
         // sits well past this window, so it doesn't shift this target). A
-        // 32-row page up from album 35's row lands on album 3.
+        // 31-row page up from album 35's row lands on album 4.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            3,
+            4,
             "PageUp should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());

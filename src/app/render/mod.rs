@@ -141,7 +141,7 @@ impl App {
         } else {
             None
         };
-        let title_color = palette::GREEN;
+        let title_color = palette::TEAL;
         let now_playing_title: Option<(String, Color)> =
             if playing_panel && mode != crate::config::PanelMode::Hidden {
                 if active {
@@ -689,10 +689,20 @@ impl App {
         }
         // Title row (when panel is expanded).
         if player_h >= 2 {
-            let title_area = Rect {
-                y: area.y + 1,
-                height: 1,
-                ..area
+            const H_PAD: u16 = 1;
+            let title_area = if area.width > 2 * H_PAD {
+                Rect {
+                    x: area.x + H_PAD,
+                    width: area.width.saturating_sub(2 * H_PAD),
+                    y: area.y + 1,
+                    height: 1,
+                }
+            } else {
+                Rect {
+                    y: area.y + 1,
+                    height: 1,
+                    ..area
+                }
             };
             if let Some((ref title, color)) = now_playing_title {
                 self.render_title_row(f, title_area, title, *color, layout);
@@ -827,12 +837,7 @@ impl App {
         } else {
             trunc_str(title, title_w)
         };
-        left.push(Span::styled(
-            title_text,
-            Style::default()
-                .fg(title_color)
-                .add_modifier(Modifier::BOLD),
-        ));
+        left.push(Span::styled(title_text, Style::default().fg(title_color)));
 
         left.push(Span::styled(
             sep_text,
