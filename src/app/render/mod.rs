@@ -111,17 +111,15 @@ impl App {
         let reserve_player_rows = in_power && mode == crate::config::PanelMode::OneRow;
         let tabs_h: u16 = 1;
         let spacer_h: u16 = 1;
-        let status_bar_h: u16 = 1;
         // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
-        // status_bar is the persistent bottom row (session/queue state, toast) --
-        // unlike the other player rows it is not conditional on onerow/reserve_player_rows.
+        // status_bar now renders within each view's right panel, not as an independent bottom row.
         let (seek_h, gap_h, title_h, controls_h): (u16, u16, u16, u16) =
             if onerow || reserve_player_rows {
                 (1, 0, 1, 1)
             } else {
                 (1, 0, 0, 0)
             };
-        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, main_area, status_bar_area] =
+        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, main_area] =
             Layout::vertical([
                 Constraint::Length(tabs_h),
                 Constraint::Length(spacer_h),
@@ -130,7 +128,6 @@ impl App {
                 Constraint::Length(title_h),
                 Constraint::Length(controls_h),
                 Constraint::Min(0),
-                Constraint::Length(status_bar_h),
             ])
             .areas(area);
 
@@ -326,28 +323,11 @@ impl App {
             );
         }
 
+        // Clear expired toast before any rendering so the status bar sees the latest state.
         if self.status_expires.is_some_and(|t| t <= Instant::now()) {
             self.status.clear();
             self.status_expires = None;
             self.force_clear = true;
-        }
-
-        // Persistent bottom status bar: pill + session/queue segments, or the
-        // toast overlay when a message is active. render_status_bar always runs
-        // first so its click hitboxes (ind_mu/ind_rc) stay populated every frame,
-        // even while a toast visually covers this row -- Clear wipes the leftover
-        // glyphs before the toast draws over them so nothing bleeds through.
-        self.render_status_bar(f, status_bar_area, &mut layout.playback);
-        let show_toast =
-            !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
-        if show_toast {
-            f.render_widget(Clear, status_bar_area);
-            f.render_widget(
-                Paragraph::new(Self::toast_line(&self.status))
-                    .alignment(Alignment::Center)
-                    .style(Style::default().fg(palette::TEXT).bg(palette::IRIS)),
-                status_bar_area,
-            );
         }
 
         let now_playing: Option<String> = if active {
@@ -381,20 +361,43 @@ impl App {
         // meaningful only in Standard mode.
         match self.view_mode {
             super::ViewMode::Power => {
-                self.render_power_view(f, main_area, &mut layout.power);
+                self.render_power_view(f, main_area, &mut layout.power, &mut layout.playback);
             }
             super::ViewMode::Standard => {
+                let content_h = main_area.height.saturating_sub(1);
+                let content_area = Rect {
+                    height: content_h,
+                    ..main_area
+                };
                 if self.tab_idx == 0 {
-                    self.render_combined(f, main_area, &mut layout.home);
+                    self.render_combined(f, content_area, &mut layout.home);
                 } else if self.tab_idx == 1 {
-                    self.render_queue_panel(f, main_area, &mut layout.queue);
+                    self.render_queue_panel(f, content_area, &mut layout.queue);
                 } else {
                     self.render_library(
                         f,
-                        main_area,
+                        content_area,
                         self.tab_idx - self.lib_tab_offset(),
                         None,
                         &mut layout.library,
+                    );
+                }
+
+                let sb_area = Rect {
+                    y: main_area.y + content_h,
+                    height: 1,
+                    ..main_area
+                };
+                self.render_status_bar(f, sb_area, &mut layout.playback);
+                let show_toast =
+                    !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
+                if show_toast {
+                    f.render_widget(Clear, sb_area);
+                    f.render_widget(
+                        Paragraph::new(Self::toast_line(&self.status))
+                            .alignment(Alignment::Center)
+                            .style(Style::default().fg(palette::TEXT).bg(palette::IRIS)),
+                        sb_area,
                     );
                 }
             }
@@ -834,7 +837,7 @@ impl App {
             super::RemoteSlotState::AttachedSession | super::RemoteSlotState::DirectRemote
         );
         let glyph_style = Style::default()
-            .bg(palette::PILL_BG)
+            .bg(palette::STATUS_PILL_BG)
             .fg(ratatui::style::Color::White);
 
         let target = match remote_state {
@@ -869,10 +872,10 @@ impl App {
             } else {
                 ratatui::style::Color::Black
             })
-            .bg(palette::PILL_BG);
+            .bg(palette::STATUS_PILL_BG);
 
         vec![
-            Span::styled(" ", Style::default().bg(palette::PILL_BG)),
+            Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
             Span::styled(
                 if self.use_nerd_fonts {
                     "\u{f1616}"
@@ -882,7 +885,7 @@ impl App {
                 glyph_style,
             ),
             Span::styled(label, label_style),
-            Span::styled(" ", Style::default().bg(palette::PILL_BG)),
+            Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
         ]
     }
 
@@ -893,14 +896,14 @@ impl App {
             _ => (format!("{gap}none"), false),
         };
         let glyph_style = Style::default()
-            .bg(palette::PILL_BG)
+            .bg(palette::STATUS_PILL_BG)
             .fg(ratatui::style::Color::White);
         let label_style = Style::default()
             .fg(if on { palette::FOAM } else { palette::SUBTLE })
-            .bg(palette::PILL_BG);
+            .bg(palette::STATUS_PILL_BG);
 
         vec![
-            Span::styled(" ", Style::default().bg(palette::PILL_BG)),
+            Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
             Span::styled(
                 if self.use_nerd_fonts {
                     "\u{f03a}"
@@ -910,7 +913,7 @@ impl App {
                 glyph_style,
             ),
             Span::styled(label, label_style),
-            Span::styled(" ", Style::default().bg(palette::PILL_BG)),
+            Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
         ]
     }
 
@@ -919,15 +922,15 @@ impl App {
             .displayed_mute(self)
             .then(|| {
                 vec![
-                    Span::styled(" ", Style::default().bg(palette::PILL_BG)),
+                    Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
                     Span::styled(
                         "muted",
                         Style::default()
                             .fg(palette::RED)
-                            .bg(palette::PILL_BG)
+                            .bg(palette::STATUS_PILL_BG)
                             .add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(" ", Style::default().bg(palette::PILL_BG)),
+                    Span::styled(" ", Style::default().bg(palette::STATUS_PILL_BG)),
                 ]
             })
     }
@@ -1113,7 +1116,7 @@ impl App {
                     &mut right_spans,
                     Span::styled(
                         format!(" {label} "),
-                        Style::default().fg(color).bg(palette::PILL_BG),
+                        Style::default().fg(color).bg(palette::STATUS_PILL_BG),
                     ),
                 );
             }
@@ -1128,7 +1131,7 @@ impl App {
                         " UNSAVED ",
                         Style::default()
                             .fg(palette::YELLOW)
-                            .bg(palette::PILL_BG)
+                            .bg(palette::STATUS_PILL_BG)
                             .add_modifier(Modifier::BOLD),
                     ),
                 );
@@ -1137,18 +1140,40 @@ impl App {
                     &mut right_spans,
                     Span::styled(
                         " AUTOSAVE ",
-                        Style::default().fg(palette::PINE).bg(palette::PILL_BG),
+                        Style::default()
+                            .fg(palette::PINE)
+                            .bg(palette::STATUS_PILL_BG),
                     ),
                 );
             }
             if let Some(server) = server_url_label(&server_url) {
-                append_right(
-                    &mut right_spans,
-                    Span::styled(
+                if self.use_nerd_fonts {
+                    if !right_spans.is_empty() {
+                        right_spans.push(Span::raw(" "));
+                    }
+                    right_spans.push(Span::styled(
+                        " \u{F06B4}",
+                        Style::default()
+                            .fg(palette::PINE)
+                            .bg(palette::STATUS_PILL_BG),
+                    ));
+                    right_spans.push(Span::styled(
                         format!(" {server} "),
-                        Style::default().fg(palette::SUBTLE).bg(palette::PILL_BG),
-                    ),
-                );
+                        Style::default()
+                            .fg(palette::SUBTLE)
+                            .bg(palette::STATUS_PILL_BG),
+                    ));
+                } else {
+                    append_right(
+                        &mut right_spans,
+                        Span::styled(
+                            format!(" {server} "),
+                            Style::default()
+                                .fg(palette::SUBTLE)
+                                .bg(palette::STATUS_PILL_BG),
+                        ),
+                    );
+                }
             }
             // Remote queue scope is omitted here: the active queue is already
             // apparent from the queue UI.

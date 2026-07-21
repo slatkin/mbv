@@ -9431,7 +9431,7 @@ pub(crate) mod tests {
 
         let _ = render_app_to_string(&mut app, 70, 28);
 
-        assert_eq!(app.layout.power.queue_area.width, 42);
+        assert_eq!(app.layout.power.queue_area.width, 38);
         let saved: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
@@ -9447,13 +9447,13 @@ pub(crate) mod tests {
         app.view_mode = ViewMode::Power;
 
         let _ = render_app_to_string(&mut app, 100, 28);
-        assert_eq!(app.layout.power.queue_area.width, 40);
+        assert_eq!(app.layout.power.queue_area.width, 36);
 
         assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
         assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
 
         let _ = render_app_to_string(&mut app, 100, 28);
-        assert_eq!(app.layout.power.queue_area.width, 50);
+        assert_eq!(app.layout.power.queue_area.width, 46);
     }
 
     #[test]
@@ -12191,18 +12191,19 @@ pub(crate) mod tests {
         let term = render_app_to_terminal(&mut app, 80, 24);
         let buf = term.backend().buffer();
         let last_y = buf.area().height - 1;
+        let test_bg = palette::STATUS_PILL_BG;
         let mut saw_row_bg = false;
         let mut saw_pill_bg = false;
 
         for x in 0..buf.area().width {
             let bg = buf[(x, last_y)].bg;
             saw_row_bg |= bg == palette::BAR_BG;
-            saw_pill_bg |= bg == palette::PILL_BG;
+            saw_pill_bg |= bg == test_bg;
         }
 
         assert!(
             saw_row_bg,
-            "expected the status bar row background Rgb(40,40,40) to be visible"
+            "expected the status bar row background to be visible"
         );
         assert!(
             saw_pill_bg,

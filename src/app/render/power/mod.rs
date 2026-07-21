@@ -10,10 +10,10 @@ mod queue;
 use super::super::layout::LayoutPower;
 use super::super::ui_util::{natural_sort_key, trunc_str};
 use super::super::{palette, App, PowerFocus};
-use ratatui::layout::Rect;
+use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -172,6 +172,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         layout: &mut LayoutPower,
+        playback: &mut super::super::layout::LayoutPlayback,
     ) {
         if area.height < 4 {
             return;
@@ -395,11 +396,40 @@ impl App {
             width: left_w,
             height: content_h,
         };
+
+        // Full-column background behind the card image and queue list.
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
+            left_area,
+        );
+
+        // Inner content area with padding inside the colored box (queue uses this).
+        let left_content = Rect {
+            x: left_area.x + 2,
+            y: left_area.y + 1,
+            width: left_area.width.saturating_sub(4),
+            height: left_area.height.saturating_sub(2),
+        };
+        // Card area: top/bottom padding only, full width (no left/right padding).
+        let card_area = Rect {
+            y: left_area.y + 1,
+            height: left_area.height.saturating_sub(2),
+            ..left_area
+        };
+
         let right_area = Rect {
             x: area.x + left_w + POWER_VIEW_GAP,
             y: area.y + 1,
             width: right_w.saturating_sub(POWER_VIEW_GAP),
-            height: content_h,
+            height: content_h.saturating_sub(1),
+        };
+
+        // Status bar sits at the bottom of the right panel only.
+        let status_area = Rect {
+            x: right_area.x,
+            y: right_area.y + right_area.height,
+            width: right_area.width,
+            height: 1,
         };
 
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
@@ -408,8 +438,8 @@ impl App {
         // The card fills the top of the left column; the queue list takes the rows
         // below it. At low heights the card can consume most of the column, so relocate
         // the queue under the library on the right instead of cramming it in.
-        let (card_h, _) = self.render_power_card(f, left_area);
-        let left_remaining = left_area.height.saturating_sub(card_h);
+        let (card_h, _) = self.render_power_card(f, card_area);
+        let left_remaining = left_content.height.saturating_sub(card_h);
 
         const MIN_LIST_ROWS: u16 = 6;
         // Hysteresis band: the card's rendered height can shift by a handful of
@@ -450,9 +480,9 @@ impl App {
             (
                 right_area,
                 Rect {
-                    y: left_area.y + card_h,
+                    y: left_content.y + card_h,
                     height: left_remaining,
-                    ..left_area
+                    ..left_content
                 },
             )
         };
@@ -480,6 +510,22 @@ impl App {
 
         self.render_power_queue(f, queue_area, queue_focused, layout);
         self.render_power_library(f, render_lib_area, left_focused, layout);
+
+        // Status bar + toast overlay at the bottom of the right panel.
+        if status_area.width > 0 {
+            self.render_status_bar(f, status_area, playback);
+            let show_toast =
+                !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
+            if show_toast {
+                f.render_widget(Clear, status_area);
+                f.render_widget(
+                    Paragraph::new(Self::toast_line(&self.status))
+                        .alignment(Alignment::Center)
+                        .style(Style::default().fg(palette::TEXT).bg(palette::IRIS)),
+                    status_area,
+                );
+            }
+        }
     }
 
     fn render_power_library(
@@ -576,7 +622,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::layout::{LayoutPower, PowerLeftRowTarget};
+    use crate::app::layout::{LayoutPlayback, LayoutPower, PowerLeftRowTarget};
     use crate::app::tests::{make_app_stub, make_item};
     use crate::app::{BrowseLevel, LibraryTab};
     use mbv_core::api::MediaItem;
@@ -691,7 +737,12 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPower::default();
         term.draw(|f| {
-            app.render_power_view(f, Rect::new(0, 0, width, height), &mut layout);
+            app.render_power_view(
+                f,
+                Rect::new(0, 0, width, height),
+                &mut layout,
+                &mut LayoutPlayback::default(),
+            );
         })
         .unwrap();
         layout
@@ -791,10 +842,7 @@ mod tests {
         assert!(
             lines
                 .get(director_line.saturating_sub(1))
-                .map(|l| {
-                    l.find('▌') == Some(0)
-                        && l.chars().skip(1).all(|c| c == ' ')
-                })
+                .map(|l| { l.find('▌') == Some(0) && l.chars().skip(1).all(|c| c == ' ') })
                 .unwrap_or(false),
             "expected a spacer row before the director line:\n{out}"
         );
@@ -875,7 +923,7 @@ mod tests {
 
         let layout = render_power_view(&mut app, 100, 28);
 
-        assert_eq!(layout.queue_area.width, 55);
+        assert_eq!(layout.queue_area.width, 51);
     }
 
     fn make_power_music_group_app() -> App {
@@ -1037,7 +1085,12 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPower::default();
         term.draw(|f| {
-            app.render_power_view(f, Rect::new(0, 0, width, height), &mut layout);
+            app.render_power_view(
+                f,
+                Rect::new(0, 0, width, height),
+                &mut layout,
+                &mut LayoutPlayback::default(),
+            );
         })
         .unwrap();
         let out = buffer_to_string(&term);
@@ -1160,7 +1213,12 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPower::default();
         term.draw(|f| {
-            app.render_power_view(f, Rect::new(0, 0, width, height), &mut layout);
+            app.render_power_view(
+                f,
+                Rect::new(0, 0, width, height),
+                &mut layout,
+                &mut LayoutPlayback::default(),
+            );
         })
         .unwrap();
         let out = buffer_to_string(&term);
