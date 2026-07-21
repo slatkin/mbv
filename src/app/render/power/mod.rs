@@ -171,6 +171,8 @@ impl App {
         area: Rect,
         layout: &mut LayoutPower,
         playback: &mut super::super::layout::LayoutPlayback,
+        tabs_area_out: &mut Rect,
+        tabbar_vol_area_out: &mut Rect,
         player_h: u16,
         show_controls: bool,
         now_playing_title: &Option<(String, ratatui::style::Color)>,
@@ -224,18 +226,31 @@ impl App {
             ..left_area
         };
 
+        let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
         let right_area = Rect {
             x: area.x + left_w + POWER_VIEW_GAP,
-            y: area.y + player_h,
+            y: area.y + tab_h + player_h,
             width: right_w.saturating_sub(POWER_VIEW_GAP),
-            height: content_h.saturating_sub(1).saturating_sub(player_h),
+            height: content_h
+                .saturating_sub(1)
+                .saturating_sub(tab_h)
+                .saturating_sub(player_h),
         };
 
-        // Player panel at the top of the right column.
+        // Tab bar at the very top of the right column.
+        let tab_area = Rect {
+            x: right_area.x,
+            y: area.y,
+            width: right_area.width,
+            height: tab_h,
+        };
+        self.render_tabs(f, tab_area, tabs_area_out, tabbar_vol_area_out, true);
+
+        // Player panel below the tab bar.
         if player_h > 0 {
             let player_area = Rect {
                 x: right_area.x,
-                y: area.y,
+                y: area.y + tab_h,
                 width: right_area.width,
                 height: player_h,
             };
@@ -567,6 +582,8 @@ mod tests {
                 Rect::new(0, 0, width, height),
                 &mut layout,
                 &mut LayoutPlayback::default(),
+                &mut Rect::default(),
+                &mut Rect::default(),
                 0,
                 false,
                 &None,
@@ -918,6 +935,8 @@ mod tests {
                 Rect::new(0, 0, width, height),
                 &mut layout,
                 &mut LayoutPlayback::default(),
+                &mut Rect::default(),
+                &mut Rect::default(),
                 0,
                 false,
                 &None,
@@ -926,16 +945,17 @@ mod tests {
         .unwrap();
         let out = buffer_to_string(&term);
         let row0 = out.lines().next().unwrap();
-        let row1 = out.lines().nth(1).unwrap();
-        let _row2 = out.lines().nth(2).unwrap();
+        let _row1 = out.lines().nth(1).unwrap();
+
+        let row4 = out.lines().nth(4).unwrap();
 
         assert!(
             !row0.contains("Alpha") && !row0.contains("Beta"),
             "expected pills not on the first row:\n{out}"
         );
         assert!(
-            row1.contains("Alpha") && row1.contains("Beta"),
-            "expected group pills directly below the area start (no header row):\n{out}"
+            row4.contains("Alpha") && row4.contains("Beta"),
+            "expected group pills below the tab bar (no header row):\n{out}"
         );
 
         let _rchar_x = |line: &str, needle: &str| -> u16 {
@@ -950,31 +970,31 @@ mod tests {
         let right_col_x = app.power_left_width + POWER_VIEW_GAP;
         let buf = term.backend().buffer();
         assert!(
-            row1.chars().take(right_col_x as usize).all(|c| c == ' '),
+            row4.chars().take(right_col_x as usize).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
-        let alpha_x = char_x(row1, "Alpha");
+        let alpha_x = char_x(row4, "Alpha");
         assert!(
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 1)].bg, palette::FOAM);
+        assert_eq!(buf[(alpha_x, 4)].bg, palette::FOAM);
         assert_eq!(
-            buf[(alpha_x, 1)].fg,
+            buf[(alpha_x, 4)].fg,
             palette::YELLOW,
             "expected the selected group pill to use yellow text"
         );
-        let beta_x = char_x(row1, "Beta");
-        assert_eq!(buf[(beta_x, 1)].bg, palette::FOAM);
+        let beta_x = char_x(row4, "Beta");
+        assert_eq!(buf[(beta_x, 4)].bg, palette::FOAM);
         assert_eq!(
-            buf[(beta_x, 1)].fg,
+            buf[(beta_x, 4)].fg,
             palette::BASE,
             "expected a non-selected group pill to stay blue with base text"
         );
 
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));
-        let between: String = row1
+        let between: String = row4
             .chars()
             .skip(gap_start as usize)
             .take((gap_end - gap_start) as usize)
@@ -986,22 +1006,22 @@ mod tests {
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 1, "expected selector hitboxes on the pills row");
+            assert_eq!(rect.y, 4, "expected selector hitboxes on the pills row");
             assert!(
                 rect.x >= right_col_x,
                 "expected selector hitboxes confined to the right column"
             );
         }
 
-        // Row 2 is a blank spacer between the pill row and the album list.
-        let row2 = out.lines().nth(2).unwrap();
+        // Row 3 is a blank spacer between the pill row and the album list.
+        let spacer_row = out.lines().nth(5).unwrap();
         assert!(
-            row2.trim().is_empty(),
+            spacer_row.trim().is_empty(),
             "expected a blank spacer row between the pills and the album list:\n{out}"
         );
-        let row3 = out.lines().nth(3).unwrap();
+        let album_row = out.lines().nth(6).unwrap();
         assert!(
-            row3.contains("Alpha") || row3.contains("First Album"),
+            album_row.contains("Alpha") || album_row.contains("First Album"),
             "expected album list content to start below the pill/spacer rows:\n{out}"
         );
     }
@@ -1021,6 +1041,8 @@ mod tests {
                 Rect::new(0, 0, width, height),
                 &mut layout,
                 &mut LayoutPlayback::default(),
+                &mut Rect::default(),
+                &mut Rect::default(),
                 0,
                 false,
                 &None,
@@ -1029,11 +1051,12 @@ mod tests {
         .unwrap();
         let out = buffer_to_string(&term);
         let _row0 = out.lines().next().unwrap();
-        let row1 = out.lines().nth(1).unwrap();
-        let _row2 = out.lines().nth(2).unwrap();
+
+        let row4 = out.lines().nth(4).unwrap();
+        let _row5 = out.lines().nth(4).unwrap();
 
         assert!(
-            row1.contains('\u{203a}'),
+            row4.contains('\u{203a}'),
             "expected a right scroll indicator on the pills row (no header gap):\n{out}"
         );
 
@@ -1042,7 +1065,7 @@ mod tests {
             line[..byte_idx].chars().count() as u16
         };
 
-        let right_indicator_x = rchar_x(row1, "\u{203a}");
+        let right_indicator_x = rchar_x(row4, "\u{203a}");
         assert!(
             right_indicator_x < width,
             "expected the right scroll indicator to stay inside the pill row:\n{out}"
@@ -1050,13 +1073,13 @@ mod tests {
 
         let right_col_x = (app.power_left_width + POWER_VIEW_GAP) as usize;
         assert!(
-            row1.chars().take(right_col_x).all(|c| c == ' '),
+            row4.chars().take(right_col_x).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 1, "expected pill hitboxes on the pills row");
+            assert_eq!(rect.y, 4, "expected pill hitboxes on the pills row");
             assert!(
                 rect.x as usize >= right_col_x,
                 "expected pill hitboxes confined to the right column"
