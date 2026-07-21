@@ -1031,6 +1031,7 @@ impl App {
             rows.push(DisplayRow::Blank);
             rows.push(DisplayRow::Pills);
             rows.push(DisplayRow::Blank);
+            rows.push(DisplayRow::Blank);
             for (idx, item) in section.items.iter().cloned().enumerate() {
                 rows.push(DisplayRow::Item(section.flat_start + idx, Box::new(item)));
             }
@@ -1073,7 +1074,7 @@ impl App {
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
         layout.selector_tabs = Vec::new();
 
-        let new_section_start = continue_row_count as usize + 4;
+        let new_section_start = continue_row_count as usize + 5;
 
         // Background for the continue watching list.
         // Extends 1 row above and below the items, full width of the list area.
