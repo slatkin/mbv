@@ -216,9 +216,9 @@ impl App {
         // Shifted down to account for the title row + blank spacer row at top.
         let left_content = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 3,
+            y: left_area.y + 2,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(4),
+            height: left_area.height.saturating_sub(3),
         };
         // Queue title row at the very top, then a blank spacer row, then the
         // card image with its own padding.
@@ -231,12 +231,12 @@ impl App {
                 height: 1,
             },
         );
-        // Card area: shifted down 2 rows (title + blank spacer).
+        // Card area: shifted down 1 row (title + blank spacer).
         let card_area = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 3,
+            y: left_area.y + 2,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(4),
+            height: left_area.height.saturating_sub(3),
         };
 
         let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
