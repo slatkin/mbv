@@ -610,10 +610,13 @@ impl App {
                     };
 
                     // Detect if this album is inside a colored block frame
+                    // Check the absolute row index (not the display cursor) to see if it's
+                    // the first content row after the top border of the block
+                    let abs_row_idx = offset + row_idx;
                     let has_block = selected
-                        && selected_block_bounds.is_some_and(|(top, _)| {
-                            // Album row comes immediately after the top AlbumDetailRule
-                            top + 1 == display_cursor
+                        && selected_block_bounds.is_some_and(|(top_pad_abs, _)| {
+                            // Album row comes immediately after the top AlbumDetailRule border
+                            abs_row_idx == top_pad_abs + 1
                         });
 
                     let mut spans: Vec<Span> = Vec::new();
