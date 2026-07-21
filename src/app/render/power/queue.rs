@@ -37,8 +37,13 @@ impl App {
         layout.queue_scope_remote_area = Rect::default();
 
         let mut spans = Vec::new();
+        let mbv_label = if self.use_nerd_fonts {
+            "\u{F08FE} mbv "
+        } else {
+            " mbv "
+        };
         spans.push(Span::styled(
-            " mbv ",
+            mbv_label,
             Style::default()
                 .fg(palette::FOAM)
                 .add_modifier(Modifier::BOLD),
@@ -51,7 +56,7 @@ impl App {
             let remote_w = remote_label.width() as u16;
             let gap = 1u16;
             let scope_block_w = local_w + gap + remote_w;
-            let queue_w = " Queue ".width() as u16;
+            let queue_w = mbv_label.width() as u16;
             let scope_start = area.width.saturating_sub(scope_block_w);
             let pad = scope_start.saturating_sub(queue_w);
             if pad > 0 {
