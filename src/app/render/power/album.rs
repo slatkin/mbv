@@ -692,17 +692,16 @@ impl App {
                     f.render_widget(Paragraph::new(Line::from(spans)), album_area);
                 }
                 GroupedAlbumDisplayRow::AlbumActionHint => {
-                    let hint_w = (detail_row_area.width as usize).saturating_sub(2);
+                    let hint_w = detail_row_area.width as usize;
                     let hint = trunc_str(
                         "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
                         hint_w,
                     );
                     f.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                            Span::raw(" "),
-                            Span::styled(hint.to_string(), Style::default().fg(palette::MUTED)),
-                        ])),
+                        Paragraph::new(Line::from(vec![Span::styled(
+                            hint.to_string(),
+                            Style::default().fg(palette::MUTED),
+                        )])),
                         detail_row_area,
                     );
                 }
