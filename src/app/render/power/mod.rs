@@ -382,8 +382,8 @@ impl App {
 
         // Queue list: title row at top, rest is the list.
         let queue_list_area = Rect {
-            y: queue_area.y + 1,
-            height: queue_area.height.saturating_sub(1),
+            y: queue_area.y,
+            height: queue_area.height,
             ..queue_area
         };
         self.render_power_queue(f, queue_list_area, queue_focused, layout);
