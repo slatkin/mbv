@@ -11,7 +11,8 @@ use super::super::layout::LayoutPower;
 use super::super::ui_util::natural_sort_key;
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::Style;
+use ratatui::style::{Color, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
 
@@ -59,6 +60,83 @@ pub(super) fn render_power_scrollbar_with_viewport(
         area,
         &mut state,
     );
+}
+
+/// Paints a colored background block spanning display rows `[top_pad_abs, bottom_pad_abs]`
+/// (absolute/unscrolled indices into the complete display row sequence), clamped to the
+/// visible scroll window `[offset, offset+visible)`. The block fills the full row width
+/// supplied by `area.x` and `area.width` (interior content can indent itself further).
+/// Call before rendering list/row content so the background shows through.
+pub(super) fn render_selected_block_background(
+    f: &mut Frame,
+    area: Rect,
+    offset: usize,
+    visible: usize,
+    top_pad_abs: usize,
+    bottom_pad_abs: usize,
+    bg: Color,
+) {
+    let vis_top = top_pad_abs.max(offset);
+    let vis_bot = bottom_pad_abs.min(offset + visible.saturating_sub(1));
+    if vis_top <= vis_bot {
+        let block_y = area.y + (vis_top - offset) as u16;
+        let block_h = (vis_bot - vis_top + 1) as u16;
+        f.render_widget(
+            Block::default().style(Style::default().bg(bg)),
+            Rect {
+                x: area.x,
+                y: block_y,
+                width: area.width,
+                height: block_h,
+            },
+        );
+    }
+}
+
+/// Paints the ▁/▔ SOFT_WHITE border rows one row outside `[top_pad_abs, bottom_pad_abs]`,
+/// overwriting whatever neighboring row content is there. Call *after* the block's own
+/// content and scrollbar render, so borders paint on top.
+pub(super) fn render_selected_block_borders(
+    f: &mut Frame,
+    area: Rect,
+    offset: usize,
+    visible: usize,
+    top_pad_abs: usize,
+    bottom_pad_abs: usize,
+) {
+    let border_style = Style::default().fg(palette::SOFT_WHITE);
+    if let Some(top_border) = top_pad_abs.checked_sub(1) {
+        if top_border >= offset && top_border < offset + visible {
+            let top_y = area.y + (top_border - offset) as u16;
+            let top_spans: Vec<Span> = (0..area.width)
+                .map(|_| Span::styled("\u{2581}", border_style))
+                .collect();
+            f.render_widget(
+                Paragraph::new(Line::from(top_spans)),
+                Rect {
+                    x: area.x,
+                    y: top_y,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+        }
+    }
+    if bottom_pad_abs + 1 >= offset && bottom_pad_abs + 1 < offset + visible {
+        let bot_y = area.y + (bottom_pad_abs + 1 - offset) as u16;
+        let bot_spans: Vec<Span> = (0..area.width)
+            .map(|_| Span::styled("\u{2594}", border_style))
+            .collect();
+        f.render_widget(
+            Paragraph::new(Line::from(bot_spans)),
+            Rect {
+                x: area.x,
+                y: bot_y,
+                width: area.width,
+                height: 1,
+            },
+        );
+    }
 }
 
 /// For folder-based music libraries where albums are stored as directories named

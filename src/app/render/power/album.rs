@@ -29,6 +29,11 @@ struct GroupedAlbumDisplayPlan {
     rows: Vec<GroupedAlbumDisplayRow>,
     display_cursor: usize,
     selected_artist_header_valid: bool,
+    /// Absolute (unscrolled) indices into `rows` of the selected album's
+    /// framing `AlbumDetailRule` rows — `(top_rule_idx, bottom_rule_idx)`.
+    /// `None` when the selected album has no colored-block framing (header
+    /// is the actual focus, or the track cache resolved to an empty vec).
+    selected_block_bounds: Option<(usize, usize)>,
 }
 
 impl GroupedAlbumDisplayRow {
@@ -94,6 +99,7 @@ impl App {
 
         let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
         let mut last_artist = String::new();
+        let mut selected_block_bounds: Option<(usize, usize)> = None;
         for &idx in &order {
             let artist = &album_info[idx].0;
             if artist != &last_artist {
@@ -108,12 +114,19 @@ impl App {
             if idx == cursor && header_selected {
                 rows.push(GroupedAlbumDisplayRow::Album(idx));
             } else if idx == cursor && !expand_selected {
+                // Hint-only state (album selected, tracks not yet shown): wrap in block frame
+                let top_idx = rows.len();
+                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                 rows.push(GroupedAlbumDisplayRow::Album(idx));
                 rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
+                let bottom_idx = rows.len();
+                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                selected_block_bounds = Some((top_idx, bottom_idx));
             } else if idx == cursor {
                 match self.album_tracks_cache.get(&albums[idx].id) {
                     Some(tracks) if !tracks.is_empty() => {
                         let detail_rows = 2 + tracks.len();
+                        let top_idx = rows.len();
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                         rows.push(GroupedAlbumDisplayRow::Album(idx));
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
@@ -123,17 +136,22 @@ impl App {
                             })
                             .take(detail_rows.saturating_sub(1)),
                         );
+                        let bottom_idx = rows.len();
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        selected_block_bounds = Some((top_idx, bottom_idx));
                     }
                     Some(_) => rows.push(GroupedAlbumDisplayRow::Album(idx)),
                     None => {
                         if fetch_missing_tracks {
                             self.fetch_album_tracks(albums[idx].id.clone());
                         }
+                        let top_idx = rows.len();
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
                         rows.push(GroupedAlbumDisplayRow::Album(idx));
                         rows.push(GroupedAlbumDisplayRow::AlbumLoading);
+                        let bottom_idx = rows.len();
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        selected_block_bounds = Some((top_idx, bottom_idx));
                     }
                 }
             } else {
@@ -170,6 +188,7 @@ impl App {
             rows,
             display_cursor,
             selected_artist_header_valid,
+            selected_block_bounds,
         }
     }
 
@@ -502,21 +521,29 @@ impl App {
         layout.left_sorted_indices = plan.order.clone();
         let display_cursor = plan.display_cursor;
         let display_rows = plan.rows;
-        let top_bound = if display_cursor > 0
-            && matches!(
-                display_rows[display_cursor - 1],
-                GroupedAlbumDisplayRow::AlbumDetailRule
-            ) {
-            display_cursor - 1
-        } else {
-            display_cursor
-        };
+        let selected_block_bounds = plan.selected_block_bounds;
+        let top_bound = selected_block_bounds
+            .map(|(top, _)| top)
+            .unwrap_or(display_cursor);
         let offset = stored_scroll.clamp(
             display_cursor
                 .saturating_sub(visible.saturating_sub(1))
                 .min(top_bound),
             top_bound,
         );
+
+        // Paint the colored background block before rendering row content
+        if let Some((top_pad_abs, bottom_pad_abs)) = selected_block_bounds {
+            super::render_selected_block_background(
+                f,
+                area,
+                offset,
+                visible,
+                top_pad_abs,
+                bottom_pad_abs,
+                palette::MEDIA_SELECTED_BG,
+            );
+        }
 
         let visible_rows: Vec<&GroupedAlbumDisplayRow> =
             display_rows.iter().skip(offset).take(visible).collect();
@@ -558,17 +585,8 @@ impl App {
                     f.render_widget(Paragraph::new(Line::from(spans)), row_area);
                 }
                 GroupedAlbumDisplayRow::AlbumDetailRule => {
-                    let detail_avail = (detail_row_area.width as usize).saturating_sub(2);
-                    f.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            Span::raw(" "),
-                            Span::styled(
-                                "\u{2500}".repeat(detail_avail),
-                                Style::default().fg(palette::OVERLAY),
-                            ),
-                        ])),
-                        detail_row_area,
-                    );
+                    // Padding rows for the colored block; the background is painted separately.
+                    // This row renders as empty, letting the background block show through.
                 }
                 GroupedAlbumDisplayRow::Album(idx) => {
                     let selected = *idx == cursor && !header_selected;
@@ -590,36 +608,77 @@ impl App {
                     } else {
                         fg
                     };
+
+                    // Detect if this album is inside a colored block frame
+                    let has_block = selected
+                        && selected_block_bounds.is_some_and(|(top, _)| {
+                            // Album row comes immediately after the top AlbumDetailRule
+                            top + 1 == display_cursor
+                        });
+
                     let mut spans: Vec<Span> = Vec::new();
-                    if selected {
+                    if has_block {
+                        // Movie-style: 1-col leading pad, no ▌ marker
+                        spans.push(Span::raw(" "));
+                    } else if selected {
+                        // Legacy style: ▌ PINE marker
                         spans.push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
                     } else {
+                        // Unselected: plain space
                         spans.push(Span::raw(" "));
                     }
-                    if selected {
-                        spans.push(Span::raw(" "));
-                    } else if year_str.is_empty() {
-                        spans.push(Span::raw("   "));
+
+                    if has_block {
+                        // Movie-style: keep padding style consistent
+                        // Year prefix: SUBTLE color, always shown when present
+                        if !year_str.is_empty() {
+                            spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
+                            spans.push(Span::styled(
+                                year_str.clone(),
+                                Style::default().fg(palette::PINE),
+                            ));
+                            spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
+                        } else {
+                            spans.push(Span::raw(" ")); // Spacing when no year
+                        }
+                        // Title: YELLOW, bold if focused
+                        let title_style = if focused {
+                            Style::default()
+                                .fg(palette::YELLOW)
+                                .add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(palette::YELLOW)
+                        };
+                        spans.push(Span::styled(trunc_name.to_string(), title_style));
                     } else {
-                        spans.push(Span::styled("   (", Style::default().fg(palette::SUBTLE)));
+                        // Legacy style spacing
+                        if selected {
+                            spans.push(Span::raw(" "));
+                        } else if year_str.is_empty() {
+                            spans.push(Span::raw("   "));
+                        } else {
+                            spans.push(Span::styled("   (", Style::default().fg(palette::SUBTLE)));
+                        }
+                        if selected && !year_str.is_empty() {
+                            spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
+                        }
+                        if !year_str.is_empty() {
+                            spans.push(Span::styled(
+                                year_str.clone(),
+                                Style::default().fg(palette::PINE),
+                            ));
+                            spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
+                        }
+                        // Title styling
+                        let title_style = if selected && focused {
+                            Style::default().fg(name_color).add_modifier(Modifier::BOLD)
+                        } else {
+                            Style::default().fg(name_color)
+                        };
+                        spans.push(Span::styled(trunc_name.to_string(), title_style));
                     }
-                    if selected && !year_str.is_empty() {
-                        spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
-                    }
-                    if !year_str.is_empty() {
-                        spans.push(Span::styled(
-                            year_str.clone(),
-                            Style::default().fg(palette::PINE),
-                        ));
-                        spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
-                    }
-                    let name_style = if selected && focused {
-                        Style::default().fg(name_color).add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(name_color)
-                    };
-                    spans.push(Span::styled(trunc_name.to_string(), name_style));
-                    let album_area = if selected { detail_row_area } else { row_area };
+
+                    let album_area = if has_block { detail_row_area } else { row_area };
                     f.render_widget(Paragraph::new(Line::from(spans)), album_area);
                 }
                 GroupedAlbumDisplayRow::AlbumActionHint => {
@@ -708,6 +767,18 @@ impl App {
         if focused && display_n > visible {
             let max_off = display_n.saturating_sub(visible);
             super::render_power_scrollbar(f, area, max_off, offset);
+        }
+
+        // Paint the ▁/▔ border rows around the colored block (after content/scrollbar)
+        if let Some((top_pad_abs, bottom_pad_abs)) = selected_block_bounds {
+            super::render_selected_block_borders(
+                f,
+                area,
+                offset,
+                visible,
+                top_pad_abs,
+                bottom_pad_abs,
+            );
         }
 
         offset
