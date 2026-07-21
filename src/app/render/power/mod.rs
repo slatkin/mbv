@@ -994,15 +994,15 @@ mod tests {
         assert_eq!(buf[(alpha_x, 3)].bg, palette::GREEN);
         assert_eq!(
             buf[(alpha_x, 3)].fg,
-            palette::YELLOW,
-            "expected the selected group pill to use yellow text"
+            palette::IRIS,
+            "expected the selected group pill to use iris text"
         );
         let beta_x = char_x(row3, "Beta");
         assert_eq!(buf[(beta_x, 3)].bg, palette::GREEN);
         assert_eq!(
             buf[(beta_x, 3)].fg,
-            palette::BASE,
-            "expected a non-selected group pill to stay blue with base text"
+            palette::PILL,
+            "expected a non-selected group pill to stay green with pill text"
         );
 
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));

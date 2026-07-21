@@ -482,11 +482,11 @@ impl App {
                 let selected = abs_idx == selected_group;
                 let style = if selected {
                     Style::default()
-                        .fg(palette::YELLOW)
+                        .fg(palette::IRIS)
                         .bg(palette::GREEN)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(palette::BASE).bg(palette::GREEN)
+                    Style::default().fg(palette::PILL).bg(palette::GREEN)
                 };
                 let pill = format!(" {} ", label);
                 let pill_rect = Rect {
@@ -1374,11 +1374,11 @@ impl App {
             let selected = *section_idx == self.home.section;
             let style = if selected {
                 Style::default()
-                    .fg(palette::YELLOW)
+                    .fg(palette::IRIS)
                     .bg(palette::GREEN)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(palette::BASE).bg(palette::GREEN)
+                Style::default().fg(palette::PILL).bg(palette::GREEN)
             };
             let label = trunc_str(label, MAX_LABEL);
             let pill = format!(" {label} ");

@@ -114,11 +114,11 @@ impl App {
             let selected = abs_idx == group_cursor;
             let style = if selected {
                 Style::default()
-                    .fg(palette::YELLOW)
+                    .fg(palette::IRIS)
                     .bg(palette::GREEN)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(palette::BASE).bg(palette::GREEN)
+                Style::default().fg(palette::PILL).bg(palette::GREEN)
             };
             let pill = format!(" {} ", label);
             selector_tabs.push((

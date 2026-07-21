@@ -432,9 +432,9 @@ impl App {
                     }
                     let abs_idx = scroll_start + idx;
                     let (fg, bold) = if abs_idx == season_cursor {
-                        (palette::YELLOW, true)
+                        (palette::IRIS, true)
                     } else {
-                        (palette::BASE, false)
+                        (palette::PILL, false)
                     };
                     let style = if bold {
                         Style::default()
