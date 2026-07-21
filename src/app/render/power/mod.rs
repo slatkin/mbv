@@ -219,11 +219,12 @@ impl App {
             width: left_area.width.saturating_sub(4),
             height: left_area.height.saturating_sub(2),
         };
-        // Card area: top/bottom padding only, full width (no left/right padding).
+        // Card area: top/bottom + left/right padding.
         let card_area = Rect {
+            x: left_area.x + 2,
             y: left_area.y + 1,
+            width: left_area.width.saturating_sub(4),
             height: left_area.height.saturating_sub(2),
-            ..left_area
         };
 
         let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
