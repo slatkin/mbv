@@ -578,9 +578,7 @@ impl App {
 
             // White unicode borders at the block's top and bottom padding
             // rows, rendering inside the coloured block.
-            let border_style = Style::default()
-                .fg(palette::BORDER_LINE)
-                .bg(palette::MEDIA_SELECTED_BG);
+            let border_style = Style::default().fg(palette::WHITE);
             if banner_rule_top >= offset && banner_rule_top < offset + visible {
                 let top_y = content_area.y + (banner_rule_top - offset) as u16;
                 let top_spans: Vec<Span> = (0..content_area.width)
@@ -841,9 +839,7 @@ impl App {
 
             // White unicode borders at the block's top and bottom padding
             // rows, rendering inside the coloured block.
-            let border_style = Style::default()
-                .fg(palette::BORDER_LINE)
-                .bg(palette::MEDIA_SELECTED_BG);
+            let border_style = Style::default().fg(palette::WHITE);
             if banner_rule_top >= offset && banner_rule_top < offset + visible {
                 let top_y = content_area.y + (banner_rule_top - offset) as u16;
                 let top_spans: Vec<Span> = (0..content_area.width)
