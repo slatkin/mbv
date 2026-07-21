@@ -307,9 +307,9 @@ impl App {
 
         let content = self.compact_banner_layout(&item, area.width);
 
-        let inner_x = area.x + 1;
-        let inner_w = (area.width as usize).saturating_sub(2);
-        let inner_w16 = area.width.saturating_sub(2);
+        let inner_x = area.x;
+        let inner_w = area.width as usize;
+        let inner_w16 = area.width;
         let mut row = area.y;
         let max_y = area.y + area.height;
 
@@ -369,6 +369,8 @@ impl App {
                         height: 1,
                     },
                 );
+                row += 1;
+                // Spacer row between metadata and description
                 row += 1;
             }
         }
