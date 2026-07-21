@@ -38,7 +38,7 @@ impl App {
 
         let mut spans = Vec::new();
         let mbv_label = if self.use_nerd_fonts {
-            "\u{F08FE} mbv "
+            "\u{F0AFE} mbv "
         } else {
             " mbv "
         };
