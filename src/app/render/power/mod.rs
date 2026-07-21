@@ -703,8 +703,8 @@ mod tests {
         );
 
         // The block's top padding row (row 1) is the MEDIA_SELECTED_BG filler row
-        // directly above the selected item; verify it carries the block's background
-        // color and contains the top border character (▁).
+        // directly above the selected item; verify it carries the top border
+        // character (▁) and the block's background color.
         let buf = term.backend().buffer();
         let pad_cell = &buf[(0, 1)];
         assert_eq!(
