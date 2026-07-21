@@ -213,30 +213,28 @@ impl App {
         );
 
         // Inner content area with padding inside the colored box (queue uses this).
-        // Shifted down to account for the title row + blank spacer row at top.
         let left_content = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 2,
+            y: left_area.y + 3,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(3),
+            height: left_area.height.saturating_sub(4),
         };
-        // Queue title row at the very top, then a blank spacer row, then the
-        // card image with its own padding.
+        // Blank row, queue title row, blank spacer row, then card image.
         self.render_power_queue_title(
             f,
             Rect {
-                x: left_area.x,
-                y: left_area.y,
-                width: left_area.width,
+                x: left_area.x + 1,
+                y: left_area.y + 1,
+                width: left_area.width.saturating_sub(2),
                 height: 1,
             },
+            layout,
         );
-        // Card area: shifted down 1 row (title + blank spacer).
         let card_area = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 2,
+            y: left_area.y + 3,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(3),
+            height: left_area.height.saturating_sub(4),
         };
 
         let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
@@ -316,6 +314,15 @@ impl App {
             let max_q = h.saturating_sub(MIN_LIST_ROWS).max(min_q);
             let queue_h = (h / 3).clamp(min_q, max_q);
             let lib_h = h.saturating_sub(queue_h);
+            // Render title (with scope pills) at the top of the relocated queue area.
+            self.render_power_queue_title(
+                f,
+                Rect {
+                    height: 1,
+                    ..right_area
+                },
+                layout,
+            );
             (
                 Rect {
                     height: lib_h,
@@ -340,30 +347,6 @@ impl App {
             )
         };
 
-        // Render scope pills at the bottom (title is already at the top).
-        if self.power_queue_relocated {
-            self.render_power_queue_scope_pills(
-                f,
-                Rect {
-                    y: queue_area.y + queue_area.height - 1,
-                    height: 1,
-                    ..queue_area
-                },
-                layout,
-            );
-        } else {
-            let _has_scope = self.render_power_queue_scope_pills(
-                f,
-                Rect {
-                    x: left_area.x,
-                    y: left_area.y + left_area.height - 1,
-                    width: left_area.width,
-                    height: 1,
-                },
-                layout,
-            );
-        }
-
         let mut render_lib_area = lib_area;
         if self.power_left_tab > 0 && self.is_music_group_view(self.power_left_tab - 1) {
             let lib_idx = self.power_left_tab - 1;
@@ -385,12 +368,10 @@ impl App {
             }
         }
 
-        // Queue list: title row at top, scope pills row at bottom (if present).
-        let has_scope = self.has_direct_remote_queue();
-        let scope_offset = if has_scope { 1 } else { 0 };
+        // Queue list: title row at top, rest is the list.
         let queue_list_area = Rect {
             y: queue_area.y + 1,
-            height: queue_area.height.saturating_sub(1 + scope_offset),
+            height: queue_area.height.saturating_sub(1),
             ..queue_area
         };
         self.render_power_queue(f, queue_list_area, queue_focused, layout);

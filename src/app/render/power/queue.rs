@@ -21,82 +21,70 @@ fn queue_group_start_row(display: &[QueueRow], row: usize) -> usize {
 }
 
 impl App {
-    /// Renders the "Queue" title pill at the top of the queue column.
-    pub(super) fn render_power_queue_title(&self, f: &mut Frame, area: Rect) {
-        if area.height < 1 {
-            return;
-        }
-        f.render_widget(
-            Paragraph::new(Line::from(vec![Span::styled(
-                " Queue ",
-                Style::default().fg(palette::BASE).bg(palette::FOAM),
-            )]))
-            .style(Style::default().bg(palette::STATUS_PILL_BG)),
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: 1,
-            },
-        );
-    }
-
-    /// Renders the Local/Remote scope pills at the bottom of the queue column.
-    /// Returns true if scope pills were rendered (i.e. remote queue exists).
-    pub(super) fn render_power_queue_scope_pills(
+    /// Renders the "Queue" title pill (and optional Local/Remote scope pills)
+    /// at the top of the queue column on a single row.
+    pub(super) fn render_power_queue_title(
         &mut self,
         f: &mut Frame,
         area: Rect,
         layout: &mut LayoutPower,
-    ) -> bool {
+    ) {
         if area.height < 1 {
-            return false;
+            return;
         }
 
         layout.queue_scope_local_area = Rect::default();
         layout.queue_scope_remote_area = Rect::default();
 
-        if !self.has_direct_remote_queue() {
-            return false;
+        let mut spans = Vec::new();
+        spans.push(Span::styled(
+            " mbv ",
+            Style::default()
+                .fg(palette::FOAM)
+                .add_modifier(Modifier::BOLD),
+        ));
+
+        if self.has_direct_remote_queue() {
+            let local_label = " LOCAL ";
+            let remote_label = " REMOTE ";
+            let local_w = local_label.width() as u16;
+            let remote_w = remote_label.width() as u16;
+            let gap = 1u16;
+            let scope_block_w = local_w + gap + remote_w;
+            let queue_w = " Queue ".width() as u16;
+            let scope_start = area.width.saturating_sub(scope_block_w);
+            let pad = scope_start.saturating_sub(queue_w);
+            if pad > 0 {
+                spans.push(Span::raw(" ".repeat(pad as usize)));
+            }
+            let local_x = area.x + area.width.saturating_sub(scope_block_w);
+            let remote_x = local_x + local_w + gap;
+            layout.queue_scope_local_area = Rect {
+                x: local_x,
+                y: area.y,
+                width: local_w,
+                height: 1,
+            };
+            layout.queue_scope_remote_area = Rect {
+                x: remote_x,
+                y: area.y,
+                width: remote_w,
+                height: 1,
+            };
+            let local_selected = self.visible_queue_scope() == QueueScope::Local;
+            let inactive = Style::default().fg(palette::MUTED);
+            let active = Style::default().fg(palette::YELLOW);
+            spans.push(Span::styled(
+                local_label,
+                if local_selected { active } else { inactive },
+            ));
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                remote_label,
+                if local_selected { inactive } else { active },
+            ));
         }
 
-        let local_label = " Local ";
-        let remote_label = " Remote ";
-        let local_w = local_label.width() as u16;
-        let remote_w = remote_label.width() as u16;
-        let gap = 1u16;
-        let scope_block_w = local_w + gap + remote_w;
-        let local_x = area.x + area.width.saturating_sub(scope_block_w);
-        let remote_x = local_x + local_w + gap;
-        layout.queue_scope_local_area = Rect {
-            x: local_x,
-            y: area.y,
-            width: local_w,
-            height: 1,
-        };
-        layout.queue_scope_remote_area = Rect {
-            x: remote_x,
-            y: area.y,
-            width: remote_w,
-            height: 1,
-        };
-        let local_selected = self.visible_queue_scope() == QueueScope::Local;
-        let inactive = Style::default().fg(palette::MUTED).bg(palette::PILL_BG);
-        let active = Style::default().fg(palette::BASE).bg(palette::FOAM);
-        let mut spans = Vec::new();
-        let pad = area.width.saturating_sub(scope_block_w);
-        if pad > 0 {
-            spans.push(Span::raw(" ".repeat(pad as usize)));
-        }
-        spans.push(Span::styled(
-            local_label,
-            if local_selected { active } else { inactive },
-        ));
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(
-            remote_label,
-            if local_selected { inactive } else { active },
-        ));
         f.render_widget(
             Paragraph::new(Line::from(spans)),
             Rect {
@@ -106,7 +94,6 @@ impl App {
                 height: 1,
             },
         );
-        true
     }
 
     /// Renders the queue list (track items, group headers, scrollbar). The
