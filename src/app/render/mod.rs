@@ -504,9 +504,9 @@ impl App {
         tabbar_vol_area_out: &mut Rect,
         in_power: bool,
     ) {
-        // Fill the tab bar area with the shared panel background.
+        // Fill the tab bar area with the tab box's own background.
         f.render_widget(
-            Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
+            Block::default().style(Style::default().bg(palette::DARK_BG)),
             area,
         );
 

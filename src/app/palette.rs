@@ -18,3 +18,5 @@ pub const STATUS_PILL_BG: Color = Color::Rgb(40, 40, 40); // status bar pill bac
 pub const SEEK_TRACK: Color = Color::Rgb(70, 84, 95); // unplayed seek track (design #46545f)
 pub const BAR_BG: Color = Color::Reset; // transparent status/title bar background
 pub const CONTINUE_BG: Color = Color::Rgb(51, 60, 67); // continue watching list background (#333c43)
+pub const MEDIA_SELECTED_BG: Color = Color::Rgb(82, 181, 75); // selected movie block background in the power view movies library list — Emby green (#52b54b)
+pub const DARK_BG: Color = Color::Rgb(40, 40, 40); // tab bar (Home, etc) background (#282828)

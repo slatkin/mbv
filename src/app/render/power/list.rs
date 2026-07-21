@@ -11,39 +11,40 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
-/// Rows the compact movie banner occupies inline in the library list: an
-/// opening horizontal rule directly above the selected item's own row (so the
-/// selected title reads as visually set off from the row above it), the
-/// banner's own content (meta/overview/poster, rendered by
-/// `render_power_compact_detail`) directly below the selected row, and a
-/// closing horizontal rule that also acts as the 1-row separator before the
-/// next list row — matching the spacing the banner already used when it was
-/// pinned to the top of the panel. The rules make the selected row + banner
-/// read as a distinct, boxed-off region instead of blending into the
-/// surrounding list.
+/// Rows the compact movie banner occupies inline in the library list. The
+/// selected movie row + the banner's own content (meta/overview/poster,
+/// rendered by `render_power_compact_detail`, directly below the selected row)
+/// are wrapped in a `palette::MEDIA_SELECTED_BG` colored block — a dark
+/// (#282828) background visually similar to the home tab's Keep Watching
+/// list — instead of horizontal rules. The two
+/// constants below reserve one row above the selected item (the block's top
+/// padding, replacing the previous opening `─` rule) and one row after the
+/// banner content (the block's bottom padding, replacing the previous closing
+/// `─` rule), and `COMPACT_BANNER_INDENT` reserves that many columns of
+/// external side padding on each side of the colored block (matched one-for-
+/// one by `render_power_compact_detail`'s own internal padding, so the
+/// visible side padding is `INDENT + 1` columns on each side).
 const COMPACT_BANNER_RULE_ROWS: usize = 1;
 const COMPACT_BANNER_GAP_ROWS: usize = 1;
-const COMPACT_BANNER_INDENT: u16 = 0;
+const COMPACT_BANNER_INDENT: u16 = 1;
 
 impl App {
     /// Filler-row count to reserve around the selected movie's row in
-    /// `lib_idx`'s display-row sequence: the banner's rule/gap rows plus its
-    /// actual content height (meta/overview/director wrapped to
-    /// `panel_width`, computed by `compact_banner_layout` — #263 replaced
-    /// the old fixed content-row constant with this, so a longer overview
-    /// grows the reserved space and a shorter one shrinks it) when a leaf
-    /// movie is selected, else 0 (no banner — ordinary list rendering,
-    /// unchanged from before this feature). One of the reserved rows is the
-    /// opening rule placed immediately *before* the selected item's row; the
-    /// rest (content + closing rule) follow it.
+    /// `lib_idx`'s display-row sequence: the colored block's top/bottom
+    /// padding rows plus the banner's actual content height
+    /// (meta/overview/director wrapped to `panel_width`, computed by
+    /// `compact_banner_layout` — #263 replaced the old fixed content-row
+    /// constant with this, so a longer overview grows the reserved space and
+    /// a shorter one shrinks it) when a leaf movie is selected, else 0 (no
+    /// banner — ordinary list rendering). One of the reserved rows is the
+    /// top padding placed immediately *before* the selected item's row; the
+    /// rest (content + bottom padding) follow it.
     ///
-    /// This runs as a pre-pass, before the rest of the list's rows are
-    /// positioned around the selected item, so `panel_width` is an estimate
-    /// (always assuming the outer list scrollbar column is reserved) rather
-    /// than the exact final banner rect width — the real rect can end up a
-    /// column wider when the list turns out not to need a scrollbar, which
-    /// only ever makes the actual rendered content shorter than this budget,
-    /// never taller, so the list around it never overlaps the banner.
+    /// `panel_width` matches the banner's eventual `Rect` width
+    /// (`content_area.width - 2 * COMPACT_BANNER_INDENT` — see
+    /// `render_power_compact_detail`'s inner padding), so the row count the
+    /// layout reserves and the rows the banner actually renders stay in
+    /// lockstep.
     fn compact_banner_rows(&mut self, lib_idx: usize, panel_width: u16) -> usize {
         let Some(item) = self.power_selected_movie_item(lib_idx) else {
             return 0;
@@ -116,11 +117,10 @@ impl App {
 
         // Reserved filler-row count for the compact movie banner, 0 for every
         // library type/state except "leaf movie selected, detail not pinned".
-        // The width estimate mirrors the final banner rect's width formula
-        // (`content_area.width` minus a pessimistically-always-reserved
-        // scrollbar column, minus the banner's own indent) -- see
-        // `compact_banner_rows`'s doc comment for why an exact match isn't
-        // required here.
+        // The width estimate matches the final banner rect's width:
+        // `content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT)` (= the
+        // colored block's width minus the external side padding, with the right
+        // external pad covering the scrollbar column when one shows up).
         let banner_rows: usize = if self.power_left_tab > 0 {
             let banner_panel_width = content_area
                 .width
@@ -130,9 +130,9 @@ impl App {
         } else {
             0
         };
-        // Content-only row count (banner_rows minus its rule/gap rows), used
-        // below to size the banner rect and selection bar to the same
-        // content-dependent height that was reserved for them above.
+        // Content-only row count (banner_rows minus its top/bottom colored-pad
+        // filler rows), used below to size the banner rect to the same
+        // content-dependent height that was reserved for it above.
         let banner_content_rows: usize =
             banner_rows.saturating_sub(COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_GAP_ROWS);
 
@@ -389,41 +389,59 @@ impl App {
                 });
             }
 
-            // Absolute display-row indices of the banner's opening and closing
-            // horizontal rules (only meaningful when banner_rows > 0). The
-            // opening rule sits directly above the selected item's row; the
-            // closing rule sits after the banner content, before the next
-            // list row. Together they bracket the selected row + banner as a
-            // distinct region rather than blending into the surrounding list.
+            // Absolute display-row indices of the colored block's top and
+            // bottom padding rows (only meaningful when banner_rows > 0).
+            // `banner_rule_top` is the padding row directly above the selected
+            // item's own row; `banner_rule_bottom` is the padding row after
+            // the banner content, before the next list row. Together they
+            // frame the selected row + banner as a single CONTINUE_BG block
+            // instead of `─` rules around it.
             let banner_rule_top = display_cursor.saturating_sub(1);
             let content_start = display_cursor + 1;
             let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
             let show_scrollbar = focused && total_display > visible;
 
-            let rule_indent = " ".repeat(COMPACT_BANNER_INDENT as usize + 1);
+            // The selected movie + banner are wrapped in a CONTINUE_BG colored
+            // block (matching the home tab's Keep Watching look). Draw the
+            // block first, before the list items, so the per-row spans only
+            // paint their own cells and the block's background shows through
+            // on the side padding cols and on the top/bottom padding rows.
+            if banner_rows > 0 {
+                let vis_top = banner_rule_top.max(offset);
+                let vis_bot = banner_rule_bottom.min(offset + visible - 1);
+                if vis_top <= vis_bot {
+                    let block_y = content_area.y + (vis_top - offset) as u16;
+                    let block_h = (vis_bot - vis_top + 1) as u16;
+                    f.render_widget(
+                        Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
+                        Rect {
+                            x: content_area.x,
+                            y: block_y,
+                            width: content_area.width,
+                            height: block_h,
+                        },
+                    );
+                }
+            }
+
+            // Width available to title + duration on a normal list row (with a
+            // 1-col leading separator before the title). For the selected row
+            // with an inline banner, the colored block's 2-col side padding
+            // + render_power_compact_detail's own internal 1-col pad reserve
+            // `2 * COMPACT_BANNER_INDENT + 2` cols off both sides, so the
+            // title aligns with the banner's `inner_x` exactly.
             let avail = (area.width as usize).saturating_sub(2 + COMPACT_BANNER_INDENT as usize);
             let list_items: Vec<ListItem> = display_rows
                 .iter()
                 .enumerate()
                 .skip(offset)
                 .take(visible)
-                .map(|(abs_idx, row)| match row {
+                .map(|(_abs_idx, row)| match row {
                     DisplayRow::Spacer => ListItem::new(Line::default()),
-                    DisplayRow::BannerFiller => {
-                        if banner_rows > 0
-                            && (abs_idx == banner_rule_top || abs_idx == banner_rule_bottom)
-                        {
-                            ListItem::new(Line::from(vec![
-                                Span::raw(rule_indent.clone()),
-                                Span::styled(
-                                    "\u{2500}".repeat(avail),
-                                    Style::default().fg(palette::OVERLAY),
-                                ),
-                            ]))
-                        } else {
-                            ListItem::new(Line::default())
-                        }
-                    }
+                    // The colored block (drawn above) frames the selected row
+                    // + banner, so the banner's top/bottom padding rows are
+                    // empty -- they show the block's CONTINUE_BG.
+                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
                     DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                         Span::raw(" "),
                         Span::styled(
@@ -456,6 +474,15 @@ impl App {
                             };
                             (item.display_name(), dur)
                         };
+                        let selected_has_banner = selected && banner_rows > 0;
+                        let avail = if selected_has_banner {
+                            // 2-col left pad + 2-col right pad inside the
+                            // colored block: title+dur share area.width - 4.
+                            (area.width as usize)
+                                .saturating_sub(2 + 2 * COMPACT_BANNER_INDENT as usize)
+                        } else {
+                            avail
+                        };
                         let name_w = avail.saturating_sub(dur_str.width());
                         let title = trunc_str(&item_name, name_w);
                         let fg = if focused {
@@ -463,28 +490,41 @@ impl App {
                         } else {
                             palette::SUBTLE
                         };
-                        let selected_has_banner = selected && banner_rows > 0;
                         let mut spans: Vec<Span> = if selected {
-                            let title_style = if focused {
-                                Style::default()
-                                    .fg(palette::IRIS)
-                                    .add_modifier(Modifier::BOLD)
-                            } else {
-                                Style::default().fg(fg)
-                            };
-                            vec![
-                                Span::raw(" ".repeat(if selected_has_banner {
-                                    COMPACT_BANNER_INDENT as usize
+                            if selected_has_banner {
+                                // Colored-block look: 2-col leading pad inside
+                                // the MEDIA_SELECTED_BG block (aligns the
+                                // title with the banner's `inner_x`), no green
+                                // `▌` gutter. Title is yellow (BOLD when
+                                // focused) and the row omits the duration --
+                                // it lives in the banner's metadata row below.
+                                let title_style = if focused {
+                                    Style::default()
+                                        .fg(palette::YELLOW)
+                                        .add_modifier(Modifier::BOLD)
                                 } else {
-                                    0
-                                })),
-                                Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                                Span::styled(title, title_style),
-                            ]
+                                    Style::default().fg(palette::YELLOW)
+                                };
+                                vec![Span::raw("  "), Span::styled(title, title_style)]
+                            } else {
+                                // Otherwise keep the green gutter for selected
+                                // list rows without an inline banner.
+                                let title_style = if focused {
+                                    Style::default()
+                                        .fg(palette::IRIS)
+                                        .add_modifier(Modifier::BOLD)
+                                } else {
+                                    Style::default().fg(fg)
+                                };
+                                vec![
+                                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                                    Span::styled(title, title_style),
+                                ]
+                            }
                         } else {
                             vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
                         };
-                        if !dur_str.is_empty() {
+                        if !selected_has_banner && !dur_str.is_empty() {
                             spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
                         }
                         ListItem::new(Line::from(spans))
@@ -505,20 +545,18 @@ impl App {
             if banner_rows > 0 && content_start >= offset && content_start < offset + visible {
                 let banner_y = content_area.y + (content_start - offset) as u16;
                 let bottom = content_area.y + content_area.height;
-                // Reserve the rightmost column for the scrollbar (drawn over
-                // content_area's last column below) so the poster image,
-                // which is right-anchored, doesn't render underneath it.
-                let banner_w = if show_scrollbar {
-                    content_area.width.saturating_sub(1)
-                } else {
-                    content_area.width
-                };
                 let banner_h = (banner_content_rows as u16).min(bottom.saturating_sub(banner_y));
                 if banner_h > 0 {
+                    // The banner content sits inside the colored block with
+                    // `COMPACT_BANNER_INDENT` cols of external side padding on
+                    // each side (and render_power_compact_detail's own
+                    // internal 1-col pad), so the poster image — right-anchored
+                    // inside `banner_rect` — never renders under the scrollbar
+                    // (which is drawn on the rightmost col afterwards).
                     let banner_rect = Rect {
                         x: content_area.x + COMPACT_BANNER_INDENT,
                         y: banner_y,
-                        width: banner_w.saturating_sub(COMPACT_BANNER_INDENT),
+                        width: content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT),
                         height: banner_h,
                     };
                     let want_cursor_y = layout.cursor_screen_y;
@@ -530,28 +568,6 @@ impl App {
                         layout,
                     );
                     layout.cursor_screen_y = want_cursor_y;
-                }
-            }
-
-            if banner_rows > 0 && display_cursor >= offset && display_cursor < offset + visible {
-                let selected_y = content_area.y + (display_cursor - offset) as u16;
-                let bottom = content_area.y + content_area.height;
-                let bar_h = (1 + banner_content_rows as u16).min(bottom.saturating_sub(selected_y));
-                if bar_h > 0 {
-                    let selection_bar =
-                        vec![
-                            Line::from(Span::styled("▌", Style::default().fg(palette::PINE)));
-                            bar_h as usize
-                        ];
-                    f.render_widget(
-                        Paragraph::new(selection_bar),
-                        Rect {
-                            x: content_area.x + COMPACT_BANNER_INDENT,
-                            y: selected_y,
-                            width: 1,
-                            height: bar_h,
-                        },
-                    );
                 }
             }
 
@@ -598,41 +614,49 @@ impl App {
             let offset = stored_scroll.clamp(lower_bound, display_cursor);
             final_offset = offset;
 
-            // Absolute display-row indices of the banner's opening and closing
-            // horizontal rules (only meaningful when banner_rows > 0). The
-            // opening rule sits directly above the selected item's row; the
-            // closing rule sits after the banner content, before the next
-            // list row. Together they bracket the selected row + banner as a
-            // distinct region rather than blending into the surrounding list.
+            // Absolute display-row indices of the colored block's top and
+            // bottom padding rows (only meaningful when banner_rows > 0).
+            // `banner_rule_top` is the padding row directly above the selected
+            // item's own row; `banner_rule_bottom` is the padding row after
+            // the banner content, before the next list row.
             let banner_rule_top = display_cursor.saturating_sub(1);
             let content_start = display_cursor + 1;
             let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
             let show_scrollbar = focused && total_display > visible;
-            let rule_indent = " ".repeat(COMPACT_BANNER_INDENT as usize + 1);
+
+            // The selected movie + banner are wrapped in a CONTINUE_BG colored
+            // block (matching the home tab's Keep Watching look). Draw the
+            // block first, before the list items, so the per-row spans only
+            // paint their own cells and the block's background shows through
+            // on the side padding cols and on the top/bottom padding rows.
+            if banner_rows > 0 {
+                let vis_top = banner_rule_top.max(offset);
+                let vis_bot = banner_rule_bottom.min(offset + visible - 1);
+                if vis_top <= vis_bot {
+                    let block_y = content_area.y + (vis_top - offset) as u16;
+                    let block_h = (vis_bot - vis_top + 1) as u16;
+                    f.render_widget(
+                        Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
+                        Rect {
+                            x: content_area.x,
+                            y: block_y,
+                            width: content_area.width,
+                            height: block_h,
+                        },
+                    );
+                }
+            }
 
             let list_items: Vec<ListItem> = display_rows
                 .iter()
                 .enumerate()
                 .skip(offset)
                 .take(visible)
-                .map(|(abs_idx, row)| match row {
-                    DisplayRow::BannerFiller => {
-                        if banner_rows > 0
-                            && (abs_idx == banner_rule_top || abs_idx == banner_rule_bottom)
-                        {
-                            let avail = (area.width as usize)
-                                .saturating_sub(2 + COMPACT_BANNER_INDENT as usize);
-                            ListItem::new(Line::from(vec![
-                                Span::raw(rule_indent.clone()),
-                                Span::styled(
-                                    "\u{2500}".repeat(avail),
-                                    Style::default().fg(palette::OVERLAY),
-                                ),
-                            ]))
-                        } else {
-                            ListItem::new(Line::default())
-                        }
-                    }
+                .map(|(_abs_idx, row)| match row {
+                    // The colored block (drawn above) frames the selected row
+                    // + banner, so the banner's top/bottom padding rows are
+                    // empty -- they show the block's CONTINUE_BG.
+                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
                     DisplayRow::Item(idx) => {
                         let item = &items[*idx];
                         let selected = *idx == cursor;
@@ -662,7 +686,10 @@ impl App {
 
                         let selected_has_banner = selected && banner_rows > 0;
                         let avail = if selected_has_banner {
-                            (area.width as usize).saturating_sub(2 + COMPACT_BANNER_INDENT as usize)
+                            // 2-col left pad + 2-col right pad inside the
+                            // colored block: title+dur share area.width - 4.
+                            (area.width as usize)
+                                .saturating_sub(2 + 2 * COMPACT_BANNER_INDENT as usize)
                         } else if selected {
                             (area.width as usize).saturating_sub(1)
                         } else {
@@ -677,26 +704,40 @@ impl App {
                         };
 
                         let mut spans: Vec<Span> = if selected {
-                            let title_style = if focused {
-                                Style::default()
-                                    .fg(palette::IRIS)
-                                    .add_modifier(Modifier::BOLD)
-                            } else {
-                                Style::default().fg(fg)
-                            };
-                            vec![
-                                Span::raw(" ".repeat(if selected_has_banner {
-                                    COMPACT_BANNER_INDENT as usize
+                            if selected_has_banner {
+                                // Colored-block look: 2-col leading pad inside
+                                // the MEDIA_SELECTED_BG block (aligns the
+                                // title with the banner's `inner_x`), no green
+                                // `▌` gutter. Title is yellow (BOLD when
+                                // focused) and the row omits the duration --
+                                // it lives in the banner's metadata row below.
+                                let title_style = if focused {
+                                    Style::default()
+                                        .fg(palette::YELLOW)
+                                        .add_modifier(Modifier::BOLD)
                                 } else {
-                                    0
-                                })),
-                                Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
-                                Span::styled(title, title_style),
-                            ]
+                                    Style::default().fg(palette::YELLOW)
+                                };
+                                vec![Span::raw("  "), Span::styled(title, title_style)]
+                            } else {
+                                // Otherwise keep the green gutter for selected
+                                // list rows without an inline banner.
+                                let title_style = if focused {
+                                    Style::default()
+                                        .fg(palette::IRIS)
+                                        .add_modifier(Modifier::BOLD)
+                                } else {
+                                    Style::default().fg(fg)
+                                };
+                                vec![
+                                    Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                                    Span::styled(title, title_style),
+                                ]
+                            }
                         } else {
                             vec![Span::raw(" "), Span::styled(title, Style::default().fg(fg))]
                         };
-                        if !dur_str.is_empty() {
+                        if !selected_has_banner && !dur_str.is_empty() {
                             spans.push(Span::styled(dur_str, Style::default().fg(palette::MUTED)));
                         }
                         ListItem::new(Line::from(spans))
@@ -727,20 +768,18 @@ impl App {
             if banner_rows > 0 && content_start >= offset && content_start < offset + visible {
                 let banner_y = content_area.y + (content_start - offset) as u16;
                 let bottom = content_area.y + content_area.height;
-                // Reserve the rightmost column for the scrollbar (drawn over
-                // content_area's last column below) so the poster image,
-                // which is right-anchored, doesn't render underneath it.
-                let banner_w = if show_scrollbar {
-                    content_area.width.saturating_sub(1)
-                } else {
-                    content_area.width
-                };
                 let banner_h = (banner_content_rows as u16).min(bottom.saturating_sub(banner_y));
                 if banner_h > 0 {
+                    // The banner content sits inside the colored block with
+                    // `COMPACT_BANNER_INDENT` cols of external side padding on
+                    // each side (and render_power_compact_detail's own
+                    // internal 1-col pad), so the poster image — right-anchored
+                    // inside `banner_rect` — never renders under the scrollbar
+                    // (which is drawn on the rightmost col afterwards).
                     let banner_rect = Rect {
                         x: content_area.x + COMPACT_BANNER_INDENT,
                         y: banner_y,
-                        width: banner_w.saturating_sub(COMPACT_BANNER_INDENT),
+                        width: content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT),
                         height: banner_h,
                     };
                     // render_power_compact_detail overwrites layout.cursor_screen_y with
@@ -756,28 +795,6 @@ impl App {
                         layout,
                     );
                     layout.cursor_screen_y = want_cursor_y;
-                }
-            }
-
-            if banner_rows > 0 && display_cursor >= offset && display_cursor < offset + visible {
-                let selected_y = content_area.y + (display_cursor - offset) as u16;
-                let bottom = content_area.y + content_area.height;
-                let bar_h = (1 + banner_content_rows as u16).min(bottom.saturating_sub(selected_y));
-                if bar_h > 0 {
-                    let selection_bar =
-                        vec![
-                            Line::from(Span::styled("▌", Style::default().fg(palette::PINE)));
-                            bar_h as usize
-                        ];
-                    f.render_widget(
-                        Paragraph::new(selection_bar),
-                        Rect {
-                            x: content_area.x + COMPACT_BANNER_INDENT,
-                            y: selected_y,
-                            width: 1,
-                            height: bar_h,
-                        },
-                    );
                 }
             }
 
@@ -1102,13 +1119,14 @@ mod tests {
     #[test]
     fn letter_group_backs_up_two_rows_to_reveal_header_when_banner_opening_rule_intervenes() {
         // Cursor lands on the first item of a non-initial letter bucket, with the
-        // compact banner active (it's a leaf movie) inserting an opening-rule
+        // compact banner active (it's a leaf movie) reserving its top padding
         // filler row directly above the item. A stale scroll that would
         // otherwise clamp exactly onto the item's own row would strand that
-        // rule with no header visible above it -- this exercises the extended
-        // nudge (back up 2 rows instead of 1) added specifically for the case
-        // where a BannerFiller row sits between a LetterHeader and the selected
-        // item, which the older "back up one row" nudge alone doesn't cover.
+        // padding row (and the bucket header above it) with no header visible
+        // -- this exercises the extended nudge (back up 2 rows instead of 1)
+        // added specifically for the case where a BannerFiller row sits
+        // between a LetterHeader and the selected item, which the older "back
+        // up one row" nudge alone doesn't cover.
         let titles: Vec<String> = (0..60)
             .map(|i| {
                 let letter = (b'A' + (i % 26) as u8) as char;
@@ -1149,33 +1167,35 @@ mod tests {
             .iter()
             .position(|l| l.contains(target_title.as_str()))
             .expect("selected item's row should render");
-        let rule_line_idx = lines
-            .iter()
-            .position(|l| l.contains('\u{2500}'))
-            .expect("expected the banner's opening rule to be visible");
+        // The colored block's top padding row (previously the opening `─`
+        // rule) sits directly above the selected item. It renders as an
+        // empty CONTINUE_BG row, so it trimmed is empty.
         assert!(
-            rule_line_idx < title_line_idx,
-            "expected the opening rule to render above the selected item:\n{out}"
+            title_line_idx >= 2,
+            "expected two rows above the selected item (its colored block's top \
+             padding row + the bucket header), not the title at row \
+             {title_line_idx}:\n{out}"
         );
+        let pad_line = lines[title_line_idx - 1].trim();
+        let header_line = lines[title_line_idx - 2].trim();
         assert!(
-            rule_line_idx > 0,
-            "expected a header row above the opening rule, not scrolled to the very top \
-             (the extended back-up-2 nudge should have kept it visible):\n{out}"
+            pad_line.is_empty(),
+            "expected the row directly above the selected item to be the empty \
+             colored padding row, not visible content:\n{out}"
         );
-        let header_line = lines[rule_line_idx - 1].trim();
         assert!(
             !header_line.is_empty() && !header_line.contains(target_title.as_str()),
-            "expected the bucket header directly above the opening rule, not stranded \
-             off-screen by the nudge:\n{out}"
+            "expected the bucket header directly above the colored padding row, \
+             not stranded off-screen by the nudge:\n{out}"
         );
     }
 
     #[test]
     fn letter_group_backs_up_from_banner_filler_row_to_keep_header_visible() {
         // Same reachable state as the previous regression, but with a taller
-        // viewport so stale scroll clamps to the banner's opening filler row
-        // rather than the selected item row itself. The header should still be
-        // nudged back into view.
+        // viewport so stale scroll clamps to the banner's top padding filler
+        // row rather than the selected item row itself. The header should
+        // still be nudged back into view.
         let titles: Vec<String> = (0..60)
             .map(|i| {
                 let letter = (b'A' + (i % 26) as u8) as char;
@@ -1207,23 +1227,24 @@ mod tests {
             .iter()
             .position(|l| l.contains(target_title.as_str()))
             .expect("selected item's row should render");
-        let rule_line_idx = lines
-            .iter()
-            .position(|l| l.contains('\u{2500}'))
-            .expect("expected the banner's opening rule to be visible");
         assert!(
-            rule_line_idx < title_line_idx,
-            "expected the opening rule to render above the selected item:\n{out}"
+            title_line_idx >= 2,
+            "expected two rows above the selected item (its colored block's top \
+             padding row + the bucket header), not the title at row \
+             {title_line_idx}:\n{out}"
         );
+        let pad_line = lines[title_line_idx - 1].trim();
+        let header_line = lines[title_line_idx - 2].trim();
         assert!(
-            rule_line_idx > 0,
-            "expected a header row above the opening rule, not scrolled to the very top:\n{out}"
+            pad_line.is_empty(),
+            "expected the row directly above the selected item to be the empty \
+             colored padding row, not visible content:\n{out}"
         );
-        let header_line = lines[rule_line_idx - 1].trim();
         assert!(
             !header_line.is_empty() && !header_line.contains(target_title.as_str()),
-            "expected the bucket header directly above the opening rule, not stranded \
-             off-screen when scroll lands on the banner filler row:\n{out}"
+            "expected the bucket header directly above the colored padding row, \
+             not stranded off-screen when scroll lands on the banner filler \
+             row:\n{out}"
         );
     }
 

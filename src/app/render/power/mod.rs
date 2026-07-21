@@ -669,81 +669,69 @@ mod tests {
         let mut app = make_power_movie_app();
         let mut layout = LayoutPower::default();
 
-        let out = render_power_library_to_string(&mut app, &mut layout);
+        let term = render_power_library_to_terminal(&mut app, &mut layout);
+        let out = buffer_to_string(&term);
         let lines: Vec<&str> = out.lines().collect();
 
         // Row 0 is the " N items" header that `render_power_list` always draws
-        // for a focused, non-search library panel. Row 1 is the banner's
-        // opening horizontal rule -- placed directly *above* the selected
-        // movie's own row (row 2) so the selected title reads as set off from
-        // the row above it. The closing rule (and everything in between)
-        // grows to fit the selected movie's actual overview/director content
-        // (#263), so its row is found dynamically below rather than assumed
-        // fixed.
-        assert!(
-            lines[1].contains('\u{2500}'),
-            "expected opening rule directly above the selected movie row:\n{out}"
-        );
+        // for a focused, non-search library panel. Row 1 is the selected movie
+        // block's top padding row (CONTINUE_BG-colored, empty), placed
+        // directly *above* the selected movie's own row (row 2) so its title
+        // reads as set off from the row above it. The bottom padding row
+        // (and everything in between) grows to fit the selected movie's actual
+        // overview/director content (#263), so its row is found dynamically
+        // below rather than assumed fixed.
         assert!(
             lines[2].contains("Focused Movie"),
-            "expected selected movie row directly below the opening rule:\n{out}"
+            "expected selected movie row directly below the block's top padding row:\n{out}"
         );
+        // The colored-block look removes the green `▌` selected-row
+        // indicator: the selected title sits inside the MEDIA_SELECTED_BG
+        // block with a 2-col leading pad instead.
         assert_eq!(
             lines[2].find('▌'),
-            Some(0),
-            "expected the selected-row indicator at column 0:\n{out}"
+            None,
+            "expected no green selected-row indicator inside the colored block:\n{out}"
         );
         assert!(
             out.contains("compact movie banner"),
             "expected compact overview text:\n{out}"
         );
-        assert_eq!(
-            lines[3].find('▌'),
-            Some(0),
-            "expected the selection indicator to continue through the banner at column 0:\n{out}"
-        );
         assert!(
             out.contains("Director: Director Hidden"),
             "compact banner must show director:\n{out}"
         );
+
+        // The block's top padding row (row 1) is the CONTINUE_BG filler row
+        // directly above the selected item; verify it's empty and carries the
+        // block's background color.
+        let buf = term.backend().buffer();
+        let pad_cell = &buf[(0, 1)];
+        assert_eq!(
+            pad_cell.symbol(),
+            " ",
+            "expected the block's top padding row to be empty:\n{out}"
+        );
+        assert_eq!(
+            pad_cell.bg,
+            palette::MEDIA_SELECTED_BG,
+            "expected the block's top padding row to carry the MEDIA_SELECTED_BG background:\n{out}"
+        );
+
+        // The block's bottom padding row (empty, CONTINUE_BG) is the first
+        // fully-empty CONTINUE_BG row below the director line; everything
+        // below it is ordinary list content again.
         let director_line = lines
             .iter()
             .position(|l| l.contains("Director: Director Hidden"))
             .expect("expected compact director line to render");
-        assert!(
-            lines
-                .get(director_line.saturating_sub(1))
-                .map(|l| { l.find('▌') == Some(0) && l.chars().skip(1).all(|c| c == ' ') })
-                .unwrap_or(false),
-            "expected a spacer row before the director line:\n{out}"
-        );
-
-        // The closing rule is the first horizontal-rule row after the
-        // director line; everything below it is ordinary list content again.
-        let closing_rule_line = lines
-            .iter()
-            .enumerate()
-            .skip(director_line + 1)
-            .find(|(_, l)| l.contains('\u{2500}'))
-            .map(|(idx, _)| idx)
-            .expect("expected a closing rule below the banner content");
-        assert_ne!(
-            lines[closing_rule_line].find('▌'),
-            Some(2),
-            "expected the selection indicator to stop before the banner's closing rule:\n{out}"
-        );
-        assert!(
-            !lines[1].contains("Focused Movie")
-                && !lines[closing_rule_line].contains("Focused Movie"),
-            "expected selected row's title to appear only once, not repeated on a rule row:\n{out}"
-        );
         let second_movie_line = lines
             .iter()
             .position(|l| l.contains("Second Movie"))
             .expect("expected remaining movie list below banner");
         assert!(
-            second_movie_line > closing_rule_line,
-            "expected remaining movie list below the banner's closing rule:\n{out}"
+            second_movie_line > director_line,
+            "expected remaining movie list below the banner's director line:\n{out}"
         );
         assert!(
             !lines[second_movie_line].contains("Focused Movie"),
@@ -760,30 +748,27 @@ mod tests {
         let out = buffer_to_string(&term);
         let lines: Vec<&str> = out.lines().collect();
 
+        // The colored-block look removes the green `▌` indicator entirely
+        // (both focused and unfocused); the selected title sits inside the
+        // MEDIA_SELECTED_BG block with a 2-col leading pad instead.
         let selected_line = lines
             .iter()
             .find(|line| line.contains("Focused Movie"))
             .expect("expected selected movie row");
-        let selected_bar = selected_line.find('▌').expect("expected selected bar");
-        let selected_text = selected_line
-            .find("Focused Movie")
-            .expect("expected selected title");
-        assert!(
-            selected_text > selected_bar,
-            "selected movie title should stay to the right of the indicator while unfocused:\n{out}"
+        assert_eq!(
+            selected_line.find('▌'),
+            None,
+            "expected no green selected-row indicator inside the colored block while unfocused:\n{out}"
         );
 
         let overview_line = lines
             .iter()
             .find(|line| line.contains("compact movie banner"))
             .expect("expected compact overview line");
-        let overview_bar = overview_line.find('▌').expect("expected banner bar");
-        let overview_text = overview_line
-            .find("compact movie banner")
-            .expect("expected compact overview text");
-        assert!(
-            overview_text > overview_bar,
-            "compact overview text should stay to the right of the indicator while unfocused:\n{out}"
+        assert_eq!(
+            overview_line.find('▌'),
+            None,
+            "expected no green banner bar inside the colored block while unfocused:\n{out}"
         );
     }
 
