@@ -1077,7 +1077,8 @@ impl App {
         let new_section_start = continue_row_count as usize + 5;
 
         // Background for the continue watching list.
-        // Extends 1 row above and below the items, full width of the list area.
+        // Includes 1 top and 1 bottom padding row so the items are not flush
+        // against the block borders; borders sit outside the block.
         let continue_bg_h = continue_row_count.min(list_area.height);
         if continue_bg_h >= 1 {
             f.render_widget(
@@ -1087,6 +1088,35 @@ impl App {
                     y: list_area.y.saturating_sub(1),
                     width: list_area.width,
                     height: continue_bg_h + 2,
+                },
+            );
+            let border_style = Style::default().fg(palette::SOFT_WHITE);
+            // Top border at the row above the block's top padding.
+            let top_y = list_area.y.saturating_sub(2);
+            let top_spans: Vec<Span> = (0..list_area.width)
+                .map(|_| Span::styled("\u{2581}", border_style))
+                .collect();
+            f.render_widget(
+                Paragraph::new(Line::from(top_spans)),
+                Rect {
+                    x: list_area.x,
+                    y: top_y,
+                    width: list_area.width,
+                    height: 1,
+                },
+            );
+            // Bottom border at the row below the block's bottom padding.
+            let bot_y = list_area.y + continue_bg_h + 1;
+            let bot_spans: Vec<Span> = (0..list_area.width)
+                .map(|_| Span::styled("\u{2594}", border_style))
+                .collect();
+            f.render_widget(
+                Paragraph::new(Line::from(bot_spans)),
+                Rect {
+                    x: list_area.x,
+                    y: bot_y,
+                    width: list_area.width,
+                    height: 1,
                 },
             );
         }
@@ -1102,6 +1132,35 @@ impl App {
                     y: new_bg_y.saturating_sub(1),
                     width: list_area.width,
                     height: new_bg_h + 2,
+                },
+            );
+            let border_style = Style::default().fg(palette::SOFT_WHITE);
+            // Top border at the row above the block's top padding.
+            let top_y = new_bg_y.saturating_sub(2);
+            let top_spans: Vec<Span> = (0..list_area.width)
+                .map(|_| Span::styled("\u{2581}", border_style))
+                .collect();
+            f.render_widget(
+                Paragraph::new(Line::from(top_spans)),
+                Rect {
+                    x: list_area.x,
+                    y: top_y,
+                    width: list_area.width,
+                    height: 1,
+                },
+            );
+            // Bottom border at the row below the block's bottom padding.
+            let bot_y = new_bg_y + new_bg_h + 1;
+            let bot_spans: Vec<Span> = (0..list_area.width)
+                .map(|_| Span::styled("\u{2594}", border_style))
+                .collect();
+            f.render_widget(
+                Paragraph::new(Line::from(bot_spans)),
+                Rect {
+                    x: list_area.x,
+                    y: bot_y,
+                    width: list_area.width,
+                    height: 1,
                 },
             );
         }
