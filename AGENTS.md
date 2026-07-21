@@ -82,6 +82,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 ## Repo Rules
 - Use Serena if installed for code exploration and targeted writes.
 - For releases, run `scripts/release.sh X.Y.Z "one-line summary"` instead of reading a separate release checklist.
+- Always run `cargo fmt` before committing Rust code changes.
 - Input handling has one front door: `src/app/input_resolver.rs`'s context-priority registry (keyboard) and the shared `Command`/`dispatch` seam (mouse). Add new shortcuts as `Command`s + bindings there, not as ad hoc key/click checks in view or panel code. Exceptions: text-entry contexts (search boxes, the save-name dialog) and external setup flows (e.g. login), which own local state. See CONTEXT.md's "Input handling" section and `docs/adr/0002-centralized-input-handling.md`.
 - For application code changes: use isolated worktree branches from `origin/main`. Push the branch and open a PR. Do not commit directly to `main`, merge into `main`, or rebase `main`.
 - For repo hygiene (scripts, config, tooling, docs) and release changes: commit directly to `main` and push.
