@@ -1025,7 +1025,7 @@ impl App {
     /// and mute status groups. Right side: queue source/save-state/scope detail.
     fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
-        let bar_style = Style::default().bg(palette::BAR_BG);
+        let bar_style = Style::default().bg(palette::DARK_BG);
         f.render_widget(Block::default().style(bar_style), area);
         layout.ind_mu = Rect::default();
 
