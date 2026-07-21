@@ -360,6 +360,8 @@ impl App {
             // When that item is also the selected/bannered one, the banner's
             // opening rule sits between the header and the item, so back up an
             // extra row to clear the rule too.
+            // Also, if a colored-padding BannerFiller (from a selected block) is at
+            // the top, back up one row to keep the border-space BannerFiller visible.
             if visible > 1
                 && offset > 0
                 && matches!(
@@ -380,6 +382,12 @@ impl App {
                     )
                 {
                     offset -= 2;
+                } else if offset >= 1
+                    && matches!(display_rows.get(offset), Some(DisplayRow::BannerFiller))
+                    && matches!(display_rows.get(offset - 1), Some(DisplayRow::BannerFiller))
+                {
+                    // Colored-padding BannerFiller at top; back up to keep border visible
+                    offset -= 1;
                 }
             }
             final_offset = offset;
@@ -653,7 +661,16 @@ impl App {
             let lower_bound = (display_cursor + banner_rows.saturating_sub(1))
                 .saturating_sub(visible.saturating_sub(1))
                 .min(display_cursor);
-            let offset = stored_scroll.clamp(lower_bound, display_cursor);
+            let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
+            // If a colored-padding BannerFiller (from a selected block) is at
+            // the top, back up one row to keep the border-space BannerFiller visible.
+            if visible > 1
+                && offset > 0
+                && matches!(display_rows.get(offset), Some(DisplayRow::BannerFiller))
+                && matches!(display_rows.get(offset - 1), Some(DisplayRow::BannerFiller))
+            {
+                offset -= 1;
+            }
             final_offset = offset;
 
             // Absolute display-row indices of the colored block's top and

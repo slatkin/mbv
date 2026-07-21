@@ -530,7 +530,7 @@ impl App {
         let display_rows = plan.rows;
         let selected_block_bounds = plan.selected_block_bounds;
         let top_bound = selected_block_bounds
-            .map(|(top, _)| top)
+            .map(|(top, _)| top.saturating_sub(1)) // include border row
             .unwrap_or(display_cursor);
         let offset = stored_scroll.clamp(
             display_cursor
