@@ -1014,14 +1014,17 @@ impl App {
 
         let mut rows: Vec<DisplayRow> = Vec::new();
         let continue_row_count;
+        let new_section_count;
         if continue_items.is_empty() {
             rows.push(DisplayRow::Empty);
             continue_row_count = 1;
+            new_section_count = 0u16;
         } else {
             continue_row_count = continue_items.len() as u16;
             for (idx, item) in continue_items.into_iter().enumerate() {
                 rows.push(DisplayRow::Item(idx, Box::new(item)));
             }
+            new_section_count = selected_new.as_ref().map(|s| s.items.len()).unwrap_or(0) as u16;
         }
         if let Some(section) = selected_new {
             rows.push(DisplayRow::Blank);
@@ -1070,7 +1073,9 @@ impl App {
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
         layout.selector_tabs = Vec::new();
 
-        // Background for the continue watching list only (not the Newest section below).
+        let new_section_start = continue_row_count as usize + 4;
+
+        // Background for the continue watching list.
         // Extends 1 row above and below the items, full width of the list area.
         let continue_bg_h = continue_row_count.min(list_area.height);
         if continue_bg_h >= 1 {
@@ -1085,14 +1090,30 @@ impl App {
             );
         }
 
+        // Background for the newest section, same style as continue watching.
+        if new_section_count >= 1 {
+            let new_bg_y = list_area.y + (new_section_start as u16).saturating_sub(scroll_y);
+            let new_bg_h = new_section_count.min(list_area.height);
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
+                Rect {
+                    x: list_area.x,
+                    y: new_bg_y.saturating_sub(1),
+                    width: list_area.width,
+                    height: new_bg_h + 2,
+                },
+            );
+        }
+
         let visible = list_area.height.min(content_h.saturating_sub(scroll_y));
         for k in 0..visible {
             let row_idx = scroll_y as usize + k as usize;
             let sy = list_area.y + k;
-            // Continue watching rows render inside the colored background with
-            // 2-col padding; Newest rows render flush in the parent panel.
+            // Rows inside colored backgrounds render with 2-col padding.
             let is_continue_row = row_idx < continue_row_count as usize;
-            let (rx, rw) = if is_continue_row {
+            let is_new_row = row_idx >= new_section_start
+                && row_idx < new_section_start + new_section_count as usize;
+            let (rx, rw) = if is_continue_row || is_new_row {
                 (list_area.x + 2, list_area.width.saturating_sub(4))
             } else {
                 (list_area.x, list_w)
