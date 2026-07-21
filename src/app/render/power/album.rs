@@ -729,7 +729,7 @@ impl App {
                             &tracks,
                             cursor,
                             detail_focused,
-                            true,
+                            false,
                             layout,
                         );
                     }
