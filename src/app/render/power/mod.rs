@@ -358,14 +358,14 @@ impl App {
             if lib_area.height > 0 {
                 let pills_area = Rect {
                     x: lib_area.x,
-                    y: lib_area.y + 1,
+                    y: lib_area.y,
                     width: lib_area.width,
                     height: 1,
                 };
                 self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
                 render_lib_area = Rect {
-                    y: lib_area.y + 3,
-                    height: lib_area.height.saturating_sub(3),
+                    y: lib_area.y + 2,
+                    height: lib_area.height.saturating_sub(2),
                     ..lib_area
                 };
             } else {
@@ -987,14 +987,14 @@ mod tests {
         let row0 = out.lines().next().unwrap();
         let _row1 = out.lines().nth(1).unwrap();
 
-        let row4 = out.lines().nth(4).unwrap();
+        let row3 = out.lines().nth(3).unwrap();
 
         assert!(
             !row0.contains("Alpha") && !row0.contains("Beta"),
             "expected pills not on the first row:\n{out}"
         );
         assert!(
-            row4.contains("Alpha") && row4.contains("Beta"),
+            row3.contains("Alpha") && row3.contains("Beta"),
             "expected group pills below the tab bar (no header row):\n{out}"
         );
 
@@ -1010,31 +1010,31 @@ mod tests {
         let right_col_x = app.power_left_width + POWER_VIEW_GAP;
         let buf = term.backend().buffer();
         assert!(
-            row4.chars().take(right_col_x as usize).all(|c| c == ' '),
+            row3.chars().take(right_col_x as usize).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
-        let alpha_x = char_x(row4, "Alpha");
+        let alpha_x = char_x(row3, "Alpha");
         assert!(
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 4)].bg, palette::FOAM);
+        assert_eq!(buf[(alpha_x, 3)].bg, palette::FOAM);
         assert_eq!(
-            buf[(alpha_x, 4)].fg,
+            buf[(alpha_x, 3)].fg,
             palette::YELLOW,
             "expected the selected group pill to use yellow text"
         );
-        let beta_x = char_x(row4, "Beta");
-        assert_eq!(buf[(beta_x, 4)].bg, palette::FOAM);
+        let beta_x = char_x(row3, "Beta");
+        assert_eq!(buf[(beta_x, 3)].bg, palette::FOAM);
         assert_eq!(
-            buf[(beta_x, 4)].fg,
+            buf[(beta_x, 3)].fg,
             palette::BASE,
             "expected a non-selected group pill to stay blue with base text"
         );
 
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));
-        let between: String = row4
+        let between: String = row3
             .chars()
             .skip(gap_start as usize)
             .take((gap_end - gap_start) as usize)
@@ -1046,20 +1046,20 @@ mod tests {
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 4, "expected selector hitboxes on the pills row");
+            assert_eq!(rect.y, 3, "expected selector hitboxes on the pills row");
             assert!(
                 rect.x >= right_col_x,
                 "expected selector hitboxes confined to the right column"
             );
         }
 
-        // Row 3 is a blank spacer between the pill row and the album list.
-        let spacer_row = out.lines().nth(5).unwrap();
+        // Row 4 is a blank spacer between the pill row and the album list.
+        let spacer_row = out.lines().nth(4).unwrap();
         assert!(
             spacer_row.trim().is_empty(),
             "expected a blank spacer row between the pills and the album list:\n{out}"
         );
-        let album_row = out.lines().nth(6).unwrap();
+        let album_row = out.lines().nth(5).unwrap();
         assert!(
             album_row.contains("Alpha") || album_row.contains("First Album"),
             "expected album list content to start below the pill/spacer rows:\n{out}"
@@ -1092,11 +1092,11 @@ mod tests {
         let out = buffer_to_string(&term);
         let _row0 = out.lines().next().unwrap();
 
-        let row4 = out.lines().nth(4).unwrap();
-        let _row5 = out.lines().nth(4).unwrap();
+        let row3 = out.lines().nth(3).unwrap();
+        let _row4 = out.lines().nth(4).unwrap();
 
         assert!(
-            row4.contains('\u{203a}'),
+            row3.contains('\u{203a}'),
             "expected a right scroll indicator on the pills row (no header gap):\n{out}"
         );
 
@@ -1105,7 +1105,7 @@ mod tests {
             line[..byte_idx].chars().count() as u16
         };
 
-        let right_indicator_x = rchar_x(row4, "\u{203a}");
+        let right_indicator_x = rchar_x(row3, "\u{203a}");
         assert!(
             right_indicator_x < width,
             "expected the right scroll indicator to stay inside the pill row:\n{out}"
@@ -1113,13 +1113,13 @@ mod tests {
 
         let right_col_x = (app.power_left_width + POWER_VIEW_GAP) as usize;
         assert!(
-            row4.chars().take(right_col_x).all(|c| c == ' '),
+            row3.chars().take(right_col_x).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 4, "expected pill hitboxes on the pills row");
+            assert_eq!(rect.y, 3, "expected pill hitboxes on the pills row");
             assert!(
                 rect.x as usize >= right_col_x,
                 "expected pill hitboxes confined to the right column"

@@ -420,9 +420,6 @@ impl App {
         let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
 
         if row < max_y {
-            row += 1;
-        }
-        if row < max_y {
             const MAX_LABEL: usize = 12;
             let tab_labels: Vec<String> = std::iter::once("All".to_string())
                 .chain(
