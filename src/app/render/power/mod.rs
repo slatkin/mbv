@@ -213,18 +213,30 @@ impl App {
         );
 
         // Inner content area with padding inside the colored box (queue uses this).
+        // Shifted down to account for the title row + blank spacer row at top.
         let left_content = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 1,
+            y: left_area.y + 3,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(2),
+            height: left_area.height.saturating_sub(4),
         };
-        // Card area: top/bottom + left/right padding.
+        // Queue title row at the very top, then a blank spacer row, then the
+        // card image with its own padding.
+        self.render_power_queue_title(
+            f,
+            Rect {
+                x: left_area.x,
+                y: left_area.y,
+                width: left_area.width,
+                height: 1,
+            },
+        );
+        // Card area: shifted down 2 rows (title + blank spacer).
         let card_area = Rect {
             x: left_area.x + 2,
-            y: left_area.y + 1,
+            y: left_area.y + 3,
             width: left_area.width.saturating_sub(4),
-            height: left_area.height.saturating_sub(2),
+            height: left_area.height.saturating_sub(4),
         };
 
         let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
@@ -328,15 +340,8 @@ impl App {
             )
         };
 
-        // Render the queue title at the top and scope pills at the bottom.
+        // Render scope pills at the bottom (title is already at the top).
         if self.power_queue_relocated {
-            self.render_power_queue_title(
-                f,
-                Rect {
-                    height: 1,
-                    ..queue_area
-                },
-            );
             self.render_power_queue_scope_pills(
                 f,
                 Rect {
@@ -347,15 +352,6 @@ impl App {
                 layout,
             );
         } else {
-            self.render_power_queue_title(
-                f,
-                Rect {
-                    x: left_area.x,
-                    y: queue_area.y,
-                    width: left_area.width,
-                    height: 1,
-                },
-            );
             let _has_scope = self.render_power_queue_scope_pills(
                 f,
                 Rect {
