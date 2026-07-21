@@ -112,14 +112,7 @@ impl App {
             }
             let abs_idx = scroll_start + idx;
             let selected = abs_idx == group_cursor;
-            let style = if selected {
-                Style::default()
-                    .fg(palette::IRIS)
-                    .bg(palette::GREEN)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::PILL).bg(palette::GREEN)
-            };
+            let style = super::selector_pill_style(selected);
             let pill = format!(" {} ", label);
             selector_tabs.push((
                 Rect {

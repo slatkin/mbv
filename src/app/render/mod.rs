@@ -19,6 +19,11 @@ use ratatui::Frame;
 use std::time::Instant;
 use unicode_width::UnicodeWidthStr;
 
+/// Height of the tab-bar box: 1 row padding + 1 row tab + 1 row spacer.
+/// Shared by both view modes (Standard here, Power in `power/mod.rs`) so the
+/// two layouts can't drift apart on this shared constant.
+pub(super) const TAB_BAR_BOX_HEIGHT: u16 = 3;
+
 fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
     let endpoint = endpoint.trim();
     if endpoint.is_empty() || endpoint.eq_ignore_ascii_case("local") {
@@ -172,7 +177,7 @@ impl App {
                 );
             }
             super::ViewMode::Standard => {
-                let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
+                let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
                 let tab_area = Rect {
                     height: tab_h,
                     ..main_area

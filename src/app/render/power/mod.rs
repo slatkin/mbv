@@ -11,7 +11,7 @@ use super::super::layout::LayoutPower;
 use super::super::ui_util::natural_sort_key;
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Color, Style};
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
@@ -140,6 +140,21 @@ pub(super) fn render_selected_block_borders(
                 height: 1,
             },
         );
+    }
+}
+
+/// Style for a selector pill (group/section/artist tab row): IRIS text +
+/// BOLD on GREEN when selected, PILL text on GREEN otherwise. Shared by
+/// every power-view pill row (home's group/section pills, music's group
+/// pills) so they can't drift apart on the selected-vs-unselected look.
+pub(super) fn selector_pill_style(selected: bool) -> Style {
+    if selected {
+        Style::default()
+            .fg(palette::IRIS)
+            .bg(palette::GREEN)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(palette::PILL).bg(palette::GREEN)
     }
 }
 
@@ -331,7 +346,7 @@ impl App {
             height: left_area.height.saturating_sub(4),
         };
 
-        let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
+        let tab_h: u16 = super::TAB_BAR_BOX_HEIGHT;
         let right_area = Rect {
             x: area.x + left_w + POWER_VIEW_GAP,
             y: area.y + tab_h + player_h,
