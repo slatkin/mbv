@@ -821,34 +821,8 @@ impl App {
             return;
         }
         let gutter_w = if selected_region_gutter { 2 } else { 1 };
-        let inner_w = (area.width as usize).saturating_sub(gutter_w);
         let max_y = area.y + area.height;
         let mut row = area.y;
-
-        let mut title_style = Style::default().fg(if focused {
-            palette::YELLOW
-        } else {
-            palette::MUTED
-        });
-        if focused {
-            title_style = title_style.add_modifier(Modifier::BOLD);
-        }
-
-        // — Album title: yellow when interactive, muted for inline preview —
-        if row < max_y && !selected_region_gutter {
-            let album_title = items[0].album.clone();
-            let title = trunc_str(&album_title, inner_w);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(format!(" {}", title), title_style))),
-                Rect {
-                    x: area.x,
-                    y: row,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
 
         // — Inline album actions / spacer row —
         if row < max_y {
