@@ -327,6 +327,31 @@ impl App {
             )
         };
 
+        // Render the queue pill row: at the bottom of the left column in
+        // normal mode, or at the top of the relocated queue area in the right
+        // column when there isn't enough room.
+        if self.power_queue_relocated {
+            self.render_power_queue_header(
+                f,
+                Rect {
+                    height: 1,
+                    ..queue_area
+                },
+                layout,
+            );
+        } else {
+            self.render_power_queue_header(
+                f,
+                Rect {
+                    x: left_area.x,
+                    y: left_area.y + left_area.height - 1,
+                    width: left_area.width,
+                    height: 1,
+                },
+                layout,
+            );
+        }
+
         let mut render_lib_area = lib_area;
         if self.power_left_tab > 0 && self.is_music_group_view(self.power_left_tab - 1) {
             let lib_idx = self.power_left_tab - 1;
@@ -348,7 +373,22 @@ impl App {
             }
         }
 
-        self.render_power_queue(f, queue_area, queue_focused, layout);
+        // Queue list: no header (rendered separately at the bottom of the
+        // left column in normal mode, or at the top of the relocated area).
+        // Leave 1 row at the bottom for the pill row in normal mode.
+        let queue_list_area = if self.power_queue_relocated {
+            Rect {
+                y: queue_area.y + 2,
+                height: queue_area.height.saturating_sub(2),
+                ..queue_area
+            }
+        } else {
+            Rect {
+                height: queue_area.height.saturating_sub(1),
+                ..queue_area
+            }
+        };
+        self.render_power_queue(f, queue_list_area, queue_focused, layout);
         self.render_power_library(f, render_lib_area, left_focused, layout);
 
         // Status bar + toast overlay at the bottom of the right panel.
