@@ -8,14 +8,12 @@ mod music;
 mod queue;
 
 use super::super::layout::LayoutPower;
-use super::super::ui_util::{natural_sort_key, trunc_str};
+use super::super::ui_util::natural_sort_key;
 use super::super::{palette, App, PowerFocus};
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
+use ratatui::style::Style;
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
-use unicode_width::UnicodeWidthStr;
 
 // Power View re-renders frequently while scrolling; prefer a cheaper filter in
 // these hot paths to reduce terminal image preparation stalls.
@@ -173,6 +171,11 @@ impl App {
         area: Rect,
         layout: &mut LayoutPower,
         playback: &mut super::super::layout::LayoutPlayback,
+        tabs_area_out: &mut Rect,
+        tabbar_vol_area_out: &mut Rect,
+        player_h: u16,
+        show_controls: bool,
+        now_playing_title: &Option<(String, ratatui::style::Color)>,
     ) {
         if area.height < 4 {
             return;
@@ -192,207 +195,13 @@ impl App {
         let left_w = self.power_left_width;
         let right_w = area.width.saturating_sub(left_w);
 
-        // Full-width header: FOAM line + breadcrumb pill right-aligned.
-        // Pill shows the nav path as "Library · Level" (bottom level omitted unless
-        // it is also the top level). Separator dots are white; the hovered crumb
-        // turns white. Clicking a crumb navigates back to that level.
-        //
-        // Music-group libraries use the standard right-aligned library title
-        // marker on the header row. Their group selector pills render on their
-        // own row at the top of the right library column below this title row.
-        {
-            let crumb_row = area.y;
-
-            let is_music_group_lib =
-                self.power_left_tab > 0 && self.is_music_group_view(self.power_left_tab - 1);
-
-            if self.power_left_tab == 0 {
-                layout.breadcrumbs = Vec::new();
-
-                let right_col_w = right_w.saturating_sub(POWER_VIEW_GAP);
-                let marker_text = " Keep Watching ";
-                let marker_w = (marker_text.width() as u16).min(right_col_w);
-                let left_line_w = area.width.saturating_sub(marker_w);
-
-                f.render_widget(
-                    Paragraph::new(Line::from(vec![
-                        Span::styled(
-                            "\u{2501}".repeat(left_line_w as usize),
-                            Style::default().fg(palette::FOAM),
-                        ),
-                        Span::styled(
-                            marker_text,
-                            Style::default()
-                                .fg(palette::BASE)
-                                .bg(palette::FOAM)
-                                .add_modifier(Modifier::BOLD),
-                        ),
-                    ])),
-                    Rect {
-                        x: area.x,
-                        y: crumb_row,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-            } else if is_music_group_lib {
-                layout.breadcrumbs = Vec::new();
-                layout.selector_tabs = Vec::new();
-                let lib_idx = self.power_left_tab - 1;
-
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        "\u{2501}".repeat(area.width as usize),
-                        Style::default().fg(palette::FOAM),
-                    ))),
-                    Rect {
-                        x: area.x,
-                        y: crumb_row,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-
-                let right_col_x = area.x + left_w + POWER_VIEW_GAP;
-                let right_col_w = right_w.saturating_sub(POWER_VIEW_GAP);
-                let marker_text = format!(" {} ", self.libs[lib_idx].library.name);
-                let marker_w = (marker_text.width() as u16).min(right_col_w);
-
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        marker_text,
-                        Style::default().fg(palette::BASE).bg(palette::FOAM),
-                    ))),
-                    Rect {
-                        x: right_col_x + right_col_w.saturating_sub(marker_w),
-                        y: crumb_row,
-                        width: marker_w,
-                        height: 1,
-                    },
-                );
-            } else {
-                layout.selector_tabs = Vec::new();
-
-                // Build (display_name, target_truncation_depth) pairs.
-                let lib_idx = self.power_left_tab - 1;
-                let lib = &self.libs[lib_idx];
-                let skip = if lib
-                    .nav_stack
-                    .first()
-                    .map(|l| l.title == lib.library.name)
-                    .unwrap_or(false)
-                {
-                    1
-                } else {
-                    0
-                };
-                let mut crumb_depths: Vec<(String, usize)> = vec![(lib.library.name.clone(), skip)];
-                for (j, lvl) in lib.nav_stack.iter().enumerate().skip(skip) {
-                    crumb_depths.push((lvl.title.clone(), j + 1));
-                }
-                // Drop the current (deepest) level from the pill unless it's the only one.
-                if crumb_depths.len() > 1 {
-                    crumb_depths.pop();
-                }
-
-                let pill_style = Style::default().fg(palette::BASE).bg(palette::FOAM);
-                let sep_style = Style::default().fg(palette::WHITE).bg(palette::FOAM);
-                const SEP: &str = " \u{00b7} "; // " · "
-                const SEP_W: usize = 3;
-
-                // Budget: leave at least a few dashes on the left.
-                let budget = (area.width as usize).saturating_sub(4);
-                let raw_w = 1
-                    + crumb_depths.iter().map(|(s, _)| s.width()).sum::<usize>()
-                    + crumb_depths.len().saturating_sub(1) * SEP_W
-                    + 1;
-                // If too wide, truncate the last displayed crumb so it fits.
-                let last_crumb_budget = if raw_w > budget && crumb_depths.len() > 1 {
-                    let fixed_w = 1
-                        + crumb_depths[..crumb_depths.len() - 1]
-                            .iter()
-                            .map(|(s, _)| s.width())
-                            .sum::<usize>()
-                        + (crumb_depths.len() - 1) * SEP_W
-                        + 1;
-                    budget.saturating_sub(fixed_w)
-                } else {
-                    budget
-                };
-
-                // Pre-compute display strings (with truncation applied).
-                let displays: Vec<(String, usize)> = crumb_depths
-                    .iter()
-                    .enumerate()
-                    .map(|(i, (name, depth))| {
-                        let s = if i == crumb_depths.len() - 1 {
-                            trunc_str(name, last_crumb_budget).to_string()
-                        } else {
-                            name.clone()
-                        };
-                        (s, *depth)
-                    })
-                    .collect();
-
-                // Pill geometry.
-                let pill_w: usize = 1
-                    + displays.iter().map(|(s, _)| s.width()).sum::<usize>()
-                    + displays.len().saturating_sub(1) * SEP_W
-                    + 1;
-                let left_line_w = (area.width as usize).saturating_sub(pill_w);
-                // x of first crumb = pill_start + 1 leading space
-                let mut x_cursor: u16 = area.x + left_line_w as u16 + 1;
-
-                // Build spans and register hover/click regions in one pass.
-                let mut pill_spans: Vec<Span> = vec![Span::styled(" ", pill_style)];
-                let mut new_power_crumbs: Vec<(u16, u16, u16, usize)> = Vec::new();
-                for (i, (display, target_depth)) in displays.iter().enumerate() {
-                    if i > 0 {
-                        pill_spans.push(Span::styled(SEP, sep_style));
-                        x_cursor += SEP_W as u16;
-                    }
-                    let dw = display.width() as u16;
-                    let x_start = x_cursor;
-                    let x_end = x_cursor + dw;
-                    let hovered = self.mouse_row == crumb_row
-                        && self.mouse_col >= x_start
-                        && self.mouse_col < x_end;
-                    let crumb_fg = if hovered {
-                        palette::WHITE
-                    } else {
-                        palette::BASE
-                    };
-                    pill_spans.push(Span::styled(
-                        display.clone(),
-                        Style::default().fg(crumb_fg).bg(palette::FOAM),
-                    ));
-                    new_power_crumbs.push((x_start, x_end, crumb_row, *target_depth));
-                    x_cursor = x_end;
-                }
-                pill_spans.push(Span::styled(" ", pill_style));
-                layout.breadcrumbs = new_power_crumbs;
-
-                let mut line_spans = vec![Span::styled(
-                    "\u{2501}".repeat(left_line_w),
-                    Style::default().fg(palette::FOAM),
-                )];
-                line_spans.extend(pill_spans);
-                f.render_widget(
-                    Paragraph::new(Line::from(line_spans)),
-                    Rect {
-                        x: area.x,
-                        y: area.y,
-                        width: area.width,
-                        height: 1,
-                    },
-                );
-            }
-        }
-
-        let content_h = area.height.saturating_sub(1);
+        // Header row removed — the tab bar above indicates current location.
+        layout.breadcrumbs = Vec::new();
+        layout.selector_tabs = Vec::new();
+        let content_h = area.height;
         let left_area = Rect {
             x: area.x,
-            y: area.y + 1,
+            y: area.y,
             width: left_w,
             height: content_h,
         };
@@ -417,12 +226,43 @@ impl App {
             ..left_area
         };
 
+        let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
         let right_area = Rect {
             x: area.x + left_w + POWER_VIEW_GAP,
-            y: area.y + 1,
+            y: area.y + tab_h + player_h,
             width: right_w.saturating_sub(POWER_VIEW_GAP),
-            height: content_h.saturating_sub(1),
+            height: content_h
+                .saturating_sub(1)
+                .saturating_sub(tab_h)
+                .saturating_sub(player_h),
         };
+
+        // Tab bar at the very top of the right column.
+        let tab_area = Rect {
+            x: right_area.x,
+            y: area.y,
+            width: right_area.width,
+            height: tab_h,
+        };
+        self.render_tabs(f, tab_area, tabs_area_out, tabbar_vol_area_out, true);
+
+        // Player panel below the tab bar.
+        if player_h > 0 {
+            let player_area = Rect {
+                x: right_area.x,
+                y: area.y + tab_h,
+                width: right_area.width,
+                height: player_h,
+            };
+            self.render_player_panel(
+                f,
+                player_area,
+                playback,
+                player_h,
+                show_controls,
+                now_playing_title,
+            );
+        }
 
         // Status bar sits at the bottom of the right panel only.
         let status_area = Rect {
@@ -742,6 +582,11 @@ mod tests {
                 Rect::new(0, 0, width, height),
                 &mut layout,
                 &mut LayoutPlayback::default(),
+                &mut Rect::default(),
+                &mut Rect::default(),
+                0,
+                false,
+                &None,
             );
         })
         .unwrap();
@@ -1090,28 +935,30 @@ mod tests {
                 Rect::new(0, 0, width, height),
                 &mut layout,
                 &mut LayoutPlayback::default(),
+                &mut Rect::default(),
+                &mut Rect::default(),
+                0,
+                false,
+                &None,
             );
         })
         .unwrap();
         let out = buffer_to_string(&term);
         let row0 = out.lines().next().unwrap();
-        let row1 = out.lines().nth(1).unwrap();
-        let row2 = out.lines().nth(2).unwrap();
+        let _row1 = out.lines().nth(1).unwrap();
+
+        let row4 = out.lines().nth(4).unwrap();
 
         assert!(
             !row0.contains("Alpha") && !row0.contains("Beta"),
-            "expected group pills to move off the title row:\n{out}"
+            "expected pills not on the first row:\n{out}"
         );
         assert!(
-            !row1.contains("Alpha") && !row1.contains("Beta"),
-            "expected a blank gap row between the title and the pills:\n{out}"
-        );
-        assert!(
-            row2.contains("Alpha") && row2.contains("Beta"),
-            "expected group pills two rows below the title:\n{out}"
+            row4.contains("Alpha") && row4.contains("Beta"),
+            "expected group pills below the tab bar (no header row):\n{out}"
         );
 
-        let rchar_x = |line: &str, needle: &str| -> u16 {
+        let _rchar_x = |line: &str, needle: &str| -> u16 {
             let byte_idx = line.rfind(needle).expect("needle not found");
             line[..byte_idx].chars().count() as u16
         };
@@ -1120,57 +967,34 @@ mod tests {
             line[..byte_idx].chars().count() as u16
         };
 
-        let music_x = rchar_x(row0, "Music");
-        assert!(
-            music_x + "Music".len() as u16 + 1 >= width,
-            "expected the Music title marker pinned to the far right of the title row:\n{out}"
-        );
-
-        let buf = term.backend().buffer();
-        assert_eq!(
-            buf[(music_x, 0)].bg,
-            palette::FOAM,
-            "expected the Music marker to keep the standard blue pill background"
-        );
-        assert_eq!(
-            buf[(music_x, 0)].fg,
-            palette::BASE,
-            "expected the Music marker to keep the standard base (black) text"
-        );
-
         let right_col_x = app.power_left_width + POWER_VIEW_GAP;
+        let buf = term.backend().buffer();
         assert!(
-            row0.chars()
-                .take(right_col_x as usize)
-                .all(|c| c == '\u{2501}'),
-            "expected a plain dash rule over the left column on the title row:\n{out}"
-        );
-        assert!(
-            row2.chars().take(right_col_x as usize).all(|c| c == ' '),
+            row4.chars().take(right_col_x as usize).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
-        let alpha_x = char_x(row2, "Alpha");
+        let alpha_x = char_x(row4, "Alpha");
         assert!(
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 2)].bg, palette::FOAM);
+        assert_eq!(buf[(alpha_x, 4)].bg, palette::FOAM);
         assert_eq!(
-            buf[(alpha_x, 2)].fg,
+            buf[(alpha_x, 4)].fg,
             palette::YELLOW,
             "expected the selected group pill to use yellow text"
         );
-        let beta_x = char_x(row2, "Beta");
-        assert_eq!(buf[(beta_x, 2)].bg, palette::FOAM);
+        let beta_x = char_x(row4, "Beta");
+        assert_eq!(buf[(beta_x, 4)].bg, palette::FOAM);
         assert_eq!(
-            buf[(beta_x, 2)].fg,
+            buf[(beta_x, 4)].fg,
             palette::BASE,
             "expected a non-selected group pill to stay blue with base text"
         );
 
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));
-        let between: String = row2
+        let between: String = row4
             .chars()
             .skip(gap_start as usize)
             .take((gap_end - gap_start) as usize)
@@ -1182,23 +1006,22 @@ mod tests {
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 2, "expected selector hitboxes on the pills row");
+            assert_eq!(rect.y, 4, "expected selector hitboxes on the pills row");
             assert!(
                 rect.x >= right_col_x,
                 "expected selector hitboxes confined to the right column"
             );
         }
 
-        // Row 3 is now a blank spacer between the pill row and the album
-        // list (added so the pills don't sit flush against the list).
-        let row3 = out.lines().nth(3).unwrap();
+        // Row 3 is a blank spacer between the pill row and the album list.
+        let spacer_row = out.lines().nth(5).unwrap();
         assert!(
-            row3.trim().is_empty(),
+            spacer_row.trim().is_empty(),
             "expected a blank spacer row between the pills and the album list:\n{out}"
         );
-        let row4 = out.lines().nth(4).unwrap();
+        let album_row = out.lines().nth(6).unwrap();
         assert!(
-            row4.contains("Alpha") || row4.contains("First Album"),
+            album_row.contains("Alpha") || album_row.contains("First Album"),
             "expected album list content to start below the pill/spacer rows:\n{out}"
         );
     }
@@ -1218,25 +1041,23 @@ mod tests {
                 Rect::new(0, 0, width, height),
                 &mut layout,
                 &mut LayoutPlayback::default(),
+                &mut Rect::default(),
+                &mut Rect::default(),
+                0,
+                false,
+                &None,
             );
         })
         .unwrap();
         let out = buffer_to_string(&term);
-        let row0 = out.lines().next().unwrap();
-        let row1 = out.lines().nth(1).unwrap();
-        let row2 = out.lines().nth(2).unwrap();
+        let _row0 = out.lines().next().unwrap();
+
+        let row4 = out.lines().nth(4).unwrap();
+        let _row5 = out.lines().nth(4).unwrap();
 
         assert!(
-            !row1.contains('\u{203a}'),
-            "expected a blank gap row between the title and the pills:\n{out}"
-        );
-        assert!(
-            row2.contains('\u{203a}'),
-            "expected a right scroll indicator on the pills row:\n{out}"
-        );
-        assert!(
-            row0.contains("Music"),
-            "expected the Music marker to keep rendering on the title row when pills overflow:\n{out}"
+            row4.contains('\u{203a}'),
+            "expected a right scroll indicator on the pills row (no header gap):\n{out}"
         );
 
         let rchar_x = |line: &str, needle: &str| -> u16 {
@@ -1244,12 +1065,7 @@ mod tests {
             line[..byte_idx].chars().count() as u16
         };
 
-        let music_x = rchar_x(row0, "Music");
-        assert!(
-            music_x + "Music".len() as u16 + 1 >= width,
-            "expected the Music marker to remain pinned to the far right:\n{out}"
-        );
-        let right_indicator_x = rchar_x(row2, "\u{203a}");
+        let right_indicator_x = rchar_x(row4, "\u{203a}");
         assert!(
             right_indicator_x < width,
             "expected the right scroll indicator to stay inside the pill row:\n{out}"
@@ -1257,17 +1073,13 @@ mod tests {
 
         let right_col_x = (app.power_left_width + POWER_VIEW_GAP) as usize;
         assert!(
-            row0.chars().take(right_col_x).all(|c| c == '\u{2501}'),
-            "expected a plain dash rule over the left column on the title row:\n{out}"
-        );
-        assert!(
-            row2.chars().take(right_col_x).all(|c| c == ' '),
+            row4.chars().take(right_col_x).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 2, "expected pill hitboxes on the pills row");
+            assert_eq!(rect.y, 4, "expected pill hitboxes on the pills row");
             assert!(
                 rect.x as usize >= right_col_x,
                 "expected pill hitboxes confined to the right column"

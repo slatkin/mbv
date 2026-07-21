@@ -111,8 +111,8 @@ impl App {
             }
         }
         let area = Rect {
-            y: area.y + 1,
-            height: area.height.saturating_sub(1),
+            y: area.y + 2,
+            height: area.height.saturating_sub(2),
             ..area
         };
         // Store the content area (after header) so mouse clicks map to the right rows.

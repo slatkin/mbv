@@ -109,219 +109,21 @@ impl App {
         // In Power View always reserve the player rows (title + controls) so that
         // content doesn't shift when the player appears or disappears.
         let reserve_player_rows = in_power && mode == crate::config::PanelMode::OneRow;
-        let tabs_h: u16 = 1;
-        let spacer_h: u16 = 1;
-        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
-        // status_bar now renders within each view's right panel, not as an independent bottom row.
-        let (seek_h, gap_h, title_h, controls_h): (u16, u16, u16, u16) =
+        // Player panel and tab bar now render within the right column of each
+        // view instead of as full-width rows above the content area.
+        let (seek_h, _gap_h, title_h, controls_h): (u16, u16, u16, u16) =
             if onerow || reserve_player_rows {
-                (1, 0, 1, 1)
+                (1, 0, 1, 0)
             } else {
                 (1, 0, 0, 0)
             };
-        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, main_area] =
-            Layout::vertical([
-                Constraint::Length(tabs_h),
-                Constraint::Length(spacer_h),
-                Constraint::Length(seek_h),
-                Constraint::Length(gap_h),
-                Constraint::Length(title_h),
-                Constraint::Length(controls_h),
-                Constraint::Min(0),
-            ])
-            .areas(area);
+        let player_h = seek_h + title_h + controls_h;
+        let [main_area] = Layout::vertical([Constraint::Min(0)]).areas(area);
 
-        // Full-width seekbar row: live bar when playing, plain grey divider otherwise.
-        if seek_h > 0 {
-            if show_controls {
-                self.render_seekbar(f, seek_area, &mut layout.playback);
-            } else {
-                layout.playback.seekbar_area = Rect::default();
-                let bar = "\u{2594}".repeat(seek_area.width as usize);
-                f.render_widget(
-                    Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
-                    seek_area,
-                );
-            }
-        } else {
-            layout.playback.seekbar_area = Rect::default();
-        }
-        // Indicator-bar click regions are never set anymore; clear them every frame.
         layout.playback.ind_mu = Rect::default();
         layout.playback.ind_rc = Rect::default();
-
-        {
-            // Tabs occupy the space between the left margin and VOL (right).
-            let tabs_x = tabs_area.x + super::TABBAR_LEFT_RESERVE;
-            let tabs_w = tabs_area
-                .width
-                .saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
-            layout.tabs_area = Rect {
-                x: tabs_x,
-                width: tabs_w,
-                ..tabs_area
-            };
-
-            // Volume badge (right-aligned), in the key·value badge style:
-            // dim "VOL" key + bold value colored by level.
-            let volume = self.playback_display_target().displayed_volume(self);
-            let vol_color = if volume > 100 {
-                palette::RED
-            } else if volume > 60 {
-                palette::YELLOW
-            } else {
-                palette::PINE
-            };
-            let vol_spans = vec![
-                Span::styled("VOL ", Style::default().fg(palette::MUTED)),
-                Span::styled(
-                    volume.to_string(),
-                    Style::default().fg(vol_color).add_modifier(Modifier::BOLD),
-                ),
-            ];
-            let vol_w: u16 = vol_spans.iter().map(|s| s.content.width() as u16).sum();
-            let vol_rect = Rect {
-                x: tabs_area.x + tabs_area.width.saturating_sub(vol_w),
-                y: tabs_area.y,
-                width: vol_w,
-                height: 1,
-            };
-            layout.tabbar_vol_area = vol_rect;
-            f.render_widget(Paragraph::new(Line::from(vol_spans)), vol_rect);
-
-            let (vis_start, vis_end) = self.visible_tab_range(tabs_w);
-            let has_left = vis_start > 0;
-            let has_right = vis_end < self.tab_count();
-            let ind_style = Style::default().fg(palette::WHITE);
-            let left_w: u16 = if has_left { 2 } else { 0 };
-            let right_w: u16 = if has_right { 2 } else { 0 };
-            if has_left {
-                f.render_widget(
-                    Paragraph::new("« ").style(ind_style),
-                    Rect {
-                        x: tabs_x,
-                        y: tabs_area.y,
-                        width: 2,
-                        height: 1,
-                    },
-                );
-            }
-            if has_right {
-                f.render_widget(
-                    Paragraph::new(" »").style(ind_style),
-                    Rect {
-                        x: tabs_x + tabs_w.saturating_sub(2),
-                        y: tabs_area.y,
-                        width: 2,
-                        height: 1,
-                    },
-                );
-            }
-            let inner_tabs = Rect {
-                x: tabs_x + left_w,
-                y: tabs_area.y,
-                width: tabs_w.saturating_sub(left_w + right_w),
-                height: tabs_area.height,
-            };
-            // In Power View, show Home + Libraries (no Queue); selection = power_left_tab.
-            // Otherwise, show the full tab list with the normal tab_idx highlight.
-            let tab_titles: Vec<Line> = if in_power {
-                let names: Vec<String> = std::iter::once("Home".to_string())
-                    .chain(self.libs.iter().map(|l| l.library.name.clone()))
-                    .collect();
-                let sel = self.power_left_tab;
-                names
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, n)| {
-                        let n = n.to_uppercase();
-                        if i == sel {
-                            Line::from(vec![
-                                Span::styled("▐", Style::default().fg(palette::PINE)),
-                                Span::styled(
-                                    format!(" {n}  "),
-                                    Style::default()
-                                        .fg(palette::WHITE)
-                                        .add_modifier(Modifier::BOLD),
-                                ),
-                            ])
-                        } else if i == 0 {
-                            // First tab keeps the same indicator-column width as
-                            // the focused state (dimmed instead of pine) so the
-                            // label doesn't jump left/right when focus moves.
-                            Line::from(vec![
-                                Span::styled("▐", Style::default().fg(palette::MUTED)),
-                                Span::styled(
-                                    format!(" {n}  "),
-                                    Style::default().fg(palette::SUBTLE),
-                                ),
-                            ])
-                        } else {
-                            Line::from(Span::styled(
-                                format!("  {n}  "),
-                                Style::default().fg(palette::SUBTLE),
-                            ))
-                        }
-                    })
-                    .collect()
-            } else {
-                let all_names: Vec<String> = std::iter::once("Home".to_string())
-                    .chain(std::iter::once("Queue".to_string()))
-                    .chain(self.libs.iter().map(|l| l.library.name.clone()))
-                    .collect();
-                let selected_tab = if self.tab_idx < vis_start || self.tab_idx >= vis_end {
-                    usize::MAX
-                } else {
-                    self.tab_idx - vis_start
-                };
-                all_names[vis_start..vis_end]
-                    .iter()
-                    .enumerate()
-                    .map(|(i, n)| {
-                        let n = n.to_uppercase();
-                        if i == selected_tab {
-                            // Left-aligned active tab: the queue-row indicator (▐, pine) flush
-                            // against the bold white label, no underline.
-                            Line::from(vec![
-                                Span::styled("▐", Style::default().fg(palette::PINE)),
-                                Span::styled(
-                                    format!(" {n}  "),
-                                    Style::default()
-                                        .fg(palette::WHITE)
-                                        .add_modifier(Modifier::BOLD),
-                                ),
-                            ])
-                        } else if i == 0 && !has_left {
-                            // First visible tab (when not scrolled) keeps the
-                            // same indicator-column width as the focused state
-                            // (dimmed instead of pine) so the label doesn't jump
-                            // left/right when focus moves.
-                            Line::from(vec![
-                                Span::styled("▐", Style::default().fg(palette::MUTED)),
-                                Span::styled(
-                                    format!(" {n}  "),
-                                    Style::default().fg(palette::SUBTLE),
-                                ),
-                            ])
-                        } else {
-                            Line::from(Span::styled(
-                                format!("  {n}  "),
-                                Style::default().fg(palette::SUBTLE),
-                            ))
-                        }
-                    })
-                    .collect()
-            };
-            f.render_widget(
-                Tabs::new(tab_titles)
-                    .select(usize::MAX)
-                    .style(Style::default().fg(palette::SUBTLE))
-                    .highlight_style(Style::default())
-                    .divider(Span::raw(""))
-                    .padding("", ""),
-                inner_tabs,
-            );
-        }
+        layout.tabs_area = Rect::default();
+        layout.tabbar_vol_area = Rect::default();
 
         // Clear expired toast before any rendering so the status bar sees the latest state.
         if self.status_expires.is_some_and(|t| t <= Instant::now()) {
@@ -352,23 +154,64 @@ impl App {
             } else {
                 None
             };
-        if let Some((ref title, color)) = now_playing_title {
-            // The one-row now-playing header: "▶ Title │ time … badges".
-            self.render_title_row(f, title_area, title, color, &mut layout.playback);
-        }
         // Top-level render dispatch (issue #275): Power owns its own nav via
         // `power_left_tab` and ignores `tab_idx` entirely; `tab_idx` is
         // meaningful only in Standard mode.
         match self.view_mode {
             super::ViewMode::Power => {
-                self.render_power_view(f, main_area, &mut layout.power, &mut layout.playback);
+                self.render_power_view(
+                    f,
+                    main_area,
+                    &mut layout.power,
+                    &mut layout.playback,
+                    &mut layout.tabs_area,
+                    &mut layout.tabbar_vol_area,
+                    player_h,
+                    show_controls,
+                    &now_playing_title,
+                );
             }
             super::ViewMode::Standard => {
-                let content_h = main_area.height.saturating_sub(1);
+                let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
+                let tab_area = Rect {
+                    height: tab_h,
+                    ..main_area
+                };
+                self.render_tabs(
+                    f,
+                    tab_area,
+                    &mut layout.tabs_area,
+                    &mut layout.tabbar_vol_area,
+                    false,
+                );
+
+                let content_h = main_area
+                    .height
+                    .saturating_sub(tab_h)
+                    .saturating_sub(player_h)
+                    .saturating_sub(1);
                 let content_area = Rect {
+                    y: main_area.y + tab_h + player_h,
                     height: content_h,
                     ..main_area
                 };
+
+                if player_h > 0 {
+                    let player_area = Rect {
+                        y: main_area.y + tab_h,
+                        height: player_h,
+                        ..main_area
+                    };
+                    self.render_player_panel(
+                        f,
+                        player_area,
+                        &mut layout.playback,
+                        player_h,
+                        show_controls,
+                        &now_playing_title,
+                    );
+                }
+
                 if self.tab_idx == 0 {
                     self.render_combined(f, content_area, &mut layout.home);
                 } else if self.tab_idx == 1 {
@@ -384,7 +227,7 @@ impl App {
                 }
 
                 let sb_area = Rect {
-                    y: main_area.y + content_h,
+                    y: main_area.y + content_h + tab_h + player_h,
                     height: 1,
                     ..main_area
                 };
@@ -649,6 +492,212 @@ impl App {
             &data,
             self.use_nerd_fonts,
         ))
+    }
+
+    /// Renders the tab bar within the given 1-row `area` and populates
+    /// `layout.tabs_area` / `layout.tabbar_vol_area` for mouse hit testing.
+    fn render_tabs(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        tabs_area_out: &mut Rect,
+        tabbar_vol_area_out: &mut Rect,
+        in_power: bool,
+    ) {
+        // Fill the tab bar area with the shared panel background.
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
+            area,
+        );
+
+        // Tabs render on the second row; first row is padding inside the box.
+        let tab_row = Rect {
+            y: area.y + 1,
+            height: 1,
+            ..area
+        };
+
+        let pb_h: u16 = 2; // 2-col padding inside the coloured box
+        let tabs_x = area.x + pb_h;
+        let tabs_w = area
+            .width
+            .saturating_sub(2 * pb_h + super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
+        let tabs_area = Rect {
+            x: tabs_x,
+            width: tabs_w,
+            ..tab_row
+        };
+        *tabs_area_out = tabs_area;
+
+        let volume = self.playback_display_target().displayed_volume(self);
+        let vol_color = if volume > 100 {
+            palette::RED
+        } else if volume > 60 {
+            palette::YELLOW
+        } else {
+            palette::PINE
+        };
+        let vol_spans = vec![
+            Span::styled("VOL ", Style::default().fg(palette::MUTED)),
+            Span::styled(
+                volume.to_string(),
+                Style::default().fg(vol_color).add_modifier(Modifier::BOLD),
+            ),
+        ];
+        let vol_w: u16 = vol_spans.iter().map(|s| s.content.width() as u16).sum();
+        let vol_rect = Rect {
+            x: area.x + area.width.saturating_sub(vol_w + pb_h),
+            y: tab_row.y,
+            width: vol_w,
+            height: 1,
+        };
+        *tabbar_vol_area_out = vol_rect;
+        f.render_widget(Paragraph::new(Line::from(vol_spans)), vol_rect);
+
+        let (vis_start, vis_end) = self.visible_tab_range(tabs_w);
+        let has_left = vis_start > 0;
+        let has_right = vis_end < self.tab_count();
+        let ind_style = Style::default().fg(palette::WHITE);
+        let left_w: u16 = if has_left { 2 } else { 0 };
+        let right_w: u16 = if has_right { 2 } else { 0 };
+        if has_left {
+            f.render_widget(
+                Paragraph::new("« ").style(ind_style),
+                Rect {
+                    x: tabs_x,
+                    y: tab_row.y,
+                    width: 2,
+                    height: 1,
+                },
+            );
+        }
+        if has_right {
+            f.render_widget(
+                Paragraph::new(" »").style(ind_style),
+                Rect {
+                    x: tabs_x + tabs_w.saturating_sub(2),
+                    y: tab_row.y,
+                    width: 2,
+                    height: 1,
+                },
+            );
+        }
+        let inner_tabs = Rect {
+            x: tabs_x + left_w,
+            y: tab_row.y,
+            width: tabs_w.saturating_sub(left_w + right_w),
+            height: area.height,
+        };
+        let tab_titles: Vec<Line> = if in_power {
+            let names: Vec<String> = std::iter::once("Home".to_string())
+                .chain(self.libs.iter().map(|l| l.library.name.clone()))
+                .collect();
+            let sel = self.power_left_tab;
+            names
+                .into_iter()
+                .enumerate()
+                .map(|(i, n)| {
+                    let n = n.to_uppercase();
+                    if i == sel {
+                        Line::from(vec![
+                            Span::styled("▐", Style::default().fg(palette::PINE)),
+                            Span::styled(
+                                format!(" {n}  "),
+                                Style::default()
+                                    .fg(palette::WHITE)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                        ])
+                    } else {
+                        Line::from(Span::styled(
+                            format!("  {n}  "),
+                            Style::default().fg(palette::SUBTLE),
+                        ))
+                    }
+                })
+                .collect()
+        } else {
+            let all_names: Vec<String> = std::iter::once("Home".to_string())
+                .chain(std::iter::once("Queue".to_string()))
+                .chain(self.libs.iter().map(|l| l.library.name.clone()))
+                .collect();
+            let selected_tab = if self.tab_idx < vis_start || self.tab_idx >= vis_end {
+                usize::MAX
+            } else {
+                self.tab_idx - vis_start
+            };
+            all_names[vis_start..vis_end]
+                .iter()
+                .enumerate()
+                .map(|(i, n)| {
+                    let n = n.to_uppercase();
+                    if i == selected_tab {
+                        Line::from(vec![
+                            Span::styled("▐", Style::default().fg(palette::PINE)),
+                            Span::styled(
+                                format!(" {n}  "),
+                                Style::default()
+                                    .fg(palette::WHITE)
+                                    .add_modifier(Modifier::BOLD),
+                            ),
+                        ])
+                    } else {
+                        Line::from(Span::styled(
+                            format!("  {n}  "),
+                            Style::default().fg(palette::SUBTLE),
+                        ))
+                    }
+                })
+                .collect()
+        };
+        f.render_widget(
+            Tabs::new(tab_titles)
+                .select(usize::MAX)
+                .style(Style::default().fg(palette::SUBTLE))
+                .highlight_style(Style::default())
+                .divider(Span::raw(""))
+                .padding("", ""),
+            inner_tabs,
+        );
+    }
+
+    /// Renders the player panel (seekbar + now-playing title row) within the
+    /// given `area`, which should be `player_h` rows tall.
+    fn render_player_panel(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        layout: &mut super::layout::LayoutPlayback,
+        player_h: u16,
+        show_controls: bool,
+        now_playing_title: &Option<(String, Color)>,
+    ) {
+        if player_h == 0 {
+            return;
+        }
+        // Seekbar row (always present when player_h > 0).
+        let seek_area = Rect { height: 1, ..area };
+        if show_controls {
+            self.render_seekbar(f, seek_area, layout);
+        } else {
+            layout.seekbar_area = Rect::default();
+            let bar = "\u{2594}".repeat(seek_area.width as usize);
+            f.render_widget(
+                Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
+                seek_area,
+            );
+        }
+        // Title row (when panel is expanded).
+        if player_h >= 2 {
+            let title_area = Rect {
+                y: area.y + 1,
+                height: 1,
+                ..area
+            };
+            if let Some((ref title, color)) = now_playing_title {
+                self.render_title_row(f, title_area, title, *color, layout);
+            }
+        }
     }
 
     /// One-line now-playing header: play/pause, next, title, and time on the
