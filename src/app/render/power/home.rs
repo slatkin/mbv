@@ -470,7 +470,7 @@ impl App {
             let mut x_cursor = area.x;
             if has_left {
                 let chunk = "\u{2039} ";
-                spans.push(Span::styled(chunk, Style::default().fg(palette::FOAM)));
+                spans.push(Span::styled(chunk, Style::default().fg(palette::BLUE)));
                 x_cursor += chunk.width() as u16;
             }
             for (idx, label) in tab_labels[scroll_start..scroll_end].iter().enumerate() {
@@ -483,10 +483,10 @@ impl App {
                 let style = if selected {
                     Style::default()
                         .fg(palette::YELLOW)
-                        .bg(palette::FOAM)
+                        .bg(palette::BLUE)
                         .add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(palette::BASE).bg(palette::FOAM)
+                    Style::default().fg(palette::BASE).bg(palette::BLUE)
                 };
                 let pill = format!(" {} ", label);
                 let pill_rect = Rect {
@@ -502,7 +502,7 @@ impl App {
             if has_right {
                 spans.push(Span::styled(
                     " \u{203a}",
-                    Style::default().fg(palette::FOAM),
+                    Style::default().fg(palette::BLUE),
                 ));
             }
             f.render_widget(
@@ -797,7 +797,7 @@ impl App {
                         (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
                     Some(Span::styled(
                         format!("{}% watched", pct),
-                        Style::default().fg(palette::FOAM),
+                        Style::default().fg(palette::BLUE),
                     ))
                 } else if !item.played {
                     Some(Span::styled(
@@ -1286,7 +1286,7 @@ impl App {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
                 line_str,
-                Style::default().fg(palette::FOAM),
+                Style::default().fg(palette::BLUE),
             ))),
             area,
         );
@@ -1303,7 +1303,7 @@ impl App {
         x_cursor += prefix_w as u16;
         if has_left {
             let chunk = "\u{2039} ";
-            spans.push(Span::styled(chunk, Style::default().fg(palette::FOAM)));
+            spans.push(Span::styled(chunk, Style::default().fg(palette::BLUE)));
             x_cursor += chunk.width() as u16;
         }
         for (idx, (section_idx, label)) in labels[scroll_start..scroll_end].iter().enumerate() {
@@ -1316,10 +1316,10 @@ impl App {
             let style = if selected {
                 Style::default()
                     .fg(palette::YELLOW)
-                    .bg(palette::FOAM)
+                    .bg(palette::BLUE)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(palette::BASE).bg(palette::FOAM)
+                Style::default().fg(palette::BASE).bg(palette::BLUE)
             };
             let label = trunc_str(label, MAX_LABEL);
             let pill = format!(" {label} ");
@@ -1336,7 +1336,7 @@ impl App {
         if has_right {
             spans.push(Span::styled(
                 " \u{203a}",
-                Style::default().fg(palette::FOAM),
+                Style::default().fg(palette::BLUE),
             ));
         }
 

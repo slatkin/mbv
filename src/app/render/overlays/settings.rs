@@ -205,7 +205,7 @@ impl App {
                     Span::styled(indicator, Style::default().fg(palette::PINE)),
                     Span::raw(" "),
                     Span::styled(format!("{:<lw$}", label, lw = label_w), label_style),
-                    Span::styled(val, Style::default().fg(palette::FOAM)),
+                    Span::styled(val, Style::default().fg(palette::BLUE)),
                 ]));
                 item_idx += 1;
             }

@@ -141,7 +141,7 @@ impl App {
         } else {
             None
         };
-        let title_color = palette::FOAM;
+        let title_color = palette::BLUE;
         let now_playing_title: Option<(String, Color)> =
             if playing_panel && mode != crate::config::PanelMode::Hidden {
                 if active {
@@ -948,7 +948,7 @@ impl App {
             .bg(palette::STATUS_PILL_BG)
             .fg(ratatui::style::Color::White);
         let label_style = Style::default()
-            .fg(if on { palette::FOAM } else { palette::SUBTLE })
+            .fg(if on { palette::BLUE } else { palette::SUBTLE })
             .bg(palette::STATUS_PILL_BG);
 
         vec![
@@ -1327,7 +1327,7 @@ mod tests {
                 f,
                 Rect::new(0, 0, 60, 1),
                 "Title",
-                palette::FOAM,
+                palette::BLUE,
                 &mut layout,
             );
         })
@@ -1366,7 +1366,7 @@ mod tests {
                 f,
                 Rect::new(0, 0, 60, 1),
                 "Title",
-                palette::FOAM,
+                palette::BLUE,
                 &mut layout,
             );
         })
@@ -1403,7 +1403,7 @@ mod tests {
                 f,
                 Rect::new(0, 0, 53, 1),
                 "This is an extremely long title that would otherwise push controls away",
-                palette::FOAM,
+                palette::BLUE,
                 &mut layout,
             );
         })

@@ -62,7 +62,7 @@ impl IndicatorData {
         if self.audio_dim {
             palette::MUTED
         } else {
-            palette::FOAM
+            palette::BLUE
         }
     }
     fn sub_color(&self) -> Color {

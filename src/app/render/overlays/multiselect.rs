@@ -227,7 +227,7 @@ impl App {
                 let arrow = if focused { "▸ " } else { "  " };
                 let check = if *is_hidden { "[x]" } else { "[ ]" };
                 let check_style = if focused {
-                    Style::default().fg(palette::FOAM)
+                    Style::default().fg(palette::BLUE)
                 } else {
                     Style::default().fg(palette::MUTED)
                 };

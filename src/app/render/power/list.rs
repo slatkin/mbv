@@ -217,7 +217,7 @@ impl App {
                     format!("{}█", s.query)
                 };
                 f.render_widget(
-                    Paragraph::new(Span::styled(input_text, Style::default().fg(palette::FOAM)))
+                    Paragraph::new(Span::styled(input_text, Style::default().fg(palette::BLUE)))
                         .block(
                             Block::default()
                                 .borders(Borders::ALL)
@@ -500,10 +500,10 @@ impl App {
                                 // it lives in the banner's metadata row below.
                                 let title_style = if focused {
                                     Style::default()
-                                        .fg(palette::PINE)
+                                        .fg(palette::YELLOW)
                                         .add_modifier(Modifier::BOLD)
                                 } else {
-                                    Style::default().fg(palette::PINE)
+                                    Style::default().fg(palette::YELLOW)
                                 };
                                 vec![Span::raw("  "), Span::styled(title, title_style)]
                             } else {
@@ -576,38 +576,40 @@ impl App {
                 super::render_power_scrollbar(f, content_area, max_off, offset);
             }
 
-            // White unicode borders at the block's top and bottom padding
-            // rows, rendering inside the coloured block.
-            let border_style = Style::default().fg(palette::WHITE);
-            if banner_rule_top >= offset && banner_rule_top < offset + visible {
-                let top_y = content_area.y + (banner_rule_top - offset) as u16;
-                let top_spans: Vec<Span> = (0..content_area.width)
-                    .map(|_| Span::styled("\u{2581}", border_style))
-                    .collect();
-                f.render_widget(
-                    Paragraph::new(Line::from(top_spans)),
-                    Rect {
-                        x: content_area.x,
-                        y: top_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
-            }
-            if banner_rule_bottom >= offset && banner_rule_bottom < offset + visible {
-                let bot_y = content_area.y + (banner_rule_bottom - offset) as u16;
-                let bot_spans: Vec<Span> = (0..content_area.width)
-                    .map(|_| Span::styled("\u{2594}", border_style))
-                    .collect();
-                f.render_widget(
-                    Paragraph::new(Line::from(bot_spans)),
-                    Rect {
-                        x: content_area.x,
-                        y: bot_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
+            if banner_rows > 0 {
+                let border_style = Style::default().fg(palette::SOFT_WHITE);
+                if let Some(top_border) = banner_rule_top.checked_sub(1) {
+                    if top_border >= offset && top_border < offset + visible {
+                        let top_y = content_area.y + (top_border - offset) as u16;
+                        let top_spans: Vec<Span> = (0..content_area.width)
+                            .map(|_| Span::styled("\u{2581}", border_style))
+                            .collect();
+                        f.render_widget(
+                            Paragraph::new(Line::from(top_spans)),
+                            Rect {
+                                x: content_area.x,
+                                y: top_y,
+                                width: content_area.width,
+                                height: 1,
+                            },
+                        );
+                    }
+                }
+                if banner_rule_bottom + 1 >= offset && banner_rule_bottom + 1 < offset + visible {
+                    let bot_y = content_area.y + (banner_rule_bottom + 1 - offset) as u16;
+                    let bot_spans: Vec<Span> = (0..content_area.width)
+                        .map(|_| Span::styled("\u{2594}", border_style))
+                        .collect();
+                    f.render_widget(
+                        Paragraph::new(Line::from(bot_spans)),
+                        Rect {
+                            x: content_area.x,
+                            y: bot_y,
+                            width: content_area.width,
+                            height: 1,
+                        },
+                    );
+                }
             }
         } else {
             enum DisplayRow {
@@ -747,10 +749,10 @@ impl App {
                                 // it lives in the banner's metadata row below.
                                 let title_style = if focused {
                                     Style::default()
-                                        .fg(palette::PINE)
+                                        .fg(palette::YELLOW)
                                         .add_modifier(Modifier::BOLD)
                                 } else {
-                                    Style::default().fg(palette::PINE)
+                                    Style::default().fg(palette::YELLOW)
                                 };
                                 vec![Span::raw("  "), Span::styled(title, title_style)]
                             } else {
@@ -839,24 +841,26 @@ impl App {
 
             // White unicode borders at the block's top and bottom padding
             // rows, rendering inside the coloured block.
-            let border_style = Style::default().fg(palette::WHITE);
-            if banner_rule_top >= offset && banner_rule_top < offset + visible {
-                let top_y = content_area.y + (banner_rule_top - offset) as u16;
-                let top_spans: Vec<Span> = (0..content_area.width)
-                    .map(|_| Span::styled("\u{2581}", border_style))
-                    .collect();
-                f.render_widget(
-                    Paragraph::new(Line::from(top_spans)),
-                    Rect {
-                        x: content_area.x,
-                        y: top_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
+            let border_style = Style::default().fg(palette::SOFT_WHITE);
+            if let Some(top_border) = banner_rule_top.checked_sub(1) {
+                if top_border >= offset && top_border < offset + visible {
+                    let top_y = content_area.y + (top_border - offset) as u16;
+                    let top_spans: Vec<Span> = (0..content_area.width)
+                        .map(|_| Span::styled("\u{2581}", border_style))
+                        .collect();
+                    f.render_widget(
+                        Paragraph::new(Line::from(top_spans)),
+                        Rect {
+                            x: content_area.x,
+                            y: top_y,
+                            width: content_area.width,
+                            height: 1,
+                        },
+                    );
+                }
             }
-            if banner_rule_bottom >= offset && banner_rule_bottom < offset + visible {
-                let bot_y = content_area.y + (banner_rule_bottom - offset) as u16;
+            if banner_rule_bottom + 1 >= offset && banner_rule_bottom + 1 < offset + visible {
+                let bot_y = content_area.y + (banner_rule_bottom + 1 - offset) as u16;
                 let bot_spans: Vec<Span> = (0..content_area.width)
                     .map(|_| Span::styled("\u{2594}", border_style))
                     .collect();

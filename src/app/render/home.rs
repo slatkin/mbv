@@ -721,7 +721,7 @@ impl App {
         let hint_style = Style::default().fg(palette::MUTED);
         f.render_widget(
             Paragraph::new(input_text)
-                .style(Style::default().fg(palette::FOAM))
+                .style(Style::default().fg(palette::BLUE))
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
@@ -747,7 +747,7 @@ impl App {
             let active = hs.type_filter;
             let all_style = if active == 0 {
                 Style::default()
-                    .fg(palette::FOAM)
+                    .fg(palette::BLUE)
                     .add_modifier(Modifier::REVERSED)
             } else {
                 Style::default().fg(palette::MUTED)
@@ -765,7 +765,7 @@ impl App {
                 };
                 let style = if active == i + 1 {
                     Style::default()
-                        .fg(palette::FOAM)
+                        .fg(palette::BLUE)
                         .add_modifier(Modifier::REVERSED)
                 } else {
                     Style::default().fg(palette::MUTED)

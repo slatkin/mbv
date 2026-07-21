@@ -373,7 +373,7 @@ impl App {
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
                     line_str,
-                    Style::default().fg(palette::FOAM),
+                    Style::default().fg(palette::BLUE),
                 ))),
                 Rect {
                     x: area.x,
@@ -422,7 +422,7 @@ impl App {
                 if scroll_start > 0 {
                     spans.push(Span::styled(
                         "\u{2039} ",
-                        Style::default().fg(palette::FOAM),
+                        Style::default().fg(palette::BLUE),
                     ));
                 }
                 for (idx, label) in tab_labels[scroll_start..scroll_end].iter().enumerate() {
@@ -439,17 +439,17 @@ impl App {
                     let style = if bold {
                         Style::default()
                             .fg(fg)
-                            .bg(palette::FOAM)
+                            .bg(palette::BLUE)
                             .add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(fg).bg(palette::FOAM)
+                        Style::default().fg(fg).bg(palette::BLUE)
                     };
                     spans.push(Span::styled(format!(" {} ", label), style));
                 }
                 if scroll_end < n_tabs {
                     spans.push(Span::styled(
                         " \u{203a}",
-                        Style::default().fg(palette::FOAM),
+                        Style::default().fg(palette::BLUE),
                     ));
                 }
                 f.render_widget(
@@ -564,7 +564,7 @@ impl App {
                 let is_playing = now_playing_id2.as_deref() == Some(ep.id.as_str());
                 let row_style = if is_playing {
                     Style::default()
-                        .fg(palette::FOAM)
+                        .fg(palette::BLUE)
                         .add_modifier(Modifier::BOLD)
                 } else if is_cursor && focused {
                     Style::default().fg(palette::YELLOW)

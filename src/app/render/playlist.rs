@@ -76,7 +76,7 @@ impl App {
                 height: 1,
             };
             let inactive = Style::default().fg(palette::MUTED).bg(palette::PILL_BG);
-            let active = Style::default().fg(palette::BASE).bg(palette::FOAM);
+            let active = Style::default().fg(palette::BASE).bg(palette::BLUE);
             spans.push(Span::styled(
                 local_label,
                 if local_selected { active } else { inactive },
@@ -91,7 +91,7 @@ impl App {
             spans.push(Span::raw(" ".repeat(gap_to_queue as usize)));
             spans.push(Span::styled(
                 queue_label,
-                Style::default().fg(palette::BASE).bg(palette::FOAM),
+                Style::default().fg(palette::BASE).bg(palette::BLUE),
             ));
             f.render_widget(
                 Paragraph::new(Line::from(spans)),
@@ -248,7 +248,7 @@ impl App {
                     let avail = title_col_width.saturating_sub(indent);
                     // Now-playing title text is emby blue (not bold); others inherit row_style.
                     let title_span_style = if now_playing {
-                        Style::default().fg(palette::FOAM)
+                        Style::default().fg(palette::BLUE)
                     } else {
                         Style::default()
                     };
@@ -344,9 +344,9 @@ impl App {
             let left = full_w.saturating_sub(pill_w + right);
             f.render_widget(
                 Paragraph::new(Line::from(vec![
-                    Span::styled("\u{2501}".repeat(left), Style::default().fg(palette::FOAM)),
-                    Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::FOAM)),
-                    Span::styled("\u{2501}".repeat(right), Style::default().fg(palette::FOAM)),
+                    Span::styled("\u{2501}".repeat(left), Style::default().fg(palette::BLUE)),
+                    Span::styled(pill, Style::default().fg(palette::BASE).bg(palette::BLUE)),
+                    Span::styled("\u{2501}".repeat(right), Style::default().fg(palette::BLUE)),
                 ])),
                 Rect {
                     x: table_area.x,

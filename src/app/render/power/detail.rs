@@ -360,7 +360,7 @@ impl App {
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
                         trunc_str(meta, tw),
-                        Style::default().fg(palette::SUBTLE),
+                        Style::default().fg(palette::MUTED_GREEN),
                     ))),
                     Rect {
                         x: inner_x,
@@ -379,7 +379,7 @@ impl App {
                 Paragraph::new(Line::from(Span::styled(
                     "Playing",
                     Style::default()
-                        .fg(palette::FOAM)
+                        .fg(palette::BLUE)
                         .add_modifier(Modifier::BOLD),
                 ))),
                 Rect {
@@ -405,7 +405,7 @@ impl App {
             if Some(idx) == content.director_line_idx {
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
-                        Span::styled("Director: ", Style::default().fg(palette::SUBTLE)),
+                        Span::styled("Director: ", Style::default().fg(palette::MUTED_GREEN)),
                         Span::styled(
                             trunc_str(&item.director, tw),
                             Style::default().fg(palette::TEXT),

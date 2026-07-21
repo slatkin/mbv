@@ -703,14 +703,15 @@ mod tests {
         );
 
         // The block's top padding row (row 1) is the MEDIA_SELECTED_BG filler row
-        // directly above the selected item; verify it carries the top border
-        // character (▁) and the block's background color.
+        // directly above the selected item; verify it is empty and shows the
+        // block's background color (no border character, which sits outside
+        // the block at banner_rule_top - 1).
         let buf = term.backend().buffer();
         let pad_cell = &buf[(0, 1)];
         assert_eq!(
             pad_cell.symbol(),
-            "\u{2581}",
-            "expected the block's top padding row to carry the top border character:\n{out}"
+            " ",
+            "expected the block's top padding row to be empty, not carry the top border character:\n{out}"
         );
         assert_eq!(
             pad_cell.bg,
@@ -718,9 +719,9 @@ mod tests {
             "expected the block's top padding row to carry the MEDIA_SELECTED_BG background:\n{out}"
         );
 
-        // The block's bottom padding row (empty, CONTINUE_BG) is the first
-        // fully-empty CONTINUE_BG row below the director line; everything
-        // below it is ordinary list content again.
+        // The block's bottom padding row (empty, MEDIA_SELECTED_BG) is the first
+        // fully-empty row below the director line; everything below it is
+        // ordinary list content again.
         let director_line = lines
             .iter()
             .position(|l| l.contains("Director: Director Hidden"))
@@ -990,14 +991,14 @@ mod tests {
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 3)].bg, palette::FOAM);
+        assert_eq!(buf[(alpha_x, 3)].bg, palette::BLUE);
         assert_eq!(
             buf[(alpha_x, 3)].fg,
             palette::YELLOW,
             "expected the selected group pill to use yellow text"
         );
         let beta_x = char_x(row3, "Beta");
-        assert_eq!(buf[(beta_x, 3)].bg, palette::FOAM);
+        assert_eq!(buf[(beta_x, 3)].bg, palette::BLUE);
         assert_eq!(
             buf[(beta_x, 3)].fg,
             palette::BASE,
