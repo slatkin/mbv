@@ -552,7 +552,7 @@ impl App {
                         spans.push(Span::raw(" "));
                         spans.push(Span::styled(
                             "\u{f037b}", // 󰍻
-                            Style::default().fg(palette::FOAM),
+                            Style::default().fg(palette::GREEN),
                         ));
                     }
                     f.render_widget(Paragraph::new(Line::from(spans)), row_area);
@@ -861,7 +861,7 @@ impl App {
                     style
                 } else if is_playing {
                     Style::default()
-                        .fg(palette::FOAM)
+                        .fg(palette::GREEN)
                         .add_modifier(Modifier::BOLD)
                 } else if is_cursor && focused {
                     Style::default().fg(palette::YELLOW)

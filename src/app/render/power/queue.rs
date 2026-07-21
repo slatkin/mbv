@@ -46,7 +46,7 @@ impl App {
         spans.push(Span::styled(
             &mbv_label,
             Style::default()
-                .fg(palette::FOAM)
+                .fg(palette::YELLOW)
                 .add_modifier(Modifier::BOLD),
         ));
 
@@ -321,7 +321,7 @@ impl App {
                     let title = trunc_str(&label, title_w);
 
                     // Now-playing title text is always emby blue, regardless of focus state.
-                    let title_color = if is_active { palette::FOAM } else { fg };
+                    let title_color = if is_active { palette::GREEN } else { fg };
 
                     let mut spans: Vec<Span> = Vec::new();
                     if indent > 0 {

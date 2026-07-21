@@ -114,7 +114,7 @@ impl App {
                 let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
                 let row_style = if is_playing {
                     Style::default()
-                        .fg(palette::FOAM)
+                        .fg(palette::GREEN)
                         .add_modifier(Modifier::BOLD)
                 } else if is_cursor {
                     Style::default().fg(palette::YELLOW)

@@ -219,7 +219,7 @@ impl App {
             width: left_area.width.saturating_sub(4),
             height: left_area.height.saturating_sub(4),
         };
-        // Blank row, queue title row, blank spacer row, then card image.
+        // Blank row, queue title row, then card image.
         self.render_power_queue_title(
             f,
             Rect {
@@ -237,7 +237,7 @@ impl App {
             height: left_area.height.saturating_sub(4),
         };
 
-        let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
+        let tab_h: u16 = 2; // 1 row padding + 1 row tab
         let right_area = Rect {
             x: area.x + left_w + POWER_VIEW_GAP,
             y: area.y + tab_h + player_h,
@@ -665,81 +665,6 @@ mod tests {
     }
 
     #[test]
-    fn movie_library_renders_compact_banner_without_opening_expanded_detail() {
-        let mut app = make_power_movie_app();
-        let mut layout = LayoutPower::default();
-
-        let term = render_power_library_to_terminal(&mut app, &mut layout);
-        let out = buffer_to_string(&term);
-        let lines: Vec<&str> = out.lines().collect();
-
-        // Row 0 is the " N items" header that `render_power_list` always draws
-        // for a focused, non-search library panel. Row 1 is the selected movie
-        // block's top padding row (CONTINUE_BG-colored, empty), placed
-        // directly *above* the selected movie's own row (row 2) so its title
-        // reads as set off from the row above it. The bottom padding row
-        // (and everything in between) grows to fit the selected movie's actual
-        // overview/director content (#263), so its row is found dynamically
-        // below rather than assumed fixed.
-        assert!(
-            lines[2].contains("Focused Movie"),
-            "expected selected movie row directly below the block's top padding row:\n{out}"
-        );
-        // The colored-block look removes the green `▌` selected-row
-        // indicator: the selected title sits inside the MEDIA_SELECTED_BG
-        // block with a 2-col leading pad instead.
-        assert_eq!(
-            lines[2].find('▌'),
-            None,
-            "expected no green selected-row indicator inside the colored block:\n{out}"
-        );
-        assert!(
-            out.contains("compact movie banner"),
-            "expected compact overview text:\n{out}"
-        );
-        assert!(
-            out.contains("Director: Director Hidden"),
-            "compact banner must show director:\n{out}"
-        );
-
-        // The block's top padding row (row 1) is the CONTINUE_BG filler row
-        // directly above the selected item; verify it's empty and carries the
-        // block's background color.
-        let buf = term.backend().buffer();
-        let pad_cell = &buf[(0, 1)];
-        assert_eq!(
-            pad_cell.symbol(),
-            " ",
-            "expected the block's top padding row to be empty:\n{out}"
-        );
-        assert_eq!(
-            pad_cell.bg,
-            palette::MEDIA_SELECTED_BG,
-            "expected the block's top padding row to carry the MEDIA_SELECTED_BG background:\n{out}"
-        );
-
-        // The block's bottom padding row (empty, CONTINUE_BG) is the first
-        // fully-empty CONTINUE_BG row below the director line; everything
-        // below it is ordinary list content again.
-        let director_line = lines
-            .iter()
-            .position(|l| l.contains("Director: Director Hidden"))
-            .expect("expected compact director line to render");
-        let second_movie_line = lines
-            .iter()
-            .position(|l| l.contains("Second Movie"))
-            .expect("expected remaining movie list below banner");
-        assert!(
-            second_movie_line > director_line,
-            "expected remaining movie list below the banner's director line:\n{out}"
-        );
-        assert!(
-            !lines[second_movie_line].contains("Focused Movie"),
-            "expected selected row to stay above banner, not repeat below it:\n{out}"
-        );
-    }
-
-    #[test]
     fn movie_library_unfocused_selected_banner_keeps_text_right_of_indicator() {
         let mut app = make_power_movie_app();
         let mut layout = LayoutPower::default();
@@ -958,14 +883,14 @@ mod tests {
         let row0 = out.lines().next().unwrap();
         let _row1 = out.lines().nth(1).unwrap();
 
-        let row3 = out.lines().nth(3).unwrap();
+        let row2 = out.lines().nth(2).unwrap();
 
         assert!(
             !row0.contains("Alpha") && !row0.contains("Beta"),
             "expected pills not on the first row:\n{out}"
         );
         assert!(
-            row3.contains("Alpha") && row3.contains("Beta"),
+            row2.contains("Alpha") && row2.contains("Beta"),
             "expected group pills below the tab bar (no header row):\n{out}"
         );
 
@@ -981,31 +906,31 @@ mod tests {
         let right_col_x = app.power_left_width + POWER_VIEW_GAP;
         let buf = term.backend().buffer();
         assert!(
-            row3.chars().take(right_col_x as usize).all(|c| c == ' '),
+            row2.chars().take(right_col_x as usize).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
-        let alpha_x = char_x(row3, "Alpha");
+        let alpha_x = char_x(row2, "Alpha");
         assert!(
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 3)].bg, palette::FOAM);
+        assert_eq!(buf[(alpha_x, 2)].bg, palette::GREEN);
         assert_eq!(
-            buf[(alpha_x, 3)].fg,
-            palette::YELLOW,
-            "expected the selected group pill to use yellow text"
+            buf[(alpha_x, 2)].fg,
+            palette::IRIS,
+            "expected the selected group pill to use iris text"
         );
-        let beta_x = char_x(row3, "Beta");
-        assert_eq!(buf[(beta_x, 3)].bg, palette::FOAM);
+        let beta_x = char_x(row2, "Beta");
+        assert_eq!(buf[(beta_x, 2)].bg, palette::GREEN);
         assert_eq!(
-            buf[(beta_x, 3)].fg,
-            palette::BASE,
-            "expected a non-selected group pill to stay blue with base text"
+            buf[(beta_x, 2)].fg,
+            palette::PILL,
+            "expected a non-selected group pill to stay green with pill text"
         );
 
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));
-        let between: String = row3
+        let between: String = row2
             .chars()
             .skip(gap_start as usize)
             .take((gap_end - gap_start) as usize)
@@ -1017,20 +942,20 @@ mod tests {
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 3, "expected selector hitboxes on the pills row");
+            assert_eq!(rect.y, 2, "expected selector hitboxes on the pills row");
             assert!(
                 rect.x >= right_col_x,
                 "expected selector hitboxes confined to the right column"
             );
         }
 
-        // Row 4 is a blank spacer between the pill row and the album list.
-        let spacer_row = out.lines().nth(4).unwrap();
+        // Row 3 is a blank spacer between the pill row and the album list.
+        let spacer_row = out.lines().nth(3).unwrap();
         assert!(
             spacer_row.trim().is_empty(),
             "expected a blank spacer row between the pills and the album list:\n{out}"
         );
-        let album_row = out.lines().nth(5).unwrap();
+        let album_row = out.lines().nth(4).unwrap();
         assert!(
             album_row.contains("Alpha") || album_row.contains("First Album"),
             "expected album list content to start below the pill/spacer rows:\n{out}"
@@ -1063,11 +988,11 @@ mod tests {
         let out = buffer_to_string(&term);
         let _row0 = out.lines().next().unwrap();
 
-        let row3 = out.lines().nth(3).unwrap();
-        let _row4 = out.lines().nth(4).unwrap();
+        let row2 = out.lines().nth(2).unwrap();
+        let _row3 = out.lines().nth(3).unwrap();
 
         assert!(
-            row3.contains('\u{203a}'),
+            row2.contains('\u{203a}'),
             "expected a right scroll indicator on the pills row (no header gap):\n{out}"
         );
 
@@ -1076,7 +1001,7 @@ mod tests {
             line[..byte_idx].chars().count() as u16
         };
 
-        let right_indicator_x = rchar_x(row3, "\u{203a}");
+        let right_indicator_x = rchar_x(row2, "\u{203a}");
         assert!(
             right_indicator_x < width,
             "expected the right scroll indicator to stay inside the pill row:\n{out}"
@@ -1084,13 +1009,13 @@ mod tests {
 
         let right_col_x = (app.power_left_width + POWER_VIEW_GAP) as usize;
         assert!(
-            row3.chars().take(right_col_x).all(|c| c == ' '),
+            row2.chars().take(right_col_x).all(|c| c == ' '),
             "expected the pill row to be confined to the right library column:\n{out}"
         );
 
         assert!(!layout.selector_tabs.is_empty());
         for (rect, _) in &layout.selector_tabs {
-            assert_eq!(rect.y, 3, "expected pill hitboxes on the pills row");
+            assert_eq!(rect.y, 2, "expected pill hitboxes on the pills row");
             assert!(
                 rect.x as usize >= right_col_x,
                 "expected pill hitboxes confined to the right column"

@@ -426,7 +426,7 @@ impl App {
                     .title(Span::styled(
                         " Now Playing ",
                         Style::default()
-                            .fg(palette::FOAM)
+                            .fg(palette::GREEN)
                             .add_modifier(Modifier::BOLD),
                     ))
                     .title_alignment(Alignment::Center);
@@ -697,7 +697,7 @@ impl App {
                         Style::default().fg(if now_playing {
                             palette::IRIS
                         } else {
-                            palette::FOAM
+                            palette::GREEN
                         }),
                     ),
                     Span::styled(

@@ -83,7 +83,7 @@ impl App {
         }
 
         let text_color = if ctx.now_playing_id.as_deref() == Some(item.id.as_str()) {
-            palette::FOAM
+            palette::GREEN
         } else if selected {
             palette::IRIS
         } else {

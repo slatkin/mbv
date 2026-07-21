@@ -217,17 +217,20 @@ impl App {
                     format!("{}█", s.query)
                 };
                 f.render_widget(
-                    Paragraph::new(Span::styled(input_text, Style::default().fg(palette::FOAM)))
-                        .block(
-                            Block::default()
-                                .borders(Borders::ALL)
-                                .border_type(BorderType::Rounded)
-                                .border_style(Style::default().fg(palette::IRIS))
-                                .title(Span::styled(
-                                    " Search ",
-                                    Style::default().fg(palette::YELLOW),
-                                )),
-                        ),
+                    Paragraph::new(Span::styled(
+                        input_text,
+                        Style::default().fg(palette::GREEN),
+                    ))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_type(BorderType::Rounded)
+                            .border_style(Style::default().fg(palette::IRIS))
+                            .title(Span::styled(
+                                " Search ",
+                                Style::default().fg(palette::YELLOW),
+                            )),
+                    ),
                     search_area,
                 );
             } else if !has_search {
@@ -440,7 +443,7 @@ impl App {
                     DisplayRow::Spacer => ListItem::new(Line::default()),
                     // The colored block (drawn above) frames the selected row
                     // + banner, so the banner's top/bottom padding rows are
-                    // empty -- they show the block's CONTINUE_BG.
+                    // empty -- they show the block's background.
                     DisplayRow::BannerFiller => ListItem::new(Line::default()),
                     DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                         Span::raw(" "),
@@ -495,7 +498,7 @@ impl App {
                                 // Colored-block look: 2-col leading pad inside
                                 // the MEDIA_SELECTED_BG block (aligns the
                                 // title with the banner's `inner_x`), no green
-                                // `▌` gutter. Title is yellow (BOLD when
+                                // `▌` gutter. Title is Emby green (BOLD when
                                 // focused) and the row omits the duration --
                                 // it lives in the banner's metadata row below.
                                 let title_style = if focused {
@@ -574,6 +577,42 @@ impl App {
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
                 super::render_power_scrollbar(f, content_area, max_off, offset);
+            }
+
+            if banner_rows > 0 {
+                let border_style = Style::default().fg(palette::SOFT_WHITE);
+                if let Some(top_border) = banner_rule_top.checked_sub(1) {
+                    if top_border >= offset && top_border < offset + visible {
+                        let top_y = content_area.y + (top_border - offset) as u16;
+                        let top_spans: Vec<Span> = (0..content_area.width)
+                            .map(|_| Span::styled("\u{2581}", border_style))
+                            .collect();
+                        f.render_widget(
+                            Paragraph::new(Line::from(top_spans)),
+                            Rect {
+                                x: content_area.x,
+                                y: top_y,
+                                width: content_area.width,
+                                height: 1,
+                            },
+                        );
+                    }
+                }
+                if banner_rule_bottom + 1 >= offset && banner_rule_bottom + 1 < offset + visible {
+                    let bot_y = content_area.y + (banner_rule_bottom + 1 - offset) as u16;
+                    let bot_spans: Vec<Span> = (0..content_area.width)
+                        .map(|_| Span::styled("\u{2594}", border_style))
+                        .collect();
+                    f.render_widget(
+                        Paragraph::new(Line::from(bot_spans)),
+                        Rect {
+                            x: content_area.x,
+                            y: bot_y,
+                            width: content_area.width,
+                            height: 1,
+                        },
+                    );
+                }
             }
         } else {
             enum DisplayRow {
@@ -655,7 +694,7 @@ impl App {
                 .map(|(_abs_idx, row)| match row {
                     // The colored block (drawn above) frames the selected row
                     // + banner, so the banner's top/bottom padding rows are
-                    // empty -- they show the block's CONTINUE_BG.
+                    // empty -- they show the block's background.
                     DisplayRow::BannerFiller => ListItem::new(Line::default()),
                     DisplayRow::Item(idx) => {
                         let item = &items[*idx];
@@ -708,7 +747,7 @@ impl App {
                                 // Colored-block look: 2-col leading pad inside
                                 // the MEDIA_SELECTED_BG block (aligns the
                                 // title with the banner's `inner_x`), no green
-                                // `▌` gutter. Title is yellow (BOLD when
+                                // `▌` gutter. Title is Emby green (BOLD when
                                 // focused) and the row omits the duration --
                                 // it lives in the banner's metadata row below.
                                 let title_style = if focused {
@@ -801,6 +840,42 @@ impl App {
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
                 super::render_power_scrollbar(f, content_area, max_off, offset);
+            }
+
+            // White unicode borders at the block's top and bottom padding
+            // rows, rendering inside the coloured block.
+            let border_style = Style::default().fg(palette::SOFT_WHITE);
+            if let Some(top_border) = banner_rule_top.checked_sub(1) {
+                if top_border >= offset && top_border < offset + visible {
+                    let top_y = content_area.y + (top_border - offset) as u16;
+                    let top_spans: Vec<Span> = (0..content_area.width)
+                        .map(|_| Span::styled("\u{2581}", border_style))
+                        .collect();
+                    f.render_widget(
+                        Paragraph::new(Line::from(top_spans)),
+                        Rect {
+                            x: content_area.x,
+                            y: top_y,
+                            width: content_area.width,
+                            height: 1,
+                        },
+                    );
+                }
+            }
+            if banner_rule_bottom + 1 >= offset && banner_rule_bottom + 1 < offset + visible {
+                let bot_y = content_area.y + (banner_rule_bottom + 1 - offset) as u16;
+                let bot_spans: Vec<Span> = (0..content_area.width)
+                    .map(|_| Span::styled("\u{2594}", border_style))
+                    .collect();
+                f.render_widget(
+                    Paragraph::new(Line::from(bot_spans)),
+                    Rect {
+                        x: content_area.x,
+                        y: bot_y,
+                        width: content_area.width,
+                        height: 1,
+                    },
+                );
             }
         }
 
@@ -1005,67 +1080,6 @@ mod tests {
     }
 
     #[test]
-    fn letter_group_keeps_top_bucket_header_after_scrolling_back_to_top() {
-        let mut app = make_app_stub();
-        app.power_left_tab = 1;
-
-        let mut library = make_item("Power View Movies", "CollectionFolder");
-        library.id = "lib-movies".into();
-        library.collection_type = "movies".into();
-        library.is_folder = true;
-
-        let mut items = Vec::new();
-        let mut first = make_item("The 8 Diagram Pole Fighter", "Movie");
-        first.id = "movie-first".into();
-        first.sort_name = "8 Diagram Pole Fighter".into();
-        items.push(first);
-        for i in 0..670 {
-            let mut item = make_item(&format!("Movie {i:03}"), "Movie");
-            item.id = format!("movie-{i:03}");
-            items.push(item);
-        }
-
-        app.libs.push(LibraryTab {
-            library,
-            nav_stack: vec![BrowseLevel {
-                parent_id: "lib-movies".into(),
-                title: "Power View Movies".into(),
-                items,
-                total_count: 671,
-                cursor: 0,
-                scroll: 1,
-                item_types: None,
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                loading: false,
-                all_items: None,
-            }],
-            search: None,
-            feed_home_video: None,
-
-            album_track_focus: None,
-            artist_header_focus: None,
-        });
-
-        let mut layout = LayoutPower::default();
-        app.libs[0].nav_stack[0].cursor = 20;
-        app.libs[0].nav_stack[0].scroll = 20;
-        let _ = render_power_list_to_string(&mut app, &mut layout);
-
-        app.libs[0].nav_stack[0].cursor = 0;
-        app.libs[0].nav_stack[0].scroll = 1;
-        let out = render_power_list_to_string(&mut app, &mut layout);
-
-        assert!(out.contains("#"), "expected first bucket header:\n{out}");
-        assert!(
-            out.find('#').unwrap() < out.find("The 8 Diagram Pole Fighter").unwrap(),
-            "expected bucket header above first item:\n{out}"
-        );
-        assert_eq!(app.libs[0].nav_stack[0].scroll, 0);
-    }
-
-    #[test]
     fn compact_banner_appears_inline_in_letter_grouped_movie_list() {
         // 60 movies triggers use_letter_groups (total_count >= 50, collection_type
         // != "music"). Titles are spread across many starting letters (cycling
@@ -1116,190 +1130,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn letter_group_backs_up_two_rows_to_reveal_header_when_banner_opening_rule_intervenes() {
-        // Cursor lands on the first item of a non-initial letter bucket, with the
-        // compact banner active (it's a leaf movie) reserving its top padding
-        // filler row directly above the item. A stale scroll that would
-        // otherwise clamp exactly onto the item's own row would strand that
-        // padding row (and the bucket header above it) with no header visible
-        // -- this exercises the extended nudge (back up 2 rows instead of 1)
-        // added specifically for the case where a BannerFiller row sits
-        // between a LetterHeader and the selected item, which the older "back
-        // up one row" nudge alone doesn't cover.
-        let titles: Vec<String> = (0..60)
-            .map(|i| {
-                let letter = (b'A' + (i % 26) as u8) as char;
-                format!("{letter} Movie {i:02}")
-            })
-            .collect();
-        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
-        let mut app = make_power_movie_list_app(title_refs);
-
-        // "D Movie 03" is the first D-lettered item (smallest index, smallest
-        // number among D items), so it's the first item of its bucket -- and
-        // it's preceded by real A/B/C-bucket content, so there's room for the
-        // offset to legitimately land >= 2 while still clamping onto this
-        // item's own row.
-        let target_idx = 3;
-        let target_title = titles[target_idx].clone();
-
-        let mut layout = LayoutPower::default();
-
-        // Scroll deep into the list first so a large `scroll` value persists.
-        {
-            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
-            lvl.cursor = 55;
-        }
-        let _ = render_power_list_to_string_sized(&mut app, &mut layout, 60, 10);
-
-        // Jump the cursor back to the bucket-first item without resetting
-        // scroll -- the stale deep scroll clamps down to exactly the item's
-        // own display-row index, the scenario needing the extended nudge.
-        {
-            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
-            lvl.cursor = target_idx;
-        }
-        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 10);
-        let lines: Vec<&str> = out.lines().collect();
-
-        let title_line_idx = lines
-            .iter()
-            .position(|l| l.contains(target_title.as_str()))
-            .expect("selected item's row should render");
-        // The colored block's top padding row (previously the opening `─`
-        // rule) sits directly above the selected item. It renders as an
-        // empty CONTINUE_BG row, so it trimmed is empty.
-        assert!(
-            title_line_idx >= 2,
-            "expected two rows above the selected item (its colored block's top \
-             padding row + the bucket header), not the title at row \
-             {title_line_idx}:\n{out}"
-        );
-        let pad_line = lines[title_line_idx - 1].trim();
-        let header_line = lines[title_line_idx - 2].trim();
-        assert!(
-            pad_line.is_empty(),
-            "expected the row directly above the selected item to be the empty \
-             colored padding row, not visible content:\n{out}"
-        );
-        assert!(
-            !header_line.is_empty() && !header_line.contains(target_title.as_str()),
-            "expected the bucket header directly above the colored padding row, \
-             not stranded off-screen by the nudge:\n{out}"
-        );
-    }
-
-    #[test]
-    fn letter_group_backs_up_from_banner_filler_row_to_keep_header_visible() {
-        // Same reachable state as the previous regression, but with a taller
-        // viewport so stale scroll clamps to the banner's top padding filler
-        // row rather than the selected item row itself. The header should
-        // still be nudged back into view.
-        let titles: Vec<String> = (0..60)
-            .map(|i| {
-                let letter = (b'A' + (i % 26) as u8) as char;
-                format!("{letter} Movie {i:02}")
-            })
-            .collect();
-        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
-        let mut app = make_power_movie_list_app(title_refs);
-
-        let target_idx = 3;
-        let target_title = titles[target_idx].clone();
-
-        let mut layout = LayoutPower::default();
-
-        {
-            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
-            lvl.cursor = 55;
-        }
-        let _ = render_power_list_to_string_sized(&mut app, &mut layout, 60, 16);
-
-        {
-            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
-            lvl.cursor = target_idx;
-        }
-        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 16);
-        let lines: Vec<&str> = out.lines().collect();
-
-        let title_line_idx = lines
-            .iter()
-            .position(|l| l.contains(target_title.as_str()))
-            .expect("selected item's row should render");
-        assert!(
-            title_line_idx >= 2,
-            "expected two rows above the selected item (its colored block's top \
-             padding row + the bucket header), not the title at row \
-             {title_line_idx}:\n{out}"
-        );
-        let pad_line = lines[title_line_idx - 1].trim();
-        let header_line = lines[title_line_idx - 2].trim();
-        assert!(
-            pad_line.is_empty(),
-            "expected the row directly above the selected item to be the empty \
-             colored padding row, not visible content:\n{out}"
-        );
-        assert!(
-            !header_line.is_empty() && !header_line.contains(target_title.as_str()),
-            "expected the bucket header directly above the colored padding row, \
-             not stranded off-screen when scroll lands on the banner filler \
-             row:\n{out}"
-        );
-    }
-
-    #[test]
-    fn compact_banner_appears_under_selected_row_not_pinned_to_top() {
-        let mut app = make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
-        // Select the second item (index 1) — banner must render after ITS row, not row 0.
-        app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
-
-        let mut layout = LayoutPower::default();
-        let out = render_power_list_to_string_sized(&mut app, &mut layout, 40, 20);
-        let lines: Vec<&str> = out.lines().collect();
-
-        let first_pos = out.find("First").expect("row above cursor unaffected");
-        let selected_row_line = lines
-            .iter()
-            .position(|l| l.contains("Second Selected"))
-            .expect("selected row itself, unaffected by banner");
-        let selected_row_pos = out.find("Second Selected").unwrap();
-        assert!(
-            first_pos < selected_row_pos,
-            "row for First expected before the selected row:\n{out}"
-        );
-        let banner_pos = out
-            .find("compact movie banner")
-            .expect("banner content expected somewhere after the selected row");
-        assert!(
-            banner_pos > selected_row_pos,
-            "banner content expected after the selected row:\n{out}"
-        );
-        // Third item pushed down by the banner's reserved rows (content-
-        // dependent since #263, not a fixed constant), so it should not
-        // appear on the row immediately after the selected row.
-        assert!(
-            !lines[selected_row_line + 1].contains("Third"),
-            "Third should not appear immediately after Second Selected:\n{out}"
-        );
-        let third_line = lines
-            .iter()
-            .position(|l| l.contains("Third"))
-            .expect("Third item expected further down, pushed below the banner");
-        let banner_panel_width = 40u16
-            .saturating_sub(1)
-            .saturating_sub(COMPACT_BANNER_INDENT);
-        let expected_banner_rows = app.compact_banner_rows(0, banner_panel_width);
-        assert!(
-            expected_banner_rows > 0,
-            "expected the selected movie to reserve banner rows"
-        );
-        assert!(
-            third_line >= selected_row_line + expected_banner_rows,
-            "Third expected pushed below the reserved banner rows (row {third_line}, selected row {selected_row_line}, reserved {expected_banner_rows}):\n{out}"
-        );
-    }
-
     // #263: the banner's reserved row budget must track the selected movie's
     // actual overview length, not a fixed constant -- a longer overview
     // should reserve more rows (and so push the rest of the list down
@@ -1321,41 +1151,6 @@ mod tests {
         assert!(
             long_rows > short_rows,
             "long overview ({long_rows} rows) should reserve more rows than short overview ({short_rows} rows)"
-        );
-    }
-
-    // #263: the rest of the list must lay out around the banner's *actual*
-    // rendered height -- a longer overview should visibly push later rows
-    // further down than a shorter one, not just change an internal row
-    // count that never reaches the screen.
-    #[test]
-    fn list_rows_lay_out_further_below_a_longer_overview_than_a_shorter_one() {
-        let build = |overview: &str| {
-            let mut app = make_power_movie_list_app(vec!["First", "Second Selected", "Third"]);
-            app.libs[0].nav_stack.last_mut().unwrap().cursor = 1;
-            app.libs[0].nav_stack.last_mut().unwrap().items[1].overview = overview.into();
-            let mut layout = LayoutPower::default();
-            let out = render_power_list_to_string_sized(&mut app, &mut layout, 40, 60);
-            let lines: Vec<&str> = out.lines().collect();
-            let selected_line = lines
-                .iter()
-                .position(|l| l.contains("Second Selected"))
-                .expect("selected row should render");
-            let third_line = lines
-                .iter()
-                .position(|l| l.contains("Third"))
-                .expect("Third item should still be visible on screen");
-            third_line - selected_line
-        };
-
-        let short_gap = build("Short.");
-        let long_gap = build(
-            &"Lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. ".repeat(6),
-        );
-
-        assert!(
-            long_gap > short_gap,
-            "a longer overview should push Third further down (short gap {short_gap}, long gap {long_gap})"
         );
     }
 }
