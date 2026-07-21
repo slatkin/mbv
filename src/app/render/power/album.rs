@@ -115,19 +115,23 @@ impl App {
                 rows.push(GroupedAlbumDisplayRow::Album(idx));
             } else if idx == cursor && !expand_selected {
                 // Hint-only state (album selected, tracks not yet shown): wrap in block frame
+                // Insert extra detail rule rows for borders (one before, one after the colored block)
+                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for top border
                 let top_idx = rows.len();
-                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg top padding
                 rows.push(GroupedAlbumDisplayRow::Album(idx));
                 rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
                 let bottom_idx = rows.len();
-                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg bottom padding
+                rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for bottom border
                 selected_block_bounds = Some((top_idx, bottom_idx));
             } else if idx == cursor {
                 match self.album_tracks_cache.get(&albums[idx].id) {
                     Some(tracks) if !tracks.is_empty() => {
                         let detail_rows = 2 + tracks.len();
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for top border
                         let top_idx = rows.len();
-                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg top padding
                         rows.push(GroupedAlbumDisplayRow::Album(idx));
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
                         rows.extend(
@@ -137,7 +141,8 @@ impl App {
                             .take(detail_rows.saturating_sub(1)),
                         );
                         let bottom_idx = rows.len();
-                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg bottom padding
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for bottom border
                         selected_block_bounds = Some((top_idx, bottom_idx));
                     }
                     Some(_) => rows.push(GroupedAlbumDisplayRow::Album(idx)),
@@ -145,12 +150,14 @@ impl App {
                         if fetch_missing_tracks {
                             self.fetch_album_tracks(albums[idx].id.clone());
                         }
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for top border
                         let top_idx = rows.len();
-                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg top padding
                         rows.push(GroupedAlbumDisplayRow::Album(idx));
                         rows.push(GroupedAlbumDisplayRow::AlbumLoading);
                         let bottom_idx = rows.len();
-                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule);
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg bottom padding
+                        rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for bottom border
                         selected_block_bounds = Some((top_idx, bottom_idx));
                     }
                 }

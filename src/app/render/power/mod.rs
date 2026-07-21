@@ -93,13 +93,10 @@ pub(super) fn render_selected_block_background(
     }
 }
 
-/// Paints the ▁/▔ SOFT_WHITE border rows one row outside `[top_pad_abs, bottom_pad_abs]`,
-/// only if space exists (i.e., only if top/bottom borders won't collide with adjacent content).
+/// Paints the ▁/▔ SOFT_WHITE border rows on the reserved rows one position outside
+/// the colored block's padding rows `[top_pad_abs, bottom_pad_abs]`.
+/// The padding rows are inserted with extra detail rule rows for border space.
 /// Call *after* the block's own content and scrollbar render, so borders paint on top.
-///
-/// Note: Borders are only rendered if:
-/// - Top border: `top_pad_abs > 0` (there's a row above to paint on)
-/// - Bottom border: `bottom_pad_abs + 1` is within visible window
 pub(super) fn render_selected_block_borders(
     f: &mut Frame,
     area: Rect,
@@ -109,11 +106,8 @@ pub(super) fn render_selected_block_borders(
     bottom_pad_abs: usize,
 ) {
     let border_style = Style::default().fg(palette::SOFT_WHITE);
-    // Render top border only if:
-    // 1. There's actually a row above the block padding (top_pad_abs > 0)
-    // 2. The border isn't at the very top of the viewport where it might collide with headers
-    if top_pad_abs > offset && top_pad_abs > 0 {
-        let top_border = top_pad_abs - 1;
+    // Top border: paint one row before the colored block padding
+    if let Some(top_border) = top_pad_abs.checked_sub(1) {
         if top_border >= offset && top_border < offset + visible {
             let top_y = area.y + (top_border - offset) as u16;
             let top_spans: Vec<Span> = (0..area.width)
@@ -130,7 +124,7 @@ pub(super) fn render_selected_block_borders(
             );
         }
     }
-    // Only render bottom border if it's within the visible window
+    // Bottom border: paint one row after the colored block padding
     let bot_border = bottom_pad_abs + 1;
     if bot_border >= offset && bot_border < offset + visible {
         let bot_y = area.y + (bot_border - offset) as u16;

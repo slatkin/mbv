@@ -327,17 +327,19 @@ impl App {
                     display_rows.push(DisplayRow::LetterHeader(bucket.clone()));
                     last_bucket = bucket;
                 }
-                // The opening rule sits directly above the selected item's own
-                // row (not after it), so the selected title reads as set off
-                // from the row above it.
+                // When selected with banner rows, insert padding with border space.
+                // Structure: [border row] [top padding] [item] [content] [bottom padding] [border row]
                 if banner_rows > 0 && idx == cursor {
-                    display_rows.push(DisplayRow::BannerFiller);
+                    display_rows.push(DisplayRow::BannerFiller); // space for top border
+                    display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
                 }
                 display_rows.push(DisplayRow::Item(idx));
                 if banner_rows > 0 && idx == cursor {
-                    for _ in 0..banner_rows.saturating_sub(1) {
+                    for _ in 0..banner_rows.saturating_sub(2) {
                         display_rows.push(DisplayRow::BannerFiller);
                     }
+                    display_rows.push(DisplayRow::BannerFiller); // bottom padding (colored)
+                    display_rows.push(DisplayRow::BannerFiller); // space for bottom border
                 }
             }
             let total_display = display_rows.len();
@@ -621,17 +623,19 @@ impl App {
 
             let mut display_rows: Vec<DisplayRow> = Vec::with_capacity(n + banner_rows);
             for i in 0..n {
-                // The opening rule sits directly above the selected item's own
-                // row (not after it), so the selected title reads as set off
-                // from the row above it.
+                // When selected with banner rows, insert padding with border space.
+                // Structure: [border row] [top padding] [item] [content] [bottom padding] [border row]
                 if banner_rows > 0 && i == cursor {
-                    display_rows.push(DisplayRow::BannerFiller);
+                    display_rows.push(DisplayRow::BannerFiller); // space for top border
+                    display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
                 }
                 display_rows.push(DisplayRow::Item(i));
                 if banner_rows > 0 && i == cursor {
-                    for _ in 0..banner_rows.saturating_sub(1) {
+                    for _ in 0..banner_rows.saturating_sub(2) {
                         display_rows.push(DisplayRow::BannerFiller);
                     }
+                    display_rows.push(DisplayRow::BannerFiller); // bottom padding (colored)
+                    display_rows.push(DisplayRow::BannerFiller); // space for bottom border
                 }
             }
             let total_display = display_rows.len();
