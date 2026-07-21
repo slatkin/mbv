@@ -4200,7 +4200,7 @@ pub(crate) mod tests {
     use crossterm::event::{
         KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     };
-    use mbv_core::api::TICKS_PER_SECOND;
+    use mbv_core::api::{device_name, TICKS_PER_SECOND};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
     use unicode_width::UnicodeWidthStr;
@@ -9233,7 +9233,10 @@ pub(crate) mod tests {
             rendered.contains(" LOCAL ") && rendered.contains(" REMOTE "),
             "expected power queue scope pills in rendered output:\n{rendered}"
         );
-        assert!(rendered.contains(" mbv "), "expected mbv pill:\n{rendered}");
+        assert!(
+            rendered.contains(&format!(" {} ", device_name())),
+            "expected device name pill:\n{rendered}"
+        );
         assert!(app.layout.power.queue_scope_local_area.width >= " Local ".width() as u16);
         assert!(app.layout.power.queue_scope_remote_area.width >= " Remote ".width() as u16);
     }

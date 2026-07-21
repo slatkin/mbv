@@ -22,7 +22,7 @@ pub fn gen_session_id() -> String {
     format!("{:x}{:x}{:x}{:x}", t.as_secs(), t.subsec_nanos(), pid, r)
 }
 
-fn device_name() -> String {
+pub fn device_name() -> String {
     std::fs::read_to_string("/etc/hostname")
         .ok()
         .map(|s| s.trim().to_string())

@@ -1,7 +1,7 @@
 use super::super::super::ui_util::*;
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App, QueueScope};
-use mbv_core::api::TICKS_PER_SECOND;
+use mbv_core::api::{device_name, TICKS_PER_SECOND};
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -37,13 +37,14 @@ impl App {
         layout.queue_scope_remote_area = Rect::default();
 
         let mut spans = Vec::new();
+        let hostname = device_name();
         let mbv_label = if self.use_nerd_fonts {
-            "\u{F0AFE} mbv "
+            format!("\u{F0AFE} {hostname} ")
         } else {
-            " mbv "
+            format!(" {hostname} ")
         };
         spans.push(Span::styled(
-            mbv_label,
+            &mbv_label,
             Style::default()
                 .fg(palette::FOAM)
                 .add_modifier(Modifier::BOLD),
