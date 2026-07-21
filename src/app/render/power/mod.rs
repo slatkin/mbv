@@ -702,15 +702,15 @@ mod tests {
             "compact banner must show director:\n{out}"
         );
 
-        // The block's top padding row (row 1) is the CONTINUE_BG filler row
-        // directly above the selected item; verify it's empty and carries the
-        // block's background color.
+        // The block's top padding row (row 1) is the MEDIA_SELECTED_BG filler row
+        // directly above the selected item; verify it carries the block's background
+        // color and contains the top border character (▁).
         let buf = term.backend().buffer();
         let pad_cell = &buf[(0, 1)];
         assert_eq!(
             pad_cell.symbol(),
-            " ",
-            "expected the block's top padding row to be empty:\n{out}"
+            "\u{2581}",
+            "expected the block's top padding row to carry the top border character:\n{out}"
         );
         assert_eq!(
             pad_cell.bg,

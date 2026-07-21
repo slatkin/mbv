@@ -438,10 +438,24 @@ impl App {
                 .take(visible)
                 .map(|(_abs_idx, row)| match row {
                     DisplayRow::Spacer => ListItem::new(Line::default()),
-                    // The colored block (drawn above) frames the selected row
-                    // + banner, so the banner's top/bottom padding rows are
-                    // empty -- they show the block's CONTINUE_BG.
-                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
+                    DisplayRow::BannerFiller => {
+                        let border_style = Style::default()
+                            .fg(palette::WHITE)
+                            .bg(palette::MEDIA_SELECTED_BG);
+                        if _abs_idx + offset == banner_rule_top {
+                            let line: Vec<Span> = (0..content_area.width)
+                                .map(|_| Span::styled("\u{2581}", border_style))
+                                .collect();
+                            ListItem::new(Line::from(line))
+                        } else if _abs_idx + offset == banner_rule_bottom {
+                            let line: Vec<Span> = (0..content_area.width)
+                                .map(|_| Span::styled("\u{2594}", border_style))
+                                .collect();
+                            ListItem::new(Line::from(line))
+                        } else {
+                            ListItem::new(Line::default())
+                        }
+                    }
                     DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                         Span::raw(" "),
                         Span::styled(
@@ -653,10 +667,24 @@ impl App {
                 .skip(offset)
                 .take(visible)
                 .map(|(_abs_idx, row)| match row {
-                    // The colored block (drawn above) frames the selected row
-                    // + banner, so the banner's top/bottom padding rows are
-                    // empty -- they show the block's CONTINUE_BG.
-                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
+                    DisplayRow::BannerFiller => {
+                        let border_style = Style::default()
+                            .fg(palette::WHITE)
+                            .bg(palette::MEDIA_SELECTED_BG);
+                        if _abs_idx + offset == banner_rule_top {
+                            let line: Vec<Span> = (0..content_area.width)
+                                .map(|_| Span::styled("\u{2581}", border_style))
+                                .collect();
+                            ListItem::new(Line::from(line))
+                        } else if _abs_idx + offset == banner_rule_bottom {
+                            let line: Vec<Span> = (0..content_area.width)
+                                .map(|_| Span::styled("\u{2594}", border_style))
+                                .collect();
+                            ListItem::new(Line::from(line))
+                        } else {
+                            ListItem::new(Line::default())
+                        }
+                    }
                     DisplayRow::Item(idx) => {
                         let item = &items[*idx];
                         let selected = *idx == cursor;
@@ -1168,8 +1196,8 @@ mod tests {
             .position(|l| l.contains(target_title.as_str()))
             .expect("selected item's row should render");
         // The colored block's top padding row (previously the opening `─`
-        // rule) sits directly above the selected item. It renders as an
-        // empty CONTINUE_BG row, so it trimmed is empty.
+        // rule) sits directly above the selected item. For items without
+        // banners, this is just an empty row.
         assert!(
             title_line_idx >= 2,
             "expected two rows above the selected item (its colored block's top \
@@ -1179,9 +1207,9 @@ mod tests {
         let pad_line = lines[title_line_idx - 1].trim();
         let header_line = lines[title_line_idx - 2].trim();
         assert!(
-            pad_line.is_empty(),
+            pad_line.is_empty() || pad_line.contains("\u{2581}") || pad_line.contains("\u{2594}"),
             "expected the row directly above the selected item to be the empty \
-             colored padding row, not visible content:\n{out}"
+             colored padding row or border row, not visible content:\n{out}"
         );
         assert!(
             !header_line.is_empty() && !header_line.contains(target_title.as_str()),
@@ -1236,9 +1264,9 @@ mod tests {
         let pad_line = lines[title_line_idx - 1].trim();
         let header_line = lines[title_line_idx - 2].trim();
         assert!(
-            pad_line.is_empty(),
-            "expected the row directly above the selected item to be the empty \
-             colored padding row, not visible content:\n{out}"
+            pad_line.contains("\u{2581}") || pad_line.contains("\u{2594}"),
+            "expected the row directly above the selected item to be the colored \
+             padding row with border characters, not visible content:\n{out}"
         );
         assert!(
             !header_line.is_empty() && !header_line.contains(target_title.as_str()),
