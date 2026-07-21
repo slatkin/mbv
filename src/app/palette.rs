@@ -20,4 +20,3 @@ pub const BAR_BG: Color = Color::Reset; // transparent status/title bar backgrou
 pub const CONTINUE_BG: Color = Color::Rgb(51, 60, 67); // continue watching list background (#333c43)
 pub const MEDIA_SELECTED_BG: Color = Color::Rgb(51, 60, 67); // selected movie block background in the power view movies library list (#333c43)
 pub const DARK_BG: Color = Color::Rgb(40, 40, 40); // tab bar (Home, etc) background (#282828)
-pub const BORDER_LINE: Color = Color::Rgb(207, 194, 166); // white variant (#cfc2a6)

@@ -438,10 +438,24 @@ impl App {
                 .take(visible)
                 .map(|(_abs_idx, row)| match row {
                     DisplayRow::Spacer => ListItem::new(Line::default()),
-                    // The colored block (drawn above) frames the selected row
-                    // + banner, so the banner's top/bottom padding rows are
-                    // empty -- they show the block's background.
-                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
+                    DisplayRow::BannerFiller => {
+                        let border_style = Style::default()
+                            .fg(palette::WHITE)
+                            .bg(palette::MEDIA_SELECTED_BG);
+                        if _abs_idx + offset == banner_rule_top {
+                            let line: Vec<Span> = (0..content_area.width)
+                                .map(|_| Span::styled("\u{2581}", border_style))
+                                .collect();
+                            ListItem::new(Line::from(line))
+                        } else if _abs_idx + offset == banner_rule_bottom {
+                            let line: Vec<Span> = (0..content_area.width)
+                                .map(|_| Span::styled("\u{2594}", border_style))
+                                .collect();
+                            ListItem::new(Line::from(line))
+                        } else {
+                            ListItem::new(Line::default())
+                        }
+                    }
                     DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                         Span::raw(" "),
                         Span::styled(
@@ -495,15 +509,15 @@ impl App {
                                 // Colored-block look: 2-col leading pad inside
                                 // the MEDIA_SELECTED_BG block (aligns the
                                 // title with the banner's `inner_x`), no green
-                                // `▌` gutter. Title is Emby green (BOLD when
+                                // `▌` gutter. Title is yellow (BOLD when
                                 // focused) and the row omits the duration --
                                 // it lives in the banner's metadata row below.
                                 let title_style = if focused {
                                     Style::default()
-                                        .fg(palette::PINE)
+                                        .fg(palette::YELLOW)
                                         .add_modifier(Modifier::BOLD)
                                 } else {
-                                    Style::default().fg(palette::PINE)
+                                    Style::default().fg(palette::YELLOW)
                                 };
                                 vec![Span::raw("  "), Span::styled(title, title_style)]
                             } else {
@@ -574,42 +588,6 @@ impl App {
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
                 super::render_power_scrollbar(f, content_area, max_off, offset);
-            }
-
-            // White unicode borders at the block's top and bottom padding
-            // rows, rendering inside the coloured block.
-            let border_style = Style::default()
-                .fg(palette::BORDER_LINE)
-                .bg(palette::MEDIA_SELECTED_BG);
-            if banner_rule_top >= offset && banner_rule_top < offset + visible {
-                let top_y = content_area.y + (banner_rule_top - offset) as u16;
-                let top_spans: Vec<Span> = (0..content_area.width)
-                    .map(|_| Span::styled("\u{2581}", border_style))
-                    .collect();
-                f.render_widget(
-                    Paragraph::new(Line::from(top_spans)),
-                    Rect {
-                        x: content_area.x,
-                        y: top_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
-            }
-            if banner_rule_bottom >= offset && banner_rule_bottom < offset + visible {
-                let bot_y = content_area.y + (banner_rule_bottom - offset) as u16;
-                let bot_spans: Vec<Span> = (0..content_area.width)
-                    .map(|_| Span::styled("\u{2594}", border_style))
-                    .collect();
-                f.render_widget(
-                    Paragraph::new(Line::from(bot_spans)),
-                    Rect {
-                        x: content_area.x,
-                        y: bot_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
             }
         } else {
             enum DisplayRow {
@@ -689,10 +667,24 @@ impl App {
                 .skip(offset)
                 .take(visible)
                 .map(|(_abs_idx, row)| match row {
-                    // The colored block (drawn above) frames the selected row
-                    // + banner, so the banner's top/bottom padding rows are
-                    // empty -- they show the block's background.
-                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
+                    DisplayRow::BannerFiller => {
+                        let border_style = Style::default()
+                            .fg(palette::WHITE)
+                            .bg(palette::MEDIA_SELECTED_BG);
+                        if _abs_idx + offset == banner_rule_top {
+                            let line: Vec<Span> = (0..content_area.width)
+                                .map(|_| Span::styled("\u{2581}", border_style))
+                                .collect();
+                            ListItem::new(Line::from(line))
+                        } else if _abs_idx + offset == banner_rule_bottom {
+                            let line: Vec<Span> = (0..content_area.width)
+                                .map(|_| Span::styled("\u{2594}", border_style))
+                                .collect();
+                            ListItem::new(Line::from(line))
+                        } else {
+                            ListItem::new(Line::default())
+                        }
+                    }
                     DisplayRow::Item(idx) => {
                         let item = &items[*idx];
                         let selected = *idx == cursor;
@@ -744,15 +736,15 @@ impl App {
                                 // Colored-block look: 2-col leading pad inside
                                 // the MEDIA_SELECTED_BG block (aligns the
                                 // title with the banner's `inner_x`), no green
-                                // `▌` gutter. Title is Emby green (BOLD when
+                                // `▌` gutter. Title is yellow (BOLD when
                                 // focused) and the row omits the duration --
                                 // it lives in the banner's metadata row below.
                                 let title_style = if focused {
                                     Style::default()
-                                        .fg(palette::PINE)
+                                        .fg(palette::YELLOW)
                                         .add_modifier(Modifier::BOLD)
                                 } else {
-                                    Style::default().fg(palette::PINE)
+                                    Style::default().fg(palette::YELLOW)
                                 };
                                 vec![Span::raw("  "), Span::styled(title, title_style)]
                             } else {
@@ -837,42 +829,6 @@ impl App {
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
                 super::render_power_scrollbar(f, content_area, max_off, offset);
-            }
-
-            // White unicode borders at the block's top and bottom padding
-            // rows, rendering inside the coloured block.
-            let border_style = Style::default()
-                .fg(palette::BORDER_LINE)
-                .bg(palette::MEDIA_SELECTED_BG);
-            if banner_rule_top >= offset && banner_rule_top < offset + visible {
-                let top_y = content_area.y + (banner_rule_top - offset) as u16;
-                let top_spans: Vec<Span> = (0..content_area.width)
-                    .map(|_| Span::styled("\u{2581}", border_style))
-                    .collect();
-                f.render_widget(
-                    Paragraph::new(Line::from(top_spans)),
-                    Rect {
-                        x: content_area.x,
-                        y: top_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
-            }
-            if banner_rule_bottom >= offset && banner_rule_bottom < offset + visible {
-                let bot_y = content_area.y + (banner_rule_bottom - offset) as u16;
-                let bot_spans: Vec<Span> = (0..content_area.width)
-                    .map(|_| Span::styled("\u{2594}", border_style))
-                    .collect();
-                f.render_widget(
-                    Paragraph::new(Line::from(bot_spans)),
-                    Rect {
-                        x: content_area.x,
-                        y: bot_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
             }
         }
 
@@ -1240,8 +1196,8 @@ mod tests {
             .position(|l| l.contains(target_title.as_str()))
             .expect("selected item's row should render");
         // The colored block's top padding row (previously the opening `─`
-        // rule) sits directly above the selected item. It now carries the
-        // top border character (▁).
+        // rule) sits directly above the selected item. For items without
+        // banners, this is just an empty row.
         assert!(
             title_line_idx >= 2,
             "expected two rows above the selected item (its colored block's top \
@@ -1251,9 +1207,9 @@ mod tests {
         let pad_line = lines[title_line_idx - 1].trim();
         let header_line = lines[title_line_idx - 2].trim();
         assert!(
-            pad_line.contains("\u{2581}") || pad_line.contains("\u{2594}"),
-            "expected the row directly above the selected item to be the colored \
-             padding row with border characters, not visible content:\n{out}"
+            pad_line.is_empty() || pad_line.contains("\u{2581}") || pad_line.contains("\u{2594}"),
+            "expected the row directly above the selected item to be the empty \
+             colored padding row or border row, not visible content:\n{out}"
         );
         assert!(
             !header_line.is_empty() && !header_line.contains(target_title.as_str()),

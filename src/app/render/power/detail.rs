@@ -354,13 +354,13 @@ impl App {
             if row < max_y {
                 let (tw, tw16) = text_dims(row);
                 // The metadata row directly below the selected movie title
-                // renders in #9e9e9e foreground (palette::SUBTLE) — light grey
-                // text on the MEDIA_SELECTED_BG block that frames the
+                // renders in #282828 foreground (palette::DARK_BG) — dark text
+                // on the green MEDIA_SELECTED_BG block that frames the
                 // selected row + banner.
                 f.render_widget(
                     Paragraph::new(Line::from(Span::styled(
                         trunc_str(meta, tw),
-                        Style::default().fg(palette::SUBTLE),
+                        Style::default().fg(palette::DARK_BG),
                     ))),
                     Rect {
                         x: inner_x,
@@ -405,7 +405,7 @@ impl App {
             if Some(idx) == content.director_line_idx {
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
-                        Span::styled("Director: ", Style::default().fg(palette::SUBTLE)),
+                        Span::styled("Director: ", Style::default().fg(palette::DARK_BG)),
                         Span::styled(
                             trunc_str(&item.director, tw),
                             Style::default().fg(palette::TEXT),
