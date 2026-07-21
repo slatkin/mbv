@@ -100,7 +100,7 @@ impl App {
         let mut x_cursor = row_area.x;
         if has_left {
             let chunk = "\u{2039} ";
-            spans.push(Span::styled(chunk, Style::default().fg(palette::BLUE)));
+            spans.push(Span::styled(chunk, Style::default().fg(palette::GREEN)));
             x_cursor += chunk.width() as u16;
         }
         for (idx, label) in tab_labels[scroll_start..scroll_end].iter().enumerate() {
@@ -115,10 +115,10 @@ impl App {
             let style = if selected {
                 Style::default()
                     .fg(palette::YELLOW)
-                    .bg(palette::BLUE)
+                    .bg(palette::GREEN)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(palette::BASE).bg(palette::BLUE)
+                Style::default().fg(palette::BASE).bg(palette::GREEN)
             };
             let pill = format!(" {} ", label);
             selector_tabs.push((
@@ -135,7 +135,7 @@ impl App {
         }
         if has_right {
             let chunk = " \u{203a}";
-            spans.push(Span::styled(chunk, Style::default().fg(palette::BLUE)));
+            spans.push(Span::styled(chunk, Style::default().fg(palette::GREEN)));
             x_cursor += chunk.width() as u16;
         }
 

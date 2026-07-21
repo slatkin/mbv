@@ -217,17 +217,20 @@ impl App {
                     format!("{}█", s.query)
                 };
                 f.render_widget(
-                    Paragraph::new(Span::styled(input_text, Style::default().fg(palette::BLUE)))
-                        .block(
-                            Block::default()
-                                .borders(Borders::ALL)
-                                .border_type(BorderType::Rounded)
-                                .border_style(Style::default().fg(palette::IRIS))
-                                .title(Span::styled(
-                                    " Search ",
-                                    Style::default().fg(palette::YELLOW),
-                                )),
-                        ),
+                    Paragraph::new(Span::styled(
+                        input_text,
+                        Style::default().fg(palette::GREEN),
+                    ))
+                    .block(
+                        Block::default()
+                            .borders(Borders::ALL)
+                            .border_type(BorderType::Rounded)
+                            .border_style(Style::default().fg(palette::IRIS))
+                            .title(Span::styled(
+                                " Search ",
+                                Style::default().fg(palette::YELLOW),
+                            )),
+                    ),
                     search_area,
                 );
             } else if !has_search {

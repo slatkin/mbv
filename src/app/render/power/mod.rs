@@ -991,14 +991,14 @@ mod tests {
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 3)].bg, palette::BLUE);
+        assert_eq!(buf[(alpha_x, 3)].bg, palette::GREEN);
         assert_eq!(
             buf[(alpha_x, 3)].fg,
             palette::YELLOW,
             "expected the selected group pill to use yellow text"
         );
         let beta_x = char_x(row3, "Beta");
-        assert_eq!(buf[(beta_x, 3)].bg, palette::BLUE);
+        assert_eq!(buf[(beta_x, 3)].bg, palette::GREEN);
         assert_eq!(
             buf[(beta_x, 3)].fg,
             palette::BASE,
