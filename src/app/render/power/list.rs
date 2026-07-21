@@ -495,9 +495,8 @@ impl App {
                         };
                         let mut spans: Vec<Span> = if selected {
                             if selected_has_banner {
-                                // Colored-block look: 2-col leading pad inside
-                                // the MEDIA_SELECTED_BG block (aligns the
-                                // title with the banner's `inner_x`), no green
+                                // Colored-block look: 1-col leading pad inside
+                                // the MEDIA_SELECTED_BG block, no green
                                 // `▌` gutter. Title is Emby green (BOLD when
                                 // focused) and the row omits the duration --
                                 // it lives in the banner's metadata row below.
@@ -508,7 +507,7 @@ impl App {
                                 } else {
                                     Style::default().fg(palette::YELLOW)
                                 };
-                                vec![Span::raw("  "), Span::styled(title, title_style)]
+                                vec![Span::raw(" "), Span::styled(title, title_style)]
                             } else {
                                 // Otherwise keep the green gutter for selected
                                 // list rows without an inline banner.
@@ -744,9 +743,8 @@ impl App {
 
                         let mut spans: Vec<Span> = if selected {
                             if selected_has_banner {
-                                // Colored-block look: 2-col leading pad inside
-                                // the MEDIA_SELECTED_BG block (aligns the
-                                // title with the banner's `inner_x`), no green
+                                // Colored-block look: 1-col leading pad inside
+                                // the MEDIA_SELECTED_BG block, no green
                                 // `▌` gutter. Title is Emby green (BOLD when
                                 // focused) and the row omits the duration --
                                 // it lives in the banner's metadata row below.
@@ -757,7 +755,7 @@ impl App {
                                 } else {
                                     Style::default().fg(palette::YELLOW)
                                 };
-                                vec![Span::raw("  "), Span::styled(title, title_style)]
+                                vec![Span::raw(" "), Span::styled(title, title_style)]
                             } else {
                                 // Otherwise keep the green gutter for selected
                                 // list rows without an inline banner.
