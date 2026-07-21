@@ -5749,7 +5749,7 @@ impl App {
                 && !self.hidden_latest.contains(&lower)
                 && !self.hidden_libraries.contains(&lower)
         }) {
-            let title = format!("New {}", v.name);
+            let title = v.name.clone();
             let items = if v.collection_type == "tvshows" {
                 client.get_latest_episodes(&v.id, 15).unwrap_or_default()
             } else {
