@@ -21,95 +21,91 @@ fn queue_group_start_row(display: &[QueueRow], row: usize) -> usize {
 }
 
 impl App {
-    /// Renders the queue header pill row (Local/Remote scope pills + Queue
-    /// pill, or a dashed rule + Queue pill) at the given 1-row area.
-    pub(super) fn render_power_queue_header(
+    /// Renders the "Queue" title pill at the top of the queue column.
+    pub(super) fn render_power_queue_title(&self, f: &mut Frame, area: Rect) {
+        if area.height < 1 {
+            return;
+        }
+        f.render_widget(
+            Paragraph::new(Line::from(vec![Span::styled(
+                " Queue ",
+                Style::default().fg(palette::BASE).bg(palette::FOAM),
+            )])),
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            },
+        );
+    }
+
+    /// Renders the Local/Remote scope pills at the bottom of the queue column.
+    /// Returns true if scope pills were rendered (i.e. remote queue exists).
+    pub(super) fn render_power_queue_scope_pills(
         &mut self,
         f: &mut Frame,
         area: Rect,
         layout: &mut LayoutPower,
-    ) {
+    ) -> bool {
         if area.height < 1 {
-            return;
+            return false;
         }
 
         layout.queue_scope_local_area = Rect::default();
         layout.queue_scope_remote_area = Rect::default();
 
-        let show_remote_scope = self.has_direct_remote_queue();
-        if show_remote_scope {
-            let queue_label = " Queue ";
-            let queue_w = queue_label.width() as u16;
-            let local_label = " Local ";
-            let remote_label = " Remote ";
-            let local_w = local_label.width() as u16;
-            let remote_w = remote_label.width() as u16;
-            let gap = 1u16;
-            // Right-aligned block for Local/Remote scope pills.
-            let scope_block_w = local_w + gap + remote_w;
-            let local_x = area.x + area.width.saturating_sub(scope_block_w);
-            let remote_x = local_x + local_w + gap;
-            layout.queue_scope_local_area = Rect {
-                x: local_x,
-                y: area.y,
-                width: local_w,
-                height: 1,
-            };
-            layout.queue_scope_remote_area = Rect {
-                x: remote_x,
-                y: area.y,
-                width: remote_w,
-                height: 1,
-            };
-            let local_selected = self.visible_queue_scope() == QueueScope::Local;
-            let inactive = Style::default().fg(palette::MUTED).bg(palette::PILL_BG);
-            let active = Style::default().fg(palette::BASE).bg(palette::FOAM);
-            let mut spans = Vec::new();
-            // Queue pill, left-aligned.
-            spans.push(Span::styled(
-                queue_label,
-                Style::default().fg(palette::BASE).bg(palette::FOAM),
-            ));
-            // Fill gap between Queue and scope pills.
-            let queue_used = queue_w;
-            let scope_start = area.width.saturating_sub(scope_block_w);
-            let pad = scope_start.saturating_sub(queue_used);
-            spans.push(Span::raw(" ".repeat(pad as usize)));
-            // Local pill.
-            spans.push(Span::styled(
-                local_label,
-                if local_selected { active } else { inactive },
-            ));
-            spans.push(Span::raw(" "));
-            // Remote pill.
-            spans.push(Span::styled(
-                remote_label,
-                if local_selected { inactive } else { active },
-            ));
-            f.render_widget(
-                Paragraph::new(Line::from(spans)),
-                Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: area.width,
-                    height: 1,
-                },
-            );
-        } else {
-            let pill = " Queue ";
-            f.render_widget(
-                Paragraph::new(Line::from(vec![Span::styled(
-                    pill,
-                    Style::default().fg(palette::BASE).bg(palette::FOAM),
-                )])),
-                Rect {
-                    x: area.x,
-                    y: area.y,
-                    width: area.width,
-                    height: 1,
-                },
-            );
+        if !self.has_direct_remote_queue() {
+            return false;
         }
+
+        let local_label = " Local ";
+        let remote_label = " Remote ";
+        let local_w = local_label.width() as u16;
+        let remote_w = remote_label.width() as u16;
+        let gap = 1u16;
+        let scope_block_w = local_w + gap + remote_w;
+        let local_x = area.x + area.width.saturating_sub(scope_block_w);
+        let remote_x = local_x + local_w + gap;
+        layout.queue_scope_local_area = Rect {
+            x: local_x,
+            y: area.y,
+            width: local_w,
+            height: 1,
+        };
+        layout.queue_scope_remote_area = Rect {
+            x: remote_x,
+            y: area.y,
+            width: remote_w,
+            height: 1,
+        };
+        let local_selected = self.visible_queue_scope() == QueueScope::Local;
+        let inactive = Style::default().fg(palette::MUTED).bg(palette::PILL_BG);
+        let active = Style::default().fg(palette::BASE).bg(palette::FOAM);
+        let mut spans = Vec::new();
+        let pad = area.width.saturating_sub(scope_block_w);
+        if pad > 0 {
+            spans.push(Span::raw(" ".repeat(pad as usize)));
+        }
+        spans.push(Span::styled(
+            local_label,
+            if local_selected { active } else { inactive },
+        ));
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            remote_label,
+            if local_selected { inactive } else { active },
+        ));
+        f.render_widget(
+            Paragraph::new(Line::from(spans)),
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            },
+        );
+        true
     }
 
     /// Renders the queue list (track items, group headers, scrollbar). The
