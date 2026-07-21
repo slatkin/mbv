@@ -50,13 +50,18 @@ impl App {
         ));
 
         if self.has_direct_remote_queue() {
-            let nf_prefix = if self.use_nerd_fonts {
-                "\u{F0AFE} "
+            let local_selected = self.visible_queue_scope() == QueueScope::Local;
+            let nf_icon = if self.use_nerd_fonts { "\u{F03A} " } else { "" };
+            let local_label = if local_selected {
+                format!(" {nf_icon}LOCAL ")
             } else {
-                ""
+                " LOCAL ".to_string()
             };
-            let local_label = format!(" {nf_prefix}LOCAL ");
-            let remote_label = format!(" {nf_prefix}REMOTE ");
+            let remote_label = if local_selected {
+                " REMOTE ".to_string()
+            } else {
+                format!(" {nf_icon}REMOTE ")
+            };
             let local_w = local_label.width() as u16;
             let remote_w = remote_label.width() as u16;
             let gap = 1u16;
@@ -81,7 +86,6 @@ impl App {
                 width: remote_w,
                 height: 1,
             };
-            let local_selected = self.visible_queue_scope() == QueueScope::Local;
             let inactive = Style::default().fg(palette::MUTED);
             let active = Style::default()
                 .fg(palette::YELLOW)
