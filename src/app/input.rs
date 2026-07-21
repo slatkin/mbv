@@ -4849,7 +4849,7 @@ mod power_music_track_focus_tests {
         let mut app = make_power_music_album_app();
         push_tracks(&mut app, "album-1", 3);
         app.libs[0].album_track_focus = Some(1);
-        app.layout.power.left_area = Rect::new(10, 5, 30, 4);
+        app.layout.power.left_area = Rect::new(10, 5, 29, 4);
         app.layout.power.left_row_map = vec![Some(1)];
 
         let handled = app.click_set_cursor(11, 5);
@@ -4990,8 +4990,8 @@ mod power_music_track_focus_tests {
         assert!(!handled);
         // Display rows: 0 = artist header, 1 = selected album 0, 2 = its
         // collapsed action-hint row (tracks stay hidden until Enter is
-        // pressed), 3.. = the remaining albums one row each. A 30-row page
-        // from display row 1 lands on display row 31 = album 29.
+        // pressed), 3.. = the remaining albums one row each. A 31-row page
+        // from display row 1 lands on display row 32 = album 30.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
             30,
@@ -5810,7 +5810,7 @@ mod power_library_scope_routing_tests {
         app.layout.tabs_area = Rect {
             x: 0,
             y: 0,
-            width: 30,
+            width: 29,
             height: 1,
         };
 
