@@ -50,8 +50,13 @@ impl App {
         ));
 
         if self.has_direct_remote_queue() {
-            let local_label = " LOCAL ";
-            let remote_label = " REMOTE ";
+            let nf_prefix = if self.use_nerd_fonts {
+                "\u{F0AFE} "
+            } else {
+                ""
+            };
+            let local_label = format!(" {nf_prefix}LOCAL ");
+            let remote_label = format!(" {nf_prefix}REMOTE ");
             let local_w = local_label.width() as u16;
             let remote_w = remote_label.width() as u16;
             let gap = 1u16;
@@ -78,7 +83,9 @@ impl App {
             };
             let local_selected = self.visible_queue_scope() == QueueScope::Local;
             let inactive = Style::default().fg(palette::MUTED);
-            let active = Style::default().fg(palette::YELLOW);
+            let active = Style::default()
+                .fg(palette::YELLOW)
+                .add_modifier(Modifier::BOLD);
             spans.push(Span::styled(
                 local_label,
                 if local_selected { active } else { inactive },
