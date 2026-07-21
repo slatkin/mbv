@@ -111,42 +111,22 @@ impl App {
         let reserve_player_rows = in_power && mode == crate::config::PanelMode::OneRow;
         let tabs_h: u16 = 1;
         let spacer_h: u16 = 1;
-        // seek = full-width seekbar row; title = now-playing row; controls = blank spacer below it.
-        // status_bar now renders within each view's right panel, not as an independent bottom row.
-        let (seek_h, gap_h, title_h, controls_h): (u16, u16, u16, u16) =
+        // Player panel now renders within the right column of each view instead
+        // of as a full-width row above the content area.
+        let (seek_h, _gap_h, title_h, controls_h): (u16, u16, u16, u16) =
             if onerow || reserve_player_rows {
                 (1, 0, 1, 1)
             } else {
                 (1, 0, 0, 0)
             };
-        let [tabs_area, _spacer_area, seek_area, _gap_area, title_area, _controls_area, main_area] =
-            Layout::vertical([
-                Constraint::Length(tabs_h),
-                Constraint::Length(spacer_h),
-                Constraint::Length(seek_h),
-                Constraint::Length(gap_h),
-                Constraint::Length(title_h),
-                Constraint::Length(controls_h),
-                Constraint::Min(0),
-            ])
-            .areas(area);
+        let player_h = seek_h + title_h + controls_h;
+        let [tabs_area, _spacer_area, main_area] = Layout::vertical([
+            Constraint::Length(tabs_h),
+            Constraint::Length(spacer_h),
+            Constraint::Min(0),
+        ])
+        .areas(area);
 
-        // Full-width seekbar row: live bar when playing, plain grey divider otherwise.
-        if seek_h > 0 {
-            if show_controls {
-                self.render_seekbar(f, seek_area, &mut layout.playback);
-            } else {
-                layout.playback.seekbar_area = Rect::default();
-                let bar = "\u{2594}".repeat(seek_area.width as usize);
-                f.render_widget(
-                    Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
-                    seek_area,
-                );
-            }
-        } else {
-            layout.playback.seekbar_area = Rect::default();
-        }
-        // Indicator-bar click regions are never set anymore; clear them every frame.
         layout.playback.ind_mu = Rect::default();
         layout.playback.ind_rc = Rect::default();
 
@@ -352,23 +332,42 @@ impl App {
             } else {
                 None
             };
-        if let Some((ref title, color)) = now_playing_title {
-            // The one-row now-playing header: "▶ Title │ time … badges".
-            self.render_title_row(f, title_area, title, color, &mut layout.playback);
-        }
         // Top-level render dispatch (issue #275): Power owns its own nav via
         // `power_left_tab` and ignores `tab_idx` entirely; `tab_idx` is
         // meaningful only in Standard mode.
         match self.view_mode {
             super::ViewMode::Power => {
-                self.render_power_view(f, main_area, &mut layout.power, &mut layout.playback);
+                self.render_power_view(
+                    f,
+                    main_area,
+                    &mut layout.power,
+                    &mut layout.playback,
+                    player_h,
+                    show_controls,
+                    &now_playing_title,
+                );
             }
             super::ViewMode::Standard => {
-                let content_h = main_area.height.saturating_sub(1);
+                let content_h = main_area.height.saturating_sub(player_h).saturating_sub(1);
                 let content_area = Rect {
+                    y: main_area.y + player_h,
                     height: content_h,
                     ..main_area
                 };
+
+                let player_area = Rect {
+                    height: player_h,
+                    ..main_area
+                };
+                self.render_player_panel(
+                    f,
+                    player_area,
+                    &mut layout.playback,
+                    player_h,
+                    show_controls,
+                    &now_playing_title,
+                );
+
                 if self.tab_idx == 0 {
                     self.render_combined(f, content_area, &mut layout.home);
                 } else if self.tab_idx == 1 {
@@ -384,7 +383,7 @@ impl App {
                 }
 
                 let sb_area = Rect {
-                    y: main_area.y + content_h,
+                    y: main_area.y + content_h + player_h,
                     height: 1,
                     ..main_area
                 };
@@ -649,6 +648,45 @@ impl App {
             &data,
             self.use_nerd_fonts,
         ))
+    }
+
+    /// Renders the player panel (seekbar + now-playing title row) within the
+    /// given `area`, which should be `player_h` rows tall.
+    fn render_player_panel(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        layout: &mut super::layout::LayoutPlayback,
+        player_h: u16,
+        show_controls: bool,
+        now_playing_title: &Option<(String, Color)>,
+    ) {
+        if player_h == 0 {
+            return;
+        }
+        // Seekbar row (always present when player_h > 0).
+        let seek_area = Rect { height: 1, ..area };
+        if show_controls {
+            self.render_seekbar(f, seek_area, layout);
+        } else {
+            layout.seekbar_area = Rect::default();
+            let bar = "\u{2594}".repeat(seek_area.width as usize);
+            f.render_widget(
+                Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
+                seek_area,
+            );
+        }
+        // Title row (when panel is expanded).
+        if player_h >= 2 {
+            let title_area = Rect {
+                y: area.y + 1,
+                height: 1,
+                ..area
+            };
+            if let Some((ref title, color)) = now_playing_title {
+                self.render_title_row(f, title_area, title, *color, layout);
+            }
+        }
     }
 
     /// One-line now-playing header: play/pause, next, title, and time on the
