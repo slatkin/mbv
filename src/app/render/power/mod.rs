@@ -50,6 +50,13 @@ pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usiz
     );
 }
 
+pub(super) fn right_panel_scrollbar_area(area: Rect) -> Rect {
+    Rect {
+        width: area.width.saturating_add(1),
+        ..area
+    }
+}
+
 pub(super) fn render_power_scrollbar_with_viewport(
     f: &mut Frame,
     area: Rect,
@@ -334,10 +341,6 @@ pub(super) enum PillUnderlay {
     /// pills float on the panel background (used by the music-group tabs);
     /// `fill: false` leaves the trailing cells untouched (feed-group tabs).
     Blank { fill: bool },
-    /// Draw a full-width horizontal rule (`─`) in this color first, so the
-    /// bar reads as a labeled divider "tail" with the pills sitting on it
-    /// (used by Home's "Newest:" section pills).
-    Rule(Color),
 }
 
 /// A horizontally-scrolling row of selector pills, shared by every power-view
@@ -413,17 +416,6 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
     let cnt = count_fitting(scroll_start, avail_pills);
     let scroll_end = (scroll_start + cnt).min(n);
     let has_right = scroll_end < n;
-
-    // Optional full-width rule underlay, drawn before the pills overlay it.
-    if let PillUnderlay::Rule(color) = bar.underlay {
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                "\u{2500}".repeat(bar_w),
-                Style::default().fg(color),
-            ))),
-            area,
-        );
-    }
 
     let mut spans: Vec<Span> = Vec::new();
     let mut x_cursor = area.x;
@@ -1260,6 +1252,16 @@ mod tests {
         assert_eq!(layout.left_area.width, 40 - 2 * POWER_TAB_LEFT_PAD);
     }
 
+    #[test]
+    fn right_panel_scrollbar_uses_one_column_right_padding() {
+        let content_area = Rect::new(42, 3, 36, 10);
+
+        let scrollbar_area = right_panel_scrollbar_area(content_area);
+
+        assert_eq!(scrollbar_area.x, content_area.x);
+        assert_eq!(scrollbar_area.width, content_area.width + 1);
+    }
+
     fn make_power_movie_app() -> App {
         let mut app = make_app_stub();
         app.power_left_tab = 1;
@@ -1494,6 +1496,8 @@ mod tests {
             .lines()
             .nth(layout.queue_scope_local_area.y as usize)
             .expect("expected queue header row");
+        let device_name = mbv_core::api::device_name();
+        let upper_device_name = device_name.to_uppercase();
 
         assert!(layout.queue_scope_local_area.y < top_y);
         assert!(layout.queue_scope_remote_area.y < top_y);
@@ -1503,7 +1507,7 @@ mod tests {
             layout.queue_area.width
         );
         assert!(
-            header.matches(&mbv_core::api::device_name()).count() >= 2,
+            header.matches(&upper_device_name).count() >= 2,
             "expected local and remote queue controls to use session-style hostname pills:\n{out}"
         );
         assert!(
@@ -1526,9 +1530,11 @@ mod tests {
             .lines()
             .nth(layout.queue_scope_local_area.y as usize)
             .expect("expected queue header row");
+        let device_name = mbv_core::api::device_name();
+        let upper_device_name = device_name.to_uppercase();
 
         assert!(
-            header.contains(&mbv_core::api::device_name()),
+            header.contains(&upper_device_name),
             "expected session hostname pill in queue header:\n{out}"
         );
         assert!(

@@ -1021,6 +1021,24 @@ impl App {
         Self::set_status_label_color(spans, fg);
     }
 
+    /// Uppercase the status label span (index 2, same convention as
+    /// [`Self::set_status_label_color`]) in place.
+    pub(super) fn uppercase_status_label(spans: &mut [Span<'static>]) {
+        let Some(label) = spans.get_mut(2) else {
+            return;
+        };
+        label.content = label.content.to_uppercase().into();
+    }
+
+    /// Bold the status label span (index 2) in place when `bold` is set.
+    pub(super) fn set_status_label_bold(spans: &mut [Span<'static>], bold: bool) {
+        if bold {
+            if let Some(label) = spans.get_mut(2) {
+                label.style = label.style.add_modifier(Modifier::BOLD);
+            }
+        }
+    }
+
     fn render_remote_status_hitbox(
         &self,
         layout: &mut LayoutPlayback,
@@ -1533,6 +1551,22 @@ mod tests {
         let spans = app.remote_status_spans(RemoteSlotState::DirectRemote, "tcp://127.0.0.1:9000");
         let text: String = spans.iter().map(|s| s.content.as_ref()).collect();
         assert!(text.contains("music"));
+    }
+
+    #[test]
+    fn status_label_style_uppercases_and_bolds_selected_label() {
+        let mut spans = vec![
+            Span::raw(" "),
+            Span::raw("icon"),
+            Span::styled("  living-room", Style::default().fg(palette::SUBTLE)),
+            Span::raw(" "),
+        ];
+
+        App::uppercase_status_label(&mut spans);
+        App::set_status_label_bold(&mut spans, true);
+
+        assert_eq!(spans[2].content.as_ref(), "  LIVING-ROOM");
+        assert!(spans[2].style.add_modifier.contains(Modifier::BOLD));
     }
 
     #[test]

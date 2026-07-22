@@ -616,7 +616,12 @@ impl App {
                 height: table_area.height.saturating_sub(1),
                 ..table_area
             };
-            super::render_power_scrollbar(f, sb_area, max_offset, state.offset());
+            super::render_power_scrollbar(
+                f,
+                super::right_panel_scrollbar_area(sb_area),
+                max_offset,
+                state.offset(),
+            );
         }
     }
 }

@@ -9540,13 +9540,15 @@ pub(crate) mod tests {
         app.set_queue_scope(QueueScope::Local);
 
         let rendered = render_app_to_string(&mut app, 90, 28);
+        let device_name = device_name();
+        let upper_device_name = device_name.to_uppercase();
 
         assert!(
-            rendered.contains(&format!(" {} ", device_name())),
+            rendered.contains(&format!(" {} ", upper_device_name)),
             "expected power queue local/session pills to use the device name:\n{rendered}"
         );
-        assert!(app.layout.power.queue_scope_local_area.width >= device_name().width() as u16);
-        assert!(app.layout.power.queue_scope_remote_area.width >= device_name().width() as u16);
+        assert!(app.layout.power.queue_scope_local_area.width >= device_name.width() as u16);
+        assert!(app.layout.power.queue_scope_remote_area.width >= device_name.width() as u16);
         assert!(
             app.layout.power.queue_scope_remote_area.x > app.layout.power.queue_scope_local_area.x
         );

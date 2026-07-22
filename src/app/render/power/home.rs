@@ -340,7 +340,7 @@ impl App {
         if needs_scrollbar && focused {
             super::render_power_scrollbar_with_viewport(
                 f,
-                content_area,
+                super::right_panel_scrollbar_area(content_area),
                 n,
                 visible_items.max(1),
                 scroll,
@@ -510,7 +510,7 @@ impl App {
         if needs_scrollbar && focused {
             super::render_power_scrollbar_with_viewport(
                 f,
-                list_area,
+                super::right_panel_scrollbar_area(list_area),
                 items.len(),
                 visible_items.max(1),
                 scroll,
@@ -783,75 +783,134 @@ impl App {
             items: Vec<mbv_core::api::MediaItem>,
         }
         enum DisplayRow {
-            Pills,
             Empty,
             Item(usize, Box<mbv_core::api::MediaItem>),
-            Blank,
         }
 
         let continue_items = self.home.continue_items.clone();
         let latest = self.home.latest.clone();
 
-        // --- Keep Watching hero panel -------------------------------------
-        // A carousel-like image + metadata panel above the Keep Watching
-        // list, reflecting the item currently under the cursor, separated
-        // from the list below by blank rows. The panel is sized to
-        // fit its metadata column's content (title + show name + duration
-        // line + full overview) rather than a fixed height, so the overview
-        // never gets clipped; it's still capped by how much of `area` can be
-        // spared without starving the list underneath.
-        // Borrows from `continue_items` (a local owned Vec, not `self`), so it's
-        // fine to hold this reference across the `&mut self` calls below and
-        // avoid a second clone of the item on top of the one already made above.
-        let hero: Option<(&mbv_core::api::MediaItem, u16, KeepWatchingHeroLayout)> =
-            if continue_items.is_empty() || area.width < 24 {
+        let mut flat = continue_items.len();
+        let mut new_sections: Vec<Section> = Vec::new();
+        for (idx, (_title, _lib, items, _cur)) in latest.iter().enumerate() {
+            if items.is_empty() {
+                flat += items.len();
+                continue;
+            }
+            new_sections.push(Section {
+                section_idx: idx + 1,
+                flat_start: flat,
+                items: items.clone(),
+            });
+            flat += items.len();
+        }
+
+        if self.home.section != 0
+            && !new_sections
+                .iter()
+                .any(|section| section.section_idx == self.home.section)
+        {
+            self.home.section = new_sections
+                .first()
+                .map(|section| section.section_idx)
+                .unwrap_or(0);
+        }
+
+        let selected_new = new_sections
+            .iter()
+            .find(|section| section.section_idx == self.home.section);
+
+        self.render_power_home_section_pills_row(
+            f,
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: area.width,
+                height: 1,
+            },
+            layout,
+        );
+        let content_area = Rect {
+            y: area.y.saturating_add(2),
+            height: area.height.saturating_sub(2),
+            ..area
+        };
+
+        let mut rows: Vec<DisplayRow> = Vec::new();
+        if self.home.section == 0 {
+            for (idx, item) in continue_items.into_iter().enumerate() {
+                rows.push(DisplayRow::Item(idx, Box::new(item)));
+            }
+        } else if let Some(section) = selected_new {
+            for (idx, item) in section.items.iter().cloned().enumerate() {
+                rows.push(DisplayRow::Item(section.flat_start + idx, Box::new(item)));
+            }
+        }
+        if rows.is_empty() {
+            rows.push(DisplayRow::Empty);
+        }
+
+        let visible_flat_indices: Vec<usize> = rows
+            .iter()
+            .filter_map(|row| match row {
+                DisplayRow::Item(flat_idx, _) => Some(*flat_idx),
+                _ => None,
+            })
+            .collect();
+        if let Some(first) = visible_flat_indices.first() {
+            if !visible_flat_indices.contains(&self.home.power_home_cursor) {
+                self.home.power_home_cursor = *first;
+            }
+        } else {
+            self.home.power_home_cursor = 0;
+        }
+        let cursor = self.home.power_home_cursor;
+
+        // --- Home hero panel ----------------------------------------------
+        // Shared hero above the selected Home list. It reflects the current
+        // flat cursor item whether the active pill is Continue Watching or one
+        // of the Newest sections.
+        let hero_item = self.power_home_current_item();
+        let hero: Option<(mbv_core::api::MediaItem, u16, KeepWatchingHeroLayout)> =
+            if area.width < 24 {
                 None
             } else {
-                continue_items
-                    .get(self.home.power_home_cursor)
-                    .or_else(|| continue_items.first())
-                    .and_then(|item| {
-                        let img_w = ((area.width as u32 * 2 / 5) as u16)
-                            .clamp(12, 32)
-                            .min(area.width.saturating_sub(12));
-                        let meta_w = area.width.saturating_sub(img_w + 1) as usize;
-                        let mut meta_layout = Self::keep_watching_hero_layout(item, meta_w);
-                        let max_allowed = area.height.saturating_sub(7); // leave room for blank rows + list
-                        meta_layout.height = meta_layout.height.min(max_allowed);
-                        if meta_layout.height < 4 {
-                            None
-                        } else {
-                            Some((item, img_w, meta_layout))
-                        }
-                    })
+                hero_item.and_then(|item| {
+                    let img_w = ((area.width as u32 * 2 / 5) as u16)
+                        .clamp(12, 32)
+                        .min(area.width.saturating_sub(12));
+                    let meta_w = area.width.saturating_sub(img_w + 1) as usize;
+                    let mut meta_layout = Self::keep_watching_hero_layout(&item, meta_w);
+                    let max_allowed = content_area.height.saturating_sub(7);
+                    meta_layout.height = meta_layout.height.min(max_allowed);
+                    if meta_layout.height < 4 {
+                        None
+                    } else {
+                        Some((item, img_w, meta_layout))
+                    }
+                })
             };
         let hero_h: u16 = hero
             .as_ref()
             .map(|(_, _, l)| {
-                // Minimum height to prevent screen jitter when browsing the list,
-                // capped by available space so short terminals still fit the list.
-                let max_allowed = area.height.saturating_sub(7);
+                let max_allowed = content_area.height.saturating_sub(7);
                 l.height.max(10).min(max_allowed)
             })
             .unwrap_or(0);
 
-        let list_area = if hero_h > 0 {
-            Rect {
-                y: area.y + hero_h + 2,
-                height: area.height.saturating_sub(hero_h + 2),
-                ..area
-            }
-        } else {
-            area
+        let list_area = Rect {
+            y: content_area.y + hero_h + 2,
+            height: content_area.height.saturating_sub(hero_h + 2),
+            ..content_area
         };
         layout.left_area = list_area;
 
         if let Some((item, img_w, meta_layout)) = &hero {
             let img_w = *img_w;
             let hero_area = Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
+                x: content_area.x,
+                y: content_area.y,
+                width: content_area.width,
                 height: hero_h,
             };
             let meta_area = Rect {
@@ -881,76 +940,6 @@ impl App {
             self.render_keep_watching_hero_meta(f, meta_area, item, meta_layout, focused);
         }
 
-        let mut flat = continue_items.len();
-        let mut new_sections: Vec<Section> = Vec::new();
-        for (idx, (_title, _lib, items, _cur)) in latest.iter().enumerate() {
-            if items.is_empty() {
-                flat += items.len();
-                continue;
-            }
-            new_sections.push(Section {
-                section_idx: idx + 1,
-                flat_start: flat,
-                items: items.clone(),
-            });
-            flat += items.len();
-        }
-
-        if !new_sections
-            .iter()
-            .any(|section| section.section_idx == self.home.section)
-        {
-            self.home.section = new_sections
-                .first()
-                .map(|section| section.section_idx)
-                .unwrap_or(0);
-        }
-
-        let selected_new = new_sections
-            .iter()
-            .find(|section| section.section_idx == self.home.section);
-
-        let mut rows: Vec<DisplayRow> = Vec::new();
-        let continue_row_count;
-        let new_section_count;
-        if continue_items.is_empty() {
-            rows.push(DisplayRow::Empty);
-            continue_row_count = 1;
-            new_section_count = 0u16;
-        } else {
-            continue_row_count = continue_items.len() as u16;
-            for (idx, item) in continue_items.into_iter().enumerate() {
-                rows.push(DisplayRow::Item(idx, Box::new(item)));
-            }
-            new_section_count = selected_new.as_ref().map(|s| s.items.len()).unwrap_or(0) as u16;
-        }
-        if let Some(section) = selected_new {
-            rows.push(DisplayRow::Blank);
-            rows.push(DisplayRow::Blank);
-            rows.push(DisplayRow::Pills);
-            rows.push(DisplayRow::Blank);
-            rows.push(DisplayRow::Blank);
-            for (idx, item) in section.items.iter().cloned().enumerate() {
-                rows.push(DisplayRow::Item(section.flat_start + idx, Box::new(item)));
-            }
-        }
-
-        let visible_flat_indices: Vec<usize> = rows
-            .iter()
-            .filter_map(|row| match row {
-                DisplayRow::Item(flat_idx, _) => Some(*flat_idx),
-                _ => None,
-            })
-            .collect();
-        if let Some(first) = visible_flat_indices.first() {
-            if !visible_flat_indices.contains(&self.home.power_home_cursor) {
-                self.home.power_home_cursor = *first;
-            }
-        } else {
-            self.home.power_home_cursor = 0;
-        }
-        let cursor = self.home.power_home_cursor;
-
         let content_h = rows.len().max(1) as u16;
         let needs_scrollbar = content_h > list_area.height;
         let list_w = super::power_content_width(list_area.width, needs_scrollbar) as u16;
@@ -968,130 +957,18 @@ impl App {
         self.home.power_home_scroll = scroll_y as usize;
 
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
-        layout.selector_tabs = Vec::new();
-
-        let new_section_start = continue_row_count as usize + 5;
-
-        // Colored section blocks use the same padded left edge as the selected
-        // row blocks on the library tabs. The whole block stays inside
-        // `list_area`; only row text decides its own internal spacing.
-        let block_x = list_area.x;
-        let block_w = list_area.width;
-
-        // Background for the continue watching list.
-        // Includes 1 top and 1 bottom padding row so the items are not flush
-        // against the block borders; borders sit outside the block.
-        let continue_bg_h = continue_row_count.min(list_area.height);
-        if continue_bg_h >= 1 {
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
-                Rect {
-                    x: block_x,
-                    y: list_area.y.saturating_sub(1),
-                    width: block_w,
-                    height: continue_bg_h + 2,
-                },
-            );
-            let border_style = Style::default().fg(palette::SOFT_WHITE);
-            // Top border at the row above the block's top padding.
-            let top_y = list_area.y.saturating_sub(2);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(block_w as usize),
-                    border_style,
-                ))),
-                Rect {
-                    x: block_x,
-                    y: top_y,
-                    width: block_w,
-                    height: 1,
-                },
-            );
-            // Bottom border at the row below the block's bottom padding.
-            let bot_y = list_area.y + continue_bg_h + 1;
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    "\u{2594}".repeat(block_w as usize),
-                    border_style,
-                ))),
-                Rect {
-                    x: block_x,
-                    y: bot_y,
-                    width: block_w,
-                    height: 1,
-                },
-            );
-        }
-
-        // Background for the newest section, same style as continue watching.
-        if new_section_count >= 1 {
-            let new_bg_y = list_area.y + (new_section_start as u16).saturating_sub(scroll_y);
-            let new_bg_h = new_section_count.min(list_area.height);
-            f.render_widget(
-                Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
-                Rect {
-                    x: block_x,
-                    y: new_bg_y.saturating_sub(1),
-                    width: block_w,
-                    height: new_bg_h + 2,
-                },
-            );
-            let border_style = Style::default().fg(palette::SOFT_WHITE);
-            // Top border at the row above the block's top padding.
-            let top_y = new_bg_y.saturating_sub(2);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(block_w as usize),
-                    border_style,
-                ))),
-                Rect {
-                    x: block_x,
-                    y: top_y,
-                    width: block_w,
-                    height: 1,
-                },
-            );
-            // Bottom border at the row below the block's bottom padding.
-            let bot_y = new_bg_y + new_bg_h + 1;
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    "\u{2594}".repeat(block_w as usize),
-                    border_style,
-                ))),
-                Rect {
-                    x: block_x,
-                    y: bot_y,
-                    width: block_w,
-                    height: 1,
-                },
-            );
-        }
 
         let visible = list_area.height.min(content_h.saturating_sub(scroll_y));
         for k in 0..visible {
             let row_idx = scroll_y as usize + k as usize;
             let sy = list_area.y + k;
-            // Rows inside colored backgrounds align to the panel's left edge
-            // like every other row -- the shared left padding is applied once
-            // upstream (POWER_TAB_LEFT_PAD), so no extra per-row indent here.
-            let is_continue_row = row_idx < continue_row_count as usize;
-            let is_new_row = row_idx >= new_section_start
-                && row_idx < new_section_start + new_section_count as usize;
-            let (rx, rw) = if is_continue_row || is_new_row {
-                (list_area.x, list_area.width)
-            } else {
-                (list_area.x, list_w)
-            };
             let row_rect = Rect {
-                x: rx,
+                x: list_area.x,
                 y: sy,
-                width: rw,
+                width: list_w,
                 height: 1,
             };
             match &rows[row_idx] {
-                DisplayRow::Pills => {
-                    self.render_power_home_section_pills_row(f, row_rect, layout);
-                }
                 DisplayRow::Empty => {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
@@ -1101,7 +978,6 @@ impl App {
                         row_rect,
                     );
                 }
-                DisplayRow::Blank => {}
                 DisplayRow::Item(flat_idx, item) => {
                     let selected_row = *flat_idx == cursor;
                     if selected_row {
@@ -1114,7 +990,7 @@ impl App {
                     } else {
                         String::new()
                     };
-                    let avail = (rw as usize).saturating_sub(1);
+                    let avail = (row_rect.width as usize).saturating_sub(1);
                     // Reserve a 6-column gap before the duration column so the title
                     // truncates well before running up against it, plus a 1-column
                     // pad after the duration so it isn't flush against the right edge.
@@ -1164,7 +1040,12 @@ impl App {
 
         if needs_scrollbar && focused {
             let max_off = content_h.saturating_sub(list_area.height) as usize;
-            super::render_power_scrollbar(f, list_area, max_off, scroll_y as usize);
+            super::render_power_scrollbar(
+                f,
+                super::right_panel_scrollbar_area(list_area),
+                max_off,
+                scroll_y as usize,
+            );
         }
     }
 
@@ -1179,15 +1060,11 @@ impl App {
             return;
         }
 
-        let mut labels: Vec<(usize, String)> = Vec::new();
+        let mut labels: Vec<(usize, String)> = vec![(0, "Continue Watching".to_string())];
         for (idx, (title, _lib, items, _cur)) in self.home.latest.iter().enumerate() {
             if !items.is_empty() {
                 labels.push((idx + 1, title.clone()));
             }
-        }
-        if labels.is_empty() {
-            layout.selector_tabs = Vec::new();
-            return;
         }
         if !labels
             .iter()
@@ -1215,8 +1092,8 @@ impl App {
                 labels: &label_strs,
                 ids: &ids,
                 selected_pos,
-                prefix: Some("Newest: "),
-                underlay: super::PillUnderlay::Rule(palette::GREEN),
+                prefix: None,
+                underlay: super::PillUnderlay::Blank { fill: false },
             },
         );
     }
@@ -1226,7 +1103,6 @@ impl App {
 mod tests {
     use super::power_home_panel_scroll;
     use crate::app::layout::AppLayout;
-    use crate::app::palette;
     use crate::app::tests::{make_app_stub, make_items};
     use mbv_core::api::TICKS_PER_SECOND;
     use ratatui::backend::TestBackend;
@@ -1247,7 +1123,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_keep_watching_then_selected_new_section() {
+    fn renders_home_pills_and_only_selected_section() {
         let mut app = make_app_stub();
 
         let mut cont = make_items(3);
@@ -1262,6 +1138,7 @@ mod tests {
             for (i, it) in v.iter_mut().enumerate() {
                 it.name = ["King Of America", "Either/Or", "Too-Rye-Ay"][i].to_string();
             }
+            v[0].overview = "Newest metadata overview appears in the shared Home hero.".into();
             v
         };
         let youtube = {
@@ -1291,20 +1168,42 @@ mod tests {
         assert!(out.contains("Taskmaster"));
         assert!(out.contains("QI XL"));
         assert!(out.contains("8 Diagram Pole Fighter"));
+        assert!(out.contains("Continue Watching"));
         assert!(out.contains("Music"));
         assert!(out.contains("YouTube"));
-        assert!(out.contains("King Of America"));
-        assert!(out.contains("Either/Or"));
+        assert!(!out.contains("King Of America"));
+        assert!(!out.contains("Either/Or"));
         assert!(!out.contains("NXL Not-E3 Showcase"));
         // Durations render as minutes only, never hours (67m for 4020s, not 1h07m).
         assert!(out.contains("47m"));
         assert!(out.contains("67m"));
         assert!(!out.contains("1h"));
-        assert_eq!(layout.power.home.hitmap.len(), 6);
+        assert_eq!(layout.power.home.hitmap.len(), 3);
+        assert_eq!(layout.power.selector_tabs.len(), 3);
+
+        app.power_home_select_section(1);
+        let backend = TestBackend::new(80, 30);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = AppLayout::default();
+        term.draw(|f| {
+            let area = Rect::new(0, 0, 80, 30);
+            app.render_power_home_list(f, area, true, &mut layout.power);
+        })
+        .unwrap();
+
+        let out = buffer_to_string(&term);
+        println!("\n{out}");
+
+        assert!(!out.contains("Taskmaster"));
+        assert!(out.contains("King Of America"));
+        assert!(out.contains("Newest metadata overview appears"));
+        assert!(out.contains("Either/Or"));
+        assert!(!out.contains("NXL Not-E3 Showcase"));
+        assert_eq!(layout.power.home.hitmap.len(), 3);
     }
 
     #[test]
-    fn list_blocks_respect_power_tab_left_indent() {
+    fn home_list_does_not_draw_selected_media_box() {
         let mut app = make_app_stub();
         let mut cont = make_items(3);
         for (i, it) in cont.iter_mut().enumerate() {
@@ -1324,20 +1223,12 @@ mod tests {
         })
         .unwrap();
 
-        let buf = term.backend().buffer();
-        let continue_top_border_y = 0;
-        let newest_top_border_y = 8;
-
-        for y in [continue_top_border_y, newest_top_border_y] {
-            assert_ne!(buf[(0, y)].symbol(), "\u{2581}");
-            assert_ne!(buf[(1, y)].symbol(), "\u{2581}");
-            assert_eq!(buf[(2, y)].symbol(), "\u{2581}");
-            assert_eq!(buf[(2, y)].fg, palette::SOFT_WHITE);
-            assert_eq!(buf[(21, y)].symbol(), "\u{2581}");
-            assert_eq!(buf[(21, y)].fg, palette::SOFT_WHITE);
-            assert_ne!(buf[(22, y)].symbol(), "\u{2581}");
-            assert_ne!(buf[(23, y)].symbol(), "\u{2581}");
-        }
+        let out = buffer_to_string(&term);
+        assert!(!out.contains('\u{2581}'), "unexpected top border:\n{out}");
+        assert!(
+            !out.contains('\u{2594}'),
+            "unexpected bottom border:\n{out}"
+        );
     }
 
     #[test]

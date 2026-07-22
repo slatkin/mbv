@@ -1029,7 +1029,7 @@ impl EmbyClient {
         let resp: Value = self.get(&format!("/Users/{}/Items/Latest", self.user_id))
             .query("ParentId", parent_id)
             .query("Limit", &limit.to_string())
-            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId")
+            .query("Fields", "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,AlbumArtist,Artists,AlbumId,Overview,PremiereDate")
             .call().map_err(|e| e.to_string())?
             .into_json().map_err(|e| e.to_string())?;
         Ok(resp
@@ -1052,7 +1052,7 @@ impl EmbyClient {
             ("SortBy",            "DateCreated"),
             ("SortOrder",         "Descending"),
             ("IsPlayed",          "false"),
-            ("Fields",            "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path"),
+            ("Fields",            "UserData,RunTimeTicks,MediaType,SeriesId,SeriesName,SortName,ParentIndexNumber,IndexNumber,Path,Overview,PremiereDate"),
         ])
     }
 

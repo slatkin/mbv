@@ -80,10 +80,12 @@ impl App {
             if local_selected || !has_remote {
                 palette::SOFT_WHITE
             } else {
-                ratatui::style::Color::Black
+                palette::SUBTLE
             },
             local_bg,
         );
+        Self::uppercase_status_label(&mut local_spans);
+        Self::set_status_label_bold(&mut local_spans, local_selected || !has_remote);
         f.render_widget(
             Block::default().style(Style::default().bg(local_bg)),
             local_area,
@@ -115,10 +117,12 @@ impl App {
                 if !local_selected {
                     palette::SOFT_WHITE
                 } else {
-                    ratatui::style::Color::Black
+                    palette::SUBTLE
                 },
                 remote_bg,
             );
+            Self::uppercase_status_label(&mut remote_spans);
+            Self::set_status_label_bold(&mut remote_spans, !local_selected);
             if remote_spans.len() >= 4 {
                 remote_spans.swap(1, 2);
                 remote_spans[1].content = format!("{} ", remote_spans[1].content).into();
