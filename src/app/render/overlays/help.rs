@@ -63,12 +63,8 @@ impl App {
         ];
         // Rendered from `PLAYBACK_HELP_BINDINGS` (issue #133, phase 4) so this
         // section can no longer silently drift from `playback_command_for_key`.
-        // `h` (hide/show player) isn't part of that Command seam yet — it
-        // lives in `handle_key_panel_toggle` — so it stays hand-written here
-        // until that handler migrates too.
         let mut sec_playback = vec![section("[playback]")];
         sec_playback.extend(PLAYBACK_HELP_BINDINGS.iter().map(|b| mk(b.keys, b.label)));
-        sec_playback.push(mk("h", "Hide/show player"));
         sec_playback.push(blank());
         let sec_queue = vec![
             section("[queue]"),
@@ -78,6 +74,7 @@ impl App {
             mk("Ctrl+Z", "Undo removal"),
             mk("v", "Toggle view"),
             mk("g", "Toggle grouping"),
+            mk("h", "Collapse/expand Power View left column"),
             mk("Shift+← / →", "Resize Power View left column"),
             mk("Ctrl+S", "Save playlist"),
             blank(),

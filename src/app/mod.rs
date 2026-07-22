@@ -1040,14 +1040,9 @@ pub struct App {
     power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
     library_position_scope_override: Option<(usize, LibraryPositionScope)>,
     power_left_width: u16,
+    power_left_collapsed: bool,
     power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
     power_queue_scroll: usize,
-    // Whether the power-view queue is currently relocated to the bottom of the
-    // right column (low-height layout). Sticky with hysteresis so a small,
-    // transient change in the card image's rendered height (e.g. switching
-    // from a season poster to an episode thumbnail while browsing seasons)
-    // doesn't flip the whole right-panel layout and cause a visible reflow.
-    power_queue_relocated: bool,
     home_card_view: bool,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
@@ -1112,7 +1107,6 @@ pub struct App {
     show_save_playlist_modal: bool,
     use_nerd_fonts: bool,
     indicator_style: render::indicators::IndicatorStyle,
-    panel_mode: crate::config::PanelMode,
     ws_send_tx: Option<mbv_core::ws::WsSender>,
     last_keepalive: Instant,
     last_capabilities: Instant,
@@ -1814,9 +1808,9 @@ impl App {
                 .as_u64()
                 .map(|v| (v as u16).max(POWER_LEFT_WIDTH_DEFAULT))
                 .unwrap_or(POWER_LEFT_WIDTH_DEFAULT),
+            power_left_collapsed: false,
             power_left_tab_pending: prefs["power_left_tab"].as_u64().unwrap_or(0) as usize,
             power_queue_scroll: 0,
-            power_queue_relocated: false,
             home_card_view: false,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
@@ -1857,7 +1851,6 @@ impl App {
             queue_dirty: false,
             pending_queue_action: None,
             show_save_playlist_modal: false,
-            panel_mode: crate::config::PanelMode::default(),
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),
             connected_session_id: None,
@@ -6254,9 +6247,9 @@ pub(crate) mod tests {
             power_left_tab: 0,
             library_position_scope_override: None,
             power_left_width: POWER_LEFT_WIDTH_DEFAULT,
+            power_left_collapsed: false,
             power_left_tab_pending: 0,
             power_queue_scroll: 0,
-            power_queue_relocated: false,
             home_card_view: false,
             last_played_item_id: None,
             last_played_completed: false,
@@ -6311,7 +6304,6 @@ pub(crate) mod tests {
             show_save_playlist_modal: false,
             use_nerd_fonts: false,
             indicator_style: Default::default(),
-            panel_mode: Default::default(),
             ws_send_tx: None,
             last_keepalive: Instant::now(),
             last_capabilities: Instant::now(),

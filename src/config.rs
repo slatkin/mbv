@@ -34,24 +34,6 @@ impl Default for UiConfig {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum PanelMode {
-    #[default]
-    #[serde(alias = "expanded")]
-    OneRow,
-    Hidden,
-}
-
-impl PanelMode {
-    pub fn next(self) -> Self {
-        match self {
-            PanelMode::OneRow => PanelMode::Hidden,
-            PanelMode::Hidden => PanelMode::OneRow,
-        }
-    }
-}
-
 pub fn load_config() -> Result<Config, String> {
     mbv_core::config::load_config()
 }
