@@ -2293,19 +2293,6 @@ impl App {
         }
     }
 
-    fn sync_direct_remote_queue_after_edit(&mut self, scope: QueueScope) {
-        if scope == QueueScope::Remote && self.has_direct_remote_queue() {
-            let (items, cursor) = {
-                let queue = self
-                    .remote_player_tab
-                    .as_ref()
-                    .expect("direct remote queue requires remote queue");
-                (queue.items.clone(), queue.queue_cursor)
-            };
-            self.replace_direct_remote_queue(items, cursor);
-        }
-    }
-
     fn sync_playback_queue_after_append(
         &mut self,
         scope: QueueScope,
@@ -10537,8 +10524,7 @@ pub(crate) mod tests {
         let _guard = crate::config::TestStateDirGuard::new();
         let local_items = make_items(2);
         let remote_items = make_items(3);
-        let (mut app, _cmd_rx) =
-            make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
+        let (mut app, cmd_rx) = make_remote_app_stub_with_cmd_rx(local_items, remote_items.clone());
         app.tab_idx = 0;
         app.queue_scope = QueueScope::Remote;
         app.home.section = 0;
@@ -10561,6 +10547,16 @@ pub(crate) mod tests {
                 .map(|i| i.id.as_str())
                 .chain(std::iter::once("id0"))
                 .collect::<Vec<_>>()
+        );
+        assert!(matches!(
+            cmd_rx.try_recv(),
+            Ok(mbv_core::ctrl::CtrlCmd::PlayerCmd(
+                mbv_core::ctrl::WireCommand::QueueAppend { items }
+            )) if items.len() == 1 && items[0].id == "id0"
+        ));
+        assert!(
+            cmd_rx.try_recv().is_err(),
+            "Ctrl+A append must not follow QueueAppend with ReplaceQueue"
         );
     }
 

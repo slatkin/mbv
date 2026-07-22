@@ -2607,7 +2607,6 @@ impl App {
         }
         self.flash_status(format!("Added: {name}"));
         if self.sync_playback_queue_after_append(scope, vec![appended]) {
-            self.sync_direct_remote_queue_after_edit(scope);
             self.persist_local_queue_state_if_needed(scope);
         } else {
             self.queue_dirty = previous_dirty;
@@ -2693,7 +2692,6 @@ impl App {
             selection.artist_label
         ));
         if self.sync_playback_queue_after_append(scope, appended) {
-            self.sync_direct_remote_queue_after_edit(scope);
             self.persist_local_queue_state_if_needed(scope);
         } else {
             self.queue_dirty = previous_dirty;
@@ -2798,7 +2796,6 @@ impl App {
                     item.display_name()
                 ));
                 if self.sync_playback_queue_after_append(scope, appended) {
-                    self.sync_direct_remote_queue_after_edit(scope);
                     self.persist_local_queue_state_if_needed(scope);
                 } else {
                     self.queue_dirty = previous_dirty;
