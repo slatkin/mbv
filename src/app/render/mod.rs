@@ -1140,7 +1140,14 @@ impl App {
             && joined_width(&[playlist_w, alive_w]) <= available;
 
         let show_remote = remote_w > 0 && (fits_all || fits_without_alive || fits_without_mute);
-        let show_playlist = playlist_w > 0 && (show_remote || fits_without_remote);
+        // Playlist is present in every fit tier's width calculation (see
+        // `joined_width` calls above), so its visibility should follow the
+        // tiers directly rather than piggybacking on `show_remote` -- when the
+        // remote pill is suppressed entirely (`show_session_pill: false`,
+        // e.g. the Power View status bar), `show_remote` is always false and
+        // that previously hid the playlist pill even when it fit fine.
+        let show_playlist = playlist_w > 0
+            && (fits_all || fits_without_alive || fits_without_mute || fits_without_remote);
         let show_alive =
             alive_status.is_some() && (fits_all || fits_without_mute || fits_without_remote);
 

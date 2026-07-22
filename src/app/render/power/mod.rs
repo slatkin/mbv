@@ -1544,6 +1544,24 @@ mod tests {
     }
 
     #[test]
+    fn power_view_bottom_status_bar_shows_playlist_pill_when_queue_is_a_playlist() {
+        let mut app = make_power_queue_app(2);
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: Some("pl1".into()),
+            name: "Road Mix".into(),
+        };
+
+        let (term, _layout) = render_power_view_to_terminal(&mut app, 100, 28);
+        let out = buffer_to_string(&term);
+        let last_line = out.lines().last().unwrap_or_default();
+
+        assert!(
+            last_line.contains("Road Mix"),
+            "expected the playlist pill to appear in the Power View status bar:\n{last_line}"
+        );
+    }
+
+    #[test]
     fn short_power_queue_panel_drops_padding_before_rows() {
         let mut app = make_power_queue_app(20);
 

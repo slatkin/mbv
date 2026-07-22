@@ -346,8 +346,14 @@ impl App {
                     );
                     let title = trunc_str(&label, title_w);
 
+                    // Inactive rows (not the now-playing item) match the
+                    // dimmed index-number/duration color when the queue
+                    // panel is unfocused, instead of standing out in the
+                    // brighter unfocused row color.
                     let title_color = if is_active && !focused {
                         palette::AQUA
+                    } else if !focused {
+                        dim_color
                     } else {
                         fg
                     };
@@ -503,5 +509,50 @@ mod tests {
         .unwrap();
 
         assert_eq!(app.power_queue_scroll, 6);
+    }
+
+    #[test]
+    fn unfocused_inactive_queue_row_title_matches_index_and_duration_dim_color() {
+        let mut app = make_app_stub();
+        app.power_focus = crate::app::PowerFocus::Left; // queue panel unfocused
+
+        let items = vec![
+            make_item("Now Playing Track", "Audio"),
+            make_item("Other Track", "Audio"),
+        ];
+        app.player_tab.set_items(items, 0);
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 0;
+        }
+
+        let backend = TestBackend::new(40, 3);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPower::default();
+        term.draw(|f| {
+            app.render_power_queue(f, Rect::new(0, 0, 40, 3), false, &mut layout);
+        })
+        .unwrap();
+
+        let buf = term.backend().buffer();
+        // Row 1 (y=1) is the second, non-active queue item; its title should
+        // start right after the "N. " index prefix, which is always dimmed.
+        // Both the prefix and the title text should share the same dim color
+        // (palette::MUTED while unfocused) instead of the brighter unfocused
+        // row color.
+        let prefix_color = buf[(0, 1)].fg;
+        let title_color = buf[(3, 1)].fg;
+        assert_eq!(prefix_color, palette::MUTED);
+        assert_eq!(
+            title_color,
+            palette::MUTED,
+            "expected inactive row title to match the dimmed index/duration color when unfocused"
+        );
+
+        // The now-playing row (y=0) keeps its distinct highlight color even
+        // while the queue panel is unfocused.
+        let now_playing_title_color = buf[(3, 0)].fg;
+        assert_eq!(now_playing_title_color, palette::AQUA);
     }
 }
