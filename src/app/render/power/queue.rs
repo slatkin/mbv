@@ -12,22 +12,6 @@ use unicode_width::UnicodeWidthStr;
 
 const QUEUE_TITLE_QUIET_COLUMNS: usize = 8;
 
-fn uppercase_status_label(spans: &mut [Span<'static>]) {
-    let Some(label) = spans.get_mut(2) else {
-        return;
-    };
-
-    label.content = label.content.to_uppercase().into();
-}
-
-fn set_status_label_bold(spans: &mut [Span<'static>], bold: bool) {
-    if bold {
-        if let Some(label) = spans.get_mut(2) {
-            label.style = label.style.add_modifier(Modifier::BOLD);
-        }
-    }
-}
-
 fn queue_group_start_row(display: &[QueueRow], row: usize) -> usize {
     let mut start = row;
     while start > 0 && !matches!(display[start - 1], QueueRow::Track { .. }) {
@@ -100,8 +84,8 @@ impl App {
             },
             local_bg,
         );
-        uppercase_status_label(&mut local_spans);
-        set_status_label_bold(&mut local_spans, local_selected || !has_remote);
+        Self::uppercase_status_label(&mut local_spans);
+        Self::set_status_label_bold(&mut local_spans, local_selected || !has_remote);
         f.render_widget(
             Block::default().style(Style::default().bg(local_bg)),
             local_area,
@@ -137,8 +121,8 @@ impl App {
                 },
                 remote_bg,
             );
-            uppercase_status_label(&mut remote_spans);
-            set_status_label_bold(&mut remote_spans, !local_selected);
+            Self::uppercase_status_label(&mut remote_spans);
+            Self::set_status_label_bold(&mut remote_spans, !local_selected);
             if remote_spans.len() >= 4 {
                 remote_spans.swap(1, 2);
                 remote_spans[1].content = format!("{} ", remote_spans[1].content).into();
@@ -483,22 +467,6 @@ mod tests {
 
         assert!(matches!(display[1], QueueRow::Spacer));
         assert_eq!(queue_group_start_row(&display, 9), 6);
-    }
-
-    #[test]
-    fn queue_button_label_style_uppercases_and_bolds_selected_label() {
-        let mut spans = vec![
-            Span::raw(" "),
-            Span::raw("icon"),
-            Span::styled("  living-room", Style::default().fg(palette::SUBTLE)),
-            Span::raw(" "),
-        ];
-
-        uppercase_status_label(&mut spans);
-        set_status_label_bold(&mut spans, true);
-
-        assert_eq!(spans[2].content.as_ref(), "  LIVING-ROOM");
-        assert!(spans[2].style.add_modifier.contains(Modifier::BOLD));
     }
 
     #[test]

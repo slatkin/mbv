@@ -5539,11 +5539,17 @@ impl App {
         sections
     }
 
+    /// Whether `section_idx` is a selectable Home pill: section 0 (Continue
+    /// Watching) is always valid, and any other index is valid iff it has a
+    /// non-empty Newest section.
+    pub(super) fn power_home_section_is_valid(&self, section_idx: usize) -> bool {
+        section_idx == 0 || self.power_home_new_sections().contains(&section_idx)
+    }
+
     pub(super) fn power_home_select_section(&mut self, section_idx: usize) {
-        let new_sections = self.power_home_new_sections();
-        let section_idx = if section_idx == 0 || new_sections.contains(&section_idx) {
+        let section_idx = if self.power_home_section_is_valid(section_idx) {
             section_idx
-        } else if let Some(first) = new_sections.first() {
+        } else if let Some(first) = self.power_home_new_sections().first() {
             *first
         } else {
             self.home.section = 0;
@@ -5562,9 +5568,7 @@ impl App {
 
     fn power_home_visible_indices(&self) -> Vec<usize> {
         let mut indices = Vec::new();
-        let selected = if self.home.section == 0
-            || self.power_home_new_sections().contains(&self.home.section)
-        {
+        let selected = if self.power_home_section_is_valid(self.home.section) {
             self.home.section
         } else {
             self.power_home_new_sections().first().copied().unwrap_or(0)
