@@ -25,6 +25,10 @@ use unicode_width::UnicodeWidthStr;
 pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
     ratatui_image::FilterType::Triangle;
 
+// Configured music albums need the image worker's child-audio lookup; their
+// album containers do not reliably expose usable Primary images.
+const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
+
 /// Columns of empty space between the left and right panels in power view.
 const POWER_VIEW_GAP: u16 = 0;
 
@@ -2441,10 +2445,14 @@ mod tests {
         let hint_x = lines[hint_y]
             .find("^P: Play")
             .expect("expected hint x position");
+        assert!(
+            lines[hint_y].starts_with("    ^P: Play"),
+            "expected collapsed hint content to align with the selected block title indent:\n{out}"
+        );
         assert_eq!(
             buf[(hint_x as u16, hint_y as u16)].fg,
-            palette::MUTED,
-            "expected inline action hints to render muted:\n{out}"
+            palette::SOFT_WHITE,
+            "expected inline action hints to render soft white:\n{out}"
         );
     }
 
@@ -2473,12 +2481,12 @@ mod tests {
         );
         assert_eq!(
             art_rect.x + art_rect.width,
-            60,
-            "album art should be right aligned"
+            58,
+            "album art should have two columns of right padding"
         );
-        assert_eq!((art_rect.width, art_rect.height), (18, 12));
-        assert!(app.card_image_loading.contains("track-1:P"));
-        assert!(!app.card_image_loading.contains("album-1:P"));
+        assert_eq!((art_rect.width, art_rect.height), (24, 12));
+        assert!(app.card_image_loading.contains("album-1:P"));
+        assert!(!app.card_image_loading.contains("track-1:P"));
         assert_eq!(
             term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
             palette::OVERLAY,
@@ -2510,14 +2518,44 @@ mod tests {
             out.contains("Opening Track"),
             "expected inline track row:\n{out}"
         );
+        let lines: Vec<&str> = out.lines().collect();
+        let hint_y = lines
+            .iter()
+            .position(|line| line.contains("^P: Play"))
+            .expect("expected track-mode action hint row");
+        let track_y = lines
+            .iter()
+            .position(|line| line.contains("Opening Track"))
+            .expect("expected inline track row");
+        assert!(
+            lines[hint_y].starts_with("    ^P: Play"),
+            "expected track-mode hint content to keep the selected block title indent:\n{out}"
+        );
+        assert!(
+            lines[hint_y + 1].trim().is_empty(),
+            "expected a blank row between the track-mode hint and tracks:\n{out}"
+        );
+        assert_eq!(
+            track_y,
+            hint_y + 2,
+            "expected the track list to start after the hint and blank separator row:\n{out}"
+        );
+        let hint_x = lines[hint_y]
+            .find("^P: Play")
+            .expect("expected track-mode hint x position");
+        assert_eq!(
+            term.backend().buffer()[(hint_x as u16, hint_y as u16)].fg,
+            palette::SOFT_WHITE,
+            "expected track-mode action hints to render soft white:\n{out}"
+        );
         assert_eq!(
             art_rect.x + art_rect.width,
-            60,
-            "album art should be right aligned"
+            58,
+            "album art should have two columns of right padding"
         );
-        assert_eq!((art_rect.width, art_rect.height), (18, 12));
-        assert!(app.card_image_loading.contains("track-1:P"));
-        assert!(!app.card_image_loading.contains("album-1:P"));
+        assert_eq!((art_rect.width, art_rect.height), (24, 12));
+        assert!(app.card_image_loading.contains("album-1:P"));
+        assert!(!app.card_image_loading.contains("track-1:P"));
         assert_eq!(
             term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
             palette::OVERLAY,
@@ -2594,12 +2632,30 @@ mod tests {
             .lines()
             .position(|line| line.contains("Focused Track"))
             .expect("expected focused track row");
+        let lines: Vec<&str> = out.lines().collect();
+        let hint_y = lines
+            .iter()
+            .position(|line| line.contains("^P: Play"))
+            .expect("expected track-mode action hint row");
+        assert!(
+            lines[hint_y].contains("BACK: Exit"),
+            "expected track-mode hint row to show the exit hint:\n{out}"
+        );
+        assert!(
+            lines[hint_y + 1].trim().is_empty(),
+            "expected a blank row between the track-mode hint and tracks:\n{out}"
+        );
+        assert_eq!(
+            focused_y,
+            hint_y + 3,
+            "expected second track after hint, blank separator, and first track:\n{out}"
+        );
 
         assert!(
-            // Track mode has no selected-region gutter (removed so the
-            // colored block reads cleanly) -- the AQUA `▌` cursor marker
-            // sits directly against the track number, no trailing space.
-            focused_line.starts_with("  \u{258c}2. Focused Track"),
+            // Track rows are indented two extra spaces inside the selected block;
+            // the AQUA `▌` cursor marker still sits directly against the track
+            // number, no trailing space.
+            focused_line.starts_with("    \u{258c}2. Focused Track"),
             "expected focused track row to show the AQUA cursor marker in track-selection mode:\n{out}"
         );
         assert_eq!(
@@ -2638,10 +2694,10 @@ mod tests {
             .expect("expected focused track to render inline");
 
         assert!(
-            // Track mode has no selected-region gutter (removed so the
-            // colored block reads cleanly) -- the AQUA `▌` cursor marker
-            // sits directly against the track number, no trailing space.
-            focused_line.starts_with("  \u{258c}2. Focused Track"),
+            // Track rows are indented two extra spaces inside the selected block;
+            // the AQUA `▌` cursor marker still sits directly against the track
+            // number, no trailing space.
+            focused_line.starts_with("    \u{258c}2. Focused Track"),
             "expected track-selection row to show the AQUA cursor marker while pane is unfocused:\n{out}"
         );
     }

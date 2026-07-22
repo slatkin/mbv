@@ -10,9 +10,14 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 
 const INLINE_ALBUM_DETAIL_INDENT: u16 = 2;
-const INLINE_ALBUM_ART_COLS: u16 = 18;
+const INLINE_ALBUM_TITLE_EXTRA_INDENT: u16 = 1;
+const INLINE_ALBUM_TRACK_EXTRA_INDENT: u16 = 2;
+const INLINE_ALBUM_ART_COLS: u16 = 24;
 const INLINE_ALBUM_ART_ROWS: u16 = 12;
 const INLINE_ALBUM_ART_GAP: u16 = 2;
+const INLINE_ALBUM_ART_RIGHT_PAD: u16 = 2;
+const INLINE_ALBUM_ART_RESERVED: u16 =
+    INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP + INLINE_ALBUM_ART_RIGHT_PAD;
 
 fn inline_album_art_cache_key(album_id: &str) -> String {
     format!("{album_id}:P")
@@ -556,9 +561,9 @@ impl App {
         let selected_block_bounds = plan.selected_block_bounds;
         let selected_art_reserved_w = if self.images_enabled()
             && selected_block_bounds.is_some()
-            && area.width >= INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP + 20
+            && area.width >= INLINE_ALBUM_ART_RESERVED + 20
         {
-            INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP
+            INLINE_ALBUM_ART_RESERVED
         } else {
             0
         };
@@ -603,15 +608,24 @@ impl App {
                 width: area.width,
                 height: 1,
             };
+            let detail_indent = INLINE_ALBUM_DETAIL_INDENT.min(row_area.width);
+            let title_indent =
+                (INLINE_ALBUM_DETAIL_INDENT + INLINE_ALBUM_TITLE_EXTRA_INDENT).min(row_area.width);
             let detail_row_area = Rect {
-                x: row_area.x + INLINE_ALBUM_DETAIL_INDENT.min(row_area.width),
-                width: row_area.width.saturating_sub(INLINE_ALBUM_DETAIL_INDENT),
+                x: row_area.x + detail_indent,
+                width: row_area.width.saturating_sub(detail_indent),
+                ..row_area
+            };
+            let title_row_area = Rect {
+                x: row_area.x + title_indent,
+                width: row_area.width.saturating_sub(title_indent),
                 ..row_area
             };
             let abs_row_idx = offset + row_idx;
-            let row_detail_area = if selected_art_abs_rows.is_some_and(|(art_top, art_bottom)| {
+            let reserve_art = selected_art_abs_rows.is_some_and(|(art_top, art_bottom)| {
                 abs_row_idx >= art_top && abs_row_idx < art_bottom
-            }) {
+            });
+            let row_detail_area = if reserve_art {
                 Rect {
                     width: detail_row_area
                         .width
@@ -620,6 +634,14 @@ impl App {
                 }
             } else {
                 detail_row_area
+            };
+            let row_title_area = if reserve_art {
+                Rect {
+                    width: title_row_area.width.saturating_sub(selected_art_reserved_w),
+                    ..title_row_area
+                }
+            } else {
+                title_row_area
             };
             match row {
                 GroupedAlbumDisplayRow::ArtistHeader(selection) => {
@@ -742,7 +764,7 @@ impl App {
                         spans.push(Span::styled(trunc_name, title_style));
                     }
 
-                    let album_area = if has_block { row_detail_area } else { row_area };
+                    let album_area = if has_block { row_title_area } else { row_area };
                     f.render_widget(Paragraph::new(Line::from(spans)), album_area);
                 }
                 GroupedAlbumDisplayRow::AlbumActionHint => {
@@ -754,9 +776,12 @@ impl App {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
                             Span::raw(" "),
-                            Span::styled(hint.to_string(), Style::default().fg(palette::MUTED)),
+                            Span::styled(
+                                hint.to_string(),
+                                Style::default().fg(palette::SOFT_WHITE),
+                            ),
                         ])),
-                        row_detail_area,
+                        row_title_area,
                     );
                 }
                 GroupedAlbumDisplayRow::AlbumDetailStart(idx) => {
@@ -777,7 +802,7 @@ impl App {
                             f,
                             Rect {
                                 height,
-                                ..row_detail_area
+                                ..row_title_area
                             },
                             &tracks,
                             cursor,
@@ -840,12 +865,7 @@ impl App {
 
         if let Some((art_top, art_bottom)) = selected_art_abs_rows {
             if art_top >= offset && art_top < offset + visible {
-                if let Some(art_source) = albums
-                    .get(cursor)
-                    .and_then(|album| self.album_tracks_cache.get(&album.id))
-                    .and_then(|tracks| tracks.first())
-                    .cloned()
-                {
+                if let Some(album) = albums.get(cursor) {
                     let visible_bottom = art_bottom.min(offset + visible);
                     self.render_inline_album_art(
                         f,
@@ -855,7 +875,7 @@ impl App {
                             width: area.width,
                             height: (visible_bottom - art_top) as u16,
                         },
-                        &art_source,
+                        album,
                         layout,
                     );
                 }
@@ -881,19 +901,19 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
-        art_source: &mbv_core::api::MediaItem,
+        album: &mbv_core::api::MediaItem,
         layout: &mut LayoutPower,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 {
             return;
         }
 
-        let cache_key = inline_album_art_cache_key(&art_source.id);
+        let cache_key = inline_album_art_cache_key(&album.id);
         self.fetch_card_image(
             cache_key.clone(),
-            art_source.id.clone(),
-            art_source.series_id.clone(),
-            &["Primary"],
+            album.id.clone(),
+            album.series_id.clone(),
+            super::MUSIC_ALBUM_IMAGE_TYPES,
         );
 
         let nav_gate_open = self.list_image_renders_allowed();
@@ -920,7 +940,10 @@ impl App {
         }
 
         let img_rect = Rect {
-            x: area.x + area.width.saturating_sub(img_w),
+            x: area.x
+                + area
+                    .width
+                    .saturating_sub(img_w + INLINE_ALBUM_ART_RIGHT_PAD),
             y: area.y,
             width: img_w,
             height: img_h,
@@ -1048,15 +1071,43 @@ impl App {
                 }
             }
             if !selected_region_gutter {
-                row += 1;
+                let trailing_hint = if focused {
+                    "BACK: Exit"
+                } else {
+                    "ENTER: Show tracks"
+                };
+                let hint = trunc_str(
+                    &format!("^P: Play | ^A: Enqueue | ^S: Shuffle | {trailing_hint}"),
+                    area.width as usize,
+                );
+                f.render_widget(
+                    Paragraph::new(Line::from(vec![
+                        Span::raw(" "),
+                        Span::styled(hint.to_string(), Style::default().fg(palette::SOFT_WHITE)),
+                    ])),
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width: area.width,
+                        height: 1,
+                    },
+                );
+                row += 2;
             }
         }
 
         // — Scrollable track list —
+        let track_indent = if selected_region_gutter {
+            0
+        } else {
+            INLINE_ALBUM_TRACK_EXTRA_INDENT
+                .saturating_sub(INLINE_ALBUM_TITLE_EXTRA_INDENT)
+                .min(area.width)
+        };
         let table_area = Rect {
-            x: area.x,
+            x: area.x + track_indent,
             y: row,
-            width: area.width,
+            width: area.width.saturating_sub(track_indent),
             height: max_y.saturating_sub(row),
         };
         if table_area.height == 0 {
