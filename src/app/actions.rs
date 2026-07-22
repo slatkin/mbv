@@ -5544,7 +5544,7 @@ impl App {
 
     pub(super) fn power_home_select_section(&mut self, section_idx: usize) {
         let new_sections = self.power_home_new_sections();
-        let section_idx = if new_sections.contains(&section_idx) {
+        let section_idx = if section_idx == 0 || new_sections.contains(&section_idx) {
             section_idx
         } else if let Some(first) = new_sections.first() {
             *first
@@ -5552,46 +5552,34 @@ impl App {
             self.home.section = 0;
             return;
         };
-        let was_keep_watching = self
-            .power_home_section_range(0)
-            .is_some_and(|(start, len)| {
-                len > 0
-                    && self.home.power_home_cursor >= start
-                    && self.home.power_home_cursor < start + len
-            });
         self.home.section = section_idx;
         self.home.power_home_scroll = 0;
-        if !was_keep_watching {
-            if let Some((start, len)) = self.power_home_section_range(section_idx) {
-                self.home.power_home_cursor = if len == 0 {
-                    start
-                } else {
-                    self.home.power_home_cursor.clamp(start, start + len - 1)
-                };
-            }
+        if let Some((start, len)) = self.power_home_section_range(section_idx) {
+            self.home.power_home_cursor = if len == 0 {
+                start
+            } else {
+                self.home.power_home_cursor.clamp(start, start + len - 1)
+            };
         }
     }
 
     fn power_home_visible_indices(&self) -> Vec<usize> {
         let mut indices = Vec::new();
-        if let Some((start, len)) = self.power_home_section_range(0) {
-            indices.extend(start..start + len);
-        }
-        let selected_new = if self.power_home_new_sections().contains(&self.home.section) {
+        let selected = if self.home.section == 0
+            || self.power_home_new_sections().contains(&self.home.section)
+        {
             self.home.section
         } else {
             self.power_home_new_sections().first().copied().unwrap_or(0)
         };
-        if selected_new > 0 {
-            if let Some((start, len)) = self.power_home_section_range(selected_new) {
-                indices.extend(start..start + len);
-            }
+        if let Some((start, len)) = self.power_home_section_range(selected) {
+            indices.extend(start..start + len);
         }
         indices
     }
 
-    /// Move the flat power-home cursor by `delta`, clamped to the fixed Keep
-    /// Watching block plus the selected New section.
+    /// Move the flat power-home cursor by `delta`, clamped to the selected
+    /// power-home section.
     pub(super) fn power_home_move_cursor(&mut self, delta: i64) {
         let indices = self.power_home_visible_indices();
         if indices.is_empty() {

@@ -25,7 +25,7 @@ pub(super) const POWER_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__"
 /// Fixed steady-state placeholder shown in the Power View queue card when no
 /// queue-card artwork is available.
 static POWER_CARD_PLACEHOLDER_BYTES: &[u8] =
-    include_bytes!("../../assets/power-card-placeholder.jpg");
+    include_bytes!("../../assets/power-card-placeholder.webp");
 
 /// A pending card-image fetch, queued when the in-flight limit is reached.
 pub(super) struct ImageFetchReq {
