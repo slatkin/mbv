@@ -22,8 +22,8 @@ const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 /// bundled bytes the first time it's needed and then just sits in the cache.
 pub(super) const POWER_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
 
-/// Fixed steady-state placeholder shown in the Power View media card when the
-/// queue is empty and the library browser hasn't drilled below the top level.
+/// Fixed steady-state placeholder shown in the Power View queue card when no
+/// queue-card artwork is available.
 static POWER_CARD_PLACEHOLDER_BYTES: &[u8] =
     include_bytes!("../../assets/power-card-placeholder.jpg");
 
