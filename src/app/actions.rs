@@ -2,7 +2,7 @@ use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_epis
 use super::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, ArtistHeaderSelection, BrowseLevel,
     ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryPositionScope,
-    LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
+    LibraryTab, LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
     RemotePlaybackTarget, SessionEvent, UndoEntry, ViewMode, PAGE_SIZE, PREFETCH_AHEAD,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
@@ -15,7 +15,16 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-type BrowseRefresh = (usize, String, Option<String>, bool, String, String, usize);
+type BrowseRefresh = (
+    usize,
+    String,
+    Option<String>,
+    bool,
+    String,
+    String,
+    usize,
+    Option<super::render::power::LetterFilter>,
+);
 type AlbumIndexFetch<'a> =
     dyn FnMut(&str, usize, usize) -> Result<(Vec<MediaItem>, usize), String> + 'a;
 const ALBUM_INDEX_PAGE_SIZE: usize = 200;
@@ -48,6 +57,21 @@ fn recursive_album_search_eligible(collection_type: &str, levels: &[String]) -> 
     collection_type == "music"
         && levels.len() > 1
         && levels.last().is_some_and(|level| level == "album")
+}
+
+/// The correct fetch `limit` for an unfiltered whole-library fetch, used by
+/// `spawn_all_items_prefetch`/`spawn_search_items_load` so `all_items` (the
+/// set `/`-search runs over) always spans the entire library. `lvl.total_count`
+/// alone is NOT enough: with a letter-range pill active it's the FILTERED
+/// range's count (e.g. ~40 for `A–C` out of a 3,000-item library), which
+/// would silently truncate `all_items` to the active range and make search
+/// miss everything outside it. `lib.library_total` (the true count captured
+/// on the library's first, unfiltered load) is the right number; `.max` is
+/// just a defensive fallback for the moment before it's been captured.
+fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLevel) -> usize {
+    lib.library_total
+        .unwrap_or(lvl.total_count)
+        .max(lvl.total_count)
 }
 
 fn fetch_all_album_index_items(
@@ -1477,6 +1501,7 @@ impl App {
             loading: true,
             scroll: 0,
             all_items: None,
+            letter_filter: None,
         });
         self.spawn_browse(
             lib_idx,
@@ -1563,6 +1588,7 @@ impl App {
             loading: true,
             scroll: 0,
             all_items: None,
+            letter_filter: None,
         });
         self.spawn_browse(
             lib_idx,
@@ -1725,6 +1751,7 @@ impl App {
             loading: true,
             scroll: 0,
             all_items: None,
+            letter_filter: None,
         });
         self.spawn_browse(
             lib_idx,
@@ -1793,6 +1820,7 @@ impl App {
             loading: true,
             scroll: 0,
             all_items: None,
+            letter_filter: None,
         });
         self.spawn_browse(
             lib_idx,
@@ -1841,6 +1869,7 @@ impl App {
             loading: true,
             scroll: 0,
             all_items: None,
+            letter_filter: None,
         });
         self.spawn_browse(
             lib_idx,
@@ -1851,6 +1880,96 @@ impl App {
             "SortName".into(),
             "Ascending".into(),
         );
+    }
+
+    /// Whether the Power View letter-range pill row applies to `lib_idx`
+    /// right now: a non-music library, not searching, at the top browse
+    /// level of its nav stack (`nav_stack.len() == 1`), with a captured true
+    /// total (`LibraryTab.library_total`) over `LIBRARY_PILL_THRESHOLD`. See
+    /// `render::power::LetterFilter` and
+    /// `maybe_capture_library_total_and_apply_default_pill`, which populates
+    /// `library_total` on a library's first load.
+    pub(super) fn should_show_letter_pills(&self, lib_idx: usize) -> bool {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return false;
+        };
+        if lib.library.collection_type == "music" {
+            return false;
+        }
+        if lib.search.is_some() {
+            return false;
+        }
+        if lib.nav_stack.len() != 1 {
+            return false;
+        }
+        lib.library_total
+            .is_some_and(|total| total > super::render::power::LIBRARY_PILL_THRESHOLD)
+    }
+
+    /// Selects letter-range pill `pill_index` for `lib_idx`'s top level (a
+    /// direct precedent: `select_music_group`). Resets cursor/scroll, marks
+    /// the level loading, and spawns a scoped refresh fetching only that
+    /// range from Emby (`get_items_sorted_ranged`) -- the existing in-list
+    /// letter headers (`list.rs`) then bucket the smaller slice per-letter.
+    /// Persists the choice so it survives a restart (`LibraryPositionLevel`).
+    pub(super) fn select_letter_pill(&mut self, lib_idx: usize, pill_index: usize) {
+        if !self.should_show_letter_pills(lib_idx) {
+            return;
+        }
+        let Some(filter) = super::render::power::LetterFilter::for_index(pill_index) else {
+            return;
+        };
+        let Some(lvl) = self.libs[lib_idx].nav_stack.last() else {
+            return;
+        };
+        if lvl.letter_filter.as_ref() == Some(&filter) {
+            return;
+        }
+        let parent_id = lvl.parent_id.clone();
+        let item_types = lvl.item_types.clone();
+        let unplayed_only = lvl.unplayed_only;
+        let sort_by = lvl.sort_by.clone();
+        let sort_order = lvl.sort_order.clone();
+        if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+            last.letter_filter = Some(filter.clone());
+            last.cursor = 0;
+            last.scroll = 0;
+            last.loading = true;
+            last.items.clear();
+            last.all_items = None;
+        }
+        self.spawn_refresh(
+            lib_idx,
+            parent_id,
+            item_types,
+            unplayed_only,
+            sort_by,
+            sort_order,
+            0,
+            Some(filter),
+        );
+        self.save_default_library_position(lib_idx);
+    }
+
+    /// Cycles the letter-range pill row by `delta` (`[`/`]` keyboard
+    /// bindings), wrapping around -- the established pattern from
+    /// `switch_music_group`.
+    pub(super) fn cycle_letter_pill(&mut self, lib_idx: usize, delta: i64) {
+        if !self.should_show_letter_pills(lib_idx) {
+            return;
+        }
+        let n = super::render::power::LetterFilter::count();
+        if n == 0 {
+            return;
+        }
+        let current = self.libs[lib_idx]
+            .nav_stack
+            .last()
+            .and_then(|l| l.letter_filter.as_ref())
+            .map(|f| f.index)
+            .unwrap_or(0);
+        let next = (current as i64 + delta).rem_euclid(n as i64) as usize;
+        self.select_letter_pill(lib_idx, next);
     }
 
     /// If the music-group library's nav_stack was truncated back to just the
@@ -1893,6 +2012,7 @@ impl App {
             loading: true,
             scroll: 0,
             all_items: None,
+            letter_filter: None,
         });
         self.spawn_browse(
             lib_idx,
@@ -2720,6 +2840,7 @@ impl App {
                             loading: true,
                             scroll: 0,
                             all_items: None,
+                            letter_filter: None,
                         });
                         self.set_tab(lib_idx + 2);
                         self.spawn_browse(
@@ -2775,6 +2896,7 @@ impl App {
                 loading: true,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             });
             if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
                 *v = 0;
@@ -3260,6 +3382,7 @@ impl App {
             let sort_by = lvl.sort_by.clone();
             let sort_order = lvl.sort_order.clone();
             let loaded_count = lvl.items.len();
+            let letter_filter = lvl.letter_filter.clone();
             self.spawn_refresh(
                 lib_idx,
                 parent_id,
@@ -3268,6 +3391,7 @@ impl App {
                 sort_by,
                 sort_order,
                 loaded_count,
+                letter_filter,
             );
         }
     }
@@ -3542,6 +3666,7 @@ impl App {
                         loading: true,
                         scroll: 0,
                         all_items: None,
+                        letter_filter: None,
                     });
                     self.spawn_restore_library_position(idx, scope, saved);
                     return;
@@ -3576,6 +3701,7 @@ impl App {
                 loading: true,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             });
             self.spawn_browse(
                 idx,
@@ -3600,7 +3726,14 @@ impl App {
         let tx = self.lib_tx.clone();
         std::thread::spawn(move || {
             let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
-                let (items, total_count) = client.get_items_sorted(
+                let letter_filter = saved_level
+                    .letter_filter_index
+                    .and_then(super::render::power::LetterFilter::for_index);
+                let (name_ge, name_lt) = letter_filter
+                    .as_ref()
+                    .map(|f| (f.name_ge, f.name_lt))
+                    .unwrap_or((None, None));
+                let (items, total_count) = client.get_items_sorted_ranged(
                     &saved_level.parent_id,
                     saved_level.item_types.as_deref(),
                     saved_level.unplayed_only,
@@ -3608,9 +3741,11 @@ impl App {
                     PAGE_SIZE,
                     &saved_level.sort_by,
                     &saved_level.sort_order,
+                    name_ge,
+                    name_lt,
                 )?;
                 if total_count > items.len() {
-                    client.get_items_sorted(
+                    client.get_items_sorted_ranged(
                         &saved_level.parent_id,
                         saved_level.item_types.as_deref(),
                         saved_level.unplayed_only,
@@ -3618,6 +3753,8 @@ impl App {
                         total_count,
                         &saved_level.sort_by,
                         &saved_level.sort_order,
+                        name_ge,
+                        name_lt,
                     )
                 } else {
                     Ok((items, total_count))
@@ -3672,12 +3809,21 @@ impl App {
                         lvl.sort_by.clone(),
                         lvl.sort_order.clone(),
                         lvl.items.len(),
+                        lvl.letter_filter.clone(),
                     )
                 })
             })
             .collect();
-        for (lib_idx, parent_id, item_types, unplayed_only, sort_by, sort_order, loaded_count) in
-            fetches
+        for (
+            lib_idx,
+            parent_id,
+            item_types,
+            unplayed_only,
+            sort_by,
+            sort_order,
+            loaded_count,
+            letter_filter,
+        ) in fetches
         {
             self.spawn_refresh(
                 lib_idx,
@@ -3687,6 +3833,7 @@ impl App {
                 sort_by,
                 sort_order,
                 loaded_count,
+                letter_filter,
             );
         }
     }
@@ -3735,6 +3882,7 @@ impl App {
                             loading: false,
                             scroll: 0,
                             all_items: None,
+                            letter_filter: None,
                         },
                     });
                 }
@@ -3844,6 +3992,7 @@ impl App {
                     loading: false,
                     scroll: 0,
                     all_items: None,
+                    letter_filter: None,
                 });
             }
             let _ = tx.send(LibEvent::NavigateTo {
@@ -3854,6 +4003,7 @@ impl App {
         });
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn spawn_browse_page(
         &self,
         lib_idx: usize,
@@ -3863,11 +4013,16 @@ impl App {
         unplayed_only: bool,
         sort_by: String,
         sort_order: String,
+        letter_filter: Option<super::render::power::LetterFilter>,
     ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
+        let (name_ge, name_lt) = letter_filter
+            .as_ref()
+            .map(|f| (f.name_ge, f.name_lt))
+            .unwrap_or((None, None));
         std::thread::spawn(move || {
-            match client.get_items_sorted(
+            match client.get_items_sorted_ranged(
                 &parent_id,
                 item_types.as_deref(),
                 unplayed_only,
@@ -3875,6 +4030,8 @@ impl App {
                 PAGE_SIZE,
                 &sort_by,
                 &sort_order,
+                name_ge,
+                name_lt,
             ) {
                 Ok((items, total_count)) => {
                     let _ = tx.send(LibEvent::PageAppended {
@@ -3897,11 +4054,18 @@ impl App {
             Some(l) => l,
             None => return,
         };
-        if lvl.is_fully_loaded() {
+        // `lvl.is_fully_loaded()` compares `items.len()` against
+        // `lvl.total_count` -- with a letter-range pill active, that count
+        // is the FILTERED range's total, not the whole library's, so a
+        // fully-loaded small range (e.g. 40 items in `A–C`) would wrongly
+        // read as "nothing more to prefetch". `all_items` backs whole-library
+        // search (see `input.rs`'s `/` handler and `spawn_search_items_load`
+        // below), so it must never be satisfied by just the active range.
+        if lvl.letter_filter.is_none() && lvl.is_fully_loaded() {
             return;
         }
         let parent_id = lvl.parent_id.clone();
-        let total_count = lvl.total_count;
+        let total_count = full_library_fetch_limit(lib, lvl);
         let item_types = lvl.item_types.clone();
         let unplayed_only = lvl.unplayed_only;
         let sort_by = lvl.sort_by.clone();
@@ -3934,7 +4098,10 @@ impl App {
             None => return,
         };
         let parent_id = lvl.parent_id.clone();
-        let total_count = lvl.total_count;
+        // See `spawn_all_items_prefetch` above: always fetch the WHOLE
+        // library unfiltered so search covers everything, not just an
+        // active letter-range pill's slice.
+        let total_count = full_library_fetch_limit(lib, lvl);
         let item_types = lvl.item_types.clone();
         let unplayed_only = lvl.unplayed_only;
         let sort_by = lvl.sort_by.clone();
@@ -4130,6 +4297,7 @@ impl App {
                     loading: false,
                     scroll: 0,
                     all_items: None,
+                    letter_filter: None,
                 });
             }
             if scope == LibraryPositionScope::Default {
@@ -4153,6 +4321,7 @@ impl App {
                     loading: false,
                     scroll: 0,
                     all_items: None,
+                    letter_filter: None,
                 });
             }
             let _ = tx.send(LibEvent::RecursiveAlbumActivated {
@@ -4164,6 +4333,7 @@ impl App {
         true
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn spawn_refresh(
         &self,
         lib_idx: usize,
@@ -4173,12 +4343,17 @@ impl App {
         sort_by: String,
         sort_order: String,
         loaded_count: usize,
+        letter_filter: Option<super::render::power::LetterFilter>,
     ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
         let limit = loaded_count.max(PAGE_SIZE);
+        let (name_ge, name_lt) = letter_filter
+            .as_ref()
+            .map(|f| (f.name_ge, f.name_lt))
+            .unwrap_or((None, None));
         std::thread::spawn(move || {
-            match client.get_items_sorted(
+            match client.get_items_sorted_ranged(
                 &parent_id,
                 item_types.as_deref(),
                 unplayed_only,
@@ -4186,6 +4361,8 @@ impl App {
                 limit,
                 &sort_by,
                 &sort_order,
+                name_ge,
+                name_lt,
             ) {
                 Ok((items, total_count)) => {
                     log::info!(target: "browse", "Refreshed lib_idx={lib_idx} parent={parent_id} total={total_count} got={} first3={:?}",
@@ -4240,6 +4417,7 @@ impl App {
         let unplayed_only = lvl.unplayed_only;
         let sort_by = lvl.sort_by.clone();
         let sort_order = lvl.sort_order.clone();
+        let letter_filter = lvl.letter_filter.clone();
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
         }
@@ -4251,6 +4429,7 @@ impl App {
             unplayed_only,
             sort_by,
             sort_order,
+            letter_filter,
         );
     }
 
@@ -4481,6 +4660,7 @@ impl App {
                         loading: true,
                         scroll: 0,
                         all_items: None,
+                        letter_filter: None,
                     });
                 }
                 self.spawn_browse(
@@ -4540,6 +4720,7 @@ impl App {
                         loading: true,
                         scroll: 0,
                         all_items: None,
+                        letter_filter: None,
                     });
                 }
                 self.spawn_browse(
@@ -4606,11 +4787,68 @@ impl App {
 
     fn handle_lib_loaded(&mut self, lib_idx: usize, parent_id: String, level: BrowseLevel) {
         self.handle_loaded_level(lib_idx, parent_id, level);
+        self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_auto_push_power_tv_season_level(lib_idx);
         self.maybe_auto_push_power_music_group_level(lib_idx);
         self.maybe_aggregate_feed_after_loaded(lib_idx);
         self.maybe_fetch_next_page(lib_idx);
         self.spawn_all_items_prefetch(lib_idx);
+    }
+
+    /// On the FIRST unfiltered load of a library's top browse level, this
+    /// captures the library's TRUE total (`LibraryTab.library_total`) --
+    /// `get_user_views` doesn't carry child counts, so this fetch's
+    /// `total_count` is the only place that number comes from. If the
+    /// library qualifies for the letter-range pill row
+    /// (`LIBRARY_PILL_THRESHOLD`) and no pill was already restored from a
+    /// saved session, this applies the default (`A–C`) pill and issues one
+    /// scoped refresh to replace the level's items with that range -- see
+    /// plan §5. A no-op for every subsequent load of the same level
+    /// (`library_total` is already `Some`), for music/feed/podcast
+    /// libraries, and for non-root levels.
+    fn maybe_capture_library_total_and_apply_default_pill(&mut self, lib_idx: usize) {
+        let Some(lib) = self.libs.get(lib_idx) else {
+            return;
+        };
+        if lib.library_total.is_some() || lib.library.collection_type == "music" {
+            return;
+        }
+        if lib.nav_stack.len() != 1 {
+            return;
+        }
+        let Some(level) = lib.nav_stack.first() else {
+            return;
+        };
+        if level.loading || level.letter_filter.is_some() {
+            return;
+        }
+        let total = level.total_count;
+        let parent_id = level.parent_id.clone();
+        let item_types = level.item_types.clone();
+        let unplayed_only = level.unplayed_only;
+        let sort_by = level.sort_by.clone();
+        let sort_order = level.sort_order.clone();
+        if let Some(lib) = self.libs.get_mut(lib_idx) {
+            lib.library_total = Some(total);
+        }
+        if total <= super::render::power::LIBRARY_PILL_THRESHOLD {
+            return;
+        }
+        let filter = super::render::power::LetterFilter::default_filter();
+        if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
+            last.loading = true;
+            last.letter_filter = Some(filter.clone());
+        }
+        self.spawn_refresh(
+            lib_idx,
+            parent_id,
+            item_types,
+            unplayed_only,
+            sort_by,
+            sort_order,
+            0,
+            Some(filter),
+        );
     }
 
     fn handle_lib_page_appended(
@@ -5695,6 +5933,7 @@ impl App {
                             loading: false,
                             scroll: lvl.scroll,
                             all_items: lvl.all_items.clone(),
+                            letter_filter: lvl.letter_filter.clone(),
                         })
                         .collect()
                 })
@@ -5708,6 +5947,7 @@ impl App {
 
                 album_track_focus: None,
                 artist_header_focus: None,
+                library_total: None,
             });
         }
         let n = self.libs.len();
@@ -6007,7 +6247,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item, make_items};
-    use crate::app::{AlbumIndexState, LibraryTab};
+    use crate::app::{AlbumIndexState, BrowseLevel, LibraryTab};
     use mbv_core::player::PlayerEvent;
     use std::sync::mpsc;
 
@@ -6040,6 +6280,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app
     }
@@ -6276,6 +6517,7 @@ mod tests {
             loading: false,
             scroll: 0,
             all_items: None,
+            letter_filter: None,
         });
         let default_position = app.libs[0].library_position_snapshot();
         app.library_position_state.libraries.insert(
@@ -6306,6 +6548,7 @@ mod tests {
             loading: false,
             scroll: 0,
             all_items: None,
+            letter_filter: None,
         };
 
         app.handle_lib_event(LibEvent::RecursiveAlbumActivated {
@@ -6428,11 +6671,13 @@ mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         assert_eq!(
@@ -6707,12 +6952,14 @@ mod tests {
                 loading: true,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         let level = BrowseLevel {
@@ -6728,6 +6975,7 @@ mod tests {
             loading: false,
             scroll: 3,
             all_items: None,
+            letter_filter: None,
         };
 
         app.handle_loaded_level(0, "parent".into(), level);
@@ -6767,12 +7015,14 @@ mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.normalize_current_browse_level_items(0, false);
@@ -6806,6 +7056,7 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.ensure_lib_loaded_for(0);
@@ -6840,6 +7091,7 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.ensure_lib_loaded_for(0);
@@ -7327,6 +7579,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -7429,6 +7682,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
@@ -7455,6 +7709,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
@@ -7495,6 +7750,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
@@ -7519,6 +7775,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         }
     }
 
@@ -7557,6 +7814,177 @@ mod tests {
 
         app.tab_idx = 1; // queue
         assert!(!app.active_lib_is_tvshows());
+    }
+
+    /// Pushes a top-level, non-loading, non-searching `BrowseLevel` onto
+    /// `lib`'s nav_stack -- the minimum state `should_show_letter_pills`
+    /// needs to consider the library "at its top browse level".
+    fn push_top_level(lib: &mut LibraryTab, item_count: usize) {
+        lib.nav_stack.push(BrowseLevel {
+            parent_id: lib.library.id.clone(),
+            title: lib.library.name.clone(),
+            items: make_items(item_count),
+            total_count: item_count,
+            cursor: 0,
+            scroll: 0,
+            item_types: Some("Movie".into()),
+            unplayed_only: false,
+            sort_by: "SortName".into(),
+            sort_order: "Ascending".into(),
+            loading: false,
+            all_items: None,
+            letter_filter: None,
+        });
+    }
+
+    #[test]
+    fn should_show_letter_pills_requires_library_total_over_threshold() {
+        let mut app = make_app_stub();
+        app.libs.push(lib_tab("movies"));
+        push_top_level(&mut app.libs[0], 10);
+
+        // No captured library_total yet -> hidden even if the fetched-so-far
+        // count is small.
+        assert!(!app.should_show_letter_pills(0));
+
+        app.libs[0].library_total = Some(300);
+        assert!(
+            !app.should_show_letter_pills(0),
+            "300 is the threshold, not over it"
+        );
+
+        app.libs[0].library_total = Some(301);
+        assert!(app.should_show_letter_pills(0));
+    }
+
+    #[test]
+    fn should_show_letter_pills_excludes_music_search_and_drilldowns() {
+        let mut app = make_app_stub();
+        app.libs.push(lib_tab("music"));
+        push_top_level(&mut app.libs[0], 10);
+        app.libs[0].library_total = Some(1000);
+        assert!(
+            !app.should_show_letter_pills(0),
+            "music libraries use group pills instead"
+        );
+
+        app.libs.push(lib_tab("movies"));
+        push_top_level(&mut app.libs[1], 10);
+        app.libs[1].library_total = Some(1000);
+        assert!(app.should_show_letter_pills(1));
+
+        app.libs[1].search = Some(crate::app::LibSearch {
+            query: String::new(),
+            items: Vec::new(),
+            results: Vec::new(),
+            cursor: 0,
+            scroll: 0,
+            loading: false,
+        });
+        assert!(!app.should_show_letter_pills(1), "hidden while searching");
+        app.libs[1].search = None;
+
+        // A second nav level (drilled into a folder) is no longer the "top"
+        // browse level.
+        push_top_level(&mut app.libs[1], 5);
+        assert!(
+            !app.should_show_letter_pills(1),
+            "hidden below the top browse level"
+        );
+    }
+
+    #[test]
+    fn select_letter_pill_scopes_the_level_and_resets_cursor() {
+        let mut app = make_app_stub();
+        app.libs.push(lib_tab("movies"));
+        push_top_level(&mut app.libs[0], 10);
+        app.libs[0].library_total = Some(1000);
+        app.libs[0].nav_stack[0].cursor = 4;
+        app.libs[0].nav_stack[0].scroll = 2;
+
+        app.select_letter_pill(0, 4); // "M–O"
+
+        let lvl = app.libs[0].nav_stack.last().unwrap();
+        let filter = lvl.letter_filter.as_ref().expect("pill should be set");
+        assert_eq!(filter.index, 4);
+        assert_eq!(filter.label, "M\u{2013}O");
+        assert_eq!(filter.name_ge, Some("M"));
+        assert_eq!(filter.name_lt, Some("P"));
+        assert_eq!(lvl.cursor, 0);
+        assert_eq!(lvl.scroll, 0);
+        assert!(lvl.loading, "a scoped refresh should be in flight");
+    }
+
+    #[test]
+    fn select_letter_pill_is_a_noop_outside_letter_pill_eligibility() {
+        let mut app = make_app_stub();
+        app.libs.push(lib_tab("movies"));
+        push_top_level(&mut app.libs[0], 10);
+        // library_total never captured -> should_show_letter_pills is false.
+
+        app.select_letter_pill(0, 0);
+
+        assert!(app.libs[0]
+            .nav_stack
+            .last()
+            .unwrap()
+            .letter_filter
+            .is_none());
+    }
+
+    #[test]
+    fn cycle_letter_pill_wraps_around() {
+        let mut app = make_app_stub();
+        app.libs.push(lib_tab("movies"));
+        push_top_level(&mut app.libs[0], 10);
+        app.libs[0].library_total = Some(1000);
+
+        // Default (no pill selected yet) is treated as index 0; cycling back
+        // wraps to the last bucket ("#").
+        app.cycle_letter_pill(0, -1);
+        let filter = app.libs[0]
+            .nav_stack
+            .last()
+            .unwrap()
+            .letter_filter
+            .as_ref()
+            .unwrap();
+        assert_eq!(filter.label, "#");
+    }
+
+    // Regression coverage for the bug found in review of the letter-pills
+    // PR: `spawn_all_items_prefetch`/`spawn_search_items_load` used to cap
+    // their unfiltered fetch's `limit` at `lvl.total_count`, which is the
+    // FILTERED range's count whenever a letter pill is active (e.g. ~40 for
+    // an `M–O` pill out of a 3,000-movie library) -- so `all_items` (the set
+    // `/`-search runs over) silently shrank to just the active range, and
+    // whole-library search missed everything outside it.
+    #[test]
+    fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
+        let mut lib = lib_tab("movies");
+        push_top_level(&mut lib, 40); // the "M–O" slice: 40 items
+        lib.library_total = Some(3000); // the library's true size
+        {
+            let lvl = lib.nav_stack.last_mut().unwrap();
+            lvl.total_count = 40; // what get_items_sorted_ranged reported for M–O
+            lvl.letter_filter = crate::app::render::power::LetterFilter::for_index(4);
+        }
+        let lvl = lib.nav_stack.last().unwrap();
+
+        assert_eq!(
+            full_library_fetch_limit(&lib, lvl),
+            3000,
+            "must fetch the whole library, not just the active M–O range"
+        );
+    }
+
+    #[test]
+    fn full_library_fetch_limit_falls_back_to_total_count_before_library_total_is_known() {
+        let mut lib = lib_tab("movies");
+        push_top_level(&mut lib, 10);
+        // library_total not yet captured (e.g. first-ever load in flight).
+        let lvl = lib.nav_stack.last().unwrap();
+        assert_eq!(full_library_fetch_limit(&lib, lvl), 10);
     }
 }
 #[test]

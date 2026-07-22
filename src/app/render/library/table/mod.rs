@@ -210,6 +210,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let backend = TestBackend::new(50, 4);
         let mut terminal = Terminal::new(backend).unwrap();

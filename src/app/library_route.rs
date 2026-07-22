@@ -296,6 +296,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         let resolved = app.route_for_active_library_view(0);
@@ -315,6 +316,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         assert_eq!(app.route_for_active_library_view(0), None);
@@ -334,6 +336,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = 1;
         app.view_mode = ViewMode::Power;
@@ -361,6 +364,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = 1;
         app.view_mode = ViewMode::Power;

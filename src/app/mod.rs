@@ -315,6 +315,9 @@ struct BrowseLevel {
     sort_order: String,
     loading: bool,
     all_items: Option<Vec<MediaItem>>, // prefetched full list for instant search
+    /// Active letter-range pill scope for a large library's top browse level
+    /// (`None` = unfiltered). See `render::power::LetterFilter`.
+    letter_filter: Option<crate::app::render::power::LetterFilter>,
 }
 
 impl BrowseLevel {
@@ -349,6 +352,9 @@ impl BrowseLevel {
             sort_order: saved.sort_order.clone(),
             loading: false,
             all_items: None,
+            letter_filter: saved
+                .letter_filter_index
+                .and_then(crate::app::render::power::LetterFilter::for_index),
         }
     }
 
@@ -362,6 +368,11 @@ impl BrowseLevel {
             unplayed_only: self.unplayed_only,
             sort_by: self.sort_by.clone(),
             sort_order: self.sort_order.clone(),
+            letter_filter_index: self.letter_filter.as_ref().map(|f| f.index),
+            // Only meaningful for the root level; `library_position_snapshot`
+            // (the `LibraryTab` method) fills this in for `levels[0]` from
+            // `LibraryTab.library_total` after collecting all levels here.
+            library_total: None,
         }
     }
 
@@ -906,6 +917,12 @@ struct LibraryTab {
     /// (`App::album_tracks_cache`). `None` = normal album-list navigation.
     album_track_focus: Option<usize>,
     artist_header_focus: Option<ArtistHeaderSelection>,
+    /// The library's TRUE unfiltered `TotalRecordCount`, captured from the
+    /// first unfiltered fetch of the library's top level. `None` until that
+    /// first load completes. Used to gate the letter pill row and per-letter
+    /// header grouping so a scoped (small) fetch doesn't look "small" to the
+    /// UI. See `LIBRARY_PILL_THRESHOLD`.
+    library_total: Option<usize>,
 }
 
 impl LibraryTab {
@@ -920,12 +937,19 @@ impl LibraryTab {
             .as_ref()
             .map(|state| (state.selected_group, state.video_cursor, state.video_scroll))
             .unwrap_or((0, 0, 0));
+        let mut levels: Vec<crate::config::LibraryPositionLevel> = self
+            .nav_stack
+            .iter()
+            .map(BrowseLevel::to_position_level)
+            .collect();
+        // The true unfiltered library total only applies to the top (root)
+        // level; stash it there so a restored session can gate the letter
+        // pill row without an extra unfiltered fetch (see `library_total`).
+        if let Some(root) = levels.first_mut() {
+            root.library_total = self.library_total;
+        }
         crate::config::LibraryPosition {
-            levels: self
-                .nav_stack
-                .iter()
-                .map(BrowseLevel::to_position_level)
-                .collect(),
+            levels,
             feed_selected_group,
             feed_video_cursor,
             feed_video_scroll,
@@ -937,6 +961,7 @@ impl LibraryTab {
         position: crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
+        self.library_total = position.levels.first().and_then(|l| l.library_total);
         self.nav_stack = nav_stack;
         self.search = None;
         self.clear_power_music_focus();
@@ -1601,6 +1626,7 @@ impl App {
                     loading: true,
                     scroll: 0,
                     all_items: None,
+                    letter_filter: None,
                 };
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     if restore_feed_view {
@@ -4438,6 +4464,7 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: Some(make_items(3)),
+                letter_filter: None,
             }],
             search: Some(LibSearch {
                 query: "ignored".into(),
@@ -4455,6 +4482,7 @@ pub(crate) mod tests {
             }),
             album_track_focus: Some(1),
             artist_header_focus: None,
+            library_total: None,
         };
         lib.library.id = "lib-movies".into();
 
@@ -4481,6 +4509,8 @@ pub(crate) mod tests {
             unplayed_only: false,
             sort_by: "SortName".into(),
             sort_order: "Ascending".into(),
+            letter_filter_index: None,
+            library_total: None,
         };
 
         let level = BrowseLevel::from_position_level(&saved, make_items(5), 5, 3);
@@ -4520,6 +4550,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
                 crate::config::LibraryPositionLevel {
                     parent_id: "folder-b".into(),
@@ -4530,6 +4562,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
             ],
             ..Default::default()
@@ -4579,6 +4613,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
                 crate::config::LibraryPositionLevel {
                     parent_id: "folder-b".into(),
@@ -4589,6 +4625,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
             ],
             ..Default::default()
@@ -4630,6 +4668,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
                 crate::config::LibraryPositionLevel {
                     parent_id: "missing-folder".into(),
@@ -4640,6 +4680,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
             ],
             ..Default::default()
@@ -4678,6 +4720,7 @@ pub(crate) mod tests {
             feed_home_video: Some(FeedHomeVideoState::default()),
             album_track_focus: Some(2),
             artist_header_focus: None,
+            library_total: None,
         };
         let position = crate::config::LibraryPosition {
             levels: Vec::new(),
@@ -4701,6 +4744,7 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
         );
 
@@ -4733,11 +4777,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.library_position_state
             .libraries
@@ -4783,11 +4829,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.library_position_state
             .libraries
@@ -4830,11 +4878,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         app.power_left_tab = 1;
@@ -4882,11 +4932,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -4921,11 +4973,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.library_position_state.libraries.insert(
             "hidden-lib".into(),
@@ -4940,6 +4994,8 @@ pub(crate) mod tests {
                         unplayed_only: false,
                         sort_by: "SortName".into(),
                         sort_order: "Ascending".into(),
+                        letter_filter_index: None,
+                        library_total: None,
                     }],
                     ..Default::default()
                 }),
@@ -4968,6 +5024,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.library_position_state
             .libraries
@@ -4984,6 +5041,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
                 crate::config::LibraryPositionLevel {
                     parent_id: "folder-b".into(),
@@ -4994,6 +5053,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
             ],
             ..Default::default()
@@ -5029,6 +5090,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.library_position_state
             .libraries
@@ -5044,6 +5106,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             feed_selected_group: 0,
             feed_video_cursor: 2,
@@ -5078,6 +5142,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let views = app
             .library_position_state
@@ -5094,6 +5159,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "DateCreated".into(),
                 sort_order: "Descending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         });
@@ -5107,6 +5174,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         });
@@ -5136,6 +5205,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let power_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -5147,6 +5217,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5176,6 +5248,7 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
         });
 
@@ -5237,6 +5310,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let power_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -5248,6 +5322,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5284,6 +5360,7 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
         });
 
@@ -5323,11 +5400,13 @@ pub(crate) mod tests {
                 sort_order: "Descending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: Some(0),
             artist_header_focus: None,
+            library_total: None,
         });
         let views = app
             .library_position_state
@@ -5344,6 +5423,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         });
@@ -5357,6 +5438,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "DateCreated".into(),
                 sort_order: "Descending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         });
@@ -5397,11 +5480,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let views = app
             .library_position_state
@@ -5418,6 +5503,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         });
@@ -5431,6 +5518,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "DateCreated".into(),
                 sort_order: "Descending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         });
@@ -5460,6 +5549,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let power_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -5471,6 +5561,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5505,6 +5597,7 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
         });
 
@@ -5568,6 +5661,8 @@ pub(crate) mod tests {
                             unplayed_only: false,
                             sort_by: "SortName".into(),
                             sort_order: "Ascending".into(),
+                            letter_filter_index: None,
+                            library_total: None,
                         }],
                         ..Default::default()
                     }),
@@ -5608,6 +5703,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: Some(0),
             artist_header_focus: None,
+            library_total: None,
         });
         let stale = crate::config::LibraryPosition {
             levels: vec![
@@ -5620,6 +5716,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
                 crate::config::LibraryPositionLevel {
                     parent_id: "missing".into(),
@@ -5630,6 +5728,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 },
             ],
             ..Default::default()
@@ -5650,6 +5750,7 @@ pub(crate) mod tests {
             sort_order: "Ascending".into(),
             loading: false,
             all_items: None,
+            letter_filter: None,
         }];
         let restored_position = crate::config::LibraryPosition {
             levels: vec![restored_nav[0].to_position_level()],
@@ -5694,6 +5795,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let default_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -5705,6 +5807,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5727,6 +5831,7 @@ pub(crate) mod tests {
             sort_order: "Descending".into(),
             loading: false,
             all_items: None,
+            letter_filter: None,
         }];
         let power_position = crate::config::LibraryPosition {
             levels: vec![restored_nav[0].to_position_level()],
@@ -5765,6 +5870,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let requested = crate::config::LibraryPosition {
@@ -5777,6 +5883,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5801,6 +5909,7 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
         });
 
@@ -5833,11 +5942,13 @@ pub(crate) mod tests {
                 sort_order: "Descending".into(),
                 loading: true,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let default_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -5849,6 +5960,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5862,6 +5975,8 @@ pub(crate) mod tests {
                 unplayed_only: false,
                 sort_by: "DateCreated".into(),
                 sort_order: "Descending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5891,6 +6006,7 @@ pub(crate) mod tests {
                 sort_order: "Descending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
         });
 
@@ -5922,11 +6038,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         app.replace_saved_library_position(
@@ -5942,6 +6060,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 }],
                 ..Default::default()
             },
@@ -5959,6 +6079,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "DateCreated".into(),
                     sort_order: "Descending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 }],
                 ..Default::default()
             },
@@ -5996,11 +6118,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = 1;
         app.view_mode = ViewMode::Power;
@@ -6019,6 +6143,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 }],
                 ..Default::default()
             },
@@ -6036,6 +6162,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "DateCreated".into(),
                     sort_order: "Descending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 }],
                 ..Default::default()
             },
@@ -6073,11 +6201,13 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = 1;
         app.view_mode = ViewMode::Power;
@@ -6095,6 +6225,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 }],
                 ..Default::default()
             },
@@ -6112,6 +6244,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "DateCreated".into(),
                     sort_order: "Descending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 }],
                 ..Default::default()
             },
@@ -7639,6 +7773,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
@@ -7683,6 +7818,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
@@ -7715,6 +7851,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
@@ -7743,6 +7880,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Movie", "Movie");
@@ -7799,6 +7937,7 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Movie", "Movie");
@@ -7851,6 +7990,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -7860,6 +8000,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         assert!(!app.is_feed_home_video_group_view(0));
 
@@ -7896,6 +8037,7 @@ pub(crate) mod tests {
                     loading: false,
                     scroll: 0,
                     all_items: None,
+                    letter_filter: None,
                 },
                 BrowseLevel {
                     parent_id: "folder-a".into(),
@@ -7910,6 +8052,7 @@ pub(crate) mod tests {
                     loading: false,
                     scroll: 0,
                     all_items: Some(vec![video.clone()]),
+                    letter_filter: None,
                 },
             ],
             search: None,
@@ -7925,6 +8068,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
@@ -7961,6 +8105,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -7975,6 +8120,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.rebuild_library_tabs_from_views(&[library]);
@@ -8014,6 +8160,7 @@ pub(crate) mod tests {
                 loading: true,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8023,6 +8170,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         let mut folders = Vec::new();
@@ -8049,6 +8197,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             },
         });
 
@@ -8097,6 +8246,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8111,6 +8261,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.select_feed_folder_group(0, 1);
@@ -8155,6 +8306,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8170,6 +8322,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.select_feed_folder_group(0, 0);
@@ -8224,6 +8377,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8244,6 +8398,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.select_feed_folder_group(0, 2);
@@ -8298,6 +8453,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8319,6 +8475,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.select_feed_folder_group(0, 2);
@@ -8366,6 +8523,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8381,6 +8539,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.go_back();
@@ -8421,6 +8580,7 @@ pub(crate) mod tests {
                 loading: true,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8430,6 +8590,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         let mut empty = make_item("Empty Channel", "Folder");
@@ -8458,6 +8619,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             },
         });
 
@@ -8542,6 +8704,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8557,6 +8720,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.ensure_feed_home_video_group_level(0);
@@ -8605,6 +8769,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8620,6 +8785,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.refresh_lib();
@@ -8648,6 +8814,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         assert!(app.is_podcast_library(0));
@@ -8668,6 +8835,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         assert!(app.is_podcast_library(0));
@@ -8701,12 +8869,14 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -8748,12 +8918,14 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
 
@@ -8793,12 +8965,14 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = 1;
         app.view_mode = ViewMode::Power;
@@ -8849,6 +9023,7 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8864,6 +9039,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = 1;
         app.view_mode = ViewMode::Power;
@@ -8945,6 +9121,7 @@ pub(crate) mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -8966,6 +9143,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.tab_idx = 1;
         app.view_mode = ViewMode::Power;
@@ -9026,6 +9204,7 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: Some(FeedHomeVideoState {
@@ -9040,6 +9219,7 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.handle_lib_event(LibEvent::Refreshed {
@@ -9090,12 +9270,14 @@ pub(crate) mod tests {
                 loading: false,
                 scroll: 0,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.handle_lib_event(LibEvent::Refreshed {
