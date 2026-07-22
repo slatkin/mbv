@@ -1045,6 +1045,7 @@ pub struct App {
     last_click_pos: (u16, u16),
     last_drag_seek: Instant,
     last_space_press: Option<Instant>,
+    last_esc_press: Option<Instant>,
     confirm_remove_idx: Option<usize>, // playlist index pending removal confirmation
     pending_delete_idx: Option<usize>, // deferred removal of now-playing item after Stopped event
     pending_queue_removal: Option<(QueueSlotId, bool)>, // deferred removal (slot, is_audio) after TrackChanged index-shifts
@@ -1817,6 +1818,7 @@ impl App {
             last_drag_seek: Instant::now() - Duration::from_secs(1),
             last_click_pos: (u16::MAX, u16::MAX),
             last_space_press: None,
+            last_esc_press: None,
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,
@@ -6506,6 +6508,7 @@ pub(crate) mod tests {
             last_drag_seek: std::time::Instant::now(),
             last_click_pos: (u16::MAX, u16::MAX),
             last_space_press: None,
+            last_esc_press: None,
             confirm_remove_idx: None,
             pending_delete_idx: None,
             pending_queue_removal: None,

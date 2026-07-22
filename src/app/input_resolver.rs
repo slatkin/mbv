@@ -444,6 +444,47 @@ mod app_level_tests {
     }
 
     #[test]
+    fn double_esc_stops_when_active() {
+        let mut app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+        }
+        // Double-tap required: first press arms, second press fires.
+        app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(
+            app.last_esc_press.is_some(),
+            "first Esc must arm the double-tap (last_esc_press set)"
+        );
+        app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(
+            app.last_esc_press.is_none(),
+            "second Esc must fire and clear last_esc_press"
+        );
+    }
+
+    #[test]
+    fn double_esc_after_timeout_does_not_stop() {
+        use std::time::{Duration, Instant};
+
+        let mut app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+        }
+        // First press arms the double-tap.
+        app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+        // Simulate the timestamp being far in the past (>300ms).
+        app.last_esc_press = Some(Instant::now() - Duration::from_millis(500));
+        // Second press should NOT fire because the window expired.
+        app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
+        assert!(
+            app.last_esc_press.is_some(),
+            "second Esc after timeout must not clear last_esc_press"
+        );
+    }
+
+    #[test]
     fn f1_opens_help_via_handle_key() {
         let mut app = make_app_stub();
         app.handle_key(ev(KeyCode::F(1), KeyModifiers::NONE));

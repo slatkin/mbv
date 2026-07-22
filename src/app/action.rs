@@ -186,7 +186,7 @@ pub(super) const PLAYBACK_HELP_BINDINGS: &[PlaybackHelpBinding] = &[
         gated: true,
     },
     PlaybackHelpBinding {
-        keys: "Esc",
+        keys: "Esc (x2)",
         label: "Stop",
         samples: &[(
             KeyChord {
