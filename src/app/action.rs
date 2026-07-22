@@ -93,7 +93,7 @@ pub(super) enum Command {
     },
 
     /// `h` in Power View: collapse or expand the physical left column that
-    /// contains the media card and queue.
+    /// contains the Power View queue card and queue.
     TogglePowerSidebar,
 }
 

@@ -140,9 +140,7 @@ impl App {
         if self.images_enabled() || is_music_item {
             self.fetch_card_image(cache_key.clone(), item_id, series_id, img_types);
         }
-        if matches!(self.card_image_states.get(&cache_key), Some(None)) {
-            return self.render_power_card_placeholder(f, area);
-        }
+        let use_placeholder = matches!(self.card_image_states.get(&cache_key), Some(None));
 
         // Prefetch images for nearby items so they are ready before the cursor reaches them.
         // Collect data first (releasing the borrow on items) then call fetch (&mut self).
@@ -171,6 +169,9 @@ impl App {
                 self.fetch_list_card_image_when_idle(pkey, pid, psid, ptypes);
             }
         }
+        if use_placeholder {
+            return self.render_power_card_placeholder(f, area);
+        }
         self.render_card_image(f, area, &cache_key, area.height)
     }
 }
@@ -184,6 +185,8 @@ mod tests {
     use mbv_core::api::EmbyClient;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
+    use ratatui::style::Style;
+    use ratatui::widgets::Paragraph;
     use ratatui::Terminal;
 
     fn make_queue_app(n: usize, cursor: usize) -> App {
@@ -372,16 +375,42 @@ mod tests {
 
     #[test]
     fn completed_no_art_uses_power_card_placeholder() {
-        let mut app = make_queue_app(1, 0);
+        let mut app = make_queue_app(6, 2);
+        app.image_protocol_enabled = true;
         app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
-        app.card_image_states.insert("id0:P".into(), None);
+        app.card_image_states.insert("id2:P".into(), None);
 
         render_power_card(&mut app);
 
         assert!(app
             .card_image_states
             .contains_key(POWER_CARD_PLACEHOLDER_KEY));
-        assert!(!app.card_image_loading.contains("id0:P"));
+        assert!(!app.card_image_loading.contains("id2:P"));
+        assert!(fetch_triggered(&app, "id1:P"));
+        assert!(fetch_triggered(&app, "id3:P"));
+        assert!(fetch_triggered(&app, "id4:P"));
+        assert!(fetch_triggered(&app, "id5:P"));
+        assert!(!fetch_triggered(&app, "id0:P"));
+    }
+
+    #[test]
+    fn completed_no_art_prefetch_centers_on_active_source() {
+        let mut app = make_queue_app(6, 0);
+        app.image_protocol_enabled = true;
+        app.image_picker = Some(ratatui_image::picker::Picker::halfblocks());
+        app.card_image_states.insert("id3:P".into(), None);
+        set_playback(&mut app, 3, false);
+
+        render_power_card(&mut app);
+
+        assert!(app
+            .card_image_states
+            .contains_key(POWER_CARD_PLACEHOLDER_KEY));
+        assert!(!app.card_image_loading.contains("id3:P"));
+        assert!(fetch_triggered(&app, "id2:P"));
+        assert!(fetch_triggered(&app, "id4:P"));
+        assert!(fetch_triggered(&app, "id5:P"));
+        assert!(!fetch_triggered(&app, "id0:P"));
     }
 
     #[test]
@@ -393,6 +422,32 @@ mod tests {
 
         assert!(app.card_image_loading.contains("id0:P"));
         assert!(rendered.contains(&format!("bg: {:?}", palette::OVERLAY)));
+    }
+
+    #[test]
+    fn loading_image_overwrites_prior_card_area_with_dim_block() {
+        let backend = TestBackend::new(30, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            f.render_widget(
+                Paragraph::new("STALE ART").style(Style::default().bg(palette::IRIS)),
+                Rect::new(0, 0, 30, 6),
+            );
+        })
+        .unwrap();
+
+        let mut app = make_queue_app(1, 0);
+        app.image_protocol_enabled = true;
+        app.last_card_height = 6;
+        term.draw(|f| {
+            app.render_power_card(f, Rect::new(0, 0, 30, 20));
+        })
+        .unwrap();
+        let rendered = format!("{:?}", term.backend().buffer());
+
+        assert!(app.card_image_loading.contains("id0:P"));
+        assert!(rendered.contains(&format!("bg: {:?}", palette::OVERLAY)));
+        assert!(!rendered.contains("STALE"));
     }
 
     #[test]
