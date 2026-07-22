@@ -9,6 +9,7 @@ use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
 use textwrap::wrap;
+use unicode_width::UnicodeWidthStr;
 
 const IMG_COLS: u16 = 18;
 const IMG_ROWS: u16 = 12;
@@ -45,6 +46,64 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
         },
     );
     (size.width, size.height)
+}
+
+/// Rows reserved below the overview text in the Series inline detail pane
+/// for the divider/season-pills row and the (roughly estimated) episode
+/// list, shared by `series_inline_detail_rows` (which reserves this many
+/// filler rows in the list) and `render_series_inline_detail` (which caps
+/// how many overview lines it draws so this many rows remain below them) --
+/// keeping both in sync prevents the overview from eating into space the
+/// layout pass assumed was reserved for the divider/pills/episodes.
+const SERIES_DETAIL_DIVIDER_ROWS: usize = 2; // blank spacer + divider/pills row
+const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8; // estimated visible episode rows
+const SERIES_DETAIL_OVERVIEW_MAX_LINES: usize = 4;
+
+/// Builds the "YYYY-YYYY  GENRE" (or any subset present) metadata line for a
+/// Series item, shared by `series_inline_detail_rows` (row-count estimate)
+/// and `render_series_inline_detail` (actual render) so the two can't drift.
+fn series_meta_line(item: &mbv_core::api::MediaItem) -> String {
+    let year_range = match (item.production_year, item.end_year) {
+        (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
+        (s, _) if s > 0 => format!("{}", s),
+        _ => String::new(),
+    };
+    let genre_upper = item.genre.to_uppercase();
+    [year_range.as_str(), genre_upper.as_str()]
+        .iter()
+        .filter(|s| !s.is_empty())
+        .copied()
+        .collect::<Vec<_>>()
+        .join("  ")
+}
+
+/// Word-wraps `text` into lines, asking `width_for_line` for the width
+/// available to the line currently being built (given the number of lines
+/// already completed) -- callers that need per-row width (e.g. narrowing
+/// around an inline image) can vary the result per call, while callers that
+/// just want a flat-width estimate can ignore the argument. Shared by
+/// `series_inline_detail_rows` and `render_series_inline_detail` so the
+/// wrapping logic can't drift between the two.
+fn wrap_overview_lines(text: &str, mut width_for_line: impl FnMut(usize) -> usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut cur_line = String::new();
+    for word in text.split_whitespace() {
+        let word_w = word.width();
+        let avail = width_for_line(lines.len());
+        if cur_line.is_empty() {
+            cur_line.push_str(word);
+        } else if cur_line.width() + 1 + word_w <= avail {
+            cur_line.push(' ');
+            cur_line.push_str(word);
+        } else {
+            lines.push(std::mem::take(&mut cur_line));
+            cur_line.push_str(word);
+        }
+    }
+    if !cur_line.is_empty() {
+        lines.push(cur_line);
+    }
+    lines
 }
 
 /// Everything content-dependent about the compact movie-detail banner: the
@@ -113,6 +172,30 @@ impl App {
             return None;
         }
         if coll == "movies" && item.item_type != "Movie" {
+            return None;
+        }
+
+        Some(item)
+    }
+
+    pub(crate) fn power_selected_series_item(
+        &self,
+        lib_idx: usize,
+    ) -> Option<mbv_core::api::MediaItem> {
+        let lib = self.libs.get(lib_idx)?;
+        if lib.library.collection_type != "tvshows" {
+            return None;
+        }
+
+        let item = if let Some(search) = &lib.search {
+            let &idx = search.results.get(search.cursor)?;
+            search.items.get(idx)?.clone()
+        } else {
+            let level = lib.nav_stack.last()?;
+            level.items.get(level.cursor)?.clone()
+        };
+
+        if item.item_type != "Series" {
             return None;
         }
 
@@ -285,6 +368,405 @@ impl App {
             img_actual_w,
             img_height,
             img_is_placeholder,
+        }
+    }
+
+    pub(super) fn series_inline_detail_rows(
+        &mut self,
+        item: &mbv_core::api::MediaItem,
+        panel_width: u16,
+    ) -> usize {
+        let inner_w = (panel_width as usize).saturating_sub(2);
+
+        // Series title row
+        let mut rows = 1usize;
+
+        // Series metadata row (year range + genre)
+        if !series_meta_line(item).is_empty() {
+            rows += 1;
+        }
+
+        // Blank spacer
+        rows += 1;
+
+        // Overview (word-wrapped, capped to leave room for pills + episodes)
+        if !item.overview.is_empty() {
+            let lines = wrap_overview_lines(&item.overview, |_| inner_w);
+            // Cap at SERIES_DETAIL_OVERVIEW_MAX_LINES rows to leave room for pills + episodes
+            rows += lines.len().min(SERIES_DETAIL_OVERVIEW_MAX_LINES);
+            if !lines.is_empty() {
+                rows += 1; // spacer after overview
+            }
+        }
+
+        // Image height (if available)
+        const IMG_ROWS: u16 = 12;
+        let img_height = if self.images_enabled() {
+            IMG_ROWS as usize
+        } else {
+            0
+        };
+        let metadata_img_end = rows + img_height;
+        rows = rows.max(metadata_img_end);
+
+        // Divider + season pills row, plus estimated episode rows -- kept in
+        // sync with `render_series_inline_detail`'s `reserved_for_below` via
+        // the shared SERIES_DETAIL_* constants.
+        rows += SERIES_DETAIL_DIVIDER_ROWS;
+        rows += SERIES_DETAIL_EPISODE_ROWS_ESTIMATE;
+
+        rows
+    }
+
+    pub(super) fn render_series_inline_detail(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        lib_idx: usize,
+        focused: bool,
+        _layout: &mut LayoutPower,
+    ) {
+        if area.height == 0 {
+            return;
+        }
+
+        let Some(item) = self.power_selected_series_item(lib_idx) else {
+            return;
+        };
+
+        // Fetch series detail if not cached
+        if !item.id.is_empty() {
+            self.fetch_series_detail(item.id.clone());
+        }
+
+        let inner_x = area.x + 1;
+        let inner_w = (area.width as usize).saturating_sub(2);
+        let inner_w16 = area.width.saturating_sub(2);
+        let max_y = area.y + area.height;
+        let mut row = area.y;
+
+        let text_color = if focused {
+            palette::WHITE
+        } else {
+            palette::SUBTLE
+        };
+
+        // ── Series Primary image (right-aligned, text wraps around it) ───
+        const IMG_COLS: u16 = 18;
+        const IMG_MAX_ROWS: u16 = 12;
+        let img_start_row = area.y + 1; // row after title
+        let primary_cache_key = format!("{}:ser_primary", item.id);
+        if !item.id.is_empty() && self.images_enabled() {
+            self.fetch_card_image(
+                primary_cache_key.clone(),
+                item.id.clone(),
+                String::new(),
+                &["Primary"],
+            );
+        }
+        const IMG_PLACEHOLDER_H: u16 = 10;
+        let img_loading = !item.id.is_empty()
+            && self.images_enabled()
+            && self.card_image_loading.contains(&primary_cache_key);
+        let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
+            if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
+                let avail = ratatui::layout::Size {
+                    width: IMG_COLS,
+                    height: IMG_MAX_ROWS,
+                };
+                match state.size_for(
+                    ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
+                    avail,
+                ) {
+                    Some(actual) => (actual.width, actual.height, false),
+                    None => (IMG_COLS, IMG_PLACEHOLDER_H, true),
+                }
+            } else if img_loading {
+                (IMG_COLS, IMG_PLACEHOLDER_H, true)
+            } else {
+                (0, 0, false)
+            }
+        };
+        let img_x = area.x + area.width.saturating_sub(img_actual_w);
+        let img_end_row = img_start_row + img_height + 1;
+        let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
+        let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
+        let text_dims = |r: u16| -> (usize, u16) {
+            if img_height > 0 && r >= img_start_row && r < img_end_row {
+                (narrow_w, narrow_w16)
+            } else {
+                (inner_w, inner_w16)
+            }
+        };
+
+        // Series title (YELLOW)
+        if !item.series_name.is_empty() && row < max_y {
+            let (tw, tw16) = text_dims(row);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&item.series_name, tw),
+                    Style::default().fg(palette::YELLOW),
+                ))),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: tw16,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
+
+        // Series metadata (year range + genre)
+        if row < max_y {
+            let ser_meta = series_meta_line(&item);
+            if !ser_meta.is_empty() {
+                let (tw, tw16) = text_dims(row);
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        trunc_str(&ser_meta, tw),
+                        Style::default().fg(palette::SUBTLE),
+                    ))),
+                    Rect {
+                        x: inner_x,
+                        y: row,
+                        width: tw16,
+                        height: 1,
+                    },
+                );
+                row += 1;
+            }
+        }
+
+        // Blank spacer after series block
+        if row < max_y {
+            row += 1;
+        }
+
+        // Overview (word-wrapped, respects image shadow width)
+        if !item.overview.is_empty() && row < max_y {
+            let overview_start_row = row;
+            let lines = wrap_overview_lines(&item.overview, |line_idx| {
+                text_dims(overview_start_row + line_idx as u16).0
+            });
+            // Cap at available rows minus space for pills + episode list --
+            // shares SERIES_DETAIL_* constants with `series_inline_detail_rows`
+            // so the reserved space and what's actually drawn stay in sync.
+            let reserved_for_below =
+                (SERIES_DETAIL_DIVIDER_ROWS + SERIES_DETAIL_EPISODE_ROWS_ESTIMATE) as u16;
+            let available_rows =
+                (max_y.saturating_sub(row).saturating_sub(reserved_for_below)) as usize;
+            for line_text in lines.iter().take(available_rows) {
+                if row >= max_y {
+                    break;
+                }
+                let (_, tw16) = text_dims(row);
+                f.render_widget(
+                    Paragraph::new(Line::from(Span::styled(
+                        line_text.clone(),
+                        Style::default().fg(text_color),
+                    ))),
+                    Rect {
+                        x: inner_x,
+                        y: row,
+                        width: tw16,
+                        height: 1,
+                    },
+                );
+                row += 1;
+            }
+        }
+
+        // Push below the image if it extends past the text
+        if row < img_end_row {
+            row = img_end_row;
+        }
+
+        // ── Render series image last so it layers over text ───────────────
+        if img_height > 0 {
+            let img_rect = Rect {
+                x: img_x,
+                y: img_start_row,
+                width: img_actual_w,
+                height: img_height,
+            };
+            if img_is_placeholder {
+                f.render_widget(
+                    Block::default().style(Style::default().bg(palette::OVERLAY)),
+                    img_rect,
+                );
+            } else if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
+                type SImg = ratatui_image::StatefulImage<ratatui_image::thread::ThreadProtocol>;
+                f.render_stateful_widget(
+                    SImg::default().resize(ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER))),
+                    img_rect,
+                    state,
+                );
+            }
+        }
+
+        // ── Grey divider with season tabs overlaid ───────────────────────
+        // Fetch series detail from cache
+        let series_detail = self.series_detail_cache.get(&item.id).cloned();
+        if let Some(ref detail) = series_detail {
+            if !detail.seasons.is_empty() && row < max_y {
+                row += 1; // blank spacer above divider
+                if row < max_y {
+                    // Draw the full-width green rule first
+                    super::render_horizontal_rule(
+                        f,
+                        Rect {
+                            x: area.x,
+                            y: row,
+                            width: area.width,
+                            height: 1,
+                        },
+                        palette::GREEN,
+                    );
+
+                    // Overlay season tabs on the same row (inactive for now)
+                    let tab_labels: Vec<String> = detail
+                        .seasons
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            let n = if s.index_number > 0 {
+                                s.index_number as usize
+                            } else {
+                                i + 1
+                            };
+                            format!("{:02}", n)
+                        })
+                        .collect();
+                    let per_tab = 5usize;
+                    let n_tabs = tab_labels.len();
+                    let prefix_w = 8;
+                    let avail = (area.width as usize).saturating_sub(prefix_w + 2);
+                    let tabs_per_page = ((avail + 1) / per_tab).max(1);
+                    let scroll_end = tabs_per_page.min(n_tabs);
+
+                    let mut spans: Vec<Span> = Vec::new();
+                    spans.push(Span::styled(
+                        "Series: ",
+                        Style::default().fg(ratatui::style::Color::White),
+                    ));
+                    for (idx, label) in tab_labels[..scroll_end].iter().enumerate() {
+                        if idx > 0 {
+                            spans.push(Span::raw(" "));
+                        }
+                        // All pills inactive (not selected)
+                        let style = super::selector_pill_style(false);
+                        spans.push(Span::styled(format!(" {} ", label), style));
+                    }
+                    if scroll_end < n_tabs {
+                        spans.push(Span::styled(
+                            " \u{203a}",
+                            Style::default().fg(palette::GREEN),
+                        ));
+                    }
+                    f.render_widget(
+                        Paragraph::new(Line::from(spans)),
+                        Rect {
+                            x: area.x,
+                            y: row,
+                            width: area.width,
+                            height: 1,
+                        },
+                    );
+                    row += 1;
+                }
+            }
+
+            // ── Episode list (inactive) ─────────────────────────────────────
+            if let Some(first_season) = detail.seasons.first() {
+                if let Some(episodes) = detail.episodes.get(&first_season.id) {
+                    if !episodes.is_empty() && row < max_y {
+                        let table_area = Rect {
+                            x: area.x,
+                            y: row,
+                            width: area.width,
+                            height: max_y.saturating_sub(row),
+                        };
+                        if table_area.height > 0 {
+                            let show_length = table_area.width > 40;
+                            let dur_col_w: usize = if show_length { 7 } else { 0 };
+                            let title_col_w = (table_area.width as usize)
+                                .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
+
+                            let rows: Vec<Row> = episodes
+                                .iter()
+                                .enumerate()
+                                .map(|(i, ep)| {
+                                    let row_style = Style::default().fg(palette::SUBTLE);
+                                    let ep_num_w = episodes.len().to_string().len();
+                                    let ep_label = if ep.index_number > 0 {
+                                        format!("{:>ep_num_w$}. ", ep.index_number)
+                                    } else {
+                                        format!("{:>ep_num_w$}. ", i + 1)
+                                    };
+                                    let label_w = ep_label.chars().count();
+                                    let title =
+                                        trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
+                                    let title_cell = Cell::from(Line::from(vec![
+                                        Span::styled(ep_label, Style::default().fg(palette::MUTED)),
+                                        Span::raw(title),
+                                    ]));
+                                    let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
+                                    let length = if len_secs > 0 {
+                                        fmt_duration_approx(len_secs)
+                                    } else {
+                                        "\u{2014}".to_string()
+                                    };
+                                    if show_length {
+                                        Row::new([
+                                            title_cell,
+                                            Cell::from(
+                                                Line::from(length).alignment(Alignment::Right),
+                                            )
+                                            .style(Style::default().fg(palette::MUTED)),
+                                            Cell::from(""),
+                                        ])
+                                        .style(row_style)
+                                    } else {
+                                        Row::new([title_cell, Cell::from(""), Cell::from("")])
+                                            .style(row_style)
+                                    }
+                                })
+                                .collect();
+
+                            let mut state = TableState::default();
+                            state.select(None); // No selection (inactive)
+                            let table = Table::new(
+                                rows,
+                                [
+                                    Constraint::Min(10),
+                                    Constraint::Length(if show_length {
+                                        dur_col_w as u16
+                                    } else {
+                                        0
+                                    }),
+                                    Constraint::Length(1),
+                                ],
+                            )
+                            .column_spacing(1)
+                            .row_highlight_style(Style::default());
+                            f.render_stateful_widget(table, table_area, &mut state);
+                        }
+                    }
+                }
+            }
+        } else if row < max_y {
+            // Loading state
+            super::render_power_placeholder(
+                f,
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                },
+                " Loading\u{2026}",
+            );
         }
     }
 

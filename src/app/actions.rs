@@ -5116,6 +5116,15 @@ impl App {
                 self.album_tracks_loading.remove(&album_id);
                 self.album_tracks_cache.insert(album_id, tracks);
             }
+            LibEvent::SeriesDetailFetched {
+                series_id,
+                seasons,
+                episodes,
+            } => {
+                self.series_detail_loading.remove(&series_id);
+                self.series_detail_cache
+                    .insert(series_id, crate::app::SeriesDetail { seasons, episodes });
+            }
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);
                 self.album_artist_cache.insert(album_id, artist);
