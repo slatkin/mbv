@@ -8,13 +8,15 @@ mod music;
 mod queue;
 
 use super::super::layout::LayoutPower;
-use super::super::ui_util::{build_queue_rows, natural_sort_key};
+use super::super::ui_util::{build_queue_rows, natural_sort_key, QueueRow};
 use super::super::{palette, App, PowerFocus};
+use mbv_core::api::MediaItem;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
+use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
 // Power View re-renders frequently while scrolling; prefer a cheaper filter in
@@ -200,6 +202,36 @@ fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, desired_rows: u16) 
         height,
         ..area
     }
+}
+
+fn rendered_power_queue_rows_for_padding(items: &[MediaItem], panel_area: Rect) -> u16 {
+    if items.is_empty() {
+        return 1;
+    }
+
+    let (display, group_for_header) = build_queue_rows(items, true);
+    let padded_visible = panel_area.height.saturating_sub(4) as usize;
+    let has_sb = display.len() > padded_visible;
+    let render_w = panel_area.width.saturating_sub(u16::from(has_sb)) as usize;
+    let wrap_w = render_w.saturating_sub(1).max(1);
+    let mut header_idx = 0;
+    let mut rows = 0u16;
+
+    for entry in display {
+        match entry {
+            QueueRow::Header => {
+                let group = group_for_header
+                    .get(header_idx)
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                header_idx += 1;
+                rows = rows.saturating_add(wrap(group, wrap_w).len().max(1) as u16);
+            }
+            QueueRow::Spacer | QueueRow::Track { .. } => rows = rows.saturating_add(1),
+        }
+    }
+
+    rows
 }
 
 /// Style for a selector pill (group/section/artist tab row): IRIS text +
@@ -763,11 +795,7 @@ impl App {
         if !self.power_left_collapsed {
             let desired_queue_rows = {
                 let queue = self.displayed_queue();
-                if queue.items.is_empty() {
-                    1
-                } else {
-                    build_queue_rows(&queue.items, true).0.len() as u16
-                }
+                rendered_power_queue_rows_for_padding(&queue.items, queue_area)
             };
             let queue_list_area = render_power_queue_panel_frame(f, queue_area, desired_queue_rows);
             self.render_power_queue(f, queue_list_area, queue_focused, layout);
@@ -1355,6 +1383,45 @@ mod tests {
             layout.queue_area.height >= 1,
             "expected at least one usable queue row on a short terminal, got {:?}",
             layout.queue_area
+        );
+    }
+
+    #[test]
+    fn power_queue_panel_counts_wrapped_group_headers_before_adding_padding() {
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+        let mut item = make_item("Track", "Audio");
+        item.id = "boundary-track".into();
+        item.album_id = "boundary-album".into();
+        item.album = "Long Album Title".into();
+        item.artist = "Very Long Artist".into();
+        app.player_tab.set_items(vec![item], 0);
+
+        let panel_area = Rect::new(0, 0, 20, 6);
+        let desired_rows =
+            rendered_power_queue_rows_for_padding(&app.displayed_queue().items, panel_area);
+        assert_eq!(desired_rows, 3);
+
+        let backend = TestBackend::new(panel_area.width, panel_area.height);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPower::default();
+        term.draw(|f| {
+            let queue_area = render_power_queue_panel_frame(f, panel_area, desired_rows);
+            app.render_power_queue(f, queue_area, true, &mut layout);
+        })
+        .unwrap();
+        let out = buffer_to_string(&term);
+
+        assert_eq!(layout.queue_area.y, 1);
+        assert_eq!(layout.queue_area.height, 4);
+        assert!(
+            layout.queue_row_map.contains(&Some(0)),
+            "expected selected track row to be mapped as visible after wrapped header: {:?}",
+            layout.queue_row_map
+        );
+        assert!(
+            out.contains("1. Track"),
+            "expected selected track to remain visible below the wrapped group header:\n{out}"
         );
     }
 
