@@ -178,7 +178,7 @@ fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, desired_rows: u16) 
     let border_style = Style::default().fg(palette::SOFT_WHITE);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "\u{2581}".repeat(area.width as usize),
+            "\u{2594}".repeat(area.width as usize),
             border_style,
         ))),
         Rect { height: 1, ..area },
@@ -186,7 +186,7 @@ fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, desired_rows: u16) 
     if area.height > 1 {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                "\u{2594}".repeat(area.width as usize),
+                "\u{2581}".repeat(area.width as usize),
                 border_style,
             ))),
             Rect {
@@ -1418,9 +1418,9 @@ mod tests {
         let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
         let x = layout.queue_area.x;
 
-        assert_eq!(buf[(x, top_y)].symbol(), "\u{2581}");
+        assert_eq!(buf[(x, top_y)].symbol(), "\u{2594}");
         assert_eq!(buf[(x, top_y)].fg, palette::SOFT_WHITE);
-        assert_eq!(buf[(x, bottom_y)].symbol(), "\u{2594}");
+        assert_eq!(buf[(x, bottom_y)].symbol(), "\u{2581}");
         assert_eq!(buf[(x, bottom_y)].fg, palette::SOFT_WHITE);
         assert_eq!(buf[(x, layout.queue_area.y)].bg, palette::MEDIA_SELECTED_BG);
         assert_eq!(
@@ -1558,6 +1558,14 @@ mod tests {
         assert!(
             last_line.contains("Road Mix"),
             "expected the playlist pill to appear in the Power View status bar:\n{last_line}"
+        );
+        let text_x = last_line
+            .find("Road Mix")
+            .expect("expected playlist name position") as u16;
+        assert_eq!(
+            term.backend().buffer()[(text_x, 27)].fg,
+            palette::YELLOW,
+            "expected playlist pill text to be yellow, not green:\n{last_line}"
         );
     }
 
@@ -2437,6 +2445,81 @@ mod tests {
             buf[(hint_x as u16, hint_y as u16)].fg,
             palette::MUTED,
             "expected inline action hints to render muted:\n{out}"
+        );
+    }
+
+    #[test]
+    fn selected_music_group_album_shows_right_aligned_art_before_track_mode() {
+        let mut app = make_power_music_group_app();
+        app.image_protocol_enabled = true;
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal(&mut app, &mut layout);
+        let out = buffer_to_string(&term);
+        let art_rect = layout
+            .inline_image_rect
+            .expect("expected selected album art rect before track mode");
+
+        assert!(
+            !out.contains("Opening Track"),
+            "tracks should stay hidden until track-selection mode:\n{out}"
+        );
+        assert_eq!(
+            art_rect.x + art_rect.width,
+            60,
+            "album art should be right aligned"
+        );
+        assert_eq!((art_rect.width, art_rect.height), (18, 12));
+        assert!(app.card_image_loading.contains("album-1:P"));
+        assert_eq!(
+            term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
+            palette::OVERLAY,
+            "loading album art should reserve a right-aligned placeholder:\n{out}"
+        );
+    }
+
+    #[test]
+    fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
+        let mut app = make_power_music_group_app();
+        app.image_protocol_enabled = true;
+        app.libs[0].album_track_focus = Some(0);
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal(&mut app, &mut layout);
+        let out = buffer_to_string(&term);
+        let art_rect = layout
+            .inline_image_rect
+            .expect("expected selected album art rect in track mode");
+
+        assert!(
+            out.contains("Opening Track"),
+            "expected inline track row:\n{out}"
+        );
+        assert_eq!(
+            art_rect.x + art_rect.width,
+            60,
+            "album art should be right aligned"
+        );
+        assert_eq!((art_rect.width, art_rect.height), (18, 12));
+        assert!(app.card_image_loading.contains("album-1:P"));
+        assert_eq!(
+            term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
+            palette::OVERLAY,
+            "loading album art should reserve a right-aligned placeholder:\n{out}"
         );
     }
 
