@@ -48,6 +48,64 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
     (size.width, size.height)
 }
 
+/// Rows reserved below the overview text in the Series inline detail pane
+/// for the divider/season-pills row and the (roughly estimated) episode
+/// list, shared by `series_inline_detail_rows` (which reserves this many
+/// filler rows in the list) and `render_series_inline_detail` (which caps
+/// how many overview lines it draws so this many rows remain below them) --
+/// keeping both in sync prevents the overview from eating into space the
+/// layout pass assumed was reserved for the divider/pills/episodes.
+const SERIES_DETAIL_DIVIDER_ROWS: usize = 2; // blank spacer + divider/pills row
+const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8; // estimated visible episode rows
+const SERIES_DETAIL_OVERVIEW_MAX_LINES: usize = 4;
+
+/// Builds the "YYYY-YYYY  GENRE" (or any subset present) metadata line for a
+/// Series item, shared by `series_inline_detail_rows` (row-count estimate)
+/// and `render_series_inline_detail` (actual render) so the two can't drift.
+fn series_meta_line(item: &mbv_core::api::MediaItem) -> String {
+    let year_range = match (item.production_year, item.end_year) {
+        (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
+        (s, _) if s > 0 => format!("{}", s),
+        _ => String::new(),
+    };
+    let genre_upper = item.genre.to_uppercase();
+    [year_range.as_str(), genre_upper.as_str()]
+        .iter()
+        .filter(|s| !s.is_empty())
+        .copied()
+        .collect::<Vec<_>>()
+        .join("  ")
+}
+
+/// Word-wraps `text` into lines, asking `width_for_line` for the width
+/// available to the line currently being built (given the number of lines
+/// already completed) -- callers that need per-row width (e.g. narrowing
+/// around an inline image) can vary the result per call, while callers that
+/// just want a flat-width estimate can ignore the argument. Shared by
+/// `series_inline_detail_rows` and `render_series_inline_detail` so the
+/// wrapping logic can't drift between the two.
+fn wrap_overview_lines(text: &str, mut width_for_line: impl FnMut(usize) -> usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    let mut cur_line = String::new();
+    for word in text.split_whitespace() {
+        let word_w = word.width();
+        let avail = width_for_line(lines.len());
+        if cur_line.is_empty() {
+            cur_line.push_str(word);
+        } else if cur_line.width() + 1 + word_w <= avail {
+            cur_line.push(' ');
+            cur_line.push_str(word);
+        } else {
+            lines.push(std::mem::take(&mut cur_line));
+            cur_line.push_str(word);
+        }
+    }
+    if !cur_line.is_empty() {
+        lines.push(cur_line);
+    }
+    lines
+}
+
 /// Everything content-dependent about the compact movie-detail banner: the
 /// meta line, the "Playing" indicator, and the overview + director text
 /// wrapped to the banner's actual panel width. Computed once by
@@ -324,21 +382,7 @@ impl App {
         let mut rows = 1usize;
 
         // Series metadata row (year range + genre)
-        let ser_start = item.production_year;
-        let ser_end = item.end_year;
-        let year_range = match (ser_start, ser_end) {
-            (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
-            (s, _) if s > 0 => format!("{}", s),
-            _ => String::new(),
-        };
-        let genre_upper = item.genre.to_uppercase();
-        let ser_meta = [year_range.as_str(), genre_upper.as_str()]
-            .iter()
-            .filter(|s| !s.is_empty())
-            .copied()
-            .collect::<Vec<_>>()
-            .join("  ");
-        if !ser_meta.is_empty() {
+        if !series_meta_line(item).is_empty() {
             rows += 1;
         }
 
@@ -347,25 +391,9 @@ impl App {
 
         // Overview (word-wrapped, capped to leave room for pills + episodes)
         if !item.overview.is_empty() {
-            let mut lines: Vec<String> = Vec::new();
-            let mut cur_line = String::new();
-            for word in item.overview.split_whitespace() {
-                let word_w = word.width();
-                if cur_line.is_empty() {
-                    cur_line.push_str(word);
-                } else if cur_line.width() + 1 + word_w <= inner_w {
-                    cur_line.push(' ');
-                    cur_line.push_str(word);
-                } else {
-                    lines.push(std::mem::take(&mut cur_line));
-                    cur_line.push_str(word);
-                }
-            }
-            if !cur_line.is_empty() {
-                lines.push(cur_line);
-            }
-            // Cap at 4 rows to leave room for pills + episodes
-            rows += lines.len().min(4);
+            let lines = wrap_overview_lines(&item.overview, |_| inner_w);
+            // Cap at SERIES_DETAIL_OVERVIEW_MAX_LINES rows to leave room for pills + episodes
+            rows += lines.len().min(SERIES_DETAIL_OVERVIEW_MAX_LINES);
             if !lines.is_empty() {
                 rows += 1; // spacer after overview
             }
@@ -381,11 +409,11 @@ impl App {
         let metadata_img_end = rows + img_height;
         rows = rows.max(metadata_img_end);
 
-        // Divider + season pills row
-        rows += 2; // spacer + divider/pills
-
-        // Episode list (estimate ~8 rows for visible episodes)
-        rows += 8;
+        // Divider + season pills row, plus estimated episode rows -- kept in
+        // sync with `render_series_inline_detail`'s `reserved_for_below` via
+        // the shared SERIES_DETAIL_* constants.
+        rows += SERIES_DETAIL_DIVIDER_ROWS;
+        rows += SERIES_DETAIL_EPISODE_ROWS_ESTIMATE;
 
         rows
     }
@@ -491,20 +519,7 @@ impl App {
 
         // Series metadata (year range + genre)
         if row < max_y {
-            let ser_start = item.production_year;
-            let ser_end = item.end_year;
-            let year_range = match (ser_start, ser_end) {
-                (s, e) if s > 0 && e > 0 && e != s => format!("{}-{}", s, e),
-                (s, _) if s > 0 => format!("{}", s),
-                _ => String::new(),
-            };
-            let genre_upper = item.genre.to_uppercase();
-            let ser_meta = [year_range.as_str(), genre_upper.as_str()]
-                .iter()
-                .filter(|s| !s.is_empty())
-                .copied()
-                .collect::<Vec<_>>()
-                .join("  ");
+            let ser_meta = series_meta_line(&item);
             if !ser_meta.is_empty() {
                 let (tw, tw16) = text_dims(row);
                 f.render_widget(
@@ -513,7 +528,7 @@ impl App {
                         Style::default().fg(palette::SUBTLE),
                     ))),
                     Rect {
-                        x: area.x,
+                        x: inner_x,
                         y: row,
                         width: tw16,
                         height: 1,
@@ -530,28 +545,15 @@ impl App {
 
         // Overview (word-wrapped, respects image shadow width)
         if !item.overview.is_empty() && row < max_y {
-            let mut lines: Vec<String> = Vec::new();
-            let mut cur_line = String::new();
-            let mut wrap_row = row;
-            for word in item.overview.split_whitespace() {
-                let word_w = word.width();
-                let (wrap_w, _) = text_dims(wrap_row);
-                if cur_line.is_empty() {
-                    cur_line.push_str(word);
-                } else if cur_line.width() + 1 + word_w <= wrap_w {
-                    cur_line.push(' ');
-                    cur_line.push_str(word);
-                } else {
-                    lines.push(std::mem::take(&mut cur_line));
-                    wrap_row += 1;
-                    cur_line.push_str(word);
-                }
-            }
-            if !cur_line.is_empty() {
-                lines.push(cur_line);
-            }
-            // Cap at available rows minus space for pills + episode list
-            let reserved_for_below = 4u16; // divider + pills + some episode rows
+            let overview_start_row = row;
+            let lines = wrap_overview_lines(&item.overview, |line_idx| {
+                text_dims(overview_start_row + line_idx as u16).0
+            });
+            // Cap at available rows minus space for pills + episode list --
+            // shares SERIES_DETAIL_* constants with `series_inline_detail_rows`
+            // so the reserved space and what's actually drawn stay in sync.
+            let reserved_for_below =
+                (SERIES_DETAIL_DIVIDER_ROWS + SERIES_DETAIL_EPISODE_ROWS_ESTIMATE) as u16;
             let available_rows =
                 (max_y.saturating_sub(row).saturating_sub(reserved_for_below)) as usize;
             for line_text in lines.iter().take(available_rows) {
@@ -565,7 +567,7 @@ impl App {
                         Style::default().fg(text_color),
                     ))),
                     Rect {
-                        x: area.x,
+                        x: inner_x,
                         y: row,
                         width: tw16,
                         height: 1,
