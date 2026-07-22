@@ -10,9 +10,10 @@ use ratatui::widgets::*;
 use ratatui::Frame;
 
 const INLINE_ALBUM_DETAIL_INDENT: u16 = 2;
-const INLINE_ALBUM_ART_COLS: u16 = 18;
-const INLINE_ALBUM_ART_ROWS: u16 = 12;
+const INLINE_ALBUM_ART_COLS: u16 = 32;
+const INLINE_ALBUM_ART_ROWS: u16 = 16;
 const INLINE_ALBUM_ART_GAP: u16 = 2;
+const INLINE_ALBUM_ART_RIGHT_PAD: u16 = 2;
 
 fn inline_album_art_cache_key(album_id: &str) -> String {
     format!("{album_id}:P")
@@ -556,9 +557,10 @@ impl App {
         let selected_block_bounds = plan.selected_block_bounds;
         let selected_art_reserved_w = if self.images_enabled()
             && selected_block_bounds.is_some()
-            && area.width >= INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP + 20
+            && area.width
+                >= INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP + INLINE_ALBUM_ART_RIGHT_PAD + 20
         {
-            INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP
+            INLINE_ALBUM_ART_COLS + INLINE_ALBUM_ART_GAP + INLINE_ALBUM_ART_RIGHT_PAD
         } else {
             0
         };
@@ -915,7 +917,10 @@ impl App {
         }
 
         let img_rect = Rect {
-            x: area.x + area.width.saturating_sub(img_w),
+            x: area.x
+                + area
+                    .width
+                    .saturating_sub(img_w + INLINE_ALBUM_ART_RIGHT_PAD),
             y: area.y,
             width: img_w,
             height: img_h,

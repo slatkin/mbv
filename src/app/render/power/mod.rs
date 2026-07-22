@@ -2477,10 +2477,10 @@ mod tests {
         );
         assert_eq!(
             art_rect.x + art_rect.width,
-            60,
-            "album art should be right aligned"
+            58,
+            "album art should have two columns of right padding"
         );
-        assert_eq!((art_rect.width, art_rect.height), (18, 12));
+        assert_eq!((art_rect.width, art_rect.height), (32, 16));
         assert!(app.card_image_loading.contains("album-1:P"));
         assert!(!app.card_image_loading.contains("track-1:P"));
         assert_eq!(
@@ -2516,10 +2516,10 @@ mod tests {
         );
         assert_eq!(
             art_rect.x + art_rect.width,
-            60,
-            "album art should be right aligned"
+            58,
+            "album art should have two columns of right padding"
         );
-        assert_eq!((art_rect.width, art_rect.height), (18, 12));
+        assert_eq!((art_rect.width, art_rect.height), (32, 16));
         assert!(app.card_image_loading.contains("album-1:P"));
         assert!(!app.card_image_loading.contains("track-1:P"));
         assert_eq!(
