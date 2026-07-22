@@ -9,7 +9,7 @@ use ratatui::Frame;
 
 fn power_card_image_types(item_type: &str) -> &'static [&'static str] {
     match item_type {
-        "MusicAlbum" => &["AudioChild"],
+        "MusicAlbum" => super::MUSIC_ALBUM_IMAGE_TYPES,
         "Audio" => &["Primary"],
         "Movie" => &["Backdrop", "Primary", "Logo"],
         _ => &["Primary", "Backdrop", "Logo"],

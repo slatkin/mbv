@@ -25,6 +25,10 @@ use unicode_width::UnicodeWidthStr;
 pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
     ratatui_image::FilterType::Triangle;
 
+// Configured music albums need the image worker's child-audio lookup; their
+// album containers do not reliably expose usable Primary images.
+const MUSIC_ALBUM_IMAGE_TYPES: &[&str] = &["AudioChild"];
+
 /// Columns of empty space between the left and right panels in power view.
 const POWER_VIEW_GAP: u16 = 0;
 
@@ -2477,8 +2481,8 @@ mod tests {
             "album art should be right aligned"
         );
         assert_eq!((art_rect.width, art_rect.height), (18, 12));
-        assert!(app.card_image_loading.contains("track-1:P"));
-        assert!(!app.card_image_loading.contains("album-1:P"));
+        assert!(app.card_image_loading.contains("album-1:P"));
+        assert!(!app.card_image_loading.contains("track-1:P"));
         assert_eq!(
             term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
             palette::OVERLAY,
@@ -2516,8 +2520,8 @@ mod tests {
             "album art should be right aligned"
         );
         assert_eq!((art_rect.width, art_rect.height), (18, 12));
-        assert!(app.card_image_loading.contains("track-1:P"));
-        assert!(!app.card_image_loading.contains("album-1:P"));
+        assert!(app.card_image_loading.contains("album-1:P"));
+        assert!(!app.card_image_loading.contains("track-1:P"));
         assert_eq!(
             term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
             palette::OVERLAY,

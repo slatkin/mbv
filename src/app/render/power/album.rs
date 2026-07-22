@@ -840,12 +840,7 @@ impl App {
 
         if let Some((art_top, art_bottom)) = selected_art_abs_rows {
             if art_top >= offset && art_top < offset + visible {
-                if let Some(art_source) = albums
-                    .get(cursor)
-                    .and_then(|album| self.album_tracks_cache.get(&album.id))
-                    .and_then(|tracks| tracks.first())
-                    .cloned()
-                {
+                if let Some(album) = albums.get(cursor).cloned() {
                     let visible_bottom = art_bottom.min(offset + visible);
                     self.render_inline_album_art(
                         f,
@@ -855,7 +850,7 @@ impl App {
                             width: area.width,
                             height: (visible_bottom - art_top) as u16,
                         },
-                        &art_source,
+                        &album,
                         layout,
                     );
                 }
@@ -881,19 +876,19 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
-        art_source: &mbv_core::api::MediaItem,
+        album: &mbv_core::api::MediaItem,
         layout: &mut LayoutPower,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 {
             return;
         }
 
-        let cache_key = inline_album_art_cache_key(&art_source.id);
+        let cache_key = inline_album_art_cache_key(&album.id);
         self.fetch_card_image(
             cache_key.clone(),
-            art_source.id.clone(),
-            art_source.series_id.clone(),
-            &["Primary"],
+            album.id.clone(),
+            album.series_id.clone(),
+            super::MUSIC_ALBUM_IMAGE_TYPES,
         );
 
         let nav_gate_open = self.list_image_renders_allowed();
