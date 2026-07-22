@@ -1476,8 +1476,8 @@ mod tests {
         let top_y = layout.queue_area.y - 2;
         let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
 
-        assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2581}");
-        assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2594}");
+        assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2594}");
+        assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2581}");
         assert_eq!(
             buf[(layout.queue_area.x, layout.queue_area.y)].bg,
             palette::MEDIA_SELECTED_BG
@@ -1578,8 +1578,8 @@ mod tests {
         let top_y = layout.queue_area.y - 1;
         let bottom_y = layout.queue_area.y + layout.queue_area.height;
 
-        assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2581}");
-        assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2594}");
+        assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2594}");
+        assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2581}");
         assert!(
             layout.queue_area.height >= 1,
             "expected at least one usable queue row on a short terminal, got {:?}",
