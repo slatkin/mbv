@@ -257,8 +257,10 @@ impl App {
 
                     let fg = if is_cursor {
                         palette::QUEUE_FOCUS_FG
-                    } else {
+                    } else if focused {
                         palette::SOFT_WHITE
+                    } else {
+                        palette::QUEUE_UNFOCUSED_FG
                     };
                     let row_style = Style::default().fg(fg);
 
@@ -319,7 +321,11 @@ impl App {
                     );
                     let title = trunc_str(&label, title_w);
 
-                    let title_color = fg;
+                    let title_color = if is_active && !focused {
+                        palette::AQUA
+                    } else {
+                        fg
+                    };
 
                     let mut spans: Vec<Span> = Vec::new();
                     if indent > 0 {

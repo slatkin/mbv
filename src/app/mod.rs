@@ -1578,8 +1578,21 @@ impl App {
         if self.power_focus == focus {
             return;
         }
+        if matches!(focus, PowerFocus::Queue) {
+            self.focus_power_queue_initial_item();
+        }
         self.power_focus = focus;
         self.save_prefs();
+    }
+
+    fn focus_power_queue_initial_item(&mut self) {
+        let playback = self.displayed_queue_playback_state();
+        let queue = self.displayed_queue_mut();
+        if playback.active && playback.active_idx < queue.items.len() {
+            queue.queue_cursor = playback.active_idx;
+        } else if queue.queue_cursor >= queue.items.len() && !queue.items.is_empty() {
+            queue.queue_cursor = 0;
+        }
     }
 
     fn activate_library_position_scope(&mut self, lib_idx: usize, scope: LibraryPositionScope) {
@@ -5642,6 +5655,50 @@ pub(crate) mod tests {
         )
         .expect("prefs json");
         assert_eq!(library_prefs["power_focus"].as_str(), Some("library_side"));
+    }
+
+    #[test]
+    fn entering_power_queue_focus_selects_now_playing_item() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.power_focus = PowerFocus::Left;
+        app.player_tab.set_items(make_items(3), 0);
+        app.player_tab.queue_cursor = 2;
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 1;
+        }
+
+        app.set_power_focus(PowerFocus::Queue);
+
+        assert_eq!(app.player_tab.queue_cursor, 1);
+    }
+
+    #[test]
+    fn entering_power_queue_focus_preserves_valid_queue_cursor_without_now_playing() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.power_focus = PowerFocus::Left;
+        app.player_tab.set_items(make_items(3), 0);
+        app.player_tab.queue_cursor = 2;
+
+        app.set_power_focus(PowerFocus::Queue);
+
+        assert_eq!(app.player_tab.queue_cursor, 2);
+    }
+
+    #[test]
+    fn entering_power_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.power_focus = PowerFocus::Left;
+        app.player_tab.set_items(make_items(3), 0);
+        app.player_tab.queue_cursor = 99;
+
+        app.set_power_focus(PowerFocus::Queue);
+
+        assert_eq!(app.player_tab.queue_cursor, 0);
     }
 
     #[test]
