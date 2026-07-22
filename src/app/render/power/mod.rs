@@ -343,9 +343,9 @@ impl App {
             self.render_power_queue_title(
                 f,
                 Rect {
-                    x: left_area.x + 1,
+                    x: left_area.x + 2,
                     y: left_area.y + 1,
-                    width: left_area.width.saturating_sub(2),
+                    width: left_area.width.saturating_sub(4),
                     height: 1,
                 },
                 layout,
@@ -1417,6 +1417,42 @@ mod tests {
                 .iter()
                 .all(|target| !matches!(target, Some(PowerLeftRowTarget::ArtistHeader(_)))),
             "flat/non-custom grouped album headers must remain non-selectable"
+        );
+    }
+
+    #[test]
+    fn inline_album_track_selection_block_hides_its_own_scrollbar() {
+        let mut app = make_app_stub();
+        let mut tracks = Vec::new();
+        for i in 0..20 {
+            let mut track = make_item(&format!("Track {i}"), "Audio");
+            track.id = format!("track-{i}");
+            track.album = "Selected Album".into();
+            track.index_number = i + 1;
+            tracks.push(track);
+        }
+
+        let backend = TestBackend::new(30, 8);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPower::default();
+        term.draw(|f| {
+            app.render_power_album_detail(
+                f,
+                Rect::new(0, 0, 30, 8),
+                &tracks,
+                12,
+                true,
+                true,
+                true,
+                &mut layout,
+            );
+        })
+        .unwrap();
+        let out = buffer_to_string(&term);
+
+        assert!(
+            !out.contains('\u{2590}'),
+            "inline track-selection block must not draw its own scrollbar:\n{out}"
         );
     }
 
