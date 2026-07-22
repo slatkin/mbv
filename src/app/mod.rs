@@ -9461,15 +9461,14 @@ pub(crate) mod tests {
         let rendered = render_app_to_string(&mut app, 90, 28);
 
         assert!(
-            rendered.contains(" LOCAL ") && rendered.contains(" REMOTE "),
-            "expected power queue scope pills in rendered output:\n{rendered}"
-        );
-        assert!(
             rendered.contains(&format!(" {} ", device_name())),
-            "expected device name pill:\n{rendered}"
+            "expected power queue local/session pills to use the device name:\n{rendered}"
         );
-        assert!(app.layout.power.queue_scope_local_area.width >= " Local ".width() as u16);
-        assert!(app.layout.power.queue_scope_remote_area.width >= " Remote ".width() as u16);
+        assert!(app.layout.power.queue_scope_local_area.width >= device_name().width() as u16);
+        assert!(app.layout.power.queue_scope_remote_area.width >= device_name().width() as u16);
+        assert!(
+            app.layout.power.queue_scope_remote_area.x > app.layout.power.queue_scope_local_area.x
+        );
     }
 
     #[test]
@@ -12234,7 +12233,8 @@ pub(crate) mod tests {
             !last_line.contains(" m "),
             "muted state should not use the old single-letter mute glyph:\n{last_line}"
         );
-        let remote_pos = last_line.find("\u{1F5A7}  local").unwrap();
+        let remote_label = format!("\u{1F5A7}  {}", mbv_core::api::device_name());
+        let remote_pos = last_line.find(&remote_label).unwrap();
         let playlist_pos = last_line.find("\u{1F5AD}  none").unwrap();
         let muted_pos = last_line.find("muted").unwrap();
         assert!(
@@ -12334,8 +12334,8 @@ pub(crate) mod tests {
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains("\u{1F5A7}  local"),
-            "expected local remote-status when no remote is connected:\n{last_line}"
+            last_line.contains(&format!("\u{1F5A7}  {}", mbv_core::api::device_name())),
+            "expected local device remote-status when no remote is connected:\n{last_line}"
         );
         assert!(
             !last_line.contains("remote:"),

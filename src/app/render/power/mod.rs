@@ -923,7 +923,7 @@ impl App {
 
         // Status bar + toast overlay at the bottom of the right panel.
         if status_area.width > 0 {
-            self.render_status_bar(f, status_area, playback);
+            self.render_status_bar(f, status_area, playback, false, true);
             let show_toast =
                 !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
             if show_toast {
@@ -1489,14 +1489,46 @@ mod tests {
         let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
         let top_y = layout.queue_area.y - 2;
         let out = buffer_to_string(&term);
+        let header = out
+            .lines()
+            .nth(layout.queue_scope_local_area.y as usize)
+            .expect("expected queue header row");
 
         assert!(layout.queue_scope_local_area.y < top_y);
         assert!(layout.queue_scope_remote_area.y < top_y);
+        assert!(layout.queue_scope_remote_area.x > layout.queue_scope_local_area.x);
+        assert_eq!(
+            layout.queue_scope_local_area.width + layout.queue_scope_remote_area.width,
+            layout.queue_area.width
+        );
         assert!(
-            out.lines()
-                .nth(layout.queue_scope_local_area.y as usize)
-                .is_some_and(|line| line.contains("LOCAL") && line.contains("REMOTE")),
-            "expected scope pills to render above the queue panel:\n{out}"
+            header.matches(&mbv_core::api::device_name()).count() >= 2,
+            "expected local and remote queue controls to use session-style hostname pills:\n{out}"
+        );
+    }
+
+    #[test]
+    fn power_queue_title_does_not_render_playlist_pill() {
+        let mut app = make_power_remote_queue_app();
+        app.queue_source = crate::config::QueueSource::Playlist {
+            id: None,
+            name: "Road Mix".into(),
+        };
+
+        let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+        let out = buffer_to_string(&term);
+        let header = out
+            .lines()
+            .nth(layout.queue_scope_local_area.y as usize)
+            .expect("expected queue header row");
+
+        assert!(
+            header.contains(&mbv_core::api::device_name()),
+            "expected session hostname pill in queue header:\n{out}"
+        );
+        assert!(
+            !header.contains("Road Mix") && !header.contains("none"),
+            "expected playlist pill to stay out of queue header:\n{out}"
         );
     }
 

@@ -1,7 +1,7 @@
 use super::super::super::ui_util::*;
 use crate::app::layout::LayoutPower;
 use crate::app::{palette, App, QueueScope};
-use mbv_core::api::{device_name, TICKS_PER_SECOND};
+use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
 use ratatui::style::*;
 use ratatui::text::*;
@@ -36,49 +36,64 @@ impl App {
         layout.queue_scope_local_area = Rect::default();
         layout.queue_scope_remote_area = Rect::default();
 
-        let mut spans = Vec::new();
-        let hostname = device_name();
-        let mbv_label = if self.use_nerd_fonts {
-            format!("\u{F0AFE} {hostname} ")
+        let remote_state = self.remote_slot_state();
+        let daemon_endpoint = self
+            .client
+            .lock()
+            .unwrap()
+            .config
+            .daemon_client_endpoint
+            .clone();
+        let local_selected = self.visible_queue_scope() == QueueScope::Local;
+        let has_remote = self.has_direct_remote_queue();
+        let local_w = if has_remote {
+            area.width / 2
         } else {
-            format!(" {hostname} ")
+            area.width
         };
-        spans.push(Span::styled(
-            &mbv_label,
-            Style::default()
-                .fg(palette::YELLOW)
-                .add_modifier(Modifier::BOLD),
-        ));
+        let remote_w = area.width.saturating_sub(local_w);
+        let local_area = Rect {
+            x: area.x,
+            y: area.y,
+            width: local_w,
+            height: 1,
+        };
+        layout.queue_scope_local_area = if has_remote {
+            local_area
+        } else {
+            Rect::default()
+        };
 
-        if self.has_direct_remote_queue() {
-            let local_selected = self.visible_queue_scope() == QueueScope::Local;
-            let nf_icon = if self.use_nerd_fonts { "\u{F03A} " } else { "" };
-            let local_label = if local_selected {
-                format!(" {nf_icon}LOCAL ")
+        let mut local_spans = self.remote_status_spans(crate::app::RemoteSlotState::Off, "");
+        if let Some(icon) = local_spans.get_mut(1) {
+            icon.content = "\u{F0AFE}".into();
+        }
+        let local_bg = if local_selected || !has_remote {
+            palette::QUEUE_BUTTON_FOCUSED_BG
+        } else {
+            palette::QUEUE_BUTTON_UNFOCUSED_BG
+        };
+        Self::set_status_pill_style(
+            &mut local_spans,
+            if local_selected || !has_remote {
+                palette::SOFT_WHITE
             } else {
-                " LOCAL ".to_string()
-            };
-            let remote_label = if local_selected {
-                " REMOTE ".to_string()
-            } else {
-                format!(" {nf_icon}REMOTE ")
-            };
-            let local_w = local_label.width() as u16;
-            let remote_w = remote_label.width() as u16;
-            let gap = 1u16;
-            let scope_block_w = local_w + gap + remote_w;
-            let queue_w = mbv_label.width() as u16;
-            let scope_start = area.width.saturating_sub(scope_block_w);
-            let pad = scope_start.saturating_sub(queue_w);
-            if pad > 0 {
-                spans.push(Span::raw(" ".repeat(pad as usize)));
-            }
-            let local_x = area.x + area.width.saturating_sub(scope_block_w);
-            let remote_x = local_x + local_w + gap;
-            layout.queue_scope_local_area = Rect {
-                x: local_x,
+                ratatui::style::Color::Black
+            },
+            local_bg,
+        );
+        f.render_widget(
+            Block::default().style(Style::default().bg(local_bg)),
+            local_area,
+        );
+        f.render_widget(Paragraph::new(Line::from(local_spans)), local_area);
+
+        if has_remote {
+            let remote_x = area.x + local_w;
+            let remote_area = Rect {
+                x: remote_x,
                 y: area.y,
-                width: local_w,
+                width: remote_w,
                 height: 1,
             };
             layout.queue_scope_remote_area = Rect {
@@ -87,30 +102,34 @@ impl App {
                 width: remote_w,
                 height: 1,
             };
-            let inactive = Style::default().fg(palette::MUTED);
-            let active = Style::default()
-                .fg(palette::YELLOW)
-                .add_modifier(Modifier::BOLD);
-            spans.push(Span::styled(
-                local_label,
-                if local_selected { active } else { inactive },
-            ));
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(
-                remote_label,
-                if local_selected { inactive } else { active },
-            ));
+            let mut remote_spans = self.remote_status_spans(remote_state, &daemon_endpoint);
+            let remote_bg = if !local_selected {
+                palette::QUEUE_BUTTON_FOCUSED_BG
+            } else {
+                palette::QUEUE_BUTTON_UNFOCUSED_BG
+            };
+            Self::set_status_pill_style(
+                &mut remote_spans,
+                if !local_selected {
+                    palette::SOFT_WHITE
+                } else {
+                    ratatui::style::Color::Black
+                },
+                remote_bg,
+            );
+            if remote_spans.len() >= 4 {
+                remote_spans.swap(1, 2);
+                remote_spans[1].content = format!("{} ", remote_spans[1].content).into();
+            }
+            f.render_widget(
+                Block::default().style(Style::default().bg(remote_bg)),
+                remote_area,
+            );
+            f.render_widget(
+                Paragraph::new(Line::from(remote_spans)).alignment(Alignment::Right),
+                remote_area,
+            );
         }
-
-        f.render_widget(
-            Paragraph::new(Line::from(spans)),
-            Rect {
-                x: area.x,
-                y: area.y,
-                width: area.width,
-                height: 1,
-            },
-        );
     }
 
     /// Renders the queue list (track items, group headers, scrollbar). The

@@ -242,7 +242,7 @@ impl App {
                     height: 1,
                     ..main_area
                 };
-                self.render_status_bar(f, sb_area, &mut layout.playback);
+                self.render_status_bar(f, sb_area, &mut layout.playback, true, true);
                 let show_toast =
                     !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
                 if show_toast {
@@ -926,7 +926,7 @@ impl App {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let label = match target {
             Some(target) => format!("{gap}{target}"),
-            None => format!("{gap}local"),
+            None => format!("{gap}{}", mbv_core::api::device_name()),
         };
         let label_style = Style::default()
             .fg(if remote_on {
@@ -1008,6 +1008,19 @@ impl App {
         spans.extend(status);
     }
 
+    fn set_status_label_color(spans: &mut [Span<'static>], color: Color) {
+        if let Some(label) = spans.get_mut(2) {
+            label.style = label.style.fg(color);
+        }
+    }
+
+    fn set_status_pill_style(spans: &mut [Span<'static>], fg: Color, bg: Color) {
+        for span in spans.iter_mut() {
+            span.style = span.style.bg(bg);
+        }
+        Self::set_status_label_color(spans, fg);
+    }
+
     fn render_remote_status_hitbox(
         &self,
         layout: &mut LayoutPlayback,
@@ -1031,7 +1044,14 @@ impl App {
 
     /// Persistent bottom status bar. Left side: connection, playlist, stay-alive,
     /// and mute status groups. Right side: queue source/save-state/scope detail.
-    fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
+    fn render_status_bar(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        layout: &mut LayoutPlayback,
+        show_session_pill: bool,
+        show_playlist_pill: bool,
+    ) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
         let bar_style = Style::default().bg(palette::DARK_BG);
         f.render_widget(Block::default().style(bar_style), area);
@@ -1042,8 +1062,12 @@ impl App {
             let cfg = &self.client.lock().unwrap().config;
             (cfg.daemon_client_endpoint.clone(), cfg.server_url.clone())
         };
-        let remote_status = self.remote_status_spans(remote_state, &daemon_endpoint);
-        let playlist_status = self.playlist_status_spans();
+        let remote_status = show_session_pill
+            .then(|| self.remote_status_spans(remote_state, &daemon_endpoint))
+            .unwrap_or_default();
+        let playlist_status = show_playlist_pill
+            .then(|| self.playlist_status_spans())
+            .unwrap_or_default();
 
         let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
             vec![
@@ -1093,8 +1117,8 @@ impl App {
             && !fits_without_mute
             && joined_width(&[playlist_w, alive_w]) <= available;
 
-        let show_remote = fits_all || fits_without_alive || fits_without_mute;
-        let show_playlist = show_remote || fits_without_remote;
+        let show_remote = remote_w > 0 && (fits_all || fits_without_alive || fits_without_mute);
+        let show_playlist = playlist_w > 0 && (show_remote || fits_without_remote);
         let show_alive =
             alive_status.is_some() && (fits_all || fits_without_mute || fits_without_remote);
 
@@ -1449,7 +1473,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPlayback::default();
         term.draw(|f| {
-            app.render_status_bar(f, Rect::new(0, 0, 80, 1), &mut layout);
+            app.render_status_bar(f, Rect::new(0, 0, 80, 1), &mut layout, true, true);
         })
         .unwrap();
 
@@ -1483,7 +1507,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPlayback::default();
         term.draw(|f| {
-            app.render_status_bar(f, Rect::new(0, 0, width, 1), &mut layout);
+            app.render_status_bar(f, Rect::new(0, 0, width, 1), &mut layout, true, true);
         })
         .unwrap();
 
