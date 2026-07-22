@@ -12073,7 +12073,9 @@ pub(crate) mod tests {
 
         assert_eq!(
             buf[(heart_x, last_y)].bg,
-            palette::BAR_BG,
+            // The status row itself renders on DARK_BG (not the old
+            // transparent BAR_BG) -- see render_status_bar's `bar_style`.
+            palette::DARK_BG,
             "expected the stay-alive heart to stay on the row background, not a pill background"
         );
     }
@@ -12197,7 +12199,10 @@ pub(crate) mod tests {
 
         for x in 0..buf.area().width {
             let bg = buf[(x, last_y)].bg;
-            saw_row_bg |= bg == palette::BAR_BG;
+            // The status row itself renders on DARK_BG (not the old
+            // transparent BAR_BG) so the pill segments read as sitting on
+            // top of it -- see render_status_bar's `bar_style`.
+            saw_row_bg |= bg == palette::DARK_BG;
             saw_pill_bg |= bg == test_bg;
         }
 

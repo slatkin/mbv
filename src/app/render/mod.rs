@@ -19,6 +19,11 @@ use ratatui::Frame;
 use std::time::Instant;
 use unicode_width::UnicodeWidthStr;
 
+/// Height of the tab-bar box: 1 row padding + 1 row tab + 1 row spacer.
+/// Shared by both view modes (Standard here, Power in `power/mod.rs`) so the
+/// two layouts can't drift apart on this shared constant.
+pub(super) const TAB_BAR_BOX_HEIGHT: u16 = 3;
+
 fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
     let endpoint = endpoint.trim();
     if endpoint.is_empty() || endpoint.eq_ignore_ascii_case("local") {
@@ -141,7 +146,7 @@ impl App {
         } else {
             None
         };
-        let title_color = palette::GREEN;
+        let title_color = palette::TEAL;
         let now_playing_title: Option<(String, Color)> =
             if playing_panel && mode != crate::config::PanelMode::Hidden {
                 if active {
@@ -172,7 +177,7 @@ impl App {
                 );
             }
             super::ViewMode::Standard => {
-                let tab_h: u16 = 3; // 1 row padding + 1 row tab + 1 row spacer
+                let tab_h: u16 = TAB_BAR_BOX_HEIGHT;
                 let tab_area = Rect {
                     height: tab_h,
                     ..main_area
@@ -689,10 +694,20 @@ impl App {
         }
         // Title row (when panel is expanded).
         if player_h >= 2 {
-            let title_area = Rect {
-                y: area.y + 1,
-                height: 1,
-                ..area
+            const H_PAD: u16 = 1;
+            let title_area = if area.width > 2 * H_PAD {
+                Rect {
+                    x: area.x + H_PAD,
+                    width: area.width.saturating_sub(2 * H_PAD),
+                    y: area.y + 1,
+                    height: 1,
+                }
+            } else {
+                Rect {
+                    y: area.y + 1,
+                    height: 1,
+                    ..area
+                }
             };
             if let Some((ref title, color)) = now_playing_title {
                 self.render_title_row(f, title_area, title, *color, layout);
@@ -827,12 +842,7 @@ impl App {
         } else {
             trunc_str(title, title_w)
         };
-        left.push(Span::styled(
-            title_text,
-            Style::default()
-                .fg(title_color)
-                .add_modifier(Modifier::BOLD),
-        ));
+        left.push(Span::styled(title_text, Style::default().fg(title_color)));
 
         left.push(Span::styled(
             sep_text,
@@ -1020,7 +1030,7 @@ impl App {
     /// and mute status groups. Right side: queue source/save-state/scope detail.
     fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
-        let bar_style = Style::default().bg(palette::BAR_BG);
+        let bar_style = Style::default().bg(palette::DARK_BG);
         f.render_widget(Block::default().style(bar_style), area);
         layout.ind_mu = Rect::default();
 

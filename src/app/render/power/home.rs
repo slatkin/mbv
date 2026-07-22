@@ -480,14 +480,7 @@ impl App {
                 }
                 let abs_idx = scroll_start + idx;
                 let selected = abs_idx == selected_group;
-                let style = if selected {
-                    Style::default()
-                        .fg(palette::IRIS)
-                        .bg(palette::GREEN)
-                        .add_modifier(Modifier::BOLD)
-                } else {
-                    Style::default().fg(palette::PILL).bg(palette::GREEN)
-                };
+                let style = super::selector_pill_style(selected);
                 let pill = format!(" {} ", label);
                 let pill_rect = Rect {
                     x: x_cursor,
@@ -1093,11 +1086,11 @@ impl App {
             let border_style = Style::default().fg(palette::SOFT_WHITE);
             // Top border at the row above the block's top padding.
             let top_y = list_area.y.saturating_sub(2);
-            let top_spans: Vec<Span> = (0..list_area.width)
-                .map(|_| Span::styled("\u{2581}", border_style))
-                .collect();
             f.render_widget(
-                Paragraph::new(Line::from(top_spans)),
+                Paragraph::new(Line::from(Span::styled(
+                    "\u{2581}".repeat(list_area.width as usize),
+                    border_style,
+                ))),
                 Rect {
                     x: list_area.x,
                     y: top_y,
@@ -1107,11 +1100,11 @@ impl App {
             );
             // Bottom border at the row below the block's bottom padding.
             let bot_y = list_area.y + continue_bg_h + 1;
-            let bot_spans: Vec<Span> = (0..list_area.width)
-                .map(|_| Span::styled("\u{2594}", border_style))
-                .collect();
             f.render_widget(
-                Paragraph::new(Line::from(bot_spans)),
+                Paragraph::new(Line::from(Span::styled(
+                    "\u{2594}".repeat(list_area.width as usize),
+                    border_style,
+                ))),
                 Rect {
                     x: list_area.x,
                     y: bot_y,
@@ -1137,11 +1130,11 @@ impl App {
             let border_style = Style::default().fg(palette::SOFT_WHITE);
             // Top border at the row above the block's top padding.
             let top_y = new_bg_y.saturating_sub(2);
-            let top_spans: Vec<Span> = (0..list_area.width)
-                .map(|_| Span::styled("\u{2581}", border_style))
-                .collect();
             f.render_widget(
-                Paragraph::new(Line::from(top_spans)),
+                Paragraph::new(Line::from(Span::styled(
+                    "\u{2581}".repeat(list_area.width as usize),
+                    border_style,
+                ))),
                 Rect {
                     x: list_area.x,
                     y: top_y,
@@ -1151,11 +1144,11 @@ impl App {
             );
             // Bottom border at the row below the block's bottom padding.
             let bot_y = new_bg_y + new_bg_h + 1;
-            let bot_spans: Vec<Span> = (0..list_area.width)
-                .map(|_| Span::styled("\u{2594}", border_style))
-                .collect();
             f.render_widget(
-                Paragraph::new(Line::from(bot_spans)),
+                Paragraph::new(Line::from(Span::styled(
+                    "\u{2594}".repeat(list_area.width as usize),
+                    border_style,
+                ))),
                 Rect {
                     x: list_area.x,
                     y: bot_y,
@@ -1372,14 +1365,7 @@ impl App {
                 x_cursor += 1;
             }
             let selected = *section_idx == self.home.section;
-            let style = if selected {
-                Style::default()
-                    .fg(palette::IRIS)
-                    .bg(palette::GREEN)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(palette::PILL).bg(palette::GREEN)
-            };
+            let style = super::selector_pill_style(selected);
             let label = trunc_str(label, MAX_LABEL);
             let pill = format!(" {label} ");
             let pill_rect = Rect {

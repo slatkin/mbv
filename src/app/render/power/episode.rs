@@ -431,19 +431,7 @@ impl App {
                         spans.push(Span::raw(" "));
                     }
                     let abs_idx = scroll_start + idx;
-                    let (fg, bold) = if abs_idx == season_cursor {
-                        (palette::IRIS, true)
-                    } else {
-                        (palette::PILL, false)
-                    };
-                    let style = if bold {
-                        Style::default()
-                            .fg(fg)
-                            .bg(palette::GREEN)
-                            .add_modifier(Modifier::BOLD)
-                    } else {
-                        Style::default().fg(fg).bg(palette::GREEN)
-                    };
+                    let style = super::selector_pill_style(abs_idx == season_cursor);
                     spans.push(Span::styled(format!(" {} ", label), style));
                 }
                 if scroll_end < n_tabs {
