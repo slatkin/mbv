@@ -83,6 +83,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 - Use Serena if installed for code exploration and targeted writes.
 - For releases, run `scripts/release.sh X.Y.Z "one-line summary"` instead of reading a separate release checklist.
 - Always run `cargo fmt` before committing Rust code changes.
+- Do not run tests after every edit or every commit. Run the narrowest relevant checks once before pushing/opening a PR, unless the user explicitly asks for more or you are diagnosing a specific failure.
 - Input handling has one front door: `src/app/input_resolver.rs`'s context-priority registry (keyboard) and the shared `Command`/`dispatch` seam (mouse). Add new shortcuts as `Command`s + bindings there, not as ad hoc key/click checks in view or panel code. Exceptions: text-entry contexts (search boxes, the save-name dialog) and external setup flows (e.g. login), which own local state. See CONTEXT.md's "Input handling" section and `docs/adr/0002-centralized-input-handling.md`.
 - For application code changes: use isolated worktree branches from `origin/main`. Push the branch and open a PR. Do not commit directly to `main`, merge into `main`, or rebase `main`.
 - For repo hygiene (scripts, config, tooling, docs) and release changes: commit directly to `main` and push.
@@ -90,5 +91,4 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 - Never open a pull request unless explicitly asked to do so; don't run `gh pr create` unless requested.
 - Documentation cleanup is agent-owned work in this repo: keep `CONTEXT.md`, `docs/adr/`, and related domain docs current as part of implementation changes, do not hand that cleanup back to the user, and do not leave doc edits sitting uncommitted at the end of the task.
 - Before starting a new ADR, run `ls docs/adr/ | sort -t- -k1 -n | tail -1` against the target merge branch (not just your worktree) at plan-authoring time, and note the reserved number in the plan's header (`**ADR:** 00NN, reserved <date>`) so a concurrently-written sibling plan can grep for it. Two independently-authored plans claiming the same ADR number is a known failure mode here (#222/#223).
-
 
