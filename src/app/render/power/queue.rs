@@ -65,8 +65,10 @@ impl App {
         };
 
         let mut local_spans = self.remote_status_spans(crate::app::RemoteSlotState::Off, "");
-        if let Some(icon) = local_spans.get_mut(1) {
-            icon.content = "\u{F0AFE}".into();
+        if self.use_nerd_fonts {
+            if let Some(icon) = local_spans.get_mut(1) {
+                icon.content = "\u{F0AFE}".into();
+            }
         }
         let local_bg = if local_selected || !has_remote {
             palette::QUEUE_BUTTON_FOCUSED_BG
