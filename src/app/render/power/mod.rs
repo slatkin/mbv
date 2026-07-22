@@ -1421,6 +1421,42 @@ mod tests {
     }
 
     #[test]
+    fn inline_album_track_selection_block_hides_its_own_scrollbar() {
+        let mut app = make_app_stub();
+        let mut tracks = Vec::new();
+        for i in 0..20 {
+            let mut track = make_item(&format!("Track {i}"), "Audio");
+            track.id = format!("track-{i}");
+            track.album = "Selected Album".into();
+            track.index_number = i + 1;
+            tracks.push(track);
+        }
+
+        let backend = TestBackend::new(30, 8);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPower::default();
+        term.draw(|f| {
+            app.render_power_album_detail(
+                f,
+                Rect::new(0, 0, 30, 8),
+                &tracks,
+                12,
+                true,
+                true,
+                true,
+                &mut layout,
+            );
+        })
+        .unwrap();
+        let out = buffer_to_string(&term);
+
+        assert!(
+            !out.contains('\u{2590}'),
+            "inline track-selection block must not draw its own scrollbar:\n{out}"
+        );
+    }
+
+    #[test]
     fn album_folder_listing_fetches_and_shows_loading_on_cache_miss() {
         let mut app = make_power_music_group_app();
         let mut second_album = make_item("Second Album", "MusicAlbum");

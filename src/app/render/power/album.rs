@@ -1010,7 +1010,7 @@ impl App {
             Some(table_area.y + (cursor.saturating_sub(state.offset())) as u16);
 
         let visible_rows = table_area.height as usize;
-        if n > visible_rows {
+        if !selected_region_gutter && n > visible_rows {
             let max_offset = n.saturating_sub(visible_rows);
             super::render_power_scrollbar(f, table_area, max_offset, state.offset());
         }
