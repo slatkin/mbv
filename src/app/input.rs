@@ -1,4 +1,4 @@
-use super::action::power_album_track_command_for_key;
+use super::action::{power_album_track_command_for_key, Command};
 use super::input_resolver::KeyChord;
 use super::layout::PowerLeftRowTarget;
 use super::settings::settings_total_rows;
@@ -20,7 +20,7 @@ use textwrap::wrap;
 impl App {
     /// Whether a context menu is currently open. Shared by every
     /// CONTEXT_STACK layer above `context_menu` that must yield to it
-    /// (`panel_toggle_h`, `home_search`, `power_lib_search`, `lib_search`,
+    /// (`power_sidebar_toggle_h`, `home_search`, `power_lib_search`, `lib_search`,
     /// `clear_queue_prompt_c`, `power_left_width`) — see
     /// docs/adr/0002-centralized-input-handling.md phase 6 (#135).
     fn context_menu_open(&self) -> bool {
@@ -175,32 +175,15 @@ impl App {
         }
     }
 
-    // Correctness note: in the pre-phase-2 source, this check ran *after*
-    // home-search/power-lib-search/lib-search (source order: power-left-width,
-    // home-search Alt-cycle, home-search char-capture, power-lib-search,
-    // lib-search, `h`-toggle, confirms...). It must stay positioned after
-    // `lib_search` in CONTEXT_STACK — not bundled with power-left-width above
-    // — otherwise `h` would win over an active search box typing the literal
-    // character 'h', which is a real behavior change, not just a structural
-    // one. (Caught during Task 4's self-review; fixed here rather than left
-    // for Task 5, since leaving it in the wrong slot even temporarily would
-    // ship a regression.)
-    pub(super) fn handle_key_panel_toggle(&mut self, key: KeyEvent) -> Option<bool> {
-        // Behavior change (phase 6, #135): gate on an open context menu. Before
-        // this fix, `h` sat above `context_menu` in CONTEXT_STACK with no guard,
-        // so pressing 'h' while a context menu was open silently toggled the
-        // panel instead of being swallowed by the menu (which has no 'h'
-        // binding of its own). See docs/adr/0002-centralized-input-handling.md
-        // phase 6 and phase-2's `home_search`, which already guards the same way.
-        if key.code != KeyCode::Char('h') || self.context_menu_open() {
+    pub(super) fn handle_key_power_sidebar_toggle(&mut self, key: KeyEvent) -> Option<bool> {
+        if self.view_mode != ViewMode::Power
+            || key.code != KeyCode::Char('h')
+            || !key.modifiers.is_empty()
+            || self.context_menu_open()
+        {
             return None;
         }
-        let active = self.player.status.lock().unwrap().active;
-        let show_controls = active || self.connected_session_id.is_some();
-        if show_controls {
-            self.panel_mode = self.panel_mode.next();
-        }
-        Some(false)
+        Some(self.dispatch(Command::TogglePowerSidebar))
     }
 
     pub(super) fn handle_key_home_search(&mut self, key: KeyEvent) -> Option<bool> {
@@ -1352,6 +1335,7 @@ impl App {
     fn handle_power_left_width_key(&mut self, key: KeyEvent) -> bool {
         if !self.power_view_active()
             || self.context_menu_open()
+            || self.power_left_collapsed
             || !Self::is_power_left_width_resize_key(key)
         {
             return false;
@@ -3686,6 +3670,19 @@ mod power_movie_detail_tests {
     #[test]
     fn shift_resize_is_ignored_outside_power_view() {
         let mut app = make_app_stub();
+
+        let handled = app.handle_key(shift(KeyCode::Right));
+
+        assert!(!handled);
+        assert_eq!(app.power_left_width, POWER_LEFT_WIDTH_DEFAULT);
+        assert!(app.status.is_empty(), "status was {:?}", app.status);
+    }
+
+    #[test]
+    fn shift_resize_is_ignored_while_power_left_column_is_collapsed() {
+        let mut app = make_power_movie_app();
+        app.power_left_collapsed = true;
+        app.terminal_width = 100;
 
         let handled = app.handle_key(shift(KeyCode::Right));
 
