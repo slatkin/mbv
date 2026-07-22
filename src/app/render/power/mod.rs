@@ -13,9 +13,9 @@ use super::super::{palette, App, PowerFocus};
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use unicode_width::UnicodeWidthStr;
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 // Power View re-renders frequently while scrolling; prefer a cheaper filter in
 // these hot paths to reduce terminal image preparation stalls.
@@ -264,6 +264,13 @@ pub(super) struct PillBar<'a> {
 /// stays on screen with `‹`/`›` chevrons when the pills overflow, and returns
 /// the on-screen hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
 pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(Rect, usize)> {
+    // `ids` runs parallel to `labels`; a mismatch would panic on the slice
+    // below, so assert the contract up front rather than fail cryptically.
+    debug_assert_eq!(
+        bar.labels.len(),
+        bar.ids.len(),
+        "render_pill_bar: labels and ids must be parallel"
+    );
     let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
     if area.width == 0 || area.height == 0 || bar.labels.is_empty() {
         return selector_tabs;
@@ -374,9 +381,10 @@ pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(R
 
     // With no rule underlay, optionally clear the rest of the row with blanks.
     if let PillUnderlay::Blank { fill: true } = bar.underlay {
-        let used_w = (x_cursor - area.x) as usize;
-        if used_w < bar_w {
-            spans.push(Span::raw(" ".repeat(bar_w - used_w)));
+        let used_w = x_cursor.saturating_sub(area.x) as usize;
+        let remaining = bar_w.saturating_sub(used_w);
+        if remaining > 0 {
+            spans.push(Span::raw(" ".repeat(remaining)));
         }
     }
 
@@ -904,6 +912,82 @@ mod tests {
             out.push('\n');
         }
         out
+    }
+
+    /// Renders a pill bar of the given labels/ids into a `width`-wide row and
+    /// returns the resulting `(rect, id)` hitboxes.
+    fn render_pill_bar_hitboxes(
+        labels: &[String],
+        ids: &[usize],
+        selected_pos: usize,
+        width: u16,
+    ) -> Vec<(Rect, usize)> {
+        let backend = TestBackend::new(width, 1);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut tabs = Vec::new();
+        term.draw(|f| {
+            tabs = render_pill_bar(
+                f,
+                Rect::new(0, 0, width, 1),
+                PillBar {
+                    labels,
+                    ids,
+                    selected_pos,
+                    prefix: None,
+                    underlay: PillUnderlay::Blank { fill: true },
+                },
+            );
+        })
+        .unwrap();
+        tabs
+    }
+
+    #[test]
+    fn pill_bar_hitboxes_carry_caller_ids_not_display_positions() {
+        // ids are deliberately offset from positions (mirroring Home's
+        // section_idx = position + 10 here) so a regression that returned the
+        // display offset instead of the id would be caught.
+        let labels: Vec<String> = ["Alpha", "Beta", "Gamma"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let ids = vec![10usize, 11, 12];
+
+        // Wide enough to show every pill: all ids returned, in order.
+        let tabs = render_pill_bar_hitboxes(&labels, &ids, 0, 60);
+        assert_eq!(
+            tabs.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+            vec![10, 11, 12],
+        );
+        // Hitboxes are left-to-right and non-overlapping.
+        for pair in tabs.windows(2) {
+            assert!(pair[0].0.x + pair[0].0.width <= pair[1].0.x);
+        }
+    }
+
+    #[test]
+    fn pill_bar_scrolls_to_keep_selected_visible_and_maps_its_id() {
+        // Six pills in a narrow row force horizontal scrolling; selecting the
+        // last one must scroll it into view and report its caller id (25).
+        let labels: Vec<String> = (0..6).map(|i| format!("Group{i}")).collect();
+        let ids: Vec<usize> = (0..6).map(|i| 20 + i).collect();
+
+        let tabs = render_pill_bar_hitboxes(&labels, &ids, 5, 18);
+
+        assert!(!tabs.is_empty(), "expected at least one visible pill");
+        // The selected pill (id 25) must be among the visible hitboxes.
+        assert!(
+            tabs.iter().any(|(_, id)| *id == 25),
+            "selected pill's id should be visible after scrolling, got {:?}",
+            tabs.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+        );
+        // Every visible id is one we supplied (never a bare display offset).
+        assert!(tabs.iter().all(|(_, id)| (20..=25).contains(id)));
+        // Overflow occurred, so scrolling dropped at least one leading pill.
+        assert!(
+            tabs.len() < labels.len(),
+            "narrow row should not fit all six pills"
+        );
     }
 
     fn render_power_library_to_terminal(
