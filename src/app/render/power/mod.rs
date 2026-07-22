@@ -1559,6 +1559,14 @@ mod tests {
             last_line.contains("Road Mix"),
             "expected the playlist pill to appear in the Power View status bar:\n{last_line}"
         );
+        let text_x = last_line
+            .find("Road Mix")
+            .expect("expected playlist name position") as u16;
+        assert_eq!(
+            term.backend().buffer()[(text_x, 27)].fg,
+            palette::YELLOW,
+            "expected playlist pill text to be yellow, not green:\n{last_line}"
+        );
     }
 
     #[test]
