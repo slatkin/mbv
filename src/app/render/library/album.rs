@@ -122,7 +122,7 @@ impl App {
                     Style::default().fg(palette::WHITE)
                 };
                 let marker = if is_cursor {
-                    Span::styled("▌", Style::default().fg(palette::PINE))
+                    Span::styled("▌", Style::default().fg(palette::AQUA))
                 } else {
                     Span::raw(" ")
                 };

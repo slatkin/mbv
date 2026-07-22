@@ -64,7 +64,7 @@ impl App {
             && !is_episode_like
         {
             let bar: Vec<Line> = (0..ind_rect.height)
-                .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::PINE))))
+                .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::AQUA))))
                 .collect();
             f.render_widget(Paragraph::new(bar), ind_rect);
         }

@@ -631,7 +631,7 @@ impl App {
                         // Movie-style: 1-col leading pad, no ▌ marker
                         spans.push(Span::raw(" "));
                     } else if selected {
-                        // Legacy style: ▌ PINE marker
+                        // Legacy style: ▌ AQUA marker
                         spans.push(super::selection_marker(true));
                     } else {
                         // Unselected: plain space
@@ -645,7 +645,7 @@ impl App {
                             spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
                             spans.push(Span::styled(
                                 year_str.as_str(),
-                                Style::default().fg(palette::PINE),
+                                Style::default().fg(palette::AQUA),
                             ));
                             spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
                         } else {
@@ -675,7 +675,7 @@ impl App {
                         if !year_str.is_empty() {
                             spans.push(Span::styled(
                                 year_str.as_str(),
-                                Style::default().fg(palette::PINE),
+                                Style::default().fg(palette::AQUA),
                             ));
                             spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
                         }

@@ -212,10 +212,10 @@ impl App {
                 row += 1;
             }
 
-            // ── Episode title (PINE/green) ────────────────────────────────────
+            // ── Episode title (AQUA/green) ────────────────────────────────────
             if row < max_y {
                 let ep_title_color = if focused {
-                    palette::PINE
+                    palette::AQUA
                 } else {
                     palette::SUBTLE
                 };

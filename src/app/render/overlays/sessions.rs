@@ -75,7 +75,7 @@ impl App {
 
             if selected {
                 let bar: Vec<Line> = (0..CARD_H)
-                    .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::PINE))))
+                    .map(|_| Line::from(Span::styled("▌", Style::default().fg(palette::AQUA))))
                     .collect();
                 f.render_widget(
                     Paragraph::new(bar),

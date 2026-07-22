@@ -161,7 +161,7 @@ pub(super) fn library_meta_line(
 fn episode_meta_line(item: &MediaItem, is_feed_lib: bool) -> Line<'static> {
     let mut spans: Vec<Span> = Vec::new();
     if item.played {
-        spans.push(Span::styled("✓ ", Style::default().fg(palette::PINE)));
+        spans.push(Span::styled("✓ ", Style::default().fg(palette::AQUA)));
     }
     let mut parts: Vec<String> = Vec::new();
     if !item.premiere_date.is_empty() {
@@ -220,7 +220,7 @@ fn episode_meta_line(item: &MediaItem, is_feed_lib: bool) -> Line<'static> {
 fn default_meta_line(item: &MediaItem, is_audio: bool) -> Line<'static> {
     let mut spans: Vec<Span> = Vec::new();
     if !is_audio && item.played {
-        spans.push(Span::styled("✓ ", Style::default().fg(palette::PINE)));
+        spans.push(Span::styled("✓ ", Style::default().fg(palette::AQUA)));
     }
     let mut parts: Vec<String> = Vec::new();
     if item.production_year > 0 {

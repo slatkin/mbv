@@ -23,6 +23,16 @@ use unicode_width::UnicodeWidthStr;
 /// Shared by both view modes (Standard here, Power in `power/mod.rs`) so the
 /// two layouts can't drift apart on this shared constant.
 pub(super) const TAB_BAR_BOX_HEIGHT: u16 = 3;
+pub(super) const PLAY_ICON: &str = "\u{f04b}";
+const PLAY_ICON_FALLBACK: &str = ">";
+
+pub(super) fn play_icon(use_nerd_fonts: bool) -> &'static str {
+    if use_nerd_fonts {
+        PLAY_ICON
+    } else {
+        PLAY_ICON_FALLBACK
+    }
+}
 
 fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
     let endpoint = endpoint.trim();
@@ -232,7 +242,7 @@ impl App {
                     height: 1,
                     ..main_area
                 };
-                self.render_status_bar(f, sb_area, &mut layout.playback);
+                self.render_status_bar(f, sb_area, &mut layout.playback, true, true);
                 let show_toast =
                     !self.status.is_empty() && (!self.system_notifications || self.notif_failed);
                 if show_toast {
@@ -439,7 +449,7 @@ impl App {
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .style(Style::default().fg(palette::OVERLAY))
                 .thumb_symbol("▐")
-                .thumb_style(Style::default().fg(palette::PINE))
+                .thumb_style(Style::default().fg(palette::AQUA))
                 .track_symbol(Some("│"))
                 .begin_symbol(None)
                 .end_symbol(None),
@@ -468,7 +478,7 @@ impl App {
     ) {
         let indicator = Span::styled(
             if selected { "\u{258c}" } else { " " },
-            Style::default().fg(palette::PINE),
+            Style::default().fg(palette::AQUA),
         );
         let mut all = vec![indicator];
         all.extend(spans);
@@ -536,7 +546,7 @@ impl App {
         } else if volume > 60 {
             palette::YELLOW
         } else {
-            palette::PINE
+            palette::AQUA
         };
         let vol_spans = vec![
             Span::styled("VOL ", Style::default().fg(palette::MUTED)),
@@ -601,7 +611,7 @@ impl App {
                     let n = n.to_uppercase();
                     if i == sel {
                         Line::from(vec![
-                            Span::styled("▐", Style::default().fg(palette::PINE)),
+                            Span::styled("▐", Style::default().fg(palette::AQUA)),
                             Span::styled(
                                 format!(" {n}  "),
                                 Style::default()
@@ -634,7 +644,7 @@ impl App {
                     let n = n.to_uppercase();
                     if i == selected_tab {
                         Line::from(vec![
-                            Span::styled("▐", Style::default().fg(palette::PINE)),
+                            Span::styled("▐", Style::default().fg(palette::AQUA)),
                             Span::styled(
                                 format!(" {n}  "),
                                 Style::default()
@@ -737,10 +747,7 @@ impl App {
         let dur_str = fmt_duration(rt_ticks / TICKS_PER_SECOND);
 
         let (glyph, gcolor): (&str, Color) = if paused {
-            (
-                if self.use_nerd_fonts { "\u{f04b}" } else { ">" },
-                palette::PINE,
-            )
+            (play_icon(self.use_nerd_fonts), palette::AQUA)
         } else {
             (
                 if self.use_nerd_fonts {
@@ -919,11 +926,11 @@ impl App {
         let gap = if self.use_nerd_fonts { " " } else { "  " };
         let label = match target {
             Some(target) => format!("{gap}{target}"),
-            None => format!("{gap}local"),
+            None => format!("{gap}{}", mbv_core::api::device_name()),
         };
         let label_style = Style::default()
             .fg(if remote_on {
-                palette::PINE
+                palette::AQUA
             } else {
                 ratatui::style::Color::Black
             })
@@ -1001,6 +1008,19 @@ impl App {
         spans.extend(status);
     }
 
+    fn set_status_label_color(spans: &mut [Span<'static>], color: Color) {
+        if let Some(label) = spans.get_mut(2) {
+            label.style = label.style.fg(color);
+        }
+    }
+
+    fn set_status_pill_style(spans: &mut [Span<'static>], fg: Color, bg: Color) {
+        for span in spans.iter_mut() {
+            span.style = span.style.bg(bg);
+        }
+        Self::set_status_label_color(spans, fg);
+    }
+
     fn render_remote_status_hitbox(
         &self,
         layout: &mut LayoutPlayback,
@@ -1024,7 +1044,14 @@ impl App {
 
     /// Persistent bottom status bar. Left side: connection, playlist, stay-alive,
     /// and mute status groups. Right side: queue source/save-state/scope detail.
-    fn render_status_bar(&mut self, f: &mut Frame, area: Rect, layout: &mut LayoutPlayback) {
+    fn render_status_bar(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        layout: &mut LayoutPlayback,
+        show_session_pill: bool,
+        show_playlist_pill: bool,
+    ) {
         // Keep the row itself darker so the pills read as segments sitting on top of it.
         let bar_style = Style::default().bg(palette::DARK_BG);
         f.render_widget(Block::default().style(bar_style), area);
@@ -1035,8 +1062,16 @@ impl App {
             let cfg = &self.client.lock().unwrap().config;
             (cfg.daemon_client_endpoint.clone(), cfg.server_url.clone())
         };
-        let remote_status = self.remote_status_spans(remote_state, &daemon_endpoint);
-        let playlist_status = self.playlist_status_spans();
+        let remote_status = if show_session_pill {
+            self.remote_status_spans(remote_state, &daemon_endpoint)
+        } else {
+            Vec::new()
+        };
+        let playlist_status = if show_playlist_pill {
+            self.playlist_status_spans()
+        } else {
+            Vec::new()
+        };
 
         let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
             vec![
@@ -1086,8 +1121,8 @@ impl App {
             && !fits_without_mute
             && joined_width(&[playlist_w, alive_w]) <= available;
 
-        let show_remote = fits_all || fits_without_alive || fits_without_mute;
-        let show_playlist = show_remote || fits_without_remote;
+        let show_remote = remote_w > 0 && (fits_all || fits_without_alive || fits_without_mute);
+        let show_playlist = playlist_w > 0 && (show_remote || fits_without_remote);
         let show_alive =
             alive_status.is_some() && (fits_all || fits_without_mute || fits_without_remote);
 
@@ -1196,7 +1231,7 @@ impl App {
                     Span::styled(
                         " AUTOSAVE ",
                         Style::default()
-                            .fg(palette::PINE)
+                            .fg(palette::AQUA)
                             .bg(palette::STATUS_PILL_BG),
                     ),
                 );
@@ -1209,7 +1244,7 @@ impl App {
                     right_spans.push(Span::styled(
                         " \u{F06B4}",
                         Style::default()
-                            .fg(palette::PINE)
+                            .fg(palette::AQUA)
                             .bg(palette::STATUS_PILL_BG),
                     ));
                     right_spans.push(Span::styled(
@@ -1280,7 +1315,7 @@ impl App {
         let spans = vec![
             Span::styled(
                 "\u{2594}".repeat(green_len),
-                Style::default().fg(palette::PINE),
+                Style::default().fg(palette::AQUA),
             ),
             Span::styled(
                 "\u{2594}".repeat(gray_len),
@@ -1442,7 +1477,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPlayback::default();
         term.draw(|f| {
-            app.render_status_bar(f, Rect::new(0, 0, 80, 1), &mut layout);
+            app.render_status_bar(f, Rect::new(0, 0, 80, 1), &mut layout, true, true);
         })
         .unwrap();
 
@@ -1476,7 +1511,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPlayback::default();
         term.draw(|f| {
-            app.render_status_bar(f, Rect::new(0, 0, width, 1), &mut layout);
+            app.render_status_bar(f, Rect::new(0, 0, width, 1), &mut layout, true, true);
         })
         .unwrap();
 
@@ -1555,7 +1590,7 @@ mod tests {
 
         let buf = term.backend().buffer();
         assert_eq!(buf[(0, 0)].symbol(), "▐");
-        assert_eq!(buf[(0, 0)].fg, palette::PINE);
+        assert_eq!(buf[(0, 0)].fg, palette::AQUA);
         assert_eq!(buf[(0, 4)].symbol(), "│");
         assert_eq!(buf[(0, 4)].fg, palette::OVERLAY);
     }

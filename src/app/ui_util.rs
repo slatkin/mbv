@@ -345,7 +345,7 @@ pub fn highlight_style(item: &MediaItem) -> Style {
         && item.item_type != "MusicAlbum"
         && item.item_type != "MusicArtist"
     {
-        Style::default().fg(palette::BASE).bg(palette::PINE)
+        Style::default().fg(palette::BASE).bg(palette::AQUA)
     } else if item.playback_position_ticks > 0 {
         Style::default().fg(palette::BASE).bg(palette::YELLOW)
     } else {

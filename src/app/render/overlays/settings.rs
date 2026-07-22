@@ -202,7 +202,7 @@ impl App {
                     Style::default().fg(palette::MUTED)
                 };
                 lines.push(Line::from(vec![
-                    Span::styled(indicator, Style::default().fg(palette::PINE)),
+                    Span::styled(indicator, Style::default().fg(palette::AQUA)),
                     Span::raw(" "),
                     Span::styled(format!("{:<lw$}", label, lw = label_w), label_style),
                     Span::styled(val, Style::default().fg(palette::GREEN)),
@@ -218,7 +218,7 @@ impl App {
             cursor_line = lines.len();
         }
         let focused = cursor == logout_cursor_idx;
-        let indicator_color = if focused { palette::RED } else { palette::PINE };
+        let indicator_color = if focused { palette::RED } else { palette::AQUA };
         let (logout_text, logout_style) = if confirm_logout && focused {
             (
                 "Log out? Press y to confirm",

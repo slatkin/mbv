@@ -1578,8 +1578,21 @@ impl App {
         if self.power_focus == focus {
             return;
         }
+        if matches!(focus, PowerFocus::Queue) {
+            self.focus_power_queue_initial_item();
+        }
         self.power_focus = focus;
         self.save_prefs();
+    }
+
+    fn focus_power_queue_initial_item(&mut self) {
+        let playback = self.displayed_queue_playback_state();
+        let queue = self.displayed_queue_mut();
+        if playback.active && playback.active_idx < queue.items.len() {
+            queue.queue_cursor = playback.active_idx;
+        } else if queue.queue_cursor >= queue.items.len() && !queue.items.is_empty() {
+            queue.queue_cursor = 0;
+        }
     }
 
     fn activate_library_position_scope(&mut self, lib_idx: usize, scope: LibraryPositionScope) {
@@ -5724,6 +5737,50 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn entering_power_queue_focus_selects_now_playing_item() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.power_focus = PowerFocus::Left;
+        app.player_tab.set_items(make_items(3), 0);
+        app.player_tab.queue_cursor = 2;
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 1;
+        }
+
+        app.set_power_focus(PowerFocus::Queue);
+
+        assert_eq!(app.player_tab.queue_cursor, 1);
+    }
+
+    #[test]
+    fn entering_power_queue_focus_preserves_valid_queue_cursor_without_now_playing() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.power_focus = PowerFocus::Left;
+        app.player_tab.set_items(make_items(3), 0);
+        app.player_tab.queue_cursor = 2;
+
+        app.set_power_focus(PowerFocus::Queue);
+
+        assert_eq!(app.player_tab.queue_cursor, 2);
+    }
+
+    #[test]
+    fn entering_power_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
+        let _guard = crate::config::TestStateDirGuard::new();
+        let mut app = make_app_stub();
+        app.power_focus = PowerFocus::Left;
+        app.player_tab.set_items(make_items(3), 0);
+        app.player_tab.queue_cursor = 99;
+
+        app.set_power_focus(PowerFocus::Queue);
+
+        assert_eq!(app.player_tab.queue_cursor, 0);
+    }
+
+    #[test]
     fn building_from_power_focus_prefs_does_not_mutate_saved_library_positions() {
         let _guard = crate::config::TestStateDirGuard::new();
         let state = crate::config::LibraryPositionState {
@@ -9498,15 +9555,14 @@ pub(crate) mod tests {
         let rendered = render_app_to_string(&mut app, 90, 28);
 
         assert!(
-            rendered.contains(" LOCAL ") && rendered.contains(" REMOTE "),
-            "expected power queue scope pills in rendered output:\n{rendered}"
-        );
-        assert!(
             rendered.contains(&format!(" {} ", device_name())),
-            "expected device name pill:\n{rendered}"
+            "expected power queue local/session pills to use the device name:\n{rendered}"
         );
-        assert!(app.layout.power.queue_scope_local_area.width >= " Local ".width() as u16);
-        assert!(app.layout.power.queue_scope_remote_area.width >= " Remote ".width() as u16);
+        assert!(app.layout.power.queue_scope_local_area.width >= device_name().width() as u16);
+        assert!(app.layout.power.queue_scope_remote_area.width >= device_name().width() as u16);
+        assert!(
+            app.layout.power.queue_scope_remote_area.x > app.layout.power.queue_scope_local_area.x
+        );
     }
 
     #[test]
@@ -12271,7 +12327,8 @@ pub(crate) mod tests {
             !last_line.contains(" m "),
             "muted state should not use the old single-letter mute glyph:\n{last_line}"
         );
-        let remote_pos = last_line.find("\u{1F5A7}  local").unwrap();
+        let remote_label = format!("\u{1F5A7}  {}", mbv_core::api::device_name());
+        let remote_pos = last_line.find(&remote_label).unwrap();
         let playlist_pos = last_line.find("\u{1F5AD}  none").unwrap();
         let muted_pos = last_line.find("muted").unwrap();
         assert!(
@@ -12371,8 +12428,8 @@ pub(crate) mod tests {
         let last_line = rendered.lines().last().unwrap();
 
         assert!(
-            last_line.contains("\u{1F5A7}  local"),
-            "expected local remote-status when no remote is connected:\n{last_line}"
+            last_line.contains(&format!("\u{1F5A7}  {}", mbv_core::api::device_name())),
+            "expected local device remote-status when no remote is connected:\n{last_line}"
         );
         assert!(
             !last_line.contains("remote:"),
@@ -12450,7 +12507,7 @@ pub(crate) mod tests {
         let remote_label_x = (remote_x + 1..buf.area().width)
             .find(|&x| buf[(x, last_y)].symbol() != " ")
             .unwrap();
-        assert_eq!(buf[(remote_label_x, last_y)].fg, palette::PINE);
+        assert_eq!(buf[(remote_label_x, last_y)].fg, palette::AQUA);
     }
 
     #[test]

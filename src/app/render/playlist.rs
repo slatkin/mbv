@@ -211,7 +211,7 @@ impl App {
                         Style::default().fg(palette::WHITE)
                     };
                     let indicator = if i == cursor {
-                        Cell::from("▐").style(Style::default().fg(palette::PINE))
+                        Cell::from("▐").style(Style::default().fg(palette::AQUA))
                     } else {
                         Cell::from(" ")
                     };
