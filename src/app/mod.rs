@@ -302,6 +302,15 @@ enum AlbumIndexState {
     Ready(Vec<AlbumSearchEntry>),
 }
 
+/// TV series detail data for inline rendering in Power View.
+/// When a Series is selected, we proactively fetch seasons and episodes
+/// so the inline detail pane can render without drilling in.
+#[derive(Clone, Debug)]
+struct SeriesDetail {
+    seasons: Vec<MediaItem>,
+    episodes: std::collections::HashMap<String, Vec<MediaItem>>,
+}
+
 struct BrowseLevel {
     parent_id: String,
     title: String,
@@ -549,6 +558,13 @@ enum LibEvent {
     AlbumTracksFetched {
         album_id: String,
         tracks: Vec<MediaItem>,
+    },
+    /// TV series detail (seasons + episodes) fetched proactively for inline
+    /// rendering in Power View when a Series is selected.
+    SeriesDetailFetched {
+        series_id: String,
+        seasons: Vec<MediaItem>,
+        episodes: std::collections::HashMap<String, Vec<MediaItem>>,
     },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate nav_stack, stay on current tab).
@@ -1191,6 +1207,11 @@ pub struct App {
     /// lifetime.
     album_tracks_cache: std::collections::HashMap<String, Vec<MediaItem>>,
     album_tracks_loading: std::collections::HashSet<String>,
+    /// TV series detail cache for inline rendering in Power View.
+    /// When a Series is selected, we proactively fetch seasons and episodes
+    /// so the inline detail pane can render without drilling in.
+    series_detail_cache: std::collections::HashMap<String, SeriesDetail>,
+    series_detail_loading: std::collections::HashSet<String>,
     save_playlist_dialog: Option<SavePlaylistDialog>,
     image_protocol: Option<String>,
     image_protocol_enabled: bool,
@@ -1922,6 +1943,8 @@ impl App {
             album_artist_fetches_active: 0,
             album_tracks_cache: std::collections::HashMap::new(),
             album_tracks_loading: std::collections::HashSet::new(),
+            series_detail_cache: std::collections::HashMap::new(),
+            series_detail_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
             pending_image_fetches: std::collections::VecDeque::new(),
@@ -6611,6 +6634,8 @@ pub(crate) mod tests {
             album_artist_fetches_active: 0,
             album_tracks_cache: std::collections::HashMap::new(),
             album_tracks_loading: std::collections::HashSet::new(),
+            series_detail_cache: std::collections::HashMap::new(),
+            series_detail_loading: std::collections::HashSet::new(),
             save_playlist_dialog: None,
             image_lru: std::collections::VecDeque::new(),
             pending_image_fetches: std::collections::VecDeque::new(),
