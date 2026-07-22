@@ -23,6 +23,16 @@ use unicode_width::UnicodeWidthStr;
 /// Shared by both view modes (Standard here, Power in `power/mod.rs`) so the
 /// two layouts can't drift apart on this shared constant.
 pub(super) const TAB_BAR_BOX_HEIGHT: u16 = 3;
+pub(super) const PLAY_ICON: &str = "\u{f04b}";
+const PLAY_ICON_FALLBACK: &str = ">";
+
+pub(super) fn play_icon(use_nerd_fonts: bool) -> &'static str {
+    if use_nerd_fonts {
+        PLAY_ICON
+    } else {
+        PLAY_ICON_FALLBACK
+    }
+}
 
 fn daemon_endpoint_label(endpoint: &str) -> Option<String> {
     let endpoint = endpoint.trim();
@@ -439,7 +449,7 @@ impl App {
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .style(Style::default().fg(palette::OVERLAY))
                 .thumb_symbol("▐")
-                .thumb_style(Style::default().fg(palette::PINE))
+                .thumb_style(Style::default().fg(palette::AQUA))
                 .track_symbol(Some("│"))
                 .begin_symbol(None)
                 .end_symbol(None),
@@ -468,7 +478,7 @@ impl App {
     ) {
         let indicator = Span::styled(
             if selected { "\u{258c}" } else { " " },
-            Style::default().fg(palette::PINE),
+            Style::default().fg(palette::AQUA),
         );
         let mut all = vec![indicator];
         all.extend(spans);
@@ -536,7 +546,7 @@ impl App {
         } else if volume > 60 {
             palette::YELLOW
         } else {
-            palette::PINE
+            palette::AQUA
         };
         let vol_spans = vec![
             Span::styled("VOL ", Style::default().fg(palette::MUTED)),
@@ -601,7 +611,7 @@ impl App {
                     let n = n.to_uppercase();
                     if i == sel {
                         Line::from(vec![
-                            Span::styled("▐", Style::default().fg(palette::PINE)),
+                            Span::styled("▐", Style::default().fg(palette::AQUA)),
                             Span::styled(
                                 format!(" {n}  "),
                                 Style::default()
@@ -634,7 +644,7 @@ impl App {
                     let n = n.to_uppercase();
                     if i == selected_tab {
                         Line::from(vec![
-                            Span::styled("▐", Style::default().fg(palette::PINE)),
+                            Span::styled("▐", Style::default().fg(palette::AQUA)),
                             Span::styled(
                                 format!(" {n}  "),
                                 Style::default()
@@ -737,10 +747,7 @@ impl App {
         let dur_str = fmt_duration(rt_ticks / TICKS_PER_SECOND);
 
         let (glyph, gcolor): (&str, Color) = if paused {
-            (
-                if self.use_nerd_fonts { "\u{f04b}" } else { ">" },
-                palette::PINE,
-            )
+            (play_icon(self.use_nerd_fonts), palette::AQUA)
         } else {
             (
                 if self.use_nerd_fonts {
@@ -923,7 +930,7 @@ impl App {
         };
         let label_style = Style::default()
             .fg(if remote_on {
-                palette::PINE
+                palette::AQUA
             } else {
                 ratatui::style::Color::Black
             })
@@ -1196,7 +1203,7 @@ impl App {
                     Span::styled(
                         " AUTOSAVE ",
                         Style::default()
-                            .fg(palette::PINE)
+                            .fg(palette::AQUA)
                             .bg(palette::STATUS_PILL_BG),
                     ),
                 );
@@ -1209,7 +1216,7 @@ impl App {
                     right_spans.push(Span::styled(
                         " \u{F06B4}",
                         Style::default()
-                            .fg(palette::PINE)
+                            .fg(palette::AQUA)
                             .bg(palette::STATUS_PILL_BG),
                     ));
                     right_spans.push(Span::styled(
@@ -1280,7 +1287,7 @@ impl App {
         let spans = vec![
             Span::styled(
                 "\u{2594}".repeat(green_len),
-                Style::default().fg(palette::PINE),
+                Style::default().fg(palette::AQUA),
             ),
             Span::styled(
                 "\u{2594}".repeat(gray_len),
@@ -1555,7 +1562,7 @@ mod tests {
 
         let buf = term.backend().buffer();
         assert_eq!(buf[(0, 0)].symbol(), "▐");
-        assert_eq!(buf[(0, 0)].fg, palette::PINE);
+        assert_eq!(buf[(0, 0)].fg, palette::AQUA);
         assert_eq!(buf[(0, 4)].symbol(), "│");
         assert_eq!(buf[(0, 4)].fg, palette::OVERLAY);
     }

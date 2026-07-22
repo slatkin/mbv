@@ -12356,7 +12356,7 @@ pub(crate) mod tests {
         let remote_label_x = (remote_x + 1..buf.area().width)
             .find(|&x| buf[(x, last_y)].symbol() != " ")
             .unwrap();
-        assert_eq!(buf[(remote_label_x, last_y)].fg, palette::PINE);
+        assert_eq!(buf[(remote_label_x, last_y)].fg, palette::AQUA);
     }
 
     #[test]

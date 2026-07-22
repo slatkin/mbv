@@ -210,7 +210,7 @@ fn rendered_power_queue_rows_for_padding(items: &[MediaItem], panel_area: Rect) 
         return 1;
     }
 
-    let (display, group_for_header) = build_queue_rows(items, true);
+    let (display, group_for_header) = build_power_queue_rows(items);
     let padded_visible = panel_area.height.saturating_sub(4) as usize;
     let has_sb = display.len() > padded_visible;
     let render_w = panel_area.width.saturating_sub(u16::from(has_sb)) as usize;
@@ -233,6 +233,20 @@ fn rendered_power_queue_rows_for_padding(items: &[MediaItem], panel_area: Rect) 
     }
 
     rows
+}
+
+pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec<String>) {
+    let (display, group_for_header) = build_queue_rows(items, true);
+    let mut rows = Vec::with_capacity(display.len().saturating_add(group_for_header.len()));
+
+    for row in display {
+        rows.push(row.clone());
+        if matches!(row, QueueRow::Header) {
+            rows.push(QueueRow::Spacer);
+        }
+    }
+
+    (rows, group_for_header)
 }
 
 /// Style for a selector pill (group/section/artist tab row): IRIS text +
@@ -274,13 +288,13 @@ pub(super) fn render_power_count_label(f: &mut Frame, area: Rect, count: usize) 
 }
 
 /// The shared left cursor marker span used by every power-view list row.
-/// `active` (row is both selected and focused) renders the PINE half-block
+/// `active` (row is both selected and focused) renders the AQUA half-block
 /// `▌`; otherwise a single blank space so unselected rows stay aligned.
 /// Only the marker glyph is unified here -- each renderer keeps its own
 /// row *text* coloring, which varies by tab.
 pub(super) fn selection_marker(active: bool) -> Span<'static> {
     if active {
-        Span::styled("\u{258c}", Style::default().fg(palette::PINE))
+        Span::styled("\u{258c}", Style::default().fg(palette::AQUA))
     } else {
         Span::raw(" ")
     }
@@ -1518,7 +1532,7 @@ mod tests {
         let panel_area = Rect::new(0, 0, 20, 6);
         let desired_rows =
             rendered_power_queue_rows_for_padding(&app.displayed_queue().items, panel_area);
-        assert_eq!(desired_rows, 3);
+        assert_eq!(desired_rows, 4);
 
         let backend = TestBackend::new(panel_area.width, panel_area.height);
         let mut term = Terminal::new(backend).unwrap();
@@ -1570,7 +1584,7 @@ mod tests {
 
         let (_term, _layout) = render_power_view_to_terminal(&mut app, 100, 20);
 
-        assert_eq!(app.power_queue_scroll, 5);
+        assert_eq!(app.power_queue_scroll, 9);
     }
 
     fn make_power_music_group_app() -> App {
@@ -2437,10 +2451,10 @@ mod tests {
 
         assert!(
             // Track mode has no selected-region gutter (removed so the
-            // colored block reads cleanly) -- the PINE `▌` cursor marker
+            // colored block reads cleanly) -- the AQUA `▌` cursor marker
             // sits directly against the track number, no trailing space.
             focused_line.starts_with("  \u{258c}2. Focused Track"),
-            "expected focused track row to show the PINE cursor marker in track-selection mode:\n{out}"
+            "expected focused track row to show the AQUA cursor marker in track-selection mode:\n{out}"
         );
         assert_eq!(
             layout.cursor_screen_y,
@@ -2479,10 +2493,10 @@ mod tests {
 
         assert!(
             // Track mode has no selected-region gutter (removed so the
-            // colored block reads cleanly) -- the PINE `▌` cursor marker
+            // colored block reads cleanly) -- the AQUA `▌` cursor marker
             // sits directly against the track number, no trailing space.
             focused_line.starts_with("  \u{258c}2. Focused Track"),
-            "expected track-selection row to show the PINE cursor marker while pane is unfocused:\n{out}"
+            "expected track-selection row to show the AQUA cursor marker while pane is unfocused:\n{out}"
         );
     }
 

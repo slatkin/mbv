@@ -152,7 +152,7 @@ impl App {
 
         // Build display rows: audio grouped by album, episodes by series, the rest
         // flat. group_for_header[j] holds the label for the j-th Header.
-        let (display, group_for_header) = build_queue_rows(&items, true);
+        let (display, group_for_header) = super::build_power_queue_rows(&items);
         let total = display.len();
         let visible = area.height as usize;
 
@@ -256,11 +256,9 @@ impl App {
                     let is_cursor = i == cursor && focused;
 
                     let fg = if is_cursor {
-                        palette::PINE
-                    } else if focused {
-                        palette::WHITE
+                        palette::QUEUE_FOCUS_FG
                     } else {
-                        palette::SUBTLE
+                        palette::SOFT_WHITE
                     };
                     let row_style = Style::default().fg(fg);
 
@@ -279,8 +277,6 @@ impl App {
                     } else {
                         String::new()
                     };
-
-                    let marker = super::selection_marker(is_cursor);
 
                     // Show queue position (1-based) for all items, right-aligned
                     // so single-digit numbers line up with double-digit ones.
@@ -304,7 +300,7 @@ impl App {
                         palette::MUTED
                     };
 
-                    // Title truncated to leave room for indent + marker + right-aligned metadata.
+                    // Title truncated to leave room for indent + right-aligned metadata.
                     let dur_visible = show_length && !dur.is_empty();
                     let pct_visible = !pct_str.is_empty();
                     let metadata_gap = if dur_visible && pct_visible { 1 } else { 0 };
@@ -312,18 +308,23 @@ impl App {
                         + (if pct_visible { pct_str.width() } else { 0 })
                         + metadata_gap;
                     let extra = metadata_w;
-                    let title_w =
-                        render_w.saturating_sub(indent + 1 + extra + QUEUE_TITLE_QUIET_COLUMNS);
+                    let now_playing_icon = super::super::play_icon(self.use_nerd_fonts);
+                    let now_playing_icon_w = if is_active {
+                        now_playing_icon.width() + 1
+                    } else {
+                        0
+                    };
+                    let title_w = render_w.saturating_sub(
+                        indent + now_playing_icon_w + extra + QUEUE_TITLE_QUIET_COLUMNS,
+                    );
                     let title = trunc_str(&label, title_w);
 
-                    // Now-playing title text is always emby blue, regardless of focus state.
-                    let title_color = if is_active { palette::GREEN } else { fg };
+                    let title_color = fg;
 
                     let mut spans: Vec<Span> = Vec::new();
                     if indent > 0 {
                         spans.push(Span::raw(" "));
                     }
-                    spans.push(marker);
                     // Prefix is "{n:>w}. " — render it dim.
                     let prefix_chars = format!("{:>num_w$}. ", queue_pos).chars().count();
                     let tc = title.chars().count();
@@ -337,12 +338,24 @@ impl App {
                             title[..split].to_string(),
                             Style::default().fg(dim_color),
                         ));
+                        if is_active {
+                            spans.push(Span::styled(
+                                format!("{now_playing_icon} "),
+                                Style::default().fg(palette::AQUA),
+                            ));
+                        }
                         spans.push(Span::styled(
                             title[split..].to_string(),
                             Style::default().fg(title_color),
                         ));
                     } else {
                         spans.push(Span::styled(title, Style::default().fg(title_color)));
+                        if is_active {
+                            spans.push(Span::styled(
+                                format!("{now_playing_icon} "),
+                                Style::default().fg(palette::AQUA),
+                            ));
+                        }
                     }
                     if pct_visible || dur_visible {
                         let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
@@ -419,9 +432,10 @@ mod tests {
             items.push(item);
         }
 
-        let (display, _) = build_queue_rows(&items, true);
+        let (display, _) = super::super::build_power_queue_rows(&items);
 
-        assert_eq!(queue_group_start_row(&display, 7), 5);
+        assert!(matches!(display[1], QueueRow::Spacer));
+        assert_eq!(queue_group_start_row(&display, 9), 6);
     }
 
     #[test]
@@ -447,7 +461,7 @@ mod tests {
             items.push(item);
         }
         app.player_tab.set_items(items, 4);
-        app.power_queue_scroll = 9;
+        app.power_queue_scroll = 10;
 
         let backend = TestBackend::new(40, 3);
         let mut term = Terminal::new(backend).unwrap();
@@ -457,6 +471,6 @@ mod tests {
         })
         .unwrap();
 
-        assert_eq!(app.power_queue_scroll, 5);
+        assert_eq!(app.power_queue_scroll, 6);
     }
 }

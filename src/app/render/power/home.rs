@@ -137,7 +137,7 @@ fn render_home_video_item(
         if item.played {
             meta_spans.push(Span::styled(
                 "\u{2713} ",
-                Style::default().fg(palette::PINE),
+                Style::default().fg(palette::AQUA),
             ));
         }
         let mut parts: Vec<String> = Vec::new();
@@ -665,7 +665,7 @@ impl App {
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         trunc_str(&layout.show_name, text_w),
-                        Style::default().fg(palette::PINE),
+                        Style::default().fg(palette::AQUA),
                     )),
                     Rect {
                         x: area.x,

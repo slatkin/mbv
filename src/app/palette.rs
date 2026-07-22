@@ -6,8 +6,9 @@ pub const MUTED: Color = Color::Rgb(108, 108, 108); // dim text, icons
 pub const SUBTLE: Color = Color::Rgb(158, 158, 158); // secondary text
 pub const TEXT: Color = Color::Rgb(230, 230, 230); // primary text
 pub const WHITE: Color = Color::Rgb(230, 230, 230); // near-white (#e6e6e6)
+pub const QUEUE_FOCUS_FG: Color = WHITE;
 pub const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
-pub const PINE: Color = Color::Rgb(131, 192, 146); // emby green — folders, watched (#83c092)
+pub const AQUA: Color = Color::Rgb(131, 192, 146); // emby green — folders, watched (#83c092)
 pub const GREEN: Color = Color::Rgb(60, 72, 65); // dark green-grey (#3c4841)
 pub const TEAL: Color = Color::Rgb(127, 187, 179); // light teal (#7fbbb3) — playback panel title text
 
