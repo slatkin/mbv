@@ -1389,7 +1389,10 @@ impl App {
                 self.last_card_height = 0; // reset stale image height for new view
                 return false;
             }
-            if key.code == KeyCode::Left && matches!(self.power_focus, PowerFocus::Left) {
+            if key.code == KeyCode::Left
+                && matches!(self.power_focus, PowerFocus::Left)
+                && !self.power_left_collapsed
+            {
                 self.set_power_focus(PowerFocus::Queue);
                 self.last_card_height = 0;
                 return false;
@@ -3665,6 +3668,18 @@ mod power_movie_detail_tests {
         assert_eq!(app.power_left_width, 45);
         assert!(app.status.contains("45"), "status was {:?}", app.status);
         assert_eq!(App::load_prefs()["power_left_width"].as_u64(), Some(45));
+    }
+
+    #[test]
+    fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
+        let mut app = make_power_movie_app();
+        app.power_left_collapsed = true;
+        app.power_focus = PowerFocus::Left;
+
+        let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
+
+        assert!(!handled);
+        assert_eq!(app.power_focus, PowerFocus::Left);
     }
 
     #[test]
