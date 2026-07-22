@@ -178,7 +178,7 @@ fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, desired_rows: u16) 
     let border_style = Style::default().fg(palette::SOFT_WHITE);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
-            "\u{2581}".repeat(area.width as usize),
+            "\u{2594}".repeat(area.width as usize),
             border_style,
         ))),
         Rect { height: 1, ..area },
@@ -186,7 +186,7 @@ fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, desired_rows: u16) 
     if area.height > 1 {
         f.render_widget(
             Paragraph::new(Line::from(Span::styled(
-                "\u{2594}".repeat(area.width as usize),
+                "\u{2581}".repeat(area.width as usize),
                 border_style,
             ))),
             Rect {
@@ -1418,9 +1418,9 @@ mod tests {
         let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
         let x = layout.queue_area.x;
 
-        assert_eq!(buf[(x, top_y)].symbol(), "\u{2581}");
+        assert_eq!(buf[(x, top_y)].symbol(), "\u{2594}");
         assert_eq!(buf[(x, top_y)].fg, palette::SOFT_WHITE);
-        assert_eq!(buf[(x, bottom_y)].symbol(), "\u{2594}");
+        assert_eq!(buf[(x, bottom_y)].symbol(), "\u{2581}");
         assert_eq!(buf[(x, bottom_y)].fg, palette::SOFT_WHITE);
         assert_eq!(buf[(x, layout.queue_area.y)].bg, palette::MEDIA_SELECTED_BG);
         assert_eq!(
