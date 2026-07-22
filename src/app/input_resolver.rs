@@ -398,6 +398,12 @@ mod app_level_tests {
             st.active = true;
         }
         let rx = app.player.spy_on_commands();
+        // Double-tap required: first press arms, second press fires.
+        app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert!(
+            rx.try_recv().is_err(),
+            "single space must not toggle pause (double-tap required)"
+        );
         app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
         assert!(matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)));
     }
@@ -412,6 +418,28 @@ mod app_level_tests {
         assert!(
             !matches!(rx.try_recv(), Ok(PlayerCommand::TogglePause)),
             "Space is inert while nothing plays"
+        );
+    }
+
+    #[test]
+    fn double_space_after_timeout_does_not_toggle_pause() {
+        use std::time::{Duration, Instant};
+
+        let mut app = make_app_stub();
+        {
+            let mut st = app.player.status.lock().unwrap();
+            st.active = true;
+        }
+        let rx = app.player.spy_on_commands();
+        // First press arms the double-tap.
+        app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+        // Simulate the timestamp being far in the past (>300ms).
+        app.last_space_press = Some(Instant::now() - Duration::from_millis(500));
+        // Second press should NOT fire because the window expired.
+        app.handle_key(ev(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert!(
+            rx.try_recv().is_err(),
+            "second space after timeout must not toggle pause"
         );
     }
 

@@ -174,7 +174,7 @@ pub(super) struct PlaybackHelpBinding {
 
 pub(super) const PLAYBACK_HELP_BINDINGS: &[PlaybackHelpBinding] = &[
     PlaybackHelpBinding {
-        keys: "Space",
+        keys: "Space (x2)",
         label: "Pause/Resume",
         samples: &[(
             KeyChord {

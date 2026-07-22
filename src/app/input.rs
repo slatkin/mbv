@@ -1247,6 +1247,21 @@ impl App {
             &snapshot,
             super::input_resolver::KeyChord::from_key(key),
         ) {
+            super::input_resolver::KeyResolution::Command(
+                cmd @ super::action::Command::TogglePlayPause,
+            ) => {
+                let now = Instant::now();
+                let double_tap = self
+                    .last_space_press
+                    .is_some_and(|t| t.elapsed() < Duration::from_millis(300));
+                self.last_space_press = Some(now);
+                if double_tap {
+                    self.last_space_press = None;
+                    Some(self.dispatch(cmd))
+                } else {
+                    None
+                }
+            }
             super::input_resolver::KeyResolution::Command(cmd) => Some(self.dispatch(cmd)),
             // Swallow is unreachable for Playback today; both non-command outcomes
             // mean "not a playback key" → let it fall through (`None`).
