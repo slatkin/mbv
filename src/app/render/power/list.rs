@@ -236,14 +236,35 @@ impl App {
         let n = items.len();
 
         // Letter grouping: applies to non-music library lists with 50+ items (not during search).
-        // Gated on the true library total, not the fetched-so-far count, so the
-        // grouping style (ranges vs. individual letters) doesn't change out from
-        // under the user as more pages lazily load in.
-        let use_letter_groups = !show_grouped && self.power_left_tab > 0 && total_count >= 50 && {
-            let lib_idx = self.power_left_tab - 1;
-            self.libs[lib_idx].library.collection_type != "music"
-                && self.libs[lib_idx].search.is_none()
+        // Gated on the true library total (`LibraryTab.library_total` when known,
+        // e.g. a letter-range pill has scoped the fetch to a smaller slice),
+        // not the fetched-so-far/filtered count, so the grouping style (ranges
+        // vs. individual letters) doesn't change out from under the user as
+        // more pages lazily load in, and a small filtered slice (< 50 items)
+        // still shows headers.
+        let active_letter_filter = if self.power_left_tab > 0 {
+            self.libs[self.power_left_tab - 1]
+                .nav_stack
+                .last()
+                .and_then(|l| l.letter_filter.as_ref())
+                .cloned()
+        } else {
+            None
         };
+        let ungrouped_total = self
+            .power_left_tab
+            .checked_sub(1)
+            .map_or(total_count, |lib_idx| {
+                self.libs[lib_idx].library_total.unwrap_or(total_count)
+            });
+        let use_letter_groups = !show_grouped
+            && self.power_left_tab > 0
+            && (ungrouped_total >= 50 || active_letter_filter.is_some())
+            && {
+                let lib_idx = self.power_left_tab - 1;
+                self.libs[lib_idx].library.collection_type != "music"
+                    && self.libs[lib_idx].search.is_none()
+            };
 
         // First row area: search input box (when searching) or item count label.
         if focused && self.power_left_tab > 0 && content_area.height > 0 {
@@ -347,11 +368,22 @@ impl App {
             // Publish the sorted order so cursor navigation can follow display order.
             layout.left_sorted_indices = sorted_indices.clone();
 
+            // With a letter-range pill active, the visible slice is already
+            // narrowed to one range (e.g. `A–C`) -- bucket by the individual
+            // first letter within it (`A`, `B`, `C`) rather than re-deriving
+            // a range bucket from the slice's own (small) size. Forcing
+            // `letter_bucket`'s `total >= 250` branch reuses its existing
+            // per-letter logic without a second code path.
+            let bucket_total = if active_letter_filter.is_some() {
+                usize::MAX
+            } else {
+                ungrouped_total
+            };
             let mut display_rows: Vec<DisplayRow> = Vec::new();
             let mut last_bucket = String::new();
             for &idx in &sorted_indices {
                 let item = &items[idx];
-                let bucket = letter_bucket(item, total_count);
+                let bucket = letter_bucket(item, bucket_total);
                 if bucket != last_bucket {
                     if !last_bucket.is_empty() {
                         display_rows.push(DisplayRow::Spacer);
@@ -911,12 +943,14 @@ mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app
@@ -995,6 +1029,7 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app.album_indexes.insert(
             "music-lib".into(),
@@ -1061,6 +1096,41 @@ mod tests {
                  buckets, not scattered after the whole list:\n{out}"
             );
         }
+    }
+
+    // Letter-range pills (large libraries): a scoped "A–C" fetch is a small
+    // slice (well under the 50-item in-list header threshold), but should
+    // still show headers -- gated on the true `library_total`, not the
+    // filtered slice's own count (plan §6) -- and those headers should be
+    // individual letters (A, B, C) within the range, not a single "A–C"
+    // range header re-derived from the small slice.
+    #[test]
+    fn active_letter_filter_forces_per_letter_headers_even_for_a_small_slice() {
+        let titles = vec!["Apple Movie", "Banana Movie", "Cherry Movie"];
+        let mut app = make_power_movie_list_app(titles);
+        // Simulate a scoped A–C fetch: the level's own total_count is small
+        // (3, the size of the filtered slice), but the library's true total
+        // is large -- exactly the state a selected letter pill produces.
+        app.libs[0].library_total = Some(1000);
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.letter_filter = super::super::LetterFilter::for_index(0); // "A–C"
+        }
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 20);
+        let trimmed_lines: Vec<&str> = out.lines().map(str::trim).collect();
+
+        for letter in ["A", "B", "C"] {
+            assert!(
+                trimmed_lines.contains(&letter),
+                "expected a standalone '{letter}' header row within the A–C range:\n{out}"
+            );
+        }
+        assert!(
+            !trimmed_lines.contains(&"A\u{2013}C"),
+            "a small filtered slice must not fall back to a single range header:\n{out}"
+        );
     }
 
     // #263: the banner's reserved row budget must track the selected movie's

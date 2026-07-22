@@ -1465,6 +1465,16 @@ impl App {
                         self.switch_feed_folder_group(lib_idx, 1);
                         return false;
                     }
+                    // Letter-range pill cycling for large non-music libraries
+                    // (`[`/`]` are otherwise free at the top browse level).
+                    if key.code == KeyCode::Char('[') && self.should_show_letter_pills(lib_idx) {
+                        self.cycle_letter_pill(lib_idx, -1);
+                        return false;
+                    }
+                    if key.code == KeyCode::Char(']') && self.should_show_letter_pills(lib_idx) {
+                        self.cycle_letter_pill(lib_idx, 1);
+                        return false;
+                    }
                 }
 
                 let is_power_nav = matches!(
@@ -2388,13 +2398,16 @@ impl App {
                     let lib_idx = self.power_left_tab - 1;
                     if self.is_music_group_view(lib_idx)
                         || self.is_feed_home_video_group_view(lib_idx)
+                        || self.should_show_letter_pills(lib_idx)
                     {
                         for (rect, target) in self.layout.power.selector_tabs.clone() {
                             if rect.contains((col, row).into()) {
                                 if self.is_music_group_view(lib_idx) {
                                     self.select_music_group(lib_idx, target);
-                                } else {
+                                } else if self.is_feed_home_video_group_view(lib_idx) {
                                     self.select_feed_folder_group(lib_idx, target);
+                                } else {
+                                    self.select_letter_pill(lib_idx, target);
                                 }
                                 return true;
                             }
@@ -3123,6 +3136,8 @@ impl App {
                                     self.select_music_group(lib_idx, target);
                                 } else if self.is_feed_home_video_group_view(lib_idx) {
                                     self.select_feed_folder_group(lib_idx, target);
+                                } else if self.should_show_letter_pills(lib_idx) {
+                                    self.select_letter_pill(lib_idx, target);
                                 }
                             }
                             return;
@@ -3555,12 +3570,14 @@ mod power_movie_detail_tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app
@@ -3590,11 +3607,13 @@ mod power_movie_detail_tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
     }
 
@@ -3864,12 +3883,14 @@ mod power_movie_detail_tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         lib.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
         assert!(lib.context_menu.is_some(), "library view");
@@ -3911,12 +3932,14 @@ mod power_movie_detail_tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app.handle_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::CONTROL));
@@ -4188,6 +4211,7 @@ mod power_music_track_focus_tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
                 BrowseLevel {
                     parent_id: "group-0".into(),
@@ -4202,12 +4226,14 @@ mod power_music_track_focus_tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
             ],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app
@@ -4283,6 +4309,7 @@ mod power_music_track_focus_tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
                 BrowseLevel {
                     parent_id: "group-0".into(),
@@ -4297,12 +4324,14 @@ mod power_music_track_focus_tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
             ],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app
@@ -5380,6 +5409,7 @@ mod power_music_track_focus_tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
                 BrowseLevel {
                     parent_id: "album-legacy".into(),
@@ -5394,12 +5424,14 @@ mod power_music_track_focus_tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
             ],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         assert!(app.is_album_level(0));
@@ -5457,11 +5489,13 @@ mod power_library_scope_routing_tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         app
     }
@@ -5489,6 +5523,8 @@ mod power_library_scope_routing_tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5531,6 +5567,8 @@ mod power_library_scope_routing_tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5544,6 +5582,8 @@ mod power_library_scope_routing_tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5595,11 +5635,13 @@ mod power_library_scope_routing_tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 }],
                 search: None,
                 feed_home_video: None,
                 album_track_focus: None,
                 artist_header_focus: None,
+                library_total: None,
             });
         }
         app.replace_saved_library_position(
@@ -5615,6 +5657,8 @@ mod power_library_scope_routing_tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 }],
                 ..Default::default()
             },
@@ -5632,6 +5676,8 @@ mod power_library_scope_routing_tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
+                    letter_filter_index: None,
+                    library_total: None,
                 }],
                 ..Default::default()
             },
@@ -5680,6 +5726,8 @@ mod power_library_scope_routing_tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5731,6 +5779,8 @@ mod power_library_scope_routing_tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5779,6 +5829,7 @@ mod power_library_scope_routing_tests {
             sort_order: "Ascending".into(),
             loading: false,
             all_items: None,
+            letter_filter: None,
         });
         app.layout.power.breadcrumbs = vec![(10, 20, 2, 1)];
         let default_position = crate::config::LibraryPosition {
@@ -5791,6 +5842,8 @@ mod power_library_scope_routing_tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5844,6 +5897,7 @@ mod power_library_scope_routing_tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
         let power_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
@@ -5855,6 +5909,8 @@ mod power_library_scope_routing_tests {
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             ..Default::default()
         };
@@ -5889,6 +5945,7 @@ mod power_library_scope_routing_tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
         });
 

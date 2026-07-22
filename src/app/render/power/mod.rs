@@ -5,6 +5,7 @@ mod episode;
 mod home;
 mod list;
 mod music;
+mod pills;
 mod queue;
 
 use super::super::layout::LayoutPower;
@@ -512,6 +513,72 @@ pub(super) fn letter_bucket(item: &mbv_core::api::MediaItem, total: usize) -> St
     .to_string()
 }
 
+/// Library size above which the Power View library list shows the
+/// letter-range pill row (see `LetterFilter`), scoping the server fetch to
+/// one range at a time. Unrelated to the 50-item in-list header threshold
+/// used by `use_letter_groups` in `list.rs`.
+pub(crate) const LIBRARY_PILL_THRESHOLD: usize = 300;
+
+/// The letter-range pill buckets, in display order. Single source of truth
+/// for both the pill labels and the Emby `NameStartsWithOrGreater` /
+/// `NameLessThan` fetch bounds, so they can't drift apart. Mirrors the range
+/// boundaries used by `letter_bucket` above.
+const LETTER_FILTER_BUCKETS: &[(&str, Option<&str>, Option<&str>)] = &[
+    ("A\u{2013}C", Some("A"), Some("D")),
+    ("D\u{2013}F", Some("D"), Some("G")),
+    ("G\u{2013}I", Some("G"), Some("J")),
+    ("J\u{2013}L", Some("J"), Some("M")),
+    ("M\u{2013}O", Some("M"), Some("P")),
+    ("P\u{2013}R", Some("P"), Some("S")),
+    ("S\u{2013}U", Some("S"), Some("V")),
+    ("V\u{2013}Z", Some("V"), None),
+    ("#", None, Some("A")),
+];
+
+/// A selected letter-range pill: which bucket, its display label, and the
+/// Emby name-range bounds to fetch. Constructed only via `for_index`/`default`
+/// so it always matches a row in `LETTER_FILTER_BUCKETS`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct LetterFilter {
+    pub index: usize,
+    pub label: &'static str,
+    pub name_ge: Option<&'static str>,
+    pub name_lt: Option<&'static str>,
+}
+
+impl LetterFilter {
+    /// Number of pill buckets (`A–C` … `V–Z`, `#`).
+    pub(crate) fn count() -> usize {
+        LETTER_FILTER_BUCKETS.len()
+    }
+
+    /// Builds the `LetterFilter` for bucket `index`, or `None` if out of range.
+    pub(crate) fn for_index(index: usize) -> Option<Self> {
+        LETTER_FILTER_BUCKETS
+            .get(index)
+            .map(|&(label, name_ge, name_lt)| LetterFilter {
+                index,
+                label,
+                name_ge,
+                name_lt,
+            })
+    }
+
+    /// The default pill selected when a large library is first opened: the
+    /// first range, `A–C`.
+    pub(crate) fn default_filter() -> Self {
+        Self::for_index(0).expect("LETTER_FILTER_BUCKETS is non-empty")
+    }
+
+    /// All pill labels in bucket order, for building a `PillBar`.
+    pub(crate) fn labels() -> Vec<String> {
+        LETTER_FILTER_BUCKETS
+            .iter()
+            .map(|&(label, _, _)| label.to_string())
+            .collect()
+    }
+}
+
 impl App {
     pub(super) fn render_power_view(
         &mut self,
@@ -703,6 +770,25 @@ impl App {
                     height: 1,
                 };
                 self.render_power_music_group_pills_row(f, pills_area, lib_idx, layout);
+                render_lib_area = Rect {
+                    y: lib_area.y + 2,
+                    height: lib_area.height.saturating_sub(2),
+                    ..lib_area
+                };
+            } else {
+                layout.selector_tabs = Vec::new();
+            }
+        } else if self.power_left_tab > 0 && self.should_show_letter_pills(self.power_left_tab - 1)
+        {
+            let lib_idx = self.power_left_tab - 1;
+            if lib_area.height > 0 {
+                let pills_area = Rect {
+                    x: lib_area.x,
+                    y: lib_area.y,
+                    width: lib_area.width,
+                    height: 1,
+                };
+                self.render_power_letter_pills_row(f, pills_area, lib_idx, layout);
                 render_lib_area = Rect {
                     y: lib_area.y + 2,
                     height: lib_area.height.saturating_sub(2),
@@ -1076,12 +1162,14 @@ mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app
@@ -1206,6 +1294,7 @@ mod tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
                 BrowseLevel {
                     parent_id: "group-0".into(),
@@ -1220,6 +1309,7 @@ mod tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
             ],
             search: None,
@@ -1227,6 +1317,7 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app
@@ -1514,6 +1605,7 @@ mod tests {
             sort_order: "Ascending".into(),
             loading: false,
             all_items: None,
+            letter_filter: None,
         });
 
         let mut layout = LayoutPower::default();
@@ -1675,11 +1767,13 @@ mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         let mut track = make_item("Opening Track", "Audio");
@@ -2154,6 +2248,7 @@ mod tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
                 BrowseLevel {
                     parent_id: "season-1".into(),
@@ -2168,6 +2263,7 @@ mod tests {
                     sort_order: "Ascending".into(),
                     loading: false,
                     all_items: None,
+                    letter_filter: None,
                 },
             ],
             search: None,
@@ -2175,6 +2271,7 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app
@@ -2209,12 +2306,14 @@ mod tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: None,
             feed_home_video: None,
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         });
 
         app
@@ -2284,5 +2383,139 @@ mod tests {
             app.libs[lib_idx].album_track_focus.is_none(),
             "home-video rendering must never set track-selection mode"
         );
+    }
+
+    #[test]
+    fn letter_filter_buckets_match_emby_name_range_bounds() {
+        // Verified empirically against a live Emby server (2026-07-22) that
+        // NameStartsWithOrGreater/NameLessThan filter on SortName -- these
+        // bounds must stay in lockstep with `letter_bucket`'s range labels.
+        let ac = LetterFilter::for_index(0).unwrap();
+        assert_eq!(ac.label, "A\u{2013}C");
+        assert_eq!(ac.name_ge, Some("A"));
+        assert_eq!(ac.name_lt, Some("D"));
+
+        let vz = LetterFilter::for_index(7).unwrap();
+        assert_eq!(vz.label, "V\u{2013}Z");
+        assert_eq!(vz.name_ge, Some("V"));
+        assert_eq!(vz.name_lt, None, "V–Z has no upper bound");
+
+        let hash = LetterFilter::for_index(8).unwrap();
+        assert_eq!(hash.label, "#");
+        assert_eq!(hash.name_ge, None, "# has no lower bound");
+        assert_eq!(hash.name_lt, Some("A"));
+
+        assert!(LetterFilter::for_index(9).is_none());
+        assert_eq!(LetterFilter::count(), 9);
+        assert_eq!(LetterFilter::labels().len(), 9);
+    }
+
+    #[test]
+    fn letter_filter_default_is_the_first_bucket() {
+        assert_eq!(
+            LetterFilter::default_filter(),
+            LetterFilter::for_index(0).unwrap()
+        );
+    }
+
+    fn make_power_large_movie_library_app(library_total: usize) -> App {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.is_folder = true;
+        library.collection_type = "movies".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: Vec::new(),
+                total_count: 0,
+                cursor: 0,
+                scroll: 0,
+                item_types: Some("Movie".into()),
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            album_track_focus: None,
+            artist_header_focus: None,
+            library_total: Some(library_total),
+        });
+
+        app
+    }
+
+    #[test]
+    fn letter_pills_show_only_when_library_total_exceeds_threshold() {
+        let mut small = make_power_large_movie_library_app(LIBRARY_PILL_THRESHOLD);
+        assert!(
+            !small.should_show_letter_pills(0),
+            "exactly the threshold must not qualify"
+        );
+
+        let mut large = make_power_large_movie_library_app(LIBRARY_PILL_THRESHOLD + 1);
+        assert!(large.should_show_letter_pills(0));
+
+        // `render_power_library_to_string` calls `render_power_library`
+        // directly, which is *below* the pill-row layout carve-out (that
+        // lives in `render_power_view`, mirroring the music-group pills
+        // row) -- go through the full view so the carve-out fires.
+        let backend = TestBackend::new(60, 20);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPower::default();
+        term.draw(|f| {
+            large.render_power_view(
+                f,
+                Rect::new(0, 0, 60, 20),
+                &mut layout,
+                &mut crate::app::layout::LayoutPlayback::default(),
+                &mut Rect::default(),
+                &mut Rect::default(),
+                0,
+                false,
+                &None,
+            );
+        })
+        .unwrap();
+        let out = buffer_to_string(&term);
+        assert!(
+            out.contains("A\u{2013}C"),
+            "expected the default A–C pill to render:\n{out}"
+        );
+        assert!(
+            !layout.selector_tabs.is_empty(),
+            "expected pill hitboxes to be recorded for click dispatch"
+        );
+
+        // Rendering the small (non-qualifying) library must not show pills.
+        let backend2 = TestBackend::new(60, 20);
+        let mut term2 = Terminal::new(backend2).unwrap();
+        let mut layout2 = LayoutPower::default();
+        term2
+            .draw(|f| {
+                small.render_power_view(
+                    f,
+                    Rect::new(0, 0, 60, 20),
+                    &mut layout2,
+                    &mut crate::app::layout::LayoutPlayback::default(),
+                    &mut Rect::default(),
+                    &mut Rect::default(),
+                    0,
+                    false,
+                    &None,
+                );
+            })
+            .unwrap();
+        let out2 = buffer_to_string(&term2);
+        assert!(!out2.contains("A\u{2013}C"));
     }
 }

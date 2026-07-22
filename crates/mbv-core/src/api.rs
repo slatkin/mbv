@@ -921,6 +921,42 @@ impl EmbyClient {
         sort_by: &str,
         sort_order: &str,
     ) -> Result<(Vec<MediaItem>, usize), String> {
+        self.get_items_sorted_ranged(
+            parent_id,
+            item_types,
+            unplayed_only,
+            start_index,
+            limit,
+            sort_by,
+            sort_order,
+            None,
+            None,
+        )
+    }
+
+    /// Like `get_items_sorted`, but additionally scopes the fetch to a
+    /// SortName range via Emby's `NameStartsWithOrGreater` /
+    /// `NameLessThan` filters (`name_ge`/`name_lt`, either or both
+    /// optional) -- used by the Power View letter-range pills so only the
+    /// selected range is fetched from the server. Verified empirically
+    /// against a live Emby server (2026-07-22): these filters key off
+    /// SortName, not the raw display Name, matching the app's own
+    /// letter-bucket header grouping (e.g. "The Harder They Come", SortName
+    /// "Harder They Come", is included in an H-I range fetch and excluded
+    /// from a T-U range fetch).
+    #[allow(clippy::too_many_arguments)]
+    pub fn get_items_sorted_ranged(
+        &self,
+        parent_id: &str,
+        item_types: Option<&str>,
+        unplayed_only: bool,
+        start_index: usize,
+        limit: usize,
+        sort_by: &str,
+        sort_order: &str,
+        name_ge: Option<&str>,
+        name_lt: Option<&str>,
+    ) -> Result<(Vec<MediaItem>, usize), String> {
         let mut req = self.get(&format!("/Users/{}/Items", self.user_id))
             .query("ParentId", parent_id)
             .query("SortBy", sort_by)
@@ -936,6 +972,12 @@ impl EmbyClient {
         }
         if unplayed_only {
             req = req.query("Filters", "IsUnplayed");
+        }
+        if let Some(v) = name_ge {
+            req = req.query("NameStartsWithOrGreater", v);
+        }
+        if let Some(v) = name_lt {
+            req = req.query("NameLessThan", v);
         }
         let call_started = std::time::Instant::now();
         let resp_result = req.call();
@@ -957,7 +999,7 @@ impl EmbyClient {
         let parse_ms = parse_started.elapsed().as_millis();
         log::info!(
             target: "api",
-            "get_items_sorted: parent={parent_id} types={item_types:?} start={start_index} limit={limit} -> {} items (total={total}) http={call_ms}ms parse={parse_ms}ms",
+            "get_items_sorted: parent={parent_id} types={item_types:?} start={start_index} limit={limit} name_ge={name_ge:?} name_lt={name_lt:?} -> {} items (total={total}) http={call_ms}ms parse={parse_ms}ms",
             items.len()
         );
         Ok((items, total))

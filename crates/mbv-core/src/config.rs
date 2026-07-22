@@ -575,6 +575,16 @@ pub struct LibraryPositionLevel {
     pub sort_by: String,
     #[serde(default)]
     pub sort_order: String,
+    /// Index of the active letter-range pill (see `app::render::power::LetterFilter`),
+    /// for the top level of a large library. `None` = unfiltered / not applicable.
+    #[serde(default)]
+    pub letter_filter_index: Option<usize>,
+    /// The library's TRUE unfiltered item count, captured for the top level
+    /// of a library so a restored session doesn't need an extra unfiltered
+    /// fetch just to re-derive whether the letter pill row applies.
+    /// `None` for non-root levels (or when never captured).
+    #[serde(default)]
+    pub library_total: Option<usize>,
 }
 
 pub fn save_library_position_state(state: &LibraryPositionState) {
@@ -1739,6 +1749,8 @@ url = "http://host"
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             feed_selected_group: 0,
             feed_video_cursor: 0,
@@ -1754,6 +1766,8 @@ url = "http://host"
                 unplayed_only: false,
                 sort_by: "SortName".into(),
                 sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
             }],
             feed_selected_group: 0,
             feed_video_cursor: 0,

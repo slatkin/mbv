@@ -566,6 +566,7 @@ mod app_level_tests {
                 sort_order: "Ascending".into(),
                 loading: false,
                 all_items: None,
+                letter_filter: None,
             }],
             search: Some(LibSearch {
                 query: String::new(),
@@ -579,6 +580,7 @@ mod app_level_tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            library_total: None,
         }
     }
 
