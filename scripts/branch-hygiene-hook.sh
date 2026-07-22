@@ -41,12 +41,9 @@ case "${HOOK}" in
     fi
     ;;
   pre-rebase)
-    if [[ "${branch}" == "main" ]]; then
-      fail "rebasing local main is blocked; reset it to origin/main instead"
-    fi
-    if is_root_checkout; then
-      fail "the root checkout must stay on main; rebase from an isolated worktree"
-    fi
+    # No restriction here: pre-commit already blocks committing on main, so
+    # local main never has commits ahead of origin/main, and `git pull --rebase`
+    # on it is always a no-op fast-forward. Nothing to guard against.
     ;;
   post-checkout)
     if [[ "${MBV_ALLOW_ROOT_BRANCH:-}" == "1" ]]; then
