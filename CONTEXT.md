@@ -78,6 +78,10 @@ _Avoid_: assuming "local" vs "remote" describes where an Emby *server* session r
 The one queue that currently owns playback authority for a given playback authority: the local queue in normal local playback, the remote queue during direct-remote control, or the daemon queue for a thin client. During remote control, the local queue may still exist and remain labeled as the local queue, but normal play routing sends local-queue playback into the remote queue, and autoload similarly loads the local queue through its autoload path, rather than making the local queue a second authority.
 _Avoid_: describing local and remote queues as simultaneous playback authorities. They may coexist as stored/displayable queue objects, but only one queue drives playback for a playback authority at a time.
 
+**Power View queue card**:
+The large artwork card shown above the queue in Power View. It represents the active playback slot when playback is active, otherwise the selected slot in the currently visible queue; it is not a library preview surface.
+_Avoid_: letting library focus, selected library item, or library drill depth influence this card.
+
 During remote control, the local queue remains a first-class editable queue: the user can tailor it locally, then play/autoload it into the remote queue. Playback-derived mutations such as active item changes, progress reconciliation, consume, and next/previous belong to the authoritative remote queue, not to the local queue being edited.
 
 **Queue cursor**:
