@@ -2,7 +2,7 @@ use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_epis
 use super::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, ArtistHeaderSelection, BrowseLevel,
     ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryPositionScope,
-    LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
+    LibraryTab, LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
     RemotePlaybackTarget, SessionEvent, UndoEntry, ViewMode, PAGE_SIZE, PREFETCH_AHEAD,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
@@ -57,6 +57,21 @@ fn recursive_album_search_eligible(collection_type: &str, levels: &[String]) -> 
     collection_type == "music"
         && levels.len() > 1
         && levels.last().is_some_and(|level| level == "album")
+}
+
+/// The correct fetch `limit` for an unfiltered whole-library fetch, used by
+/// `spawn_all_items_prefetch`/`spawn_search_items_load` so `all_items` (the
+/// set `/`-search runs over) always spans the entire library. `lvl.total_count`
+/// alone is NOT enough: with a letter-range pill active it's the FILTERED
+/// range's count (e.g. ~40 for `A–C` out of a 3,000-item library), which
+/// would silently truncate `all_items` to the active range and make search
+/// miss everything outside it. `lib.library_total` (the true count captured
+/// on the library's first, unfiltered load) is the right number; `.max` is
+/// just a defensive fallback for the moment before it's been captured.
+fn full_library_fetch_limit(lib: &LibraryTab, lvl: &BrowseLevel) -> usize {
+    lib.library_total
+        .unwrap_or(lvl.total_count)
+        .max(lvl.total_count)
 }
 
 fn fetch_all_album_index_items(
@@ -4039,11 +4054,18 @@ impl App {
             Some(l) => l,
             None => return,
         };
-        if lvl.is_fully_loaded() {
+        // `lvl.is_fully_loaded()` compares `items.len()` against
+        // `lvl.total_count` -- with a letter-range pill active, that count
+        // is the FILTERED range's total, not the whole library's, so a
+        // fully-loaded small range (e.g. 40 items in `A–C`) would wrongly
+        // read as "nothing more to prefetch". `all_items` backs whole-library
+        // search (see `input.rs`'s `/` handler and `spawn_search_items_load`
+        // below), so it must never be satisfied by just the active range.
+        if lvl.letter_filter.is_none() && lvl.is_fully_loaded() {
             return;
         }
         let parent_id = lvl.parent_id.clone();
-        let total_count = lvl.total_count;
+        let total_count = full_library_fetch_limit(lib, lvl);
         let item_types = lvl.item_types.clone();
         let unplayed_only = lvl.unplayed_only;
         let sort_by = lvl.sort_by.clone();
@@ -4076,7 +4098,10 @@ impl App {
             None => return,
         };
         let parent_id = lvl.parent_id.clone();
-        let total_count = lvl.total_count;
+        // See `spawn_all_items_prefetch` above: always fetch the WHOLE
+        // library unfiltered so search covers everything, not just an
+        // active letter-range pill's slice.
+        let total_count = full_library_fetch_limit(lib, lvl);
         let item_types = lvl.item_types.clone();
         let unplayed_only = lvl.unplayed_only;
         let sort_by = lvl.sort_by.clone();
@@ -7925,6 +7950,41 @@ mod tests {
             .as_ref()
             .unwrap();
         assert_eq!(filter.label, "#");
+    }
+
+    // Regression coverage for the bug found in review of the letter-pills
+    // PR: `spawn_all_items_prefetch`/`spawn_search_items_load` used to cap
+    // their unfiltered fetch's `limit` at `lvl.total_count`, which is the
+    // FILTERED range's count whenever a letter pill is active (e.g. ~40 for
+    // an `M–O` pill out of a 3,000-movie library) -- so `all_items` (the set
+    // `/`-search runs over) silently shrank to just the active range, and
+    // whole-library search missed everything outside it.
+    #[test]
+    fn full_library_fetch_limit_uses_true_total_not_the_filtered_range_count() {
+        let mut lib = lib_tab("movies");
+        push_top_level(&mut lib, 40); // the "M–O" slice: 40 items
+        lib.library_total = Some(3000); // the library's true size
+        {
+            let lvl = lib.nav_stack.last_mut().unwrap();
+            lvl.total_count = 40; // what get_items_sorted_ranged reported for M–O
+            lvl.letter_filter = crate::app::render::power::LetterFilter::for_index(4);
+        }
+        let lvl = lib.nav_stack.last().unwrap();
+
+        assert_eq!(
+            full_library_fetch_limit(&lib, lvl),
+            3000,
+            "must fetch the whole library, not just the active M–O range"
+        );
+    }
+
+    #[test]
+    fn full_library_fetch_limit_falls_back_to_total_count_before_library_total_is_known() {
+        let mut lib = lib_tab("movies");
+        push_top_level(&mut lib, 10);
+        // library_total not yet captured (e.g. first-ever load in flight).
+        let lvl = lib.nav_stack.last().unwrap();
+        assert_eq!(full_library_fetch_limit(&lib, lvl), 10);
     }
 }
 #[test]

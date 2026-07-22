@@ -1098,7 +1098,18 @@ impl App {
                         .last()
                         .map(|l| {
                             let all = l.all_items.clone().unwrap_or_else(|| l.items.clone());
-                            let needs = l.all_items.is_none() && l.items.len() < l.total_count;
+                            // With a letter-range pill active, `l.total_count`
+                            // is the FILTERED range's count, not the whole
+                            // library's -- `l.items.len() < l.total_count`
+                            // alone would read a fully-loaded small range as
+                            // "nothing more to fetch" and search would run
+                            // over just that range. Force the full-library
+                            // fetch whenever a filter is active and it
+                            // hasn't already happened (`all_items` still
+                            // unset); `spawn_search_items_load` always fetches
+                            // the whole library unfiltered (see there).
+                            let needs = l.all_items.is_none()
+                                && (l.letter_filter.is_some() || l.items.len() < l.total_count);
                             (all, needs)
                         })
                         .unwrap_or_default()
@@ -4152,6 +4163,40 @@ mod power_movie_detail_tests {
              original verb set, untouched by #145's album/track scoping \
              (which only ever changes the folder branch and only for music \
              libraries): {labels:?}"
+        );
+    }
+
+    // Regression coverage for the letter-pills PR review finding: opening
+    // `/`-search while a letter-range pill is active must always trigger a
+    // full-library fetch, even when the active range's slice is already
+    // "fully loaded" by its own (small, filtered) total_count. Before the
+    // fix, `needs_full_load` compared `items.len()` against the level's
+    // (filtered) `total_count`, so a fully-loaded small range read as
+    // "nothing more to fetch" and search silently ran over just that range.
+    #[test]
+    fn opening_search_with_an_active_letter_pill_always_needs_a_full_library_fetch() {
+        let mut app = make_power_movie_app();
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            // Simulate a selected, fully-loaded M–O range: only 2 items, and
+            // the level's own total_count (what get_items_sorted_ranged
+            // reported for that range) matches items.len() exactly -- the
+            // state that used to wrongly look "fully loaded" for search.
+            lvl.letter_filter = crate::app::render::power::LetterFilter::for_index(4);
+            lvl.total_count = lvl.items.len();
+        }
+        app.libs[0].library_total = Some(3000); // the library's true size
+
+        // `handle_key` returns whether the app should quit, not whether the
+        // key was "handled" -- the `/` handler returns `Some(false)`, so a
+        // successful (non-quitting) key press yields `false` here.
+        let should_quit = app.handle_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
+
+        assert!(!should_quit);
+        let search = app.libs[0].search.as_ref().expect("search should open");
+        assert!(
+            search.loading,
+            "a full-library fetch must be in flight, not just the active M–O range"
         );
     }
 }

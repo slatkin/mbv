@@ -494,6 +494,18 @@ pub(super) fn letter_bucket(item: &mbv_core::api::MediaItem, total: usize) -> St
         .next()
         .map(|c| c.to_ascii_uppercase())
         .unwrap_or('\0');
+    // KNOWN LIMITATION: any non-ASCII-alphabetic first character (accented
+    // letters like "Æon"/"Élan" included, codepoint > 'Z') buckets here as
+    // "#". But the "#" *pill*'s Emby fetch bounds are `NameLessThan("A")`
+    // -- only titles that SORT BEFORE "A" -- so an accented title with a
+    // codepoint after 'Z' is actually fetched by the `V–Z` pill
+    // (`name_ge = "V"`, no upper bound) yet renders under this "#" header,
+    // making it unreachable from the "#" pill's scoped fetch. Fixing this
+    // would mean either teaching the "#" pill to also request `V–Z`-range
+    // items with a non-ASCII-alphabetic first char (an Emby-side filter
+    // that doesn't exist), or bucketing accented letters under their
+    // unaccented equivalent instead of "#" (a bigger behavior change than
+    // this pass intends). Left as-is; flagged for a follow-up.
     if !first.is_ascii_alphabetic() {
         return "#".to_string();
     }
@@ -523,6 +535,12 @@ pub(crate) const LIBRARY_PILL_THRESHOLD: usize = 300;
 /// for both the pill labels and the Emby `NameStartsWithOrGreater` /
 /// `NameLessThan` fetch bounds, so they can't drift apart. Mirrors the range
 /// boundaries used by `letter_bucket` above.
+///
+/// KNOWN LIMITATION (see `letter_bucket`'s doc comment): the `"#"` pill's
+/// bounds (`NameLessThan("A")`) only reach titles that sort *before* "A".
+/// An accented title whose SortName starts with a codepoint after 'Z'
+/// (e.g. "Æon Flux") is fetched by the `V–Z` pill but rendered under a
+/// `"#"` in-list header, and so is unreachable from the `"#"` pill itself.
 const LETTER_FILTER_BUCKETS: &[(&str, Option<&str>, Option<&str>)] = &[
     ("A\u{2013}C", Some("A"), Some("D")),
     ("D\u{2013}F", Some("D"), Some("G")),
