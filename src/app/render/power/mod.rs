@@ -289,25 +289,35 @@ impl App {
         }
 
         // Left panel (card + queue) | Right panel (library, remaining).
-        let left_w = self.power_left_width;
+        let left_w = if self.power_left_collapsed {
+            0
+        } else {
+            self.power_left_width
+        };
         let right_w = area.width.saturating_sub(left_w);
 
         // Header row removed — the tab bar above indicates current location.
         layout.breadcrumbs = Vec::new();
         layout.selector_tabs = Vec::new();
         let content_h = area.height;
-        let left_area = Rect {
-            x: area.x,
-            y: area.y,
-            width: left_w,
-            height: content_h,
+        let left_area = if self.power_left_collapsed {
+            Rect::default()
+        } else {
+            Rect {
+                x: area.x,
+                y: area.y,
+                width: left_w,
+                height: content_h,
+            }
         };
 
         // Full-column background behind the card image and queue list.
-        f.render_widget(
-            Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
-            left_area,
-        );
+        if !self.power_left_collapsed {
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
+                left_area,
+            );
+        }
 
         // Full-column background for the right panel (tabs, player, library, queue, status).
         let right_full_area = Rect {
@@ -329,16 +339,18 @@ impl App {
             height: left_area.height.saturating_sub(4),
         };
         // Blank row, queue title row, then card image.
-        self.render_power_queue_title(
-            f,
-            Rect {
-                x: left_area.x + 2,
-                y: left_area.y + 1,
-                width: left_area.width.saturating_sub(4),
-                height: 1,
-            },
-            layout,
-        );
+        if !self.power_left_collapsed {
+            self.render_power_queue_title(
+                f,
+                Rect {
+                    x: left_area.x + 2,
+                    y: left_area.y + 1,
+                    width: left_area.width.saturating_sub(4),
+                    height: 1,
+                },
+                layout,
+            );
+        }
         let card_area = Rect {
             x: left_area.x + 2,
             y: left_area.y + 3,
@@ -395,57 +407,13 @@ impl App {
         let queue_focused = matches!(self.power_focus, PowerFocus::Queue);
         let left_focused = !queue_focused;
 
-        // The card fills the top of the left column; the queue list takes the rows
-        // below it. At low heights the card can consume most of the column, so relocate
-        // the queue under the library on the right instead of cramming it in.
-        let (card_h, _) = self.render_power_card(f, card_area);
-        let left_remaining = left_content.height.saturating_sub(card_h);
-
-        const MIN_LIST_ROWS: u16 = 6;
-        // Hysteresis band: the card's rendered height can shift by a handful of
-        // rows from one frame to the next purely because a different image just
-        // finished loading (e.g. a season poster vs. an episode thumbnail have
-        // very different aspect ratios). Without a dead zone, that alone could
-        // flip the relocation decision and reflow the entire right-panel text,
-        // making it look like the whole screen redraws in time with the image.
-        const HYSTERESIS_ROWS: u16 = 4;
-        let relocate_threshold = if self.power_queue_relocated {
-            MIN_LIST_ROWS + HYSTERESIS_ROWS
+        let (lib_area, queue_area) = if self.power_left_collapsed {
+            (right_area, Rect::default())
         } else {
-            MIN_LIST_ROWS
-        };
-        self.power_queue_relocated = left_remaining < relocate_threshold;
-        let (lib_area, queue_area) = if self.power_queue_relocated {
-            // Not enough room for the queue in the left column -- split the right column:
-            // library on top, relocated queue at the bottom.
-            let h = right_area.height;
-            let min_q = MIN_LIST_ROWS.min(h);
-            let max_q = h.saturating_sub(MIN_LIST_ROWS).max(min_q);
-            let queue_h = (h / 3).clamp(min_q, max_q);
-            let lib_h = h.saturating_sub(queue_h);
-            // Render title (with scope pills) at the top of the relocated queue area.
-            self.render_power_queue_title(
-                f,
-                Rect {
-                    height: 1,
-                    ..right_area
-                },
-                layout,
-            );
-            (
-                Rect {
-                    height: lib_h,
-                    ..right_area
-                },
-                Rect {
-                    y: right_area.y + lib_h,
-                    height: queue_h,
-                    ..right_area
-                },
-            )
-        } else {
-            // Normal mode: queue in left column below card,
-            // library fills the entire right column.
+            // The card fills the top of the left column; the queue list takes
+            // the rows below it. Short terminals keep that same structure.
+            let (card_h, _) = self.render_power_card(f, card_area);
+            let left_remaining = left_content.height.saturating_sub(card_h);
             (
                 right_area,
                 Rect {
@@ -477,13 +445,15 @@ impl App {
             }
         }
 
-        // Queue list: title row at top, rest is the list.
-        let queue_list_area = Rect {
-            y: queue_area.y,
-            height: queue_area.height,
-            ..queue_area
-        };
-        self.render_power_queue(f, queue_list_area, queue_focused, layout);
+        if !self.power_left_collapsed {
+            // Queue list: title row at top, rest is the list.
+            let queue_list_area = Rect {
+                y: queue_area.y,
+                height: queue_area.height,
+                ..queue_area
+            };
+            self.render_power_queue(f, queue_list_area, queue_focused, layout);
+        }
         self.render_power_library(f, render_lib_area, left_focused, layout);
 
         // Status bar + toast overlay at the bottom of the right panel.
@@ -814,6 +784,38 @@ mod tests {
         let layout = render_power_view(&mut app, 100, 28);
 
         assert_eq!(layout.queue_area.width, 51);
+    }
+
+    #[test]
+    fn collapsed_power_left_column_gives_library_full_width() {
+        let mut app = make_power_movie_app();
+        app.power_left_width = 55;
+        app.power_left_collapsed = true;
+
+        let layout = render_power_view(&mut app, 100, 28);
+
+        assert_eq!(layout.queue_area, Rect::default());
+        assert_eq!(layout.left_area.x, 0);
+        assert_eq!(layout.left_area.width, 100);
+    }
+
+    #[test]
+    fn short_power_view_keeps_queue_in_left_column() {
+        let mut app = make_power_movie_app();
+        app.power_left_width = 40;
+
+        let layout = render_power_view(&mut app, 100, 12);
+
+        assert!(
+            layout.queue_area.x < app.power_left_width,
+            "expected short-height queue to stay in the left column, got {:?}",
+            layout.queue_area
+        );
+        assert!(
+            layout.left_area.x >= app.power_left_width,
+            "expected library area to remain in the right column, got {:?}",
+            layout.left_area
+        );
     }
 
     fn make_power_music_group_app() -> App {

@@ -91,6 +91,10 @@ pub(super) enum Command {
         lib_idx: usize,
         delta: i64,
     },
+
+    /// `h` in Power View: collapse or expand the physical left column that
+    /// contains the media card and queue.
+    TogglePowerSidebar,
 }
 
 /// Translate a key event into a playback `Command`, or `None` if this handler
@@ -144,9 +148,8 @@ pub(super) fn playback_command_for_key(
 /// command it must resolve to — so the test exercises the whole displayed
 /// claim, not just one side of it.
 ///
-/// Keys not yet covered here (e.g. `h` hide/show player, which lives in
-/// `handle_key_panel_toggle`, not this Command seam) stay hand-written in
-/// `render_help_panel` until their handler migrates onto `Command` too.
+/// Power-view-specific bindings that are not playback commands stay documented
+/// separately in `render_help_panel`.
 pub(super) struct PlaybackHelpBinding {
     /// Display text shown in the help overlay (e.g. `"Space"`, `"< / >"`).
     pub keys: &'static str,
@@ -518,6 +521,13 @@ impl App {
                             (idx as i64 + delta).clamp(0, track_count as i64 - 1) as usize;
                         self.libs[lib_idx].album_track_focus = Some(new_idx);
                     }
+                }
+            }
+            Command::TogglePowerSidebar => {
+                self.power_left_collapsed = !self.power_left_collapsed;
+                if self.power_left_collapsed && matches!(self.power_focus, super::PowerFocus::Queue)
+                {
+                    self.set_power_focus(super::PowerFocus::Left);
                 }
             }
         }

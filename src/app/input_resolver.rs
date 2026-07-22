@@ -189,8 +189,8 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_lib_search,
     },
     ContextEntry {
-        name: "panel_toggle_h",
-        handler: App::handle_key_panel_toggle,
+        name: "power_sidebar_toggle_h",
+        handler: App::handle_key_power_sidebar_toggle,
     },
     ContextEntry {
         name: "confirm_clear_queue",
@@ -602,23 +602,20 @@ mod app_level_tests {
     }
 
     #[test]
-    fn home_search_char_capture_wins_over_h_panel_toggle_via_handle_key() {
-        // Regression guard: `panel_toggle_h` must stay ordered after
+    fn home_search_char_capture_wins_over_h_power_sidebar_toggle_via_handle_key() {
+        // Regression guard: `power_sidebar_toggle_h` must stay ordered after
         // `home_search` in CONTEXT_STACK (matching the pre-phase-2 source,
         // where the h-toggle ran after all three search blocks). If it were
         // ever reordered ahead of home_search, pressing the literal 'h'
-        // character while a search box is focused would toggle the panel
+        // character while a search box is focused would toggle the sidebar
         // instead of typing 'h' into the query — a real behavior change.
         let mut app = make_app_stub();
-        {
-            let mut st = app.player.status.lock().unwrap();
-            st.active = true; // show_controls == true, so panel_toggle_h would fire if reached
-        }
+        app.view_mode = crate::app::ViewMode::Power;
         app.search.set_state_for_test(Some(test_home_search()));
         if let Some(hs) = app.search.state_mut() {
             hs.input_focused = true;
         }
-        let panel_mode_before = app.panel_mode;
+        let collapsed_before = app.power_left_collapsed;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
         assert_eq!(
             app.search.state().unwrap().query,
@@ -626,46 +623,56 @@ mod app_level_tests {
             "home search must capture the literal 'h' character"
         );
         assert_eq!(
-            app.panel_mode, panel_mode_before,
-            "panel mode must not toggle while home search captures 'h'"
+            app.power_left_collapsed, collapsed_before,
+            "Power View sidebar must not toggle while home search captures 'h'"
         );
     }
 
     #[test]
-    fn h_toggles_panel_mode_when_active_via_handle_key() {
-        // Positive counterpart to the precedence test above: with no search
-        // active, 'h' must actually reach `handle_key_panel_toggle` and
-        // advance `panel_mode`, not just correctly decline to fire when a
-        // higher-priority context claims the key.
+    fn h_toggles_power_sidebar_in_power_view_via_handle_key() {
         let mut app = make_app_stub();
-        {
-            let mut st = app.player.status.lock().unwrap();
-            st.active = true;
-        }
-        let before = app.panel_mode;
+        app.view_mode = crate::app::ViewMode::Power;
+        let before = app.power_left_collapsed;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
-        assert_ne!(app.panel_mode, before);
+        assert_ne!(app.power_left_collapsed, before);
     }
 
     #[test]
-    fn h_does_not_toggle_panel_mode_while_context_menu_is_open_via_handle_key() {
-        // Behavior change (phase 6, #135): before this fix, `panel_toggle_h`
-        // had no `context_menu` guard and sat above `context_menu` in
-        // CONTEXT_STACK, so 'h' bled through an open context menu and
-        // silently toggled the panel. It must now fall through to (and be
-        // swallowed by) the context-menu layer instead.
+    fn h_does_nothing_outside_power_view_via_handle_key() {
         let mut app = make_app_stub();
-        {
-            let mut st = app.player.status.lock().unwrap();
-            st.active = true; // show_controls == true, so panel_toggle_h would fire if reached
-        }
+        app.view_mode = crate::app::ViewMode::Standard;
+        app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+        assert!(!app.power_left_collapsed);
+    }
+
+    #[test]
+    fn h_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
+        let mut app = make_app_stub();
+        app.view_mode = crate::app::ViewMode::Power;
         app.context_menu = Some(test_empty_context_menu());
-        let before = app.panel_mode;
+        let before = app.power_left_collapsed;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
         assert_eq!(
-            app.panel_mode, before,
-            "panel mode must not toggle while a context menu is open"
+            app.power_left_collapsed, before,
+            "Power View sidebar must not toggle while a context menu is open"
         );
+    }
+
+    #[test]
+    fn h_moves_queue_focus_to_library_when_collapsing_power_sidebar() {
+        let mut app = make_app_stub();
+        app.view_mode = crate::app::ViewMode::Power;
+        app.power_focus = crate::app::PowerFocus::Queue;
+
+        app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+
+        assert!(app.power_left_collapsed);
+        assert_eq!(app.power_focus, crate::app::PowerFocus::Left);
+
+        app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
+
+        assert!(!app.power_left_collapsed);
+        assert_eq!(app.power_focus, crate::app::PowerFocus::Left);
     }
 
     #[test]
@@ -766,7 +773,7 @@ mod app_level_tests {
                 "home_search",
                 "power_lib_search",
                 "lib_search",
-                "panel_toggle_h",
+                "power_sidebar_toggle_h",
                 "confirm_clear_queue",
                 "confirm_rescan",
                 "confirm_skip_intro",
