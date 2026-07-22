@@ -394,18 +394,20 @@ impl App {
                     fetched
                 };
                 // Decode off the UI thread; the main loop only builds the protocol.
-                let img = bytes.and_then(|b| image::load_from_memory(&b).ok()).map(|img| {
-                    if square_crop {
-                        // Center-crop to a square so collage tiles are uniform
-                        // regardless of the cover's native aspect ratio.
-                        let side = img.width().min(img.height());
-                        let x = (img.width() - side) / 2;
-                        let y = (img.height() - side) / 2;
-                        img.crop_imm(x, y, side, side)
-                    } else {
-                        img
-                    }
-                });
+                let img = bytes
+                    .and_then(|b| image::load_from_memory(&b).ok())
+                    .map(|img| {
+                        if square_crop {
+                            // Center-crop to a square so collage tiles are uniform
+                            // regardless of the cover's native aspect ratio.
+                            let side = img.width().min(img.height());
+                            let x = (img.width() - side) / 2;
+                            let y = (img.height() - side) / 2;
+                            img.crop_imm(x, y, side, side)
+                        } else {
+                            img
+                        }
+                    });
                 let _ = tx.send((cache_key, img));
             }));
             if result.is_err() {

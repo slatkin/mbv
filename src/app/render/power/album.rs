@@ -32,7 +32,10 @@ fn inline_art_box_rect(area: Rect) -> Rect {
     let box_w = INLINE_ALBUM_ART_COLS.min(area.width);
     let box_h = INLINE_ALBUM_ART_ROWS.min(area.height);
     Rect {
-        x: area.x + area.width.saturating_sub(box_w + INLINE_ALBUM_ART_RIGHT_PAD),
+        x: area.x
+            + area
+                .width
+                .saturating_sub(box_w + INLINE_ALBUM_ART_RIGHT_PAD),
         y: area.y,
         width: box_w,
         height: box_h,
