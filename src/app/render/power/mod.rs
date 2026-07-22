@@ -2477,7 +2477,8 @@ mod tests {
             "album art should be right aligned"
         );
         assert_eq!((art_rect.width, art_rect.height), (18, 12));
-        assert!(app.card_image_loading.contains("album-1:P"));
+        assert!(app.card_image_loading.contains("track-1:P"));
+        assert!(!app.card_image_loading.contains("album-1:P"));
         assert_eq!(
             term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
             palette::OVERLAY,
@@ -2515,7 +2516,8 @@ mod tests {
             "album art should be right aligned"
         );
         assert_eq!((art_rect.width, art_rect.height), (18, 12));
-        assert!(app.card_image_loading.contains("album-1:P"));
+        assert!(app.card_image_loading.contains("track-1:P"));
+        assert!(!app.card_image_loading.contains("album-1:P"));
         assert_eq!(
             term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
             palette::OVERLAY,

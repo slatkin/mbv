@@ -217,6 +217,10 @@ _Avoid_: "raw order", "SortName order" — both describe this same concept but o
 The artist attributed to an album for grouping and header-display purposes, computed via a fallback chain: Emby's own `AlbumArtist`/`Artists` tag first, then a background-fetched majority vote over the album's first few tracks' tags (for tag-less albums), then a folder-name heuristic, then the literal "Unknown Artist".
 _Avoid_: "artist" alone when what's meant is only the item's own (possibly empty) tag — that's one input to resolution, not the resolved value.
 
+**Folder-view album art source**:
+When rendering album art for a folder-based music album, do not request the folder item's `Primary` image. Folder album items often have no usable image. Use a sampled track from inside the folder as the image source and request that track's `Primary` image instead; the cached album tracks are the source of truth for this path.
+_Avoid_: using the album folder ID as the image item ID or cache key for folder-view selected album art.
+
 **Display order**:
 The order items actually appear on screen in a power-list view, whenever that differs from API order — e.g. albums resorted by resolved artist in a grouped album view, or items resorted by `effective_sort_str` for letter-bucket grouping. Published as `left_sorted_indices` so keyboard and mouse navigation stay consistent with what's rendered, regardless of which view produced the reordering.
 _Avoid_: "sorted order" — ambiguous with API order, which is also a sort result. Also avoid treating this as specific to grouped album views — any power-list view that reorders for display produces one.
