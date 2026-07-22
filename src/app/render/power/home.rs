@@ -972,13 +972,11 @@ impl App {
 
         let new_section_start = continue_row_count as usize + 5;
 
-        // Colored selection blocks are full-bleed surfaces: their background
-        // and top/bottom border rules reach the panel's true left edge, past
-        // the shared left text padding, so they stretch edge-to-edge like the
-        // right panel. Only the text rows inside stay within the padded
-        // content area (`list_area`).
-        let bleed_x = list_area.x.saturating_sub(super::POWER_TAB_LEFT_PAD);
-        let bleed_w = list_area.width.saturating_add(super::POWER_TAB_LEFT_PAD);
+        // Colored section blocks use the same padded left edge as the selected
+        // row blocks on the library tabs. The whole block stays inside
+        // `list_area`; only row text decides its own internal spacing.
+        let block_x = list_area.x;
+        let block_w = list_area.width;
 
         // Background for the continue watching list.
         // Includes 1 top and 1 bottom padding row so the items are not flush
@@ -988,9 +986,9 @@ impl App {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
                 Rect {
-                    x: bleed_x,
+                    x: block_x,
                     y: list_area.y.saturating_sub(1),
-                    width: bleed_w,
+                    width: block_w,
                     height: continue_bg_h + 2,
                 },
             );
@@ -999,13 +997,13 @@ impl App {
             let top_y = list_area.y.saturating_sub(2);
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(bleed_w as usize),
+                    "\u{2581}".repeat(block_w as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: bleed_x,
+                    x: block_x,
                     y: top_y,
-                    width: bleed_w,
+                    width: block_w,
                     height: 1,
                 },
             );
@@ -1013,13 +1011,13 @@ impl App {
             let bot_y = list_area.y + continue_bg_h + 1;
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2594}".repeat(bleed_w as usize),
+                    "\u{2594}".repeat(block_w as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: bleed_x,
+                    x: block_x,
                     y: bot_y,
-                    width: bleed_w,
+                    width: block_w,
                     height: 1,
                 },
             );
@@ -1032,9 +1030,9 @@ impl App {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
                 Rect {
-                    x: bleed_x,
+                    x: block_x,
                     y: new_bg_y.saturating_sub(1),
-                    width: bleed_w,
+                    width: block_w,
                     height: new_bg_h + 2,
                 },
             );
@@ -1043,13 +1041,13 @@ impl App {
             let top_y = new_bg_y.saturating_sub(2);
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(bleed_w as usize),
+                    "\u{2581}".repeat(block_w as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: bleed_x,
+                    x: block_x,
                     y: top_y,
-                    width: bleed_w,
+                    width: block_w,
                     height: 1,
                 },
             );
@@ -1057,13 +1055,13 @@ impl App {
             let bot_y = new_bg_y + new_bg_h + 1;
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2594}".repeat(bleed_w as usize),
+                    "\u{2594}".repeat(block_w as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: bleed_x,
+                    x: block_x,
                     y: bot_y,
-                    width: bleed_w,
+                    width: block_w,
                     height: 1,
                 },
             );
@@ -1228,6 +1226,7 @@ impl App {
 mod tests {
     use super::power_home_panel_scroll;
     use crate::app::layout::AppLayout;
+    use crate::app::palette;
     use crate::app::tests::{make_app_stub, make_items};
     use mbv_core::api::TICKS_PER_SECOND;
     use ratatui::backend::TestBackend;
@@ -1302,6 +1301,43 @@ mod tests {
         assert!(out.contains("67m"));
         assert!(!out.contains("1h"));
         assert_eq!(layout.power.home.hitmap.len(), 6);
+    }
+
+    #[test]
+    fn list_blocks_respect_power_tab_left_indent() {
+        let mut app = make_app_stub();
+        let mut cont = make_items(3);
+        for (i, it) in cont.iter_mut().enumerate() {
+            it.name = format!("Continue {i}");
+        }
+        app.home.continue_items = cont;
+        app.home.latest = vec![
+            ("Music".into(), "l1".into(), make_items(2), 0),
+            ("YouTube".into(), "l2".into(), make_items(2), 0),
+        ];
+
+        let backend = TestBackend::new(26, 16);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = AppLayout::default();
+        term.draw(|f| {
+            app.render_power_home_list(f, Rect::new(2, 2, 20, 14), true, &mut layout.power);
+        })
+        .unwrap();
+
+        let buf = term.backend().buffer();
+        let continue_top_border_y = 0;
+        let newest_top_border_y = 8;
+
+        for y in [continue_top_border_y, newest_top_border_y] {
+            assert_ne!(buf[(0, y)].symbol(), "\u{2581}");
+            assert_ne!(buf[(1, y)].symbol(), "\u{2581}");
+            assert_eq!(buf[(2, y)].symbol(), "\u{2581}");
+            assert_eq!(buf[(2, y)].fg, palette::SOFT_WHITE);
+            assert_eq!(buf[(21, y)].symbol(), "\u{2581}");
+            assert_eq!(buf[(21, y)].fg, palette::SOFT_WHITE);
+            assert_ne!(buf[(22, y)].symbol(), "\u{2581}");
+            assert_ne!(buf[(23, y)].symbol(), "\u{2581}");
+        }
     }
 
     #[test]

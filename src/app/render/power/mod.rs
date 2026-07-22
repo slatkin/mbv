@@ -32,8 +32,8 @@ const POWER_VIEW_GAP: u16 = 0;
 /// fn; individual tab renderers add only their own content-level gutters
 /// (marker columns, banner indents) relative to this padded edge.
 ///
-/// Full-bleed surfaces (e.g. the Home tab's colored selection blocks) that
-/// must reach the panel's true left edge expand back out by this amount.
+/// Detail surfaces that need additional internal alignment can add their own
+/// indentation relative to this padded edge.
 pub(super) const POWER_TAB_LEFT_PAD: u16 = 2;
 
 pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usize, offset: usize) {
@@ -675,19 +675,20 @@ impl App {
             )
         };
 
-        // Apply the shared left-edge padding once here, at the single point
+        // Apply the shared horizontal padding once here, at the single point
         // where the tab content area is finalized, so every tab kind (and the
-        // music-group pills row below) inherits a consistent left gutter
-        // instead of each renderer inventing its own. The right edge is left
-        // in place (width shrinks by the same amount). When the left column is
-        // collapsed the user has asked to reclaim maximum width, so the gutter
-        // is dropped and the library spans the panel edge-to-edge.
+        // music-group pills row below) inherits consistent left/right gutters
+        // instead of each renderer inventing its own. When the left column is
+        // collapsed the user has asked to reclaim maximum width, so the gutters
+        // are dropped and the library spans the panel edge-to-edge.
         let lib_area = if self.power_left_collapsed {
             lib_area
         } else {
             Rect {
                 x: lib_area.x + POWER_TAB_LEFT_PAD,
-                width: lib_area.width.saturating_sub(POWER_TAB_LEFT_PAD),
+                width: lib_area
+                    .width
+                    .saturating_sub(POWER_TAB_LEFT_PAD.saturating_mul(2)),
                 ..lib_area
             }
         };
@@ -1040,6 +1041,17 @@ mod tests {
         })
         .unwrap();
         layout
+    }
+
+    #[test]
+    fn expanded_power_view_tab_panel_has_two_column_side_gutters() {
+        let mut app = make_app_stub();
+        app.power_left_width = 40;
+
+        let layout = render_power_view(&mut app, 80, 24);
+
+        assert_eq!(layout.left_area.x, 40 + POWER_TAB_LEFT_PAD);
+        assert_eq!(layout.left_area.width, 40 - 2 * POWER_TAB_LEFT_PAD);
     }
 
     fn make_power_movie_app() -> App {
