@@ -2441,6 +2441,81 @@ mod tests {
     }
 
     #[test]
+    fn selected_music_group_album_shows_right_aligned_art_before_track_mode() {
+        let mut app = make_power_music_group_app();
+        app.image_protocol_enabled = true;
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal(&mut app, &mut layout);
+        let out = buffer_to_string(&term);
+        let art_rect = layout
+            .inline_image_rect
+            .expect("expected selected album art rect before track mode");
+
+        assert!(
+            !out.contains("Opening Track"),
+            "tracks should stay hidden until track-selection mode:\n{out}"
+        );
+        assert_eq!(
+            art_rect.x + art_rect.width,
+            60,
+            "album art should be right aligned"
+        );
+        assert_eq!((art_rect.width, art_rect.height), (18, 12));
+        assert!(app.card_image_loading.contains("album-1:P"));
+        assert_eq!(
+            term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
+            palette::OVERLAY,
+            "loading album art should reserve a right-aligned placeholder:\n{out}"
+        );
+    }
+
+    #[test]
+    fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
+        let mut app = make_power_music_group_app();
+        app.image_protocol_enabled = true;
+        app.libs[0].album_track_focus = Some(0);
+
+        let mut track = make_item("Opening Track", "Audio");
+        track.id = "track-1".into();
+        track.album = "First Album".into();
+        track.artist = "Alpha".into();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal(&mut app, &mut layout);
+        let out = buffer_to_string(&term);
+        let art_rect = layout
+            .inline_image_rect
+            .expect("expected selected album art rect in track mode");
+
+        assert!(
+            out.contains("Opening Track"),
+            "expected inline track row:\n{out}"
+        );
+        assert_eq!(
+            art_rect.x + art_rect.width,
+            60,
+            "album art should be right aligned"
+        );
+        assert_eq!((art_rect.width, art_rect.height), (18, 12));
+        assert!(app.card_image_loading.contains("album-1:P"));
+        assert_eq!(
+            term.backend().buffer()[(art_rect.x, art_rect.y)].bg,
+            palette::OVERLAY,
+            "loading album art should reserve a right-aligned placeholder:\n{out}"
+        );
+    }
+
+    #[test]
     fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
         // Selection now reads via the colored MEDIA_SELECTED_BG block + YELLOW
         // title text (the movie-tab colored-block style), not the legacy `▌`
