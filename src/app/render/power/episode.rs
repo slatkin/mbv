@@ -369,18 +369,15 @@ impl App {
         } // blank spacer above divider
         if row < max_y {
             // Draw the full-width blue rule first.
-            let line_str = "\u{2500}".repeat(area.width as usize);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    line_str,
-                    Style::default().fg(palette::GREEN),
-                ))),
+            super::render_horizontal_rule(
+                f,
                 Rect {
                     x: area.x,
                     y: row,
                     width: area.width,
                     height: 1,
                 },
+                palette::GREEN,
             );
 
             // Overlay season tabs on the same row (drawn on top of the rule).
@@ -456,17 +453,15 @@ impl App {
         // ── Loading state: episodes not yet arrived ─────────────────────────
         if items.is_empty() {
             if row < max_y {
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        " Loading\u{2026}",
-                        Style::default().fg(palette::MUTED),
-                    ))),
+                super::render_power_placeholder(
+                    f,
                     Rect {
                         x: area.x,
                         y: row,
                         width: area.width,
                         height: 1,
                     },
+                    " Loading\u{2026}",
                 );
             }
             return;
@@ -561,11 +556,7 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if is_cursor && focused {
-                    Span::styled("\u{258c}", Style::default().fg(palette::PINE))
-                } else {
-                    Span::raw(" ")
-                };
+                let marker = super::selection_marker(is_cursor && focused);
                 let ep_num_w = n.to_string().len();
                 let ep_label = if ep.index_number > 0 {
                     format!("{:>ep_num_w$}. ", ep.index_number)

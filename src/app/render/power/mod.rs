@@ -15,6 +15,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 // Power View re-renders frequently while scrolling; prefer a cheaper filter in
 // these hot paths to reduce terminal image preparation stalls.
@@ -23,6 +24,17 @@ pub(super) const POWER_RENDER_FILTER: ratatui_image::FilterType =
 
 /// Columns of empty space between the left and right panels in power view.
 const POWER_VIEW_GAP: u16 = 0;
+
+/// Left-edge padding applied once to every power-view tab's content area
+/// (Home, library lists, music groups, albums, series, home-video, feed
+/// groups) plus the music-group pills row, so all tabs share a consistent
+/// gutter. Applied at the single dispatch chokepoint in the main render
+/// fn; individual tab renderers add only their own content-level gutters
+/// (marker columns, banner indents) relative to this padded edge.
+///
+/// Full-bleed surfaces (e.g. the Home tab's colored selection blocks) that
+/// must reach the panel's true left edge expand back out by this amount.
+pub(super) const POWER_TAB_LEFT_PAD: u16 = 2;
 
 pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usize, offset: usize) {
     let visible = area.height as usize;
@@ -156,6 +168,245 @@ pub(super) fn selector_pill_style(selected: bool) -> Style {
     } else {
         Style::default().fg(palette::PILL).bg(palette::GREEN)
     }
+}
+
+/// Draws the shared " {count} items" header (SUBTLE) on the first row of
+/// `area` and returns `area` shrunk by that one row, so callers can render
+/// their list into the remaining space. Used by every tab that shows an
+/// item count above its list (home-video, library list) to keep the label
+/// styling and the one-row consumption identical.
+pub(super) fn render_power_count_label(f: &mut Frame, area: Rect, count: usize) -> Rect {
+    if area.width == 0 || area.height == 0 {
+        return area;
+    }
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            format!(" {} items", count),
+            Style::default().fg(palette::SUBTLE),
+        )),
+        Rect { height: 1, ..area },
+    );
+    Rect {
+        y: area.y + 1,
+        height: area.height.saturating_sub(1),
+        ..area
+    }
+}
+
+/// The shared left cursor marker span used by every power-view list row.
+/// `active` (row is both selected and focused) renders the PINE half-block
+/// `▌`; otherwise a single blank space so unselected rows stay aligned.
+/// Only the marker glyph is unified here -- each renderer keeps its own
+/// row *text* coloring, which varies by tab.
+pub(super) fn selection_marker(active: bool) -> Span<'static> {
+    if active {
+        Span::styled("\u{258c}", Style::default().fg(palette::PINE))
+    } else {
+        Span::raw(" ")
+    }
+}
+
+/// Width in columns reserved for a power-view list's scrollbar gutter.
+pub(super) const POWER_SCROLLBAR_GUTTER: u16 = 1;
+
+/// Usable text width of a list column of the given `width` once the
+/// scrollbar gutter is reserved (when `needs_scrollbar`). Centralizes the
+/// `width - gutter` arithmetic every scrolling list repeats.
+pub(super) fn power_content_width(width: u16, needs_scrollbar: bool) -> usize {
+    let gutter = if needs_scrollbar {
+        POWER_SCROLLBAR_GUTTER
+    } else {
+        0
+    };
+    width.saturating_sub(gutter) as usize
+}
+
+/// Renders a single-row horizontal rule (`─` repeated to fill `area`'s width)
+/// in `color` -- e.g. a divider between list rows, or the "tail" line under a
+/// section header. Shared so separators stay visually identical.
+pub(super) fn render_horizontal_rule(f: &mut Frame, area: Rect, color: Color) {
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            "\u{2500}".repeat(area.width as usize),
+            Style::default().fg(color),
+        )),
+        area,
+    );
+}
+
+/// What to draw behind a pill bar before the pills are overlaid.
+pub(super) enum PillUnderlay {
+    /// No divider. `fill` clears the row's trailing cells with blanks so the
+    /// pills float on the panel background (used by the music-group tabs);
+    /// `fill: false` leaves the trailing cells untouched (feed-group tabs).
+    Blank { fill: bool },
+    /// Draw a full-width horizontal rule (`─`) in this color first, so the
+    /// bar reads as a labeled divider "tail" with the pills sitting on it
+    /// (used by Home's "Newest:" section pills).
+    Rule(Color),
+}
+
+/// A horizontally-scrolling row of selector pills, shared by every power-view
+/// pill bar (Home's "Newest" section pills, feed-group tabs, music-group
+/// tabs) so their scroll/overflow/selection behavior can't drift apart.
+/// Callers pre-truncate `labels`, supply the parallel `ids` recorded as click
+/// targets, mark which position is `selected_pos`, and choose an optional
+/// leading `prefix` label and the `underlay`.
+pub(super) struct PillBar<'a> {
+    pub labels: &'a [String],
+    pub ids: &'a [usize],
+    pub selected_pos: usize,
+    pub prefix: Option<&'a str>,
+    pub underlay: PillUnderlay,
+}
+
+/// Renders `bar` into `area`, scrolling the visible window so `selected_pos`
+/// stays on screen with `‹`/`›` chevrons when the pills overflow, and returns
+/// the on-screen hitboxes as `(rect, id)` pairs for `layout.selector_tabs`.
+pub(super) fn render_pill_bar(f: &mut Frame, area: Rect, bar: PillBar) -> Vec<(Rect, usize)> {
+    // `ids` runs parallel to `labels`; a mismatch would panic on the slice
+    // below, so assert the contract up front rather than fail cryptically.
+    debug_assert_eq!(
+        bar.labels.len(),
+        bar.ids.len(),
+        "render_pill_bar: labels and ids must be parallel"
+    );
+    let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
+    if area.width == 0 || area.height == 0 || bar.labels.is_empty() {
+        return selector_tabs;
+    }
+    let n = bar.labels.len();
+    let bar_w = area.width as usize;
+    let prefix_w = bar.prefix.map(|p| p.width()).unwrap_or(0);
+    // Display width of each pill is " label " = label width + 2.
+    let pill_widths: Vec<usize> = bar.labels.iter().map(|l| l.width() + 2).collect();
+
+    // Greedy: how many pills fit starting at `start` within `avail` columns
+    // (1-column gap between consecutive pills).
+    let count_fitting = |start: usize, avail: usize| -> usize {
+        let mut used = 0usize;
+        let mut count = 0usize;
+        for width in pill_widths.iter().skip(start) {
+            let need = if count == 0 { *width } else { 1 + *width };
+            if used + need > avail {
+                break;
+            }
+            used += need;
+            count += 1;
+        }
+        count
+    };
+
+    // Advance the scroll window until the selected pill is visible.
+    let mut scroll_start = 0usize;
+    loop {
+        let avail = bar_w
+            .saturating_sub(prefix_w)
+            .saturating_sub(if scroll_start > 0 { 2 } else { 0 }) // "‹ "
+            .saturating_sub(2); // reserve for " ›"
+        let cnt = count_fitting(scroll_start, avail);
+        if cnt == 0 || scroll_start + cnt > bar.selected_pos {
+            break;
+        }
+        scroll_start += 1;
+    }
+
+    let has_left = scroll_start > 0;
+    let avail_pills = bar_w
+        .saturating_sub(prefix_w)
+        .saturating_sub(if has_left { 2 } else { 0 })
+        .saturating_sub(2); // reserve for " ›"
+    let cnt = count_fitting(scroll_start, avail_pills);
+    let scroll_end = (scroll_start + cnt).min(n);
+    let has_right = scroll_end < n;
+
+    // Optional full-width rule underlay, drawn before the pills overlay it.
+    if let PillUnderlay::Rule(color) = bar.underlay {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2500}".repeat(bar_w),
+                Style::default().fg(color),
+            ))),
+            area,
+        );
+    }
+
+    let mut spans: Vec<Span> = Vec::new();
+    let mut x_cursor = area.x;
+    if let Some(prefix) = bar.prefix {
+        // White label, no background, so an underlay rule shows around it.
+        spans.push(Span::styled(
+            prefix.to_string(),
+            Style::default().fg(Color::White),
+        ));
+        x_cursor += prefix_w as u16;
+    }
+    if has_left {
+        let chunk = "\u{2039} ";
+        spans.push(Span::styled(chunk, Style::default().fg(palette::GREEN)));
+        x_cursor += chunk.width() as u16;
+    }
+    for (offset, (label, &id)) in bar.labels[scroll_start..scroll_end]
+        .iter()
+        .zip(bar.ids[scroll_start..scroll_end].iter())
+        .enumerate()
+    {
+        if offset > 0 {
+            // Single blank gap so the pills float free rather than sitting on
+            // a continuous divider.
+            spans.push(Span::raw(" "));
+            x_cursor += 1;
+        }
+        let abs_idx = scroll_start + offset;
+        let style = selector_pill_style(abs_idx == bar.selected_pos);
+        let pill = format!(" {} ", label);
+        let pill_w = pill.width() as u16;
+        selector_tabs.push((
+            Rect {
+                x: x_cursor,
+                y: area.y,
+                width: pill_w,
+                height: 1,
+            },
+            id,
+        ));
+        spans.push(Span::styled(pill, style));
+        x_cursor += pill_w;
+    }
+    if has_right {
+        let chunk = " \u{203a}";
+        spans.push(Span::styled(chunk, Style::default().fg(palette::GREEN)));
+        x_cursor += chunk.width() as u16;
+    }
+
+    // With no rule underlay, optionally clear the rest of the row with blanks.
+    if let PillUnderlay::Blank { fill: true } = bar.underlay {
+        let used_w = x_cursor.saturating_sub(area.x) as usize;
+        let remaining = bar_w.saturating_sub(used_w);
+        if remaining > 0 {
+            spans.push(Span::raw(" ".repeat(remaining)));
+        }
+    }
+
+    f.render_widget(Paragraph::new(Line::from(spans)), area);
+    selector_tabs
+}
+
+/// Draws a shared empty/loading placeholder message (MUTED) at `area`.
+/// Callers pass the exact text (`" (empty)"`, `" Loading…"`, or a
+/// context-specific string like `"Indexing music library..."`) so the
+/// wording stays local, but the placeholder styling is defined once.
+pub(super) fn render_power_placeholder(f: &mut Frame, area: Rect, msg: &str) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            msg.to_string(),
+            Style::default().fg(palette::MUTED),
+        )),
+        area,
+    );
 }
 
 /// For folder-based music libraries where albums are stored as directories named
@@ -424,6 +675,23 @@ impl App {
             )
         };
 
+        // Apply the shared left-edge padding once here, at the single point
+        // where the tab content area is finalized, so every tab kind (and the
+        // music-group pills row below) inherits a consistent left gutter
+        // instead of each renderer inventing its own. The right edge is left
+        // in place (width shrinks by the same amount). When the left column is
+        // collapsed the user has asked to reclaim maximum width, so the gutter
+        // is dropped and the library spans the panel edge-to-edge.
+        let lib_area = if self.power_left_collapsed {
+            lib_area
+        } else {
+            Rect {
+                x: lib_area.x + POWER_TAB_LEFT_PAD,
+                width: lib_area.width.saturating_sub(POWER_TAB_LEFT_PAD),
+                ..lib_area
+            }
+        };
+
         let mut render_lib_area = lib_area;
         if self.power_left_tab > 0 && self.is_music_group_view(self.power_left_tab - 1) {
             let lib_idx = self.power_left_tab - 1;
@@ -644,6 +912,82 @@ mod tests {
             out.push('\n');
         }
         out
+    }
+
+    /// Renders a pill bar of the given labels/ids into a `width`-wide row and
+    /// returns the resulting `(rect, id)` hitboxes.
+    fn render_pill_bar_hitboxes(
+        labels: &[String],
+        ids: &[usize],
+        selected_pos: usize,
+        width: u16,
+    ) -> Vec<(Rect, usize)> {
+        let backend = TestBackend::new(width, 1);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut tabs = Vec::new();
+        term.draw(|f| {
+            tabs = render_pill_bar(
+                f,
+                Rect::new(0, 0, width, 1),
+                PillBar {
+                    labels,
+                    ids,
+                    selected_pos,
+                    prefix: None,
+                    underlay: PillUnderlay::Blank { fill: true },
+                },
+            );
+        })
+        .unwrap();
+        tabs
+    }
+
+    #[test]
+    fn pill_bar_hitboxes_carry_caller_ids_not_display_positions() {
+        // ids are deliberately offset from positions (mirroring Home's
+        // section_idx = position + 10 here) so a regression that returned the
+        // display offset instead of the id would be caught.
+        let labels: Vec<String> = ["Alpha", "Beta", "Gamma"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let ids = vec![10usize, 11, 12];
+
+        // Wide enough to show every pill: all ids returned, in order.
+        let tabs = render_pill_bar_hitboxes(&labels, &ids, 0, 60);
+        assert_eq!(
+            tabs.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+            vec![10, 11, 12],
+        );
+        // Hitboxes are left-to-right and non-overlapping.
+        for pair in tabs.windows(2) {
+            assert!(pair[0].0.x + pair[0].0.width <= pair[1].0.x);
+        }
+    }
+
+    #[test]
+    fn pill_bar_scrolls_to_keep_selected_visible_and_maps_its_id() {
+        // Six pills in a narrow row force horizontal scrolling; selecting the
+        // last one must scroll it into view and report its caller id (25).
+        let labels: Vec<String> = (0..6).map(|i| format!("Group{i}")).collect();
+        let ids: Vec<usize> = (0..6).map(|i| 20 + i).collect();
+
+        let tabs = render_pill_bar_hitboxes(&labels, &ids, 5, 18);
+
+        assert!(!tabs.is_empty(), "expected at least one visible pill");
+        // The selected pill (id 25) must be among the visible hitboxes.
+        assert!(
+            tabs.iter().any(|(_, id)| *id == 25),
+            "selected pill's id should be visible after scrolling, got {:?}",
+            tabs.iter().map(|(_, id)| *id).collect::<Vec<_>>(),
+        );
+        // Every visible id is one we supplied (never a bare display offset).
+        assert!(tabs.iter().all(|(_, id)| (20..=25).contains(id)));
+        // Overflow occurred, so scrolling dropped at least one leading pill.
+        assert!(
+            tabs.len() < labels.len(),
+            "narrow row should not fit all six pills"
+        );
     }
 
     fn render_power_library_to_terminal(

@@ -280,11 +280,7 @@ impl App {
                         String::new()
                     };
 
-                    let marker = if is_cursor {
-                        Span::styled("\u{258c}", Style::default().fg(palette::PINE))
-                    } else {
-                        Span::raw(" ")
-                    };
+                    let marker = super::selection_marker(is_cursor);
 
                     // Show queue position (1-based) for all items, right-aligned
                     // so single-digit numbers line up with double-digit ones.

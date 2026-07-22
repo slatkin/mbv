@@ -65,7 +65,7 @@ fn build_list_row_spans(
                 Style::default().fg(fg)
             };
             vec![
-                Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                super::selection_marker(true),
                 Span::styled(title, title_style),
             ]
         }
@@ -284,22 +284,7 @@ impl App {
                     search_area,
                 );
             } else if !has_search {
-                let count_label = format!(" {} items", total_count);
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        count_label,
-                        Style::default().fg(palette::SUBTLE),
-                    )),
-                    Rect {
-                        height: 1,
-                        ..content_area
-                    },
-                );
-                content_area = Rect {
-                    y: content_area.y + 1,
-                    height: content_area.height.saturating_sub(1),
-                    ..content_area
-                };
+                content_area = super::render_power_count_label(f, content_area, total_count);
             }
         }
 
@@ -326,10 +311,7 @@ impl App {
             } else {
                 "(empty)"
             };
-            f.render_widget(
-                Paragraph::new(Span::styled(msg, Style::default().fg(palette::MUTED))),
-                content_area,
-            );
+            super::render_power_placeholder(f, content_area, msg);
             return;
         }
 
