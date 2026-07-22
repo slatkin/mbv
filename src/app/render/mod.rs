@@ -1062,12 +1062,16 @@ impl App {
             let cfg = &self.client.lock().unwrap().config;
             (cfg.daemon_client_endpoint.clone(), cfg.server_url.clone())
         };
-        let remote_status = show_session_pill
-            .then(|| self.remote_status_spans(remote_state, &daemon_endpoint))
-            .unwrap_or_default();
-        let playlist_status = show_playlist_pill
-            .then(|| self.playlist_status_spans())
-            .unwrap_or_default();
+        let remote_status = if show_session_pill {
+            self.remote_status_spans(remote_state, &daemon_endpoint)
+        } else {
+            Vec::new()
+        };
+        let playlist_status = if show_playlist_pill {
+            self.playlist_status_spans()
+        } else {
+            Vec::new()
+        };
 
         let alive_status: Option<Vec<Span>> = self.stay_alive_ctrl.is_some().then(|| {
             vec![
