@@ -5381,6 +5381,85 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn restoring_pre_pill_feature_position_captures_library_total_and_shows_pills() {
+        // Regression test: a `LibraryPosition` saved before the
+        // letter-range-pill feature existed carries `library_total: None`
+        // and `letter_filter_index: None`. Restoring such a position must
+        // still capture `library_total` from the restored level's
+        // `total_count` (via `maybe_capture_library_total_and_apply_default_pill`)
+        // so `should_show_letter_pills` becomes true for large libraries --
+        // otherwise the pill row never appears for any library opened
+        // before this feature shipped.
+        let mut app = make_app_stub();
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "lib-movies".into();
+        library.collection_type = "movies".into();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: Vec::new(),
+            search: None,
+            feed_home_video: None,
+            album_track_focus: None,
+            artist_header_focus: None,
+            library_total: None,
+        });
+        let pre_feature_position = crate::config::LibraryPosition {
+            levels: vec![crate::config::LibraryPositionLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                focused_item_id: None,
+                cursor_index: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                letter_filter_index: None,
+                library_total: None,
+            }],
+            ..Default::default()
+        };
+        app.replace_saved_library_position(
+            0,
+            LibraryPositionScope::Power,
+            pre_feature_position.clone(),
+        );
+        app.view_mode = ViewMode::Power;
+        app.tab_idx = 1;
+        app.power_focus = PowerFocus::Queue;
+        app.power_left_tab = 1;
+
+        app.handle_lib_event(LibEvent::RestoreLibraryPosition {
+            lib_idx: 0,
+            scope: LibraryPositionScope::Power,
+            requested_position: pre_feature_position.clone(),
+            position: pre_feature_position,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-movies".into(),
+                title: "Movies".into(),
+                items: make_items(2),
+                total_count: 673,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+            }],
+        });
+
+        assert_eq!(app.libs[0].library_total, Some(673));
+        assert!(app.should_show_letter_pills(0));
+        assert_eq!(
+            app.libs[0].nav_stack[0].letter_filter,
+            Some(super::render::power::LetterFilter::default_filter()),
+            "large restored library should get the default A-C pill applied"
+        );
+    }
+
+    #[test]
     fn set_tab_activates_default_scope_placeholder_after_power_scope_use() {
         let mut app = make_app_stub();
         let mut library = make_item("Movies", "CollectionFolder");
@@ -5770,13 +5849,21 @@ pub(crate) mod tests {
             nav_stack: restored_nav,
         });
 
+        // `restored_position` was snapshotted from the nav_stack alone, before
+        // `handle_lib_event` ran. The restore also captures the library's
+        // true total via `maybe_capture_library_total_and_apply_default_pill`
+        // (see #325 follow-up fix), so the state actually persisted carries
+        // `library_total: Some(2)` (this level's `total_count`) rather than
+        // the `None` `restored_position` was built with.
+        let mut expected_position = restored_position;
+        expected_position.levels[0].library_total = Some(2);
         let saved = crate::config::load_library_position_state();
         assert_eq!(
             saved
                 .libraries
                 .get("lib-movies")
                 .and_then(|views| views.default.clone()),
-            Some(restored_position)
+            Some(expected_position)
         );
         assert!(app.libs[0].search.is_none());
         assert!(app.libs[0].album_track_focus.is_none());
@@ -5851,10 +5938,17 @@ pub(crate) mod tests {
             nav_stack: restored_nav,
         });
 
+        // As in `restored_default_library_fallback_rewrites_state_file_after_success`,
+        // the restore also captures the library's true total (this level's
+        // `total_count`) via `maybe_capture_library_total_and_apply_default_pill`,
+        // so the persisted power-scope level carries `library_total: Some(2)`
+        // rather than the `None` `power_position` was built with.
+        let mut expected_power_position = power_position;
+        expected_power_position.levels[0].library_total = Some(2);
         let saved = crate::config::load_library_position_state();
         let views = saved.libraries.get("lib-movies").expect("saved library");
         assert_eq!(views.default.clone(), Some(default_position));
-        assert_eq!(views.power.clone(), Some(power_position));
+        assert_eq!(views.power.clone(), Some(expected_power_position));
     }
 
     #[test]

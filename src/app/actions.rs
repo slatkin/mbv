@@ -4911,6 +4911,12 @@ impl App {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.apply_library_position(position.clone(), nav_stack);
         }
+        // Positions saved before the letter-pill feature existed carry no
+        // `library_total`, so without this call `should_show_letter_pills`
+        // would stay false forever for those libraries. This is a no-op for
+        // saves that already have `library_total` set (see the function's
+        // own early-return checks).
+        self.maybe_capture_library_total_and_apply_default_pill(lib_idx);
         self.maybe_refresh_feed_groups_after_refresh(lib_idx);
         let restored = self
             .libs
