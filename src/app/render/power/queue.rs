@@ -114,7 +114,7 @@ impl App {
     }
 
     /// Renders the queue list (track items, group headers, scrollbar). The
-    /// header pill row is rendered separately by `render_power_queue_header`.
+    /// title/scope pill row is rendered separately by `render_power_queue_title`.
     pub(super) fn render_power_queue(
         &mut self,
         f: &mut Frame,
@@ -122,12 +122,12 @@ impl App {
         focused: bool,
         layout: &mut LayoutPower,
     ) -> Vec<u16> {
+        layout.queue_cursor_screen_y = None;
+        layout.queue_area = area;
+
         if area.height < 1 {
             return vec![];
         }
-
-        layout.queue_cursor_screen_y = None;
-        layout.queue_area = area;
 
         let (items, cursor) = {
             let queue = self.displayed_queue();

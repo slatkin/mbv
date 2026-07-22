@@ -8,13 +8,15 @@ mod music;
 mod queue;
 
 use super::super::layout::LayoutPower;
-use super::super::ui_util::natural_sort_key;
+use super::super::ui_util::{build_queue_rows, natural_sort_key, QueueRow};
 use super::super::{palette, App, PowerFocus};
+use mbv_core::api::MediaItem;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
+use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
 // Power View re-renders frequently while scrolling; prefer a cheaper filter in
@@ -153,6 +155,83 @@ pub(super) fn render_selected_block_borders(
             },
         );
     }
+}
+
+fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, desired_rows: u16) -> Rect {
+    if area.width == 0 || area.height == 0 {
+        return Rect::default();
+    }
+
+    f.render_widget(
+        Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
+        area,
+    );
+
+    let border_style = Style::default().fg(palette::SOFT_WHITE);
+    f.render_widget(
+        Paragraph::new(Line::from(Span::styled(
+            "\u{2581}".repeat(area.width as usize),
+            border_style,
+        ))),
+        Rect { height: 1, ..area },
+    );
+    if area.height > 1 {
+        f.render_widget(
+            Paragraph::new(Line::from(Span::styled(
+                "\u{2594}".repeat(area.width as usize),
+                border_style,
+            ))),
+            Rect {
+                y: area.y + area.height - 1,
+                height: 1,
+                ..area
+            },
+        );
+    }
+
+    let border_rows = area.height.min(2);
+    let use_padding = area.height >= desired_rows.saturating_add(4);
+    let top_decoration = 1 + u16::from(use_padding);
+    let height = area
+        .height
+        .saturating_sub(border_rows)
+        .saturating_sub(if use_padding { 2 } else { 0 });
+
+    Rect {
+        y: area.y + top_decoration,
+        height,
+        ..area
+    }
+}
+
+fn rendered_power_queue_rows_for_padding(items: &[MediaItem], panel_area: Rect) -> u16 {
+    if items.is_empty() {
+        return 1;
+    }
+
+    let (display, group_for_header) = build_queue_rows(items, true);
+    let padded_visible = panel_area.height.saturating_sub(4) as usize;
+    let has_sb = display.len() > padded_visible;
+    let render_w = panel_area.width.saturating_sub(u16::from(has_sb)) as usize;
+    let wrap_w = render_w.saturating_sub(1).max(1);
+    let mut header_idx = 0;
+    let mut rows = 0u16;
+
+    for entry in display {
+        match entry {
+            QueueRow::Header => {
+                let group = group_for_header
+                    .get(header_idx)
+                    .map(|s| s.as_str())
+                    .unwrap_or("");
+                header_idx += 1;
+                rows = rows.saturating_add(wrap(group, wrap_w).len().max(1) as u16);
+            }
+            QueueRow::Spacer | QueueRow::Track { .. } => rows = rows.saturating_add(1),
+        }
+    }
+
+    rows
 }
 
 /// Style for a selector pill (group/section/artist tab row): IRIS text +
@@ -715,12 +794,11 @@ impl App {
         }
 
         if !self.power_left_collapsed {
-            // Queue list: title row at top, rest is the list.
-            let queue_list_area = Rect {
-                y: queue_area.y,
-                height: queue_area.height,
-                ..queue_area
+            let desired_queue_rows = {
+                let queue = self.displayed_queue();
+                rendered_power_queue_rows_for_padding(&queue.items, queue_area)
             };
+            let queue_list_area = render_power_queue_panel_frame(f, queue_area, desired_queue_rows);
             self.render_power_queue(f, queue_list_area, queue_focused, layout);
         }
         self.render_power_library(f, render_lib_area, left_focused, layout);
@@ -838,7 +916,9 @@ mod tests {
     use super::*;
     use crate::app::layout::{LayoutPlayback, LayoutPower, PowerLeftRowTarget};
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{BrowseLevel, LibraryTab};
+    use crate::app::{BrowseLevel, LibraryTab, QueueScope};
+    use crate::config::Config;
+    use mbv_core::api::EmbyClient;
     use mbv_core::api::MediaItem;
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
@@ -1022,7 +1102,11 @@ mod tests {
         buffer_to_string(&term)
     }
 
-    fn render_power_view(app: &mut App, width: u16, height: u16) -> LayoutPower {
+    fn render_power_view_to_terminal(
+        app: &mut App,
+        width: u16,
+        height: u16,
+    ) -> (Terminal<TestBackend>, LayoutPower) {
         let backend = TestBackend::new(width, height);
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPower::default();
@@ -1040,7 +1124,11 @@ mod tests {
             );
         })
         .unwrap();
-        layout
+        (term, layout)
+    }
+
+    fn render_power_view(app: &mut App, width: u16, height: u16) -> LayoutPower {
+        render_power_view_to_terminal(app, width, height).1
     }
 
     #[test]
@@ -1096,6 +1184,30 @@ mod tests {
             artist_header_focus: None,
         });
 
+        app
+    }
+
+    fn make_power_queue_app(item_count: usize) -> App {
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+        app.player_tab.set_items(
+            (0..item_count)
+                .map(|i| make_item(&format!("Queue Item {i}"), "Movie"))
+                .collect(),
+            0,
+        );
+        app
+    }
+
+    fn make_power_remote_queue_app() -> App {
+        let local_items = vec![make_item("Local Queue Item", "Movie")];
+        let remote_items = vec![make_item("Remote Queue Item", "Movie")];
+        let (remote, player_rx) = mbv_core::remote_player::RemotePlayer::stub(remote_items, 0);
+        let mut app = App::new_remote(EmbyClient::new(Config::default()), remote, player_rx, false);
+        app.power_left_tab = 1;
+        app.power_focus = PowerFocus::Queue;
+        app.queue_scope = QueueScope::Remote;
+        app.player_tab.set_items(local_items, 0);
         app
     }
 
@@ -1172,6 +1284,187 @@ mod tests {
             "expected library area to remain in the right column, got {:?}",
             layout.left_area
         );
+    }
+
+    #[test]
+    fn power_queue_panel_uses_selected_media_frame_and_background() {
+        let mut app = make_power_queue_app(2);
+
+        let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+        let buf = term.backend().buffer();
+        let top_y = layout.queue_area.y - 2;
+        let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
+        let x = layout.queue_area.x;
+
+        assert_eq!(buf[(x, top_y)].symbol(), "\u{2581}");
+        assert_eq!(buf[(x, top_y)].fg, palette::SOFT_WHITE);
+        assert_eq!(buf[(x, bottom_y)].symbol(), "\u{2594}");
+        assert_eq!(buf[(x, bottom_y)].fg, palette::SOFT_WHITE);
+        assert_eq!(buf[(x, layout.queue_area.y)].bg, palette::MEDIA_SELECTED_BG);
+        assert_eq!(
+            buf[(x, layout.queue_area.y - 1)].bg,
+            palette::MEDIA_SELECTED_BG
+        );
+        assert_eq!(
+            buf[(x, layout.queue_area.y + layout.queue_area.height)].bg,
+            palette::MEDIA_SELECTED_BG
+        );
+    }
+
+    #[test]
+    fn power_queue_panel_fills_remaining_left_column_with_short_queue() {
+        let mut app = make_power_queue_app(1);
+
+        let (_term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+        let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
+
+        assert_eq!(bottom_y, 26);
+        assert!(
+            layout.queue_area.height > 1,
+            "expected queue viewport inside full-height panel, got {:?}",
+            layout.queue_area
+        );
+    }
+
+    #[test]
+    fn power_queue_panel_empty_state_is_inside_panel() {
+        let mut app = make_power_queue_app(0);
+
+        let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+        let out = buffer_to_string(&term);
+        let empty_y = out
+            .lines()
+            .position(|line| line.contains("Add items with p"))
+            .expect("expected queue empty-state message");
+
+        assert_eq!(empty_y as u16, layout.queue_area.y);
+        assert_eq!(
+            term.backend().buffer()[(layout.queue_area.x, empty_y as u16)].bg,
+            palette::MEDIA_SELECTED_BG
+        );
+    }
+
+    #[test]
+    fn power_queue_panel_remains_visible_when_unfocused() {
+        let mut app = make_power_queue_app(1);
+        app.power_focus = PowerFocus::Left;
+
+        let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+        let buf = term.backend().buffer();
+        let top_y = layout.queue_area.y - 2;
+        let bottom_y = layout.queue_area.y + layout.queue_area.height + 1;
+
+        assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2581}");
+        assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2594}");
+        assert_eq!(
+            buf[(layout.queue_area.x, layout.queue_area.y)].bg,
+            palette::MEDIA_SELECTED_BG
+        );
+    }
+
+    #[test]
+    fn power_queue_title_and_scope_pills_stay_outside_panel() {
+        let mut app = make_power_remote_queue_app();
+
+        let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
+        let top_y = layout.queue_area.y - 2;
+        let out = buffer_to_string(&term);
+
+        assert!(layout.queue_scope_local_area.y < top_y);
+        assert!(layout.queue_scope_remote_area.y < top_y);
+        assert!(
+            out.lines()
+                .nth(layout.queue_scope_local_area.y as usize)
+                .is_some_and(|line| line.contains("LOCAL") && line.contains("REMOTE")),
+            "expected scope pills to render above the queue panel:\n{out}"
+        );
+    }
+
+    #[test]
+    fn short_power_queue_panel_drops_padding_before_rows() {
+        let mut app = make_power_queue_app(20);
+
+        let (term, layout) = render_power_view_to_terminal(&mut app, 100, 12);
+        let buf = term.backend().buffer();
+        let top_y = layout.queue_area.y - 1;
+        let bottom_y = layout.queue_area.y + layout.queue_area.height;
+
+        assert_eq!(buf[(layout.queue_area.x, top_y)].symbol(), "\u{2581}");
+        assert_eq!(buf[(layout.queue_area.x, bottom_y)].symbol(), "\u{2594}");
+        assert!(
+            layout.queue_area.height >= 1,
+            "expected at least one usable queue row on a short terminal, got {:?}",
+            layout.queue_area
+        );
+    }
+
+    #[test]
+    fn power_queue_panel_counts_wrapped_group_headers_before_adding_padding() {
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+        let mut item = make_item("Track", "Audio");
+        item.id = "boundary-track".into();
+        item.album_id = "boundary-album".into();
+        item.album = "Long Album Title".into();
+        item.artist = "Very Long Artist".into();
+        app.player_tab.set_items(vec![item], 0);
+
+        let panel_area = Rect::new(0, 0, 20, 6);
+        let desired_rows =
+            rendered_power_queue_rows_for_padding(&app.displayed_queue().items, panel_area);
+        assert_eq!(desired_rows, 3);
+
+        let backend = TestBackend::new(panel_area.width, panel_area.height);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = LayoutPower::default();
+        term.draw(|f| {
+            let queue_area = render_power_queue_panel_frame(f, panel_area, desired_rows);
+            app.render_power_queue(f, queue_area, true, &mut layout);
+        })
+        .unwrap();
+        let out = buffer_to_string(&term);
+
+        assert_eq!(layout.queue_area.y, 1);
+        assert_eq!(layout.queue_area.height, 4);
+        assert!(
+            layout.queue_row_map.contains(&Some(0)),
+            "expected selected track row to be mapped as visible after wrapped header: {:?}",
+            layout.queue_row_map
+        );
+        assert!(
+            out.contains("1. Track"),
+            "expected selected track to remain visible below the wrapped group header:\n{out}"
+        );
+    }
+
+    #[test]
+    fn power_queue_panel_preserves_group_aware_scrolling() {
+        let mut app = make_power_movie_app();
+        app.power_focus = PowerFocus::Queue;
+
+        let mut items = Vec::new();
+        for i in 0..4 {
+            let mut item = make_item(&format!("A{i}"), "Audio");
+            item.id = format!("a-{i}");
+            item.album_id = "album-a".into();
+            item.album = "Album A".into();
+            item.artist = "Artist".into();
+            items.push(item);
+        }
+        for i in 0..4 {
+            let mut item = make_item(&format!("B{i}"), "Audio");
+            item.id = format!("b-{i}");
+            item.album_id = "album-b".into();
+            item.album = "Album B".into();
+            item.artist = "Artist".into();
+            items.push(item);
+        }
+        app.player_tab.set_items(items, 4);
+        app.power_queue_scroll = 9;
+
+        let (_term, _layout) = render_power_view_to_terminal(&mut app, 100, 20);
+
+        assert_eq!(app.power_queue_scroll, 5);
     }
 
     fn make_power_music_group_app() -> App {
