@@ -20,8 +20,16 @@ jobs:
 
       - name: Update system and install makedeps
         run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm --needed rust cargo nasm mpv openssl github-cli git openssh
+          pacman_retry() {
+            for attempt in 1 2 3; do
+              "$@" && return 0
+              pacman -Syy --noconfirm
+              sleep $((attempt * 10))
+            done
+            "$@"
+          }
+          pacman_retry pacman -Syu --noconfirm
+          pacman_retry pacman -S --noconfirm --needed rust nasm mpv openssl github-cli git openssh
 
       - name: Cache Rust build
         uses: actions/cache@v6
