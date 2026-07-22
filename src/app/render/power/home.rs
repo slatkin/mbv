@@ -96,11 +96,7 @@ fn render_home_video_item(
     focused: bool,
     is_feed_lib: bool,
 ) {
-    let marker = if selected && focused {
-        Span::styled("\u{258c}", Style::default().fg(palette::PINE))
-    } else {
-        Span::raw(" ")
-    };
+    let marker = super::selection_marker(selected && focused);
     f.render_widget(
         Paragraph::new(marker),
         Rect {
@@ -205,7 +201,7 @@ fn render_home_video_item(
 
     let sep_y = row_y + item_h - 1;
     if sep_y < content_area.y + content_area.height {
-        render_horizontal_rule(
+        super::render_horizontal_rule(
             f,
             Rect {
                 x: content_area.x,
@@ -216,18 +212,6 @@ fn render_home_video_item(
             palette::MUTED,
         );
     }
-}
-
-/// Renders a single-row horizontal rule (─ repeated to fill `area`'s width)
-/// in `color`, e.g. as a divider between list rows or panels.
-fn render_horizontal_rule(f: &mut Frame, area: Rect, color: Color) {
-    f.render_widget(
-        Paragraph::new(Span::styled(
-            "\u{2500}".repeat(area.width as usize),
-            Style::default().fg(color),
-        )),
-        area,
-    );
 }
 
 /// Pre-wrapped content for the Keep Watching hero panel's metadata column,
@@ -276,22 +260,7 @@ impl App {
         // Item count label (matches render_power_list style). Uses the
         // server-reported total, not `n`, for the reason above.
         if focused && content_area.height > 0 {
-            let count_label = format!(" {} items", total_count);
-            f.render_widget(
-                Paragraph::new(Span::styled(
-                    count_label,
-                    Style::default().fg(palette::SUBTLE),
-                )),
-                Rect {
-                    height: 1,
-                    ..content_area
-                },
-            );
-            content_area = Rect {
-                y: content_area.y + 1,
-                height: content_area.height.saturating_sub(1),
-                ..content_area
-            };
+            content_area = super::render_power_count_label(f, content_area, total_count);
         }
 
         if n == 0 {
@@ -314,8 +283,7 @@ impl App {
             .collect();
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > content_area.height;
-        let text_w =
-            (content_area.width as usize).saturating_sub(if needs_scrollbar { 1 } else { 0 });
+        let text_w = super::power_content_width(content_area.width, needs_scrollbar);
 
         let mut scroll = {
             let mut s = 0usize;
@@ -421,90 +389,29 @@ impl App {
 
         if row < max_y {
             const MAX_LABEL: usize = 12;
-            let tab_labels: Vec<String> = std::iter::once("All".to_string())
+            let labels: Vec<String> = std::iter::once("All".to_string())
                 .chain(
                     groups
                         .iter()
                         .map(|g| trunc_str(&g.name, MAX_LABEL).to_string()),
                 )
                 .collect();
-            let n_tabs = tab_labels.len();
-            let pill_widths: Vec<usize> = tab_labels.iter().map(|l| l.width() + 2).collect();
-            let bar_w = area.width as usize;
-
-            let count_fitting = |start: usize, avail: usize| -> usize {
-                let mut used = 0usize;
-                let mut count = 0usize;
-                for width in pill_widths.iter().take(n_tabs).skip(start) {
-                    let need = if count == 0 { *width } else { 1 + *width };
-                    if used + need > avail {
-                        break;
-                    }
-                    used += need;
-                    count += 1;
-                }
-                count
-            };
-
-            let mut scroll_start = 0usize;
-            loop {
-                let avail = bar_w
-                    .saturating_sub(if scroll_start > 0 { 2 } else { 0 })
-                    .saturating_sub(2);
-                let cnt = count_fitting(scroll_start, avail);
-                if cnt == 0 || scroll_start + cnt > selected_group {
-                    break;
-                }
-                scroll_start += 1;
-            }
-
-            let has_left = scroll_start > 0;
-            let avail_pills = bar_w
-                .saturating_sub(if has_left { 2 } else { 0 })
-                .saturating_sub(2);
-            let cnt = count_fitting(scroll_start, avail_pills);
-            let scroll_end = (scroll_start + cnt).min(n_tabs);
-            let has_right = scroll_end < n_tabs;
-
-            let mut spans: Vec<Span> = Vec::new();
-            let mut x_cursor = area.x;
-            if has_left {
-                let chunk = "\u{2039} ";
-                spans.push(Span::styled(chunk, Style::default().fg(palette::GREEN)));
-                x_cursor += chunk.width() as u16;
-            }
-            for (idx, label) in tab_labels[scroll_start..scroll_end].iter().enumerate() {
-                if idx > 0 {
-                    spans.push(Span::raw(" "));
-                    x_cursor += 1;
-                }
-                let abs_idx = scroll_start + idx;
-                let selected = abs_idx == selected_group;
-                let style = super::selector_pill_style(selected);
-                let pill = format!(" {} ", label);
-                let pill_rect = Rect {
-                    x: x_cursor,
-                    y: row,
-                    width: pill.width() as u16,
-                    height: 1,
-                };
-                selector_tabs.push((pill_rect, abs_idx));
-                spans.push(Span::styled(pill.clone(), style));
-                x_cursor += pill.width() as u16;
-            }
-            if has_right {
-                spans.push(Span::styled(
-                    " \u{203a}",
-                    Style::default().fg(palette::GREEN),
-                ));
-            }
-            f.render_widget(
-                Paragraph::new(Line::from(spans)),
+            // Tabs are identified by 0-based index (0 = "All").
+            let ids: Vec<usize> = (0..labels.len()).collect();
+            selector_tabs = super::render_pill_bar(
+                f,
                 Rect {
                     x: area.x,
                     y: row,
                     width: area.width,
                     height: 1,
+                },
+                super::PillBar {
+                    labels: &labels,
+                    ids: &ids,
+                    selected_pos: selected_group,
+                    prefix: None,
+                    underlay: super::PillUnderlay::Blank { fill: false },
                 },
             );
         }
@@ -534,17 +441,15 @@ impl App {
                 } else {
                     " (empty)"
                 };
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        msg,
-                        Style::default().fg(palette::MUTED),
-                    ))),
+                super::render_power_placeholder(
+                    f,
                     Rect {
                         x: list_area.x,
                         y: list_area.y,
                         width: list_area.width,
                         height: 1,
                     },
+                    msg,
                 );
             }
             return;
@@ -558,7 +463,7 @@ impl App {
             .collect();
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > list_area.height;
-        let text_w = (list_area.width as usize).saturating_sub(if needs_scrollbar { 1 } else { 0 });
+        let text_w = super::power_content_width(list_area.width, needs_scrollbar);
 
         let mut scroll = stored_scroll.min(items.len().saturating_sub(1));
         if current_pos < scroll {
@@ -1048,9 +953,7 @@ impl App {
 
         let content_h = rows.len().max(1) as u16;
         let needs_scrollbar = content_h > list_area.height;
-        let list_w = list_area
-            .width
-            .saturating_sub(if needs_scrollbar { 1 } else { 0 });
+        let list_w = super::power_content_width(list_area.width, needs_scrollbar) as u16;
         let cursor_row = rows
             .iter()
             .position(|row| matches!(row, DisplayRow::Item(flat_idx, _) if *flat_idx == cursor))
@@ -1069,6 +972,14 @@ impl App {
 
         let new_section_start = continue_row_count as usize + 5;
 
+        // Colored selection blocks are full-bleed surfaces: their background
+        // and top/bottom border rules reach the panel's true left edge, past
+        // the shared left text padding, so they stretch edge-to-edge like the
+        // right panel. Only the text rows inside stay within the padded
+        // content area (`list_area`).
+        let bleed_x = list_area.x.saturating_sub(super::POWER_TAB_LEFT_PAD);
+        let bleed_w = list_area.width.saturating_add(super::POWER_TAB_LEFT_PAD);
+
         // Background for the continue watching list.
         // Includes 1 top and 1 bottom padding row so the items are not flush
         // against the block borders; borders sit outside the block.
@@ -1077,9 +988,9 @@ impl App {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
                 Rect {
-                    x: list_area.x,
+                    x: bleed_x,
                     y: list_area.y.saturating_sub(1),
-                    width: list_area.width,
+                    width: bleed_w,
                     height: continue_bg_h + 2,
                 },
             );
@@ -1088,13 +999,13 @@ impl App {
             let top_y = list_area.y.saturating_sub(2);
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(list_area.width as usize),
+                    "\u{2581}".repeat(bleed_w as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: list_area.x,
+                    x: bleed_x,
                     y: top_y,
-                    width: list_area.width,
+                    width: bleed_w,
                     height: 1,
                 },
             );
@@ -1102,13 +1013,13 @@ impl App {
             let bot_y = list_area.y + continue_bg_h + 1;
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2594}".repeat(list_area.width as usize),
+                    "\u{2594}".repeat(bleed_w as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: list_area.x,
+                    x: bleed_x,
                     y: bot_y,
-                    width: list_area.width,
+                    width: bleed_w,
                     height: 1,
                 },
             );
@@ -1121,9 +1032,9 @@ impl App {
             f.render_widget(
                 Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
                 Rect {
-                    x: list_area.x,
+                    x: bleed_x,
                     y: new_bg_y.saturating_sub(1),
-                    width: list_area.width,
+                    width: bleed_w,
                     height: new_bg_h + 2,
                 },
             );
@@ -1132,13 +1043,13 @@ impl App {
             let top_y = new_bg_y.saturating_sub(2);
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2581}".repeat(list_area.width as usize),
+                    "\u{2581}".repeat(bleed_w as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: list_area.x,
+                    x: bleed_x,
                     y: top_y,
-                    width: list_area.width,
+                    width: bleed_w,
                     height: 1,
                 },
             );
@@ -1146,13 +1057,13 @@ impl App {
             let bot_y = new_bg_y + new_bg_h + 1;
             f.render_widget(
                 Paragraph::new(Line::from(Span::styled(
-                    "\u{2594}".repeat(list_area.width as usize),
+                    "\u{2594}".repeat(bleed_w as usize),
                     border_style,
                 ))),
                 Rect {
-                    x: list_area.x,
+                    x: bleed_x,
                     y: bot_y,
-                    width: list_area.width,
+                    width: bleed_w,
                     height: 1,
                 },
             );
@@ -1162,12 +1073,14 @@ impl App {
         for k in 0..visible {
             let row_idx = scroll_y as usize + k as usize;
             let sy = list_area.y + k;
-            // Rows inside colored backgrounds render with 2-col padding.
+            // Rows inside colored backgrounds align to the panel's left edge
+            // like every other row -- the shared left padding is applied once
+            // upstream (POWER_TAB_LEFT_PAD), so no extra per-row indent here.
             let is_continue_row = row_idx < continue_row_count as usize;
             let is_new_row = row_idx >= new_section_start
                 && row_idx < new_section_start + new_section_count as usize;
             let (rx, rw) = if is_continue_row || is_new_row {
-                (list_area.x + 2, list_area.width.saturating_sub(4))
+                (list_area.x, list_area.width)
             } else {
                 (list_area.x, list_w)
             };
@@ -1228,7 +1141,7 @@ impl App {
                     };
                     let mut spans: Vec<Span> = if selected_row && focused {
                         vec![
-                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                            super::selection_marker(true),
                             Span::styled(
                                 title,
                                 Style::default()
@@ -1286,107 +1199,28 @@ impl App {
         }
 
         const MAX_LABEL: usize = 18;
-        let pill_widths: Vec<usize> = labels
-            .iter()
-            .map(|(_, label)| trunc_str(label, MAX_LABEL).width() + 2)
-            .collect();
         let selected_pos = labels
             .iter()
             .position(|(section_idx, _)| *section_idx == self.home.section)
             .unwrap_or(0);
-
-        // "Newest: " prefix (8 chars) + optional "‹ " (2 chars)
-        let prefix_w = 8usize;
-        let count_fitting = |start: usize, avail: usize| -> usize {
-            let mut used = 0usize;
-            let mut count = 0usize;
-            for width in pill_widths.iter().skip(start) {
-                let need = if count == 0 { *width } else { 1 + *width };
-                if used + need > avail {
-                    break;
-                }
-                used += need;
-                count += 1;
-            }
-            count
-        };
-
-        let mut scroll_start = 0usize;
-        loop {
-            let avail = (area.width as usize)
-                .saturating_sub(prefix_w)
-                .saturating_sub(if scroll_start > 0 { 2 } else { 0 })
-                .saturating_sub(2);
-            let count = count_fitting(scroll_start, avail);
-            if count == 0 || scroll_start + count > selected_pos {
-                break;
-            }
-            scroll_start += 1;
-        }
-
-        let has_left = scroll_start > 0;
-        let avail_pills = (area.width as usize)
-            .saturating_sub(prefix_w)
-            .saturating_sub(if has_left { 2 } else { 0 })
-            .saturating_sub(2);
-        let count = count_fitting(scroll_start, avail_pills);
-        let scroll_end = (scroll_start + count).min(labels.len());
-        let has_right = scroll_end < labels.len();
-
-        // Draw the full-width FOAM rule first (the "tail").
-        let line_str = "\u{2500}".repeat(area.width as usize);
-        f.render_widget(
-            Paragraph::new(Line::from(Span::styled(
-                line_str,
-                Style::default().fg(palette::GREEN),
-            ))),
+        // Pre-truncated pill labels; ids are the section indices (idx+1) used
+        // as click targets, distinct from the pill's display position.
+        let label_strs: Vec<String> = labels
+            .iter()
+            .map(|(_, label)| trunc_str(label, MAX_LABEL).to_string())
+            .collect();
+        let ids: Vec<usize> = labels.iter().map(|(section_idx, _)| *section_idx).collect();
+        layout.selector_tabs = super::render_pill_bar(
+            f,
             area,
+            super::PillBar {
+                labels: &label_strs,
+                ids: &ids,
+                selected_pos,
+                prefix: Some("Newest: "),
+                underlay: super::PillUnderlay::Rule(palette::GREEN),
+            },
         );
-
-        // Overlay "Newest: " label + pills on top of the rule.
-        let mut spans: Vec<Span> = Vec::new();
-        let mut selector_tabs: Vec<(Rect, usize)> = Vec::new();
-        let mut x_cursor = area.x;
-        // "Newest: " label — white, no background (line shows through)
-        spans.push(Span::styled(
-            "Newest: ",
-            Style::default().fg(ratatui::style::Color::White),
-        ));
-        x_cursor += prefix_w as u16;
-        if has_left {
-            let chunk = "\u{2039} ";
-            spans.push(Span::styled(chunk, Style::default().fg(palette::GREEN)));
-            x_cursor += chunk.width() as u16;
-        }
-        for (idx, (section_idx, label)) in labels[scroll_start..scroll_end].iter().enumerate() {
-            if idx > 0 {
-                // Single transparent space — FOAM line shows through
-                spans.push(Span::raw(" "));
-                x_cursor += 1;
-            }
-            let selected = *section_idx == self.home.section;
-            let style = super::selector_pill_style(selected);
-            let label = trunc_str(label, MAX_LABEL);
-            let pill = format!(" {label} ");
-            let pill_rect = Rect {
-                x: x_cursor,
-                y: area.y,
-                width: pill.width() as u16,
-                height: 1,
-            };
-            selector_tabs.push((pill_rect, *section_idx));
-            spans.push(Span::styled(pill.clone(), style));
-            x_cursor += pill.width() as u16;
-        }
-        if has_right {
-            spans.push(Span::styled(
-                " \u{203a}",
-                Style::default().fg(palette::GREEN),
-            ));
-        }
-
-        f.render_widget(Paragraph::new(Line::from(spans)), area);
-        layout.selector_tabs = selector_tabs;
     }
 }
 

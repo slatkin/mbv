@@ -632,7 +632,7 @@ impl App {
                         spans.push(Span::raw(" "));
                     } else if selected {
                         // Legacy style: ▌ PINE marker
-                        spans.push(Span::styled("\u{258c}", Style::default().fg(palette::PINE)));
+                        spans.push(super::selection_marker(true));
                     } else {
                         // Unselected: plain space
                         spans.push(Span::raw(" "));
@@ -737,7 +737,7 @@ impl App {
                 GroupedAlbumDisplayRow::AlbumLoading => {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
-                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                            super::selection_marker(true),
                             Span::raw(" "),
                             Span::styled("Loading\u{2026}", Style::default().fg(palette::MUTED)),
                         ])),
@@ -869,7 +869,7 @@ impl App {
                 );
                 f.render_widget(
                     Paragraph::new(Line::from(vec![
-                        Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                        super::selection_marker(true),
                         Span::raw(" "),
                         Span::styled(hint.to_string(), Style::default().fg(palette::MUTED)),
                     ])),
@@ -884,7 +884,7 @@ impl App {
                 if row + 1 < max_y {
                     f.render_widget(
                         Paragraph::new(Line::from(vec![
-                            Span::styled("\u{258c}", Style::default().fg(palette::PINE)),
+                            super::selection_marker(true),
                             Span::raw(" "),
                         ])),
                         Rect {
@@ -951,11 +951,8 @@ impl App {
                 } else {
                     Style::default().fg(palette::SUBTLE)
                 };
-                let marker = if selected_region_gutter || (is_cursor && focused) {
-                    Span::styled("\u{258c}", Style::default().fg(palette::PINE))
-                } else {
-                    Span::raw(" ")
-                };
+                let marker =
+                    super::selection_marker(selected_region_gutter || (is_cursor && focused));
                 let track_num = if item.index_number > 0 {
                     format!("{}. ", item.index_number)
                 } else {
