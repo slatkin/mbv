@@ -542,7 +542,7 @@ impl App {
                     None => (Vec::new(), 0),
                 }
             };
-            self.render_power_album_detail(f, area, &items, cursor, focused, false, layout);
+            self.render_power_album_detail(f, area, &items, cursor, focused, true, false, layout);
         } else if is_series {
             self.render_power_episode_detail(f, area, lib_idx, focused, layout);
         } else if is_home_video {
@@ -1227,60 +1227,65 @@ mod tests {
             "expected the selected album's cached tracks to render inline, \
              without any drilldown:\n{out}"
         );
+
+        // Selection now reads via a colored MEDIA_SELECTED_BG block framed by
+        // ▁/▔ unicode borders (movie-tab colored-block style), not the legacy
+        // `─` rule + `▌` gutter.
+        let title_y = lines
+            .iter()
+            .position(|l| l.contains("First Album"))
+            .expect("expected selected album row");
         assert!(
-            lines[1].contains("\u{2500}"),
-            "expected top rule directly above selected album row:\n{out}"
-        );
-        assert!(
-            lines[2].contains("First Album"),
-            "expected selected album row to stay in the list flow:\n{out}"
-        );
-        assert!(
-            lines[2].starts_with("  \u{258c} ") && !lines[2].starts_with("  \u{258c}   "),
-            "expected selected album row to drop the grouped indent after the gutter:\n{out}"
-        );
-        assert!(
-            lines[3].contains("^P: Play | ^A: Enqueue | ^S: Shuffle"),
-            "expected action hints directly under selected album title:\n{out}"
+            lines[title_y - 2].contains("\u{2581}"),
+            "expected a top border two rows above the title (border row, then colored padding row):\n{out}"
         );
         assert!(
-            lines[3].starts_with("  \u{258c} "),
-            "expected action hints to share the selected-region gutter:\n{out}"
+            lines[title_y - 1].trim().is_empty(),
+            "expected the colored top-padding row directly above the title to be blank:\n{out}"
+        );
+
+        let track_y = lines
+            .iter()
+            .position(|l| l.contains("Opening Track"))
+            .expect("expected inline track row");
+        assert!(
+            track_y > title_y,
+            "expected the track row to render below the selected album title:\n{out}"
+        );
+
+        let second_album_y = lines
+            .iter()
+            .position(|l| l.contains("Second Album"))
+            .expect("expected the following album row");
+        assert!(
+            lines[second_album_y - 1].contains("\u{2594}"),
+            "expected a bottom border directly above the following album row:\n{out}"
         );
         assert!(
-            lines[5].contains("Opening Track"),
-            "expected selected album tracks inside the inline detail region:\n{out}"
+            second_album_y > track_y,
+            "expected the following album to render after the inline track detail:\n{out}"
+        );
+
+        let title_row_idx = layout
+            .left_row_map
+            .iter()
+            .position(|r| *r == Some(0))
+            .expect("expected the selected album (index 0) in the row map");
+        let second_row_idx = layout
+            .left_row_map
+            .iter()
+            .position(|r| *r == Some(1))
+            .expect("expected the following album (index 1) in the row map");
+        assert!(
+            second_row_idx > title_row_idx,
+            "expected the following album's row-map entry after the selected album's"
         );
         assert!(
-            lines[5].starts_with("  \u{258c} 1. Opening Track"),
-            "expected inline tracks to share the selected-region gutter:\n{out}"
-        );
-        assert!(
-            lines[6].contains("\u{2500}"),
-            "expected bottom rule directly after inline detail:\n{out}"
-        );
-        assert!(
-            lines[7].contains("Second Album"),
-            "expected following album row immediately after reserved inline detail rows:\n{out}"
-        );
-        assert_eq!(
-            layout.left_row_map.get(1),
-            Some(&None),
-            "expected top rule row to be non-selectable"
-        );
-        assert_eq!(
-            layout.left_row_map.get(2),
-            Some(&Some(0)),
-            "expected selected album row to map to its album index"
-        );
-        assert!(
-            layout.left_row_map[3..7].iter().all(Option::is_none),
-            "expected inline detail and bottom-rule rows to be non-selectable"
-        );
-        assert_eq!(
-            layout.left_row_map.get(7),
-            Some(&Some(1)),
-            "expected album row after inline detail to remain selectable"
+            layout.left_row_map[title_row_idx + 1..second_row_idx]
+                .iter()
+                .all(Option::is_none),
+            "expected every row between the two albums (borders, padding, track detail) to be non-selectable:\n{:?}",
+            layout.left_row_map
         );
         assert_eq!(
             app.libs[0].nav_stack.len(),
@@ -1342,46 +1347,68 @@ mod tests {
         let out = render_power_library_to_string(&mut app, &mut layout);
         let lines: Vec<&str> = out.lines().collect();
 
+        // Selection now reads via a colored MEDIA_SELECTED_BG block framed by
+        // ▁/▔ unicode borders (movie-tab colored-block style), not the legacy
+        // `─` rule + `▌` gutter. Structure per block:
+        //   [border ▁] [colored padding] [album title] [tracks...] [colored padding] [border ▔]
+        let title_y = lines
+            .iter()
+            .position(|l| l.contains("First Album"))
+            .expect("expected selected album title row");
         assert!(
-            lines[2].contains("\u{2500}"),
-            "expected top rule directly above selected album row:\n{out}"
+            lines[title_y - 2].contains("\u{2581}"),
+            "expected a top border two rows above the title (border row, then colored padding row):\n{out}"
         );
         assert!(
-            lines[3].contains("First Album"),
-            "expected selected album row to stay in the flat list flow:\n{out}"
+            lines[title_y - 1].trim().is_empty(),
+            "expected the colored top-padding row directly above the title to be blank:\n{out}"
+        );
+
+        let track_y = lines
+            .iter()
+            .position(|l| l.contains("Opening Track"))
+            .expect("expected inline track row");
+        assert!(
+            track_y > title_y,
+            "expected the track row to render below the selected album title:\n{out}"
+        );
+
+        let second_album_y = lines
+            .iter()
+            .position(|l| l.contains("Second Album"))
+            .expect("expected the following album row");
+        assert!(
+            lines[second_album_y - 1].contains("\u{2594}"),
+            "expected a bottom border directly above the following album row:\n{out}"
         );
         assert!(
-            lines[3].starts_with("  \u{258c} First Album"),
-            "expected flat selected album title to align after a one-column gutter gap:\n{out}"
+            second_album_y > track_y,
+            "expected the following album to render after the inline track detail:\n{out}"
+        );
+
+        // Row-map: only the Album() rows (title + following album) map to a
+        // selectable index; every border/padding/track-detail row is `None`.
+        let title_row_idx = layout
+            .left_row_map
+            .iter()
+            .position(|r| *r == Some(0))
+            .expect("expected the selected album (index 0) in the row map");
+        let second_row_idx = layout
+            .left_row_map
+            .iter()
+            .position(|r| *r == Some(1))
+            .expect("expected the following album (index 1) in the row map");
+        assert!(
+            second_row_idx > title_row_idx,
+            "expected the following album's row-map entry after the selected album's"
         );
         assert!(
-            lines[4].contains("^P: Play | ^A: Enqueue | ^S: Shuffle"),
-            "expected action hints directly under selected album title:\n{out}"
+            layout.left_row_map[title_row_idx + 1..second_row_idx]
+                .iter()
+                .all(Option::is_none),
+            "expected every row between the two albums (borders, padding, track detail) to be non-selectable:\n{:?}",
+            layout.left_row_map
         );
-        assert!(
-            lines[5].starts_with("  \u{258c}"),
-            "expected the spacer row between hints and tracks to keep the selected-region gutter:\n{out}"
-        );
-        assert!(
-            lines[6].contains("Opening Track"),
-            "expected tracks inside the inline detail region:\n{out}"
-        );
-        assert!(
-            lines[6].starts_with("  \u{258c} 1. Opening Track"),
-            "expected inline tracks to share the selected-region gutter:\n{out}"
-        );
-        assert!(
-            lines[7].contains("\u{2500}"),
-            "expected bottom rule directly after inline detail:\n{out}"
-        );
-        assert!(
-            lines[8].contains("Second Album"),
-            "expected following album row immediately after inline detail:\n{out}"
-        );
-        assert_eq!(layout.left_row_map.get(1), Some(&None));
-        assert_eq!(layout.left_row_map.get(2), Some(&Some(0)));
-        assert!(layout.left_row_map[3..7].iter().all(Option::is_none));
-        assert_eq!(layout.left_row_map.get(7), Some(&Some(1)));
         assert!(
             layout
                 .left_row_targets
@@ -1425,35 +1452,65 @@ mod tests {
             "expected a loading indicator in the detail pane while the \
              fetch is in flight:\n{out}"
         );
+        // Selection now reads via a colored MEDIA_SELECTED_BG block framed by
+        // ▁/▔ unicode borders (movie-tab colored-block style), not the legacy
+        // `─` rule + `▌` gutter.
+        let title_y = lines
+            .iter()
+            .position(|l| l.contains("First Album"))
+            .expect("expected selected album row");
         assert!(
-            lines[1].contains("\u{2500}"),
-            "expected top rule directly above selected album row:\n{out}"
+            lines[title_y - 2].contains("\u{2581}"),
+            "expected a top border two rows above the title (border row, then colored padding row):\n{out}"
         );
         assert!(
-            lines[2].contains("First Album"),
-            "expected selected album row to stay in the list flow:\n{out}"
+            lines[title_y - 1].trim().is_empty(),
+            "expected the colored top-padding row directly above the title to be blank:\n{out}"
+        );
+
+        let loading_y = lines
+            .iter()
+            .position(|l| l.to_lowercase().contains("loading"))
+            .expect("expected an inline loading row");
+        assert!(
+            loading_y > title_y,
+            "expected the loading row to render below the selected album title:\n{out}"
+        );
+
+        let second_album_y = lines
+            .iter()
+            .position(|l| l.contains("Second Album"))
+            .expect("expected the following album row");
+        assert!(
+            lines[second_album_y - 1].contains("\u{2594}"),
+            "expected a bottom border directly above the following album row:\n{out}"
         );
         assert!(
-            lines[3].to_lowercase().contains("loading"),
-            "expected loading row directly under the selected album row:\n{out}"
+            second_album_y > loading_y,
+            "expected the following album to render after the inline loading row:\n{out}"
+        );
+
+        let title_row_idx = layout
+            .left_row_map
+            .iter()
+            .position(|r| *r == Some(0))
+            .expect("expected the selected album (index 0) in the row map");
+        let second_row_idx = layout
+            .left_row_map
+            .iter()
+            .position(|r| *r == Some(1))
+            .expect("expected the following album (index 1) in the row map");
+        assert!(
+            second_row_idx > title_row_idx,
+            "expected the following album's row-map entry after the selected album's"
         );
         assert!(
-            lines[3].starts_with("  \u{258c} Loading"),
-            "expected inline loading row to share the selected-region gutter:\n{out}"
+            layout.left_row_map[title_row_idx + 1..second_row_idx]
+                .iter()
+                .all(Option::is_none),
+            "expected every row between the two albums (borders, padding, loading row) to be non-selectable:\n{:?}",
+            layout.left_row_map
         );
-        assert!(
-            lines[4].contains("\u{2500}"),
-            "expected bottom rule directly after inline loading row:\n{out}"
-        );
-        assert!(
-            lines[5].contains("Second Album"),
-            "expected following album row directly after inline loading row:\n{out}"
-        );
-        assert_eq!(layout.left_row_map.get(1), Some(&None));
-        assert_eq!(layout.left_row_map.get(2), Some(&Some(0)));
-        assert_eq!(layout.left_row_map.get(3), Some(&None));
-        assert_eq!(layout.left_row_map.get(4), Some(&None));
-        assert_eq!(layout.left_row_map.get(5), Some(&Some(1)));
     }
 
     #[test]
@@ -1511,6 +1568,9 @@ mod tests {
 
     #[test]
     fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
+        // Selection now reads via the colored MEDIA_SELECTED_BG block + YELLOW
+        // title text (the movie-tab colored-block style), not the legacy `▌`
+        // marker -- confirm that styling survives losing pane focus.
         let mut app = make_power_music_group_app();
 
         let mut track = make_item("Opening Track", "Audio");
@@ -1523,15 +1583,25 @@ mod tests {
         let mut layout = LayoutPower::default();
         let term = render_power_library_to_terminal_focused(&mut app, &mut layout, false);
         let out = buffer_to_string(&term);
-        let title_line = out
+        let title_y = out
             .lines()
-            .find(|line| line.contains("First Album"))
+            .position(|line| line.contains("First Album"))
             .expect("expected selected album title row");
+        let title_line = out.lines().nth(title_y).unwrap();
+        let title_x = title_line
+            .find("First Album")
+            .expect("expected title text position") as u16;
 
+        let buf = term.backend().buffer();
         assert_eq!(
-            title_line.find('▌'),
-            Some(2),
-            "selected album title row should keep the selected-region gutter while unfocused:\n{out}"
+            buf[(title_x, title_y as u16)].bg,
+            palette::MEDIA_SELECTED_BG,
+            "selected album title row should keep the colored block background while unfocused:\n{out}"
+        );
+        assert_eq!(
+            buf[(title_x, title_y as u16)].fg,
+            palette::YELLOW,
+            "selected album title should keep its YELLOW text while unfocused:\n{out}"
         );
     }
 
@@ -1567,8 +1637,11 @@ mod tests {
             .expect("expected focused track row");
 
         assert!(
-            focused_line.starts_with("  \u{258c} 2. Focused Track"),
-            "expected focused track row to keep the green selected-row gutter in track-selection mode:\n{out}"
+            // Track mode has no selected-region gutter (removed so the
+            // colored block reads cleanly) -- the PINE `▌` cursor marker
+            // sits directly against the track number, no trailing space.
+            focused_line.starts_with("  \u{258c}2. Focused Track"),
+            "expected focused track row to show the PINE cursor marker in track-selection mode:\n{out}"
         );
         assert_eq!(
             layout.cursor_screen_y,
@@ -1606,8 +1679,11 @@ mod tests {
             .expect("expected focused track to render inline");
 
         assert!(
-            focused_line.starts_with("  \u{258c} 2. Focused Track"),
-            "expected track-selection row to keep the green selected-row gutter while pane is unfocused:\n{out}"
+            // Track mode has no selected-region gutter (removed so the
+            // colored block reads cleanly) -- the PINE `▌` cursor marker
+            // sits directly against the track number, no trailing space.
+            focused_line.starts_with("  \u{258c}2. Focused Track"),
+            "expected track-selection row to show the PINE cursor marker while pane is unfocused:\n{out}"
         );
     }
 

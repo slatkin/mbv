@@ -4988,13 +4988,15 @@ mod power_music_track_focus_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Display rows: 0 = artist header, 1 = selected album 0, 2 = its
-        // collapsed action-hint row (tracks stay hidden until Enter is
-        // pressed), 3.. = the remaining albums one row each. A 31-row page
-        // from display row 1 lands on display row 32 = album 30.
+        // Display rows: 0 = artist header; the selected album 0 is wrapped
+        // in the colored-block frame (1 = top border, 2 = colored top
+        // padding, 3 = album row, 4 = collapsed action-hint row -- tracks
+        // stay hidden until Enter is pressed, 5 = colored bottom padding,
+        // 6 = bottom border), then 7.. = the remaining albums one row each.
+        // A 31-row page from display row 3 lands on display row 34 = album 28.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            30,
+            28,
             "PageDown should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -5014,13 +5016,14 @@ mod power_music_track_focus_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Display row 0 is the artist header, then one row per album (the
-        // collapsed action-hint row that appears under the *selected* album
-        // sits well past this window, so it doesn't shift this target). A
-        // 31-row page up from album 35's row lands on album 4.
+        // Display row 0 is the artist header, then one row per album up to
+        // album 35's colored-block frame (which adds a top border + top
+        // padding row before the album's own row -- see the page_down test
+        // above for the full 6-row block layout). A 31-row page up from
+        // album 35's row (display row 38) lands on display row 7 = album 6.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            4,
+            6,
             "PageUp should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -5082,10 +5085,12 @@ mod power_music_track_focus_tests {
         let handled = down_app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Display rows: 0 artist header, 1 selected album 0, 2 its collapsed
-        // action-hint row, 3 album 1. With a 1-row page, PageDown targets
-        // row 2 (the hint row, non-selectable), so paging must resolve
-        // forward to the next selectable album row at row 3 => album 1.
+        // Display rows: 0 artist header; selected album 0 is wrapped in the
+        // colored-block frame (1 top border, 2 colored top padding, 3 album
+        // row, 4 collapsed action-hint row, 5 colored bottom padding, 6
+        // bottom border), then 7 = album 1. With a 1-row page, PageDown
+        // targets row 4 (the hint row, non-selectable), so paging must
+        // resolve forward to the next selectable album row at row 7 => album 1.
         assert_eq!(down_app.libs[0].nav_stack.last().unwrap().cursor, 1);
 
         let mut up_app = make_power_music_album_list_app(10, 3);
@@ -5096,11 +5101,13 @@ mod power_music_track_focus_tests {
         let handled = up_app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
         assert!(!handled);
-        // Display rows: 0 artist header, 1-3 albums 0-2, 4 selected album 3.
-        // With a 4-row page, PageUp targets row 0 (the artist header,
-        // non-selectable). No album row precedes it, so paging must resolve
-        // to the first album in display order => album 0.
-        assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 0);
+        // Display rows: 0 artist header, 1-3 albums 0-2, then selected album
+        // 3 is wrapped in the colored-block frame (4 top border, 5 colored
+        // top padding, 6 album row, ...). With a 4-row page, PageUp targets
+        // row 2 (album 1, selectable) -- the 2 extra border/padding rows in
+        // front of album 3's block push its row from 4 to 6, so the page no
+        // longer reaches all the way back to the artist header at row 0.
+        assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 1);
     }
 
     fn buffer_to_string(term: &ratatui::Terminal<ratatui::backend::TestBackend>) -> String {

@@ -728,6 +728,7 @@ impl App {
                             &tracks,
                             cursor,
                             detail_focused,
+                            false, // show_title: Album(idx) row above already shows it
                             false,
                             layout,
                         );
@@ -809,6 +810,7 @@ impl App {
         items: &[mbv_core::api::MediaItem],
         cursor: usize,
         focused: bool,
+        show_title: bool,
         selected_region_gutter: bool,
         layout: &mut LayoutPower,
     ) {
@@ -823,6 +825,31 @@ impl App {
         let gutter_w = if selected_region_gutter { 2 } else { 1 };
         let max_y = area.y + area.height;
         let mut row = area.y;
+
+        // — Album title (only when no separate row already shows it — the
+        // drilled-in single-pane view has no Album(idx) row above this, unlike
+        // the inline/grouped call site) —
+        if show_title && row < max_y {
+            let album_title = items[0].album.clone();
+            let title = trunc_str(&album_title, (area.width as usize).saturating_sub(1));
+            let title_style = if focused {
+                Style::default()
+                    .fg(palette::YELLOW)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(palette::YELLOW)
+            };
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(format!(" {title}"), title_style))),
+                Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: 1,
+                },
+            );
+            row += 1;
+        }
 
         // — Inline album actions / spacer row —
         if row < max_y {
