@@ -1792,22 +1792,52 @@ mod tests {
 
         let mut layout = LayoutPower::default();
         let out = render_power_library_to_string(&mut app, &mut layout);
-        let header = out
-            .lines()
-            .find(|line| line.contains("Alpha"))
+        let lines: Vec<&str> = out.lines().collect();
+        let header_row = lines
+            .iter()
+            .position(|line| line.contains("Alpha"))
             .expect("expected Alpha header");
+        let header = lines[header_row];
 
         assert!(
             !header.contains('\u{258c}'),
             "selected artist header should no longer render the left focus gutter:\n{out}"
         );
         assert!(
-            header.contains('\u{f037b}'),
-            "selected artist header should render the trailing focus icon:\n{out}"
+            !header.contains('\u{f037b}'),
+            "selected artist header should no longer render the trailing focus icon \
+             (the selection block now carries the focus signal):\n{out}"
         );
+
+        // The header should now be wrapped in the same colored-block frame
+        // as a selected album: a `▁` border row (with a blank colored-bg
+        // padding row directly beneath it) above the header, an action-hint
+        // row directly below the header (no `ENTER` clause, unlike the
+        // album hint), then a colored-bg padding row and a `▔` border row.
+        assert!(
+            header_row >= 2 && lines[header_row - 2].contains('\u{2581}'),
+            "expected a top border row two rows above the selected header:\n{out}"
+        );
+        let hint_row = header_row + 1;
+        assert!(
+            lines[hint_row].contains("^P: Play | ^A: Enqueue | ^S: Shuffle"),
+            "expected the artist action-hint row directly below the header:\n{out}"
+        );
+        assert!(
+            !lines[hint_row].contains("ENTER"),
+            "artist action hint should not include the album's ENTER clause:\n{out}"
+        );
+        assert!(
+            lines[hint_row + 1..]
+                .iter()
+                .take(4)
+                .any(|line| line.contains('\u{2594}')),
+            "expected a bottom border row below the selected header block:\n{out}"
+        );
+
         assert_eq!(
             layout.cursor_screen_y,
-            Some(0),
+            Some(header_row as u16),
             "selected header should own the screen cursor row"
         );
     }

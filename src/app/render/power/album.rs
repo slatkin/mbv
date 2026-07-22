@@ -23,6 +23,61 @@ fn inline_album_art_cache_key(album_id: &str) -> String {
     format!("{album_id}:P")
 }
 
+/// Computes the reserved-column art box: right-aligned within `area`
+/// (leaving `INLINE_ALBUM_ART_RIGHT_PAD`), sized up to
+/// `INLINE_ALBUM_ART_COLS`x`INLINE_ALBUM_ART_ROWS` (clamped to `area`).
+/// Shared by the single-album inline-art path and the artist-header collage
+/// so their outer geometry can't drift apart.
+fn inline_art_box_rect(area: Rect) -> Rect {
+    let box_w = INLINE_ALBUM_ART_COLS.min(area.width);
+    let box_h = INLINE_ALBUM_ART_ROWS.min(area.height);
+    Rect {
+        x: area.x + area.width.saturating_sub(box_w + INLINE_ALBUM_ART_RIGHT_PAD),
+        y: area.y,
+        width: box_w,
+        height: box_h,
+    }
+}
+
+#[derive(Clone, Copy)]
+enum ArtAnchorX {
+    Left,
+    Center,
+    Right,
+}
+
+#[derive(Clone, Copy)]
+enum ArtAnchorY {
+    Top,
+    Center,
+    Bottom,
+}
+
+/// Places a `w`x`h` image within `container` anchored to the given corner/edge,
+/// letterboxing the leftover margin to the opposite side(s). The single-album
+/// art uses `(Right, Top)`; collage tiles anchor toward the box center so any
+/// margin falls on the outer edges and the tiles abut with no internal seam.
+fn align_art(container: Rect, w: u16, h: u16, ax: ArtAnchorX, ay: ArtAnchorY) -> Rect {
+    let free_w = container.width.saturating_sub(w);
+    let free_h = container.height.saturating_sub(h);
+    let x = match ax {
+        ArtAnchorX::Left => container.x,
+        ArtAnchorX::Center => container.x + free_w / 2,
+        ArtAnchorX::Right => container.x + free_w,
+    };
+    let y = match ay {
+        ArtAnchorY::Top => container.y,
+        ArtAnchorY::Center => container.y + free_h / 2,
+        ArtAnchorY::Bottom => container.y + free_h,
+    };
+    Rect {
+        x,
+        y,
+        width: w,
+        height: h,
+    }
+}
+
 enum GroupedAlbumDisplayRow {
     ArtistHeader(ArtistHeaderSelection),
     AlbumDetailRule,
@@ -31,6 +86,8 @@ enum GroupedAlbumDisplayRow {
     /// it is *not* expanded into full track-selection mode (`AlbumDetailStart`
     /// covers the hint once expanded).
     AlbumActionHint,
+    /// Action-hint row shown directly under a selected artist header.
+    ArtistActionHint,
     AlbumDetailStart(usize),
     AlbumDetailContinuation,
     AlbumLoading,
@@ -121,12 +178,35 @@ impl App {
         for &idx in &order {
             let artist = &album_info[idx].0;
             if artist != &last_artist {
-                rows.push(GroupedAlbumDisplayRow::ArtistHeader(
-                    ArtistHeaderSelection {
-                        first_album_id: albums[idx].id.clone(),
-                        artist_label: artist.clone(),
-                    },
-                ));
+                let header_selection = ArtistHeaderSelection {
+                    first_album_id: albums[idx].id.clone(),
+                    artist_label: artist.clone(),
+                };
+                let this_header_selected =
+                    header_selected && selected_artist_header == Some(&header_selection);
+                if this_header_selected {
+                    // Wrap the selected artist header in the same colored
+                    // block frame as a selected album (see the `!expand_selected`
+                    // album branch below): border space, bg padding, the
+                    // header row itself, an action-hint row, filler rows so
+                    // the block is tall enough for the collage, bg padding,
+                    // border space.
+                    rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for top border
+                    let top_idx = rows.len();
+                    rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg top padding
+                    rows.push(GroupedAlbumDisplayRow::ArtistHeader(header_selection));
+                    rows.push(GroupedAlbumDisplayRow::ArtistActionHint);
+                    rows.extend(
+                        std::iter::repeat_with(|| GroupedAlbumDisplayRow::AlbumDetailContinuation)
+                            .take(inline_art_rows_after_album.saturating_sub(1)),
+                    );
+                    let bottom_idx = rows.len();
+                    rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg bottom padding
+                    rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for bottom border
+                    selected_block_bounds = Some((top_idx, bottom_idx));
+                } else {
+                    rows.push(GroupedAlbumDisplayRow::ArtistHeader(header_selection));
+                }
                 last_artist = artist.clone();
             }
             if idx == cursor && header_selected {
@@ -645,12 +725,27 @@ impl App {
             };
             match row {
                 GroupedAlbumDisplayRow::ArtistHeader(selection) => {
-                    let artist_label = trunc_str(&selection.artist_label, avail);
                     let selected = selectable_headers
                         && self.libs[lib_idx]
                             .artist_header_focus
                             .as_ref()
                             .is_some_and(|focused| focused == selection);
+                    // The block + bold label carry the focus signal (like a
+                    // selected album); no green glyph here. When the collage
+                    // art column is reserved for this row, only shrink the
+                    // label's width -- its start column (`row_area.x`) must
+                    // never move so the label doesn't shift on
+                    // select/deselect.
+                    let label_area = if reserve_art {
+                        Rect {
+                            width: row_area.width.saturating_sub(selected_art_reserved_w),
+                            ..row_area
+                        }
+                    } else {
+                        row_area
+                    };
+                    let label_avail = (label_area.width as usize).saturating_sub(1);
+                    let artist_label = trunc_str(&selection.artist_label, label_avail);
                     let label_style = if selected && focused {
                         Style::default()
                             .fg(palette::YELLOW)
@@ -658,15 +753,8 @@ impl App {
                     } else {
                         Style::default().fg(palette::YELLOW)
                     };
-                    let mut spans = vec![Span::raw(" "), Span::styled(artist_label, label_style)];
-                    if selected {
-                        spans.push(Span::raw(" "));
-                        spans.push(Span::styled(
-                            "\u{f037b}", // 󰍻
-                            Style::default().fg(palette::GREEN),
-                        ));
-                    }
-                    f.render_widget(Paragraph::new(Line::from(spans)), row_area);
+                    let spans = vec![Span::raw(" "), Span::styled(artist_label, label_style)];
+                    f.render_widget(Paragraph::new(Line::from(spans)), label_area);
                 }
                 GroupedAlbumDisplayRow::AlbumDetailRule => {
                     // Padding rows for the colored block; the background is painted separately.
@@ -784,6 +872,23 @@ impl App {
                         row_title_area,
                     );
                 }
+                GroupedAlbumDisplayRow::ArtistActionHint => {
+                    // Aligned under the header label: `row_area` with the
+                    // same single-space lead as the label, not the
+                    // album-title indent used by `AlbumActionHint`.
+                    let hint_w = (row_area.width as usize).saturating_sub(1);
+                    let hint = trunc_str("^P: Play | ^A: Enqueue | ^S: Shuffle", hint_w);
+                    f.render_widget(
+                        Paragraph::new(Line::from(vec![
+                            Span::raw(" "),
+                            Span::styled(
+                                hint.to_string(),
+                                Style::default().fg(palette::SOFT_WHITE),
+                            ),
+                        ])),
+                        row_area,
+                    );
+                }
                 GroupedAlbumDisplayRow::AlbumDetailStart(idx) => {
                     let height = visible_rows[row_idx..]
                         .iter()
@@ -840,6 +945,7 @@ impl App {
                 | GroupedAlbumDisplayRow::AlbumDetailRule => None,
                 GroupedAlbumDisplayRow::Album(idx) => Some(*idx),
                 GroupedAlbumDisplayRow::AlbumActionHint
+                | GroupedAlbumDisplayRow::ArtistActionHint
                 | GroupedAlbumDisplayRow::AlbumDetailStart(_)
                 | GroupedAlbumDisplayRow::AlbumDetailContinuation
                 | GroupedAlbumDisplayRow::AlbumLoading => None,
@@ -865,19 +971,26 @@ impl App {
 
         if let Some((art_top, art_bottom)) = selected_art_abs_rows {
             if art_top >= offset && art_top < offset + visible {
-                if let Some(album) = albums.get(cursor) {
-                    let visible_bottom = art_bottom.min(offset + visible);
-                    self.render_inline_album_art(
-                        f,
-                        Rect {
-                            x: area.x,
-                            y: area.y + (art_top - offset) as u16,
-                            width: area.width,
-                            height: (visible_bottom - art_top) as u16,
-                        },
-                        album,
-                        layout,
-                    );
+                let visible_bottom = art_bottom.min(offset + visible);
+                let art_rect = Rect {
+                    x: area.x,
+                    y: area.y + (art_top - offset) as u16,
+                    width: area.width,
+                    height: (visible_bottom - art_top) as u16,
+                };
+                if let Some(selection) = &selected {
+                    // Collage: the selected artist header's albums, in the
+                    // already-sorted `left_sorted_indices` order, first 4.
+                    let header_albums: Vec<mbv_core::api::MediaItem> = layout
+                        .left_sorted_indices
+                        .iter()
+                        .filter(|&&idx| album_info[idx].0 == selection.artist_label)
+                        .take(4)
+                        .filter_map(|&idx| albums.get(idx).cloned())
+                        .collect();
+                    self.render_inline_artist_collage(f, art_rect, &header_albums, layout);
+                } else if let Some(album) = albums.get(cursor) {
+                    self.render_inline_album_art(f, art_rect, album, layout);
                 }
             }
         }
@@ -908,19 +1021,172 @@ impl App {
             return;
         }
 
-        let cache_key = inline_album_art_cache_key(&album.id);
-        self.fetch_card_image(
-            cache_key.clone(),
-            album.id.clone(),
-            album.series_id.clone(),
-            super::MUSIC_ALBUM_IMAGE_TYPES,
+        let box_rect = inline_art_box_rect(area);
+        let nav_gate_open = self.list_image_renders_allowed();
+        let img_rect = self.render_inline_art_cell(
+            f,
+            box_rect,
+            album,
+            inline_album_art_cache_key(&album.id),
+            nav_gate_open,
+            false,
+            (ArtAnchorX::Right, ArtAnchorY::Top),
         );
+        layout.inline_image_rect = Some(img_rect);
+    }
+
+    /// Renders a 2x2 (or fewer) collage of an artist's album covers in
+    /// `area`, for the selected artist header's block. Each tile is fetched
+    /// center-cropped to a square (a `:sq`-suffixed cache key, distinct from
+    /// the standalone album image) so the covers form an even grid.
+    ///
+    /// Fill behavior: 1 album fills the whole box; 2 split into left/right
+    /// halves; 3+ use a 2x2 grid (top-left, top-right, bottom-left,
+    /// bottom-right) with only the first 4 albums shown. When 3 albums are
+    /// given, the 4th (bottom-right) cell is simply left unpainted, showing
+    /// the selected-block background through.
+    ///
+    /// Each tile anchors toward the box center (e.g. the top-left tile pins its
+    /// bottom-right corner) so the squares abut with no internal seam; any
+    /// letterbox margin falls on the box's outer edges instead.
+    fn render_inline_artist_collage(
+        &mut self,
+        f: &mut Frame,
+        area: Rect,
+        albums: &[mbv_core::api::MediaItem],
+        layout: &mut LayoutPower,
+    ) {
+        if !self.images_enabled() || area.width < 4 || area.height < 2 || albums.is_empty() {
+            return;
+        }
+
+        let box_rect = inline_art_box_rect(area);
+        layout.inline_image_rect = Some(box_rect);
+
+        // Each entry is `(cell, (anchor_x, anchor_y))`; anchors point toward the
+        // box center so adjacent tiles meet at the seam.
+        let cells: Vec<(Rect, (ArtAnchorX, ArtAnchorY))> = if albums.len() == 1 {
+            vec![(box_rect, (ArtAnchorX::Center, ArtAnchorY::Center))]
+        } else if albums.len() == 2 {
+            let left_w = box_rect.width / 2;
+            vec![
+                (
+                    Rect {
+                        x: box_rect.x,
+                        y: box_rect.y,
+                        width: left_w,
+                        height: box_rect.height,
+                    },
+                    (ArtAnchorX::Right, ArtAnchorY::Center),
+                ),
+                (
+                    Rect {
+                        x: box_rect.x + left_w,
+                        y: box_rect.y,
+                        width: box_rect.width - left_w,
+                        height: box_rect.height,
+                    },
+                    (ArtAnchorX::Left, ArtAnchorY::Center),
+                ),
+            ]
+        } else {
+            let half_w = box_rect.width / 2;
+            let half_h = box_rect.height / 2;
+            vec![
+                (
+                    Rect {
+                        x: box_rect.x,
+                        y: box_rect.y,
+                        width: half_w,
+                        height: half_h,
+                    },
+                    (ArtAnchorX::Right, ArtAnchorY::Bottom),
+                ),
+                (
+                    Rect {
+                        x: box_rect.x + half_w,
+                        y: box_rect.y,
+                        width: box_rect.width - half_w,
+                        height: half_h,
+                    },
+                    (ArtAnchorX::Left, ArtAnchorY::Bottom),
+                ),
+                (
+                    Rect {
+                        x: box_rect.x,
+                        y: box_rect.y + half_h,
+                        width: half_w,
+                        height: box_rect.height - half_h,
+                    },
+                    (ArtAnchorX::Right, ArtAnchorY::Top),
+                ),
+                (
+                    Rect {
+                        x: box_rect.x + half_w,
+                        y: box_rect.y + half_h,
+                        width: box_rect.width - half_w,
+                        height: box_rect.height - half_h,
+                    },
+                    (ArtAnchorX::Left, ArtAnchorY::Top),
+                ),
+            ]
+        };
 
         let nav_gate_open = self.list_image_renders_allowed();
-        let placeholder_w = INLINE_ALBUM_ART_COLS.min(area.width);
-        let placeholder_h = INLINE_ALBUM_ART_ROWS.min(area.height);
-        let mut img_w = placeholder_w;
-        let mut img_h = placeholder_h;
+        for ((cell, anchor), album) in cells.iter().zip(albums.iter().take(4)) {
+            self.render_inline_art_cell(
+                f,
+                *cell,
+                album,
+                format!("{}:sq", album.id),
+                nav_gate_open,
+                true,
+                *anchor,
+            );
+        }
+    }
+
+    /// Fetches + renders a single album cover into `cell`, falling back to the
+    /// `OVERLAY` loading placeholder while the image isn't yet decoded/gated.
+    /// Returns the rect actually painted (image or placeholder). Shared by the
+    /// single-album art path and each quadrant of the collage.
+    ///
+    /// When `square` is set, the cover is fetched center-cropped to a square
+    /// (via `fetch_card_image_square`) — the collage mode, giving uniform grid
+    /// tiles; otherwise the natural-aspect cover is fetched. Placement within
+    /// `cell` follows `anchor` (the standalone path uses `(Right, Top)`;
+    /// collage tiles anchor toward the box center so they abut).
+    fn render_inline_art_cell(
+        &mut self,
+        f: &mut Frame,
+        cell: Rect,
+        album: &mbv_core::api::MediaItem,
+        cache_key: String,
+        nav_gate_open: bool,
+        square: bool,
+        anchor: (ArtAnchorX, ArtAnchorY),
+    ) -> Rect {
+        if cell.width == 0 || cell.height == 0 {
+            return cell;
+        }
+
+        if square {
+            self.fetch_card_image_square(
+                cache_key.clone(),
+                album.id.clone(),
+                album.series_id.clone(),
+                super::MUSIC_ALBUM_IMAGE_TYPES,
+            );
+        } else {
+            self.fetch_card_image(
+                cache_key.clone(),
+                album.id.clone(),
+                album.series_id.clone(),
+                super::MUSIC_ALBUM_IMAGE_TYPES,
+            );
+        }
+
+        let mut img_rect = cell;
         let mut use_placeholder = true;
 
         if nav_gate_open {
@@ -928,27 +1194,15 @@ impl App {
                 if let Some(actual) = state.size_for(
                     ratatui_image::Resize::Scale(Some(super::POWER_RENDER_FILTER)),
                     ratatui::layout::Size {
-                        width: INLINE_ALBUM_ART_COLS.min(area.width),
-                        height: INLINE_ALBUM_ART_ROWS.min(area.height),
+                        width: cell.width,
+                        height: cell.height,
                     },
                 ) {
-                    img_w = actual.width;
-                    img_h = actual.height;
+                    img_rect = align_art(cell, actual.width, actual.height, anchor.0, anchor.1);
                     use_placeholder = false;
                 }
             }
         }
-
-        let img_rect = Rect {
-            x: area.x
-                + area
-                    .width
-                    .saturating_sub(img_w + INLINE_ALBUM_ART_RIGHT_PAD),
-            y: area.y,
-            width: img_w,
-            height: img_h,
-        };
-        layout.inline_image_rect = Some(img_rect);
 
         if use_placeholder {
             f.render_widget(
@@ -965,6 +1219,8 @@ impl App {
                 state,
             );
         }
+
+        img_rect
     }
 
     /// Renders the music album detail panel (track list) into `area` — the lib
