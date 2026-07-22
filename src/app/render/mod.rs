@@ -961,7 +961,7 @@ impl App {
             .bg(palette::STATUS_PILL_BG)
             .fg(ratatui::style::Color::White);
         let label_style = Style::default()
-            .fg(if on { palette::GREEN } else { palette::SUBTLE })
+            .fg(if on { palette::YELLOW } else { palette::SUBTLE })
             .bg(palette::STATUS_PILL_BG);
 
         vec![
