@@ -13,3 +13,7 @@ context-snapshot.json
 .claude/worktrees/
 state.md
 session-log.md
+# BEGIN oh-my-opencode-slim worktrees
+.slim/worktrees/
+.slim/worktrees.json
+# END oh-my-opencode-slim worktrees
