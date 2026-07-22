@@ -33,6 +33,10 @@ pub(super) struct ImageFetchReq {
     pub item_id: String,
     pub series_id: String,
     pub types: Vec<String>,
+    /// When true, the decoded image is center-cropped to a square before it is
+    /// handed to the protocol. Used by the artist-header collage so its tiles
+    /// are uniform squares regardless of the cover's native aspect ratio.
+    pub square_crop: bool,
 }
 
 impl App {
@@ -187,6 +191,30 @@ impl App {
         series_id: String,
         types: &[&str],
     ) {
+        self.queue_card_image_fetch(cache_key, item_id, series_id, types, false);
+    }
+
+    /// Like [`fetch_card_image`], but the decoded image is center-cropped to a
+    /// square. Use a cache key distinct from the standalone image (e.g. a
+    /// `:sq` suffix) so the un-cropped variant is not clobbered.
+    pub(super) fn fetch_card_image_square(
+        &mut self,
+        cache_key: String,
+        item_id: String,
+        series_id: String,
+        types: &[&str],
+    ) {
+        self.queue_card_image_fetch(cache_key, item_id, series_id, types, true);
+    }
+
+    fn queue_card_image_fetch(
+        &mut self,
+        cache_key: String,
+        item_id: String,
+        series_id: String,
+        types: &[&str],
+        square_crop: bool,
+    ) {
         if self.card_image_loading.contains(&cache_key)
             || self.card_image_states.contains_key(&cache_key)
         {
@@ -199,6 +227,7 @@ impl App {
             item_id,
             series_id,
             types: types.iter().map(|s| s.to_string()).collect(),
+            square_crop,
         };
         if self.image_fetches_active >= MAX_IMAGE_FETCHES {
             // Queue instead of dropping: a slot will pick it up on completion.
@@ -289,6 +318,7 @@ impl App {
             item_id,
             series_id,
             types,
+            square_crop,
         } = req;
         std::thread::spawn(move || {
             // catch_unwind so a panic during fetch/decode still reports a result,
@@ -364,7 +394,18 @@ impl App {
                     fetched
                 };
                 // Decode off the UI thread; the main loop only builds the protocol.
-                let img = bytes.and_then(|b| image::load_from_memory(&b).ok());
+                let img = bytes.and_then(|b| image::load_from_memory(&b).ok()).map(|img| {
+                    if square_crop {
+                        // Center-crop to a square so collage tiles are uniform
+                        // regardless of the cover's native aspect ratio.
+                        let side = img.width().min(img.height());
+                        let x = (img.width() - side) / 2;
+                        let y = (img.height() - side) / 2;
+                        img.crop_imm(x, y, side, side)
+                    } else {
+                        img
+                    }
+                });
                 let _ = tx.send((cache_key, img));
             }));
             if result.is_err() {
