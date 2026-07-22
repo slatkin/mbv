@@ -332,9 +332,9 @@ impl App {
         self.render_power_queue_title(
             f,
             Rect {
-                x: left_area.x + 1,
+                x: left_area.x + 2,
                 y: left_area.y + 1,
-                width: left_area.width.saturating_sub(2),
+                width: left_area.width.saturating_sub(4),
                 height: 1,
             },
             layout,
