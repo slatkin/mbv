@@ -1485,6 +1485,7 @@ mod tests {
     #[test]
     fn power_queue_title_and_scope_pills_stay_outside_panel() {
         let mut app = make_power_remote_queue_app();
+        app.use_nerd_fonts = false;
 
         let (term, layout) = render_power_view_to_terminal(&mut app, 100, 28);
         let top_y = layout.queue_area.y - 2;
@@ -1504,6 +1505,10 @@ mod tests {
         assert!(
             header.matches(&mbv_core::api::device_name()).count() >= 2,
             "expected local and remote queue controls to use session-style hostname pills:\n{out}"
+        );
+        assert!(
+            !header.contains('\u{F0AFE}'),
+            "expected non-Nerd-Font queue header to avoid private-use glyphs:\n{out}"
         );
     }
 
