@@ -662,12 +662,13 @@ impl App {
         let top_bound = selected_block_bounds
             .map(|(top, _)| top.saturating_sub(1)) // include border row
             .unwrap_or(display_cursor);
-        let offset = stored_scroll.clamp(
-            display_cursor
-                .saturating_sub(visible.saturating_sub(1))
-                .min(top_bound),
-            top_bound,
-        );
+        let rows_below_album = selected_block_bounds
+            .map(|(_, bottom_pad_abs)| (bottom_pad_abs + 1).saturating_sub(display_cursor))
+            .unwrap_or(0);
+        let lower = (display_cursor + rows_below_album)
+            .saturating_sub(visible.saturating_sub(1))
+            .min(top_bound);
+        let offset = stored_scroll.clamp(lower, top_bound);
 
         // Paint the colored background block before rendering row content
         if let Some((top_pad_abs, bottom_pad_abs)) = selected_block_bounds {

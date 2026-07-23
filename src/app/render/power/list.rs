@@ -455,9 +455,9 @@ impl App {
                 .iter()
                 .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
                 .unwrap_or(0);
-            // For banners, `banner_rows - 1` rows sit below the cursor (opening rule above).
+            // For banners, `banner_rows` rows sit below the cursor (opening rule above).
             // For series, `series_detail_rows` rows sit below the cursor (block follows it).
-            let banner_below = banner_rows.saturating_sub(1);
+            let banner_below = banner_rows;
             let rows_below_cursor = banner_below.max(series_detail_rows);
             let lower_bound = (display_cursor + rows_below_cursor)
                 .saturating_sub(visible.saturating_sub(1))
@@ -775,9 +775,9 @@ impl App {
             // banner or series detail follows it, extend the lower bound so
             // scrolling keeps pulling up until the whole block is visible too
             // (clamped to display_cursor itself if the viewport could never fit both).
-            // For banners, `banner_rows - 1` rows sit below the cursor (opening rule above).
+            // For banners, `banner_rows` rows sit below the cursor (opening rule above).
             // For series, `series_detail_rows` rows sit below the cursor (block follows it).
-            let banner_below = banner_rows.saturating_sub(1);
+            let banner_below = banner_rows;
             let rows_below_cursor = banner_below.max(series_detail_rows);
             let lower_bound = (display_cursor + rows_below_cursor)
                 .saturating_sub(visible.saturating_sub(1))
