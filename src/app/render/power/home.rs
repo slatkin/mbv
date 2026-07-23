@@ -75,8 +75,10 @@ fn format_release_date(premiere_date: &str) -> String {
         .unwrap_or_else(|| premiere_date.to_string())
 }
 
-fn home_video_item_height(item: &mbv_core::api::MediaItem, text_w: usize) -> u16 {
-    if item.overview.is_empty() || text_w == 0 {
+fn home_video_item_height(item: &mbv_core::api::MediaItem, text_w: usize, selected: bool) -> u16 {
+    if !selected {
+        1 // title only for non-selected rows
+    } else if item.overview.is_empty() || text_w == 0 {
         3 // title + meta + separator
     } else {
         let ov_text = trunc_overview(&item.overview);
@@ -96,6 +98,18 @@ fn render_home_video_item(
     focused: bool,
     is_feed_lib: bool,
 ) {
+    if selected {
+        f.render_widget(
+            Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
+            Rect {
+                x: content_area.x,
+                y: row_y,
+                width: text_w as u16,
+                height: item_h,
+            },
+        );
+    }
+
     let marker = super::selection_marker(selected && focused);
     f.render_widget(
         Paragraph::new(marker),
@@ -132,7 +146,7 @@ fn render_home_video_item(
         },
     );
 
-    if row_y + 1 < content_area.y + content_area.height {
+    if selected && row_y + 1 < content_area.y + content_area.height {
         let mut meta_spans: Vec<Span> = Vec::new();
         if item.played {
             meta_spans.push(Span::styled(
@@ -172,7 +186,10 @@ fn render_home_video_item(
         );
     }
 
-    if !item.overview.is_empty() && item_h >= 4 && row_y + 2 < content_area.y + content_area.height
+    if selected
+        && !item.overview.is_empty()
+        && item_h >= 4
+        && row_y + 2 < content_area.y + content_area.height
     {
         let ov_text = trunc_overview(&item.overview);
         let wrapped = wrap(&ov_text, (tw as usize).max(1));
@@ -200,7 +217,7 @@ fn render_home_video_item(
     }
 
     let sep_y = row_y + item_h - 1;
-    if sep_y < content_area.y + content_area.height {
+    if selected && sep_y < content_area.y + content_area.height {
         super::render_horizontal_rule(
             f,
             Rect {
@@ -266,6 +283,7 @@ impl App {
         if n == 0 {
             return;
         }
+        let current_pos = cursor.min(n.saturating_sub(1));
 
         let is_feed_lib = {
             let c = self.client.lock().unwrap();
@@ -279,16 +297,20 @@ impl App {
         let text_w_with_sb = (content_area.width as usize).saturating_sub(1);
         let item_heights: Vec<u16> = items
             .iter()
-            .map(|it| home_video_item_height(it, text_w_with_sb))
+            .map(|it| home_video_item_height(it, text_w_with_sb, false))
             .collect();
+        let selected_height = home_video_item_height(&items[current_pos], text_w_with_sb, true);
+        let selected_index = current_pos;
+        let mut item_heights = item_heights;
+        item_heights[selected_index] = selected_height;
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > content_area.height;
         let text_w = super::power_content_width(content_area.width, needs_scrollbar);
 
         let mut scroll = {
             let mut s = 0usize;
-            while s < cursor {
-                let visible_h: u16 = item_heights[s..=cursor].iter().sum();
+            while s < current_pos {
+                let visible_h: u16 = item_heights[s..=current_pos].iter().sum();
                 if visible_h <= content_area.height {
                     break;
                 }
@@ -296,8 +318,8 @@ impl App {
             }
             s
         };
-        if scroll > cursor {
-            scroll = cursor;
+        if scroll > current_pos {
+            scroll = current_pos;
         }
 
         let mut row_y = content_area.y;
@@ -310,7 +332,7 @@ impl App {
             }
             visible_items += 1;
             let item_h = item_heights[i];
-            let selected = i == cursor;
+            let selected = i == current_pos;
             if selected {
                 layout.cursor_screen_y = Some(row_y);
             }
@@ -459,8 +481,11 @@ impl App {
         let text_w_with_sb = (list_area.width as usize).saturating_sub(1);
         let item_heights: Vec<u16> = items
             .iter()
-            .map(|it| home_video_item_height(it, text_w_with_sb))
+            .map(|it| home_video_item_height(it, text_w_with_sb, false))
             .collect();
+        let selected_height = home_video_item_height(&items[current_pos], text_w_with_sb, true);
+        let mut item_heights = item_heights;
+        item_heights[current_pos] = selected_height;
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > list_area.height;
         let text_w = super::power_content_width(list_area.width, needs_scrollbar);
