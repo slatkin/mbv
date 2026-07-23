@@ -238,7 +238,21 @@ impl App {
                     .width
                     .saturating_sub(1)
                     .saturating_sub(COMPACT_BANNER_INDENT);
-                self.series_inline_detail_rows(&item, panel_width)
+                self.series_inline_detail_rows(
+                    &item,
+                    panel_width,
+                    self.libs[lib_idx].series_selection.is_some(),
+                    self.libs[lib_idx]
+                        .series_selection
+                        .and_then(|_| self.series_detail_cache.get(&item.id))
+                        .and_then(|detail| {
+                            detail
+                                .seasons
+                                .get(self.libs[lib_idx].series_season_cursor)
+                                .and_then(|season| detail.episodes.get(&season.id))
+                        })
+                        .map(Vec::len),
+                )
             } else {
                 0
             }
@@ -1454,6 +1468,17 @@ mod tests {
         );
 
         let mut layout = LayoutPower::default();
+        let inactive = render_power_list_to_string_sized(&mut app, &mut layout, 60, 40);
+        assert!(
+            inactive.contains("Series: 1"),
+            "inactive series detail should show season count:\n{inactive}"
+        );
+        assert!(
+            !inactive.contains("Episode 1"),
+            "inactive series detail should hide episodes:\n{inactive}"
+        );
+
+        app.libs[0].series_selection = Some(0);
         let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 40);
 
         let title_pos = out.find("Test Show  ").or_else(|| out.find("Test Show\n"));

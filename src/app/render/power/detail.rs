@@ -55,7 +55,7 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
 /// how many overview lines it draws so this many rows remain below them) --
 /// keeping both in sync prevents the overview from eating into space the
 /// layout pass assumed was reserved for the divider/pills/episodes.
-const SERIES_DETAIL_DIVIDER_ROWS: usize = 2; // blank spacer + divider/pills row
+const SERIES_DETAIL_DIVIDER_ROWS: usize = 1; // season summary/pills row
 const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8; // estimated visible episode rows
 const SERIES_DETAIL_OVERVIEW_MAX_LINES: usize = 4;
 /// Blank row below the episode list (above the ▔ bottom border). Shared by
@@ -379,6 +379,8 @@ impl App {
         &mut self,
         item: &mbv_core::api::MediaItem,
         panel_width: u16,
+        in_selection: bool,
+        episode_count: Option<usize>,
     ) -> usize {
         let inner_w = (panel_width as usize).saturating_sub(2);
 
@@ -402,7 +404,14 @@ impl App {
             }
         }
 
-        // Image height (if available)
+        // Season summary row and episodes when selection mode is active.
+        rows += SERIES_DETAIL_DIVIDER_ROWS;
+        if in_selection {
+            rows += episode_count.unwrap_or(SERIES_DETAIL_EPISODE_ROWS_ESTIMATE);
+        }
+
+        // Keep the block tall enough for the image, if it extends below the
+        // text and episode content.
         const IMG_ROWS: u16 = 12;
         let img_height = if self.images_enabled() {
             IMG_ROWS as usize
@@ -411,12 +420,6 @@ impl App {
         };
         let image_end_row = img_height;
         rows = rows.max(image_end_row);
-
-        // Divider + season pills row, plus estimated episode rows -- kept in
-        // sync with `render_series_inline_detail`'s `reserved_for_below` via
-        // the shared SERIES_DETAIL_* constants.
-        rows += SERIES_DETAIL_DIVIDER_ROWS;
-        rows += SERIES_DETAIL_EPISODE_ROWS_ESTIMATE;
 
         // Blank spacer below the episode list
         rows += SERIES_DETAIL_TRAILING_BLANK_ROWS;
@@ -540,11 +543,15 @@ impl App {
             let lines = wrap_overview_lines(&item.overview, |line_idx| {
                 text_dims(overview_start_row + line_idx as u16).0
             });
-            // Cap at available rows minus space for pills + episode list --
+            // Cap at available rows minus space for the season row and episode list --
             // shares SERIES_DETAIL_* constants with `series_inline_detail_rows`
             // so the reserved space and what's actually drawn stay in sync.
             let reserved_for_below = (SERIES_DETAIL_DIVIDER_ROWS
-                + SERIES_DETAIL_EPISODE_ROWS_ESTIMATE
+                + if self.libs[lib_idx].series_selection.is_some() {
+                    SERIES_DETAIL_EPISODE_ROWS_ESTIMATE
+                } else {
+                    0
+                }
                 + SERIES_DETAIL_TRAILING_BLANK_ROWS
                 + 1) as u16;
             let available_rows =
@@ -571,11 +578,6 @@ impl App {
             if !lines.is_empty() && row < max_y {
                 row += 1;
             }
-        }
-
-        // Push below the image if it extends past the text
-        if row < img_end_row {
-            row = img_end_row;
         }
 
         // ── Render series image last so it layers over text ───────────────
@@ -609,41 +611,8 @@ impl App {
         let ep_cursor = self.libs[lib_idx].series_selection;
         if let Some(ref detail) = series_detail {
             if !detail.seasons.is_empty() && row < max_y {
-                row += 1; // blank spacer above divider
                 if row < max_y {
-                    // Draw the full-width green rule first
-                    super::render_horizontal_rule(
-                        f,
-                        Rect {
-                            x: area.x,
-                            y: row,
-                            width: area.width,
-                            height: 1,
-                        },
-                        palette::POWER_RIGHT_BG,
-                    );
-
-                    // Overlay season tabs on the same row
-                    let tab_labels: Vec<String> = detail
-                        .seasons
-                        .iter()
-                        .enumerate()
-                        .map(|(i, s)| {
-                            let n = if s.index_number > 0 {
-                                s.index_number as usize
-                            } else {
-                                i + 1
-                            };
-                            format!("{:02}", n)
-                        })
-                        .collect();
-                    let per_tab = 5usize;
-                    let n_tabs = tab_labels.len();
-                    let prefix_w = 8;
-                    let avail = (area.width as usize).saturating_sub(prefix_w + 2);
-                    let tabs_per_page = ((avail + 1) / per_tab).max(1);
-                    let scroll_end = tabs_per_page.min(n_tabs);
-
+                    let (season_w, season_w16) = text_dims(row);
                     let mut spans: Vec<Span> = Vec::new();
                     spans.push(Span::styled(
                         "Series: ",
@@ -651,18 +620,44 @@ impl App {
                             .fg(palette::YELLOW)
                             .add_modifier(Modifier::BOLD),
                     ));
-                    for (idx, label) in tab_labels[..scroll_end].iter().enumerate() {
-                        if idx > 0 {
-                            spans.push(Span::raw(" "));
+                    if in_selection {
+                        let tab_labels: Vec<String> = detail
+                            .seasons
+                            .iter()
+                            .enumerate()
+                            .map(|(i, s)| {
+                                let n = if s.index_number > 0 {
+                                    s.index_number as usize
+                                } else {
+                                    i + 1
+                                };
+                                format!("{:02}", n)
+                            })
+                            .collect();
+                        let per_tab = 5usize;
+                        let n_tabs = tab_labels.len();
+                        let prefix_w = 8;
+                        let avail = season_w.saturating_sub(prefix_w + 2);
+                        let tabs_per_page = ((avail + 1) / per_tab).max(1);
+                        let scroll_end = tabs_per_page.min(n_tabs);
+                        for (idx, label) in tab_labels[..scroll_end].iter().enumerate() {
+                            if idx > 0 {
+                                spans.push(Span::raw(" "));
+                            }
+                            let is_active = idx == season_cursor;
+                            let style = super::selector_pill_style(is_active);
+                            spans.push(Span::styled(format!(" {} ", label), style));
                         }
-                        let is_active = in_selection && idx == season_cursor;
-                        let style = super::selector_pill_style(is_active);
-                        spans.push(Span::styled(format!(" {} ", label), style));
-                    }
-                    if scroll_end < n_tabs {
+                        if scroll_end < n_tabs {
+                            spans.push(Span::styled(
+                                " \u{203a}",
+                                Style::default().fg(palette::GREEN),
+                            ));
+                        }
+                    } else {
                         spans.push(Span::styled(
-                            " \u{203a}",
-                            Style::default().fg(palette::GREEN),
+                            detail.seasons.len().to_string(),
+                            Style::default().fg(palette::SOFT_WHITE),
                         ));
                     }
                     f.render_widget(
@@ -670,7 +665,7 @@ impl App {
                         Rect {
                             x: area.x,
                             y: row,
-                            width: area.width,
+                            width: season_w16,
                             height: 1,
                         },
                     );
@@ -684,11 +679,12 @@ impl App {
                 .and_then(|s| detail.episodes.get(&s.id))
                 .map(|eps| eps.as_slice())
                 .unwrap_or(&[]);
-            if !episodes.is_empty() && row < max_y {
+            if in_selection && !episodes.is_empty() && row < max_y {
+                let (_, table_width) = text_dims(row);
                 let table_area = Rect {
                     x: area.x,
                     y: row,
-                    width: area.width,
+                    width: table_width,
                     height: max_y
                         .saturating_sub(row)
                         .saturating_sub((SERIES_DETAIL_TRAILING_BLANK_ROWS + 1) as u16),
