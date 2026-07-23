@@ -442,7 +442,7 @@ impl App {
             self.fetch_series_detail(item.id.clone());
         }
 
-        let inner_x = area.x + 1;
+        let inner_x = area.x;
         let inner_w = (area.width as usize).saturating_sub(2);
         let inner_w16 = area.width.saturating_sub(2);
         let max_y = area.y + area.height;

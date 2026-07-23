@@ -65,7 +65,7 @@ fn build_list_row_spans(
                 Style::default().fg(palette::YELLOW)
             };
             vec![
-                super::selection_marker(true),
+                Span::raw(" "),
                 Span::styled(title, title_style),
             ]
         } else {
