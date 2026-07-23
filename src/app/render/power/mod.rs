@@ -12,7 +12,7 @@ use super::super::ui_util::{build_queue_rows, natural_sort_key, QueueRow};
 use super::super::{palette, App, PowerFocus};
 use mbv_core::api::MediaItem;
 use ratatui::layout::{Alignment, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
 use ratatui::Frame;
@@ -259,18 +259,17 @@ pub(super) fn build_power_queue_rows(items: &[MediaItem]) -> (Vec<QueueRow>, Vec
     (rows, group_for_header)
 }
 
-/// Style for a selector pill (group/section/artist tab row): IRIS text +
-/// BOLD on GREEN when selected, PILL text on GREEN otherwise. Shared by
+/// Style for a selector pill (group/section/artist tab row): dark active text
+/// on YELLOW, yellow inactive text on the dark pill background. Shared by
 /// every power-view pill row (home's group/section pills, music's group
 /// pills) so they can't drift apart on the selected-vs-unselected look.
 pub(super) fn selector_pill_style(selected: bool) -> Style {
     if selected {
-        Style::default()
-            .fg(palette::IRIS)
-            .bg(palette::GREEN)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(palette::PILL_DARK).bg(palette::YELLOW)
     } else {
-        Style::default().fg(palette::PILL).bg(palette::GREEN)
+        Style::default()
+            .fg(palette::YELLOW)
+            .bg(palette::POWER_RIGHT_BG)
     }
 }
 
@@ -1901,18 +1900,18 @@ mod tests {
             alpha_x >= right_col_x,
             "expected pills confined to the right column"
         );
-        assert_eq!(buf[(alpha_x, 3)].bg, palette::GREEN);
+        assert_eq!(buf[(alpha_x, 3)].bg, palette::YELLOW);
         assert_eq!(
             buf[(alpha_x, 3)].fg,
-            palette::IRIS,
-            "expected the selected group pill to use iris text"
+            palette::PILL_DARK,
+            "expected the selected group pill to use dark text"
         );
         let beta_x = char_x(row3, "Beta");
-        assert_eq!(buf[(beta_x, 3)].bg, palette::GREEN);
+        assert_eq!(buf[(beta_x, 3)].bg, palette::POWER_RIGHT_BG);
         assert_eq!(
             buf[(beta_x, 3)].fg,
-            palette::PILL,
-            "expected a non-selected group pill to stay green with pill text"
+            palette::YELLOW,
+            "expected a non-selected group pill to use yellow text"
         );
 
         let (gap_start, gap_end) = (alpha_x.min(beta_x), alpha_x.max(beta_x));

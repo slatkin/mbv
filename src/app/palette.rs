@@ -11,10 +11,10 @@ pub const QUEUE_UNFOCUSED_FG: Color = Color::Rgb(79, 91, 88); // queue row text 
 pub const QUEUE_BUTTON_FOCUSED_BG: Color = Color::Rgb(30, 35, 38); // focused queue button (#1E2326)
 pub const QUEUE_BUTTON_UNFOCUSED_BG: Color = Color::Rgb(46, 56, 60); // unfocused queue button (#2E383C)
 pub const YELLOW: Color = Color::Rgb(219, 188, 127); // muted gold (#dbbc7f)
-pub const AQUA: Color = Color::Rgb(131, 192, 146); // emby green — folders, watched (#83c092)
+pub const AQUA: Color = Color::Rgb(53, 167, 124); // emby green — folders, watched (#35a77c)
+pub const BLUE: Color = Color::Rgb(58, 148, 197); // pill background blue (#3a94c5)
 pub const GREEN: Color = Color::Rgb(60, 72, 65); // dark green-grey (#3c4841)
-pub const TEAL: Color = Color::Rgb(127, 187, 179); // light teal (#7fbbb3) — playback panel title text
-
+pub const PILL_DARK: Color = Color::Rgb(39, 46, 51); // pill dark color (#272e33)
 pub const IRIS: Color = Color::Rgb(167, 192, 128); // sage green — active tab, focused pill text (#A7C080)
 pub const IRIS_DIM: Color = Color::Rgb(83, 133, 80); // seekbar downloaded-unplayed: IRIS@50% over #555555
 pub const FOCUSED: Color = Color::Rgb(83, 83, 83); // focused item bg (#535353)
