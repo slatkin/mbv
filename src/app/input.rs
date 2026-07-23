@@ -5202,13 +5202,13 @@ mod power_music_track_focus_tests {
 
         assert!(!handled);
         // Display row 0 is the artist header, then one row per album up to
-        // album 35's colored-block frame (which adds a top border + top
-        // padding row before the album's own row -- see the page_down test
-        // above for the full 6-row block layout). A 31-row page up from
-        // album 35's row (display row 38) lands on display row 7 = album 6.
+        // album 35's colored-block frame. The selected block adds its border,
+        // padding, album-artist row, title row, and trailing block rows, so
+        // album 35 is at display row 39. A 31-row page up lands on display
+        // row 8 = album 7.
         assert_eq!(
             app.libs[0].nav_stack.last().unwrap().cursor,
-            6,
+            7,
             "PageUp should move by rendered display rows, not raw album count"
         );
         assert!(app.libs[0].album_track_focus.is_none());
@@ -5271,11 +5271,11 @@ mod power_music_track_focus_tests {
 
         assert!(!handled);
         // Display rows: 0 artist header; selected album 0 is wrapped in the
-        // colored-block frame (1 top border, 2 colored top padding, 3 album
-        // row, 4 collapsed action-hint row, 5 colored bottom padding, 6
-        // bottom border), then 7 = album 1. With a 1-row page, PageDown
-        // targets row 4 (the hint row, non-selectable), so paging must
-        // resolve forward to the next selectable album row at row 7 => album 1.
+        // colored-block frame (1 top border, 2 colored top padding, 3
+        // album-artist row, 4 album row, 5 collapsed action hint, 6 colored
+        // bottom padding, 7 bottom border), then 8 = album 1. With a 1-row
+        // page, PageDown targets the hint row, so paging resolves forward to
+        // album 1.
         assert_eq!(down_app.libs[0].nav_stack.last().unwrap().cursor, 1);
 
         let mut up_app = make_power_music_album_list_app(10, 3);
@@ -5288,11 +5288,10 @@ mod power_music_track_focus_tests {
         assert!(!handled);
         // Display rows: 0 artist header, 1-3 albums 0-2, then selected album
         // 3 is wrapped in the colored-block frame (4 top border, 5 colored
-        // top padding, 6 album row, ...). With a 4-row page, PageUp targets
-        // row 2 (album 1, selectable) -- the 2 extra border/padding rows in
-        // front of album 3's block push its row from 4 to 6, so the page no
-        // longer reaches all the way back to the artist header at row 0.
-        assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 1);
+        // top padding, 6 album-artist row, 7 album row, ...). With a 4-row
+        // page, PageUp targets row 3, the nearest album in the upward
+        // direction: album 2.
+        assert_eq!(up_app.libs[0].nav_stack.last().unwrap().cursor, 2);
     }
 
     fn buffer_to_string(term: &ratatui::Terminal<ratatui::backend::TestBackend>) -> String {
