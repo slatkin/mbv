@@ -1032,14 +1032,16 @@ impl App {
 
             // White unicode borders at the block's top and bottom padding
             // rows, rendering inside the coloured block.
-            super::render_selected_block_borders(
-                f,
-                content_area,
-                offset,
-                visible,
-                banner_rule_top,
-                banner_rule_bottom,
-            );
+            if banner_rows > 0 {
+                super::render_selected_block_borders(
+                    f,
+                    content_area,
+                    offset,
+                    visible,
+                    banner_rule_top,
+                    banner_rule_bottom,
+                );
+            }
 
             // Series inline detail: render ▁ top border at the filler row above selected item
             if series_detail_rows > 0
@@ -1377,6 +1379,70 @@ mod tests {
         assert!(
             long_rows > short_rows,
             "long overview ({long_rows} rows) should reserve more rows than short overview ({short_rows} rows)"
+        );
+    }
+
+    // Regression test for a bug where the plain (non letter-grouped) list
+    // branch called `render_selected_block_borders` unconditionally instead
+    // of gating it on `banner_rows > 0` like the letter-grouped branch does.
+    // With no movie banner, `banner_rule_top`/`banner_rule_bottom` collapse
+    // to near-zero, so it painted a stray full-width `▔` row right where the
+    // series inline detail's title/metadata should be.
+    #[test]
+    fn series_inline_detail_has_no_stray_banner_border_in_plain_list_branch() {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+        let mut library = make_item("Shows", "CollectionFolder");
+        library.id = "lib-shows".into();
+        library.is_folder = true;
+        library.collection_type = "tvshows".into();
+
+        let mut show = make_item("Test Show", "Series");
+        show.id = "series-1".into();
+        show.series_name = "Test Show".into();
+        show.production_year = 2020;
+        show.end_year = 2022;
+        show.genre = "drama".into();
+        show.overview = "A short overview.".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-shows".into(),
+                title: "Shows".into(),
+                items: vec![show],
+                total_count: 1,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            album_track_focus: None,
+            artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
+            library_total: None,
+        });
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 40);
+
+        let title_pos = out.find("Test Show  ").or_else(|| out.find("Test Show\n"));
+        let meta_pos = out.find("2020-2022  DRAMA");
+        let title_pos = title_pos.expect("series title should render");
+        let meta_pos = meta_pos.expect("year/genre metadata should render");
+        let between = &out[title_pos..meta_pos];
+        assert!(
+            !between.contains('\u{2594}'),
+            "no stray banner-border glyph should appear between the series title \
+             and its year/genre metadata row:\n{out}"
         );
     }
 }
