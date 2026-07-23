@@ -14,9 +14,10 @@ use mbv_core::api::MediaItem;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::{Block, Clear, Paragraph};
 use ratatui::Frame;
 use textwrap::wrap;
+use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
 // Power View re-renders frequently while scrolling; prefer a cheaper filter in
@@ -42,6 +43,23 @@ const POWER_VIEW_GAP: u16 = 0;
 /// indentation relative to this padded edge.
 pub(super) const POWER_TAB_LEFT_PAD: u16 = 2;
 
+fn power_right_panel_content_area(area: Rect, left_collapsed: bool) -> Rect {
+    if left_collapsed {
+        Rect {
+            width: area.width.saturating_sub(1),
+            ..area
+        }
+    } else {
+        Rect {
+            x: area.x + POWER_TAB_LEFT_PAD,
+            width: area
+                .width
+                .saturating_sub(POWER_TAB_LEFT_PAD.saturating_mul(2)),
+            ..area
+        }
+    }
+}
+
 pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usize, offset: usize) {
     let visible = area.height as usize;
     render_power_scrollbar_with_viewport(
@@ -53,13 +71,6 @@ pub(super) fn render_power_scrollbar(f: &mut Frame, area: Rect, max_offset: usiz
     );
 }
 
-pub(super) fn right_panel_scrollbar_area(area: Rect) -> Rect {
-    Rect {
-        width: area.width.saturating_add(1),
-        ..area
-    }
-}
-
 pub(super) fn render_power_scrollbar_with_viewport(
     f: &mut Frame,
     area: Rect,
@@ -67,23 +78,96 @@ pub(super) fn render_power_scrollbar_with_viewport(
     viewport_content_length: usize,
     offset: usize,
 ) {
+    render_power_scrollbar_with_viewport_at(
+        f,
+        area,
+        content_length,
+        viewport_content_length,
+        offset,
+        area.x + area.width.saturating_sub(1),
+        super::thin_vertical_thumb(GlyphSet::minimal()),
+        palette::SCROLLBAR,
+    );
+}
+
+pub(super) fn render_power_right_scrollbar(
+    f: &mut Frame,
+    area: Rect,
+    max_offset: usize,
+    offset: usize,
+) {
+    let visible = area.height as usize;
+    let x = if area.right() < f.area().right() {
+        area.right()
+    } else {
+        area.x + area.width.saturating_sub(1)
+    };
+    render_power_scrollbar_with_viewport_at(
+        f,
+        area,
+        max_offset.saturating_add(visible),
+        visible,
+        offset,
+        x,
+        super::thin_vertical_thumb(GlyphSet::minimal()),
+        palette::SCROLLBAR,
+    );
+}
+
+pub(super) fn render_power_right_scrollbar_with_viewport(
+    f: &mut Frame,
+    area: Rect,
+    content_length: usize,
+    viewport_content_length: usize,
+    offset: usize,
+) {
+    let x = if area.right() < f.area().right() {
+        area.right()
+    } else {
+        area.x + area.width.saturating_sub(1)
+    };
+    render_power_scrollbar_with_viewport_at(
+        f,
+        area,
+        content_length,
+        viewport_content_length,
+        offset,
+        x,
+        super::thin_vertical_thumb(GlyphSet::minimal()),
+        palette::SCROLLBAR,
+    );
+}
+
+fn render_power_scrollbar_with_viewport_at(
+    f: &mut Frame,
+    area: Rect,
+    content_length: usize,
+    viewport_content_length: usize,
+    offset: usize,
+    x: u16,
+    glyph_set: GlyphSet,
+    scrollbar_color: Color,
+) {
     if area.height == 0 || viewport_content_length == 0 || content_length <= viewport_content_length
     {
         return;
     }
     let max_offset = content_length.saturating_sub(viewport_content_length);
-    let mut state = ScrollbarState::new(max_offset + 1)
-        .position(offset.min(max_offset))
-        .viewport_content_length(viewport_content_length);
-    f.render_stateful_widget(
-        Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .thumb_symbol("▐")
-            .track_symbol(Some(" "))
-            .style(Style::default().fg(palette::SUBTLE))
-            .begin_symbol(None)
-            .end_symbol(None),
-        area,
-        &mut state,
+    let scrollbar = ScrollBar::vertical(ScrollLengths {
+        content_len: content_length,
+        viewport_len: viewport_content_length,
+    })
+    .offset(offset.min(max_offset))
+    .glyph_set(glyph_set)
+    .track_style(Style::default().fg(scrollbar_color))
+    .thumb_style(Style::default().fg(scrollbar_color));
+    f.render_widget(
+        &scrollbar,
+        Rect {
+            x,
+            width: 1,
+            ..area
+        },
     );
 }
 
@@ -840,17 +924,7 @@ impl App {
         // instead of each renderer inventing its own. When the left column is
         // collapsed the user has asked to reclaim maximum width, so the gutters
         // are dropped and the library spans the panel edge-to-edge.
-        let lib_area = if self.power_left_collapsed {
-            lib_area
-        } else {
-            Rect {
-                x: lib_area.x + POWER_TAB_LEFT_PAD,
-                width: lib_area
-                    .width
-                    .saturating_sub(POWER_TAB_LEFT_PAD.saturating_mul(2)),
-                ..lib_area
-            }
-        };
+        let lib_area = power_right_panel_content_area(lib_area, self.power_left_collapsed);
 
         let mut render_lib_area = lib_area;
         if self.power_left_tab > 0 && self.is_music_group_view(self.power_left_tab - 1) {
@@ -1062,12 +1136,10 @@ mod tests {
         let top = render_power_scrollbar_column(7, 3, 0);
         let bottom = render_power_scrollbar_column(7, 3, 3);
 
-        assert_eq!(top.lines().next(), Some("▐"));
-        assert_eq!(bottom.lines().last(), Some("▐"));
-        assert!(
-            top.matches('▐').count() > 2,
-            "expected a proportional thumb:\n{top}"
-        );
+        assert!(top.lines().next().is_some_and(|line| line != " "));
+        assert!(bottom.lines().last().is_some_and(|line| line != " "));
+        assert!(top.chars().filter(|&c| c == '▕').count() > 2);
+        assert!(top.chars().all(|c| c == '▕' || c == ' ' || c == '\n'));
     }
 
     #[test]
@@ -1075,9 +1147,22 @@ mod tests {
         let top = render_power_scrollbar_column_with_viewport(7, 10, 2, 0);
         let bottom = render_power_scrollbar_column_with_viewport(7, 10, 2, 8);
 
-        assert_eq!(top.matches('▐').count(), 1);
-        assert_eq!(top.lines().next(), Some("▐"));
-        assert_eq!(bottom.lines().last(), Some("▐"));
+        assert!((1..=2).contains(&top.matches('▕').count()));
+        assert!((1..=2).contains(&bottom.matches('▕').count()));
+        assert!(top.chars().all(|c| c == '▕' || c == ' ' || c == '\n'));
+        assert!(bottom.chars().all(|c| c == '▕' || c == ' ' || c == '\n'));
+    }
+
+    #[test]
+    fn power_queue_scrollbar_uses_queue_unfocused_color() {
+        let backend = TestBackend::new(1, 7);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            render_power_scrollbar(f, Rect::new(0, 0, 1, 7), 3, 0);
+        })
+        .unwrap();
+
+        assert_eq!(term.backend().buffer()[(0, 0)].fg, palette::SCROLLBAR);
     }
 
     fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
@@ -1241,13 +1326,25 @@ mod tests {
     }
 
     #[test]
-    fn right_panel_scrollbar_uses_one_column_right_padding() {
-        let content_area = Rect::new(42, 3, 36, 10);
+    fn expanded_power_right_scrollbar_uses_first_right_gutter_column() {
+        let backend = TestBackend::new(80, 5);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            render_power_right_scrollbar(f, Rect::new(2, 0, 76, 5), 3, 0);
+        })
+        .unwrap();
 
-        let scrollbar_area = right_panel_scrollbar_area(content_area);
+        let buffer = term.backend().buffer();
+        assert_eq!(buffer[(77, 0)].symbol(), " ");
+        assert_eq!(buffer[(78, 0)].symbol(), "▕");
+        assert_eq!(buffer[(79, 0)].symbol(), " ");
+    }
 
-        assert_eq!(scrollbar_area.x, content_area.x);
-        assert_eq!(scrollbar_area.width, content_area.width + 1);
+    #[test]
+    fn collapsed_power_right_panel_keeps_one_column_after_scrollbar() {
+        let right_panel = Rect::new(0, 0, 80, 24);
+        let content = power_right_panel_content_area(right_panel, true);
+        assert_eq!(content.x + content.width, right_panel.right() - 1);
     }
 
     fn make_power_movie_app() -> App {
@@ -1376,7 +1473,7 @@ mod tests {
 
         assert_eq!(layout.queue_area, Rect::default());
         assert_eq!(layout.left_area.x, 0);
-        assert_eq!(layout.left_area.width, 100);
+        assert_eq!(layout.left_area.width, 99);
     }
 
     #[test]

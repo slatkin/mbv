@@ -12,12 +12,17 @@ use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Tabs,
-};
+use ratatui::widgets::{Block, Clear, Paragraph, Tabs};
 use ratatui::Frame;
 use std::time::Instant;
+use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
+
+pub(super) fn thin_vertical_thumb(mut glyphs: GlyphSet) -> GlyphSet {
+    glyphs.thumb_vertical_lower = ['▕'; 8];
+    glyphs.thumb_vertical_upper = ['▕'; 8];
+    glyphs
+}
 
 /// Height of the tab-bar box: 1 row padding + 1 row tab + 1 row spacer.
 /// Shared by both view modes (Standard here, Power in `power/mod.rs`) so the
@@ -442,22 +447,21 @@ impl App {
             return;
         }
         let max_offset = total.saturating_sub(visible);
-        let mut state = ScrollbarState::new(max_offset + 1)
-            .position(scroll.min(max_offset))
-            .viewport_content_length(visible);
-        f.render_stateful_widget(
-            Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .style(Style::default().fg(palette::OVERLAY))
-                .thumb_symbol("▐")
-                .thumb_style(Style::default().fg(palette::AQUA))
-                .track_symbol(Some("│"))
-                .begin_symbol(None)
-                .end_symbol(None),
+        let scrollbar = ScrollBar::vertical(ScrollLengths {
+            content_len: total,
+            viewport_len: visible,
+        })
+        .offset(scroll.min(max_offset))
+        .glyph_set(thin_vertical_thumb(GlyphSet::box_drawing()))
+        .track_style(Style::default().fg(palette::SCROLLBAR))
+        .thumb_style(Style::default().fg(palette::SCROLLBAR));
+        f.render_widget(
+            &scrollbar,
             Rect {
-                width: content.width.saturating_add(1),
+                x: content.x.saturating_add(content.width),
+                width: 1,
                 ..content
             },
-            &mut state,
         );
     }
 
@@ -1614,14 +1618,18 @@ mod tests {
         let top = render_sidebar_scrollbar_column(10, 5, 0);
         let bottom = render_sidebar_scrollbar_column(10, 5, 5);
 
-        assert_eq!(top.lines().next(), Some("▐"));
-        assert_eq!(bottom.lines().last(), Some("▐"));
-        assert_eq!(top.matches('▐').count(), bottom.matches('▐').count());
+        assert!(top.lines().next().is_some_and(|line| line != "│"));
+        assert!(bottom.lines().last().is_some_and(|line| line != "│"));
+        assert_eq!(
+            top.lines().filter(|line| *line != "│").count(),
+            bottom.lines().filter(|line| *line != "│").count()
+        );
+        assert!(top.chars().all(|c| c == '│' || c == '▕' || c == '\n'));
         assert_ne!(top, bottom);
     }
 
     #[test]
-    fn sidebar_scrollbar_thumb_uses_pine_not_track_color() {
+    fn sidebar_scrollbar_uses_scrollbar_color() {
         let backend = TestBackend::new(1, 5);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
@@ -1630,9 +1638,9 @@ mod tests {
         .unwrap();
 
         let buf = term.backend().buffer();
-        assert_eq!(buf[(0, 0)].symbol(), "▐");
-        assert_eq!(buf[(0, 0)].fg, palette::AQUA);
+        assert_ne!(buf[(0, 0)].symbol(), "│");
+        assert_eq!(buf[(0, 0)].fg, palette::SCROLLBAR);
         assert_eq!(buf[(0, 4)].symbol(), "│");
-        assert_eq!(buf[(0, 4)].fg, palette::OVERLAY);
+        assert_eq!(buf[(0, 4)].fg, palette::SCROLLBAR);
     }
 }

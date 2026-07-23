@@ -55,6 +55,7 @@ unicode-width = "0.2.2"
 log.workspace = true
 libc.workspace = true
 nix.workspace = true
+tui-scrollbar = "0.2.7"
 
 [build-dependencies]
 resvg = "0.47"

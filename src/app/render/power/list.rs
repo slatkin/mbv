@@ -833,12 +833,7 @@ impl App {
 
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
-                super::render_power_scrollbar(
-                    f,
-                    super::right_panel_scrollbar_area(content_area),
-                    max_off,
-                    offset,
-                );
+                super::render_power_right_scrollbar(f, content_area, max_off, offset);
             }
 
             if banner_rows > 0 {
@@ -1092,12 +1087,7 @@ impl App {
 
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
-                super::render_power_scrollbar(
-                    f,
-                    super::right_panel_scrollbar_area(content_area),
-                    max_off,
-                    offset,
-                );
+                super::render_power_right_scrollbar(f, content_area, max_off, offset);
             }
 
             // White unicode borders at the block's top and bottom padding

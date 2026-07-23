@@ -8,8 +8,9 @@ use super::super::super::App;
 use mbv_core::api::MediaItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 
 pub(super) const LIB_SELECTED_IMG_W: u16 = 32;
 pub(super) const LIB_AUDIO_IMG_W: u16 = 12;
@@ -92,17 +93,21 @@ impl App {
             // Use the server-reported total, not `display_items.len()`, so the
             // thumb reflects the real list size instead of shrinking to just
             // whatever page(s) have been lazily fetched so far.
-            let mut sb_state =
-                ScrollbarState::new(total_count.max(display_items.len())).position(scroll);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("▐")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                area,
-                &mut sb_state,
+            let scrollbar = ScrollBar::vertical(ScrollLengths {
+                content_len: total_count.max(display_items.len()),
+                viewport_len: area.height as usize,
+            })
+            .offset(scroll)
+            .glyph_set(super::super::thin_vertical_thumb(GlyphSet::minimal()))
+            .track_style(Style::default().fg(palette::SCROLLBAR))
+            .thumb_style(Style::default().fg(palette::SCROLLBAR));
+            f.render_widget(
+                &scrollbar,
+                Rect {
+                    x: area.x + area.width.saturating_sub(1),
+                    width: 1,
+                    ..area
+                },
             );
         }
     }

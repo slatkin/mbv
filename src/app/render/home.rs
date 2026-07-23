@@ -9,11 +9,9 @@ use mbv_core::api::MediaItem;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Block, BorderType, Borders, List, ListItem, ListState, Paragraph, Scrollbar,
-    ScrollbarOrientation, ScrollbarState,
-};
+use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph};
 use ratatui::Frame;
+use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 use unicode_width::UnicodeWidthStr;
 
 impl App {
@@ -525,17 +523,15 @@ impl App {
                 height: area.height,
             };
             layout.home_scrollbar = sb_rect;
-            let mut sb_state = ScrollbarState::new(max_offset + 1).position(row_offset);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("▐")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                area,
-                &mut sb_state,
-            );
+            let scrollbar = ScrollBar::vertical(ScrollLengths {
+                content_len: max_offset.saturating_add(visible_rows),
+                viewport_len: visible_rows,
+            })
+            .offset(row_offset)
+            .glyph_set(super::thin_vertical_thumb(GlyphSet::minimal()))
+            .track_style(Style::default().fg(palette::SCROLLBAR))
+            .thumb_style(Style::default().fg(palette::SCROLLBAR));
+            f.render_widget(&scrollbar, sb_rect);
         } else {
             layout.home_scrollbar = Rect::default();
         }
@@ -665,9 +661,7 @@ impl App {
         use ratatui::layout::{Constraint, Layout};
         use ratatui::style::{Modifier, Style};
         use ratatui::text::{Line, Span};
-        use ratatui::widgets::{
-            Block, BorderType, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-        };
+        use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 
         if !self.search.is_open() {
             return;
@@ -833,11 +827,21 @@ impl App {
         f.render_stateful_widget(List::new(items), results_area, &mut state);
 
         if filtered_total > visible {
-            let mut sb_state = ScrollbarState::new(filtered_total).position(scroll);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight),
-                results_area,
-                &mut sb_state,
+            let scrollbar = ScrollBar::vertical(ScrollLengths {
+                content_len: filtered_total,
+                viewport_len: visible,
+            })
+            .offset(scroll)
+            .glyph_set(super::thin_vertical_thumb(GlyphSet::box_drawing()))
+            .track_style(Style::default().fg(palette::SCROLLBAR))
+            .thumb_style(Style::default().fg(palette::SCROLLBAR));
+            f.render_widget(
+                &scrollbar,
+                Rect {
+                    x: results_area.x + results_area.width.saturating_sub(1),
+                    width: 1,
+                    ..results_area
+                },
             );
         }
     }

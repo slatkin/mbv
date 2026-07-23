@@ -4,8 +4,9 @@ use super::super::super::ui_util::trunc_str;
 use super::super::super::App;
 use ratatui::layout::{Alignment, Rect};
 use ratatui::style::{Modifier, Style};
-use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 
 impl App {
     pub(super) fn render_season_grid(
@@ -207,16 +208,21 @@ impl App {
         }
 
         if total_rows > n_visible_rows {
-            let mut state = ScrollbarState::new(total_rows).position(scroll_row);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("▐")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                area,
-                &mut state,
+            let scrollbar = ScrollBar::vertical(ScrollLengths {
+                content_len: total_rows,
+                viewport_len: n_visible_rows,
+            })
+            .offset(scroll_row)
+            .glyph_set(super::super::thin_vertical_thumb(GlyphSet::minimal()))
+            .track_style(Style::default().fg(palette::SCROLLBAR))
+            .thumb_style(Style::default().fg(palette::SCROLLBAR));
+            f.render_widget(
+                &scrollbar,
+                Rect {
+                    x: area.x + area.width.saturating_sub(1),
+                    width: 1,
+                    ..area
+                },
             );
         }
     }

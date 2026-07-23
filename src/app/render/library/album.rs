@@ -5,10 +5,9 @@ use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::{Alignment, Constraint, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{
-    Cell, Paragraph, Row, Scrollbar, ScrollbarOrientation, ScrollbarState, Table, TableState,
-};
+use ratatui::widgets::{Cell, Paragraph, Row, Table, TableState};
 use ratatui::Frame;
+use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 
 impl App {
     pub(super) fn render_album_view(&mut self, f: &mut Frame, area: Rect, lib_idx: usize) {
@@ -175,17 +174,21 @@ impl App {
         let total_rows = n;
         let visible_rows = right_area.height as usize;
         if total_rows > visible_rows {
-            let max_offset = total_rows.saturating_sub(visible_rows);
-            let mut sb_state = ScrollbarState::new(max_offset + 1).position(state.offset());
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("▐")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                right_area,
-                &mut sb_state,
+            let scrollbar = ScrollBar::vertical(ScrollLengths {
+                content_len: total_rows,
+                viewport_len: visible_rows,
+            })
+            .offset(state.offset())
+            .glyph_set(super::super::thin_vertical_thumb(GlyphSet::minimal()))
+            .track_style(Style::default().fg(palette::SCROLLBAR))
+            .thumb_style(Style::default().fg(palette::SCROLLBAR));
+            f.render_widget(
+                &scrollbar,
+                Rect {
+                    x: right_area.x + right_area.width.saturating_sub(1),
+                    width: 1,
+                    ..right_area
+                },
             );
         }
     }
