@@ -415,6 +415,9 @@ impl App {
         rows += SERIES_DETAIL_DIVIDER_ROWS;
         rows += SERIES_DETAIL_EPISODE_ROWS_ESTIMATE;
 
+        // Bottom border row
+        rows += 1;
+
         rows
     }
 
@@ -454,7 +457,7 @@ impl App {
         // ── Series Primary image (right-aligned, text wraps around it) ───
         const IMG_COLS: u16 = 18;
         const IMG_MAX_ROWS: u16 = 12;
-        let img_start_row = area.y + 1; // row after title
+        let img_start_row = row + 1; // row after title
         let primary_cache_key = format!("{}:ser_primary", item.id);
         if !item.id.is_empty() && self.images_enabled() {
             self.fetch_card_image(
@@ -793,6 +796,22 @@ impl App {
                     height: 1,
                 },
                 " Loading\u{2026}",
+            );
+        }
+
+        // ── Bottom border: row of ▔ characters at the very bottom ───────
+        if max_y > area.y {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    "\u{2594}".repeat(area.width as usize),
+                    Style::default().fg(palette::SOFT_WHITE),
+                )),
+                Rect {
+                    x: area.x,
+                    y: max_y - 1,
+                    width: area.width,
+                    height: 1,
+                },
             );
         }
     }
