@@ -434,7 +434,14 @@ where
             .levels
             .get(idx + 1)
             .is_some_and(|next| level.items.iter().any(|item| item.id == next.parent_id));
-        restored.levels.push(level.to_position_level());
+        let mut position_level = level.to_position_level();
+        if idx == 0 {
+            // `library_total` belongs to the root LibraryTab, not BrowseLevel.
+            // Preserve it while rebuilding the saved position so restored
+            // letter-pill views remain eligible for their selector row.
+            position_level.library_total = saved_level.library_total;
+        }
+        restored.levels.push(position_level);
         nav_stack.push(level);
         if !can_descend {
             break;
@@ -4594,8 +4601,8 @@ pub(crate) mod tests {
                     unplayed_only: false,
                     sort_by: "SortName".into(),
                     sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
+                    letter_filter_index: Some(0),
+                    library_total: Some(301),
                 },
                 crate::config::LibraryPositionLevel {
                     parent_id: "folder-b".into(),
@@ -4634,6 +4641,8 @@ pub(crate) mod tests {
         assert_eq!(restored.1.len(), 2);
         assert_eq!(restored.1[0].cursor, 1);
         assert_eq!(restored.1[1].cursor, 0);
+        assert_eq!(restored.0.levels[0].letter_filter_index, Some(0));
+        assert_eq!(restored.0.levels[0].library_total, Some(301));
     }
 
     #[test]
