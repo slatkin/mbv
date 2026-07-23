@@ -544,6 +544,20 @@ impl App {
                 );
             }
 
+            if series_detail_rows > 0 {
+                let series_rule_top = display_cursor;
+                let series_rule_bottom = display_cursor + series_detail_rows.saturating_sub(1);
+                super::render_selected_block_background(
+                    f,
+                    content_area,
+                    offset,
+                    visible,
+                    series_rule_top,
+                    series_rule_bottom,
+                    palette::MEDIA_SELECTED_BG,
+                );
+            }
+
             // Width available to title + duration on a normal list row (with a
             // 1-col leading separator before the title). For the selected row
             // with an inline banner, the colored block's 2-col side padding
@@ -817,6 +831,25 @@ impl App {
                     visible,
                     banner_rule_top,
                     banner_rule_bottom,
+                    palette::MEDIA_SELECTED_BG,
+                );
+            }
+
+            // Series inline detail block: same treatment as the movie banner
+            // but uses the selected item row itself as the top of the colored
+            // block. The SeriesDetailFiller top border (▁) and the bottom
+            // border (▔, drawn inside render_series_inline_detail) are left
+            // uncolored so they blend into the existing background.
+            if series_detail_rows > 0 {
+                let series_rule_top = display_cursor;
+                let series_rule_bottom = display_cursor + series_detail_rows.saturating_sub(1);
+                super::render_selected_block_background(
+                    f,
+                    content_area,
+                    offset,
+                    visible,
+                    series_rule_top,
+                    series_rule_bottom,
                     palette::MEDIA_SELECTED_BG,
                 );
             }
