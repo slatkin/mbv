@@ -429,6 +429,10 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // space for top border
                     display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
                 }
+                // Series inline detail: ▁ top border above the selected item
+                if series_detail_rows > 0 && idx == cursor {
+                    display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
+                }
                 display_rows.push(DisplayRow::Item(idx));
                 if banner_rows > 0 && idx == cursor {
                     for _ in 0..banner_rows.saturating_sub(2) {
@@ -437,10 +441,8 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // bottom padding (colored)
                     display_rows.push(DisplayRow::BannerFiller); // space for bottom border
                 }
-                // Series inline detail: offset list to make room for the block.
-                // One filler row above for the ▁ top border, the rest below for content.
+                // Series inline detail content rows below the selected item
                 if series_detail_rows > 0 && idx == cursor {
-                    display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
                     for _ in 0..series_detail_rows {
                         display_rows.push(DisplayRow::SeriesDetailFiller);
                     }
@@ -472,7 +474,11 @@ impl App {
                 && offset > 0
                 && matches!(
                     display_rows.get(offset),
-                    Some(DisplayRow::Item(_) | DisplayRow::BannerFiller)
+                    Some(
+                        DisplayRow::Item(_)
+                            | DisplayRow::BannerFiller
+                            | DisplayRow::SeriesDetailFiller
+                    )
                 )
             {
                 if matches!(
@@ -740,6 +746,10 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // space for top border
                     display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
                 }
+                // Series inline detail: ▁ top border above the selected item
+                if series_detail_rows > 0 && i == cursor {
+                    display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
+                }
                 display_rows.push(DisplayRow::Item(i));
                 if banner_rows > 0 && i == cursor {
                     for _ in 0..banner_rows.saturating_sub(2) {
@@ -748,10 +758,8 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // bottom padding (colored)
                     display_rows.push(DisplayRow::BannerFiller); // space for bottom border
                 }
-                // Series inline detail: offset list to make room for the block.
-                // One filler row above for the ▁ top border, the rest below for content.
+                // Series inline detail content rows below the selected item
                 if series_detail_rows > 0 && i == cursor {
-                    display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
                     for _ in 0..series_detail_rows {
                         display_rows.push(DisplayRow::SeriesDetailFiller);
                     }
