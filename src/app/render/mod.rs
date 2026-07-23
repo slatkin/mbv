@@ -820,6 +820,7 @@ impl App {
         } else {
             palette::MUTED
         };
+        let mut codec_value_next = false;
         let right = self
             .build_status_indicator_spans()
             .unwrap_or_default()
@@ -827,15 +828,23 @@ impl App {
             .map(|span| {
                 let is_caption =
                     matches!(span.content.as_ref(), "CODEC " | "RES " | "AUD " | "SUB ");
-                if is_caption {
+                let is_codec_caption = span.content.as_ref() == "CODEC ";
+                if is_codec_caption {
+                    codec_value_next = true;
                     Span::styled(
                         span.content.to_string(),
                         span.style.fg(palette::PLAYBACK_META_FG),
                     )
-                } else if span.content.contains("FLAC") {
+                } else if codec_value_next {
+                    codec_value_next = false;
                     Span::styled(
                         span.content.to_string(),
                         span.style.fg(palette::PLAYBACK_CONTENT_FG),
+                    )
+                } else if is_caption {
+                    Span::styled(
+                        span.content.to_string(),
+                        span.style.fg(palette::PLAYBACK_META_FG),
                     )
                 } else {
                     span
