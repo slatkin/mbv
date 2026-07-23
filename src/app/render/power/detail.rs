@@ -58,6 +58,12 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
 const SERIES_DETAIL_DIVIDER_ROWS: usize = 2; // blank spacer + divider/pills row
 const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8; // estimated visible episode rows
 const SERIES_DETAIL_OVERVIEW_MAX_LINES: usize = 4;
+/// Blank row above the series title (below the ▁ top border) and blank row
+/// below the episode list (above the ▔ bottom border). Shared by
+/// `series_inline_detail_rows` and `render_series_inline_detail` for the same
+/// reason as the constants above -- one row budget, two call sites.
+const SERIES_DETAIL_LEADING_BLANK_ROWS: usize = 1;
+const SERIES_DETAIL_TRAILING_BLANK_ROWS: usize = 1;
 
 /// Builds the "YYYY-YYYY  GENRE" (or any subset present) metadata line for a
 /// Series item, shared by `series_inline_detail_rows` (row-count estimate)
@@ -378,8 +384,11 @@ impl App {
     ) -> usize {
         let inner_w = (panel_width as usize).saturating_sub(2);
 
+        // Blank spacer above the series title
+        let mut rows = SERIES_DETAIL_LEADING_BLANK_ROWS;
+
         // Series title row
-        let mut rows = 1usize;
+        rows += 1;
 
         // Series metadata row (year range + genre)
         if !series_meta_line(item).is_empty() {
@@ -415,6 +424,9 @@ impl App {
         rows += SERIES_DETAIL_DIVIDER_ROWS;
         rows += SERIES_DETAIL_EPISODE_ROWS_ESTIMATE;
 
+        // Blank spacer below the episode list
+        rows += SERIES_DETAIL_TRAILING_BLANK_ROWS;
+
         // Bottom border row
         rows += 1;
 
@@ -447,6 +459,11 @@ impl App {
         let inner_w16 = area.width.saturating_sub(1);
         let max_y = area.y + area.height;
         let mut row = area.y;
+
+        // Blank spacer above the series title, below the ▁ top border.
+        if row < max_y {
+            row += 1;
+        }
 
         let text_color = if focused {
             palette::WHITE
@@ -555,8 +572,9 @@ impl App {
             // Cap at available rows minus space for pills + episode list --
             // shares SERIES_DETAIL_* constants with `series_inline_detail_rows`
             // so the reserved space and what's actually drawn stay in sync.
-            let reserved_for_below =
-                (SERIES_DETAIL_DIVIDER_ROWS + SERIES_DETAIL_EPISODE_ROWS_ESTIMATE) as u16;
+            let reserved_for_below = (SERIES_DETAIL_DIVIDER_ROWS
+                + SERIES_DETAIL_EPISODE_ROWS_ESTIMATE
+                + SERIES_DETAIL_TRAILING_BLANK_ROWS) as u16;
             let available_rows =
                 (max_y.saturating_sub(row).saturating_sub(reserved_for_below)) as usize;
             for line_text in lines.iter().take(available_rows) {
@@ -694,7 +712,9 @@ impl App {
                     x: area.x,
                     y: row,
                     width: area.width,
-                    height: max_y.saturating_sub(row),
+                    height: max_y
+                        .saturating_sub(row)
+                        .saturating_sub(SERIES_DETAIL_TRAILING_BLANK_ROWS as u16),
                 };
                 if table_area.height > 0 {
                     let show_length = table_area.width > 40;
