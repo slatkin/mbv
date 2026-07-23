@@ -75,16 +75,8 @@ fn format_release_date(premiere_date: &str) -> String {
         .unwrap_or_else(|| premiere_date.to_string())
 }
 
-fn home_video_item_height(item: &mbv_core::api::MediaItem, text_w: usize, selected: bool) -> u16 {
-    if !selected {
-        1 // title only for non-selected rows
-    } else if item.overview.is_empty() || text_w == 0 {
-        3 // title + meta + separator
-    } else {
-        let ov_text = trunc_overview(&item.overview);
-        let lines = wrap(&ov_text, text_w).len() as u16;
-        3 + lines // title + meta + overview lines + separator
-    }
+fn home_video_item_height(_item: &mbv_core::api::MediaItem, _text_w: usize) -> u16 {
+    1 // title only for non-selected rows
 }
 
 fn render_home_video_item(
@@ -98,24 +90,27 @@ fn render_home_video_item(
     focused: bool,
     is_feed_lib: bool,
 ) {
-    if selected {
+    let expanded = selected && item_h > 1;
+    let title_y = row_y + if expanded { 2 } else { 0 };
+
+    if expanded {
         f.render_widget(
             Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
             Rect {
                 x: content_area.x,
-                y: row_y,
+                y: row_y + 1,
                 width: text_w as u16,
-                height: item_h,
+                height: item_h.saturating_sub(2),
             },
         );
     }
 
-    let marker = super::selection_marker(selected && focused);
+    let marker = super::selection_marker(selected && focused && !expanded);
     f.render_widget(
         Paragraph::new(marker),
         Rect {
             x: content_area.x,
-            y: row_y,
+            y: title_y,
             width: 1,
             height: 1,
         },
@@ -123,7 +118,9 @@ fn render_home_video_item(
 
     let tx = content_area.x + 1;
     let tw = (text_w.saturating_sub(1)) as u16;
-    let title_color = if selected && focused {
+    let title_color = if expanded {
+        palette::YELLOW
+    } else if selected && focused {
         palette::IRIS
     } else {
         palette::TEXT
@@ -140,13 +137,13 @@ fn render_home_video_item(
         Paragraph::new(Span::styled(title_trunc, title_style)),
         Rect {
             x: tx,
-            y: row_y,
+            y: title_y,
             width: tw,
             height: 1,
         },
     );
 
-    if selected && row_y + 1 < content_area.y + content_area.height {
+    if selected && !expanded && row_y + 1 < content_area.y + content_area.height {
         let mut meta_spans: Vec<Span> = Vec::new();
         if item.played {
             meta_spans.push(Span::styled(
@@ -187,6 +184,7 @@ fn render_home_video_item(
     }
 
     if selected
+        && !expanded
         && !item.overview.is_empty()
         && item_h >= 4
         && row_y + 2 < content_area.y + content_area.height
@@ -216,17 +214,19 @@ fn render_home_video_item(
         }
     }
 
-    let sep_y = row_y + item_h - 1;
-    if selected && sep_y < content_area.y + content_area.height {
-        super::render_horizontal_rule(
+    if expanded && row_y < content_area.y + content_area.height {
+        super::render_selected_block_borders(
             f,
             Rect {
                 x: content_area.x,
-                y: sep_y,
                 width: text_w as u16,
-                height: 1,
+                y: row_y,
+                height: item_h,
             },
-            palette::MUTED,
+            0,
+            item_h as usize,
+            1,
+            item_h.saturating_sub(2) as usize,
         );
     }
 }
@@ -297,9 +297,13 @@ impl App {
         let text_w_with_sb = (content_area.width as usize).saturating_sub(1);
         let item_heights: Vec<u16> = items
             .iter()
-            .map(|it| home_video_item_height(it, text_w_with_sb, false))
+            .map(|it| home_video_item_height(it, text_w_with_sb))
             .collect();
-        let selected_height = home_video_item_height(&items[current_pos], text_w_with_sb, true);
+        let selected_panel_width = text_w_with_sb.saturating_sub(2) as u16;
+        let selected_height = self
+            .compact_banner_layout_with_overview(&items[current_pos], selected_panel_width, true)
+            .content_rows()
+            .saturating_add(5) as u16;
         let selected_index = current_pos;
         let mut item_heights = item_heights;
         item_heights[selected_index] = selected_height;
@@ -347,6 +351,24 @@ impl App {
                 focused,
                 is_feed_lib,
             );
+            if selected {
+                let detail_height = item_h.saturating_sub(5);
+                if detail_height > 0 {
+                    self.render_power_compact_detail(
+                        f,
+                        Rect {
+                            x: content_area.x + 1,
+                            y: row_y + 3,
+                            width: text_w.saturating_sub(2) as u16,
+                            height: detail_height,
+                        },
+                        lib_idx,
+                        focused,
+                        layout,
+                    );
+                    layout.cursor_screen_y = Some(row_y + 1);
+                }
+            }
             let visible_rows = (content_area.y + content_area.height)
                 .saturating_sub(row_y)
                 .min(item_h);
@@ -481,9 +503,13 @@ impl App {
         let text_w_with_sb = (list_area.width as usize).saturating_sub(1);
         let item_heights: Vec<u16> = items
             .iter()
-            .map(|it| home_video_item_height(it, text_w_with_sb, false))
+            .map(|it| home_video_item_height(it, text_w_with_sb))
             .collect();
-        let selected_height = home_video_item_height(&items[current_pos], text_w_with_sb, true);
+        let selected_panel_width = text_w_with_sb.saturating_sub(2) as u16;
+        let selected_height = self
+            .compact_banner_layout_with_overview(&items[current_pos], selected_panel_width, true)
+            .content_rows()
+            .saturating_add(5) as u16;
         let mut item_heights = item_heights;
         item_heights[current_pos] = selected_height;
         let total_h: u16 = item_heights.iter().sum();
@@ -521,6 +547,24 @@ impl App {
             render_home_video_item(
                 f, item, row_y, item_h, list_area, text_w, selected, focused, true,
             );
+            if selected {
+                let detail_height = item_h.saturating_sub(5);
+                if detail_height > 0 {
+                    self.render_power_compact_detail(
+                        f,
+                        Rect {
+                            x: list_area.x + 1,
+                            y: row_y + 3,
+                            width: text_w.saturating_sub(2) as u16,
+                            height: detail_height,
+                        },
+                        lib_idx,
+                        focused,
+                        layout,
+                    );
+                    layout.cursor_screen_y = Some(row_y + 1);
+                }
+            }
             let visible_rows = (list_area.y + list_area.height)
                 .saturating_sub(row_y)
                 .min(item_h);

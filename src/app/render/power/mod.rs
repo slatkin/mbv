@@ -324,19 +324,6 @@ pub(super) fn power_content_width(width: u16, needs_scrollbar: bool) -> usize {
     width.saturating_sub(gutter) as usize
 }
 
-/// Renders a single-row horizontal rule (`─` repeated to fill `area`'s width)
-/// in `color` -- e.g. a divider between list rows, or the "tail" line under a
-/// section header. Shared so separators stay visually identical.
-pub(super) fn render_horizontal_rule(f: &mut Frame, area: Rect, color: Color) {
-    f.render_widget(
-        Paragraph::new(Span::styled(
-            "\u{2500}".repeat(area.width as usize),
-            Style::default().fg(color),
-        )),
-        area,
-    );
-}
-
 /// What to draw behind a pill bar before the pills are overlaid.
 pub(super) enum PillUnderlay {
     /// No divider. `fill` clears the row's trailing cells with blanks so the

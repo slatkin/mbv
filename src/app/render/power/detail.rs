@@ -11,8 +11,8 @@ use ratatui::Frame;
 use textwrap::wrap;
 use unicode_width::UnicodeWidthStr;
 
-const IMG_COLS: u16 = 18;
-const IMG_ROWS: u16 = 12;
+const IMG_COLS: u16 = 24;
+const IMG_ROWS: u16 = 14;
 
 /// Cache key for the compact movie banner's poster image, under which
 /// `fetch_card_image`/`fetch_list_card_image_when_idle` store and look up the
@@ -164,7 +164,9 @@ impl App {
             return None;
         }
 
-        let item = if let Some(search) = &lib.search {
+        let item = if self.is_feed_home_video_group_view(lib_idx) {
+            self.selected_feed_home_video_item(lib_idx)?
+        } else if let Some(search) = &lib.search {
             let &idx = search.results.get(search.cursor)?;
             search.items.get(idx)?.clone()
         } else {
@@ -215,6 +217,15 @@ impl App {
         &mut self,
         item: &mbv_core::api::MediaItem,
         panel_width: u16,
+    ) -> CompactBannerLayout {
+        self.compact_banner_layout_with_overview(item, panel_width, false)
+    }
+
+    pub(super) fn compact_banner_layout_with_overview(
+        &mut self,
+        item: &mbv_core::api::MediaItem,
+        panel_width: u16,
+        truncate_overview: bool,
     ) -> CompactBannerLayout {
         let inner_w = (panel_width as usize).saturating_sub(2);
 
@@ -334,7 +345,11 @@ impl App {
         let mut lines: Vec<String> = Vec::new();
         let mut director_line_idx: Option<usize> = None;
         if !item.overview.is_empty() || !item.director.is_empty() {
-            let cleaned_overview = clean_overview(&item.overview);
+            let cleaned_overview = if truncate_overview {
+                trunc_overview(&item.overview)
+            } else {
+                clean_overview(&item.overview)
+            };
             for paragraph in cleaned_overview.lines() {
                 let paragraph = if paragraph.trim().is_empty() {
                     " "
@@ -826,7 +841,10 @@ impl App {
 
         layout.cursor_screen_y = Some(area.y);
 
-        let content = self.compact_banner_layout(&item, area.width);
+        let truncate_overview =
+            self.is_home_video_view(lib_idx) || self.is_podcast_library(lib_idx);
+        let content =
+            self.compact_banner_layout_with_overview(&item, area.width, truncate_overview);
 
         let inner_x = area.x;
         let inner_w = area.width as usize;
