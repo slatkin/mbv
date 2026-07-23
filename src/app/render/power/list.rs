@@ -28,6 +28,64 @@ const COMPACT_BANNER_RULE_ROWS: usize = 1;
 const COMPACT_BANNER_GAP_ROWS: usize = 1;
 const COMPACT_BANNER_INDENT: u16 = 1;
 
+enum DisplayRow {
+    Spacer,
+    LetterHeader(String),
+    Item(usize),
+    BannerFiller,
+    SeriesDetailFiller,
+}
+
+fn push_selected_detail_fillers_before(
+    rows: &mut Vec<DisplayRow>,
+    item_idx: usize,
+    cursor: usize,
+    banner_rows: usize,
+    series_detail_rows: usize,
+) {
+    if banner_rows > 0 && item_idx == cursor {
+        rows.push(DisplayRow::BannerFiller);
+        rows.push(DisplayRow::BannerFiller);
+    }
+    if series_detail_rows > 0 && item_idx == cursor {
+        rows.push(DisplayRow::SeriesDetailFiller);
+        rows.push(DisplayRow::SeriesDetailFiller);
+    }
+}
+
+fn push_selected_detail_fillers_after(
+    rows: &mut Vec<DisplayRow>,
+    item_idx: usize,
+    cursor: usize,
+    banner_rows: usize,
+    series_detail_rows: usize,
+) {
+    if banner_rows > 0 && item_idx == cursor {
+        for _ in 0..banner_rows.saturating_sub(2) {
+            rows.push(DisplayRow::BannerFiller);
+        }
+        rows.push(DisplayRow::BannerFiller);
+        rows.push(DisplayRow::BannerFiller);
+    }
+    if series_detail_rows > 0 && item_idx == cursor {
+        for _ in 0..series_detail_rows {
+            rows.push(DisplayRow::SeriesDetailFiller);
+        }
+    }
+}
+
+fn selected_detail_lower_bound(
+    display_cursor: usize,
+    banner_rows: usize,
+    series_detail_rows: usize,
+    visible: usize,
+) -> usize {
+    let rows_below_cursor = banner_rows.max(series_detail_rows);
+    (display_cursor + rows_below_cursor)
+        .saturating_sub(visible.saturating_sub(1))
+        .min(display_cursor)
+}
+
 /// Builds the title (+ optional duration) spans for one list row, shared by
 /// both the letter-grouped and plain-list rendering branches (identical
 /// styling logic, only how `title`/`dur_str`/`avail` are computed differs
@@ -148,6 +206,78 @@ impl App {
         COMPACT_BANNER_RULE_ROWS + content_rows + COMPACT_BANNER_GAP_ROWS
     }
 
+    fn render_series_detail_if_visible(
+        &mut self,
+        f: &mut Frame,
+        content_area: Rect,
+        offset: usize,
+        visible: usize,
+        display_cursor: usize,
+        series_detail_rows: usize,
+        lib_idx: usize,
+        focused: bool,
+        layout: &mut LayoutPower,
+    ) {
+        if series_detail_rows == 0 {
+            return;
+        }
+        let content_start = display_cursor + 1;
+        if content_start < offset || content_start >= offset + visible {
+            return;
+        }
+
+        let detail_y = content_area.y + (content_start - offset) as u16;
+        let bottom = content_area.y + content_area.height;
+        let detail_h = (series_detail_rows as u16).min(bottom.saturating_sub(detail_y));
+        if detail_h == 0 {
+            return;
+        }
+
+        self.render_series_inline_detail(
+            f,
+            Rect {
+                x: content_area.x + COMPACT_BANNER_INDENT,
+                y: detail_y,
+                width: content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT),
+                height: detail_h,
+            },
+            lib_idx,
+            focused,
+            layout,
+        );
+    }
+
+    fn render_series_detail_top_border(
+        f: &mut Frame,
+        content_area: Rect,
+        offset: usize,
+        visible: usize,
+        display_cursor: usize,
+        series_detail_rows: usize,
+    ) {
+        if series_detail_rows == 0
+            || display_cursor < 2
+            || display_cursor - 2 < offset
+            || display_cursor - 2 >= offset + visible
+        {
+            return;
+        }
+
+        let border_y = content_area.y + (display_cursor - 2 - offset) as u16;
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                "\u{2581}".repeat(content_area.width as usize),
+                Style::default().fg(palette::SOFT_WHITE),
+            )),
+            Rect {
+                x: content_area.x,
+                y: border_y,
+                width: content_area.width,
+                height: 1,
+            },
+        );
+    }
+
     /// Renders the Continue/library list items into `area`.
     /// The title header is now drawn in the top-of-screen FOAM bar by `render_power_view`.
     pub(super) fn render_power_list(
@@ -238,21 +368,8 @@ impl App {
                     .width
                     .saturating_sub(1)
                     .saturating_sub(COMPACT_BANNER_INDENT);
-                self.series_inline_detail_rows(
-                    &item,
-                    panel_width,
-                    self.libs[lib_idx].series_selection.is_some(),
-                    self.libs[lib_idx]
-                        .series_selection
-                        .and_then(|_| self.series_detail_cache.get(&item.id))
-                        .and_then(|detail| {
-                            detail
-                                .seasons
-                                .get(self.libs[lib_idx].series_season_cursor)
-                                .and_then(|season| detail.episodes.get(&season.id))
-                        })
-                        .map(Vec::len),
-                )
+                let (in_selection, episode_count) = self.series_selection_state(lib_idx, &item.id);
+                self.series_inline_detail_rows(&item, panel_width, in_selection, episode_count)
             } else {
                 0
             }
@@ -428,14 +545,6 @@ impl App {
         } else if use_letter_groups {
             // Build display rows: inject a Spacer+LetterHeader at each bucket boundary.
             // The spacer is omitted before the very first header.
-            enum DisplayRow {
-                Spacer,
-                LetterHeader(String),
-                Item(usize),
-                BannerFiller,
-                SeriesDetailFiller,
-            }
-
             // Sort item indices by the same effective key used for bucketing so that
             // items within each group appear in article-stripped alphabetical order.
             let mut sorted_indices: Vec<usize> = (0..n).collect();
@@ -466,32 +575,21 @@ impl App {
                     display_rows.push(DisplayRow::LetterHeader(bucket.clone()));
                     last_bucket = bucket;
                 }
-                // When selected with banner rows, insert padding with border space.
-                // Structure: [border row] [top padding] [item] [content] [bottom padding] [border row]
-                if banner_rows > 0 && idx == cursor {
-                    display_rows.push(DisplayRow::BannerFiller); // space for top border
-                    display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
-                }
-                // Series inline detail: ▁ top border plus one colored spacer
-                // row above the selected item.
-                if series_detail_rows > 0 && idx == cursor {
-                    display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
-                    display_rows.push(DisplayRow::SeriesDetailFiller); // top padding (colored)
-                }
+                push_selected_detail_fillers_before(
+                    &mut display_rows,
+                    idx,
+                    cursor,
+                    banner_rows,
+                    series_detail_rows,
+                );
                 display_rows.push(DisplayRow::Item(idx));
-                if banner_rows > 0 && idx == cursor {
-                    for _ in 0..banner_rows.saturating_sub(2) {
-                        display_rows.push(DisplayRow::BannerFiller);
-                    }
-                    display_rows.push(DisplayRow::BannerFiller); // bottom padding (colored)
-                    display_rows.push(DisplayRow::BannerFiller); // space for bottom border
-                }
-                // Series inline detail content rows below the selected item
-                if series_detail_rows > 0 && idx == cursor {
-                    for _ in 0..series_detail_rows {
-                        display_rows.push(DisplayRow::SeriesDetailFiller);
-                    }
-                }
+                push_selected_detail_fillers_after(
+                    &mut display_rows,
+                    idx,
+                    cursor,
+                    banner_rows,
+                    series_detail_rows,
+                );
             }
             let total_display = display_rows.len();
 
@@ -502,11 +600,12 @@ impl App {
                 .unwrap_or(0);
             // For banners, `banner_rows` rows sit below the cursor (opening rule above).
             // For series, `series_detail_rows` rows sit below the cursor (block follows it).
-            let banner_below = banner_rows;
-            let rows_below_cursor = banner_below.max(series_detail_rows);
-            let lower_bound = (display_cursor + rows_below_cursor)
-                .saturating_sub(visible.saturating_sub(1))
-                .min(display_cursor);
+            let lower_bound = selected_detail_lower_bound(
+                display_cursor,
+                banner_rows,
+                series_detail_rows,
+                visible,
+            );
             let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
             // If stale scroll state would put the first item of a bucket at the
             // top of the viewport, back up so its letter header remains visible.
@@ -720,28 +819,17 @@ impl App {
                 }
             }
 
-            // Series inline detail: block sits below the selected row
-            if series_detail_rows > 0 && content_start >= offset && content_start < offset + visible
-            {
-                let detail_y = content_area.y + (content_start - offset) as u16;
-                let bottom = content_area.y + content_area.height;
-                let detail_h = (series_detail_rows as u16).min(bottom.saturating_sub(detail_y));
-                if detail_h > 0 {
-                    let detail_rect = Rect {
-                        x: content_area.x + COMPACT_BANNER_INDENT,
-                        y: detail_y,
-                        width: content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT),
-                        height: detail_h,
-                    };
-                    self.render_series_inline_detail(
-                        f,
-                        detail_rect,
-                        self.power_left_tab - 1,
-                        focused,
-                        layout,
-                    );
-                }
-            }
+            self.render_series_detail_if_visible(
+                f,
+                content_area,
+                offset,
+                visible,
+                display_cursor,
+                series_detail_rows,
+                self.power_left_tab - 1,
+                focused,
+                layout,
+            );
 
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
@@ -764,62 +852,33 @@ impl App {
                 );
             }
 
-            // Series inline detail: render ▁ top border above the colored top padding row
-            if series_detail_rows > 0
-                && display_cursor >= 2
-                && display_cursor - 2 >= offset
-                && display_cursor - 2 < offset + visible
-            {
-                let border_y = content_area.y + (display_cursor - 2 - offset) as u16;
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        "\u{2581}".repeat(content_area.width as usize),
-                        Style::default().fg(palette::SOFT_WHITE),
-                    )),
-                    Rect {
-                        x: content_area.x,
-                        y: border_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
-            }
+            Self::render_series_detail_top_border(
+                f,
+                content_area,
+                offset,
+                visible,
+                display_cursor,
+                series_detail_rows,
+            );
         } else {
-            enum DisplayRow {
-                Item(usize),
-                BannerFiller,
-                SeriesDetailFiller,
-            }
-
             let mut display_rows: Vec<DisplayRow> =
                 Vec::with_capacity(n + banner_rows + series_detail_rows);
             for i in 0..n {
-                // When selected with banner rows, insert padding with border space.
-                // Structure: [border row] [top padding] [item] [content] [bottom padding] [border row]
-                if banner_rows > 0 && i == cursor {
-                    display_rows.push(DisplayRow::BannerFiller); // space for top border
-                    display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
-                }
-                // Series inline detail: ▁ top border plus one colored spacer
-                // row above the selected item.
-                if series_detail_rows > 0 && i == cursor {
-                    display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
-                    display_rows.push(DisplayRow::SeriesDetailFiller); // top padding (colored)
-                }
+                push_selected_detail_fillers_before(
+                    &mut display_rows,
+                    i,
+                    cursor,
+                    banner_rows,
+                    series_detail_rows,
+                );
                 display_rows.push(DisplayRow::Item(i));
-                if banner_rows > 0 && i == cursor {
-                    for _ in 0..banner_rows.saturating_sub(2) {
-                        display_rows.push(DisplayRow::BannerFiller);
-                    }
-                    display_rows.push(DisplayRow::BannerFiller); // bottom padding (colored)
-                    display_rows.push(DisplayRow::BannerFiller); // space for bottom border
-                }
-                // Series inline detail content rows below the selected item
-                if series_detail_rows > 0 && i == cursor {
-                    for _ in 0..series_detail_rows {
-                        display_rows.push(DisplayRow::SeriesDetailFiller);
-                    }
-                }
+                push_selected_detail_fillers_after(
+                    &mut display_rows,
+                    i,
+                    cursor,
+                    banner_rows,
+                    series_detail_rows,
+                );
             }
             let total_display = display_rows.len();
             let display_cursor = display_rows
@@ -833,11 +892,12 @@ impl App {
             // (clamped to display_cursor itself if the viewport could never fit both).
             // For banners, `banner_rows` rows sit below the cursor (opening rule above).
             // For series, `series_detail_rows` rows sit below the cursor (block follows it).
-            let banner_below = banner_rows;
-            let rows_below_cursor = banner_below.max(series_detail_rows);
-            let lower_bound = (display_cursor + rows_below_cursor)
-                .saturating_sub(visible.saturating_sub(1))
-                .min(display_cursor);
+            let lower_bound = selected_detail_lower_bound(
+                display_cursor,
+                banner_rows,
+                series_detail_rows,
+                visible,
+            );
             let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
             // If a colored-padding BannerFiller (from a selected block) is at
             // the top, back up one row to keep the border-space BannerFiller visible.
@@ -892,6 +952,9 @@ impl App {
                 .skip(offset)
                 .take(visible)
                 .map(|(_abs_idx, row)| match row {
+                    DisplayRow::Spacer | DisplayRow::LetterHeader(_) => {
+                        ListItem::new(Line::default())
+                    }
                     // The colored block (drawn above) frames the selected row
                     // + banner, so the banner's top/bottom padding rows are
                     // empty -- they show the block's background.
@@ -964,7 +1027,10 @@ impl App {
                 .skip(offset)
                 .take(visible)
                 .map(|row| match row {
-                    DisplayRow::BannerFiller | DisplayRow::SeriesDetailFiller => None,
+                    DisplayRow::Spacer
+                    | DisplayRow::LetterHeader(_)
+                    | DisplayRow::BannerFiller
+                    | DisplayRow::SeriesDetailFiller => None,
                     DisplayRow::Item(idx) => Some(*idx),
                 })
                 .collect();
@@ -1012,28 +1078,17 @@ impl App {
                 }
             }
 
-            // Series inline detail: block sits below the selected row
-            if series_detail_rows > 0 && content_start >= offset && content_start < offset + visible
-            {
-                let detail_y = content_area.y + (content_start - offset) as u16;
-                let bottom = content_area.y + content_area.height;
-                let detail_h = (series_detail_rows as u16).min(bottom.saturating_sub(detail_y));
-                if detail_h > 0 {
-                    let detail_rect = Rect {
-                        x: content_area.x + COMPACT_BANNER_INDENT,
-                        y: detail_y,
-                        width: content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT),
-                        height: detail_h,
-                    };
-                    self.render_series_inline_detail(
-                        f,
-                        detail_rect,
-                        self.power_left_tab - 1,
-                        focused,
-                        layout,
-                    );
-                }
-            }
+            self.render_series_detail_if_visible(
+                f,
+                content_area,
+                offset,
+                visible,
+                display_cursor,
+                series_detail_rows,
+                self.power_left_tab - 1,
+                focused,
+                layout,
+            );
 
             if show_scrollbar {
                 let max_off = total_display.saturating_sub(visible);
@@ -1058,26 +1113,14 @@ impl App {
                 );
             }
 
-            // Series inline detail: render ▁ top border above the colored top padding row
-            if series_detail_rows > 0
-                && display_cursor >= 2
-                && display_cursor - 2 >= offset
-                && display_cursor - 2 < offset + visible
-            {
-                let border_y = content_area.y + (display_cursor - 2 - offset) as u16;
-                f.render_widget(
-                    Paragraph::new(Span::styled(
-                        "\u{2581}".repeat(content_area.width as usize),
-                        Style::default().fg(palette::SOFT_WHITE),
-                    )),
-                    Rect {
-                        x: content_area.x,
-                        y: border_y,
-                        width: content_area.width,
-                        height: 1,
-                    },
-                );
-            }
+            Self::render_series_detail_top_border(
+                f,
+                content_area,
+                offset,
+                visible,
+                display_cursor,
+                series_detail_rows,
+            );
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
@@ -1525,6 +1568,116 @@ mod tests {
         assert!(
             lines[last_episode_row + 2].contains('\u{2594}'),
             "bottom border should follow exactly one spacer row after episodes:\n{out}"
+        );
+    }
+
+    #[test]
+    fn letter_grouped_series_detail_keeps_headers_and_episode_borders() {
+        let mut app = make_app_stub();
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Shows", "CollectionFolder");
+        library.id = "lib-shows".into();
+        library.is_folder = true;
+        library.collection_type = "tvshows".into();
+
+        let items: Vec<_> = (0..60)
+            .map(|i| {
+                let letter = (b'A' + (i % 26) as u8) as char;
+                let name = if i == 0 {
+                    "Alpha Series 00".to_string()
+                } else {
+                    format!("{letter} Series {i:02}")
+                };
+                let mut series = make_item(&name, "Series");
+                series.id = format!("series-{i}");
+                if i == 0 {
+                    series.overview = "Letter-grouped selected series overview.".into();
+                }
+                series
+            })
+            .collect();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-shows".into(),
+                title: "Shows".into(),
+                items,
+                total_count: 60,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            album_track_focus: None,
+            artist_header_focus: None,
+            series_selection: Some(0),
+            series_season_cursor: 0,
+            library_total: Some(250),
+        });
+
+        let mut season = make_item("Season 1", "Season");
+        season.id = "season-1".into();
+        season.index_number = 1;
+        let episodes: Vec<_> = (1..=8)
+            .map(|i| {
+                let mut ep = make_item(&format!("Letter Episode {i}"), "Episode");
+                ep.id = format!("episode-{i}");
+                ep.index_number = i;
+                ep
+            })
+            .collect();
+        app.series_detail_cache.insert(
+            "series-0".into(),
+            SeriesDetail {
+                seasons: vec![season],
+                episodes: HashMap::from([("season-1".into(), episodes)]),
+            },
+        );
+
+        let mut layout = LayoutPower::default();
+        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 200);
+        let lines: Vec<&str> = out.lines().collect();
+        let header = lines
+            .iter()
+            .position(|line| line.trim() == "A")
+            .unwrap_or_else(|| panic!("letter-grouped series header should render:\n{out}"));
+        let title = lines
+            .iter()
+            .position(|line| line.contains("Alpha Series 00"))
+            .expect("selected series title should render");
+        assert!(
+            header < title,
+            "header should precede selected series:\n{out}"
+        );
+        assert!(
+            out.contains("Letter-grouped selected series overview."),
+            "selected series detail should render:\n{out}"
+        );
+
+        let episode = lines
+            .iter()
+            .position(|line| line.contains("8. Letter Episode 8"))
+            .expect("last episode should render");
+        assert!(
+            lines[episode + 1].trim().is_empty(),
+            "episode list should retain its trailing spacer:\n{out}"
+        );
+        assert!(
+            lines[episode + 2].contains('\u{2594}'),
+            "series detail should retain its bottom border:\n{out}"
+        );
+        assert!(
+            layout.left_row_map.iter().any(Option::is_none),
+            "letter headers and detail filler rows should remain non-selectable"
         );
     }
 }

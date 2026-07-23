@@ -62,6 +62,9 @@ const SERIES_DETAIL_OVERVIEW_MAX_LINES: usize = 4;
 /// `series_inline_detail_rows` and `render_series_inline_detail` for the same
 /// reason as the constants above -- one row budget, two call sites.
 const SERIES_DETAIL_TRAILING_BLANK_ROWS: usize = 1;
+const SERIES_IMAGE_COLS: u16 = 18;
+const SERIES_IMAGE_ROWS: u16 = 12;
+const SERIES_IMAGE_PLACEHOLDER_ROWS: u16 = 10;
 
 /// Builds the "YYYY-YYYY  GENRE" (or any subset present) metadata line for a
 /// Series item, shared by `series_inline_detail_rows` (row-count estimate)
@@ -390,6 +393,25 @@ impl App {
         }
     }
 
+    pub(super) fn series_selection_state(
+        &self,
+        lib_idx: usize,
+        series_id: &str,
+    ) -> (bool, Option<usize>) {
+        let in_selection = self.libs[lib_idx].series_selection.is_some();
+        let episode_count = self.libs[lib_idx]
+            .series_selection
+            .and_then(|_| self.series_detail_cache.get(series_id))
+            .and_then(|detail| {
+                detail
+                    .seasons
+                    .get(self.libs[lib_idx].series_season_cursor)
+                    .and_then(|season| detail.episodes.get(&season.id))
+            })
+            .map(Vec::len);
+        (in_selection, episode_count)
+    }
+
     pub(super) fn series_inline_detail_rows(
         &mut self,
         item: &mbv_core::api::MediaItem,
@@ -427,9 +449,8 @@ impl App {
 
         // Keep the block tall enough for the image, if it extends below the
         // text and episode content.
-        const IMG_ROWS: u16 = 12;
         let img_height = if self.images_enabled() {
-            IMG_ROWS as usize
+            SERIES_IMAGE_ROWS as usize
         } else {
             0
         };
@@ -460,6 +481,7 @@ impl App {
         let Some(item) = self.power_selected_series_item(lib_idx) else {
             return;
         };
+        let (in_selection, _) = self.series_selection_state(lib_idx, &item.id);
 
         // Fetch series detail if not cached
         if !item.id.is_empty() {
@@ -479,8 +501,6 @@ impl App {
         };
 
         // ── Series Primary image (right-aligned, text wraps around it) ───
-        const IMG_COLS: u16 = 18;
-        const IMG_MAX_ROWS: u16 = 12;
         let img_start_row = row;
         let primary_cache_key = format!("{}:ser_primary", item.id);
         if !item.id.is_empty() && self.images_enabled() {
@@ -491,25 +511,24 @@ impl App {
                 &["Primary"],
             );
         }
-        const IMG_PLACEHOLDER_H: u16 = 10;
         let img_loading = !item.id.is_empty()
             && self.images_enabled()
             && self.card_image_loading.contains(&primary_cache_key);
         let (img_actual_w, img_height, img_is_placeholder): (u16, u16, bool) = {
             if let Some(Some(state)) = self.card_image_states.get_mut(&primary_cache_key) {
                 let avail = ratatui::layout::Size {
-                    width: IMG_COLS,
-                    height: IMG_MAX_ROWS,
+                    width: SERIES_IMAGE_COLS,
+                    height: SERIES_IMAGE_ROWS,
                 };
                 match state.size_for(
                     ratatui_image::Resize::Scale(Some(POWER_RENDER_FILTER)),
                     avail,
                 ) {
                     Some(actual) => (actual.width, actual.height, false),
-                    None => (IMG_COLS, IMG_PLACEHOLDER_H, true),
+                    None => (SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS, true),
                 }
             } else if img_loading {
-                (IMG_COLS, IMG_PLACEHOLDER_H, true)
+                (SERIES_IMAGE_COLS, SERIES_IMAGE_PLACEHOLDER_ROWS, true)
             } else {
                 (0, 0, false)
             }
@@ -527,24 +546,22 @@ impl App {
         };
 
         // Series metadata (year range + genre)
-        if row < max_y {
-            let ser_meta = series_meta_line(&item);
-            if !ser_meta.is_empty() {
-                let (tw, tw16) = text_dims(row);
-                f.render_widget(
-                    Paragraph::new(Line::from(Span::styled(
-                        trunc_str(&ser_meta, tw),
-                        Style::default().fg(palette::SUBTLE),
-                    ))),
-                    Rect {
-                        x: inner_x,
-                        y: row,
-                        width: tw16,
-                        height: 1,
-                    },
-                );
-                row += 1;
-            }
+        let ser_meta = series_meta_line(&item);
+        if !ser_meta.is_empty() && row < max_y {
+            let (tw, tw16) = text_dims(row);
+            f.render_widget(
+                Paragraph::new(Line::from(Span::styled(
+                    trunc_str(&ser_meta, tw),
+                    Style::default().fg(palette::SUBTLE),
+                ))),
+                Rect {
+                    x: inner_x,
+                    y: row,
+                    width: tw16,
+                    height: 1,
+                },
+            );
+            row += 1;
         }
 
         // Blank spacer after series block
@@ -562,7 +579,7 @@ impl App {
             // shares SERIES_DETAIL_* constants with `series_inline_detail_rows`
             // so the reserved space and what's actually drawn stay in sync.
             let reserved_for_below = (SERIES_DETAIL_DIVIDER_ROWS
-                + if self.libs[lib_idx].series_selection.is_some() {
+                + if in_selection {
                     SERIES_DETAIL_EPISODE_ROWS_ESTIMATE
                 } else {
                     0
@@ -621,71 +638,68 @@ impl App {
         // ── Grey divider with season tabs overlaid ───────────────────────
         // Fetch series detail from cache
         let series_detail = self.series_detail_cache.get(&item.id).cloned();
-        let in_selection = self.libs[lib_idx].series_selection.is_some();
         let season_cursor = self.libs[lib_idx].series_season_cursor;
         let ep_cursor = self.libs[lib_idx].series_selection;
         if let Some(ref detail) = series_detail {
             if !detail.seasons.is_empty() && row < max_y {
-                if row < max_y {
-                    let (season_w, season_w16) = text_dims(row);
-                    let mut spans: Vec<Span> = Vec::new();
-                    spans.push(Span::styled(
-                        "Series: ",
-                        Style::default()
-                            .fg(palette::YELLOW)
-                            .add_modifier(Modifier::BOLD),
-                    ));
-                    if in_selection {
-                        let tab_labels: Vec<String> = detail
-                            .seasons
-                            .iter()
-                            .enumerate()
-                            .map(|(i, s)| {
-                                let n = if s.index_number > 0 {
-                                    s.index_number as usize
-                                } else {
-                                    i + 1
-                                };
-                                format!("{:02}", n)
-                            })
-                            .collect();
-                        let per_tab = 5usize;
-                        let n_tabs = tab_labels.len();
-                        let prefix_w = 8;
-                        let avail = season_w.saturating_sub(prefix_w + 2);
-                        let tabs_per_page = ((avail + 1) / per_tab).max(1);
-                        let scroll_end = tabs_per_page.min(n_tabs);
-                        for (idx, label) in tab_labels[..scroll_end].iter().enumerate() {
-                            if idx > 0 {
-                                spans.push(Span::raw(" "));
-                            }
-                            let is_active = idx == season_cursor;
-                            let style = super::selector_pill_style(is_active);
-                            spans.push(Span::styled(format!(" {} ", label), style));
+                let (season_w, season_w16) = text_dims(row);
+                let mut spans: Vec<Span> = Vec::new();
+                spans.push(Span::styled(
+                    "Series: ",
+                    Style::default()
+                        .fg(palette::YELLOW)
+                        .add_modifier(Modifier::BOLD),
+                ));
+                if in_selection {
+                    let tab_labels: Vec<String> = detail
+                        .seasons
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            let n = if s.index_number > 0 {
+                                s.index_number as usize
+                            } else {
+                                i + 1
+                            };
+                            format!("{:02}", n)
+                        })
+                        .collect();
+                    let per_tab = 5usize;
+                    let n_tabs = tab_labels.len();
+                    let prefix_w = 8;
+                    let avail = season_w.saturating_sub(prefix_w + 2);
+                    let tabs_per_page = ((avail + 1) / per_tab).max(1);
+                    let scroll_end = tabs_per_page.min(n_tabs);
+                    for (idx, label) in tab_labels[..scroll_end].iter().enumerate() {
+                        if idx > 0 {
+                            spans.push(Span::raw(" "));
                         }
-                        if scroll_end < n_tabs {
-                            spans.push(Span::styled(
-                                " \u{203a}",
-                                Style::default().fg(palette::GREEN),
-                            ));
-                        }
-                    } else {
+                        let is_active = idx == season_cursor;
+                        let style = super::selector_pill_style(is_active);
+                        spans.push(Span::styled(format!(" {} ", label), style));
+                    }
+                    if scroll_end < n_tabs {
                         spans.push(Span::styled(
-                            detail.seasons.len().to_string(),
-                            Style::default().fg(palette::SOFT_WHITE),
+                            " \u{203a}",
+                            Style::default().fg(palette::GREEN),
                         ));
                     }
-                    f.render_widget(
-                        Paragraph::new(Line::from(spans)),
-                        Rect {
-                            x: area.x,
-                            y: row,
-                            width: season_w16,
-                            height: 1,
-                        },
-                    );
-                    row += 1;
+                } else {
+                    spans.push(Span::styled(
+                        detail.seasons.len().to_string(),
+                        Style::default().fg(palette::SOFT_WHITE),
+                    ));
                 }
+                f.render_widget(
+                    Paragraph::new(Line::from(spans)),
+                    Rect {
+                        x: area.x,
+                        y: row,
+                        width: season_w16,
+                        height: 1,
+                    },
+                );
+                row += 1;
             }
 
             // ── Episode list ─────────────────────────────────────────────
@@ -724,7 +738,7 @@ impl App {
                         .iter()
                         .enumerate()
                         .map(|(i, ep)| {
-                            let is_cursor = in_selection && ep_cursor == Some(i);
+                            let is_cursor = ep_cursor == Some(i);
                             let is_playing = now_playing_id.as_deref() == Some(ep.id.as_str());
                             let row_style = if is_playing {
                                 Style::default()
@@ -777,9 +791,7 @@ impl App {
                         .collect();
 
                     let mut state = TableState::default();
-                    if in_selection {
-                        state.select(ep_cursor);
-                    }
+                    state.select(ep_cursor);
                     let table = Table::new(
                         rows,
                         [
@@ -1228,7 +1240,7 @@ mod tests {
         );
         assert_eq!(
             layout.inline_image_rect.map(|r| (r.width, r.height)),
-            Some((18, 12)),
+            Some((24, 14)),
             "expected the placeholder to reserve the banner's IMG_COLS x IMG_ROWS box:\n{out}"
         );
     }
@@ -1260,7 +1272,7 @@ mod tests {
 
         assert_eq!(
             layout.inline_image_rect.map(|r| (r.width, r.height)),
-            Some((18, 12)),
+            Some((24, 14)),
             "expected the placeholder to be reserved on the same frame as the rest of \
              the banner's content, even while the nav-idle gate is still closed:\n{out}"
         );
@@ -1292,13 +1304,13 @@ mod tests {
         let mut layout = LayoutPower::default();
         let out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
-        // IMG_COLS x IMG_ROWS = 18 x 12 cells at a 10x20px font is an
-        // 180x240px box. Fitting a 2:3 poster into that box is
-        // height-constrained (240/3 = 80 < 180/2 = 90), giving a fitted
-        // 160x240px image -> ceil(160/10) x ceil(240/20) = 16 x 12 cells.
+        // IMG_COLS x IMG_ROWS = 24 x 14 cells at a 10x20px font is a
+        // 240x280px box. Fitting a 2:3 poster into that box is
+        // height-constrained (280/3 < 240/2), giving a fitted
+        // 187x280px image -> ceil(187/10) x ceil(280/20) = 19 x 14 cells.
         assert_eq!(
             layout.inline_image_rect.map(|r| (r.width, r.height)),
-            Some((16, 12)),
+            Some((19, 14)),
             "expected the placeholder to match a typical 2:3 poster's fitted \
              width at this font size, not the full IMG_COLS bounding box:\n{out}"
         );
