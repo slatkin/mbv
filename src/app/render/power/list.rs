@@ -1176,13 +1176,24 @@ mod tests {
         width: u16,
         height: u16,
     ) -> String {
+        buffer_to_string(&render_power_list_to_terminal_sized(
+            app, layout, width, height,
+        ))
+    }
+
+    fn render_power_list_to_terminal_sized(
+        app: &mut App,
+        layout: &mut LayoutPower,
+        width: u16,
+        height: u16,
+    ) -> Terminal<TestBackend> {
         let backend = TestBackend::new(width, height);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
             app.render_power_list(f, Rect::new(0, 0, width, height), true, layout);
         })
         .unwrap();
-        buffer_to_string(&term)
+        term
     }
 
     fn make_power_movie_list_app(titles: Vec<&str>) -> App {
@@ -1502,6 +1513,7 @@ mod tests {
                 ep
             })
             .collect();
+        let active_episode = episodes[1].clone();
         app.series_detail_cache.insert(
             "series-1".into(),
             SeriesDetail {
@@ -1522,7 +1534,15 @@ mod tests {
         );
 
         app.libs[0].series_selection = Some(0);
-        let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 40);
+        app.player_tab.set_items(vec![active_episode], 0);
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 0;
+            status.paused = false;
+        }
+        let term = render_power_list_to_terminal_sized(&mut app, &mut layout, 60, 40);
+        let out = buffer_to_string(&term);
 
         let title_pos = out.find("Test Show  ").or_else(|| out.find("Test Show\n"));
         let meta_pos = out.find("2020-2022  DRAMA");
@@ -1555,6 +1575,38 @@ mod tests {
         assert!(
             lines[selected_row + 1].contains("2020-2022  DRAMA"),
             "metadata should render directly below the selected title:\n{out}"
+        );
+
+        let active_episode_line = lines
+            .iter()
+            .find(|line| line.contains("Episode 2"))
+            .copied()
+            .expect("active episode row should render");
+        let icon = crate::app::render::play_icon(app.use_nerd_fonts);
+        assert!(
+            active_episode_line.contains(&format!("2. {icon} Episode 2")),
+            "expected the active episode icon and following space after its number:\n{out}"
+        );
+        let icon_byte_x = active_episode_line
+            .find(icon)
+            .expect("expected active episode icon");
+        let icon_x = active_episode_line[..icon_byte_x].chars().count() as u16;
+        let title_byte_x = active_episode_line
+            .find("Episode 2")
+            .expect("expected active episode title");
+        let title_x = active_episode_line[..title_byte_x].chars().count() as u16;
+        let active_episode_y = lines
+            .iter()
+            .position(|line| line.contains("Episode 2"))
+            .unwrap() as u16;
+        let buffer = term.backend().buffer();
+        assert_eq!(
+            buffer[(icon_x, active_episode_y)].fg,
+            super::super::palette::AQUA
+        );
+        assert_eq!(
+            buffer[(title_x, active_episode_y)].fg,
+            super::super::palette::WHITE
         );
 
         let last_episode_row = lines

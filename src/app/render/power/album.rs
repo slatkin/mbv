@@ -8,8 +8,9 @@ use ratatui::style::*;
 use ratatui::text::*;
 use ratatui::widgets::*;
 use ratatui::Frame;
+use textwrap::wrap;
+use unicode_width::UnicodeWidthStr;
 
-const INLINE_ALBUM_DETAIL_INDENT: u16 = 2;
 const INLINE_ALBUM_TITLE_EXTRA_INDENT: u16 = 1;
 const INLINE_ALBUM_TRACK_EXTRA_INDENT: u16 = 2;
 const INLINE_ALBUM_ART_COLS: u16 = 24;
@@ -81,9 +82,13 @@ fn align_art(container: Rect, w: u16, h: u16, ax: ArtAnchorX, ay: ArtAnchorY) ->
     }
 }
 
+#[derive(Clone)]
 enum GroupedAlbumDisplayRow {
     ArtistHeader(ArtistHeaderSelection),
+    ArtistGroupSpacer,
     AlbumDetailRule,
+    AlbumArtist(usize),
+    AlbumWrappedContinuation,
     Album(usize),
     /// Action-hint row shown directly under the selected album's title when
     /// it is *not* expanded into full track-selection mode (`AlbumDetailStart`
@@ -128,6 +133,14 @@ impl GroupedAlbumDisplayRow {
 }
 
 impl App {
+    fn album_artist_label(&self, item: &mbv_core::api::MediaItem) -> String {
+        self.album_artist_cache
+            .get(&item.id)
+            .filter(|artist| !artist.is_empty())
+            .cloned()
+            .unwrap_or_else(|| item.artist.clone())
+    }
+
     fn build_grouped_album_display_plan(
         &mut self,
         albums: &[mbv_core::api::MediaItem],
@@ -136,6 +149,7 @@ impl App {
         selectable_headers: bool,
         selected_artist_header: Option<&ArtistHeaderSelection>,
         expand_selected: bool,
+        wrap_widths: Option<(u16, u16)>,
     ) -> GroupedAlbumDisplayPlan {
         let mut album_info: Vec<(String, String, String)> = Vec::with_capacity(albums.len());
         for item in albums {
@@ -174,13 +188,108 @@ impl App {
         } else {
             0
         };
+        let album_artist_labels: Vec<String> = albums
+            .iter()
+            .map(|item| self.album_artist_label(item))
+            .collect();
+        let wrapped_lines = |text: &str, width: u16| wrap(text, width.max(1) as usize).len().max(1);
+        let selected_artist_lines = |idx: usize| {
+            wrap_widths
+                .map(|(full_width, _)| {
+                    wrapped_lines(&album_artist_labels[idx], full_width.saturating_sub(1))
+                })
+                .unwrap_or(1)
+        };
+        let selected_title_lines = |idx: usize| {
+            wrap_widths
+                .map(|(full_width, artwork_width)| {
+                    let suffix = if album_info[idx].1.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" • {}", album_info[idx].1)
+                    };
+                    let suffix_width = suffix.chars().count() as u16;
+                    wrapped_lines(
+                        &album_info[idx].2,
+                        full_width
+                            .saturating_sub(artwork_width)
+                            .saturating_sub(1)
+                            .saturating_sub(suffix_width),
+                    )
+                })
+                .unwrap_or(1)
+        };
+        let selected_hint_lines = |text: &str| {
+            wrap_widths
+                .map(|(full_width, artwork_width)| {
+                    wrapped_lines(
+                        text,
+                        full_width.saturating_sub(artwork_width).saturating_sub(1),
+                    )
+                })
+                .unwrap_or(1)
+        };
+        let playing_track_id = {
+            let playback = self.effective_playback_state();
+            playback.active.then(|| {
+                self.playback_queue()
+                    .items
+                    .get(playback.active_idx)
+                    .map(|item| item.id.clone())
+            })
+        }
+        .flatten();
+        let use_nerd_fonts = self.use_nerd_fonts;
+        let selected_detail_rows = |tracks: &[mbv_core::api::MediaItem]| {
+            let Some((full_width, artwork_width)) = wrap_widths else {
+                return 2 + tracks.len();
+            };
+            let table_width = full_width.saturating_sub(artwork_width);
+            let show_length = table_width > 40;
+            let title_col_width =
+                (table_width as usize).saturating_sub(2 + if show_length { 8 } else { 0 });
+            let hint_width = table_width.saturating_sub(1).max(1) as usize;
+            let hint_lines = wrap(
+                "^P: Play | ^A: Enqueue | ^S: Shuffle | BACK: Exit",
+                hint_width,
+            )
+            .len()
+            .max(1);
+            let track_lines = tracks
+                .iter()
+                .enumerate()
+                .map(|(i, track)| {
+                    let track_num = if track.index_number > 0 {
+                        format!("{}. ", track.index_number)
+                    } else {
+                        format!("{}. ", i + 1)
+                    };
+                    let play_width = (playing_track_id.as_deref() == Some(track.id.as_str()))
+                        .then(|| super::super::play_icon(use_nerd_fonts).width() + 1)
+                        .unwrap_or(0);
+                    wrap(
+                        &track.name,
+                        title_col_width
+                            .saturating_sub(track_num.chars().count() + play_width)
+                            .max(1),
+                    )
+                    .len()
+                    .max(1)
+                })
+                .sum::<usize>();
+            hint_lines + 1 + track_lines
+        };
 
         let mut rows: Vec<GroupedAlbumDisplayRow> = Vec::new();
         let mut last_artist = String::new();
+        let mut has_artist_group = false;
         let mut selected_block_bounds: Option<(usize, usize)> = None;
         for &idx in &order {
             let artist = &album_info[idx].0;
             if artist != &last_artist {
+                if has_artist_group {
+                    rows.push(GroupedAlbumDisplayRow::ArtistGroupSpacer);
+                }
                 let header_selection = ArtistHeaderSelection {
                     first_album_id: albums[idx].id.clone(),
                     artist_label: artist.clone(),
@@ -211,6 +320,7 @@ impl App {
                     rows.push(GroupedAlbumDisplayRow::ArtistHeader(header_selection));
                 }
                 last_artist = artist.clone();
+                has_artist_group = true;
             }
             if idx == cursor && header_selected {
                 rows.push(GroupedAlbumDisplayRow::Album(idx));
@@ -220,8 +330,24 @@ impl App {
                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for top border
                 let top_idx = rows.len();
                 rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg top padding
+                rows.push(GroupedAlbumDisplayRow::AlbumArtist(idx));
+                rows.extend(std::iter::repeat_n(
+                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                    selected_artist_lines(idx).saturating_sub(1),
+                ));
                 rows.push(GroupedAlbumDisplayRow::Album(idx));
+                rows.extend(std::iter::repeat_n(
+                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                    selected_title_lines(idx).saturating_sub(1),
+                ));
                 rows.push(GroupedAlbumDisplayRow::AlbumActionHint);
+                rows.extend(std::iter::repeat_n(
+                    GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                    selected_hint_lines(
+                        "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
+                    )
+                    .saturating_sub(1),
+                ));
                 rows.extend(
                     std::iter::repeat_with(|| GroupedAlbumDisplayRow::AlbumDetailContinuation)
                         .take(inline_art_rows_after_album.saturating_sub(1)),
@@ -233,11 +359,21 @@ impl App {
             } else if idx == cursor {
                 match self.album_tracks_cache.get(&albums[idx].id) {
                     Some(tracks) if !tracks.is_empty() => {
-                        let detail_rows = (2 + tracks.len()).max(inline_art_rows_after_album);
+                        let detail_rows =
+                            selected_detail_rows(tracks).max(inline_art_rows_after_album);
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for top border
                         let top_idx = rows.len();
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg top padding
+                        rows.push(GroupedAlbumDisplayRow::AlbumArtist(idx));
+                        rows.extend(std::iter::repeat_n(
+                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                            selected_artist_lines(idx).saturating_sub(1),
+                        ));
                         rows.push(GroupedAlbumDisplayRow::Album(idx));
+                        rows.extend(std::iter::repeat_n(
+                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                            selected_title_lines(idx).saturating_sub(1),
+                        ));
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailStart(idx));
                         rows.extend(
                             std::iter::repeat_with(|| {
@@ -258,8 +394,21 @@ impl App {
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // space for top border
                         let top_idx = rows.len();
                         rows.push(GroupedAlbumDisplayRow::AlbumDetailRule); // colored bg top padding
+                        rows.push(GroupedAlbumDisplayRow::AlbumArtist(idx));
+                        rows.extend(std::iter::repeat_n(
+                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                            selected_artist_lines(idx).saturating_sub(1),
+                        ));
                         rows.push(GroupedAlbumDisplayRow::Album(idx));
+                        rows.extend(std::iter::repeat_n(
+                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                            selected_title_lines(idx).saturating_sub(1),
+                        ));
                         rows.push(GroupedAlbumDisplayRow::AlbumLoading);
+                        rows.extend(std::iter::repeat_n(
+                            GroupedAlbumDisplayRow::AlbumWrappedContinuation,
+                            selected_hint_lines("Loading…").saturating_sub(1),
+                        ));
                         rows.extend(
                             std::iter::repeat_with(|| {
                                 GroupedAlbumDisplayRow::AlbumDetailContinuation
@@ -356,6 +505,7 @@ impl App {
             true,
             selected.as_ref(),
             expand_selected,
+            None,
         );
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);
@@ -419,6 +569,7 @@ impl App {
             true,
             selected.as_ref(),
             expand_selected,
+            None,
         );
         let target = if to_end {
             plan.rows.iter().rev().find_map(|row| row.row_target(true))
@@ -473,6 +624,7 @@ impl App {
             true,
             Some(selection),
             expand_selected,
+            None,
         );
         if !plan.selected_artist_header_valid {
             if self.libs[lib_idx]
@@ -541,6 +693,7 @@ impl App {
             selectable_headers,
             selected.as_ref(),
             expand_selected,
+            None,
         );
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);
@@ -634,6 +787,14 @@ impl App {
             selectable_headers,
             selected.as_ref(),
             expand_selected,
+            Some((
+                area.width,
+                if self.images_enabled() && area.width >= INLINE_ALBUM_ART_RESERVED + 20 {
+                    INLINE_ALBUM_ART_RESERVED
+                } else {
+                    0
+                },
+            )),
         );
         if selected.is_some() && !plan.selected_artist_header_valid {
             self.clear_artist_header_focus(lib_idx);
@@ -655,7 +816,16 @@ impl App {
                 if selected_art_reserved_w == 0 {
                     return None;
                 }
-                let art_top = top_pad_abs + 1;
+                let title_offset = if selected.is_some() {
+                    1
+                } else {
+                    1 + wrap(
+                        &self.album_artist_label(&albums[cursor]),
+                        area.width.saturating_sub(1).max(1) as usize,
+                    )
+                    .len()
+                };
+                let art_top = top_pad_abs + title_offset;
                 let art_bottom = (art_top + INLINE_ALBUM_ART_ROWS as usize).min(bottom_pad_abs);
                 (art_bottom > art_top).then_some((art_top, art_bottom))
             });
@@ -692,41 +862,10 @@ impl App {
                 width: area.width,
                 height: 1,
             };
-            let detail_indent = INLINE_ALBUM_DETAIL_INDENT.min(row_area.width);
-            let title_indent =
-                (INLINE_ALBUM_DETAIL_INDENT + INLINE_ALBUM_TITLE_EXTRA_INDENT).min(row_area.width);
-            let detail_row_area = Rect {
-                x: row_area.x + detail_indent,
-                width: row_area.width.saturating_sub(detail_indent),
-                ..row_area
-            };
-            let title_row_area = Rect {
-                x: row_area.x + title_indent,
-                width: row_area.width.saturating_sub(title_indent),
-                ..row_area
-            };
             let abs_row_idx = offset + row_idx;
             let reserve_art = selected_art_abs_rows.is_some_and(|(art_top, art_bottom)| {
                 abs_row_idx >= art_top && abs_row_idx < art_bottom
             });
-            let row_detail_area = if reserve_art {
-                Rect {
-                    width: detail_row_area
-                        .width
-                        .saturating_sub(selected_art_reserved_w),
-                    ..detail_row_area
-                }
-            } else {
-                detail_row_area
-            };
-            let row_title_area = if reserve_art {
-                Rect {
-                    width: title_row_area.width.saturating_sub(selected_art_reserved_w),
-                    ..title_row_area
-                }
-            } else {
-                title_row_area
-            };
             match row {
                 GroupedAlbumDisplayRow::ArtistHeader(selection) => {
                     let selected = selectable_headers
@@ -760,39 +899,122 @@ impl App {
                     let spans = vec![Span::raw(" "), Span::styled(artist_label, label_style)];
                     f.render_widget(Paragraph::new(Line::from(spans)), label_area);
                 }
+                GroupedAlbumDisplayRow::ArtistGroupSpacer => {}
                 GroupedAlbumDisplayRow::AlbumDetailRule => {
                     // Padding rows for the colored block; the background is painted separately.
                     // This row renders as empty, letting the background block show through.
                 }
+                GroupedAlbumDisplayRow::AlbumWrappedContinuation => {}
+                GroupedAlbumDisplayRow::AlbumArtist(idx) => {
+                    let artist = self
+                        .album_artist_cache
+                        .get(&albums[*idx].id)
+                        .filter(|artist| !artist.is_empty())
+                        .cloned()
+                        .unwrap_or_else(|| albums[*idx].artist.clone());
+                    let artist_lines: Vec<Line> =
+                        wrap(&artist, row_area.width.saturating_sub(1).max(1) as usize)
+                            .into_iter()
+                            .map(|line| {
+                                Line::from(vec![
+                                    Span::raw(" "),
+                                    Span::styled(
+                                        line.into_owned(),
+                                        Style::default().fg(palette::YELLOW),
+                                    ),
+                                ])
+                            })
+                            .collect();
+                    f.render_widget(
+                        Paragraph::new(artist_lines.clone()),
+                        Rect {
+                            height: artist_lines.len() as u16,
+                            ..row_area
+                        },
+                    );
+                }
                 GroupedAlbumDisplayRow::Album(idx) => {
                     let selected = *idx == cursor && !header_selected;
                     let (_, year_str, album_name) = &album_info[*idx];
-                    let prefix_w = if year_str.is_empty() {
-                        3
+                    let suffix_w = if year_str.is_empty() {
+                        0
                     } else {
-                        year_str.len() + 6
+                        year_str.chars().count() + 3
                     };
-                    let name_w = avail.saturating_sub(prefix_w);
+                    let lead_w = if selected { 2 } else { 1 };
+                    let name_w = avail.saturating_sub(lead_w + suffix_w);
                     let trunc_name = trunc_str(album_name, name_w);
-                    let fg = if focused {
-                        palette::WHITE
-                    } else {
-                        palette::SUBTLE
-                    };
-                    let name_color = if selected && focused {
-                        palette::IRIS
-                    } else {
-                        fg
-                    };
-
                     // Detect if this album is inside a colored block frame
                     // Check the absolute row index (not the display cursor) to see if it's
                     // the first content row after the top border of the block
                     let has_block = selected
                         && selected_block_bounds.is_some_and(|(top_pad_abs, _)| {
-                            // Album row comes immediately after the top AlbumDetailRule border
-                            abs_row_idx == top_pad_abs + 1
+                            let artist_lines = wrap(
+                                &self.album_artist_label(&albums[*idx]),
+                                row_area.width.saturating_sub(1).max(1) as usize,
+                            )
+                            .len();
+                            abs_row_idx == top_pad_abs + 1 + artist_lines
                         });
+
+                    if has_block {
+                        let content_width = row_area
+                            .width
+                            .saturating_sub(selected_art_reserved_w)
+                            .saturating_sub(1);
+                        let suffix = if year_str.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" • {year_str}")
+                        };
+                        let suffix_width = suffix.chars().count();
+                        let title_lines: Vec<Line> = wrap(
+                            album_name,
+                            content_width.saturating_sub(suffix_width as u16).max(1) as usize,
+                        )
+                        .into_iter()
+                        .enumerate()
+                        .map(|(line_idx, line)| {
+                            let mut spans = vec![
+                                Span::raw(" "),
+                                Span::styled(
+                                    line.into_owned(),
+                                    Style::default()
+                                        .fg(palette::WHITE)
+                                        .add_modifier(Modifier::BOLD),
+                                ),
+                            ];
+                            if line_idx + 1
+                                == wrap(
+                                    album_name,
+                                    content_width.saturating_sub(suffix_width as u16).max(1)
+                                        as usize,
+                                )
+                                .len()
+                                && !suffix.is_empty()
+                            {
+                                spans.push(Span::styled(
+                                    " • ",
+                                    Style::default().fg(palette::YELLOW),
+                                ));
+                                spans.push(Span::styled(
+                                    year_str.as_str(),
+                                    Style::default().fg(palette::AQUA),
+                                ));
+                            }
+                            Line::from(spans)
+                        })
+                        .collect();
+                        f.render_widget(
+                            Paragraph::new(title_lines.clone()),
+                            Rect {
+                                width: row_area.width.saturating_sub(selected_art_reserved_w),
+                                height: title_lines.len() as u16,
+                                ..row_area
+                            },
+                        );
+                        continue;
+                    }
 
                     let mut spans: Vec<Span> = Vec::new();
                     if has_block {
@@ -806,74 +1028,55 @@ impl App {
                         spans.push(Span::raw(" "));
                     }
 
-                    if has_block {
-                        // Movie-style: keep padding style consistent
-                        // Year prefix: SUBTLE color, always shown when present
-                        if !year_str.is_empty() {
-                            spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
-                            spans.push(Span::styled(
-                                year_str.as_str(),
-                                Style::default().fg(palette::AQUA),
-                            ));
-                            spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
-                        } else {
-                            spans.push(Span::raw(" ")); // Spacing when no year
-                        }
-                        // Title: YELLOW, bold if focused
-                        let title_style = if focused {
-                            Style::default()
-                                .fg(palette::YELLOW)
-                                .add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().fg(palette::YELLOW)
-                        };
-                        spans.push(Span::styled(trunc_name, title_style));
-                    } else {
-                        // Legacy style spacing
-                        if selected {
-                            spans.push(Span::raw(" "));
-                        } else if year_str.is_empty() {
-                            spans.push(Span::raw("   "));
-                        } else {
-                            spans.push(Span::styled("   (", Style::default().fg(palette::SUBTLE)));
-                        }
-                        if selected && !year_str.is_empty() {
-                            spans.push(Span::styled("(", Style::default().fg(palette::SUBTLE)));
-                        }
-                        if !year_str.is_empty() {
-                            spans.push(Span::styled(
-                                year_str.as_str(),
-                                Style::default().fg(palette::AQUA),
-                            ));
-                            spans.push(Span::styled(") ", Style::default().fg(palette::SUBTLE)));
-                        }
-                        // Title styling
-                        let title_style = if selected && focused {
-                            Style::default().fg(name_color).add_modifier(Modifier::BOLD)
-                        } else {
-                            Style::default().fg(name_color)
-                        };
-                        spans.push(Span::styled(trunc_name, title_style));
+                    if !has_block && selected {
+                        spans.push(Span::raw(" "));
                     }
 
-                    let album_area = if has_block { row_title_area } else { row_area };
+                    let title_style = if selected && focused {
+                        Style::default()
+                            .fg(palette::WHITE)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(palette::WHITE)
+                    };
+                    spans.push(Span::styled(trunc_name, title_style));
+                    if !year_str.is_empty() {
+                        spans.push(Span::styled(" • ", Style::default().fg(palette::YELLOW)));
+                        spans.push(Span::styled(
+                            year_str.as_str(),
+                            Style::default().fg(palette::AQUA),
+                        ));
+                    }
+
+                    let album_area = row_area;
                     f.render_widget(Paragraph::new(Line::from(spans)), album_area);
                 }
                 GroupedAlbumDisplayRow::AlbumActionHint => {
-                    let hint_w = row_detail_area.width.saturating_sub(1) as usize;
-                    let hint = trunc_str(
-                        "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks",
-                        hint_w,
-                    );
+                    let hint = "^P: Play | ^A: Enqueue | ^S: Shuffle | ENTER: Show tracks";
+                    let hint_width = row_area
+                        .width
+                        .saturating_sub(selected_art_reserved_w)
+                        .saturating_sub(1)
+                        .max(1) as usize;
+                    let hint_lines: Vec<Line> = wrap(hint, hint_width)
+                        .into_iter()
+                        .map(|line| {
+                            Line::from(vec![
+                                Span::raw(" "),
+                                Span::styled(
+                                    line.into_owned(),
+                                    Style::default().fg(palette::SOFT_WHITE),
+                                ),
+                            ])
+                        })
+                        .collect();
                     f.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            Span::raw(" "),
-                            Span::styled(
-                                hint.to_string(),
-                                Style::default().fg(palette::SOFT_WHITE),
-                            ),
-                        ])),
-                        row_title_area,
+                        Paragraph::new(hint_lines.clone()),
+                        Rect {
+                            width: row_area.width.saturating_sub(selected_art_reserved_w),
+                            height: hint_lines.len() as u16,
+                            ..row_area
+                        },
                     );
                 }
                 GroupedAlbumDisplayRow::ArtistActionHint => {
@@ -909,27 +1112,45 @@ impl App {
                         let detail_focused = self.libs[lib_idx].album_track_focus.is_some();
                         self.render_power_album_detail(
                             f,
-                            Rect {
-                                height,
-                                ..row_title_area
-                            },
+                            Rect { height, ..row_area },
                             &tracks,
                             cursor,
                             detail_focused,
                             false, // show_title: Album(idx) row above already shows it
                             false,
+                            true,
+                            selected_art_reserved_w,
                             layout,
                         );
                     }
                 }
                 GroupedAlbumDisplayRow::AlbumLoading => {
+                    let loading = "Loading…";
+                    let loading_width = row_area
+                        .width
+                        .saturating_sub(selected_art_reserved_w)
+                        .saturating_sub(2)
+                        .max(1) as usize;
+                    let loading_lines: Vec<Line> = wrap(loading, loading_width)
+                        .into_iter()
+                        .map(|line| {
+                            Line::from(vec![
+                                super::selection_marker(true),
+                                Span::raw(" "),
+                                Span::styled(
+                                    line.into_owned(),
+                                    Style::default().fg(palette::MUTED),
+                                ),
+                            ])
+                        })
+                        .collect();
                     f.render_widget(
-                        Paragraph::new(Line::from(vec![
-                            super::selection_marker(true),
-                            Span::raw(" "),
-                            Span::styled("Loading\u{2026}", Style::default().fg(palette::MUTED)),
-                        ])),
-                        row_detail_area,
+                        Paragraph::new(loading_lines.clone()),
+                        Rect {
+                            width: row_area.width.saturating_sub(selected_art_reserved_w),
+                            height: loading_lines.len() as u16,
+                            ..row_area
+                        },
                     );
                 }
                 GroupedAlbumDisplayRow::AlbumDetailContinuation => {}
@@ -946,7 +1167,10 @@ impl App {
             .take(visible)
             .map(|dr| match dr {
                 GroupedAlbumDisplayRow::ArtistHeader(_)
-                | GroupedAlbumDisplayRow::AlbumDetailRule => None,
+                | GroupedAlbumDisplayRow::ArtistGroupSpacer
+                | GroupedAlbumDisplayRow::AlbumDetailRule
+                | GroupedAlbumDisplayRow::AlbumArtist(_)
+                | GroupedAlbumDisplayRow::AlbumWrappedContinuation => None,
                 GroupedAlbumDisplayRow::Album(idx) => Some(*idx),
                 GroupedAlbumDisplayRow::AlbumActionHint
                 | GroupedAlbumDisplayRow::ArtistActionHint
@@ -1245,6 +1469,8 @@ impl App {
         focused: bool,
         show_title: bool,
         selected_region_gutter: bool,
+        flush_left: bool,
+        art_reserved_w: u16,
         layout: &mut LayoutPower,
     ) {
         if area.height == 0 {
@@ -1336,28 +1562,38 @@ impl App {
                 } else {
                     "ENTER: Show tracks"
                 };
-                let hint = trunc_str(
+                let hint_width = area
+                    .width
+                    .saturating_sub(art_reserved_w)
+                    .saturating_sub(1)
+                    .max(1) as usize;
+                let hint_lines: Vec<Line> = wrap(
                     &format!("^P: Play | ^A: Enqueue | ^S: Shuffle | {trailing_hint}"),
-                    area.width as usize,
-                );
-                f.render_widget(
-                    Paragraph::new(Line::from(vec![
+                    hint_width,
+                )
+                .into_iter()
+                .map(|line| {
+                    Line::from(vec![
                         Span::raw(" "),
-                        Span::styled(hint.to_string(), Style::default().fg(palette::SOFT_WHITE)),
-                    ])),
+                        Span::styled(line.into_owned(), Style::default().fg(palette::SOFT_WHITE)),
+                    ])
+                })
+                .collect();
+                f.render_widget(
+                    Paragraph::new(hint_lines.clone()),
                     Rect {
                         x: area.x,
                         y: row,
-                        width: area.width,
-                        height: 1,
+                        width: area.width.saturating_sub(art_reserved_w),
+                        height: hint_lines.len() as u16,
                     },
                 );
-                row += 2;
+                row += hint_lines.len() as u16 + 1;
             }
         }
 
         // — Scrollable track list —
-        let track_indent = if selected_region_gutter {
+        let track_indent = if selected_region_gutter || flush_left {
             0
         } else {
             INLINE_ALBUM_TRACK_EXTRA_INDENT
@@ -1367,7 +1603,10 @@ impl App {
         let table_area = Rect {
             x: area.x + track_indent,
             y: row,
-            width: area.width.saturating_sub(track_indent),
+            width: area
+                .width
+                .saturating_sub(track_indent)
+                .saturating_sub(art_reserved_w),
             height: max_y.saturating_sub(row),
         };
         if table_area.height == 0 {
@@ -1387,7 +1626,7 @@ impl App {
         let show_length = table_area.width > 40;
         let dur_col_w: usize = if show_length { 7 } else { 0 };
         let title_col_w = (table_area.width as usize)
-            .saturating_sub(gutter_w + if show_length { dur_col_w + 1 } else { 0 });
+            .saturating_sub(gutter_w + 2 + if show_length { dur_col_w + 1 } else { 0 });
 
         let rows: Vec<Row> = items
             .iter()
@@ -1396,15 +1635,7 @@ impl App {
                 let is_cursor = i == cursor;
                 let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
                 let row_style = if selected_region_gutter && is_cursor && focused {
-                    let mut style = Style::default().fg(palette::YELLOW);
-                    if is_playing {
-                        style = style.add_modifier(Modifier::BOLD);
-                    }
-                    style
-                } else if is_playing {
-                    Style::default()
-                        .fg(palette::GREEN)
-                        .add_modifier(Modifier::BOLD)
+                    Style::default().fg(palette::YELLOW)
                 } else if is_cursor && focused {
                     Style::default().fg(palette::YELLOW)
                 } else if focused {
@@ -1424,13 +1655,39 @@ impl App {
                     title_spans.push(Span::raw(" "));
                 }
                 let num_w = track_num.chars().count();
-                let title = trunc_str(&item.name, title_col_w.saturating_sub(num_w));
-                title_spans.push(Span::styled(
-                    track_num,
-                    Style::default().fg(palette::SUBTLE),
-                ));
-                title_spans.push(Span::raw(title));
-                let title_cell = Cell::from(Line::from(title_spans));
+                let play_icon = super::super::play_icon(self.use_nerd_fonts);
+                let play_icon_w = if is_playing { play_icon.width() + 1 } else { 0 };
+                let title_width = title_col_w.saturating_sub(num_w + play_icon_w).max(1);
+                let title_lines = wrap(&item.name, title_width);
+                let mut wrapped_title_lines = Vec::with_capacity(title_lines.len());
+                for (line_idx, line) in title_lines.into_iter().enumerate() {
+                    if line_idx == 0 {
+                        let mut first_line = title_spans.clone();
+                        first_line.push(Span::styled(
+                            track_num.clone(),
+                            Style::default().fg(palette::SUBTLE),
+                        ));
+                        if is_playing {
+                            first_line.push(Span::styled(
+                                format!("{play_icon} "),
+                                Style::default().fg(palette::AQUA),
+                            ));
+                        }
+                        first_line.push(Span::raw(line.into_owned()));
+                        wrapped_title_lines.push(Line::from(first_line));
+                    } else {
+                        wrapped_title_lines.push(Line::from(vec![
+                            Span::raw(" ".repeat(
+                                1 + if selected_region_gutter { 1 } else { 0 }
+                                    + num_w
+                                    + play_icon_w,
+                            )),
+                            Span::raw(line.into_owned()),
+                        ]));
+                    }
+                }
+                let title_height = wrapped_title_lines.len() as u16;
+                let title_cell = Cell::from(Text::from(wrapped_title_lines));
                 let len_secs = item.runtime_ticks / TICKS_PER_SECOND;
                 let length = if len_secs > 0 {
                     fmt_duration_approx(len_secs)
@@ -1444,9 +1701,12 @@ impl App {
                             .style(Style::default().fg(palette::SUBTLE)),
                         Cell::from(""),
                     ])
+                    .height(title_height)
                     .style(row_style)
                 } else {
-                    Row::new([title_cell, Cell::from(""), Cell::from("")]).style(row_style)
+                    Row::new([title_cell, Cell::from(""), Cell::from("")])
+                        .height(title_height)
+                        .style(row_style)
                 }
             })
             .collect();
