@@ -676,7 +676,14 @@ impl EmbyClient {
         self.user_id = user_id;
 
         match self.get(&format!("/Users/{}", self.user_id)).call() {
-            Ok(_) => Ok(()),
+            Ok(resp) => {
+                if let Ok(user) = resp.into_json::<Value>() {
+                    if let Some(name) = user["Name"].as_str().filter(|name| !name.is_empty()) {
+                        self.config.username = name.to_string();
+                    }
+                }
+                Ok(())
+            }
             Err(ureq::Error::Status(401 | 403, _)) => {
                 clear_cached_token();
                 self.token.clear();
@@ -740,6 +747,12 @@ impl EmbyClient {
                 .map_err(|e| format!("Auth parse failed: {e}"))?;
             self.token = resp["AccessToken"].as_str().unwrap_or("").to_string();
             self.user_id = resp["User"]["Id"].as_str().unwrap_or("").to_string();
+            if let Some(name) = resp["User"]["Name"]
+                .as_str()
+                .filter(|name| !name.is_empty())
+            {
+                self.config.username = name.to_string();
+            }
             save_cached_token(&self.config.server_url, &self.token, &self.user_id);
         } else if !self.config.api_key.is_empty() {
             self.token = self.config.api_key.clone();
@@ -761,11 +774,19 @@ impl EmbyClient {
                     .iter()
                     .find(|u| u["Name"].as_str().unwrap_or("").to_lowercase() == uname);
                 match found {
-                    Some(u) => self.user_id = u["Id"].as_str().unwrap_or("").to_string(),
+                    Some(u) => {
+                        self.user_id = u["Id"].as_str().unwrap_or("").to_string();
+                        if let Some(name) = u["Name"].as_str().filter(|name| !name.is_empty()) {
+                            self.config.username = name.to_string();
+                        }
+                    }
                     None => return Err(format!("User '{}' not found", self.config.username)),
                 }
             } else {
                 self.user_id = users[0]["Id"].as_str().unwrap_or("").to_string();
+                if let Some(name) = users[0]["Name"].as_str().filter(|name| !name.is_empty()) {
+                    self.config.username = name.to_string();
+                }
             }
         } else {
             return Err("No credentials configured".to_string());

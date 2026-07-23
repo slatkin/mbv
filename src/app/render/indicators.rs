@@ -62,12 +62,12 @@ impl IndicatorData {
         if self.audio_dim {
             palette::MUTED
         } else {
-            palette::GREEN
+            palette::AQUA
         }
     }
     fn sub_color(&self) -> Color {
         if !self.sub_label.is_empty() {
-            palette::YELLOW
+            palette::FOAM
         } else {
             palette::MUTED
         }
@@ -127,7 +127,7 @@ fn chips(d: &IndicatorData) -> Vec<Span<'static>> {
             &d.sub_label
         };
         if !d.sub_label.is_empty() {
-            out.push(chip(sub_display, palette::YELLOW));
+            out.push(chip(sub_display, d.sub_color()));
         } else {
             // Off: hollow/dim — no fill, dim text.
             out.push(Span::styled(
