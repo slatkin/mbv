@@ -957,7 +957,9 @@ impl App {
                     None => (Vec::new(), 0),
                 }
             };
-            self.render_power_album_detail(f, area, &items, cursor, focused, true, false, layout);
+            self.render_power_album_detail(
+                f, area, &items, cursor, focused, true, false, false, 0, layout,
+            );
         } else if is_home_video {
             self.render_power_home_video_list(f, area, lib_idx, focused, layout);
         } else {
@@ -1769,6 +1771,82 @@ mod tests {
     }
 
     #[test]
+    fn grouped_album_rows_use_styled_suffix_and_single_group_spacers() {
+        let mut app = make_power_music_group_app();
+        let mut alpha_album = make_item("Second Alpha Album", "MusicAlbum");
+        alpha_album.id = "album-1b".into();
+        alpha_album.artist = "Alpha".into();
+        alpha_album.production_year = 2002;
+        let mut beta_album = make_item("Beta Album", "MusicAlbum");
+        beta_album.id = "album-2".into();
+        beta_album.artist = "Beta".into();
+        beta_album.production_year = 2003;
+        let level = app.libs[0].nav_stack.last_mut().unwrap();
+        level.items.extend([alpha_album, beta_album]);
+        level.cursor = 2;
+
+        let mut layout = LayoutPower::default();
+        let term = render_power_library_to_terminal(&mut app, &mut layout);
+        let out = buffer_to_string(&term);
+        let lines: Vec<&str> = out.lines().collect();
+        let alpha_y = lines
+            .iter()
+            .position(|line| line.contains("Alpha") && !line.contains("Album"))
+            .expect("expected Alpha artist header");
+        let beta_y = lines
+            .iter()
+            .position(|line| line.contains("Beta") && !line.contains("Album"))
+            .expect("expected Beta artist header");
+        let last_alpha_album_y = lines
+            .iter()
+            .rposition(|line| line.contains("Alpha Album"))
+            .expect("expected the final Alpha album row");
+        assert_eq!(
+            beta_y,
+            last_alpha_album_y + 2,
+            "expected exactly one spacer between artist groups:\n{out}"
+        );
+        let last_selectable = layout
+            .left_row_targets
+            .iter()
+            .rev()
+            .find_map(Option::as_ref)
+            .expect("expected a selectable album row");
+        assert!(
+            matches!(last_selectable, PowerLeftRowTarget::Album(_)),
+            "expected no trailing artist spacer after the final album"
+        );
+
+        let album_y = lines
+            .iter()
+            .position(|line| line.contains("Second Alpha Album"))
+            .expect("expected Alpha album row");
+        let title_x = lines[album_y].find("Second Alpha Album").unwrap() as u16;
+        let header_x = lines[alpha_y].find("Alpha").unwrap() as u16;
+        assert_eq!(
+            title_x, header_x,
+            "album title should align with its header"
+        );
+        let bullet_x = lines[album_y].find('•').unwrap() as u16;
+        let year_x = lines[album_y].find("2002").unwrap() as u16;
+        let buffer = term.backend().buffer();
+        assert_eq!(buffer[(title_x, album_y as u16)].fg, palette::WHITE);
+        assert_eq!(buffer[(bullet_x, album_y as u16)].fg, palette::YELLOW);
+        assert_eq!(buffer[(year_x, album_y as u16)].fg, palette::AQUA);
+
+        let selected_album_y = lines
+            .iter()
+            .position(|line| line.contains("Beta Album"))
+            .expect("expected selected Beta album row");
+        let selected_title_x = lines[selected_album_y].find("Beta Album").unwrap() as u16;
+        assert_eq!(
+            buffer[(selected_title_x, selected_album_y as u16)].fg,
+            palette::WHITE,
+            "selected album titles should remain white"
+        );
+    }
+
+    #[test]
     fn selectable_artist_header_renders_focused() {
         let mut app = make_power_music_group_app();
         app.libs[0].artist_header_focus = Some(crate::app::ArtistHeaderSelection {
@@ -2100,12 +2178,12 @@ mod tests {
             .position(|l| l.contains("First Album"))
             .expect("expected selected album row");
         assert!(
-            lines[title_y - 2].contains("\u{2581}"),
-            "expected a top border two rows above the title (border row, then colored padding row):\n{out}"
+            lines[title_y - 3].contains("\u{2581}"),
+            "expected a top border three rows above the title (border, padding, then artist row):\n{out}"
         );
         assert!(
-            lines[title_y - 1].trim().is_empty(),
-            "expected the colored top-padding row directly above the title to be blank:\n{out}"
+            lines[title_y - 2].trim().is_empty(),
+            "expected the colored top-padding row directly above the artist row to be blank:\n{out}"
         );
 
         let track_y = lines
@@ -2224,12 +2302,12 @@ mod tests {
             .position(|l| l.contains("First Album"))
             .expect("expected selected album title row");
         assert!(
-            lines[title_y - 2].contains("\u{2581}"),
-            "expected a top border two rows above the title (border row, then colored padding row):\n{out}"
+            lines[title_y - 3].contains("\u{2581}"),
+            "expected a top border three rows above the title (border, padding, then artist row):\n{out}"
         );
         assert!(
-            lines[title_y - 1].trim().is_empty(),
-            "expected the colored top-padding row directly above the title to be blank:\n{out}"
+            lines[title_y - 2].trim().is_empty(),
+            "expected the colored top-padding row directly above the artist row to be blank:\n{out}"
         );
 
         let track_y = lines
@@ -2310,6 +2388,8 @@ mod tests {
                 true,
                 true,
                 true,
+                false,
+                0,
                 &mut layout,
             );
         })
@@ -2364,12 +2444,12 @@ mod tests {
             .position(|l| l.contains("First Album"))
             .expect("expected selected album row");
         assert!(
-            lines[title_y - 2].contains("\u{2581}"),
-            "expected a top border two rows above the title (border row, then colored padding row):\n{out}"
+            lines[title_y - 3].contains("\u{2581}"),
+            "expected a top border three rows above the title (border, padding, then artist row):\n{out}"
         );
         assert!(
-            lines[title_y - 1].trim().is_empty(),
-            "expected the colored top-padding row directly above the title to be blank:\n{out}"
+            lines[title_y - 2].trim().is_empty(),
+            "expected the colored top-padding row directly above the artist row to be blank:\n{out}"
         );
 
         let loading_y = lines
@@ -2463,9 +2543,16 @@ mod tests {
         let hint_x = lines[hint_y]
             .find("^P: Play")
             .expect("expected hint x position");
+        let title_y = lines
+            .iter()
+            .position(|line| line.contains("First Album"))
+            .expect("expected selected album title row");
+        let title_x = lines[title_y]
+            .find("First Album")
+            .expect("expected selected album title position");
         assert!(
-            lines[hint_y].starts_with("    ^P: Play"),
-            "expected collapsed hint content to align with the selected block title indent:\n{out}"
+            hint_x == title_x,
+            "expected collapsed hint content to align with the selected album title:\n{out}"
         );
         assert_eq!(
             buf[(hint_x as u16, hint_y as u16)].fg,
@@ -2484,6 +2571,8 @@ mod tests {
         track.album = "First Album".into();
         track.artist = "Alpha".into();
         track.index_number = 1;
+        app.album_artist_cache
+            .insert("album-1".into(), "Album Artist".into());
         app.album_tracks_cache.insert("album-1".into(), vec![track]);
 
         let mut layout = LayoutPower::default();
@@ -2496,6 +2585,39 @@ mod tests {
         assert!(
             !out.contains("Opening Track"),
             "tracks should stay hidden until track-selection mode:\n{out}"
+        );
+        let lines: Vec<&str> = out.lines().collect();
+        let title_y = lines
+            .iter()
+            .position(|line| line.contains("First Album"))
+            .expect("expected selected album title row");
+        assert_eq!(
+            lines[title_y - 1].trim(),
+            "Album Artist",
+            "album artist should appear immediately above the title:\n{out}"
+        );
+        let artist_x = lines[title_y - 1].find("Album Artist").unwrap() as u16;
+        assert_eq!(
+            term.backend().buffer()[(artist_x, (title_y - 1) as u16)].fg,
+            palette::YELLOW
+        );
+        assert_eq!(
+            art_rect.y, title_y as u16,
+            "album artwork should start on the title row, below the artist row"
+        );
+
+        app.album_artist_cache.remove("album-1");
+        let fallback_term = render_power_library_to_terminal(&mut app, &mut layout);
+        let fallback = buffer_to_string(&fallback_term);
+        let fallback_lines: Vec<&str> = fallback.lines().collect();
+        let fallback_title_y = fallback_lines
+            .iter()
+            .position(|line| line.contains("First Album"))
+            .expect("expected fallback album title row");
+        assert_eq!(
+            fallback_lines[fallback_title_y - 1].trim(),
+            "Alpha",
+            "item artist should be the fallback when album artist is absent:\n{fallback}"
         );
         assert_eq!(
             art_rect.x + art_rect.width,
@@ -2513,6 +2635,91 @@ mod tests {
     }
 
     #[test]
+    fn selected_album_block_wraps_text_around_art_without_moving_art() {
+        let mut app = make_power_music_group_app();
+        app.image_protocol_enabled = true;
+        app.libs[0].album_track_focus = Some(0);
+        let album = &mut app.libs[0].nav_stack.last_mut().unwrap().items[0];
+        album.name = "A Very Long Album Title That Wraps Before Artwork".into();
+        album.artist = "Fallback Artist With A Very Long Name That Wraps Clearly".into();
+        app.album_artist_cache.insert(
+            "album-1".into(),
+            "Preferred Album Artist With A Very Long Name That Wraps".into(),
+        );
+        let mut track = make_item(
+            "A Very Long Track Name That Continues Below The Artwork Width",
+            "Audio",
+        );
+        track.id = "track-1".into();
+        track.album = album.name.clone();
+        track.artist = album.artist.clone();
+        track.index_number = 1;
+        app.album_tracks_cache.insert("album-1".into(), vec![track]);
+
+        let mut layout = LayoutPower::default();
+        let backend = TestBackend::new(50, 35);
+        let mut term = Terminal::new(backend).unwrap();
+        term.draw(|f| {
+            app.render_power_library(f, Rect::new(0, 0, 50, 35), true, &mut layout);
+        })
+        .unwrap();
+        let out = buffer_to_string(&term);
+        let lines: Vec<&str> = out.lines().collect();
+        let art_rect = layout
+            .inline_image_rect
+            .expect("expected selected album artwork");
+        let title_y = lines
+            .iter()
+            .position(|line| line.trim() == "A Very Long")
+            .expect("expected wrapped album title");
+        let artist_y = lines
+            .iter()
+            .position(|line| line.contains("Preferred Album Artist"))
+            .expect("expected preferred album artist row");
+        assert!(
+            artist_y < title_y,
+            "artist row should precede album title:\n{out}"
+        );
+        assert_eq!(art_rect.y, title_y as u16);
+        let artist_x = lines[artist_y].find("Preferred Album Artist").unwrap() as u16;
+        assert_eq!(
+            term.backend().buffer()[(artist_x, artist_y as u16)].fg,
+            palette::YELLOW
+        );
+        assert!(
+            lines.iter().any(|line| line.contains("^P: Play"))
+                && lines.iter().any(|line| line.contains("Shuffle")),
+            "expected wrapped action hint rows:\n{out}"
+        );
+        assert!(
+            lines.iter().any(|line| line.contains("Track Name That"))
+                && lines.iter().any(|line| line.trim() == "Width"),
+            "expected wrapped inline track rows:\n{out}"
+        );
+        for line in &lines[title_y..] {
+            if line.contains("Preferred Album Artist")
+                || line.contains("A Very Long Album")
+                || line.contains("^P: Play")
+                || line.contains("Shuffle")
+                || line.contains("A Very Long Track")
+                || line.contains("Artwork Width")
+            {
+                let last_text_x = line
+                    .chars()
+                    .enumerate()
+                    .filter(|(_, ch)| !ch.is_whitespace())
+                    .map(|(x, _)| x as u16)
+                    .max()
+                    .unwrap();
+                assert!(
+                    last_text_x < art_rect.x,
+                    "selected-block text must not draw beneath artwork:\n{out}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn selected_music_group_album_keeps_right_aligned_art_in_track_mode() {
         let mut app = make_power_music_group_app();
         app.image_protocol_enabled = true;
@@ -2523,6 +2730,13 @@ mod tests {
         track.album = "First Album".into();
         track.artist = "Alpha".into();
         track.index_number = 1;
+        app.player_tab.set_items(vec![track.clone()], 0);
+        {
+            let mut status = app.player.status.lock().unwrap();
+            status.active = true;
+            status.current_idx = 0;
+            status.paused = false;
+        }
         app.album_tracks_cache.insert("album-1".into(), vec![track]);
 
         let mut layout = LayoutPower::default();
@@ -2537,6 +2751,16 @@ mod tests {
             "expected inline track row:\n{out}"
         );
         let lines: Vec<&str> = out.lines().collect();
+        let playing_line = lines
+            .iter()
+            .find(|line| line.contains("Opening Track"))
+            .copied()
+            .expect("expected active music track row");
+        let icon = super::super::play_icon(app.use_nerd_fonts);
+        assert!(
+            playing_line.contains(&format!("1. {icon} Opening Track")),
+            "expected the active track icon and following space after its number:\n{out}"
+        );
         let hint_y = lines
             .iter()
             .position(|line| line.contains("^P: Play"))
@@ -2546,21 +2770,47 @@ mod tests {
             .position(|line| line.contains("Opening Track"))
             .expect("expected inline track row");
         assert!(
-            lines[hint_y].starts_with("    ^P: Play"),
-            "expected track-mode hint content to keep the selected block title indent:\n{out}"
-        );
-        assert!(
-            lines[hint_y + 1].trim().is_empty(),
-            "expected a blank row between the track-mode hint and tracks:\n{out}"
+            lines[track_y - 1].trim().is_empty(),
+            "expected a blank row between the wrapped track-mode hint and tracks:\n{out}"
         );
         assert_eq!(
-            track_y,
-            hint_y + 2,
-            "expected the track list to start after the hint and blank separator row:\n{out}"
+            track_y.saturating_sub(hint_y),
+            3,
+            "expected the wrapped hint, blank separator, then track list:\n{out}"
         );
         let hint_x = lines[hint_y]
             .find("^P: Play")
             .expect("expected track-mode hint x position");
+        let title_y = lines
+            .iter()
+            .position(|line| line.contains("First Album"))
+            .expect("expected selected album title row");
+        let title_x = lines[title_y]
+            .find("First Album")
+            .expect("expected selected album title position");
+        assert_eq!(
+            hint_x, title_x,
+            "track-mode hint should align with album title"
+        );
+        assert!(
+            lines[track_y].starts_with("\u{258c}1."),
+            "track list should start flush with the album block title:\n{out}"
+        );
+        let icon_byte_x = playing_line
+            .find(icon)
+            .expect("expected active music track icon");
+        let icon_x = playing_line[..icon_byte_x].chars().count() as u16;
+        let title_byte_x = playing_line
+            .find("Opening Track")
+            .expect("expected active music track title");
+        let active_title_x = playing_line[..title_byte_x].chars().count() as u16;
+        let buffer = term.backend().buffer();
+        assert_eq!(
+            buffer[(icon_x, track_y as u16)].fg,
+            palette::AQUA,
+            "expected active icon to be AQUA at x={icon_x}:\n{out}"
+        );
+        assert_eq!(buffer[(active_title_x, track_y as u16)].fg, palette::YELLOW);
         assert_eq!(
             term.backend().buffer()[(hint_x as u16, hint_y as u16)].fg,
             palette::SOFT_WHITE,
@@ -2583,9 +2833,9 @@ mod tests {
 
     #[test]
     fn album_folder_inline_detail_keeps_title_gutter_when_library_pane_unfocused() {
-        // Selection now reads via the colored MEDIA_SELECTED_BG block + YELLOW
-        // title text (the movie-tab colored-block style), not the legacy `▌`
-        // marker -- confirm that styling survives losing pane focus.
+        // Selection now reads via the colored MEDIA_SELECTED_BG block + white
+        // title text, not the legacy `▌` marker -- confirm that styling survives
+        // losing pane focus.
         let mut app = make_power_music_group_app();
 
         let mut track = make_item("Opening Track", "Audio");
@@ -2615,8 +2865,8 @@ mod tests {
         );
         assert_eq!(
             buf[(title_x, title_y as u16)].fg,
-            palette::YELLOW,
-            "selected album title should keep its YELLOW text while unfocused:\n{out}"
+            palette::WHITE,
+            "selected album title should keep its white text while unfocused:\n{out}"
         );
     }
 
@@ -2670,10 +2920,9 @@ mod tests {
         );
 
         assert!(
-            // Track rows are indented two extra spaces inside the selected block;
-            // the AQUA `▌` cursor marker still sits directly against the track
+            // The AQUA `▌` cursor marker still sits directly against the track
             // number, no trailing space.
-            focused_line.starts_with("    \u{258c}2. Focused Track"),
+            focused_line.starts_with("\u{258c}2. Focused Track"),
             "expected focused track row to show the AQUA cursor marker in track-selection mode:\n{out}"
         );
         assert_eq!(
@@ -2712,10 +2961,9 @@ mod tests {
             .expect("expected focused track to render inline");
 
         assert!(
-            // Track rows are indented two extra spaces inside the selected block;
-            // the AQUA `▌` cursor marker still sits directly against the track
+            // The AQUA `▌` cursor marker still sits directly against the track
             // number, no trailing space.
-            focused_line.starts_with("    \u{258c}2. Focused Track"),
+            focused_line.starts_with("\u{258c}2. Focused Track"),
             "expected track-selection row to show the AQUA cursor marker while pane is unfocused:\n{out}"
         );
     }

@@ -283,7 +283,7 @@ impl App {
                     let fg = if is_cursor {
                         palette::QUEUE_FOCUS_FG
                     } else if focused {
-                        palette::SOFT_WHITE
+                        palette::WHITE
                     } else {
                         palette::QUEUE_UNFOCUSED_FG
                     };

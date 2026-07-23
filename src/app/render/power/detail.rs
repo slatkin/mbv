@@ -740,11 +740,7 @@ impl App {
                         .map(|(i, ep)| {
                             let is_cursor = ep_cursor == Some(i);
                             let is_playing = now_playing_id.as_deref() == Some(ep.id.as_str());
-                            let row_style = if is_playing {
-                                Style::default()
-                                    .fg(palette::GREEN)
-                                    .add_modifier(Modifier::BOLD)
-                            } else if is_cursor && focused {
+                            let row_style = if is_cursor && focused {
                                 Style::default().fg(palette::YELLOW)
                             } else if focused {
                                 Style::default().fg(palette::WHITE)
@@ -763,12 +759,23 @@ impl App {
                                 format!("{:>ep_num_w$}. ", i + 1)
                             };
                             let label_w = ep_label.chars().count();
-                            let title = trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
-                            let title_cell = Cell::from(Line::from(vec![
-                                marker,
-                                Span::styled(ep_label, Style::default().fg(palette::MUTED)),
-                                Span::raw(title),
-                            ]));
+                            let play_icon = super::super::play_icon(self.use_nerd_fonts);
+                            let play_icon_w = if is_playing { play_icon.width() + 1 } else { 0 };
+                            let title = trunc_str(
+                                &ep.name,
+                                title_col_w.saturating_sub(label_w + play_icon_w),
+                            );
+                            let mut title_spans = vec![marker];
+                            title_spans
+                                .push(Span::styled(ep_label, Style::default().fg(palette::MUTED)));
+                            if is_playing {
+                                title_spans.push(Span::styled(
+                                    format!("{play_icon} "),
+                                    Style::default().fg(palette::AQUA),
+                                ));
+                            }
+                            title_spans.push(Span::raw(title));
+                            let title_cell = Cell::from(Line::from(title_spans));
                             let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
                             let length = if len_secs > 0 {
                                 fmt_duration_approx(len_secs)
