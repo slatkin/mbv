@@ -8,8 +8,9 @@ use super::super::super::App;
 use mbv_core::api::MediaItem;
 use ratatui::layout::Rect;
 use ratatui::style::Style;
-use ratatui::widgets::{Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState};
+use ratatui::widgets::Paragraph;
 use ratatui::Frame;
+use tui_scrollbar::{GlyphSet, ScrollBar, ScrollLengths};
 
 pub(super) const LIB_SELECTED_IMG_W: u16 = 32;
 pub(super) const LIB_AUDIO_IMG_W: u16 = 12;
@@ -64,6 +65,17 @@ impl App {
 
         let total_h: u16 = all_heights.iter().sum();
         let needs_scrollbar = total_h > area.height;
+        let total_items = total_count.max(display_items.len());
+        // Loaded rows provide exact terminal-row heights. Unloaded lazy-page
+        // items retain the server total with a one-row baseline, since their
+        // per-item row heights are not available yet.
+        let total_rows =
+            total_items.saturating_add((total_h as usize).saturating_sub(display_items.len()));
+        let scroll_rows: usize = all_heights
+            .iter()
+            .take(scroll)
+            .map(|&height| height as usize)
+            .sum();
         let sep_w = if needs_scrollbar {
             area.width.saturating_sub(1)
         } else {
@@ -92,17 +104,21 @@ impl App {
             // Use the server-reported total, not `display_items.len()`, so the
             // thumb reflects the real list size instead of shrinking to just
             // whatever page(s) have been lazily fetched so far.
-            let mut sb_state =
-                ScrollbarState::new(total_count.max(display_items.len())).position(scroll);
-            f.render_stateful_widget(
-                Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                    .thumb_symbol("▐")
-                    .track_symbol(Some(" "))
-                    .begin_symbol(None)
-                    .end_symbol(None)
-                    .style(Style::default().fg(palette::SUBTLE)),
-                area,
-                &mut sb_state,
+            let scrollbar = ScrollBar::vertical(ScrollLengths {
+                content_len: total_rows,
+                viewport_len: area.height as usize,
+            })
+            .offset(scroll_rows)
+            .glyph_set(super::super::thin_vertical_thumb(GlyphSet::minimal()))
+            .track_style(Style::default().fg(palette::SCROLLBAR))
+            .thumb_style(Style::default().fg(palette::SCROLLBAR));
+            f.render_widget(
+                &scrollbar,
+                Rect {
+                    x: area.x + area.width.saturating_sub(1),
+                    width: 1,
+                    ..area
+                },
             );
         }
     }
@@ -184,7 +200,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{LibSearch, LibraryTab};
+    use crate::app::{BrowseLevel, LibSearch, LibraryTab};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
@@ -259,5 +275,74 @@ mod tests {
             }
         }
         output
+    }
+
+    #[test]
+    fn multiline_rows_use_terminal_units_for_scrollbar_metrics() {
+        let mut app = make_app_stub();
+        let mut library = make_item("Movies", "CollectionFolder");
+        library.id = "movies".into();
+        library.collection_type = "movies".into();
+        library.is_folder = true;
+        let items: Vec<_> = (0..8)
+            .map(|i| {
+                let mut item = make_item(&format!("Movie {i}"), "Movie");
+                item.id = format!("movie-{i}");
+                item
+            })
+            .collect();
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "movies".into(),
+                title: "Movies".into(),
+                items,
+                total_count: 8,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+            }],
+            search: None,
+            feed_home_video: None,
+            album_track_focus: None,
+            artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
+            library_total: None,
+        });
+
+        fn render_scrollbar_column(app: &mut App, cursor: usize) -> Vec<String> {
+            app.libs[0].nav_stack[0].cursor = cursor;
+            let backend = TestBackend::new(40, 12);
+            let mut terminal = Terminal::new(backend).unwrap();
+            terminal
+                .draw(|frame| {
+                    app.render_library_table(
+                        frame,
+                        Rect::new(0, 0, 40, 12),
+                        0,
+                        &mut LayoutLibrary::default(),
+                    );
+                })
+                .unwrap();
+            let buffer = terminal.backend().buffer();
+            (0..buffer.area().height)
+                .map(|y| buffer[(buffer.area().width - 1, y)].symbol().to_string())
+                .collect()
+        }
+
+        let top = render_scrollbar_column(&mut app, 0);
+        let bottom = render_scrollbar_column(&mut app, 7);
+        assert!(top.iter().any(|symbol| symbol == " "), "{top:?}");
+        assert_ne!(top[0], " ");
+        assert_eq!(top[11], " ");
+        assert_eq!(bottom[0], " ");
+        assert_ne!(bottom[11], " ");
     }
 }

@@ -314,9 +314,9 @@ impl App {
 
         // Scrollbar (hidden when unfocused, consistent with queue panel).
         if needs_scrollbar && focused {
-            super::render_power_scrollbar_with_viewport(
+            super::render_power_right_scrollbar_with_viewport(
                 f,
-                super::right_panel_scrollbar_area(content_area),
+                content_area,
                 n,
                 visible_items.max(1),
                 scroll,
@@ -499,9 +499,9 @@ impl App {
         layout.left_row_map = row_map;
 
         if needs_scrollbar && focused {
-            super::render_power_scrollbar_with_viewport(
+            super::render_power_right_scrollbar_with_viewport(
                 f,
-                super::right_panel_scrollbar_area(list_area),
+                list_area,
                 items.len(),
                 visible_items.max(1),
                 scroll,
@@ -1031,12 +1031,7 @@ impl App {
 
         if needs_scrollbar && focused {
             let max_off = content_h.saturating_sub(list_area.height) as usize;
-            super::render_power_scrollbar(
-                f,
-                super::right_panel_scrollbar_area(list_area),
-                max_off,
-                scroll_y as usize,
-            );
+            super::render_power_right_scrollbar(f, list_area, max_off, scroll_y as usize);
         }
     }
 

@@ -1189,12 +1189,7 @@ impl App {
         let display_n = display_rows.len();
         if focused && display_n > visible {
             let max_off = display_n.saturating_sub(visible);
-            super::render_power_scrollbar(
-                f,
-                super::right_panel_scrollbar_area(area),
-                max_off,
-                offset,
-            );
+            super::render_power_right_scrollbar(f, area, max_off, offset);
         }
 
         if let Some((art_top, art_bottom)) = selected_art_abs_rows {
@@ -1730,12 +1725,7 @@ impl App {
         let visible_rows = table_area.height as usize;
         if !selected_region_gutter && n > visible_rows {
             let max_offset = n.saturating_sub(visible_rows);
-            super::render_power_scrollbar(
-                f,
-                super::right_panel_scrollbar_area(table_area),
-                max_offset,
-                state.offset(),
-            );
+            super::render_power_right_scrollbar(f, table_area, max_offset, state.offset());
         }
     }
 }

@@ -31,3 +31,4 @@ pub const PLAYBACK_META_FG: Color = Color::Rgb(133, 146, 137); // playback metad
 pub const MUTED_GREEN: Color = Color::Rgb(108, 118, 108); // muted greenish-grey for detail/label text (#6c766c)
 pub const PILL: Color = Color::Rgb(211, 198, 170); // unselected pill text (#D3C6AA)
 pub const SOFT_WHITE: Color = PILL; // warm off-white for unicode borders (#D3C6AA) -- same value as PILL, aliased so the two can't silently drift apart
+pub const SCROLLBAR: Color = Color::Rgb(79, 91, 88); // queue-style scrollbar track/thumb
