@@ -216,8 +216,6 @@ impl App {
         } else {
             0
         };
-        let series_detail_content_rows: usize =
-            series_detail_rows.saturating_sub(COMPACT_BANNER_RULE_ROWS + COMPACT_BANNER_GAP_ROWS);
 
         // Pre-warm nearby movies' poster images so they're already cached by
         // the time the cursor reaches them (#287) -- mirrors the prefetch
@@ -431,6 +429,10 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // space for top border
                     display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
                 }
+                // Series inline detail: ▁ top border above the selected item
+                if series_detail_rows > 0 && idx == cursor {
+                    display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
+                }
                 display_rows.push(DisplayRow::Item(idx));
                 if banner_rows > 0 && idx == cursor {
                     for _ in 0..banner_rows.saturating_sub(2) {
@@ -439,9 +441,9 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // bottom padding (colored)
                     display_rows.push(DisplayRow::BannerFiller); // space for bottom border
                 }
-                // Series inline detail: show metadata/overview below selected Series row
+                // Series inline detail content rows below the selected item
                 if series_detail_rows > 0 && idx == cursor {
-                    for _ in 0..series_detail_content_rows {
+                    for _ in 0..series_detail_rows {
                         display_rows.push(DisplayRow::SeriesDetailFiller);
                     }
                 }
@@ -453,9 +455,10 @@ impl App {
                 .iter()
                 .position(|r| matches!(r, DisplayRow::Item(i) if *i == cursor))
                 .unwrap_or(0);
-            // Only `banner_rows - 1` or `series_detail_rows` rows sit *below*
-            // the cursor now (the opening rule sits above it), hence the `- 1`.
-            let rows_below_cursor = banner_rows.max(series_detail_rows).saturating_sub(1);
+            // For banners, `banner_rows - 1` rows sit below the cursor (opening rule above).
+            // For series, `series_detail_rows` rows sit below the cursor (block follows it).
+            let banner_below = banner_rows.saturating_sub(1);
+            let rows_below_cursor = banner_below.max(series_detail_rows);
             let lower_bound = (display_cursor + rows_below_cursor)
                 .saturating_sub(visible.saturating_sub(1))
                 .min(display_cursor);
@@ -558,8 +561,9 @@ impl App {
                     // The colored block (drawn above) frames the selected row
                     // + banner, so the banner's top/bottom padding rows are
                     // empty -- they show the block's background.
-                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
-                    DisplayRow::SeriesDetailFiller => ListItem::new(Line::default()),
+                    DisplayRow::BannerFiller | DisplayRow::SeriesDetailFiller => {
+                        ListItem::new(Line::default())
+                    }
                     DisplayRow::LetterHeader(label) => ListItem::new(Line::from(vec![
                         Span::raw(" "),
                         Span::styled(
@@ -662,13 +666,12 @@ impl App {
                 }
             }
 
-            // Series inline detail: render metadata/overview below selected Series row
+            // Series inline detail: block sits below the selected row
             if series_detail_rows > 0 && content_start >= offset && content_start < offset + visible
             {
                 let detail_y = content_area.y + (content_start - offset) as u16;
                 let bottom = content_area.y + content_area.height;
-                let detail_h =
-                    (series_detail_content_rows as u16).min(bottom.saturating_sub(detail_y));
+                let detail_h = (series_detail_rows as u16).min(bottom.saturating_sub(detail_y));
                 if detail_h > 0 {
                     let detail_rect = Rect {
                         x: content_area.x + COMPACT_BANNER_INDENT,
@@ -706,6 +709,27 @@ impl App {
                     banner_rule_bottom,
                 );
             }
+
+            // Series inline detail: render ▁ top border at the filler row above selected item
+            if series_detail_rows > 0
+                && display_cursor > 0
+                && display_cursor > offset
+                && display_cursor - 1 < offset + visible
+            {
+                let border_y = content_area.y + (display_cursor - 1 - offset) as u16;
+                f.render_widget(
+                    Paragraph::new(Span::styled(
+                        "\u{2581}".repeat(content_area.width as usize),
+                        Style::default().fg(palette::SOFT_WHITE),
+                    )),
+                    Rect {
+                        x: content_area.x,
+                        y: border_y,
+                        width: content_area.width,
+                        height: 1,
+                    },
+                );
+            }
         } else {
             enum DisplayRow {
                 Item(usize),
@@ -722,6 +746,10 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // space for top border
                     display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
                 }
+                // Series inline detail: ▁ top border above the selected item
+                if series_detail_rows > 0 && i == cursor {
+                    display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
+                }
                 display_rows.push(DisplayRow::Item(i));
                 if banner_rows > 0 && i == cursor {
                     for _ in 0..banner_rows.saturating_sub(2) {
@@ -730,9 +758,9 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // bottom padding (colored)
                     display_rows.push(DisplayRow::BannerFiller); // space for bottom border
                 }
-                // Series inline detail: show metadata/overview below selected Series row
+                // Series inline detail content rows below the selected item
                 if series_detail_rows > 0 && i == cursor {
-                    for _ in 0..series_detail_content_rows {
+                    for _ in 0..series_detail_rows {
                         display_rows.push(DisplayRow::SeriesDetailFiller);
                     }
                 }
@@ -747,9 +775,10 @@ impl App {
             // banner or series detail follows it, extend the lower bound so
             // scrolling keeps pulling up until the whole block is visible too
             // (clamped to display_cursor itself if the viewport could never fit both).
-            // Only `banner_rows - 1` or `series_detail_rows` rows sit *below*
-            // the cursor now (the opening rule sits above it), hence the `- 1`.
-            let rows_below_cursor = banner_rows.max(series_detail_rows).saturating_sub(1);
+            // For banners, `banner_rows - 1` rows sit below the cursor (opening rule above).
+            // For series, `series_detail_rows` rows sit below the cursor (block follows it).
+            let banner_below = banner_rows.saturating_sub(1);
+            let rows_below_cursor = banner_below.max(series_detail_rows);
             let lower_bound = (display_cursor + rows_below_cursor)
                 .saturating_sub(visible.saturating_sub(1))
                 .min(display_cursor);
@@ -801,8 +830,9 @@ impl App {
                     // The colored block (drawn above) frames the selected row
                     // + banner, so the banner's top/bottom padding rows are
                     // empty -- they show the block's background.
-                    DisplayRow::BannerFiller => ListItem::new(Line::default()),
-                    DisplayRow::SeriesDetailFiller => ListItem::new(Line::default()),
+                    DisplayRow::BannerFiller | DisplayRow::SeriesDetailFiller => {
+                        ListItem::new(Line::default())
+                    }
                     DisplayRow::Item(idx) => {
                         let item = &items[*idx];
                         let selected = *idx == cursor;
@@ -917,13 +947,12 @@ impl App {
                 }
             }
 
-            // Series inline detail: render metadata/overview below selected Series row
+            // Series inline detail: block sits below the selected row
             if series_detail_rows > 0 && content_start >= offset && content_start < offset + visible
             {
                 let detail_y = content_area.y + (content_start - offset) as u16;
                 let bottom = content_area.y + content_area.height;
-                let detail_h =
-                    (series_detail_content_rows as u16).min(bottom.saturating_sub(detail_y));
+                let detail_h = (series_detail_rows as u16).min(bottom.saturating_sub(detail_y));
                 if detail_h > 0 {
                     let detail_rect = Rect {
                         x: content_area.x + COMPACT_BANNER_INDENT,
@@ -961,6 +990,27 @@ impl App {
                 banner_rule_top,
                 banner_rule_bottom,
             );
+
+            // Series inline detail: render ▁ top border at the filler row above selected item
+            if series_detail_rows > 0
+                && display_cursor > 0
+                && display_cursor > offset
+                && display_cursor - 1 < offset + visible
+            {
+                let border_y = content_area.y + (display_cursor - 1 - offset) as u16;
+                f.render_widget(
+                    Paragraph::new(Span::styled(
+                        "\u{2581}".repeat(content_area.width as usize),
+                        Style::default().fg(palette::SOFT_WHITE),
+                    )),
+                    Rect {
+                        x: content_area.x,
+                        y: border_y,
+                        width: content_area.width,
+                        height: 1,
+                    },
+                );
+            }
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
