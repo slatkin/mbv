@@ -125,7 +125,7 @@ impl App {
         // view instead of as full-width rows above the content area.
         let (seek_h, _gap_h, title_h, controls_h): (u16, u16, u16, u16) =
             if playing_panel || reserve_player_rows {
-                (1, 0, 1, 1)
+                (1, 0, 1, 2)
             } else {
                 (1, 0, 0, 0)
             };
@@ -153,7 +153,7 @@ impl App {
         } else {
             None
         };
-        let title_color = palette::BLUE;
+        let title_color = palette::PLAYBACK_CONTENT_FG;
         let now_playing_title: Option<(String, Color)> = if playing_panel {
             if active {
                 now_playing.map(|t| (t, title_color))
@@ -549,7 +549,7 @@ impl App {
             palette::AQUA
         };
         let vol_spans = vec![
-            Span::styled("VOL ", Style::default().fg(palette::MUTED)),
+            Span::styled("VOL ", Style::default().fg(palette::PLAYBACK_META_FG)),
             Span::styled(
                 volume.to_string(),
                 Style::default().fg(vol_color).add_modifier(Modifier::BOLD),
@@ -622,7 +622,7 @@ impl App {
                     } else {
                         Line::from(Span::styled(
                             format!("  {n}  "),
-                            Style::default().fg(palette::SUBTLE),
+                            Style::default().fg(palette::PLAYBACK_META_FG),
                         ))
                     }
                 })
@@ -655,7 +655,7 @@ impl App {
                     } else {
                         Line::from(Span::styled(
                             format!("  {n}  "),
-                            Style::default().fg(palette::SUBTLE),
+                            Style::default().fg(palette::PLAYBACK_META_FG),
                         ))
                     }
                 })
@@ -694,13 +694,24 @@ impl App {
             layout.seekbar_area = Rect::default();
             let bar = "\u{2594}".repeat(seek_area.width as usize);
             f.render_widget(
-                Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK))),
+                Paragraph::new(Span::styled(bar, Style::default().fg(palette::SEEK_TRACK)))
+                    .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
                 seek_area,
             );
         }
         // Title row (when panel is expanded).
         if player_h >= 2 {
-            const H_PAD: u16 = 1;
+            const H_PAD: u16 = 2;
+            let title_row_area = Rect {
+                y: area.y + 1,
+                height: 1,
+                ..area
+            };
+            f.render_widget(
+                Paragraph::new(Span::raw(" ".repeat(title_row_area.width as usize)))
+                    .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                title_row_area,
+            );
             let title_area = if area.width > 2 * H_PAD {
                 Rect {
                     x: area.x + H_PAD,
@@ -718,6 +729,35 @@ impl App {
             if let Some((ref title, color)) = now_playing_title {
                 self.render_title_row(f, title_area, title, *color, layout);
             }
+        }
+
+        if player_h >= 3 {
+            let blank_area = Rect {
+                y: area.y + 2,
+                height: 1,
+                ..area
+            };
+            f.render_widget(
+                Paragraph::new(Span::raw(" ".repeat(blank_area.width as usize)))
+                    .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+                blank_area,
+            );
+        }
+
+        if player_h >= 4 {
+            let border_area = Rect {
+                y: area.y + 3,
+                height: 1,
+                ..area
+            };
+            let border = "\u{2594}".repeat(border_area.width as usize);
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    border,
+                    Style::default().fg(palette::SEEK_TRACK),
+                )),
+                border_area,
+            );
         }
     }
 
@@ -780,7 +820,28 @@ impl App {
         } else {
             palette::MUTED
         };
-        let right = self.build_status_indicator_spans().unwrap_or_default();
+        let right = self
+            .build_status_indicator_spans()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|span| {
+                let is_caption =
+                    matches!(span.content.as_ref(), "CODEC " | "RES " | "AUD " | "SUB ");
+                if is_caption {
+                    Span::styled(
+                        span.content.to_string(),
+                        span.style.fg(palette::PLAYBACK_META_FG),
+                    )
+                } else if span.content.contains("FLAC") {
+                    Span::styled(
+                        span.content.to_string(),
+                        span.style.fg(palette::PLAYBACK_CONTENT_FG),
+                    )
+                } else {
+                    span
+                }
+            })
+            .collect::<Vec<_>>();
 
         // Left: glyph  stop  next  title  │  elapsed / total
         // A running `x` cursor tracks where each clickable glyph lands in the
@@ -854,7 +915,7 @@ impl App {
 
         left.push(Span::styled(
             time_text,
-            Style::default().fg(palette::SUBTLE),
+            Style::default().fg(palette::PLAYBACK_META_FG),
         ));
 
         left.push(Span::raw(post_time_gap));
@@ -865,7 +926,11 @@ impl App {
         let mut spans = left;
         spans.push(Span::raw(" ".repeat(gap)));
         spans.extend(right);
-        f.render_widget(Paragraph::new(Line::from(spans)), area);
+        f.render_widget(
+            Paragraph::new(Line::from(spans))
+                .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+            area,
+        );
     }
 
     /// Current playback position / runtime (ticks) and paused state, from the
@@ -1347,7 +1412,11 @@ impl App {
                 Style::default().fg(palette::SEEK_TRACK),
             ),
         ];
-        f.render_widget(Paragraph::new(Line::from(spans)), area);
+        f.render_widget(
+            Paragraph::new(Line::from(spans))
+                .style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
+            area,
+        );
     }
 }
 
