@@ -61,22 +61,12 @@ fn parse_ymd(date_str: &str) -> Option<(&str, &'static str, u32)> {
     Some((y, MONTHS.get(month_idx)?, day))
 }
 
-fn feed_added_date(date_added: &str) -> String {
-    parse_ymd(date_added)
-        .map(|(y, month, d)| format!("Added {d} {month}, {y}"))
-        .unwrap_or_else(|| date_added.to_string())
-}
-
 /// Formats an Emby `PremiereDate` value (e.g. `2015-06-19T00:00:00.0000000Z`)
 /// as a release date like "19 Jun 2015".
 fn format_release_date(premiere_date: &str) -> String {
     parse_ymd(premiere_date)
         .map(|(y, month, d)| format!("{d} {} {y}", &month[..3]))
         .unwrap_or_else(|| premiere_date.to_string())
-}
-
-fn home_video_item_height(_item: &mbv_core::api::MediaItem, _text_w: usize) -> u16 {
-    1 // title only for non-selected rows
 }
 
 fn render_home_video_item(
@@ -88,7 +78,6 @@ fn render_home_video_item(
     text_w: usize,
     selected: bool,
     focused: bool,
-    is_feed_lib: bool,
 ) {
     let expanded = selected && item_h > 1;
     let title_y = row_y + if expanded { 2 } else { 0 };
@@ -143,77 +132,6 @@ fn render_home_video_item(
         },
     );
 
-    if selected && !expanded && row_y + 1 < content_area.y + content_area.height {
-        let mut meta_spans: Vec<Span> = Vec::new();
-        if item.played {
-            meta_spans.push(Span::styled(
-                "\u{2713} ",
-                Style::default().fg(palette::AQUA),
-            ));
-        }
-        let mut parts: Vec<String> = Vec::new();
-        if is_feed_lib && !item.date_added.is_empty() {
-            parts.push(feed_added_date(&item.date_added));
-        }
-        let dur_s = item.runtime_ticks / TICKS_PER_SECOND;
-        if dur_s > 0 {
-            parts.push(fmt_duration_approx(dur_s));
-        }
-        if !parts.is_empty() {
-            meta_spans.push(Span::styled(
-                parts.join("  "),
-                Style::default().fg(palette::SUBTLE),
-            ));
-        }
-        if item.playback_position_ticks > 0 && !item.played && item.runtime_ticks > 0 {
-            let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-            meta_spans.push(Span::styled(
-                format!("  {}%", pct),
-                Style::default().fg(palette::YELLOW),
-            ));
-        }
-        f.render_widget(
-            Paragraph::new(Line::from(meta_spans)),
-            Rect {
-                x: tx,
-                y: row_y + 1,
-                width: tw,
-                height: 1,
-            },
-        );
-    }
-
-    if selected
-        && !expanded
-        && !item.overview.is_empty()
-        && item_h >= 4
-        && row_y + 2 < content_area.y + content_area.height
-    {
-        let ov_text = trunc_overview(&item.overview);
-        let wrapped = wrap(&ov_text, (tw as usize).max(1));
-        let ov_color = if selected && focused {
-            palette::WHITE
-        } else {
-            palette::MUTED
-        };
-        let ov_style = Style::default().fg(ov_color);
-        for (li, line) in wrapped.iter().enumerate() {
-            let ly = row_y + 2 + li as u16;
-            if ly >= content_area.y + content_area.height {
-                break;
-            }
-            f.render_widget(
-                Paragraph::new(Span::styled(line.to_string(), ov_style)),
-                Rect {
-                    x: tx,
-                    y: ly,
-                    width: tw,
-                    height: 1,
-                },
-            );
-        }
-    }
-
     if expanded && row_y < content_area.y + content_area.height {
         super::render_selected_block_borders(
             f,
@@ -245,6 +163,36 @@ struct KeepWatchingHeroLayout {
 }
 
 impl App {
+    fn render_selected_home_video_detail(
+        &mut self,
+        f: &mut Frame,
+        content_area: Rect,
+        row_y: u16,
+        item_h: u16,
+        lib_idx: usize,
+        focused: bool,
+        layout: &mut LayoutPower,
+    ) {
+        let detail_height = item_h.saturating_sub(5);
+        if detail_height == 0 {
+            return;
+        }
+
+        self.render_power_compact_detail(
+            f,
+            Rect {
+                x: content_area.x + 1,
+                y: row_y + 3,
+                width: content_area.width.saturating_sub(2),
+                height: detail_height,
+            },
+            lib_idx,
+            focused,
+            layout,
+        );
+        layout.cursor_screen_y = Some(row_y + 1);
+    }
+
     pub(super) fn render_power_home_video_list(
         &mut self,
         f: &mut Frame,
@@ -285,27 +233,16 @@ impl App {
         }
         let current_pos = cursor.min(n.saturating_sub(1));
 
-        let is_feed_lib = {
-            let c = self.client.lock().unwrap();
-            c.config
-                .feed_view_libraries
-                .contains(&self.libs[lib_idx].library.name.to_lowercase())
-        };
-
         // Conservatively assume scrollbar present to get text_w for height
         // calculations, then recheck once we know the real total height.
         let text_w_with_sb = (content_area.width as usize).saturating_sub(1);
-        let item_heights: Vec<u16> = items
-            .iter()
-            .map(|it| home_video_item_height(it, text_w_with_sb))
-            .collect();
+        let mut item_heights = vec![1; n];
         let selected_panel_width = text_w_with_sb.saturating_sub(2) as u16;
         let selected_height = self
             .compact_banner_layout_with_overview(&items[current_pos], selected_panel_width, true)
             .content_rows()
             .saturating_add(5) as u16;
         let selected_index = current_pos;
-        let mut item_heights = item_heights;
         item_heights[selected_index] = selected_height;
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > content_area.height;
@@ -349,25 +286,20 @@ impl App {
                 text_w,
                 selected,
                 focused,
-                is_feed_lib,
             );
             if selected {
-                let detail_height = item_h.saturating_sub(5);
-                if detail_height > 0 {
-                    self.render_power_compact_detail(
-                        f,
-                        Rect {
-                            x: content_area.x + 1,
-                            y: row_y + 3,
-                            width: text_w.saturating_sub(2) as u16,
-                            height: detail_height,
-                        },
-                        lib_idx,
-                        focused,
-                        layout,
-                    );
-                    layout.cursor_screen_y = Some(row_y + 1);
-                }
+                self.render_selected_home_video_detail(
+                    f,
+                    Rect {
+                        width: text_w as u16,
+                        ..content_area
+                    },
+                    row_y,
+                    item_h,
+                    lib_idx,
+                    focused,
+                    layout,
+                );
             }
             let visible_rows = (content_area.y + content_area.height)
                 .saturating_sub(row_y)
@@ -501,16 +433,12 @@ impl App {
 
         let current_pos = cursor.min(items.len().saturating_sub(1));
         let text_w_with_sb = (list_area.width as usize).saturating_sub(1);
-        let item_heights: Vec<u16> = items
-            .iter()
-            .map(|it| home_video_item_height(it, text_w_with_sb))
-            .collect();
+        let mut item_heights = vec![1; items.len()];
         let selected_panel_width = text_w_with_sb.saturating_sub(2) as u16;
         let selected_height = self
             .compact_banner_layout_with_overview(&items[current_pos], selected_panel_width, true)
             .content_rows()
             .saturating_add(5) as u16;
-        let mut item_heights = item_heights;
         item_heights[current_pos] = selected_height;
         let total_h: u16 = item_heights.iter().sum();
         let needs_scrollbar = total_h > list_area.height;
@@ -544,26 +472,20 @@ impl App {
             if selected {
                 layout.cursor_screen_y = Some(row_y);
             }
-            render_home_video_item(
-                f, item, row_y, item_h, list_area, text_w, selected, focused, true,
-            );
+            render_home_video_item(f, item, row_y, item_h, list_area, text_w, selected, focused);
             if selected {
-                let detail_height = item_h.saturating_sub(5);
-                if detail_height > 0 {
-                    self.render_power_compact_detail(
-                        f,
-                        Rect {
-                            x: list_area.x + 1,
-                            y: row_y + 3,
-                            width: text_w.saturating_sub(2) as u16,
-                            height: detail_height,
-                        },
-                        lib_idx,
-                        focused,
-                        layout,
-                    );
-                    layout.cursor_screen_y = Some(row_y + 1);
-                }
+                self.render_selected_home_video_detail(
+                    f,
+                    Rect {
+                        width: text_w as u16,
+                        ..list_area
+                    },
+                    row_y,
+                    item_h,
+                    lib_idx,
+                    focused,
+                    layout,
+                );
             }
             let visible_rows = (list_area.y + list_area.height)
                 .saturating_sub(row_y)
@@ -1172,7 +1094,8 @@ impl App {
 mod tests {
     use super::power_home_panel_scroll;
     use crate::app::layout::AppLayout;
-    use crate::app::tests::{make_app_stub, make_items};
+    use crate::app::tests::{make_app_stub, make_item, make_items};
+    use crate::app::{palette, BrowseLevel, FeedHomeVideoGroup, FeedHomeVideoState, LibraryTab};
     use mbv_core::api::TICKS_PER_SECOND;
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
@@ -1189,6 +1112,31 @@ mod tests {
             out.push('\n');
         }
         out
+    }
+
+    fn assert_selected_home_video_panel(term: &Terminal<TestBackend>, title: &str) {
+        let buf = term.backend().buffer();
+        let area = *buf.area();
+        let (title_y, title_x) = (0..area.height)
+            .find_map(|y| {
+                let line: String = (0..area.width).map(|x| buf[(x, y)].symbol()).collect();
+                line.find(title).map(|x| (y, x as u16))
+            })
+            .expect("selected home-video title should be present in the buffer");
+        assert_eq!(
+            buf[(title_x, title_y)].fg,
+            palette::YELLOW,
+            "selected home-video title should be yellow"
+        );
+
+        let row_is = |y: u16, glyph: &str| (0..area.width).all(|x| buf[(x, y)].symbol() == glyph);
+        let top_y = (0..area.height)
+            .find(|&y| row_is(y, "▁"))
+            .expect("selected home-video top border should render");
+        let bottom_y = (0..area.height)
+            .find(|&y| row_is(y, "▔"))
+            .expect("selected home-video bottom border should render");
+        assert!(top_y < title_y && title_y < bottom_y);
     }
 
     #[test]
@@ -1298,6 +1246,161 @@ mod tests {
             !out.contains('\u{2594}'),
             "unexpected bottom border:\n{out}"
         );
+    }
+
+    fn make_home_video_panel_app() -> crate::app::App {
+        let mut app = make_app_stub();
+        app.image_protocol_enabled = true;
+        app.power_left_tab = 1;
+
+        let mut library = make_item("Home Videos", "CollectionFolder");
+        library.id = "lib-homevideos".into();
+        library.is_folder = true;
+        library.collection_type = "homevideos".into();
+
+        let mut selected = make_item("Selected Home Video", "Video");
+        selected.id = "video-selected".into();
+        selected.overview = "Selected home-video overview.".into();
+        selected.runtime_ticks = 25 * 60 * TICKS_PER_SECOND;
+        let mut other = make_item("Other Home Video", "Video");
+        other.id = "video-other".into();
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-homevideos".into(),
+                title: "Home Videos".into(),
+                items: vec![selected.clone(), other],
+                total_count: 2,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+            }],
+            search: None,
+            feed_home_video: Some(FeedHomeVideoState {
+                all_items: vec![make_item("Other Feed Video", "Video"), selected],
+                groups: vec![FeedHomeVideoGroup {
+                    folder: make_item("Feed", "Folder"),
+                    items: Vec::new(),
+                }],
+                loading: false,
+                selected_group: 0,
+                video_cursor: 0,
+                video_scroll: 0,
+            }),
+            album_track_focus: None,
+            artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
+            library_total: None,
+        });
+
+        app
+    }
+
+    #[test]
+    fn selected_regular_home_video_keeps_detail_below_title() {
+        let mut app = make_home_video_panel_app();
+        app.libs[0].feed_home_video = None;
+
+        let backend = TestBackend::new(60, 30);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = AppLayout::default();
+        term.draw(|f| {
+            app.render_power_home_video_list(
+                f,
+                Rect::new(0, 0, 60, 30),
+                0,
+                true,
+                &mut layout.power,
+            );
+        })
+        .unwrap();
+
+        let out = buffer_to_string(&term);
+        assert_selected_home_video_panel(&term, "Selected Home Video");
+        let title = out
+            .find("Selected Home Video")
+            .expect("selected home-video title should render");
+        let overview = out
+            .find("Selected home-video overview.")
+            .unwrap_or_else(|| panic!("selected home-video detail should render:\n{out}"));
+        let other = out
+            .find("Other Home Video")
+            .expect("following home-video row should render");
+        assert!(
+            title < overview && overview < other,
+            "unexpected render order:\n{out}"
+        );
+        assert_eq!(layout.power.cursor_screen_y, Some(2));
+        assert_eq!(layout.power.left_row_map[0], Some(0));
+        let other_row = layout
+            .power
+            .left_row_map
+            .iter()
+            .position(|row| *row == Some(1))
+            .expect("unselected home-video row should map to the display");
+        assert!(other_row + 1 < layout.power.left_row_map.len());
+        assert_eq!(
+            layout
+                .power
+                .left_row_map
+                .get(other_row + 1)
+                .copied()
+                .flatten(),
+            None,
+            "unselected home-video rows should occupy one line"
+        );
+    }
+
+    #[test]
+    fn selected_grouped_feed_home_video_keeps_detail_and_scroll_state() {
+        let mut app = make_home_video_panel_app();
+        app.client
+            .lock()
+            .unwrap()
+            .config
+            .feed_view_libraries
+            .push("home videos".into());
+        let feed_state = app.libs[0].feed_home_video.as_mut().unwrap();
+        feed_state.video_cursor = 1;
+        feed_state.video_scroll = 1;
+
+        let backend = TestBackend::new(60, 30);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = AppLayout::default();
+        term.draw(|f| {
+            app.render_power_feed_home_video_group_view(
+                f,
+                Rect::new(0, 0, 60, 30),
+                0,
+                true,
+                &mut layout.power,
+            );
+        })
+        .unwrap();
+
+        let out = buffer_to_string(&term);
+        assert_selected_home_video_panel(&term, "Selected Home Video");
+        assert!(out.contains("All"), "feed selector should render:\n{out}");
+        let title = out
+            .find("Selected Home Video")
+            .expect("selected feed home-video title should render");
+        let overview = out
+            .find("Selected home-video overview.")
+            .unwrap_or_else(|| panic!("selected feed home-video detail should render:\n{out}"));
+        assert!(title < overview, "unexpected render order:\n{out}");
+        assert_eq!(
+            app.libs[0].feed_home_video.as_ref().unwrap().video_scroll,
+            1
+        );
+        assert_eq!(layout.power.left_row_map[0], Some(1));
     }
 
     #[test]
