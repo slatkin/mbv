@@ -92,6 +92,38 @@ fn build_list_row_spans(
     spans
 }
 
+/// Paints the series inline detail block's colored background, shared by
+/// both the letter-grouped and plain-list rendering branches of
+/// `render_power_list` (identical treatment, only how `display_cursor` /
+/// `offset` / `visible` are computed differs between the two call sites).
+/// The colored block starts at the selected item's own row (`display_cursor`)
+/// and spans `series_detail_rows` rows; the SeriesDetailFiller top border (▁)
+/// and the bottom border (▔, drawn inside `render_series_inline_detail`) are
+/// left uncolored so they blend into the existing background.
+fn render_series_detail_background(
+    f: &mut Frame,
+    content_area: Rect,
+    offset: usize,
+    visible: usize,
+    display_cursor: usize,
+    series_detail_rows: usize,
+) {
+    if series_detail_rows == 0 {
+        return;
+    }
+    let series_rule_top = display_cursor;
+    let series_rule_bottom = display_cursor + series_detail_rows.saturating_sub(1);
+    super::render_selected_block_background(
+        f,
+        content_area,
+        offset,
+        visible,
+        series_rule_top,
+        series_rule_bottom,
+        palette::MEDIA_SELECTED_BG,
+    );
+}
+
 impl App {
     /// Filler-row count to reserve around the selected movie's row in
     /// `lib_idx`'s display-row sequence: the colored block's top/bottom
@@ -544,19 +576,14 @@ impl App {
                 );
             }
 
-            if series_detail_rows > 0 {
-                let series_rule_top = display_cursor;
-                let series_rule_bottom = display_cursor + series_detail_rows.saturating_sub(1);
-                super::render_selected_block_background(
-                    f,
-                    content_area,
-                    offset,
-                    visible,
-                    series_rule_top,
-                    series_rule_bottom,
-                    palette::MEDIA_SELECTED_BG,
-                );
-            }
+            render_series_detail_background(
+                f,
+                content_area,
+                offset,
+                visible,
+                display_cursor,
+                series_detail_rows,
+            );
 
             // Width available to title + duration on a normal list row (with a
             // 1-col leading separator before the title). For the selected row
@@ -835,24 +862,14 @@ impl App {
                 );
             }
 
-            // Series inline detail block: same treatment as the movie banner
-            // but uses the selected item row itself as the top of the colored
-            // block. The SeriesDetailFiller top border (▁) and the bottom
-            // border (▔, drawn inside render_series_inline_detail) are left
-            // uncolored so they blend into the existing background.
-            if series_detail_rows > 0 {
-                let series_rule_top = display_cursor;
-                let series_rule_bottom = display_cursor + series_detail_rows.saturating_sub(1);
-                super::render_selected_block_background(
-                    f,
-                    content_area,
-                    offset,
-                    visible,
-                    series_rule_top,
-                    series_rule_bottom,
-                    palette::MEDIA_SELECTED_BG,
-                );
-            }
+            render_series_detail_background(
+                f,
+                content_area,
+                offset,
+                visible,
+                display_cursor,
+                series_detail_rows,
+            );
 
             let list_items: Vec<ListItem> = display_rows
                 .iter()
