@@ -443,8 +443,8 @@ impl App {
         }
 
         let inner_x = area.x;
-        let inner_w = (area.width as usize).saturating_sub(2);
-        let inner_w16 = area.width.saturating_sub(2);
+        let inner_w = (area.width as usize).saturating_sub(1);
+        let inner_w16 = area.width.saturating_sub(1);
         let max_y = area.y + area.height;
         let mut row = area.y;
 
