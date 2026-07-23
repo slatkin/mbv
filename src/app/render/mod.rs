@@ -153,7 +153,7 @@ impl App {
         } else {
             None
         };
-        let title_color = palette::TEAL;
+        let title_color = palette::BLUE;
         let now_playing_title: Option<(String, Color)> = if playing_panel {
             if active {
                 now_playing.map(|t| (t, title_color))

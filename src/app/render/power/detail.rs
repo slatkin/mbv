@@ -620,7 +620,7 @@ impl App {
                             width: area.width,
                             height: 1,
                         },
-                        palette::GREEN,
+                        palette::POWER_RIGHT_BG,
                     );
 
                     // Overlay season tabs on the same row
@@ -647,7 +647,9 @@ impl App {
                     let mut spans: Vec<Span> = Vec::new();
                     spans.push(Span::styled(
                         "Series: ",
-                        Style::default().fg(ratatui::style::Color::White),
+                        Style::default()
+                            .fg(palette::YELLOW)
+                            .add_modifier(Modifier::BOLD),
                     ));
                     for (idx, label) in tab_labels[..scroll_end].iter().enumerate() {
                         if idx > 0 {
