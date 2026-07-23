@@ -986,7 +986,7 @@ impl App {
                 f.render_widget(
                     Paragraph::new(Self::toast_line(&self.status))
                         .alignment(Alignment::Center)
-                        .style(Style::default().fg(palette::TEXT).bg(palette::IRIS)),
+                        .style(Style::default().fg(palette::TOAST_FG).bg(palette::TOAST_BG)),
                     status_area,
                 );
             }
