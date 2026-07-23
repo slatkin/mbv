@@ -314,6 +314,9 @@ impl App {
             return None;
         }
         let lib_idx = self.power_left_tab - 1;
+        if key.code == KeyCode::Enter && self.power_selected_series_item(lib_idx).is_some() {
+            return None;
+        }
         if self.libs[lib_idx].search.is_some() {
             self.handle_lib_search_key(lib_idx, key, crate::app::LibraryPositionScope::Power);
             Some(false)
@@ -1662,16 +1665,9 @@ impl App {
                     && key.code == KeyCode::Enter
                     && self.libs[lib_idx].series_selection.is_none()
                 {
-                    if let Some(item) = self.libs[lib_idx]
-                        .nav_stack
-                        .last()
-                        .and_then(|lvl| lvl.items.get(lvl.cursor))
-                    {
-                        if item.item_type == "Series" {
-                            let item = item.clone();
-                            self.enter_series_selection(lib_idx, &item);
-                            return false;
-                        }
+                    if let Some(item) = self.power_selected_series_item(lib_idx) {
+                        self.enter_series_selection(lib_idx, &item);
+                        return false;
                     }
                 }
 

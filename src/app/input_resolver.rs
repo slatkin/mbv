@@ -761,6 +761,66 @@ mod app_level_tests {
     }
 
     #[test]
+    fn power_enter_on_series_search_result_starts_selection_without_drilldown() {
+        use crate::app::{BrowseLevel, LibSearch, LibraryTab};
+
+        let mut app = make_app_stub();
+        app.tab_idx = 1;
+        app.view_mode = crate::app::ViewMode::Power;
+        app.power_focus = crate::app::PowerFocus::Left;
+        app.power_left_tab = 1;
+
+        let mut library = crate::app::tests::make_item("Shows", "CollectionFolder");
+        library.id = "lib-shows".into();
+        library.collection_type = "tvshows".into();
+        library.is_folder = true;
+
+        let mut series = crate::app::tests::make_item("Search Result", "Series");
+        series.id = "series-1".into();
+        series.is_folder = true;
+
+        app.libs.push(LibraryTab {
+            library,
+            nav_stack: vec![BrowseLevel {
+                parent_id: "lib-shows".into(),
+                title: "Shows".into(),
+                items: Vec::new(),
+                total_count: 0,
+                cursor: 0,
+                scroll: 0,
+                item_types: None,
+                unplayed_only: false,
+                sort_by: "SortName".into(),
+                sort_order: "Ascending".into(),
+                loading: false,
+                all_items: None,
+                letter_filter: None,
+            }],
+            search: Some(LibSearch {
+                query: "search".into(),
+                items: vec![series],
+                results: vec![0],
+                cursor: 0,
+                scroll: 0,
+                loading: false,
+            }),
+            feed_home_video: None,
+            album_track_focus: None,
+            artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
+            library_total: None,
+        });
+        app.series_detail_loading.insert("series-1".into());
+
+        let nav_depth = app.libs[0].nav_stack.len();
+        app.handle_key(ev(KeyCode::Enter, KeyModifiers::NONE));
+
+        assert_eq!(app.libs[0].series_selection, Some(0));
+        assert_eq!(app.libs[0].nav_stack.len(), nav_depth);
+    }
+
+    #[test]
     fn lib_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
         app.tab_idx = 2;
