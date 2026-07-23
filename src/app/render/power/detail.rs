@@ -58,11 +58,9 @@ fn poster_placeholder_size(font_size: ratatui_image::FontSize) -> (u16, u16) {
 const SERIES_DETAIL_DIVIDER_ROWS: usize = 2; // blank spacer + divider/pills row
 const SERIES_DETAIL_EPISODE_ROWS_ESTIMATE: usize = 8; // estimated visible episode rows
 const SERIES_DETAIL_OVERVIEW_MAX_LINES: usize = 4;
-/// Blank row above the series title (below the ▁ top border) and blank row
-/// below the episode list (above the ▔ bottom border). Shared by
+/// Blank row below the episode list (above the ▔ bottom border). Shared by
 /// `series_inline_detail_rows` and `render_series_inline_detail` for the same
 /// reason as the constants above -- one row budget, two call sites.
-const SERIES_DETAIL_LEADING_BLANK_ROWS: usize = 1;
 const SERIES_DETAIL_TRAILING_BLANK_ROWS: usize = 1;
 
 /// Builds the "YYYY-YYYY  GENRE" (or any subset present) metadata line for a
@@ -384,11 +382,7 @@ impl App {
     ) -> usize {
         let inner_w = (panel_width as usize).saturating_sub(2);
 
-        // Blank spacer above the series title
-        let mut rows = SERIES_DETAIL_LEADING_BLANK_ROWS;
-
-        // Series title row
-        rows += 1;
+        let mut rows = 0usize;
 
         // Series metadata row (year range + genre)
         if !series_meta_line(item).is_empty() {
@@ -415,8 +409,8 @@ impl App {
         } else {
             0
         };
-        let metadata_img_end = rows + img_height;
-        rows = rows.max(metadata_img_end);
+        let image_end_row = img_height;
+        rows = rows.max(image_end_row);
 
         // Divider + season pills row, plus estimated episode rows -- kept in
         // sync with `render_series_inline_detail`'s `reserved_for_below` via
@@ -460,11 +454,6 @@ impl App {
         let max_y = area.y + area.height;
         let mut row = area.y;
 
-        // Blank spacer above the series title, below the ▁ top border.
-        if row < max_y {
-            row += 1;
-        }
-
         let text_color = if focused {
             palette::WHITE
         } else {
@@ -474,7 +463,7 @@ impl App {
         // ── Series Primary image (right-aligned, text wraps around it) ───
         const IMG_COLS: u16 = 18;
         const IMG_MAX_ROWS: u16 = 12;
-        let img_start_row = row + 1; // row after title
+        let img_start_row = row;
         let primary_cache_key = format!("{}:ser_primary", item.id);
         if !item.id.is_empty() && self.images_enabled() {
             self.fetch_card_image(
@@ -508,7 +497,7 @@ impl App {
             }
         };
         let img_x = area.x + area.width.saturating_sub(img_actual_w);
-        let img_end_row = img_start_row + img_height + 1;
+        let img_end_row = img_start_row + img_height;
         let narrow_w = inner_w.saturating_sub(img_actual_w as usize);
         let narrow_w16 = inner_w16.saturating_sub(img_actual_w);
         let text_dims = |r: u16| -> (usize, u16) {
@@ -518,24 +507,6 @@ impl App {
                 (inner_w, inner_w16)
             }
         };
-
-        // Series title (YELLOW)
-        if !item.series_name.is_empty() && row < max_y {
-            let (tw, tw16) = text_dims(row);
-            f.render_widget(
-                Paragraph::new(Line::from(Span::styled(
-                    trunc_str(&item.series_name, tw),
-                    Style::default().fg(palette::YELLOW),
-                ))),
-                Rect {
-                    x: inner_x,
-                    y: row,
-                    width: tw16,
-                    height: 1,
-                },
-            );
-            row += 1;
-        }
 
         // Series metadata (year range + genre)
         if row < max_y {
@@ -574,7 +545,8 @@ impl App {
             // so the reserved space and what's actually drawn stay in sync.
             let reserved_for_below = (SERIES_DETAIL_DIVIDER_ROWS
                 + SERIES_DETAIL_EPISODE_ROWS_ESTIMATE
-                + SERIES_DETAIL_TRAILING_BLANK_ROWS) as u16;
+                + SERIES_DETAIL_TRAILING_BLANK_ROWS
+                + 1) as u16;
             let available_rows =
                 (max_y.saturating_sub(row).saturating_sub(reserved_for_below)) as usize;
             for line_text in lines.iter().take(available_rows) {
@@ -594,6 +566,9 @@ impl App {
                         height: 1,
                     },
                 );
+                row += 1;
+            }
+            if !lines.is_empty() && row < max_y {
                 row += 1;
             }
         }
@@ -714,7 +689,7 @@ impl App {
                     width: area.width,
                     height: max_y
                         .saturating_sub(row)
-                        .saturating_sub(SERIES_DETAIL_TRAILING_BLANK_ROWS as u16),
+                        .saturating_sub((SERIES_DETAIL_TRAILING_BLANK_ROWS + 1) as u16),
                 };
                 if table_area.height > 0 {
                     let show_length = table_area.width > 40;
@@ -823,13 +798,13 @@ impl App {
         if max_y > area.y {
             f.render_widget(
                 Paragraph::new(Span::styled(
-                    "\u{2594}".repeat(area.width as usize),
+                    "\u{2594}".repeat(area.width.saturating_add(2) as usize),
                     Style::default().fg(palette::SOFT_WHITE),
                 )),
                 Rect {
-                    x: area.x,
+                    x: area.x.saturating_sub(1),
                     y: max_y - 1,
-                    width: area.width,
+                    width: area.width.saturating_add(2),
                     height: 1,
                 },
             );

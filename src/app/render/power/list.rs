@@ -64,10 +64,7 @@ fn build_list_row_spans(
             } else {
                 Style::default().fg(palette::YELLOW)
             };
-            vec![
-                Span::raw(" "),
-                Span::styled(title, title_style),
-            ]
+            vec![Span::raw(" "), Span::styled(title, title_style)]
         } else {
             // Otherwise keep the green gutter for selected list rows
             // without an inline banner.
@@ -96,10 +93,10 @@ fn build_list_row_spans(
 /// both the letter-grouped and plain-list rendering branches of
 /// `render_power_list` (identical treatment, only how `display_cursor` /
 /// `offset` / `visible` are computed differs between the two call sites).
-/// The colored block starts at the selected item's own row (`display_cursor`)
-/// and spans `series_detail_rows` rows; the SeriesDetailFiller top border (▁)
-/// and the bottom border (▔, drawn inside `render_series_inline_detail`) are
-/// left uncolored so they blend into the existing background.
+/// The colored block starts at the spacer row above the selected item and runs
+/// through the spacer row below the episode list; the SeriesDetailFiller top
+/// border (▁) and the bottom border (▔, drawn inside `render_series_inline_detail`)
+/// are left uncolored so they blend into the existing background.
 fn render_series_detail_background(
     f: &mut Frame,
     content_area: Rect,
@@ -111,7 +108,7 @@ fn render_series_detail_background(
     if series_detail_rows == 0 {
         return;
     }
-    let series_rule_top = display_cursor;
+    let series_rule_top = display_cursor.saturating_sub(1);
     let series_rule_bottom = display_cursor + series_detail_rows.saturating_sub(1);
     super::render_selected_block_background(
         f,
@@ -461,9 +458,11 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // space for top border
                     display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
                 }
-                // Series inline detail: ▁ top border above the selected item
+                // Series inline detail: ▁ top border plus one colored spacer
+                // row above the selected item.
                 if series_detail_rows > 0 && idx == cursor {
                     display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
+                    display_rows.push(DisplayRow::SeriesDetailFiller); // top padding (colored)
                 }
                 display_rows.push(DisplayRow::Item(idx));
                 if banner_rows > 0 && idx == cursor {
@@ -751,13 +750,13 @@ impl App {
                 );
             }
 
-            // Series inline detail: render ▁ top border at the filler row above selected item
+            // Series inline detail: render ▁ top border above the colored top padding row
             if series_detail_rows > 0
-                && display_cursor > 0
-                && display_cursor > offset
-                && display_cursor - 1 < offset + visible
+                && display_cursor >= 2
+                && display_cursor - 2 >= offset
+                && display_cursor - 2 < offset + visible
             {
-                let border_y = content_area.y + (display_cursor - 1 - offset) as u16;
+                let border_y = content_area.y + (display_cursor - 2 - offset) as u16;
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         "\u{2581}".repeat(content_area.width as usize),
@@ -787,9 +786,11 @@ impl App {
                     display_rows.push(DisplayRow::BannerFiller); // space for top border
                     display_rows.push(DisplayRow::BannerFiller); // top padding (colored)
                 }
-                // Series inline detail: ▁ top border above the selected item
+                // Series inline detail: ▁ top border plus one colored spacer
+                // row above the selected item.
                 if series_detail_rows > 0 && i == cursor {
                     display_rows.push(DisplayRow::SeriesDetailFiller); // ▁ top border
+                    display_rows.push(DisplayRow::SeriesDetailFiller); // top padding (colored)
                 }
                 display_rows.push(DisplayRow::Item(i));
                 if banner_rows > 0 && i == cursor {
@@ -1043,13 +1044,13 @@ impl App {
                 );
             }
 
-            // Series inline detail: render ▁ top border at the filler row above selected item
+            // Series inline detail: render ▁ top border above the colored top padding row
             if series_detail_rows > 0
-                && display_cursor > 0
-                && display_cursor > offset
-                && display_cursor - 1 < offset + visible
+                && display_cursor >= 2
+                && display_cursor - 2 >= offset
+                && display_cursor - 2 < offset + visible
             {
-                let border_y = content_area.y + (display_cursor - 1 - offset) as u16;
+                let border_y = content_area.y + (display_cursor - 2 - offset) as u16;
                 f.render_widget(
                     Paragraph::new(Span::styled(
                         "\u{2581}".repeat(content_area.width as usize),
@@ -1083,10 +1084,11 @@ mod tests {
     use super::*;
     use crate::app::layout::LayoutPower;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{AlbumIndexState, BrowseLevel, LibSearch, LibraryTab};
+    use crate::app::{AlbumIndexState, BrowseLevel, LibSearch, LibraryTab, SeriesDetail};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
     use ratatui::Terminal;
+    use std::collections::HashMap;
 
     fn buffer_to_string(term: &Terminal<TestBackend>) -> String {
         let buf = term.backend().buffer();
@@ -1431,6 +1433,26 @@ mod tests {
             library_total: None,
         });
 
+        let mut season = make_item("Season 1", "Season");
+        season.id = "season-1".into();
+        season.index_number = 1;
+        let episodes: Vec<_> = (1..=8)
+            .map(|i| {
+                let mut ep = make_item(&format!("Episode {i}"), "Episode");
+                ep.id = format!("episode-{i}");
+                ep.index_number = i;
+                ep.runtime_ticks = 23 * 60 * TICKS_PER_SECOND;
+                ep
+            })
+            .collect();
+        app.series_detail_cache.insert(
+            "series-1".into(),
+            SeriesDetail {
+                seasons: vec![season],
+                episodes: HashMap::from([("season-1".into(), episodes)]),
+            },
+        );
+
         let mut layout = LayoutPower::default();
         let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 40);
 
@@ -1443,6 +1465,41 @@ mod tests {
             !between.contains('\u{2594}'),
             "no stray banner-border glyph should appear between the series title \
              and its year/genre metadata row:\n{out}"
+        );
+
+        let lines: Vec<&str> = out.lines().collect();
+        let selected_row = lines
+            .iter()
+            .position(|line| line.contains("Test Show"))
+            .expect("selected series row should render");
+        assert!(
+            selected_row >= 2,
+            "selected row should have room for top border and spacer:\n{out}"
+        );
+        assert!(
+            lines[selected_row - 2].contains('\u{2581}'),
+            "top border should be two rows above the selected series title:\n{out}"
+        );
+        assert!(
+            lines[selected_row - 1].trim().is_empty(),
+            "one spacer row should sit between top border and selected title:\n{out}"
+        );
+        assert!(
+            lines[selected_row + 1].contains("2020-2022  DRAMA"),
+            "metadata should render directly below the selected title:\n{out}"
+        );
+
+        let last_episode_row = lines
+            .iter()
+            .position(|line| line.contains("8. Episode 8"))
+            .expect("last visible episode row should render");
+        assert!(
+            lines[last_episode_row + 1].trim().is_empty(),
+            "one spacer row should sit below the episode list:\n{out}"
+        );
+        assert!(
+            lines[last_episode_row + 2].contains('\u{2594}'),
+            "bottom border should follow exactly one spacer row after episodes:\n{out}"
         );
     }
 }
