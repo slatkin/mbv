@@ -296,6 +296,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -316,6 +318,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -336,6 +340,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = 1;
@@ -364,6 +370,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = 1;

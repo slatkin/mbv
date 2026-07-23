@@ -566,6 +566,13 @@ enum LibEvent {
         seasons: Vec<MediaItem>,
         episodes: std::collections::HashMap<String, Vec<MediaItem>>,
     },
+    /// Episodes for a specific season fetched when switching seasons in
+    /// series-selection mode.
+    SeriesSeasonEpisodesFetched {
+        series_id: String,
+        season_id: String,
+        episodes: Vec<MediaItem>,
+    },
     /// `switch_tab`: true for user-initiated navigation (switch to the lib tab),
     /// false for startup restore (just populate nav_stack, stay on current tab).
     NavigateTo {
@@ -933,6 +940,14 @@ struct LibraryTab {
     /// (`App::album_tracks_cache`). `None` = normal album-list navigation.
     album_track_focus: Option<usize>,
     artist_header_focus: Option<ArtistHeaderSelection>,
+    /// `Some(ep_idx)` = series-selection mode is active for the Series item
+    /// currently shown inline at the library list nav level;
+    /// `ep_idx` indexes into the cached episode list for the current season.
+    /// `None` = normal list navigation.
+    series_selection: Option<usize>,
+    /// Which season is selected in series-selection mode (index into
+    /// `SeriesDetail.seasons`). Only meaningful when `series_selection.is_some()`.
+    series_season_cursor: usize,
     /// The library's TRUE unfiltered `TotalRecordCount`, captured from the
     /// first unfiltered fetch of the library's top level. `None` until that
     /// first load completes. Used to gate the letter pill row and per-letter
@@ -4509,6 +4524,8 @@ pub(crate) mod tests {
             }),
             album_track_focus: Some(1),
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         };
         lib.library.id = "lib-movies".into();
@@ -4747,6 +4764,8 @@ pub(crate) mod tests {
             feed_home_video: Some(FeedHomeVideoState::default()),
             album_track_focus: Some(2),
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         };
         let position = crate::config::LibraryPosition {
@@ -4810,6 +4829,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.library_position_state
@@ -4862,6 +4883,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.library_position_state
@@ -4911,6 +4934,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -4965,6 +4990,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -5006,6 +5033,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.library_position_state.libraries.insert(
@@ -5051,6 +5080,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.library_position_state
@@ -5117,6 +5148,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.library_position_state
@@ -5169,6 +5202,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let views = app
@@ -5232,6 +5267,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let power_position = crate::config::LibraryPosition {
@@ -5337,6 +5374,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let power_position = crate::config::LibraryPosition {
@@ -5428,6 +5467,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let pre_feature_position = crate::config::LibraryPosition {
@@ -5512,6 +5553,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: Some(0),
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let views = app
@@ -5592,6 +5635,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let views = app
@@ -5655,6 +5700,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let power_position = crate::config::LibraryPosition {
@@ -5853,6 +5900,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: Some(0),
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let stale = crate::config::LibraryPosition {
@@ -5953,6 +6002,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let default_position = crate::config::LibraryPosition {
@@ -6035,6 +6086,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -6113,6 +6166,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let default_position = crate::config::LibraryPosition {
@@ -6209,6 +6264,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -6289,6 +6346,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = 1;
@@ -6372,6 +6431,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = 1;
@@ -7942,6 +8003,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -7987,6 +8050,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -8020,6 +8085,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -8049,6 +8116,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -8106,6 +8175,8 @@ pub(crate) mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -8169,6 +8240,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         assert!(!app.is_feed_home_video_group_view(0));
@@ -8237,6 +8310,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8289,6 +8364,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8339,6 +8416,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8430,6 +8509,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8491,6 +8572,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8567,6 +8650,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8644,6 +8729,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8708,6 +8795,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8759,6 +8848,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8889,6 +8980,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8954,6 +9047,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -8983,6 +9078,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -9004,6 +9101,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -9045,6 +9144,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -9094,6 +9195,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -9141,6 +9244,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = 1;
@@ -9208,6 +9313,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = 1;
@@ -9312,6 +9419,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = 1;
@@ -9388,6 +9497,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -9446,6 +9557,8 @@ pub(crate) mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 

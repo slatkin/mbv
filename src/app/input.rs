@@ -1478,14 +1478,6 @@ impl App {
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
                     && !key.modifiers.contains(KeyModifiers::ALT)
                 {
-                    if key.code == KeyCode::Char('[') && self.is_series_view(lib_idx) {
-                        self.switch_season(lib_idx, -1);
-                        return false;
-                    }
-                    if key.code == KeyCode::Char(']') && self.is_series_view(lib_idx) {
-                        self.switch_season(lib_idx, 1);
-                        return false;
-                    }
                     if key.code == KeyCode::Char('[') && self.is_music_group_view(lib_idx) {
                         self.switch_music_group(lib_idx, -1);
                         return false;
@@ -1613,6 +1605,73 @@ impl App {
                             }
                         }
                         _ => {}
+                    }
+                }
+
+                // Series-selection mode: while the power-left panel has a
+                // Series item selected and selection mode is active, Enter/
+                // Escape/Up/Down/[/] are intercepted for navigating within
+                // the inline series detail (season pills + episode list)
+                // instead of drilling into `nav_stack` (`select`) or
+                // moving the list cursor (`move_lib_cursor`).
+                if !is_power_nav && self.libs[lib_idx].series_selection.is_some() {
+                    match key.code {
+                        KeyCode::Enter => {
+                            // Play the focused episode in selection mode.
+                            if let Some(episodes) = self.series_selection_episodes(lib_idx) {
+                                let ep_idx = self.libs[lib_idx].series_selection.unwrap_or(0);
+                                if let Some(ep) = episodes.get(ep_idx) {
+                                    let ep = ep.clone();
+                                    self.libs[lib_idx].series_selection = None;
+                                    self.play_item(ep);
+                                }
+                            }
+                            return false;
+                        }
+                        KeyCode::Esc | KeyCode::Backspace => {
+                            self.libs[lib_idx].series_selection = None;
+                            return false;
+                        }
+                        KeyCode::Up | KeyCode::Down => {
+                            let delta: i64 = if key.code == KeyCode::Up { -1 } else { 1 };
+                            if let Some(episodes) = self.series_selection_episodes(lib_idx) {
+                                let count = episodes.len();
+                                if count > 0 {
+                                    let cur = self.libs[lib_idx].series_selection.unwrap_or(0);
+                                    let new_idx =
+                                        (cur as i64 + delta).clamp(0, count as i64 - 1) as usize;
+                                    self.libs[lib_idx].series_selection = Some(new_idx);
+                                }
+                            }
+                            return false;
+                        }
+                        KeyCode::Char('[') => {
+                            self.switch_series_selection_season(lib_idx, -1);
+                            return false;
+                        }
+                        KeyCode::Char(']') => {
+                            self.switch_series_selection_season(lib_idx, 1);
+                            return false;
+                        }
+                        _ => {}
+                    }
+                }
+                // Activate series-selection mode on Enter when the cursor is
+                // on a Series item (instead of drilling down via `select`).
+                if !is_power_nav
+                    && key.code == KeyCode::Enter
+                    && self.libs[lib_idx].series_selection.is_none()
+                {
+                    if let Some(item) = self.libs[lib_idx]
+                        .nav_stack
+                        .last()
+                        .and_then(|lvl| lvl.items.get(lvl.cursor))
+                    {
+                        if item.item_type == "Series" {
+                            let item = item.clone();
+                            self.enter_series_selection(lib_idx, &item);
+                            return false;
+                        }
                     }
                 }
 
@@ -3616,6 +3675,8 @@ mod power_movie_detail_tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -3652,6 +3713,8 @@ mod power_movie_detail_tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
     }
@@ -3929,6 +3992,8 @@ mod power_movie_detail_tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         lib.handle_key(KeyEvent::new(KeyCode::Char('.'), KeyModifiers::NONE));
@@ -3978,6 +4043,8 @@ mod power_movie_detail_tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -4306,6 +4373,8 @@ mod power_music_track_focus_tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -4404,6 +4473,8 @@ mod power_music_track_focus_tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -5504,6 +5575,8 @@ mod power_music_track_focus_tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -5568,6 +5641,8 @@ mod power_library_scope_routing_tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app
@@ -5714,6 +5789,8 @@ mod power_library_scope_routing_tests {
                 feed_home_video: None,
                 album_track_focus: None,
                 artist_header_focus: None,
+                series_selection: None,
+                series_season_cursor: 0,
                 library_total: None,
             });
         }
@@ -5970,6 +6047,8 @@ mod power_library_scope_routing_tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         let power_position = crate::config::LibraryPosition {

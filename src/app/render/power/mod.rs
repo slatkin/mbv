@@ -1,7 +1,6 @@
 mod album;
 mod card;
 mod detail;
-mod episode;
 mod home;
 mod list;
 mod music;
@@ -957,7 +956,6 @@ impl App {
         let is_music_group = self.power_left_tab > 0 && self.is_music_group_view(lib_idx);
         let is_album_folders = self.power_left_tab > 0 && self.is_viewing_album_folders(lib_idx);
         let is_album = self.power_left_tab > 0 && self.is_album_level(lib_idx);
-        let is_series = self.power_left_tab > 0 && self.is_series_view(lib_idx);
         let is_home_video = self.power_left_tab > 0 && self.is_home_video_view(lib_idx);
         if is_feed_group {
             self.render_power_feed_home_video_group_view(f, area, lib_idx, focused, layout);
@@ -974,8 +972,6 @@ impl App {
                 }
             };
             self.render_power_album_detail(f, area, &items, cursor, focused, true, false, layout);
-        } else if is_series {
-            self.render_power_episode_detail(f, area, lib_idx, focused, layout);
         } else if is_home_video {
             self.render_power_home_video_list(f, area, lib_idx, focused, layout);
         } else {
@@ -1307,6 +1303,8 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -1727,6 +1725,8 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -2213,6 +2213,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -2840,6 +2842,8 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -2882,45 +2886,12 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
         app
-    }
-
-    #[test]
-    fn series_library_is_never_album_folders_and_renders_via_episode_detail_path() {
-        let mut app = make_power_series_app();
-        let lib_idx = 0;
-
-        assert!(
-            !app.is_viewing_album_folders(lib_idx),
-            "a tvshows library must never satisfy is_viewing_album_folders (gated \
-             on collection_type == \"music\")"
-        );
-        assert!(
-            !app.is_album_level(lib_idx),
-            "a tvshows library must never satisfy is_album_level either"
-        );
-        assert!(app.is_series_view(lib_idx));
-        assert!(app.libs[lib_idx].album_track_focus.is_none());
-
-        let mut layout = LayoutPower::default();
-        let out = render_power_library_to_string(&mut app, &mut layout);
-
-        assert!(
-            out.contains("Pilot"),
-            "expected the original single-pane episode-detail renderer to fire \
-             unchanged:\n{out}"
-        );
-        assert!(
-            app.album_tracks_cache.is_empty(),
-            "series rendering must never touch the album-tracks cache added by #145"
-        );
-        assert!(
-            app.libs[lib_idx].album_track_focus.is_none(),
-            "series rendering must never set track-selection mode"
-        );
     }
 
     #[test]
@@ -3017,6 +2988,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: Some(library_total),
         });
 

@@ -1346,51 +1346,79 @@ impl App {
             .map(|i| i.item_type == "Season")
             .unwrap_or(false)
     }
-    /// True when Power View should show the combined series view:
-    /// either at episode level (with a Season level directly above), or at
-    /// season level while episodes are still loading.
-    pub(super) fn is_series_view(&self, lib_idx: usize) -> bool {
-        let lib = &self.libs[lib_idx];
-        if lib.search.is_some() {
-            return false;
+    /// Activates series-selection mode for the given Series item.
+    /// Ensures the series detail is fetched and sets `series_selection`
+    /// to start at the first episode.
+    pub(super) fn enter_series_selection(&mut self, lib_idx: usize, item: &MediaItem) {
+        if item.item_type != "Series" || item.id.is_empty() {
+            return;
         }
-        let lvl = match lib.nav_stack.last() {
-            Some(l) => l,
-            None => return false,
+        // Ensure the series detail (seasons + episodes) is fetched.
+        self.fetch_series_detail(item.id.clone());
+        self.libs[lib_idx].series_selection = Some(0);
+    }
+
+    /// Returns the episodes for the current season in series-selection
+    /// mode, or `None` if not in selection mode.
+    pub(super) fn series_selection_episodes(&self, lib_idx: usize) -> Option<Vec<MediaItem>> {
+        let _ep_idx = self.libs[lib_idx].series_selection?;
+        let item = self.power_selected_series_item(lib_idx)?;
+        let detail = self.series_detail_cache.get(&item.id)?;
+        let season = detail
+            .seasons
+            .get(self.libs[lib_idx].series_season_cursor)?;
+        detail.episodes.get(&season.id).cloned()
+    }
+
+    /// Switches to the previous (`delta == -1`) or next (`delta == 1`)
+    /// season while in series-selection mode. Adjusts the season cursor
+    /// and ensures episodes for the new season are fetched.
+    pub(super) fn switch_series_selection_season(&mut self, lib_idx: usize, delta: i64) {
+        let Some(item) = self.power_selected_series_item(lib_idx) else {
+            return;
         };
-        // Normal state: at episode level with a season list one level up.
-        if lvl
-            .items
-            .first()
-            .map(|i| i.item_type == "Episode")
-            .unwrap_or(false)
-        {
-            let len = lib.nav_stack.len();
-            return len >= 2
-                && lib.nav_stack[len - 2]
-                    .items
-                    .first()
-                    .map(|i| i.item_type == "Season")
-                    .unwrap_or(false);
+        let Some(detail) = self.series_detail_cache.get(&item.id).cloned() else {
+            return;
+        };
+        let n = detail.seasons.len();
+        if n == 0 {
+            return;
         }
-        // Transitional state: switch_season pushed an empty loading BrowseLevel
-        // above the season level. Neither branch above fires for empty items, so
-        // detect this explicitly and keep treating it as a series view while the
-        // new season's episodes load (prevents flashing the queue image).
-        if lvl.loading && lvl.items.is_empty() {
-            let len = lib.nav_stack.len();
-            return len >= 2
-                && lib.nav_stack[len - 2]
-                    .items
-                    .first()
-                    .map(|i| i.item_type == "Season")
-                    .unwrap_or(false);
+        let cur = self.libs[lib_idx].series_season_cursor;
+        let new_cur = (cur as i64 + delta).clamp(0, n as i64 - 1) as usize;
+        if new_cur == cur {
+            return;
         }
-        // At-season level: browsing seasons before drilling into episodes.
-        lvl.items
-            .first()
-            .map(|i| i.item_type == "Season")
-            .unwrap_or(false)
+        let new_season = &detail.seasons[new_cur];
+        // Ensure episodes for the new season are fetched.
+        if !detail.episodes.contains_key(&new_season.id) {
+            let series_id = item.id.clone();
+            let season_id = new_season.id.clone();
+            let client = self.client.lock().unwrap().clone();
+            let tx = self.lib_tx.clone();
+            std::thread::spawn(move || {
+                let eps = client
+                    .get_items_sorted(
+                        &season_id,
+                        None,
+                        false,
+                        0,
+                        super::PAGE_SIZE,
+                        "IndexNumber",
+                        "Ascending",
+                    )
+                    .map(|(items, _total)| items)
+                    .unwrap_or_default();
+                let _ = tx.send(LibEvent::SeriesSeasonEpisodesFetched {
+                    series_id,
+                    season_id,
+                    episodes: eps,
+                });
+            });
+        }
+        self.libs[lib_idx].series_season_cursor = new_cur;
+        // Reset episode cursor to first episode.
+        self.libs[lib_idx].series_selection = Some(0);
     }
 
     /// True when Power View should show the combined music group view:
@@ -1684,84 +1712,6 @@ impl App {
         let cur = self.feed_home_video_selected_group_index(lib_idx);
         let next = (cur as i64 + delta).rem_euclid(n as i64) as usize;
         self.select_feed_folder_group(lib_idx, next);
-    }
-
-    /// Switch to the previous (`delta == -1`) or next (`delta == 1`) season
-    /// while in the combined series view. Pops the current episode level,
-    /// adjusts the season cursor, then kicks off a fetch for the new season.
-    pub(super) fn switch_season(&mut self, lib_idx: usize, delta: i64) {
-        let stack_len = self.libs[lib_idx].nav_stack.len();
-        if stack_len < 2 {
-            return;
-        }
-        let at_episodes = self.libs[lib_idx]
-            .nav_stack
-            .last()
-            .map(|l| {
-                l.items
-                    .first()
-                    .map(|i| i.item_type == "Episode")
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false);
-        if !at_episodes {
-            return;
-        }
-
-        // Check season count before popping so we never lose the episode level.
-        let n = self.libs[lib_idx].nav_stack[stack_len - 2].items.len();
-        if n == 0 {
-            return;
-        }
-
-        // Pop the episode level.
-        self.libs[lib_idx].nav_stack.pop();
-        let cur = self.libs[lib_idx]
-            .nav_stack
-            .last()
-            .map(|l| l.cursor)
-            .unwrap_or(0);
-        let new_cursor = (cur as i64 + delta).clamp(0, n as i64 - 1) as usize;
-        if let Some(season_lvl) = self.libs[lib_idx].nav_stack.last_mut() {
-            season_lvl.cursor = new_cursor;
-        }
-
-        // Collect the new season's identity.
-        let (season_id, season_name) = self.libs[lib_idx]
-            .nav_stack
-            .last()
-            .and_then(|l| l.items.get(new_cursor))
-            .map(|s| (s.id.clone(), s.name.clone()))
-            .unwrap_or_default();
-        if season_id.is_empty() {
-            return;
-        }
-
-        // Push a loading placeholder so the Loaded handler can fill it in.
-        self.libs[lib_idx].nav_stack.push(BrowseLevel {
-            parent_id: season_id.clone(),
-            title: season_name.clone(),
-            items: vec![],
-            total_count: 0,
-            cursor: 0,
-            item_types: Some("Episode".into()),
-            unplayed_only: false,
-            sort_by: "SortName".into(),
-            sort_order: "Ascending".into(),
-            loading: true,
-            scroll: 0,
-            all_items: None,
-            letter_filter: None,
-        });
-        self.spawn_browse(
-            lib_idx,
-            season_id,
-            season_name,
-            Some("Episode".into()),
-            false,
-            "SortName".into(),
-            "Ascending".into(),
-        );
     }
 
     /// Switch to the previous (`delta == -1`) or next (`delta == 1`) group
@@ -5125,6 +5075,15 @@ impl App {
                 self.series_detail_cache
                     .insert(series_id, crate::app::SeriesDetail { seasons, episodes });
             }
+            LibEvent::SeriesSeasonEpisodesFetched {
+                series_id,
+                season_id,
+                episodes,
+            } => {
+                if let Some(detail) = self.series_detail_cache.get_mut(&series_id) {
+                    detail.episodes.insert(season_id, episodes);
+                }
+            }
             LibEvent::AlbumArtistFetched { album_id, artist } => {
                 self.album_artist_loading.remove(&album_id);
                 self.album_artist_cache.insert(album_id, artist);
@@ -5951,6 +5910,8 @@ impl App {
 
                 album_track_focus: None,
                 artist_header_focus: None,
+                series_selection: None,
+                series_season_cursor: 0,
                 library_total: None,
             });
         }
@@ -6284,6 +6245,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app
@@ -6681,6 +6644,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -6963,6 +6928,8 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -7026,6 +6993,8 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -7060,6 +7029,8 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -7095,6 +7066,8 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
 
@@ -7583,6 +7556,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -7686,6 +7661,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -7713,6 +7690,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -7754,6 +7733,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
         app.tab_idx = app.lib_tab_offset();
@@ -7779,6 +7760,8 @@ mod tests {
             feed_home_video: None,
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         }
     }

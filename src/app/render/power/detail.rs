@@ -608,6 +608,9 @@ impl App {
         // ── Grey divider with season tabs overlaid ───────────────────────
         // Fetch series detail from cache
         let series_detail = self.series_detail_cache.get(&item.id).cloned();
+        let in_selection = self.libs[lib_idx].series_selection.is_some();
+        let season_cursor = self.libs[lib_idx].series_season_cursor;
+        let ep_cursor = self.libs[lib_idx].series_selection;
         if let Some(ref detail) = series_detail {
             if !detail.seasons.is_empty() && row < max_y {
                 row += 1; // blank spacer above divider
@@ -624,7 +627,7 @@ impl App {
                         palette::GREEN,
                     );
 
-                    // Overlay season tabs on the same row (inactive for now)
+                    // Overlay season tabs on the same row
                     let tab_labels: Vec<String> = detail
                         .seasons
                         .iter()
@@ -654,8 +657,8 @@ impl App {
                         if idx > 0 {
                             spans.push(Span::raw(" "));
                         }
-                        // All pills inactive (not selected)
-                        let style = super::selector_pill_style(false);
+                        let is_active = in_selection && idx == season_cursor;
+                        let style = super::selector_pill_style(is_active);
                         spans.push(Span::styled(format!(" {} ", label), style));
                     }
                     if scroll_end < n_tabs {
@@ -677,82 +680,106 @@ impl App {
                 }
             }
 
-            // ── Episode list (inactive) ─────────────────────────────────────
-            if let Some(first_season) = detail.seasons.first() {
-                if let Some(episodes) = detail.episodes.get(&first_season.id) {
-                    if !episodes.is_empty() && row < max_y {
-                        let table_area = Rect {
-                            x: area.x,
-                            y: row,
-                            width: area.width,
-                            height: max_y.saturating_sub(row),
-                        };
-                        if table_area.height > 0 {
-                            let show_length = table_area.width > 40;
-                            let dur_col_w: usize = if show_length { 7 } else { 0 };
-                            let title_col_w = (table_area.width as usize)
-                                .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
+            // ── Episode list ─────────────────────────────────────────────
+            let active_season = detail.seasons.get(season_cursor);
+            let episodes = active_season
+                .and_then(|s| detail.episodes.get(&s.id))
+                .map(|eps| eps.as_slice())
+                .unwrap_or(&[]);
+            if !episodes.is_empty() && row < max_y {
+                let table_area = Rect {
+                    x: area.x,
+                    y: row,
+                    width: area.width,
+                    height: max_y.saturating_sub(row),
+                };
+                if table_area.height > 0 {
+                    let show_length = table_area.width > 40;
+                    let dur_col_w: usize = if show_length { 7 } else { 0 };
+                    let title_col_w = (table_area.width as usize)
+                        .saturating_sub(1 + if show_length { dur_col_w + 1 } else { 0 });
 
-                            let rows: Vec<Row> = episodes
-                                .iter()
-                                .enumerate()
-                                .map(|(i, ep)| {
-                                    let row_style = Style::default().fg(palette::SUBTLE);
-                                    let ep_num_w = episodes.len().to_string().len();
-                                    let ep_label = if ep.index_number > 0 {
-                                        format!("{:>ep_num_w$}. ", ep.index_number)
-                                    } else {
-                                        format!("{:>ep_num_w$}. ", i + 1)
-                                    };
-                                    let label_w = ep_label.chars().count();
-                                    let title =
-                                        trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
-                                    let title_cell = Cell::from(Line::from(vec![
-                                        Span::styled(ep_label, Style::default().fg(palette::MUTED)),
-                                        Span::raw(title),
-                                    ]));
-                                    let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
-                                    let length = if len_secs > 0 {
-                                        fmt_duration_approx(len_secs)
-                                    } else {
-                                        "\u{2014}".to_string()
-                                    };
-                                    if show_length {
-                                        Row::new([
-                                            title_cell,
-                                            Cell::from(
-                                                Line::from(length).alignment(Alignment::Right),
-                                            )
-                                            .style(Style::default().fg(palette::MUTED)),
-                                            Cell::from(""),
-                                        ])
-                                        .style(row_style)
-                                    } else {
-                                        Row::new([title_cell, Cell::from(""), Cell::from("")])
-                                            .style(row_style)
-                                    }
-                                })
-                                .collect();
+                    let playback = self.effective_playback_state();
+                    let now_playing_id: Option<String> = if playback.active {
+                        self.playback_queue()
+                            .items
+                            .get(playback.active_idx)
+                            .map(|i| i.id.clone())
+                    } else {
+                        None
+                    };
 
-                            let mut state = TableState::default();
-                            state.select(None); // No selection (inactive)
-                            let table = Table::new(
-                                rows,
-                                [
-                                    Constraint::Min(10),
-                                    Constraint::Length(if show_length {
-                                        dur_col_w as u16
-                                    } else {
-                                        0
-                                    }),
-                                    Constraint::Length(1),
-                                ],
-                            )
-                            .column_spacing(1)
-                            .row_highlight_style(Style::default());
-                            f.render_stateful_widget(table, table_area, &mut state);
-                        }
+                    let rows: Vec<Row> = episodes
+                        .iter()
+                        .enumerate()
+                        .map(|(i, ep)| {
+                            let is_cursor = in_selection && ep_cursor == Some(i);
+                            let is_playing = now_playing_id.as_deref() == Some(ep.id.as_str());
+                            let row_style = if is_playing {
+                                Style::default()
+                                    .fg(palette::GREEN)
+                                    .add_modifier(Modifier::BOLD)
+                            } else if is_cursor && focused {
+                                Style::default().fg(palette::YELLOW)
+                            } else if focused {
+                                Style::default().fg(palette::WHITE)
+                            } else {
+                                Style::default().fg(palette::SUBTLE)
+                            };
+                            let marker = if is_cursor {
+                                super::selection_marker(focused)
+                            } else {
+                                ratatui::text::Span::raw(" ")
+                            };
+                            let ep_num_w = episodes.len().to_string().len();
+                            let ep_label = if ep.index_number > 0 {
+                                format!("{:>ep_num_w$}. ", ep.index_number)
+                            } else {
+                                format!("{:>ep_num_w$}. ", i + 1)
+                            };
+                            let label_w = ep_label.chars().count();
+                            let title = trunc_str(&ep.name, title_col_w.saturating_sub(label_w));
+                            let title_cell = Cell::from(Line::from(vec![
+                                marker,
+                                Span::styled(ep_label, Style::default().fg(palette::MUTED)),
+                                Span::raw(title),
+                            ]));
+                            let len_secs = ep.runtime_ticks / TICKS_PER_SECOND;
+                            let length = if len_secs > 0 {
+                                fmt_duration_approx(len_secs)
+                            } else {
+                                "\u{2014}".to_string()
+                            };
+                            if show_length {
+                                Row::new([
+                                    title_cell,
+                                    Cell::from(Line::from(length).alignment(Alignment::Right))
+                                        .style(Style::default().fg(palette::MUTED)),
+                                    Cell::from(""),
+                                ])
+                                .style(row_style)
+                            } else {
+                                Row::new([title_cell, Cell::from(""), Cell::from("")])
+                                    .style(row_style)
+                            }
+                        })
+                        .collect();
+
+                    let mut state = TableState::default();
+                    if in_selection {
+                        state.select(ep_cursor);
                     }
+                    let table = Table::new(
+                        rows,
+                        [
+                            Constraint::Min(10),
+                            Constraint::Length(if show_length { dur_col_w as u16 } else { 0 }),
+                            Constraint::Length(1),
+                        ],
+                    )
+                    .column_spacing(1)
+                    .row_highlight_style(Style::default());
+                    f.render_stateful_widget(table, table_area, &mut state);
                 }
             }
         } else if row < max_y {
@@ -1075,6 +1102,8 @@ mod tests {
 
             album_track_focus: None,
             artist_header_focus: None,
+            series_selection: None,
+            series_season_cursor: 0,
             library_total: None,
         });
     }
