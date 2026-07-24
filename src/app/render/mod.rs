@@ -255,7 +255,7 @@ impl App {
                     f.render_widget(
                         Paragraph::new(Self::toast_line(&self.status))
                             .alignment(Alignment::Center)
-                            .style(Style::default().fg(palette::TEXT).bg(palette::IRIS)),
+                            .style(Style::default().fg(palette::TOAST_FG).bg(palette::TOAST_BG)),
                         sb_area,
                     );
                 }
@@ -296,10 +296,7 @@ impl App {
 
     fn toast_line(s: &str) -> Line<'static> {
         let text_style = Style::default()
-            .fg(palette::TEXT)
-            .add_modifier(Modifier::BOLD);
-        let yellow_style = Style::default()
-            .fg(palette::YELLOW)
+            .fg(palette::TOAST_FG)
             .add_modifier(Modifier::BOLD);
         let open = s.find(['[', '(']);
         if let Some(i) = open {
@@ -310,11 +307,7 @@ impl App {
                     Span::styled(s[i..i + 1].to_string(), text_style),
                 ];
                 for c in s[i + 1..j].chars() {
-                    spans.push(if c.is_uppercase() {
-                        Span::styled(c.to_string(), yellow_style)
-                    } else {
-                        Span::styled(c.to_string(), text_style)
-                    });
+                    spans.push(Span::styled(c.to_string(), text_style));
                 }
                 spans.push(Span::styled(s[j..j + 1].to_string(), text_style));
                 if j + 1 < s.len() {
@@ -1154,9 +1147,13 @@ impl App {
         layout.ind_mu = Rect::default();
 
         let remote_state = self.remote_slot_state();
-        let (daemon_endpoint, server_url) = {
+        let (daemon_endpoint, server_url, username) = {
             let cfg = &self.client.lock().unwrap().config;
-            (cfg.daemon_client_endpoint.clone(), cfg.server_url.clone())
+            (
+                cfg.daemon_client_endpoint.clone(),
+                cfg.server_url.clone(),
+                cfg.username.clone(),
+            )
         };
         let remote_status = if show_session_pill {
             self.remote_status_spans(remote_state, &daemon_endpoint)
@@ -1338,6 +1335,23 @@ impl App {
                             .bg(palette::STATUS_PILL_BG),
                     ),
                 );
+            }
+            if !username.is_empty() {
+                if !right_spans.is_empty() {
+                    right_spans.push(Span::raw(" "));
+                }
+                right_spans.push(Span::styled(
+                    " 🯅",
+                    Style::default()
+                        .fg(palette::FOAM)
+                        .bg(palette::STATUS_PILL_BG),
+                ));
+                right_spans.push(Span::styled(
+                    format!(" {username} "),
+                    Style::default()
+                        .fg(palette::PLAYBACK_META_FG)
+                        .bg(palette::STATUS_PILL_BG),
+                ));
             }
             if let Some(server) = server_url_label(&server_url) {
                 if self.use_nerd_fonts {
