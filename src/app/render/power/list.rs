@@ -14,8 +14,9 @@ use unicode_width::UnicodeWidthStr;
 /// Rows the compact movie banner occupies inline in the library list. The
 /// selected movie row + the banner's own content (meta/overview/poster,
 /// rendered by `render_power_compact_detail`, directly below the selected row)
-/// are wrapped in a `palette::MEDIA_SELECTED_BG` colored block — a dark
-/// (#282828) background visually similar to the home tab's Keep Watching
+/// are wrapped in a colored block — `palette::MEDIA_SELECTED_BG` when focused,
+/// `palette::PLAYBACK_PANEL_BG` when unfocused — a dark (#282828 / #151515)
+/// background visually similar to the home tab's Keep Watching
 /// list — instead of horizontal rules. The two
 /// constants below reserve one row above the selected item (the block's top
 /// padding, replacing the previous opening `─` rule) and one row after the
