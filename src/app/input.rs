@@ -2541,6 +2541,25 @@ impl App {
         // Always track mouse position so hover rendering is up to date.
         self.mouse_col = col;
         self.mouse_row = row;
+
+        // Swallow the single click that merely refocused the window (e.g.
+        // alt-tab back in by clicking): if a FocusGained landed within the
+        // last 150ms, this Down(Left)/Down(Right) is that click, not a UI
+        // action. `.take()` makes this strictly one-shot -- it clears
+        // `refocus_at` whether or not the click was in the window, so a
+        // second click right after a suppressed one dispatches normally.
+        if matches!(
+            mouse.kind,
+            MouseEventKind::Down(MouseButton::Left) | MouseEventKind::Down(MouseButton::Right)
+        ) {
+            if let Some(t) = self.refocus_at.take() {
+                if t.elapsed() < Duration::from_millis(150) {
+                    log::debug!(target: "input", "suppressed refocus click at ({col}, {row})");
+                    return;
+                }
+            }
+        }
+
         if matches!(
             mouse.kind,
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
@@ -4186,6 +4205,96 @@ mod power_music_track_focus_tests {
         assert_eq!(app_mouse.libs[0].album_track_focus, None);
         assert_eq!(app_key.libs[0].nav_stack.len(), nav_len_before);
         assert_eq!(app_mouse.libs[0].nav_stack.len(), nav_len_before);
+    }
+
+    #[test]
+    fn refocus_click_after_focus_gained_is_suppressed() {
+        let mut app = make_power_music_album_app();
+        app.note_focus_gained();
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
+        assert!(app.refocus_at.is_none());
+    }
+
+    #[test]
+    fn click_without_focus_event_dispatches_normally() {
+        let mut app = make_power_music_album_app();
+        assert!(app.refocus_at.is_none());
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    }
+
+    #[test]
+    fn click_outside_refocus_window_dispatches_normally() {
+        let mut app = make_power_music_album_app();
+        app.refocus_at = Some(Instant::now() - Duration::from_millis(500));
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    }
+
+    #[test]
+    fn second_click_after_refocus_dispatches() {
+        let mut app = make_power_music_album_app();
+        app.note_focus_gained();
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        let click = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        };
+        app.handle_mouse(click);
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 0);
+
+        app.handle_mouse(click);
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
+    }
+
+    #[test]
+    fn focus_lost_clears_pending_refocus() {
+        let mut app = make_power_music_album_app();
+        app.note_focus_gained();
+        app.note_focus_lost();
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
+
+        app.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 11,
+            row: 5,
+            modifiers: KeyModifiers::NONE,
+        });
+
+        assert_eq!(app.libs[0].nav_stack.last().unwrap().cursor, 1);
     }
 
     #[test]

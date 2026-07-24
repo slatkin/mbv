@@ -1172,6 +1172,11 @@ pub struct App {
     last_scroll_at: Instant,
     last_nav_at: Instant,
     last_power_library_nav_at: Instant,
+    /// Set when the terminal reports FocusGained; used to swallow the
+    /// single click that merely refocused the window. `None` until the
+    /// first focus event is ever seen (terminals that never report focus
+    /// never suppress).
+    refocus_at: Option<Instant>,
     album_artist_cache: std::collections::HashMap<String, String>,
     album_artist_loading: std::collections::HashSet<String>,
     pending_album_artist_fetches: std::collections::VecDeque<String>,
@@ -1470,6 +1475,18 @@ impl App {
         }
         self.queue_column_width = normalized;
         true
+    }
+
+    /// Record that the terminal just regained focus, arming the
+    /// refocus-click suppression window (see `handle_mouse`).
+    pub(super) fn note_focus_gained(&mut self) {
+        self.refocus_at = Some(Instant::now());
+    }
+
+    /// Clear any pending refocus suppression -- the window shouldn't
+    /// outlive the focus session that armed it.
+    pub(super) fn note_focus_lost(&mut self) {
+        self.refocus_at = None;
     }
 
     /// Save the current position of `lib_idx` (#361 collapsed the old
@@ -1838,6 +1855,7 @@ impl App {
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_power_library_nav_at: Instant::now() - Duration::from_secs(1),
+            refocus_at: None,
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_loading: std::collections::HashSet::new(),
             pending_album_artist_fetches: std::collections::VecDeque::new(),
@@ -3466,6 +3484,8 @@ impl App {
                         self.card_image_states.clear();
                         self.card_image_loading.clear();
                     }
+                    Event::FocusGained => self.note_focus_gained(),
+                    Event::FocusLost => self.note_focus_lost(),
                     _ => {}
                 }
             }
@@ -3490,7 +3510,8 @@ impl App {
                 self.card_image_loading.clear();
                 let _ = crossterm::execute!(
                     terminal.backend_mut(),
-                    crossterm::event::EnableMouseCapture
+                    crossterm::event::EnableMouseCapture,
+                    crossterm::event::EnableFocusChange
                 );
                 self.force_clear = true;
                 log::info!(target: "stay_alive", "reattach-refresh: capabilities re-detected, images invalidated");
@@ -4041,6 +4062,7 @@ fn init_terminal() -> Result<Terminal<CrosstermBackend<std::io::Stdout>>, Box<dy
     let mut stdout = std::io::stdout();
     crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
     crossterm::execute!(stdout, crossterm::event::EnableMouseCapture)?;
+    crossterm::execute!(stdout, crossterm::event::EnableFocusChange)?;
     let _ = crossterm::execute!(
         stdout,
         crossterm::event::PushKeyboardEnhancementFlags(
@@ -4062,6 +4084,7 @@ fn restore_terminal(
         terminal.backend_mut(),
         crossterm::event::DisableMouseCapture
     )?;
+    crossterm::execute!(terminal.backend_mut(), crossterm::event::DisableFocusChange)?;
     crossterm::execute!(
         terminal.backend_mut(),
         crossterm::terminal::LeaveAlternateScreen
@@ -5839,6 +5862,7 @@ pub(crate) mod tests {
             last_scroll_at: Instant::now() - Duration::from_secs(1),
             last_nav_at: Instant::now() - Duration::from_secs(1),
             last_power_library_nav_at: Instant::now() - Duration::from_secs(1),
+            refocus_at: None,
             album_artist_cache: std::collections::HashMap::new(),
             album_artist_loading: std::collections::HashSet::new(),
             pending_album_artist_fetches: std::collections::VecDeque::new(),
