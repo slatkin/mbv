@@ -220,26 +220,34 @@ Apply the pre-written content in the appendices below verbatim. It encodes ratio
 - [ ] Add a note to `docs/adr/0009-v-key-controls-audio-visualizer.md` (Appendix C)
 - [ ] Comment on issue #98 that #361 narrowed its scope (Appendix D)
 
+**Note:** the "Verification gate — BLOCKING, before push" section in the original version of this plan was replaced mid-flight. Visual verification is the user's, done manually; the agent runs automated checks only. See "Verification" below.
+
 ---
 
-## Verification gate — BLOCKING, before push
+## Verification
 
-921 tests will stay green through a rename that quietly drops a render call. The suite is a strong net for the rename and a weak net for the visual result. **Do not push until the visual sweep passes.**
+**The implementing agent does automated checks only.** It must not launch the app, use the `/run` skill, or attempt any interactive TUI verification, and must never claim or imply a visual check.
 
-Use the `/run` skill. Confirm each renders correctly and is navigable:
+- [ ] `cargo fmt`
+- [ ] `cargo clippy` — zero warnings; fix by deleting dead code, never `#[allow(unused)]`
+- [ ] `cargo test` — green
 
-- [ ] Home (continue-watching + latest sections)
-- [ ] A movies library — list, letter pills, inline detail banner
-- [ ] A TV library — series inline detail, season/episode selection
-- [ ] A music library — group levels, album drill-down, inline album track selection
-- [ ] **Podcasts** — flagged fragile in prior work; it rides on the sidebar shell. Verify visually, a green build is not evidence.
-- [ ] Queue column — card, scope pills, grouping, `h` collapse/expand, `Shift+←/→` resize
-- [ ] Tab bar with more libraries than fit — arrows correct, selected tab always reachable (Task 5)
-- [ ] **Image protocol off** — set `image_protocol = none` in F2 and sweep the above again. This configuration has, as far as anyone can tell, never been visually verified in Power View. It is the single most likely source of a shipped regression.
-- [ ] Overlays over the new layout: F1 help, F2 settings, F3 sessions, F4 playlists, context menu
-- [ ] `v` and `g` do nothing, silently, everywhere
+**The visual sweep is the user's, done manually.** This is deliberate: 921 tests will stay green through a rename that quietly drops a render call, so the suite is a strong net for the rename and a weak net for the visual result. A background agent driving an interactive TUI is not a credible substitute for a human looking at it.
 
-Then: `cargo fmt` → `cargo clippy` (zero warnings; delete dead code, never `#[allow(unused)]`) → `cargo test`.
+The agent's final report must include a **ranked, specific list of what to look at hardest**, derived from what it actually changed — surfaces where its diff could plausibly break rendering without breaking a test. That list is the handoff, not the generic sweep below.
+
+Reference surfaces for the manual sweep:
+
+- Home (continue-watching + latest sections)
+- A movies library — list, letter pills, inline detail banner
+- A TV library — series inline detail, season/episode selection
+- A music library — group levels, album drill-down, inline album track selection
+- **Podcasts** — flagged fragile in prior work; it rides on the sidebar shell
+- Queue column — card, scope pills, grouping, `h` collapse/expand, `Shift+←/→` resize
+- Tab bar with more libraries than fit — arrows correct, selected tab always reachable (Task 5)
+- **Image protocol off** — set `image_protocol = none` in F2 and sweep the above again. As far as anyone can tell this has never been visually verified in Power View, and after this change it is the only thing a no-image terminal can render. Highest-risk item.
+- Overlays over the new layout: F1 help, F2 settings, F3 sessions, F4 playlists, context menu
+- `v` and `g` do nothing, silently, everywhere
 
 ---
 
