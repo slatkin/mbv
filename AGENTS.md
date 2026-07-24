@@ -2,9 +2,7 @@
 - Prefer evidence over assumptions: verify outcomes before final claims.
 - Choose the lightest-weight path that preserves quality.
 - Consult official docs before implementing with SDKs/frameworks/APIs.
-
-## Development
-Read `docs/agents/worktrees.md` before beginning development. Read `docs/agents/repo.md` for repo setup and configuration. See `docs/CHECKIN.md` for pre-commit steps.
+- Read `docs/agents/rules/` when starting a parent session.
 
 ## Issue tracker
 Issues live in GitHub Issues (slatkin/mbv), managed via the `gh` CLI. External PRs are not pulled into triage. See `docs/agents/issue-tracker.md`.
@@ -16,6 +14,7 @@ Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/do
 Broad requests: explore first, then plan. Keep and update domain docs while planning. 2+ independent tasks in parallel. run_in_background for builds/tests. Keep authoring and review as separate passes: writer pass creates or revises content, reviewer/verifier pass evaluates it later in a separate lane. Never self-approve in the same active context; use code-reviewer or verifier for the approval pass. Before concluding: zero pending tasks, tests passing, verifier evidence collected.
 
 # Operation principles
+- Use the `worktrees` skill before delegating to executor agents. Executors should always work in isolated worktrees.
 - Delegate specialized or tool-heavy work to the most appropriate agent.
 - Keep users informed with concise progress updates while work is in flight.
 - Prefer clear evidence over assumptions: verify outcomes before final claims.
