@@ -275,7 +275,8 @@ impl App {
                 }
                 QueueRow::Track { idx, in_group: _ } => {
                     let i = *idx;
-                    let indent: usize = 0;
+                    let indent: usize = 2;
+                    let track_content_w = render_w.saturating_sub(2);
                     let item = &items[i];
                     let is_active = i == playback.active_idx && playback.active;
                     let is_cursor = i == cursor && focused;
@@ -341,7 +342,7 @@ impl App {
                     } else {
                         0
                     };
-                    let title_w = render_w.saturating_sub(
+                    let title_w = track_content_w.saturating_sub(
                         indent + now_playing_icon_w + extra + QUEUE_TITLE_QUIET_COLUMNS,
                     );
                     let title = trunc_str(&label, title_w);
@@ -360,7 +361,7 @@ impl App {
 
                     let mut spans: Vec<Span> = Vec::new();
                     if indent > 0 {
-                        spans.push(Span::raw(" "));
+                        spans.push(Span::raw("  "));
                     }
                     // Prefix is "{n:>w}. " — render it dim.
                     let prefix_chars = format!("{:>num_w$}. ", queue_pos).chars().count();
@@ -396,7 +397,7 @@ impl App {
                     }
                     if pct_visible || dur_visible {
                         let used: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
-                        let pad = render_w.saturating_sub(used + metadata_w);
+                        let pad = track_content_w.saturating_sub(used + metadata_w);
                         spans.push(Span::raw(" ".repeat(pad)));
                     }
                     if pct_visible {

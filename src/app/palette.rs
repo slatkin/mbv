@@ -23,6 +23,7 @@ pub const PILL_BG: Color = Color::Rgb(60, 66, 74); // subtle grey control-pill b
 pub const STATUS_PILL_BG: Color = Color::Rgb(40, 40, 40); // status bar pill background (#282828)
 pub const SEEK_TRACK: Color = Color::Rgb(70, 84, 95); // unplayed seek track (design #46545f)
 pub const MEDIA_SELECTED_BG: Color = GREEN; // selected movie block background in the power view
+pub const POWER_LEFT_FOCUSED_BG: Color = GREEN;
 pub const DARK_BG: Color = Color::Rgb(30, 35, 38); // tab bar (Home, etc) background (#1e2326)
 pub const POWER_RIGHT_BG: Color = Color::Rgb(45, 53, 59); // power view right panel background (#2d353b)
 pub const PLAYBACK_PANEL_BG: Color = Color::Rgb(51, 60, 67); // now-playing panel background (#333c43)
