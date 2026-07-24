@@ -6124,7 +6124,7 @@ impl App {
         let Some(&cursor_line) = self.layout.settings_line_of_cursor.get(cursor) else {
             return;
         };
-        let visible = self.terminal_height.saturating_sub(4) as usize;
+        let visible = self.layout.settings_content_area.height.max(1) as usize;
         if cursor_line < self.settings_scroll {
             self.settings_scroll = cursor_line;
         } else if cursor_line >= self.settings_scroll + visible {

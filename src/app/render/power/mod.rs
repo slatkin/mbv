@@ -804,6 +804,8 @@ impl App {
                 height: content_h,
             }
         };
+        layout.panel_area = left_area;
+        layout.panel_content_area = Self::power_panel_content_area(left_area);
 
         // Full-column background behind the card image and queue list.
         if !self.power_left_collapsed {
@@ -1086,7 +1088,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::layout::{LayoutPlayback, LayoutPower, PowerLeftRowTarget};
+    use crate::app::layout::{AppLayout, LayoutPlayback, LayoutPower, PowerLeftRowTarget};
     use crate::app::tests::{make_app_stub, make_item};
     use crate::app::{BrowseLevel, LibraryTab, QueueScope};
     use crate::config::Config;
@@ -1323,6 +1325,87 @@ mod tests {
 
         assert_eq!(layout.left_area.x, 40 + POWER_TAB_LEFT_PAD);
         assert_eq!(layout.left_area.width, 40 - 2 * POWER_TAB_LEFT_PAD);
+    }
+
+    #[test]
+    fn expanded_power_panel_bounds_follow_sidebar_resize() {
+        let mut app = make_app_stub();
+        app.power_left_width = 31;
+        let first = render_power_view(&mut app, 80, 24);
+        assert_eq!(first.panel_area, Rect::new(0, 0, 31, 24));
+        assert_eq!(first.panel_content_area, Rect::new(2, 3, 27, 19));
+
+        app.power_left_width = 47;
+        let second = render_power_view(&mut app, 80, 24);
+        assert_eq!(second.panel_area, Rect::new(0, 0, 47, 24));
+        assert_eq!(second.panel_content_area, Rect::new(2, 3, 43, 19));
+    }
+
+    #[test]
+    fn power_panel_shell_paints_opaque_sidebar_and_active_local_header() {
+        let backend = TestBackend::new(20, 8);
+        let mut term = Terminal::new(backend).unwrap();
+        let sidebar = Rect::new(3, 1, 10, 6);
+        term.draw(|f| {
+            f.render_widget(
+                Block::default().style(Style::default().bg(palette::IRIS)),
+                sidebar,
+            );
+            App::render_panel_shell_at(f, sidebar, "HELP", "Esc Close", true);
+        })
+        .unwrap();
+
+        let buffer = term.backend().buffer();
+        for y in sidebar.y..sidebar.bottom() {
+            for x in sidebar.x..sidebar.right() {
+                if y >= sidebar.bottom() - 2
+                    || (y == sidebar.y + 1 && (sidebar.x + 2..sidebar.right()).contains(&x))
+                {
+                    continue;
+                }
+                assert_eq!(buffer[(x, y)].bg, palette::PLAYBACK_PANEL_BG);
+            }
+        }
+        assert_eq!(
+            buffer[(sidebar.x + 2, sidebar.y + 1)].bg,
+            palette::QUEUE_BUTTON_FOCUSED_BG
+        );
+        assert_eq!(buffer[(sidebar.x + 2, sidebar.y + 1)].fg, palette::TEXT);
+        assert!(buffer[(sidebar.x + 2, sidebar.y + 1)]
+            .modifier
+            .contains(ratatui::style::Modifier::BOLD));
+        assert_eq!(
+            buffer[(sidebar.x + sidebar.width - 3, sidebar.y + 1)].bg,
+            palette::QUEUE_BUTTON_FOCUSED_BG
+        );
+        for x in sidebar.x..sidebar.right() {
+            assert_eq!(buffer[(x, sidebar.y + 2)].bg, palette::PLAYBACK_PANEL_BG);
+            assert_eq!(buffer[(x, sidebar.y + 2)].symbol(), " ");
+        }
+    }
+
+    #[test]
+    fn settings_content_has_two_column_and_one_row_insets() {
+        let mut app = make_app_stub();
+        let backend = TestBackend::new(20, 10);
+        let mut term = Terminal::new(backend).unwrap();
+        let mut layout = AppLayout::default();
+        term.draw(|f| {
+            app.render_settings_panel(f, &mut layout, None);
+        })
+        .unwrap();
+
+        assert_eq!(layout.settings_content_area, Rect::new(2, 4, 15, 3));
+        let buffer = term.backend().buffer();
+        for x in 0..19 {
+            assert_eq!(buffer[(x, 3)].symbol(), " ");
+        }
+        for x in [0, 1, 18, 19] {
+            assert_eq!(buffer[(x, 4)].bg, palette::PANEL_BG);
+        }
+        for x in 2..17 {
+            assert_eq!(buffer[(x, 7)].bg, palette::PANEL_BG);
+        }
     }
 
     #[test]
