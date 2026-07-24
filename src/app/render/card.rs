@@ -1,5 +1,5 @@
 use super::POWER_RENDER_FILTER;
-use crate::app::images::POWER_CARD_PLACEHOLDER_KEY;
+use crate::app::images::QUEUE_CARD_PLACEHOLDER_KEY;
 use crate::app::{palette, App};
 use mbv_core::api::MediaItem;
 use ratatui::layout::Rect;
@@ -98,7 +98,7 @@ impl App {
     fn render_power_card_placeholder(&mut self, f: &mut Frame, area: Rect) -> (u16, bool) {
         self.ensure_placeholder_card_image();
         let rendered =
-            self.render_card_image(f, area, POWER_CARD_PLACEHOLDER_KEY, area.height.min(18));
+            self.render_card_image(f, area, QUEUE_CARD_PLACEHOLDER_KEY, area.height.min(18));
         if rendered == (0, false) {
             (
                 area.height
@@ -178,9 +178,9 @@ impl App {
 
 #[cfg(test)]
 mod tests {
-    use crate::app::images::POWER_CARD_PLACEHOLDER_KEY;
+    use crate::app::images::QUEUE_CARD_PLACEHOLDER_KEY;
     use crate::app::tests::{make_app_stub, make_item, make_items};
-    use crate::app::{palette, App, BrowseLevel, LibraryTab, PowerFocus, QueueScope, ViewMode};
+    use crate::app::{palette, App, BrowseLevel, LibraryTab, PanelFocus, QueueScope};
     use crate::config::Config;
     use mbv_core::api::EmbyClient;
     use ratatui::backend::TestBackend;
@@ -197,10 +197,8 @@ mod tests {
 
     fn make_drilled_library_app() -> App {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
 
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
@@ -350,7 +348,7 @@ mod tests {
 
         assert!(app
             .card_image_states
-            .contains_key(POWER_CARD_PLACEHOLDER_KEY));
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert!(!fetch_triggered(&app, "remote-hidden:P"));
     }
 
@@ -388,7 +386,7 @@ mod tests {
 
         assert!(app
             .card_image_states
-            .contains_key(POWER_CARD_PLACEHOLDER_KEY));
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert!(!app.card_image_loading.contains("id2:P"));
         assert!(fetch_triggered(&app, "id1:P"));
         assert!(fetch_triggered(&app, "id3:P"));
@@ -409,7 +407,7 @@ mod tests {
 
         assert!(app
             .card_image_states
-            .contains_key(POWER_CARD_PLACEHOLDER_KEY));
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY));
         assert!(!app.card_image_loading.contains("id3:P"));
         assert!(fetch_triggered(&app, "id2:P"));
         assert!(fetch_triggered(&app, "id4:P"));

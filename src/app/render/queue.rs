@@ -1,5 +1,5 @@
-use super::super::super::ui_util::*;
-use crate::app::layout::LayoutPower;
+use super::super::ui_util::*;
+use crate::app::layout::LayoutMain;
 use crate::app::{palette, App, QueueScope};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
@@ -27,7 +27,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if area.height < 1 {
             return;
@@ -145,7 +145,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) -> Vec<u16> {
         layout.queue_cursor_screen_y = None;
         layout.queue_area = area;
@@ -160,7 +160,7 @@ impl App {
         };
         let n = items.len();
         if n == 0 {
-            self.power_queue_scroll = 0;
+            self.queue_scroll = 0;
             f.render_widget(
                 Paragraph::new(if self.visible_queue_scope() == QueueScope::Local {
                     "  Add items with p from Home or library tabs"
@@ -193,15 +193,15 @@ impl App {
             })
             .unwrap_or(0);
         let max_offset = total.saturating_sub(visible);
-        self.power_queue_scroll = self.power_queue_scroll.min(max_offset);
-        if cursor_row < self.power_queue_scroll {
-            self.power_queue_scroll = queue_group_start_row(&display, cursor_row);
-        } else if cursor_row >= self.power_queue_scroll + visible {
-            self.power_queue_scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
+        self.queue_scroll = self.queue_scroll.min(max_offset);
+        if cursor_row < self.queue_scroll {
+            self.queue_scroll = queue_group_start_row(&display, cursor_row);
+        } else if cursor_row >= self.queue_scroll + visible {
+            self.queue_scroll = cursor_row.saturating_sub(visible.saturating_sub(1));
         }
-        let offset = self.power_queue_scroll;
+        let offset = self.queue_scroll;
         layout.queue_cursor_screen_y =
-            Some(area.y + (cursor_row.saturating_sub(self.power_queue_scroll)) as u16);
+            Some(area.y + (cursor_row.saturating_sub(self.queue_scroll)) as u16);
 
         // Count how many group headers appear before the scroll offset, so we
         // index group_for_header correctly for the visible window.
@@ -273,7 +273,7 @@ impl App {
                     layout.queue_row_map.push(None);
                     line_offset += 1;
                 }
-                QueueRow::Track { idx, in_group: _ } => {
+                QueueRow::Track { idx } => {
                     let i = *idx;
                     let indent: usize = 2;
                     let track_content_w = render_w.saturating_sub(2);
@@ -336,7 +336,7 @@ impl App {
                         + (if pct_visible { pct_str.width() } else { 0 })
                         + metadata_gap;
                     let extra = metadata_w;
-                    let now_playing_icon = super::super::play_icon(self.use_nerd_fonts);
+                    let now_playing_icon = super::play_icon(self.use_nerd_fonts);
                     let now_playing_icon_w = if is_active {
                         now_playing_icon.width() + 1
                     } else {
@@ -479,7 +479,7 @@ mod tests {
     #[test]
     fn render_power_queue_snaps_upward_scroll_to_group_start() {
         let mut app = make_app_stub();
-        app.power_focus = crate::app::PowerFocus::Queue;
+        app.panel_focus = crate::app::PanelFocus::Queue;
 
         let mut items = Vec::new();
         for i in 0..4 {
@@ -499,23 +499,23 @@ mod tests {
             items.push(item);
         }
         app.player_tab.set_items(items, 4);
-        app.power_queue_scroll = 10;
+        app.queue_scroll = 10;
 
         let backend = TestBackend::new(40, 3);
         let mut term = Terminal::new(backend).unwrap();
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         term.draw(|f| {
             app.render_power_queue(f, Rect::new(0, 0, 40, 3), true, &mut layout);
         })
         .unwrap();
 
-        assert_eq!(app.power_queue_scroll, 6);
+        assert_eq!(app.queue_scroll, 6);
     }
 
     #[test]
     fn unfocused_inactive_queue_row_title_matches_index_and_duration_dim_color() {
         let mut app = make_app_stub();
-        app.power_focus = crate::app::PowerFocus::Left; // queue panel unfocused
+        app.panel_focus = crate::app::PanelFocus::Library; // queue panel unfocused
 
         let items = vec![
             make_item("Now Playing Track", "Audio"),
@@ -530,7 +530,7 @@ mod tests {
 
         let backend = TestBackend::new(40, 3);
         let mut term = Terminal::new(backend).unwrap();
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         term.draw(|f| {
             app.render_power_queue(f, Rect::new(0, 0, 40, 3), false, &mut layout);
         })

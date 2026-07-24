@@ -5,9 +5,7 @@ use super::super::super::settings::{
 };
 use super::super::super::ui_util::{cycle_lang, next_subtitle_mode};
 use super::super::super::App;
-use super::super::super::{
-    MultiSelectKind, SettingKey, ViewMode, SETTINGS_PANEL_W, SETTING_SECTIONS,
-};
+use super::super::super::{MultiSelectKind, SettingKey, SETTINGS_PANEL_W, SETTING_SECTIONS};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -58,20 +56,7 @@ impl App {
                     Some("iterm2") => Some("auto".into()),
                     _ => None,
                 };
-                let now_none = self.image_protocol.is_none();
-                self.image_protocol_enabled = !now_none;
-                if now_none {
-                    self.home_card_view = false;
-                    self.set_view_mode(ViewMode::Standard);
-                    self.save_prefs();
-                }
-            }
-            SettingKey::ViewMode => {
-                self.set_view_mode(if self.view_mode == ViewMode::Power {
-                    ViewMode::Standard
-                } else {
-                    ViewMode::Power
-                });
+                self.image_protocol_enabled = self.image_protocol.is_some();
             }
             SettingKey::SystemNotifications => {
                 let new_val = {
@@ -119,7 +104,6 @@ impl App {
                     SettingKey::SavePlaylistOnQuit => {
                         c.config.save_playlist_on_quit = !c.config.save_playlist_on_quit
                     }
-                    SettingKey::StartOnQueue => c.config.start_on_queue = !c.config.start_on_queue,
                     SettingKey::AlwaysPlayNext => {
                         c.config.always_play_next = !c.config.always_play_next
                     }

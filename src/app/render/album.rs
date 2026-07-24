@@ -1,6 +1,6 @@
-use super::super::super::ui_util::*;
+use super::super::ui_util::*;
 use super::{natural_sort_key, parse_album_folder_name, strip_article};
-use crate::app::layout::{LayoutPower, PowerLeftRowTarget};
+use crate::app::layout::{LayoutMain, LibraryRowTarget};
 use crate::app::{palette, App, ArtistHeaderSelection};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
@@ -121,11 +121,11 @@ impl GroupedAlbumDisplayRow {
         }
     }
 
-    fn row_target(&self, selectable_headers: bool) -> Option<PowerLeftRowTarget> {
+    fn row_target(&self, selectable_headers: bool) -> Option<LibraryRowTarget> {
         match self {
-            Self::Album(idx) => Some(PowerLeftRowTarget::Album(*idx)),
+            Self::Album(idx) => Some(LibraryRowTarget::Album(*idx)),
             Self::ArtistHeader(selection) if selectable_headers => {
-                Some(PowerLeftRowTarget::ArtistHeader(selection.clone()))
+                Some(LibraryRowTarget::ArtistHeader(selection.clone()))
             }
             _ => None,
         }
@@ -264,9 +264,11 @@ impl App {
                     } else {
                         format!("{}. ", i + 1)
                     };
-                    let play_width = (playing_track_id.as_deref() == Some(track.id.as_str()))
-                        .then(|| super::super::play_icon(use_nerd_fonts).width() + 1)
-                        .unwrap_or(0);
+                    let play_width = if playing_track_id.as_deref() == Some(track.id.as_str()) {
+                        super::play_icon(use_nerd_fonts).width() + 1
+                    } else {
+                        0
+                    };
                     wrap(
                         &track.name,
                         title_col_width
@@ -527,10 +529,10 @@ impl App {
         let target = plan.rows[selectable[new_pos]].row_target(true);
         drop(plan);
         match target {
-            Some(PowerLeftRowTarget::ArtistHeader(selection)) => {
+            Some(LibraryRowTarget::ArtistHeader(selection)) => {
                 self.set_artist_header_focus(lib_idx, selection);
             }
-            Some(PowerLeftRowTarget::Album(idx)) => {
+            Some(LibraryRowTarget::Album(idx)) => {
                 self.clear_artist_header_focus(lib_idx);
                 if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                     if level.cursor != idx {
@@ -578,10 +580,10 @@ impl App {
         };
         drop(plan);
         match target {
-            Some(PowerLeftRowTarget::ArtistHeader(selection)) => {
+            Some(LibraryRowTarget::ArtistHeader(selection)) => {
                 self.set_artist_header_focus(lib_idx, selection);
             }
-            Some(PowerLeftRowTarget::Album(idx)) => {
+            Some(LibraryRowTarget::Album(idx)) => {
                 self.clear_artist_header_focus(lib_idx);
                 if let Some(level) = self.libs[lib_idx].nav_stack.last_mut() {
                     level.cursor = idx;
@@ -660,9 +662,8 @@ impl App {
         lib_idx: usize,
         page_down: bool,
     ) -> bool {
-        if self.view_mode != crate::app::ViewMode::Power
-            || self.power_left_tab != lib_idx + 1
-            || !matches!(self.power_focus, crate::app::PowerFocus::Left)
+        if self.library_tab != lib_idx + 1
+            || !matches!(self.panel_focus, crate::app::PanelFocus::Library)
             || self.libs[lib_idx].search.is_some()
             || self.libs[lib_idx].album_track_focus.is_some()
             || !self.is_viewing_album_folders(lib_idx)
@@ -684,7 +685,7 @@ impl App {
 
         let cursor = level.cursor;
         let albums = level.items.clone();
-        let page = (self.layout.power.left_area.height as usize).max(1);
+        let page = (self.layout.main.left_area.height as usize).max(1);
         let selected = self.selected_power_music_artist_header(lib_idx);
         let selectable_headers = self.is_music_group_view(lib_idx);
         let expand_selected = !selectable_headers || self.libs[lib_idx].album_track_focus.is_some();
@@ -741,7 +742,7 @@ impl App {
         cursor: usize,
         stored_scroll: usize,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) -> usize {
         let visible = area.height as usize;
         let avail = (area.width as usize).saturating_sub(2);
@@ -1245,7 +1246,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         album: &mbv_core::api::MediaItem,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 {
             return;
@@ -1284,7 +1285,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         albums: &[mbv_core::api::MediaItem],
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if !self.images_enabled() || area.width < 4 || area.height < 2 || albums.is_empty() {
             return;
@@ -1462,6 +1463,7 @@ impl App {
     /// nav_stack level or the inline-album-detail cache (the currently
     /// highlighted album in the album-folder listing, fetched proactively
     /// via `fetch_album_tracks`) with the same code path.
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn render_power_album_detail(
         &mut self,
         f: &mut Frame,
@@ -1473,7 +1475,7 @@ impl App {
         selected_region_gutter: bool,
         flush_left: bool,
         art_reserved_w: u16,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -1636,9 +1638,7 @@ impl App {
             .map(|(i, item)| {
                 let is_cursor = i == cursor;
                 let is_playing = now_playing_id.as_deref() == Some(item.id.as_str());
-                let row_style = if selected_region_gutter && is_cursor && focused {
-                    Style::default().fg(palette::YELLOW)
-                } else if is_cursor && focused {
+                let row_style = if is_cursor && focused {
                     Style::default().fg(palette::YELLOW)
                 } else if focused {
                     Style::default().fg(palette::WHITE)
@@ -1657,7 +1657,7 @@ impl App {
                     title_spans.push(Span::raw(" "));
                 }
                 let num_w = track_num.chars().count();
-                let play_icon = super::super::play_icon(self.use_nerd_fonts);
+                let play_icon = super::play_icon(self.use_nerd_fonts);
                 let play_icon_w = if is_playing { play_icon.width() + 1 } else { 0 };
                 let title_width = title_col_w.saturating_sub(num_w + play_icon_w).max(1);
                 let title_lines = wrap(&item.name, title_width);

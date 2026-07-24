@@ -16,9 +16,9 @@ impl App {
     ) {
         let footer = self.sessions_overlay_footer();
         let content = match power_area {
-            Some(area) => Self::render_panel_shell_at(f, area, "REMOTE SESSIONS", &footer, true),
+            Some(area) => Self::render_panel_shell_at(f, area, "REMOTE SESSIONS", footer, true),
             None => {
-                Self::render_panel_shell(f, f.area(), SESSIONS_PANEL_W, "REMOTE SESSIONS", &footer)
+                Self::render_panel_shell(f, f.area(), SESSIONS_PANEL_W, "REMOTE SESSIONS", footer)
             }
         };
         let ix = content.x;

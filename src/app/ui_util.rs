@@ -1,7 +1,4 @@
-use super::palette;
 use mbv_core::api::MediaItem;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span, Text};
 use unicode_width::UnicodeWidthStr;
 
 /// Advance subtitle mode through the standard cycle.
@@ -194,272 +191,13 @@ pub fn trunc_str(s: &str, max: usize) -> String {
     }
 }
 
-pub fn item_text_and_style(item: &MediaItem, selected: bool) -> (String, Style) {
-    if item.is_folder {
-        let text = if item.item_type == "Folder" && item.total_count > 0 {
-            format!(
-                "{} \u{00b7} {} items",
-                item.display_name(),
-                item.total_count
-            )
-        } else if item.unplayed_item_count > 0 {
-            format!("{} [{}]", item.display_name(), item.unplayed_item_count)
-        } else {
-            item.display_name()
-        };
-        let style = if selected {
-            Style::default()
-        } else {
-            Style::default().fg(palette::WHITE)
-        };
-        return (text, style);
-    }
-    let mut suffix = String::new();
-    if item.runtime_ticks > 0 {
-        let s = item.runtime_seconds();
-        let h = (s / 3600.0) as u64;
-        let m = ((s % 3600.0) / 60.0) as u64;
-        let dur = if h > 0 {
-            format!("{h}h{m:02}m")
-        } else {
-            format!("{m}m")
-        };
-        suffix = format!(" ({dur})");
-    }
-    let text = format!("{}{}", item.display_name(), suffix);
-    let style = if selected {
-        Style::default()
-    } else {
-        Style::default().fg(palette::WHITE)
-    };
-    (text, style)
-}
-
-pub fn fmt_item_wrapped(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
-    let name_style = if selected {
-        Style::default().add_modifier(Modifier::BOLD)
-    } else {
-        Style::default()
-            .fg(palette::WHITE)
-            .add_modifier(Modifier::BOLD)
-    };
-    let yellow = Style::default().fg(palette::YELLOW);
-    let subtle = Style::default().fg(palette::SUBTLE);
-    let count_style = Style::default()
-        .fg(palette::IRIS)
-        .add_modifier(Modifier::BOLD);
-
-    let in_progress = !item.is_folder && item.playback_position_ticks > 0;
-
-    let dur_str: String = if item.runtime_ticks > 0 {
-        let s = item.runtime_seconds();
-        let h = (s / 3600.0) as u64;
-        let m = ((s % 3600.0) / 60.0) as u64;
-        if h > 0 {
-            format!("{h}h{m:02}m")
-        } else {
-            format!("{m}m")
-        }
-    } else {
-        String::new()
-    };
-
-    // Subtitle line: context metadata
-    let subtitle: String = if item.is_folder {
-        String::new()
-    } else if item.item_type == "Episode" && item.parent_index_number > 0 {
-        let tag = format!("S{:02}E{:02}", item.parent_index_number, item.index_number);
-        if !item.series_name.is_empty() {
-            format!("{tag}  {}", item.series_name)
-        } else {
-            tag
-        }
-    } else if item.item_type == "Audio" {
-        if !item.album.is_empty() && !item.artist.is_empty() {
-            format!("{}  {}", item.artist, item.album)
-        } else if !item.artist.is_empty() {
-            item.artist.clone()
-        } else {
-            String::new()
-        }
-    } else if item.item_type == "MusicAlbum" && !item.artist.is_empty() {
-        item.artist.clone()
-    } else {
-        String::new()
-    };
-
-    // Duration goes on line 1 as right-aligned suffix when there's subtitle content,
-    // otherwise drops to line 2 so the second row isn't wasted blank.
-    let has_subtitle = !subtitle.is_empty();
-
-    let suffix: String = if item.is_folder {
-        if item.unplayed_item_count > 0 {
-            format!("[{}]", item.unplayed_item_count)
-        } else if item.total_count > 0 {
-            format!("{}", item.total_count)
-        } else {
-            String::new()
-        }
-    } else if in_progress {
-        if item.runtime_ticks > 0 {
-            let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-            format!("{pct}%")
-        } else {
-            String::new()
-        }
-    } else if has_subtitle {
-        dur_str.clone()
-    } else {
-        String::new()
-    };
-
-    let name = trunc_str(&item.name, width.saturating_sub(suffix.width() + 2).max(1));
-    let gap = width.saturating_sub(name.width() + suffix.width());
-    let suffix_style = if in_progress {
-        yellow
-    } else if item.is_folder {
-        count_style
-    } else {
-        subtle
-    };
-    let mut line1_spans = vec![Span::styled(name, name_style)];
-    if !suffix.is_empty() {
-        line1_spans.push(Span::styled(" ".repeat(gap.max(1)), Style::default()));
-        line1_spans.push(Span::styled(suffix, suffix_style));
-    }
-
-    let sub_style = subtle;
-    let line2_content = if has_subtitle {
-        trunc_str(&subtitle, width.max(1))
-    } else {
-        dur_str
-    };
-    let line2 = Line::from(Span::styled(line2_content, sub_style));
-
-    Text::from(vec![Line::from(line1_spans), line2])
-}
-
-pub fn highlight_style(item: &MediaItem) -> Style {
-    if item.is_folder
-        && item.item_type != "Series"
-        && item.item_type != "MusicAlbum"
-        && item.item_type != "MusicArtist"
-    {
-        Style::default().fg(palette::BASE).bg(palette::AQUA)
-    } else if item.playback_position_ticks > 0 {
-        Style::default().fg(palette::BASE).bg(palette::YELLOW)
-    } else {
-        Style::default().fg(palette::WHITE).bg(palette::FOCUSED)
-    }
-}
-
-pub fn fmt_item_continue(item: &MediaItem, width: usize, selected: bool) -> Text<'static> {
-    let name_style = if selected {
-        Style::default().add_modifier(Modifier::BOLD)
-    } else {
-        Style::default()
-            .fg(palette::WHITE)
-            .add_modifier(Modifier::BOLD)
-    };
-    let yellow = Style::default().fg(palette::YELLOW);
-    let subtle = Style::default().fg(palette::SUBTLE);
-
-    // Fixed right-side columns (widths include 1 leading space each)
-    let dur_str = if item.runtime_ticks > 0 {
-        let s = item.runtime_seconds();
-        let h = (s / 3600.0) as u64;
-        let m = ((s % 3600.0) / 60.0) as u64;
-        if h > 0 {
-            format!("{h}h{m:02}m")
-        } else {
-            format!("{m}m")
-        }
-    } else {
-        String::new()
-    };
-
-    let pct_str = if item.runtime_ticks > 0 {
-        let pct = (item.playback_position_ticks * 100 / item.runtime_ticks.max(1)) as u64;
-        format!("{pct}%")
-    } else {
-        String::new()
-    };
-
-    let ep_tag = if item.item_type == "Episode" && item.parent_index_number > 0 {
-        format!("S{}E{:02}", item.parent_index_number, item.index_number)
-    } else {
-        String::new()
-    };
-
-    let context = if item.item_type == "Episode" {
-        item.series_name.clone()
-    } else if item.item_type == "Audio" {
-        item.artist.clone()
-    } else if item.production_year > 0 {
-        item.production_year.to_string()
-    } else {
-        String::new()
-    };
-
-    // Column layout (left to right):
-    //   episode title | context (series/year/artist) | ep tag | pct | dur
-    const CTX_W: usize = 20; // series name / year / artist
-    const TAG_W: usize = 9; // "S2025E31 "
-    const PCT_W: usize = 5; // " 100%"
-    const DUR_W: usize = 6; // " 1h23m"
-
-    let ctx_used = if context.is_empty() { 0 } else { CTX_W };
-    let tag_used = if ep_tag.is_empty() { 0 } else { TAG_W };
-    let fixed_w = ctx_used + tag_used + PCT_W + DUR_W;
-    let name_w = width.saturating_sub(fixed_w).max(4);
-
-    let ctx_col = if context.is_empty() {
-        String::new()
-    } else {
-        format!("{:<width$}", trunc_str(&context, CTX_W - 1), width = CTX_W)
-    };
-    let tag_col = if ep_tag.is_empty() {
-        String::new()
-    } else {
-        format!("{:<width$}", ep_tag, width = TAG_W)
-    };
-    let pct_col = if pct_str.is_empty() {
-        " ".repeat(PCT_W)
-    } else {
-        format!("{:>width$}", pct_str, width = PCT_W)
-    };
-    let dur_col = if dur_str.is_empty() {
-        " ".repeat(DUR_W)
-    } else {
-        format!("{:>width$}", dur_str, width = DUR_W)
-    };
-
-    let col_style = subtle;
-
-    let name_trunc = trunc_str(&item.name, name_w);
-    let name_pad = name_w.saturating_sub(name_trunc.width());
-    let line = Line::from(vec![
-        Span::styled(name_trunc, name_style),
-        Span::raw(" ".repeat(name_pad)),
-        Span::styled(ctx_col, col_style),
-        Span::styled(tag_col, col_style),
-        Span::styled(pct_col, yellow),
-        Span::styled(dur_col, col_style),
-    ]);
-    Text::from(vec![line])
-}
-
-pub fn highlight_style_continue(_item: &MediaItem) -> Style {
-    Style::default().bg(palette::FOCUSED)
-}
-
 /// A visual row in the queue: a group header, a blank spacer between groups, or a
-/// track (item index + whether it sits under a group header, which drives the indent).
+/// track (item index into the underlying queue).
 #[derive(Clone)]
 pub(super) enum QueueRow {
     Header,
     Spacer,
-    Track { idx: usize, in_group: bool },
+    Track { idx: usize },
 }
 
 /// Build the visual rows for the queue.
@@ -473,10 +211,7 @@ pub(super) fn build_queue_rows(items: &[MediaItem], group: bool) -> (Vec<QueueRo
     let mut display: Vec<QueueRow> = Vec::new();
     let mut group_for_header: Vec<String> = Vec::new();
     if !group {
-        display.extend((0..items.len()).map(|idx| QueueRow::Track {
-            idx,
-            in_group: false,
-        }));
+        display.extend((0..items.len()).map(|idx| QueueRow::Track { idx }));
         return (display, group_for_header);
     }
     let mut last_group_key: Option<String> = None;
@@ -495,7 +230,6 @@ pub(super) fn build_queue_rows(items: &[MediaItem], group: bool) -> (Vec<QueueRo
             None
         };
 
-        let in_group = group.is_some();
         if let Some((key, label)) = group {
             if last_group_key.as_deref() != Some(key.as_str()) {
                 if last_group_key.is_some() {
@@ -508,7 +242,7 @@ pub(super) fn build_queue_rows(items: &[MediaItem], group: bool) -> (Vec<QueueRo
         } else {
             last_group_key = None;
         }
-        display.push(QueueRow::Track { idx: i, in_group });
+        display.push(QueueRow::Track { idx: i });
     }
     (display, group_for_header)
 }

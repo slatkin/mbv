@@ -1,27 +1,24 @@
 use super::action::{power_album_track_command_for_key, Command};
 use super::input_resolver::KeyChord;
-use super::layout::PowerLeftRowTarget;
+use super::layout::LibraryRowTarget;
 use super::settings::settings_total_rows;
-use super::ui_util::item_text_and_style;
+use super::PanelFocus;
 use super::{
     App, ContextAction, ContextMenu, LibSearch, PendingQueueAction, QueueScope, SavePlaylistDialog,
-    SavePlaylistStage, HELP_PANEL_W, HOME_MIN_SECTION_H, PLAYLISTS_PANEL_W,
-    POWER_LEFT_WIDTH_DEFAULT, POWER_LEFT_WIDTH_STEP, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
+    SavePlaylistStage, HELP_PANEL_W, PLAYLISTS_PANEL_W, POWER_LEFT_WIDTH_DEFAULT,
+    POWER_LEFT_WIDTH_STEP, SESSIONS_PANEL_W, SETTINGS_PANEL_W,
 };
-use super::{PowerFocus, ViewMode};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use mbv_core::api::{MediaItem, TICKS_PER_SECOND};
 use mbv_core::player::PlayerCommand;
 use ratatui::layout::Rect;
-use ratatui::widgets::{Block, BorderType, Borders};
 use std::time::{Duration, Instant};
-use textwrap::wrap;
 
 impl App {
     /// Whether a context menu is currently open. Shared by every
     /// CONTEXT_STACK layer above `context_menu` that must yield to it
     /// (`power_sidebar_toggle_h`, `home_search`, `power_lib_search`, `lib_search`,
-    /// `clear_queue_prompt_c`, `power_left_width`) — see
+    /// `clear_queue_prompt_c`, `queue_column_width`) — see
     /// docs/adr/0002-centralized-input-handling.md phase 6 (#135).
     fn context_menu_open(&self) -> bool {
         self.context_menu.is_some()
@@ -36,22 +33,8 @@ impl App {
     }
 
     fn context_menu_power_lib_idx(&self) -> Option<usize> {
-        if self.tab_idx == 1
-            && self.view_mode == ViewMode::Power
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab > 0
-        {
-            Some(self.power_left_tab - 1)
-        } else {
-            None
-        }
-    }
-
-    fn context_menu_lib_idx(&self) -> Option<usize> {
-        if let Some(lib_idx) = self.context_menu_power_lib_idx() {
-            Some(lib_idx)
-        } else if self.tab_idx >= self.lib_tab_offset() {
-            Some(self.tab_idx - self.lib_tab_offset())
+        if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
+            Some(self.library_tab - 1)
         } else {
             None
         }
@@ -103,11 +86,10 @@ impl App {
         });
     }
 
+    /// Home + one tab per library (no Queue tab -- the queue is the
+    /// always-visible left column, not a tab).
     pub(super) fn tab_count(&self) -> usize {
-        2 + self.libs.len()
-    }
-    pub(super) fn lib_tab_offset(&self) -> usize {
-        2
+        1 + self.libs.len()
     }
 
     pub(super) fn handle_key(&mut self, key: KeyEvent) -> bool {
@@ -149,10 +131,10 @@ impl App {
     }
 
     pub(super) fn active_power_album_track_lib_idx(&self) -> Option<usize> {
-        if self.view_mode != ViewMode::Power || self.power_left_tab == 0 {
+        if self.library_tab == 0 {
             return None;
         }
-        let lib_idx = self.power_left_tab - 1;
+        let lib_idx = self.library_tab - 1;
         let lib = self.libs.get(lib_idx)?;
         if lib.album_track_focus.is_some() && self.is_viewing_album_folders(lib_idx) {
             Some(lib_idx)
@@ -167,8 +149,8 @@ impl App {
         Some(self.dispatch(command))
     }
 
-    pub(super) fn handle_key_power_left_width(&mut self, key: KeyEvent) -> Option<bool> {
-        if self.handle_power_left_width_key(key) {
+    pub(super) fn handle_key_queue_column_width(&mut self, key: KeyEvent) -> Option<bool> {
+        if self.handle_queue_column_width_key(key) {
             Some(false)
         } else {
             None
@@ -176,21 +158,14 @@ impl App {
     }
 
     pub(super) fn handle_key_power_sidebar_toggle(&mut self, key: KeyEvent) -> Option<bool> {
-        if self.view_mode != ViewMode::Power
-            || key.code != KeyCode::Char('h')
-            || !key.modifiers.is_empty()
-            || self.context_menu_open()
-        {
+        if key.code != KeyCode::Char('h') || !key.modifiers.is_empty() || self.context_menu_open() {
             return None;
         }
         Some(self.dispatch(Command::TogglePowerSidebar))
     }
 
     pub(super) fn handle_key_home_search(&mut self, key: KeyEvent) -> Option<bool> {
-        if !(self.tab_idx == 0 || self.tab_idx == 1)
-            || !self.search.is_open()
-            || self.context_menu_open()
-        {
+        if self.library_tab != 0 || !self.search.is_open() || self.context_menu_open() {
             return None;
         }
         if key.modifiers.contains(KeyModifiers::ALT)
@@ -300,12 +275,11 @@ impl App {
     }
 
     pub(super) fn handle_key_power_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
-        if self.view_mode != ViewMode::Power
-            || key.modifiers.contains(KeyModifiers::ALT)
+        if key.modifiers.contains(KeyModifiers::ALT)
             || key.modifiers.contains(KeyModifiers::CONTROL)
             || self.context_menu_open()
-            || !matches!(self.power_focus, PowerFocus::Left)
-            || self.power_left_tab == 0
+            || !matches!(self.panel_focus, PanelFocus::Library)
+            || self.library_tab == 0
         {
             return None;
         }
@@ -313,36 +287,16 @@ impl App {
         if matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
             return None;
         }
-        let lib_idx = self.power_left_tab - 1;
+        let lib_idx = self.library_tab - 1;
         if key.code == KeyCode::Enter && self.power_selected_series_item(lib_idx).is_some() {
             return None;
         }
         if self.libs[lib_idx].search.is_some() {
-            self.handle_lib_search_key(lib_idx, key, crate::app::LibraryPositionScope::Power);
+            self.handle_lib_search_key(lib_idx, key);
             Some(false)
         } else {
             None
         }
-    }
-
-    pub(super) fn handle_key_lib_search(&mut self, key: KeyEvent) -> Option<bool> {
-        if self.tab_idx <= 1
-            || key.modifiers.contains(KeyModifiers::ALT)
-            || key.modifiers.contains(KeyModifiers::CONTROL)
-            || self.context_menu_open()
-        {
-            return None;
-        }
-        if self
-            .libs
-            .get(self.tab_idx - self.lib_tab_offset())
-            .is_none_or(|l| l.search.is_none())
-        {
-            return None;
-        }
-        let lib_idx = self.tab_idx - self.lib_tab_offset();
-        self.handle_lib_search_key(lib_idx, key, crate::app::LibraryPositionScope::Default);
-        Some(false)
     }
 
     pub(super) fn handle_key_confirm_clear_queue(&mut self, key: KeyEvent) -> Option<bool> {
@@ -373,13 +327,8 @@ impl App {
             KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter
         ) {
             let lib_idx = pending_lib_idx.unwrap_or_else(|| {
-                if self.tab_idx > 1 {
-                    self.tab_idx - self.lib_tab_offset()
-                } else if self.view_mode == ViewMode::Power
-                    && matches!(self.power_focus, PowerFocus::Left)
-                    && self.power_left_tab > 0
-                {
-                    self.power_left_tab - 1
+                if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
+                    self.library_tab - 1
                 } else {
                     0
                 }
@@ -450,15 +399,17 @@ impl App {
         {
             return None;
         }
-        let in_lib_search = self.tab_idx > 1
+        let in_lib_search = self.library_tab > 0
             && self
                 .libs
-                .get(self.tab_idx - self.lib_tab_offset())
+                .get(self.library_tab - 1)
                 .is_some_and(|l| l.search.is_some());
         if in_lib_search {
             return None;
         }
-        if self.tab_idx == 1 && self.visible_queue_scope() == QueueScope::Remote {
+        if matches!(self.panel_focus, PanelFocus::Queue)
+            && self.visible_queue_scope() == QueueScope::Remote
+        {
             self.flash_status_high("Remote queue is controlled by the daemon".into());
             return Some(false);
         }
@@ -494,21 +445,17 @@ impl App {
     }
 
     pub(super) fn handle_key_view_dispatch(&mut self, key: KeyEvent) -> Option<bool> {
-        if self.tab_idx == 0 {
-            Some(self.handle_combined_key(key))
-        } else if self.tab_idx == 1 {
-            Some(self.handle_queue_key(key))
-        } else {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
-            Some(self.handle_lib_key(lib_idx, key).unwrap_or(false))
-        }
+        // `handle_queue_key` (despite its name -- a holdover from when this
+        // was Standard's Queue-tab handler) is Power's single left-column
+        // dispatch: it branches internally on `panel_focus`/`library_tab`
+        // to route to Home (`handle_power_cw_key`), a library
+        // (`handle_lib_key`), or genuine queue-cursor movement.
+        Some(self.handle_queue_key(key))
     }
 
-    /// Global view keys shared by all three top-level view handlers
-    /// (`handle_combined_key`, `handle_lib_key`, `handle_queue_key`): quit,
-    /// tab cycling (incl. the Power-view override, since `self.tab_idx`
-    /// and `self.view_mode` are read directly instead of being faked by the
-    /// caller), digit tab-jump, and the context-menu key. Each handler calls
+    /// Global view keys shared by the left-column handlers (`handle_lib_key`,
+    /// `handle_queue_key`, and Home nav via `handle_power_cw_key`): quit, tab
+    /// cycling, digit tab-jump, and the context-menu key. Each handler calls
     /// this at the point in its own precedence order where these keys used
     /// to be independently matched; genuinely per-view behavior (`/` search,
     /// `Ctrl+a` enqueue) stays local. See
@@ -517,27 +464,17 @@ impl App {
         match key.code {
             KeyCode::Char('q') if key.modifiers.is_empty() => Some(self.try_quit()),
             KeyCode::Tab => {
-                if self.view_mode == ViewMode::Power {
-                    self.power_left_tab_next();
-                } else {
-                    let n = (self.tab_idx + 1) % self.tab_count();
-                    self.set_tab(n);
-                }
+                self.library_tab_next();
                 Some(false)
             }
             KeyCode::BackTab => {
-                if self.view_mode == ViewMode::Power {
-                    self.power_left_tab_prev();
-                } else {
-                    let n = self.tab_count();
-                    self.set_tab((self.tab_idx + n - 1) % n);
-                }
+                self.library_tab_prev();
                 Some(false)
             }
             KeyCode::Char(c @ '1'..='9') => {
                 let idx = (c as usize) - ('1' as usize);
                 if idx < self.tab_count() {
-                    self.set_tab(idx);
+                    self.set_library_tab(idx);
                 }
                 Some(false)
             }
@@ -549,8 +486,8 @@ impl App {
         }
     }
 
-    /// `Ctrl+a`: enqueue the current selection. Shared by
-    /// `handle_combined_key` and `handle_lib_key` — the queue view has no
+    /// `Ctrl+a`: enqueue the current selection. Shared by `handle_lib_key`
+    /// (Home nav has its own enqueue binding) -- the queue view has no
     /// "enqueue selected" concept, so `handle_queue_key` does not call this.
     ///
     /// Issue #209: `a` (no modifier) is the playback-context audio-track
@@ -571,14 +508,7 @@ impl App {
         }
     }
 
-    fn handle_lib_search_key(
-        &mut self,
-        lib_idx: usize,
-        key: KeyEvent,
-        scope: crate::app::LibraryPositionScope,
-    ) {
-        let saved = self.tab_idx;
-        self.tab_idx = self.lib_tab_offset() + lib_idx;
+    fn handle_lib_search_key(&mut self, lib_idx: usize, key: KeyEvent) {
         match key.code {
             KeyCode::Esc => {
                 self.libs[lib_idx].search = None;
@@ -608,7 +538,7 @@ impl App {
             KeyCode::Home => self.jump_lib_cursor(false),
             KeyCode::End => self.jump_lib_cursor(true),
             KeyCode::Enter => {
-                if !self.activate_recursive_album(lib_idx, scope) {
+                if !self.activate_recursive_album(lib_idx) {
                     self.select();
                 }
             }
@@ -618,7 +548,6 @@ impl App {
             }
             _ => {}
         }
-        self.tab_idx = saved;
     }
 
     pub(super) fn handle_key_save_modal(&mut self, key: KeyEvent) -> Option<bool> {
@@ -638,7 +567,7 @@ impl App {
                 }
                 if play_after {
                     self.show_playlists = false;
-                    self.set_tab(1);
+                    self.set_panel_focus(PanelFocus::Queue);
                 }
             }
             KeyCode::Char('d') | KeyCode::Char('D') => {
@@ -648,7 +577,7 @@ impl App {
                 }
                 if play_after {
                     self.show_playlists = false;
-                    self.set_tab(1);
+                    self.set_panel_focus(PanelFocus::Queue);
                 }
             }
             KeyCode::Esc | KeyCode::Char('c') | KeyCode::Char('C') => {
@@ -964,7 +893,7 @@ impl App {
                         self.replace_queue_or_prompt(action);
                         if !self.show_save_playlist_modal {
                             self.show_playlists = false;
-                            self.set_tab(1);
+                            self.set_panel_focus(PanelFocus::Queue);
                         }
                     }
                 } else if let Some(pl) = self.playlists.get(self.playlists_cursor).cloned() {
@@ -1151,94 +1080,6 @@ impl App {
         Some(false)
     }
 
-    fn handle_combined_key(&mut self, key: KeyEvent) -> bool {
-        if let Some(quit) = self.handle_enqueue_selected_key(key) {
-            return quit;
-        }
-        if let Some(quit) = self.handle_global_view_key(key) {
-            return quit;
-        }
-        match key.code {
-            KeyCode::Left | KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
-                let n = 1 + self.home.latest.len();
-                self.home.section = (self.home.section + n - 1) % n;
-                self.ensure_home_section_visible();
-                if self.home_card_view && !self.card_image_states.is_empty() {
-                    self.force_clear = true;
-                }
-                return false;
-            }
-            KeyCode::Right | KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
-                let n = 1 + self.home.latest.len();
-                self.home.section = (self.home.section + 1) % n;
-                self.ensure_home_section_visible();
-                if self.home_card_view && !self.card_image_states.is_empty() {
-                    self.force_clear = true;
-                }
-                return false;
-            }
-            KeyCode::Char('v') => {
-                if self.images_enabled() {
-                    self.home_card_view = !self.home_card_view;
-                    if !self.card_image_states.is_empty() {
-                        self.force_clear = true;
-                    }
-                }
-                return false;
-            }
-            KeyCode::Char('/') => {
-                self.search.open(true);
-                return false;
-            }
-            _ => {}
-        }
-        match key.code {
-            KeyCode::Up => {
-                if self.home_card_view {
-                    self.home.section = self.home.section.saturating_sub(1);
-                    self.ensure_home_section_visible();
-                    if !self.card_image_states.is_empty() {
-                        self.force_clear = true;
-                    }
-                } else {
-                    self.move_home_cursor(-1);
-                }
-            }
-            KeyCode::Down => {
-                if self.home_card_view {
-                    let n = 1 + self.home.latest.len();
-                    self.home.section = (self.home.section + 1).min(n.saturating_sub(1));
-                    self.ensure_home_section_visible();
-                    if !self.card_image_states.is_empty() {
-                        self.force_clear = true;
-                    }
-                } else {
-                    self.move_home_cursor(1);
-                }
-            }
-            KeyCode::Left => {
-                if self.home_card_view {
-                    self.move_home_cursor(-1);
-                }
-            }
-            KeyCode::Right => {
-                if self.home_card_view {
-                    self.move_home_cursor(1);
-                }
-            }
-            KeyCode::Enter if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.enqueue_selected()
-            }
-            KeyCode::Enter => self.select_home(),
-            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.toggle_watched_home()
-            }
-            KeyCode::Delete if self.home.section == 0 => self.remove_from_continue_watching(),
-            _ => {}
-        }
-        false
-    }
-
     pub(super) fn adjust_volume(&mut self, delta: i64) {
         self.playback_target().adjust_volume(self, delta);
     }
@@ -1348,7 +1189,7 @@ impl App {
                 true
             }
             KeyCode::Delete => {
-                let cursor = self.home.power_home_cursor;
+                let cursor = self.home.home_cursor;
                 let cw_len = self.home.continue_items.len();
                 if cursor < cw_len {
                     let saved = self.home.continue_cursor;
@@ -1363,34 +1204,31 @@ impl App {
     }
 
     fn power_cw_page(&self) -> usize {
-        (self.layout.power.left_area.height as usize).max(1)
+        (self.layout.main.left_area.height as usize).max(1)
     }
 
-    fn is_power_left_width_resize_key(key: KeyEvent) -> bool {
+    fn is_queue_column_width_resize_key(key: KeyEvent) -> bool {
         matches!(key.code, KeyCode::Left | KeyCode::Right) && key.modifiers == KeyModifiers::SHIFT
     }
 
-    fn power_view_active(&self) -> bool {
-        self.view_mode == ViewMode::Power
-    }
-
-    fn handle_power_left_width_key(&mut self, key: KeyEvent) -> bool {
-        if !self.power_view_active()
-            || self.context_menu_open()
-            || self.power_left_collapsed
-            || !Self::is_power_left_width_resize_key(key)
+    fn handle_queue_column_width_key(&mut self, key: KeyEvent) -> bool {
+        if self.context_menu_open()
+            || self.queue_column_collapsed
+            || !Self::is_queue_column_width_resize_key(key)
         {
             return false;
         }
 
-        let max_width = Self::power_left_width_max_for_terminal(self.terminal_width);
+        let max_width = Self::queue_column_width_max_for_terminal(self.terminal_width);
         let next_width = if key.code == KeyCode::Left {
-            self.power_left_width.saturating_sub(POWER_LEFT_WIDTH_STEP)
+            self.queue_column_width
+                .saturating_sub(POWER_LEFT_WIDTH_STEP)
         } else {
-            self.power_left_width.saturating_add(POWER_LEFT_WIDTH_STEP)
+            self.queue_column_width
+                .saturating_add(POWER_LEFT_WIDTH_STEP)
         };
-        let normalized = Self::normalize_power_left_width(next_width, self.terminal_width);
-        if normalized == self.power_left_width {
+        let normalized = Self::normalize_queue_column_width(next_width, self.terminal_width);
+        if normalized == self.queue_column_width {
             let limit = if key.code == KeyCode::Left {
                 format!("Power view width already at minimum ({POWER_LEFT_WIDTH_DEFAULT} cols)")
             } else {
@@ -1400,9 +1238,12 @@ impl App {
             return true;
         }
 
-        self.power_left_width = normalized;
+        self.queue_column_width = normalized;
         self.save_prefs();
-        self.flash_status(format!("Power view width: {} cols", self.power_left_width));
+        self.flash_status(format!(
+            "Power view width: {} cols",
+            self.queue_column_width
+        ));
         true
     }
 
@@ -1423,31 +1264,28 @@ impl App {
             return false;
         }
 
-        // In Power View, bare Left/Right switch focus between the two panels.
-        // Queue is on the left; library is on the right.
-        if self.view_mode == ViewMode::Power && key.modifiers.is_empty() {
-            if key.code == KeyCode::Right && matches!(self.power_focus, PowerFocus::Queue) {
-                self.set_power_focus(PowerFocus::Left);
+        // Bare Left/Right switch focus between the two panels. Queue is on
+        // the left; library is on the right.
+        if key.modifiers.is_empty() {
+            if key.code == KeyCode::Right && matches!(self.panel_focus, PanelFocus::Queue) {
+                self.set_panel_focus(PanelFocus::Library);
                 self.last_card_height = 0; // reset stale image height for new view
                 return false;
             }
             if key.code == KeyCode::Left
-                && matches!(self.power_focus, PowerFocus::Left)
-                && !self.power_left_collapsed
+                && matches!(self.panel_focus, PanelFocus::Library)
+                && !self.queue_column_collapsed
             {
-                self.set_power_focus(PowerFocus::Queue);
+                self.set_panel_focus(PanelFocus::Queue);
                 self.last_card_height = 0;
                 return false;
             }
         }
 
-        // Power view bracket keys are panel-scoped; the queue panel owns
-        // Local/Remote scope switching, while the left panel keeps its
-        // section/season/group bracket actions.
-        if self.tab_idx == 1
-            && self.view_mode == ViewMode::Power
-            && matches!(self.power_focus, PowerFocus::Queue)
-        {
+        // Bracket keys are panel-scoped; the queue panel owns Local/Remote
+        // scope switching, while the left panel keeps its section/season/
+        // group bracket actions.
+        if matches!(self.panel_focus, PanelFocus::Queue) {
             match key.code {
                 KeyCode::Char('[')
                     if self.has_direct_remote_queue()
@@ -1469,13 +1307,13 @@ impl App {
             }
         }
 
-        // In Power View, route nav keys to the focused library panel.
-        if self.view_mode == ViewMode::Power && matches!(self.power_focus, PowerFocus::Left) {
-            if self.power_left_tab == 0 && self.handle_power_cw_key(key) {
+        // Route nav keys to the focused library panel.
+        if matches!(self.panel_focus, PanelFocus::Library) {
+            if self.library_tab == 0 && self.handle_power_cw_key(key) {
                 return false;
             }
-            if self.power_left_tab > 0 {
-                let lib_idx = self.power_left_tab - 1;
+            if self.library_tab > 0 {
+                let lib_idx = self.library_tab - 1;
 
                 // Season switching: [ = previous season, ] = next season.
                 if !key.modifiers.contains(KeyModifiers::CONTROL)
@@ -1520,11 +1358,11 @@ impl App {
                 // single source of truth for "did the library view claim
                 // this key" — no more hand-maintained mirror of its key set.
                 //
-                // The `tab_idx` swap stays: many action methods
+                // The `library_tab` derivation stays: many action methods
                 // `handle_lib_key` calls into (`current_lib_item`, `select`,
                 // `move_lib_cursor`, `refresh_lib`, `shuffle_play`,
                 // `play_folder`, `go_back`, ...) derive their own lib index
-                // from `self.tab_idx` rather than taking it as a parameter.
+                // from `self.library_tab` rather than taking it as a parameter.
                 // Impact analysis on `current_lib_item` alone showed 6
                 // affected symbols across `execute_context_action`,
                 // `enqueue_selected`, `select`, and `toggle_watched`
@@ -1567,20 +1405,11 @@ impl App {
                                 if !has_focused_track {
                                     return false;
                                 }
-                                self.with_library_position_scope_override(
-                                    lib_idx,
-                                    crate::app::LibraryPositionScope::Power,
-                                    |app| {
-                                        // Track already focused (#145 task 4): play
-                                        // it. Reuses `select()` (now track-focus
-                                        // aware via `current_lib_item()`) rather
-                                        // than duplicating queue-build logic here.
-                                        let saved = app.tab_idx;
-                                        app.tab_idx = app.lib_tab_offset() + lib_idx;
-                                        app.select();
-                                        app.tab_idx = saved;
-                                    },
-                                );
+                                // Track already focused (#145 task 4): play it.
+                                // Reuses `select()` (track-focus aware via
+                                // `current_lib_item()`) rather than
+                                // duplicating queue-build logic here.
+                                self.select();
                             }
                             return false;
                         }
@@ -1673,27 +1502,16 @@ impl App {
 
                 // Let Power View's shared Tab/BackTab cycling path run after this block.
                 if !is_power_nav && !matches!(key.code, KeyCode::Tab | KeyCode::BackTab) {
-                    let outcome = self.with_library_position_scope_override(
-                        lib_idx,
-                        crate::app::LibraryPositionScope::Power,
-                        |app| {
-                            let saved = app.tab_idx;
-                            app.tab_idx = app.lib_tab_offset() + lib_idx;
-                            let outcome = app.handle_lib_key(lib_idx, key);
-                            app.tab_idx = saved;
-                            outcome
-                        },
-                    );
-                    if let Some(quit) = outcome {
+                    if let Some(quit) = self.handle_lib_key(lib_idx, key) {
                         return quit;
                     }
                 }
             }
         }
 
-        // Power view queue focus: PageUp/PageDown use the actual queue panel height.
-        if self.view_mode == ViewMode::Power && matches!(self.power_focus, PowerFocus::Queue) {
-            let page = self.layout.power.queue_area.height.saturating_sub(1).max(1) as usize;
+        // Queue focus: PageUp/PageDown use the actual queue panel height.
+        if matches!(self.panel_focus, PanelFocus::Queue) {
+            let page = self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize;
             match key.code {
                 KeyCode::PageUp => {
                     self.last_nav_at = Instant::now();
@@ -1706,29 +1524,6 @@ impl App {
                     let queue = self.displayed_queue_mut();
                     let n = queue.items.len();
                     queue.queue_cursor = (queue.queue_cursor + page).min(n.saturating_sub(1));
-                    return false;
-                }
-                _ => {}
-            }
-        }
-
-        // Non-power queue view: scope switching via [ / ].
-        if self.view_mode == ViewMode::Standard && self.tab_idx == 1 {
-            match key.code {
-                KeyCode::Char('[')
-                    if self.has_direct_remote_queue()
-                        && !key.modifiers.contains(KeyModifiers::CONTROL)
-                        && !key.modifiers.contains(KeyModifiers::ALT) =>
-                {
-                    self.set_queue_scope(QueueScope::Local);
-                    return false;
-                }
-                KeyCode::Char(']')
-                    if self.has_direct_remote_queue()
-                        && !key.modifiers.contains(KeyModifiers::CONTROL)
-                        && !key.modifiers.contains(KeyModifiers::ALT) =>
-                {
-                    self.set_queue_scope(QueueScope::Remote);
                     return false;
                 }
                 _ => {}
@@ -1819,16 +1614,6 @@ impl App {
                 self.search.open(true);
                 return false;
             }
-            KeyCode::Char('v') => {
-                self.set_view_mode(if self.view_mode == ViewMode::Power {
-                    ViewMode::Standard
-                } else {
-                    ViewMode::Power
-                });
-            }
-            KeyCode::Char('g') if self.view_mode == ViewMode::Standard && self.tab_idx == 1 => {
-                self.queue_group = !self.queue_group;
-            }
             KeyCode::Char('p') => {
                 let (active, current_idx) = {
                     let s = self.player.status.lock().unwrap();
@@ -1855,17 +1640,11 @@ impl App {
                     });
                 }
             }
-            KeyCode::Left | KeyCode::Up
-                if self.view_mode == ViewMode::Power
-                    && key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                self.power_left_tab_prev();
+            KeyCode::Left | KeyCode::Up if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.library_tab_prev();
             }
-            KeyCode::Right | KeyCode::Down
-                if self.view_mode == ViewMode::Power
-                    && key.modifiers.contains(KeyModifiers::ALT) =>
-            {
-                self.power_left_tab_next();
+            KeyCode::Right | KeyCode::Down if key.modifiers.contains(KeyModifiers::ALT) => {
+                self.library_tab_next();
             }
             _ => {}
         }
@@ -2003,8 +1782,8 @@ impl App {
         if n == 0 {
             return;
         }
-        if self.tab_idx < self.tab_scroll {
-            self.tab_scroll = self.tab_idx;
+        if self.library_tab < self.tab_scroll {
+            self.tab_scroll = self.library_tab;
             return;
         }
         let tab_w = self
@@ -2012,26 +1791,28 @@ impl App {
             .saturating_sub(super::TABBAR_LEFT_RESERVE + super::TABBAR_RIGHT_RESERVE);
         loop {
             let (_, end) = self.visible_tab_range(tab_w);
-            if self.tab_idx < end {
+            if self.library_tab < end {
                 break;
             }
             self.tab_scroll += 1;
         }
     }
 
+    /// Tab-bar title widths: Home + one per library (no Queue tab -- see
+    /// `tab_count`).
     fn tab_title_widths(&self) -> Vec<u16> {
         let pad: u16 = 2;
-        let mut w = vec![
-            "Home".chars().count() as u16 + pad,
-            "Queue".chars().count() as u16 + pad,
-        ];
+        let mut w = vec!["Home".chars().count() as u16 + pad];
         for l in &self.libs {
             w.push(l.library.name.chars().count() as u16 + pad);
         }
         w
     }
 
-    fn tab_idx_at(&self, col: u16) -> Option<usize> {
+    /// Map a column click to a left-panel tab index (0 = Home, 1+ = library),
+    /// scroll-aware: returns `usize::MAX - 1` for a click on the `«` arrow
+    /// and `usize::MAX` for a click on the `»` arrow (see `handle_mouse`).
+    fn power_tab_idx_at(&self, col: u16) -> Option<usize> {
         let area = self.layout.tabs_area;
         if col < area.x || col >= area.x + area.width {
             return None;
@@ -2067,42 +1848,14 @@ impl App {
         None
     }
 
-    /// Map a column click to a power-view left-panel tab index (0=Home, 1+=library).
-    fn power_tab_idx_at(&self, col: u16) -> Option<usize> {
-        let area = self.layout.tabs_area;
-        if col < area.x || col >= area.x + area.width {
-            return None;
-        }
-        let rel = col - area.x;
-        let n = self.power_left_tab_count();
-        let pad = 4u16; // rendered as "  NAME  " (2 leading + 2 trailing spaces)
-        let mut x = 0u16;
-        for i in 0..n {
-            let name_w = if i == 0 {
-                "Home".len() as u16
-            } else {
-                self.libs[i - 1].library.name.chars().count() as u16
-            };
-            let w = name_w + pad;
-            if rel < x + w {
-                return Some(i);
-            }
-            x += w;
-        }
-        None
-    }
-
     pub(super) fn open_context_menu(&mut self) {
         let mut entries: Vec<super::ContextMenuEntry> = vec![];
 
-        let cw_focused = self.view_mode == ViewMode::Power
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab == 0;
+        let cw_focused = matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0;
         let power_lib_idx = self.context_menu_power_lib_idx();
-        let context_lib_idx = self.context_menu_lib_idx();
         let in_podcast = power_lib_idx.is_some_and(|idx| self.is_podcast_library(idx))
             || self.is_in_podcast_library();
-        let podcast_bulk_ids = context_lib_idx.and_then(|lib_idx| {
+        let podcast_bulk_ids = power_lib_idx.and_then(|lib_idx| {
             if in_podcast && self.is_feed_home_video_group_view(lib_idx) {
                 Some((
                     self.podcast_mark_all_ids(lib_idx),
@@ -2123,19 +1876,13 @@ impl App {
                 .continue_items
                 .get(self.home.continue_cursor)
                 .cloned()
-        } else if let Some(lib_idx) = power_lib_idx {
-            let saved = self.tab_idx;
-            self.tab_idx = self.lib_tab_offset() + lib_idx;
-            let item = self.current_lib_item();
-            self.tab_idx = saved;
-            item
-        } else if self.search.is_open() || self.tab_idx == 0 {
+        } else if power_lib_idx.is_some() {
+            self.current_lib_item()
+        } else if self.search.is_open() {
             self.current_home_item()
-        } else if self.tab_idx == 1 {
+        } else if matches!(self.panel_focus, PanelFocus::Queue) {
             let queue = self.displayed_queue();
             queue.items.get(queue.queue_cursor).cloned()
-        } else if self.tab_idx > 1 {
-            self.current_lib_item()
         } else {
             None
         };
@@ -2203,7 +1950,7 @@ impl App {
                 if cw_focused
                     || power_lib_idx.is_some()
                     || self.search.is_open()
-                    || self.tab_idx != 1
+                    || !matches!(self.panel_focus, PanelFocus::Queue)
                 {
                     Self::push_context_action(&mut entries, "Add to Queue", ContextAction::Enqueue);
                 }
@@ -2232,7 +1979,7 @@ impl App {
                     }
                 }
                 if cw_focused
-                    || (!self.search.is_open() && self.tab_idx == 0 && self.home.section == 0)
+                    || (!self.search.is_open() && self.library_tab == 0 && self.home.section == 0)
                 {
                     Self::push_context_action(
                         &mut entries,
@@ -2240,7 +1987,10 @@ impl App {
                         ContextAction::RemoveFromContinueWatching,
                     );
                 }
-                if !cw_focused && !self.search.is_open() && self.tab_idx == 1 {
+                if !cw_focused
+                    && !self.search.is_open()
+                    && matches!(self.panel_focus, PanelFocus::Queue)
+                {
                     let pos = self.displayed_queue().queue_cursor;
                     Self::push_context_action(
                         &mut entries,
@@ -2248,7 +1998,7 @@ impl App {
                         ContextAction::RemoveFromQueue(pos),
                     );
                 }
-                if self.search.is_open() || self.tab_idx == 1 {
+                if self.search.is_open() || matches!(self.panel_focus, PanelFocus::Queue) {
                     Self::push_context_action(
                         &mut entries,
                         "Go to Library",
@@ -2296,83 +2046,31 @@ impl App {
     }
 
     fn context_menu_spawn_point(&self) -> (u16, u16) {
-        if self.tab_idx == 0 && self.home_card_view {
-            let center = self.layout.home.carousel_slots[1].1;
-            return (center.x + center.width / 2, center.y + center.height / 2);
-        }
-        if self.view_mode == ViewMode::Power {
-            match self.power_focus {
-                PowerFocus::Left => {
-                    let area = self.layout.power.left_area;
-                    if area.width > 0 {
-                        let y = self.layout.power.cursor_screen_y.unwrap_or(area.y);
-                        let x = area.x + 2;
-                        // Avoid inline image overlap (detail/episode poster).
-                        if let Some(img) = self.layout.power.inline_image_rect {
-                            if y >= img.y && y < img.y + img.height {
-                                let below = img.y + img.height;
-                                if below < area.y + area.height {
-                                    return (x, below);
-                                }
+        match self.panel_focus {
+            PanelFocus::Library => {
+                let area = self.layout.main.left_area;
+                if area.width > 0 {
+                    let y = self.layout.main.cursor_screen_y.unwrap_or(area.y);
+                    let x = area.x + 2;
+                    // Avoid inline image overlap (detail/episode poster).
+                    if let Some(img) = self.layout.main.inline_image_rect {
+                        if y >= img.y && y < img.y + img.height {
+                            let below = img.y + img.height;
+                            if below < area.y + area.height {
+                                return (x, below);
                             }
                         }
-                        return (x, y);
                     }
-                }
-                PowerFocus::Queue => {
-                    let area = self.layout.power.queue_area;
-                    if area.width > 0 {
-                        let y = self.layout.power.queue_cursor_screen_y.unwrap_or(area.y);
-                        return (area.x + 2, y);
-                    }
+                    return (x, y);
                 }
             }
-        }
-        if self.tab_idx == 0 {
-            let sec = self.home.section;
-            if let Some(area) = self.layout.home.section_areas.get(sec) {
-                let scroll = self.layout.home.home_scrolls.get(sec).copied().unwrap_or(0);
-                let cursor = match sec {
-                    0 => self.home.continue_cursor,
-                    n => self
-                        .home
-                        .latest
-                        .get(n - 1)
-                        .map(|(_, _, _, c)| *c)
-                        .unwrap_or(0),
-                };
-                let row = cursor.saturating_sub(scroll) as u16;
-                return (self.terminal_width / 2, area.y + 1 + row);
+            PanelFocus::Queue => {
+                let area = self.layout.main.queue_area;
+                if area.width > 0 {
+                    let y = self.layout.main.queue_cursor_screen_y.unwrap_or(area.y);
+                    return (area.x + 2, y);
+                }
             }
-        } else if self.tab_idx > 1 {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
-            let lib = &self.libs[lib_idx];
-            let cursor = lib
-                .nav_stack
-                .last()
-                .map(|lvl| {
-                    lib.search
-                        .as_ref()
-                        .and_then(|s| s.results.get(s.cursor).copied())
-                        .unwrap_or(lvl.cursor)
-                })
-                .unwrap_or(0);
-            let scroll = self
-                .layout
-                .library
-                .lib_scroll
-                .get(lib_idx)
-                .copied()
-                .unwrap_or(0);
-            let row = cursor.saturating_sub(scroll) as u16;
-            let tbl = self
-                .layout
-                .library
-                .lib_table_area
-                .get(lib_idx)
-                .copied()
-                .unwrap_or_default();
-            return (self.terminal_width / 2, tbl.y + row * 3);
         }
         (4, 4)
     }
@@ -2387,14 +2085,18 @@ impl App {
 
     pub(super) fn save_prefs(&self) {
         let path = crate::config::prefs_path();
+        // New keys only (#361) -- readers still fall back to the old
+        // `panel_focus`/`library_tab`/`queue_column_width` keys in
+        // `load_prefs`'s callers; that fallback can be deleted a release
+        // later. `tab_idx` is gone outright, not migrated: it was
+        // Standard-view-only state.
         let v = serde_json::json!({
             "ui_volume": self.ui_volume,
             "mute_on": self.mute_on,
             "pre_mute_volume": self.pre_mute_volume,
-            "tab_idx": self.tab_idx,
-            "power_focus": self.power_focus.pref_value(),
-            "power_left_tab": self.power_left_tab,
-            "power_left_width": self.power_left_width,
+            "panel_focus": self.panel_focus.pref_value(),
+            "library_tab": self.library_tab,
+            "queue_column_width": self.queue_column_width,
         });
         if let Ok(s) = serde_json::to_string(&v) {
             let _ = std::fs::write(path, s);
@@ -2434,11 +2136,11 @@ impl App {
     }
 
     fn click_set_cursor(&mut self, col: u16, row: u16) -> bool {
-        if self.view_mode == ViewMode::Power {
+        {
             if self.has_direct_remote_queue() {
                 if self
                     .layout
-                    .power
+                    .main
                     .queue_scope_local_area
                     .contains((col, row).into())
                 {
@@ -2447,7 +2149,7 @@ impl App {
                 }
                 if self
                     .layout
-                    .power
+                    .main
                     .queue_scope_remote_area
                     .contains((col, row).into())
                 {
@@ -2456,45 +2158,45 @@ impl App {
                 }
             }
             // Click in queue area: focus queue and move cursor.
-            let qa = self.layout.power.queue_area;
+            let qa = self.layout.main.queue_area;
             if qa.contains((col, row).into()) {
-                if !matches!(self.power_focus, PowerFocus::Queue) {
+                if !matches!(self.panel_focus, PanelFocus::Queue) {
                     self.last_card_height = 0;
                 }
-                self.set_power_focus(PowerFocus::Queue);
+                self.set_panel_focus(PanelFocus::Queue);
                 let content_y = (row - qa.y) as usize;
-                if let Some(&Some(item_idx)) = self.layout.power.queue_row_map.get(content_y) {
+                if let Some(&Some(item_idx)) = self.layout.main.queue_row_map.get(content_y) {
                     self.displayed_queue_mut().queue_cursor = item_idx;
                 }
                 return true;
             }
             // Click in the left panel: focus it and set its cursor.
-            let la = self.layout.power.left_area;
+            let la = self.layout.main.left_area;
             if la.contains((col, row).into()) {
-                if !matches!(self.power_focus, PowerFocus::Left) {
+                if !matches!(self.panel_focus, PanelFocus::Library) {
                     self.last_card_height = 0;
                 }
-                self.set_power_focus(PowerFocus::Left);
-                if self.power_left_tab == 0 {
+                self.set_panel_focus(PanelFocus::Library);
+                if self.library_tab == 0 {
                     // Home tab: rectangle hit-test the two-column card grid.
                     let pos = (col, row).into();
                     if let Some((_, flat_idx)) = self
                         .layout
-                        .power
+                        .main
                         .home
                         .hitmap
                         .iter()
                         .find(|(rect, _)| rect.contains(pos))
                     {
-                        self.home.power_home_cursor = *flat_idx;
+                        self.home.home_cursor = *flat_idx;
                     }
                 } else {
-                    let lib_idx = self.power_left_tab - 1;
+                    let lib_idx = self.library_tab - 1;
                     if self.is_music_group_view(lib_idx)
                         || self.is_feed_home_video_group_view(lib_idx)
                         || self.should_show_letter_pills(lib_idx)
                     {
-                        for (rect, target) in self.layout.power.selector_tabs.clone() {
+                        for (rect, target) in self.layout.main.selector_tabs.clone() {
                             if rect.contains((col, row).into()) {
                                 if self.is_music_group_view(lib_idx) {
                                     self.select_music_group(lib_idx, target);
@@ -2509,28 +2211,28 @@ impl App {
                     }
                     let click_y = (row - la.y) as usize;
                     // Read the row map before taking a mutable borrow on libs (borrow checker).
-                    let use_row_map = !self.layout.power.left_row_map.is_empty();
+                    let use_row_map = !self.layout.main.left_row_map.is_empty();
                     let row_map_item = if use_row_map {
-                        self.layout.power.left_row_map.get(click_y).copied()
+                        self.layout.main.left_row_map.get(click_y).copied()
                     } else {
                         None
                     };
                     let row_target = self
                         .layout
-                        .power
+                        .main
                         .left_row_targets
                         .get(click_y)
                         .cloned()
                         .flatten();
                     if self.is_music_group_view(lib_idx) {
                         match row_target {
-                            Some(PowerLeftRowTarget::ArtistHeader(selection)) => {
+                            Some(LibraryRowTarget::ArtistHeader(selection)) => {
                                 self.libs[lib_idx].album_track_focus = None;
                                 self.libs[lib_idx].artist_header_focus = Some(selection);
                                 self.save_default_library_position(lib_idx);
                                 return true;
                             }
-                            Some(PowerLeftRowTarget::Album(item_idx)) => {
+                            Some(LibraryRowTarget::Album(item_idx)) => {
                                 let lib = &mut self.libs[lib_idx];
                                 if let Some(lvl) = lib.nav_stack.last_mut() {
                                     if item_idx < lvl.items.len() {
@@ -2626,151 +2328,6 @@ impl App {
                 }
                 return true;
             }
-        } else if self.tab_idx == 1 {
-            if self.has_direct_remote_queue() {
-                if self
-                    .layout
-                    .queue
-                    .scope_local_area
-                    .contains((col, row).into())
-                {
-                    self.set_queue_scope(QueueScope::Local);
-                    return true;
-                }
-                if self
-                    .layout
-                    .queue
-                    .scope_remote_area
-                    .contains((col, row).into())
-                {
-                    self.set_queue_scope(QueueScope::Remote);
-                    return true;
-                }
-            }
-            let inner = self.layout.queue.inner;
-            if inner.contains((col, row).into()) {
-                let click_y = (row - inner.y) as usize;
-                if let Some(&Some(idx)) = self.layout.queue.row_map.get(click_y) {
-                    self.displayed_queue_mut().queue_cursor = idx;
-                    return true;
-                }
-            }
-        } else if self.tab_idx == 0 {
-            if self.layout.home.home_rect.contains((col, row).into()) {
-                let n_secs = self.layout.home.section_areas.len();
-                let mut found_sec: Option<(usize, Rect)> = None;
-                for sec in 0..n_secs {
-                    let sect_area = self.layout.home.section_areas[sec];
-                    if sect_area.contains((col, row).into()) {
-                        found_sec = Some((sec, sect_area));
-                        break;
-                    }
-                }
-                if let Some((sec, sect_area)) = found_sec {
-                    self.home.section = sec;
-                    let inner = Block::default()
-                        .borders(Borders::TOP | Borders::BOTTOM)
-                        .border_type(BorderType::Rounded)
-                        .inner(sect_area);
-                    if inner.contains((col, row).into()) {
-                        let row_idx = (row - inner.y) as usize;
-                        let scroll_start =
-                            self.layout.home.home_scrolls.get(sec).copied().unwrap_or(0);
-                        let inner_h = inner.height as usize;
-                        let inner_w = inner.width.max(1) as usize;
-                        let item_texts: Vec<String> = {
-                            let items_slice: &[MediaItem] = if sec == 0 {
-                                &self.home.continue_items
-                            } else {
-                                self.home
-                                    .latest
-                                    .get(sec - 1)
-                                    .map(|c| c.2.as_slice())
-                                    .unwrap_or(&[])
-                            };
-                            items_slice
-                                .iter()
-                                .skip(scroll_start)
-                                .map(|item| {
-                                    let (t, _) = item_text_and_style(item, false);
-                                    t
-                                })
-                                .collect()
-                        };
-                        let mut line_acc = 0usize;
-                        let mut found_item = None;
-                        for (i, text) in item_texts.iter().enumerate() {
-                            let n_lines = wrap(text, inner_w).len().max(1);
-                            if row_idx < line_acc + n_lines {
-                                found_item = Some(scroll_start + i);
-                                break;
-                            }
-                            line_acc += n_lines;
-                            if line_acc >= inner_h {
-                                break;
-                            }
-                        }
-                        if let Some(clicked) = found_item {
-                            let (len, _) = self.home_section_len_cur(sec);
-                            if clicked < len {
-                                self.set_home_cursor(sec, clicked);
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        } else if self.tab_idx > 1 {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
-            let lib = &self.layout.library;
-            let tbl = lib.lib_table_area.get(lib_idx).copied().unwrap_or_default();
-            if tbl.contains((col, row).into()) {
-                let click_y = row - tbl.y;
-                let scroll = lib.lib_scroll.get(lib_idx).copied().unwrap_or(0);
-                let display_pos = {
-                    let mut y = 0u16;
-                    let mut found = scroll;
-                    for (vi, &h) in lib
-                        .lib_row_heights
-                        .get(lib_idx)
-                        .map(|v| v.as_slice())
-                        .unwrap_or(&[])
-                        .iter()
-                        .enumerate()
-                    {
-                        if click_y < y + h {
-                            found = scroll + vi;
-                            break;
-                        }
-                        y += h;
-                    }
-                    found
-                };
-                let lib = &mut self.libs[lib_idx];
-                let mut save_position = false;
-                let hit = if let Some(s) = &mut lib.search {
-                    if display_pos < s.results.len() {
-                        s.cursor = display_pos;
-                        true
-                    } else {
-                        false
-                    }
-                } else if let Some(lvl) = lib.nav_stack.last_mut() {
-                    if display_pos < lvl.items.len() {
-                        lvl.cursor = display_pos;
-                        save_position = true;
-                        true
-                    } else {
-                        false
-                    }
-                } else {
-                    false
-                };
-                if save_position {
-                    self.save_default_library_position(lib_idx);
-                }
-                return hit;
-            }
         }
         false
     }
@@ -2792,10 +2349,9 @@ impl App {
         } else {
             return false;
         };
-        let power_panel =
-            self.view_mode == ViewMode::Power && self.layout.power.panel_area.width > 0;
+        let power_panel = self.layout.main.panel_area.width > 0;
         let panel_area = if power_panel {
-            self.layout.power.panel_area
+            self.layout.main.panel_area
         } else {
             Rect {
                 x: 0,
@@ -2804,7 +2360,7 @@ impl App {
                 height: self.terminal_height,
             }
         };
-        let content_area = self.layout.power.panel_content_area;
+        let content_area = self.layout.main.panel_content_area;
         let inside_panel = panel_area.contains((col, row).into());
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left)) && !inside_panel {
             if self.show_settings {
@@ -2955,7 +2511,7 @@ impl App {
                                     self.replace_queue_or_prompt(action);
                                     if !self.show_save_playlist_modal {
                                         self.show_playlists = false;
-                                        self.set_tab(1);
+                                        self.set_panel_focus(PanelFocus::Queue);
                                     }
                                 }
                             } else {
@@ -3024,27 +2580,15 @@ impl App {
         if matches!(mouse.kind, MouseEventKind::Down(MouseButton::Left))
             && self.layout.tabs_area.contains((col, row).into())
         {
-            if self.view_mode == ViewMode::Power {
-                // In Power View, tab clicks change the left-panel selection, not the app tab.
-                if let Some(idx) = self.power_tab_idx_at(col) {
-                    self.power_left_tab = idx;
-                    if idx > 0 {
-                        self.set_power_focus(PowerFocus::Left);
-                        self.activate_library_position_scope(
-                            idx - 1,
-                            crate::app::LibraryPositionScope::Power,
-                        );
-                    }
-                    self.save_prefs();
-                }
-            } else if let Some(idx) = self.tab_idx_at(col) {
+            // Tab clicks change the left-panel selection.
+            if let Some(idx) = self.power_tab_idx_at(col) {
                 if idx == usize::MAX - 1 {
                     self.tab_scroll = self.tab_scroll.saturating_sub(1);
                 } else if idx == usize::MAX {
                     let max_scroll = self.tab_count().saturating_sub(1);
                     self.tab_scroll = (self.tab_scroll + 1).min(max_scroll);
                 } else {
-                    self.set_tab(idx);
+                    self.set_library_tab(idx);
                 }
             }
             return;
@@ -3071,71 +2615,23 @@ impl App {
                     self.dispatch(super::action::Command::AdjustVolume(-delta * 5));
                     return;
                 }
-                if self.tab_idx == 0 {
-                    let sb = self.layout.home.home_scrollbar;
-                    if sb.width > 0 && sb.contains((col, row).into()) {
-                        let active = self.player.status.lock().unwrap().active;
-                        let chrome: u16 = if active { 6 } else { 3 };
-                        let panel_h = self.terminal_height.saturating_sub(chrome);
-                        let n_sections = 1 + self.home.latest.len();
-                        let visible = ((panel_h / HOME_MIN_SECTION_H) as usize)
-                            .max(1)
-                            .min(n_sections);
-                        let max_offset = n_sections.saturating_sub(visible);
-                        self.home_panel_section_offset =
-                            (self.home_panel_section_offset as i64 + delta)
-                                .clamp(0, max_offset as i64) as usize;
-                    } else if self.layout.home.home_rect.contains((col, row).into()) {
-                        if self.home_card_view {
-                            let n = 1 + self.home.latest.len();
-                            self.home.section =
-                                (self.home.section as i64 + delta).clamp(0, n as i64 - 1) as usize;
-                            self.ensure_home_section_visible();
-                            if !self.card_image_states.is_empty() {
-                                self.force_clear = true;
-                            }
-                        } else {
-                            self.move_home_cursor(delta);
-                        }
-                    }
-                } else if self.view_mode == ViewMode::Power {
-                    // Scroll in whichever power-view panel the mouse is over.
-                    let queue_area = self.layout.power.queue_area;
-                    let left_area = self.layout.power.left_area;
-                    if queue_area.contains((col, row).into()) {
-                        let n = self.displayed_queue().items.len();
-                        if n > 0 {
-                            let delta = delta * 3;
-                            let queue = self.displayed_queue_mut();
-                            queue.queue_cursor =
-                                (queue.queue_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
-                        }
-                    } else if left_area.contains((col, row).into()) {
-                        if self.power_left_tab == 0 {
-                            self.power_cw_move_cursor(delta);
-                        } else {
-                            let lib_idx = self.power_left_tab - 1;
-                            self.with_library_position_scope_override(
-                                lib_idx,
-                                crate::app::LibraryPositionScope::Power,
-                                |app| {
-                                    let saved = app.tab_idx;
-                                    app.tab_idx = app.lib_tab_offset() + lib_idx;
-                                    app.move_lib_cursor(delta);
-                                    app.tab_idx = saved;
-                                },
-                            );
-                        }
-                    }
-                } else if self.tab_idx == 1 {
+                // Scroll in whichever panel the mouse is over.
+                let queue_area = self.layout.main.queue_area;
+                let left_area = self.layout.main.left_area;
+                if queue_area.contains((col, row).into()) {
                     let n = self.displayed_queue().items.len();
                     if n > 0 {
+                        let delta = delta * 3;
                         let queue = self.displayed_queue_mut();
                         queue.queue_cursor =
                             (queue.queue_cursor as i64 + delta).clamp(0, n as i64 - 1) as usize;
                     }
-                } else {
-                    self.move_lib_cursor(delta);
+                } else if left_area.contains((col, row).into()) {
+                    if self.library_tab == 0 {
+                        self.power_cw_move_cursor(delta);
+                    } else {
+                        self.move_lib_cursor(delta);
+                    }
                 }
             }
             MouseEventKind::Down(MouseButton::Left) => {
@@ -3175,76 +2671,19 @@ impl App {
 
                 let now = Instant::now();
 
-                if let Some(r) = self.layout.home.carousel_left_arrow {
-                    if r.contains((col, row).into()) {
-                        if self.tab_idx == 0 {
-                            self.move_home_cursor(-1);
-                        } else {
-                            if self.displayed_queue().queue_cursor > 0 {
-                                self.displayed_queue_mut().queue_cursor -= 1;
-                            }
-                        }
-                        return;
-                    }
-                }
-                if let Some(r) = self.layout.home.carousel_right_arrow {
-                    if r.contains((col, row).into()) {
-                        if self.tab_idx == 0 {
-                            self.move_home_cursor(1);
-                        } else {
-                            let n = self.displayed_queue().items.len();
-                            if self.displayed_queue().queue_cursor + 1 < n {
-                                self.displayed_queue_mut().queue_cursor += 1;
-                            }
-                        }
-                        return;
-                    }
-                }
-                if self.tab_idx == 0 && self.home_card_view {
-                    let strips = self.layout.home.home_card_strips.clone();
-                    for (sec_idx, strip_rect) in &strips {
-                        if strip_rect.contains((col, row).into()) && *sec_idx != self.home.section {
-                            self.home.section = *sec_idx;
-                            if !self.card_image_states.is_empty() {
-                                self.force_clear = true;
-                            }
-                            return;
-                        }
-                    }
-                }
-                if let Some(r) = self.layout.home.carousel_up_arrow {
-                    if r.contains((col, row).into()) {
-                        if self.home.section > 0 {
-                            self.home.section -= 1;
-                            self.ensure_home_section_visible();
-                        }
-                        return;
-                    }
-                }
-                if let Some(r) = self.layout.home.carousel_down_arrow {
-                    if r.contains((col, row).into()) {
-                        let n_sections = 1 + self.home.latest.len();
-                        if self.home.section + 1 < n_sections {
-                            self.home.section += 1;
-                            self.ensure_home_section_visible();
-                        }
-                        return;
-                    }
-                }
-
                 let is_double = now.duration_since(self.last_click_time)
                     < Duration::from_millis(400)
                     && self.last_click_pos == (col, row);
                 self.last_click_time = now;
                 self.last_click_pos = (col, row);
 
-                if self.view_mode == ViewMode::Power {
-                    for (rect, target) in self.layout.power.selector_tabs.clone() {
+                {
+                    for (rect, target) in self.layout.main.selector_tabs.clone() {
                         if rect.contains((col, row).into()) {
-                            if self.power_left_tab == 0 {
+                            if self.library_tab == 0 {
                                 self.power_home_select_section(target);
                             } else {
-                                let lib_idx = self.power_left_tab - 1;
+                                let lib_idx = self.library_tab - 1;
                                 if self.is_music_group_view(lib_idx) {
                                     self.select_music_group(lib_idx, target);
                                 } else if self.is_feed_home_video_group_view(lib_idx) {
@@ -3268,11 +2707,7 @@ impl App {
                         self.seek_to_col(col);
                         return;
                     }
-                    if self.tab_idx == 0 {
-                        if self.layout.home.home_rect.contains((col, row).into()) {
-                            self.select_home();
-                        }
-                    } else if self.tab_idx == 1 {
+                    if matches!(self.panel_focus, PanelFocus::Queue) {
                         let queue = self.displayed_queue();
                         let t = queue.queue_cursor;
                         // Spatial hit-test stays local (issue #134); the
@@ -3281,10 +2716,12 @@ impl App {
                         // `Enter` can't drift again the way they did before
                         // a70ad7a.
                         if t < queue.items.len()
-                            && self.layout.queue.inner.contains((col, row).into())
+                            && self.layout.main.queue_area.contains((col, row).into())
                         {
                             self.dispatch(super::action::Command::QueuePlayCursor);
                         }
+                    } else if self.library_tab == 0 {
+                        self.power_home_play();
                     } else if self
                         .current_lib_item()
                         .map(|i| !i.is_folder)
@@ -3342,19 +2779,10 @@ impl App {
                     }
                     return;
                 }
-                if self.tab_idx == 0 {
-                    let sb = self.layout.home.home_scrollbar;
-                    if sb.width > 0 && sb.contains((col, row).into()) {
-                        self.home_scrollbar_seek(row);
-                        return;
-                    }
-                }
-
-                // Power-view header breadcrumb clicks.
-                if self.tab_idx == 1 && self.view_mode == ViewMode::Power && self.power_left_tab > 0
-                {
-                    let crumbs = self.layout.power.breadcrumbs.clone();
-                    let lib_idx = self.power_left_tab - 1;
+                // Header breadcrumb clicks.
+                if self.library_tab > 0 {
+                    let crumbs = self.layout.main.breadcrumbs.clone();
+                    let lib_idx = self.library_tab - 1;
                     for (x_start, x_end, crumb_row, target_depth) in crumbs {
                         if row == crumb_row && col >= x_start && col < x_end {
                             self.libs[lib_idx].nav_stack.truncate(target_depth);
@@ -3365,64 +2793,24 @@ impl App {
                     }
                 }
 
-                if self.tab_idx > 1 {
-                    let crumbs = self.layout.library.breadcrumbs.clone();
-                    let lib_off = self.lib_tab_offset();
-                    for (x_start, x_end, crumb_row, target_depth) in crumbs {
-                        if row == crumb_row && col >= x_start && col < x_end {
-                            let lib = &mut self.libs[self.tab_idx - lib_off];
-                            lib.nav_stack.truncate(target_depth);
-                            lib.search = None;
-                            self.save_default_library_position(self.tab_idx - lib_off);
-                            return;
-                        }
-                    }
-                }
                 let hit = self.click_set_cursor(col, row);
                 if hit
-                    && self.tab_idx > 1
+                    && self.library_tab > 0
                     && self
                         .current_lib_item()
                         .map(|i| i.is_folder)
                         .unwrap_or(false)
                 {
-                    let lib_idx = self.tab_idx - self.lib_tab_offset();
-                    if !self.activate_recursive_album(
-                        lib_idx,
-                        crate::app::LibraryPositionScope::Default,
-                    ) {
+                    let lib_idx = self.library_tab - 1;
+                    if !self.activate_recursive_album(lib_idx) {
                         self.select();
                     }
                 }
             }
             MouseEventKind::Down(MouseButton::Right) => {
-                if self.tab_idx == 0 && self.home_card_view {
-                    let slots = self.layout.home.carousel_slots;
-                    for (maybe_item_idx, card_rect) in slots.iter() {
-                        if card_rect.contains((col, row).into()) {
-                            if let Some(item_idx) = maybe_item_idx {
-                                let sec = self.home.section;
-                                self.set_home_cursor(sec, *item_idx);
-                                let cx = card_rect.x + card_rect.width / 2;
-                                let cy = card_rect.y + card_rect.height / 2;
-                                self.open_context_menu_at(cx, cy);
-                            }
-                            return;
-                        }
-                    }
-                    return;
-                }
                 if self.click_set_cursor(col, row) {
                     self.open_context_menu_at(col, row);
                 }
-            }
-            MouseEventKind::Drag(MouseButton::Left)
-                if self.tab_idx == 0 && {
-                    let sb = self.layout.home.home_scrollbar;
-                    sb.width > 0 && sb.contains((col, row).into())
-                } =>
-            {
-                self.home_scrollbar_seek(row);
             }
             MouseEventKind::Drag(MouseButton::Left)
                 if self
@@ -3576,7 +2964,6 @@ mod playback_header_mouse_tests {
         use crate::app::tests::make_item;
 
         let mut app = make_app_stub();
-        app.tab_idx = 1;
         app.player_tab.set_items(
             vec![
                 make_item("Track One", "Audio"),
@@ -3584,7 +2971,8 @@ mod playback_header_mouse_tests {
             ],
             1, // cursor already on the second item, as if arrow-keyed there
         );
-        app.layout.queue.inner = Rect {
+        app.panel_focus = PanelFocus::Queue;
+        app.layout.main.queue_area = Rect {
             x: 0,
             y: 0,
             width: 20,
@@ -3640,10 +3028,9 @@ mod playback_header_mouse_tests {
     #[test]
     fn power_panel_bounds_consume_clicks_over_the_physical_sidebar() {
         let mut app = make_app_stub();
-        app.view_mode = ViewMode::Power;
         app.show_help = true;
-        app.layout.power.panel_area = Rect::new(0, 0, 31, 24);
-        app.layout.power.panel_content_area = Rect::new(2, 3, 27, 19);
+        app.layout.main.panel_area = Rect::new(0, 0, 31, 24);
+        app.layout.main.panel_content_area = Rect::new(2, 3, 27, 19);
 
         app.handle_mouse(left_down(30, 23));
         assert!(
@@ -3683,17 +3070,15 @@ mod playback_header_mouse_tests {
 mod power_movie_detail_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, ViewMode, POWER_LEFT_WIDTH_DEFAULT};
+    use crate::app::{BrowseLevel, LibraryTab, PanelFocus, POWER_LEFT_WIDTH_DEFAULT};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::backend::TestBackend;
     use ratatui::Terminal;
 
     fn make_power_movie_app() -> App {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
 
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
@@ -3777,10 +3162,8 @@ mod power_movie_detail_tests {
 
     fn make_power_tab_cycle_app() -> App {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         push_power_library(&mut app, "lib-movies", "Movies");
         push_power_library(&mut app, "lib-shows", "Shows");
         app
@@ -3835,51 +3218,50 @@ mod power_movie_detail_tests {
     #[test]
     fn shift_right_resizes_power_view_without_switching_focus() {
         let mut app = make_power_movie_app();
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.terminal_width = 100;
 
         let handled = app.handle_key(shift(KeyCode::Right));
 
         assert!(!handled);
-        assert!(matches!(app.power_focus, PowerFocus::Queue));
-        assert_eq!(app.power_left_width, 45);
+        assert!(matches!(app.panel_focus, PanelFocus::Queue));
+        assert_eq!(app.queue_column_width, 45);
         assert!(app.status.contains("45"), "status was {:?}", app.status);
-        assert_eq!(App::load_prefs()["power_left_width"].as_u64(), Some(45));
+        assert_eq!(App::load_prefs()["queue_column_width"].as_u64(), Some(45));
     }
 
     #[test]
     fn left_does_not_focus_hidden_queue_when_power_left_column_is_collapsed() {
         let mut app = make_power_movie_app();
-        app.power_left_collapsed = true;
-        app.power_focus = PowerFocus::Left;
+        app.queue_column_collapsed = true;
+        app.panel_focus = PanelFocus::Library;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
 
         assert!(!handled);
-        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert_eq!(app.panel_focus, PanelFocus::Library);
     }
 
-    #[test]
-    fn shift_resize_is_ignored_outside_power_view() {
-        let mut app = make_app_stub();
-
-        let handled = app.handle_key(shift(KeyCode::Right));
-
-        assert!(!handled);
-        assert_eq!(app.power_left_width, POWER_LEFT_WIDTH_DEFAULT);
-        assert!(app.status.is_empty(), "status was {:?}", app.status);
-    }
+    // `shift_resize_is_ignored_outside_power_view` (deleted, #361): asserted
+    // Shift+Right resize does nothing on a plain `make_app_stub()` (i.e.
+    // outside Power View / on the Home tab). "Outside Power View" no longer
+    // exists as a state -- Power is the only view now, and the queue column
+    // it resizes is present on every tab including Home, so Shift+Right
+    // correctly resizes it here too. The surviving resize guards (column
+    // collapsed, overlay open) are still covered by
+    // `shift_resize_is_ignored_while_power_left_column_is_collapsed` and
+    // `help_overlay_blocks_power_resize_shortcuts` below/above.
 
     #[test]
     fn shift_resize_is_ignored_while_power_left_column_is_collapsed() {
         let mut app = make_power_movie_app();
-        app.power_left_collapsed = true;
+        app.queue_column_collapsed = true;
         app.terminal_width = 100;
 
         let handled = app.handle_key(shift(KeyCode::Right));
 
         assert!(!handled);
-        assert_eq!(app.power_left_width, POWER_LEFT_WIDTH_DEFAULT);
+        assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
         assert!(app.status.is_empty(), "status was {:?}", app.status);
     }
 
@@ -3892,7 +3274,7 @@ mod power_movie_detail_tests {
         let handled = app.handle_key(shift(KeyCode::Right));
 
         assert!(!handled);
-        assert_eq!(app.power_left_width, POWER_LEFT_WIDTH_DEFAULT);
+        assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
     }
 
     #[test]
@@ -3901,7 +3283,7 @@ mod power_movie_detail_tests {
         app.terminal_width = 80;
 
         app.handle_key(shift(KeyCode::Left));
-        assert_eq!(app.power_left_width, POWER_LEFT_WIDTH_DEFAULT);
+        assert_eq!(app.queue_column_width, POWER_LEFT_WIDTH_DEFAULT);
         assert!(
             app.status.contains("minimum"),
             "expected minimum toast, got {:?}",
@@ -3909,33 +3291,33 @@ mod power_movie_detail_tests {
         );
 
         app.handle_key(shift(KeyCode::Right));
-        assert_eq!(app.power_left_width, 45);
+        assert_eq!(app.queue_column_width, 45);
         app.handle_key(shift(KeyCode::Right));
-        assert_eq!(app.power_left_width, 48);
-        let saved = App::load_prefs()["power_left_width"].as_u64();
+        assert_eq!(app.queue_column_width, 48);
+        let saved = App::load_prefs()["queue_column_width"].as_u64();
         assert_eq!(saved, Some(48));
 
         app.handle_key(shift(KeyCode::Right));
-        assert_eq!(app.power_left_width, 48);
+        assert_eq!(app.queue_column_width, 48);
         assert!(
             app.status.contains("maximum"),
             "expected maximum toast, got {:?}",
             app.status
         );
-        assert_eq!(App::load_prefs()["power_left_width"].as_u64(), saved);
+        assert_eq!(App::load_prefs()["queue_column_width"].as_u64(), saved);
     }
 
     #[test]
     fn render_normalizes_oversized_saved_power_width_and_persists_it() {
         let mut app = make_power_movie_app();
-        app.power_left_width = 80;
+        app.queue_column_width = 80;
 
         let backend = TestBackend::new(70, 24);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| app.render(f)).unwrap();
 
-        assert_eq!(app.power_left_width, 42);
-        assert_eq!(App::load_prefs()["power_left_width"].as_u64(), Some(42));
+        assert_eq!(app.queue_column_width, 42);
+        assert_eq!(App::load_prefs()["queue_column_width"].as_u64(), Some(42));
     }
 
     #[test]
@@ -3962,13 +3344,13 @@ mod power_movie_detail_tests {
             loading: false,
         });
 
-        // Render for real so layout.power.left_row_map / left_area reflect the
+        // Render for real so layout.main.left_row_map / left_area reflect the
         // actual banner-filler rows inserted after the selected (cursor=0) row.
         let backend = TestBackend::new(100, 40);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| app.render(f)).unwrap();
 
-        let row_map = app.layout.power.left_row_map.clone();
+        let row_map = app.layout.main.left_row_map.clone();
         assert!(
             row_map.iter().any(|r| r.is_none()),
             "expected banner filler (None) rows in left_row_map, got {:?}",
@@ -3990,7 +3372,7 @@ mod power_movie_detail_tests {
             click_row_idx
         );
 
-        let la = app.layout.power.left_area;
+        let la = app.layout.main.left_area;
         let row = la.y + click_row_idx as u16;
         let col = la.x + 1;
 
@@ -4022,7 +3404,7 @@ mod power_movie_detail_tests {
         assert!(home.context_menu.is_some(), "combined (home) view");
 
         let mut lib = make_app_stub();
-        lib.tab_idx = 2;
+        lib.library_tab = 1;
         let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         library.is_folder = true;
@@ -4056,7 +3438,7 @@ mod power_movie_detail_tests {
         assert!(lib.context_menu.is_some(), "library view");
 
         let mut queue = make_power_movie_app();
-        queue.power_focus = PowerFocus::Queue;
+        queue.panel_focus = PanelFocus::Queue;
         queue
             .player_tab
             .items
@@ -4071,7 +3453,7 @@ mod power_movie_detail_tests {
         // `handle_enqueue_selected_key` (the queue view has no "enqueue
         // selected" concept and does not wire this in). See issue #209.
         let mut app = make_app_stub();
-        app.tab_idx = 2;
+        app.library_tab = 1;
         let mut library = crate::app::tests::make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         library.is_folder = true;
@@ -4145,9 +3527,8 @@ mod power_movie_detail_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
         assert!(!handled);
-        assert_eq!(app.tab_idx, 1);
-        assert_eq!(app.power_left_tab, 2);
-        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert_eq!(app.library_tab, 2);
+        assert_eq!(app.panel_focus, PanelFocus::Library);
     }
 
     #[test]
@@ -4166,9 +3547,8 @@ mod power_movie_detail_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
         assert!(!handled);
-        assert_eq!(app.tab_idx, 1);
-        assert_eq!(app.power_left_tab, 2);
-        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert_eq!(app.library_tab, 2);
+        assert_eq!(app.panel_focus, PanelFocus::Library);
         let search = app.libs[0]
             .search
             .as_ref()
@@ -4182,7 +3562,7 @@ mod power_movie_detail_tests {
     fn power_view_backtab_cycles_from_right_panel_with_search_open() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_power_tab_cycle_app();
-        app.power_left_tab = 2;
+        app.library_tab = 2;
         app.libs[1].search = Some(LibSearch {
             query: "sho".into(),
             items: app.libs[1].nav_stack[0].items.clone(),
@@ -4195,9 +3575,8 @@ mod power_movie_detail_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT));
 
         assert!(!handled);
-        assert_eq!(app.tab_idx, 1);
-        assert_eq!(app.power_left_tab, 1);
-        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert_eq!(app.library_tab, 1);
+        assert_eq!(app.panel_focus, PanelFocus::Library);
         let search = app.libs[1]
             .search
             .as_ref()
@@ -4208,9 +3587,50 @@ mod power_movie_detail_tests {
     }
 
     #[test]
-    fn plain_library_search_does_not_gain_power_view_tab_cycling() {
+    fn selecting_the_last_tab_scrolls_it_into_view_with_correct_arrows() {
+        // Task 5 (#361): with more libraries than fit in the tab bar, the
+        // tab bar must scroll the selected tab into view rather than
+        // stranding it off-screen, and the `«`/`»` arrows (derived from the
+        // same `visible_tab_range` call the slicing uses -- see
+        // `render_tabs`) must reflect where the bar actually scrolled to.
         let mut app = make_app_stub();
-        app.tab_idx = 2;
+        app.terminal_width = 40;
+        for i in 0..10 {
+            push_power_library(
+                &mut app,
+                &format!("lib-{i}"),
+                &format!("Library Number {i}"),
+            );
+        }
+        app.panel_focus = PanelFocus::Library;
+
+        // Jump straight to the last tab, the same way `library_tab_next`
+        // would land there after enough presses, and let it scroll into view.
+        app.library_tab = app.tab_count() - 1;
+        app.ensure_tab_visible();
+
+        let tab_w = app
+            .terminal_width
+            .saturating_sub(crate::app::TABBAR_LEFT_RESERVE + crate::app::TABBAR_RIGHT_RESERVE);
+        let (vis_start, vis_end) = app.visible_tab_range(tab_w);
+        assert!(
+            app.library_tab >= vis_start && app.library_tab < vis_end,
+            "selected tab {} not in visible range {vis_start}..{vis_end}",
+            app.library_tab
+        );
+        // The bar overflowed, so scrolling right of Home must show the
+        // left-scroll arrow (there are tabs before vis_start).
+        assert!(vis_start > 0, "expected the tab bar to have scrolled");
+        // The last tab is visible and nothing follows it, so the
+        // right-scroll arrow must not falsely claim there's more.
+        assert_eq!(vis_end, app.tab_count());
+    }
+
+    #[test]
+    fn library_search_on_an_unfocused_library_survives_tab_cycling() {
+        let mut app = make_app_stub();
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         push_power_library(&mut app, "lib-movies", "Movies");
         push_power_library(&mut app, "lib-shows", "Shows");
         app.libs[0].search = Some(LibSearch {
@@ -4225,7 +3645,6 @@ mod power_movie_detail_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
 
         assert!(!handled);
-        assert_eq!(app.tab_idx, 2);
         let search = app.libs[0]
             .search
             .as_ref()
@@ -4240,7 +3659,7 @@ mod power_movie_detail_tests {
         // Positive counterpart: with queue focus (not library focus), the
         // same Ctrl+z reaches `handle_queue_key`'s own binding.
         let mut app = make_power_movie_app();
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.queue_undo_stack.push(crate::app::UndoEntry::Remove(
             0,
             Box::new(crate::app::tests::make_item("removed", "Movie")),
@@ -4259,7 +3678,7 @@ mod power_movie_detail_tests {
     // sit in the same functions the new track-focus interception lives in
     // (the power-left key dispatch match block and `open_context_menu`), but
     // are untouched by tasks 1-4: the queue PageUp/PageDown block is a
-    // separate `if` gated on `PowerFocus::Queue`, entirely outside the
+    // separate `if` gated on `PanelFocus::Queue`, entirely outside the
     // `is_viewing_album_folders`-gated block added for track-selection mode;
     // and `open_context_menu`'s non-folder branch (which a `Movie` item
     // takes) doesn't consult `album_track_focus` or `is_viewing_album_folders`
@@ -4270,8 +3689,8 @@ mod power_movie_detail_tests {
     #[test]
     fn queue_page_up_and_down_move_queue_cursor_when_queue_panel_focused() {
         let mut app = make_power_movie_app();
-        app.power_focus = PowerFocus::Queue;
-        app.layout.power.queue_area = Rect::new(0, 0, 20, 11);
+        app.panel_focus = PanelFocus::Queue;
+        app.layout.main.queue_area = Rect::new(0, 0, 20, 11);
 
         for i in 0..20 {
             let mut item = make_item(&format!("Queued {i}"), "Movie");
@@ -4304,15 +3723,15 @@ mod power_movie_detail_tests {
         assert!(!app.power_right_panel_image_renders_allowed());
 
         app.handle_key(KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-        assert_eq!(app.power_focus, PowerFocus::Queue);
+        assert_eq!(app.panel_focus, PanelFocus::Queue);
         assert!(!app.power_right_panel_image_renders_allowed());
     }
 
     #[test]
     fn power_queue_navigation_keeps_right_panel_gate_open_after_focus_moves_to_library() {
         let mut app = make_power_movie_app();
-        app.power_focus = PowerFocus::Queue;
-        app.layout.power.queue_area = Rect::new(0, 0, 20, 4);
+        app.panel_focus = PanelFocus::Queue;
+        app.layout.main.queue_area = Rect::new(0, 0, 20, 4);
         for i in 0..5 {
             let mut item = make_item(&format!("Queued {i}"), "Movie");
             item.id = format!("queued-{i}");
@@ -4329,7 +3748,7 @@ mod power_movie_detail_tests {
 
         app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
 
-        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert_eq!(app.panel_focus, PanelFocus::Library);
         assert!(app.power_right_panel_image_renders_allowed());
     }
 
@@ -4370,7 +3789,7 @@ mod power_movie_detail_tests {
             // the level's own total_count (what get_items_sorted_ranged
             // reported for that range) matches items.len() exactly -- the
             // state that used to wrongly look "fully loaded" for search.
-            lvl.letter_filter = crate::app::render::power::LetterFilter::for_index(4);
+            lvl.letter_filter = crate::app::render::LetterFilter::for_index(4);
             lvl.total_count = lvl.items.len();
         }
         app.libs[0].library_total = Some(3000); // the library's true size
@@ -4393,7 +3812,7 @@ mod power_movie_detail_tests {
 mod power_music_track_focus_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{BrowseLevel, LibraryTab, PowerFocus, ViewMode};
+    use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use ratatui::backend::TestBackend;
     use ratatui::layout::Rect;
@@ -4406,10 +3825,8 @@ mod power_music_track_focus_tests {
     /// tests, with two albums at the album level and `album-1` selected.
     fn make_power_music_album_app() -> App {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         app.music_levels = vec!["group".into(), "album".into()];
 
         let mut library = make_item("Music", "CollectionFolder");
@@ -4503,10 +3920,8 @@ mod power_music_track_focus_tests {
 
     fn make_power_music_album_list_app(album_count: usize, cursor: usize) -> App {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         app.music_levels = vec!["group".into(), "album".into()];
 
         let mut library = make_item("Music", "CollectionFolder");
@@ -4846,19 +4261,19 @@ mod power_music_track_focus_tests {
         render_full_app(&mut app, 100, 24);
         let row = app
             .layout
-            .power
+            .main
             .left_row_targets
             .iter()
             .position(|target| {
                 matches!(
                     target,
-                    Some(PowerLeftRowTarget::ArtistHeader(selection))
+                    Some(LibraryRowTarget::ArtistHeader(selection))
                         if selection.artist_label == "Beta"
                 )
             })
             .expect("expected Beta header row target");
-        let x = app.layout.power.left_area.x;
-        let y = app.layout.power.left_area.y + row as u16;
+        let x = app.layout.main.left_area.x;
+        let y = app.layout.main.left_area.y + row as u16;
 
         let handled = app.click_set_cursor(x, y);
 
@@ -5110,7 +4525,7 @@ mod power_music_track_focus_tests {
         let mut app = make_power_music_album_app();
         push_tracks(&mut app, "album-1", 3);
         app.libs[0].album_track_focus = Some(1);
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         let album_cursor_before = app.libs[0].nav_stack.last().unwrap().cursor;
 
         app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
@@ -5127,8 +4542,8 @@ mod power_music_track_focus_tests {
         let mut app = make_power_music_album_app();
         push_tracks(&mut app, "album-1", 3);
         app.libs[0].album_track_focus = Some(1);
-        app.layout.power.left_area = Rect::new(10, 5, 29, 4);
-        app.layout.power.left_row_map = vec![Some(1)];
+        app.layout.main.left_area = Rect::new(10, 5, 29, 4);
+        app.layout.main.left_row_map = vec![Some(1)];
 
         let handled = app.click_set_cursor(11, 5);
 
@@ -5257,7 +4672,7 @@ mod power_music_track_focus_tests {
         let mut app = make_power_music_album_list_app(60, 0);
         push_tracks(&mut app, "album-0", 4);
         render_full_app(&mut app, 100, 40);
-        let viewport_rows = app.layout.power.left_area.height as usize;
+        let viewport_rows = app.layout.main.left_area.height as usize;
         assert_eq!(
             viewport_rows, 30,
             "fixture sanity: expected 30 rendered list rows"
@@ -5287,7 +4702,7 @@ mod power_music_track_focus_tests {
         let mut app = make_power_music_album_list_app(60, 35);
         push_tracks(&mut app, "album-35", 4);
         render_full_app(&mut app, 100, 40);
-        let viewport_rows = app.layout.power.left_area.height as usize;
+        let viewport_rows = app.layout.main.left_area.height as usize;
         assert_eq!(
             viewport_rows, 30,
             "fixture sanity: expected 30 rendered list rows"
@@ -5317,7 +4732,7 @@ mod power_music_track_focus_tests {
         app.libs[0].nav_stack.last_mut().unwrap().items[2].artist = "Bravo".into();
         push_tracks(&mut app, "album-0", 4);
         render_full_app(&mut app, 100, 40);
-        app.layout.power.left_area.height = 100;
+        app.layout.main.left_area.height = 100;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
@@ -5334,7 +4749,7 @@ mod power_music_track_focus_tests {
         app.libs[0].nav_stack.last_mut().unwrap().items[2].artist = "Bravo".into();
         push_tracks(&mut app, "album-1", 4);
         render_full_app(&mut app, 100, 40);
-        app.layout.power.left_area.height = 100;
+        app.layout.main.left_area.height = 100;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
@@ -5360,7 +4775,7 @@ mod power_music_track_focus_tests {
         let mut down_app = make_power_music_album_list_app(10, 0);
         render_full_app(&mut down_app, 100, 40);
         assert!(down_app.libs[0].album_track_focus.is_none());
-        down_app.layout.power.left_area.height = 1;
+        down_app.layout.main.left_area.height = 1;
 
         let handled = down_app.handle_key(KeyEvent::new(KeyCode::PageDown, KeyModifiers::NONE));
 
@@ -5376,7 +4791,7 @@ mod power_music_track_focus_tests {
         let mut up_app = make_power_music_album_list_app(10, 3);
         render_full_app(&mut up_app, 100, 40);
         assert!(up_app.libs[0].album_track_focus.is_none());
-        up_app.layout.power.left_area.height = 4;
+        up_app.layout.main.left_area.height = 4;
 
         let handled = up_app.handle_key(KeyEvent::new(KeyCode::PageUp, KeyModifiers::NONE));
 
@@ -5436,10 +4851,7 @@ mod power_music_track_focus_tests {
         push_tracks(&mut app, "album-1", 3);
         assert!(app.libs[0].album_track_focus.is_none());
 
-        let saved = app.tab_idx;
-        app.tab_idx = app.lib_tab_offset();
         let item = app.current_lib_item();
-        app.tab_idx = saved;
 
         let item = item.expect("current_lib_item should resolve the selected album");
         assert_eq!(item.id, "album-1");
@@ -5452,10 +4864,7 @@ mod power_music_track_focus_tests {
         push_tracks(&mut app, "album-1", 3);
         app.libs[0].album_track_focus = Some(1);
 
-        let saved = app.tab_idx;
-        app.tab_idx = app.lib_tab_offset();
         let item = app.current_lib_item();
-        app.tab_idx = saved;
 
         let item = item.expect("current_lib_item should resolve the focused track");
         assert_eq!(item.id, "album-1-track-1");
@@ -5473,10 +4882,7 @@ mod power_music_track_focus_tests {
         app.libs[0].album_track_focus = Some(0);
         assert!(!app.album_tracks_cache.contains_key("album-1"));
 
-        let saved = app.tab_idx;
-        app.tab_idx = app.lib_tab_offset();
         let item = app.current_lib_item();
-        app.tab_idx = saved;
 
         let item = item.expect("must fall back to the album folder item, not None");
         assert_eq!(item.id, "album-1");
@@ -5614,7 +5020,7 @@ mod power_music_track_focus_tests {
         // app by pushing a nav_stack level of tracks) must keep working
         // exactly as before -- Task 4 must not change its behavior.
         let mut app = make_app_stub();
-        app.tab_idx = 2;
+        app.library_tab = 1;
         app.music_levels = vec!["album".into()];
 
         let mut library = make_item("Music", "CollectionFolder");
@@ -5695,7 +5101,7 @@ mod power_music_track_focus_tests {
 mod power_library_scope_routing_tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item, make_items};
-    use crate::app::{BrowseLevel, LibraryPositionScope, LibraryTab, PowerFocus, ViewMode};
+    use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
     use crossterm::event::{
         KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
     };
@@ -5703,10 +5109,8 @@ mod power_library_scope_routing_tests {
 
     fn make_power_library_app() -> App {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
 
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
@@ -5752,72 +5156,35 @@ mod power_library_scope_routing_tests {
     }
 
     #[test]
-    fn power_view_left_panel_movement_saves_power_scope_via_real_key_path() {
+    fn power_view_left_panel_movement_saves_position_via_real_key_path() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_power_library_app();
-        let default_position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        };
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Default,
-            default_position.clone(),
-        );
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
 
         assert!(!handled);
-        let views = crate::config::load_library_position_state()
+        let position = crate::config::load_library_position_state()
             .libraries
             .get("lib-movies")
             .cloned()
             .expect("saved library");
-        assert_eq!(views.default, Some(default_position));
         assert_eq!(
-            views
-                .power
-                .as_ref()
-                .and_then(|position| position.levels.first())
+            position
+                .levels
+                .first()
                 .and_then(|level| level.focused_item_id.as_deref()),
             Some("id1")
         );
     }
 
     #[test]
-    fn power_view_left_panel_refresh_clears_power_scope_via_real_key_path() {
+    fn power_view_left_panel_refresh_clears_saved_position_via_real_key_path() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_power_library_app();
-        let default_position = crate::config::LibraryPosition {
+        let saved_position = crate::config::LibraryPosition {
             levels: vec![crate::config::LibraryPositionLevel {
                 parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        };
-        let power_position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Power".into(),
+                title: "Saved".into(),
                 focused_item_id: Some("id1".into()),
                 cursor_index: 1,
                 item_types: Some("Movie".into()),
@@ -5829,33 +5196,22 @@ mod power_library_scope_routing_tests {
             }],
             ..Default::default()
         };
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Default,
-            default_position.clone(),
-        );
-        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position);
+        app.replace_saved_library_position(0, saved_position);
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Char('r'), KeyModifiers::NONE));
 
         assert!(!handled);
-        let views = crate::config::load_library_position_state()
+        assert!(!crate::config::load_library_position_state()
             .libraries
-            .get("lib-movies")
-            .cloned()
-            .expect("saved library");
-        assert_eq!(views.default, Some(default_position));
-        assert!(views.power.is_none());
+            .contains_key("lib-movies"));
     }
 
     #[test]
-    fn power_view_ctrl_r_confirmation_targets_active_power_library_and_preserves_default() {
+    fn power_view_ctrl_r_confirmation_targets_active_power_library() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 2;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 2;
 
         for (lib_id, title) in [("lib-shows", "Shows"), ("lib-movies", "Movies")] {
             let mut library = make_item(title, "CollectionFolder");
@@ -5890,32 +5246,12 @@ mod power_library_scope_routing_tests {
         }
         app.replace_saved_library_position(
             1,
-            LibraryPositionScope::Default,
             crate::config::LibraryPosition {
                 levels: vec![crate::config::LibraryPositionLevel {
                     parent_id: "lib-movies".into(),
-                    title: "Default".into(),
+                    title: "Saved".into(),
                     focused_item_id: Some("id0".into()),
                     cursor_index: 0,
-                    item_types: Some("Movie".into()),
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    letter_filter_index: None,
-                    library_total: None,
-                }],
-                ..Default::default()
-            },
-        );
-        app.replace_saved_library_position(
-            1,
-            LibraryPositionScope::Power,
-            crate::config::LibraryPosition {
-                levels: vec![crate::config::LibraryPositionLevel {
-                    parent_id: "lib-movies".into(),
-                    title: "Power".into(),
-                    focused_item_id: Some("id1".into()),
-                    cursor_index: 1,
                     item_types: Some("Movie".into()),
                     unplayed_only: false,
                     sort_by: "SortName".into(),
@@ -5934,52 +5270,21 @@ mod power_library_scope_routing_tests {
         let handled = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
 
         assert!(!handled);
-        let views = crate::config::load_library_position_state()
+        assert!(!crate::config::load_library_position_state()
             .libraries
-            .get("lib-movies")
-            .cloned()
-            .expect("saved library");
-        assert!(views.power.is_none());
-        assert_eq!(
-            views
-                .default
-                .as_ref()
-                .and_then(|position| position.levels.first())
-                .and_then(|level| level.focused_item_id.as_deref()),
-            Some("id0")
-        );
+            .contains_key("lib-movies"));
     }
 
     #[test]
-    fn power_view_left_panel_mouse_scroll_saves_power_scope() {
+    fn power_view_left_panel_mouse_scroll_saves_position() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_power_library_app();
-        app.layout.power.left_area = Rect {
+        app.layout.main.left_area = Rect {
             x: 10,
             y: 5,
             width: 20,
             height: 5,
         };
-        let default_position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        };
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Default,
-            default_position.clone(),
-        );
 
         app.handle_mouse(make_power_library_mouse_event(
             MouseEventKind::ScrollDown,
@@ -5987,52 +5292,30 @@ mod power_library_scope_routing_tests {
             6,
         ));
 
-        let views = crate::config::load_library_position_state()
+        let position = crate::config::load_library_position_state()
             .libraries
             .get("lib-movies")
             .cloned()
             .expect("saved library");
-        assert_eq!(views.default, Some(default_position));
         assert_eq!(
-            views
-                .power
-                .as_ref()
-                .and_then(|position| position.levels.first())
+            position
+                .levels
+                .first()
                 .and_then(|level| level.focused_item_id.as_deref()),
             Some("id1")
         );
     }
 
     #[test]
-    fn power_view_left_panel_mouse_click_saves_power_scope() {
+    fn power_view_left_panel_mouse_click_saves_position() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_power_library_app();
-        app.layout.power.left_area = Rect {
+        app.layout.main.left_area = Rect {
             x: 10,
             y: 5,
             width: 20,
             height: 5,
         };
-        let default_position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        };
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Default,
-            default_position.clone(),
-        );
 
         app.handle_mouse(make_power_library_mouse_event(
             MouseEventKind::Down(MouseButton::Left),
@@ -6040,24 +5323,22 @@ mod power_library_scope_routing_tests {
             6,
         ));
 
-        let views = crate::config::load_library_position_state()
+        let position = crate::config::load_library_position_state()
             .libraries
             .get("lib-movies")
             .cloned()
             .expect("saved library");
-        assert_eq!(views.default, Some(default_position));
         assert_eq!(
-            views
-                .power
-                .as_ref()
-                .and_then(|position| position.levels.first())
+            position
+                .levels
+                .first()
                 .and_then(|level| level.focused_item_id.as_deref()),
             Some("id1")
         );
     }
 
     #[test]
-    fn power_view_breadcrumb_click_saves_power_scope() {
+    fn power_view_breadcrumb_click_saves_position() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_power_library_app();
         app.libs[0].nav_stack.push(BrowseLevel {
@@ -6075,27 +5356,7 @@ mod power_library_scope_routing_tests {
             all_items: None,
             letter_filter: None,
         });
-        app.layout.power.breadcrumbs = vec![(10, 20, 2, 1)];
-        let default_position = crate::config::LibraryPosition {
-            levels: vec![crate::config::LibraryPositionLevel {
-                parent_id: "lib-movies".into(),
-                title: "Default".into(),
-                focused_item_id: Some("id0".into()),
-                cursor_index: 0,
-                item_types: Some("Movie".into()),
-                unplayed_only: false,
-                sort_by: "SortName".into(),
-                sort_order: "Ascending".into(),
-                letter_filter_index: None,
-                library_total: None,
-            }],
-            ..Default::default()
-        };
-        app.replace_saved_library_position(
-            0,
-            LibraryPositionScope::Default,
-            default_position.clone(),
-        );
+        app.layout.main.breadcrumbs = vec![(10, 20, 2, 1)];
 
         app.handle_mouse(make_power_library_mouse_event(
             MouseEventKind::Down(MouseButton::Left),
@@ -6103,16 +5364,12 @@ mod power_library_scope_routing_tests {
             2,
         ));
 
-        let views = crate::config::load_library_position_state()
+        let position = crate::config::load_library_position_state()
             .libraries
             .get("lib-movies")
             .cloned()
             .expect("saved library");
-        assert_eq!(views.default, Some(default_position));
-        assert_eq!(
-            views.power.as_ref().map(|position| position.levels.len()),
-            Some(1)
-        );
+        assert_eq!(position.levels.len(), 1);
         assert_eq!(app.libs[0].nav_stack.len(), 1);
     }
 
@@ -6120,9 +5377,7 @@ mod power_library_scope_routing_tests {
     fn power_view_mouse_tab_selection_from_queue_focus_applies_restore_result() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.layout.tabs_area = Rect {
             x: 0,
             y: 0,
@@ -6160,7 +5415,7 @@ mod power_library_scope_routing_tests {
             }],
             ..Default::default()
         };
-        app.replace_saved_library_position(0, LibraryPositionScope::Power, power_position.clone());
+        app.replace_saved_library_position(0, power_position.clone());
 
         app.handle_mouse(make_power_library_mouse_event(
             MouseEventKind::Down(MouseButton::Left),
@@ -6168,14 +5423,13 @@ mod power_library_scope_routing_tests {
             0,
         ));
 
-        assert_eq!(app.power_left_tab, 1);
-        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert_eq!(app.library_tab, 1);
+        assert_eq!(app.panel_focus, PanelFocus::Library);
         assert_eq!(app.libs[0].nav_stack.len(), 1);
         assert!(app.libs[0].nav_stack[0].loading);
 
         app.handle_lib_event(crate::app::LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
-            scope: LibraryPositionScope::Power,
             requested_position: power_position.clone(),
             position: power_position,
             nav_stack: vec![BrowseLevel {

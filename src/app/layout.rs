@@ -42,52 +42,27 @@ pub(crate) struct LayoutPlayback {
     pub next_area: Rect,
 }
 
-/// Home-tab section/carousel geometry.
-#[derive(Default)]
-pub(crate) struct LayoutHome {
-    pub home_rect: Rect,
-    pub section_areas: Vec<Rect>,
-    pub home_scrolls: Vec<usize>,
-    pub home_scrollbar: Rect,
-    pub home_card_strips: Vec<(usize, Rect)>,
-    pub carousel_slots: [(Option<usize>, Rect); 3],
-    pub carousel_left_arrow: Option<Rect>,
-    pub carousel_right_arrow: Option<Rect>,
-    pub carousel_up_arrow: Option<Rect>,
-    pub carousel_down_arrow: Option<Rect>,
-}
-
-/// Queue list/filmstrip/card view geometry.
-#[derive(Default)]
-pub(crate) struct LayoutQueue {
-    pub row_map: Vec<Option<usize>>,
-    pub rect: Rect,
-    pub inner: Rect,
-    pub scope_local_area: Rect,
-    pub scope_remote_area: Rect,
-}
-
 /// Geometry for the power-view's own Home sub-tab,
 /// separate from `LayoutHome` which belongs to the regular Home tab.
 #[derive(Default)]
-pub(crate) struct LayoutPowerHome {
+pub(crate) struct LayoutHome {
     pub hitmap: Vec<(Rect, usize)>,
 }
 
 /// Power-view left panel, queue panel, and home-grid geometry.
 #[derive(Default)]
-pub(crate) struct LayoutPower {
+pub(crate) struct LayoutMain {
     /// Full expanded Power sidebar covered by an F1-F4 panel, when present.
     pub panel_area: Rect,
     /// Content bounds inside `panel_area`, shared with panel mouse hit-testing.
     pub panel_content_area: Rect,
     pub left_row_map: Vec<Option<usize>>,
-    pub left_row_targets: Vec<Option<PowerLeftRowTarget>>,
+    pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
     /// Geometry for the power-view's own Home sub-tab grid. Distinct from
     /// `AppLayout::home` (`LayoutHome`), which is the regular Home-tab.
-    pub home: LayoutPowerHome,
+    pub home: LayoutHome,
     pub queue_row_map: Vec<Option<usize>>,
     pub queue_area: Rect,
     pub queue_scope_local_area: Rect,
@@ -100,18 +75,9 @@ pub(crate) struct LayoutPower {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum PowerLeftRowTarget {
+pub(crate) enum LibraryRowTarget {
     Album(usize),
     ArtistHeader(ArtistHeaderSelection),
-}
-
-/// Library table/breadcrumb geometry.
-#[derive(Default)]
-pub(crate) struct LayoutLibrary {
-    pub breadcrumbs: Vec<(u16, u16, u16, usize)>,
-    pub lib_scroll: Vec<usize>,
-    pub lib_row_heights: Vec<Vec<u16>>,
-    pub lib_table_area: Vec<Rect>,
 }
 
 /// All per-frame layout geometry, grouped by the view that produces it.
@@ -120,10 +86,7 @@ pub(crate) struct LayoutLibrary {
 #[derive(Default)]
 pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
-    pub home: LayoutHome,
-    pub queue: LayoutQueue,
-    pub power: LayoutPower,
-    pub library: LayoutLibrary,
+    pub main: LayoutMain,
     pub tabs_area: Rect,
     pub tabbar_vol_area: Rect,
     pub settings_area: Rect,

@@ -177,11 +177,7 @@ impl App {
     /// -- Home tab). No match in either case means local playback,
     /// unaffected (#223).
     ///
-    /// `tab_idx == 1` is the Queue tab -- it has no library of its own
-    /// (`lib_tab_offset()` is `2`, so a bare `tab_idx - lib_tab_offset()`
-    /// would underflow and panic here, unlike `enqueue_selected`'s existing
-    /// `tab_idx == 0` / `tab_idx >= 2` split which already avoids this).
-    /// Queue tab has no library of its own. If a route is already active,
+    /// Queue focus has no library of its own. If a route is already active,
     /// keep it rather than re-resolving from nav context (there is none);
     /// otherwise resolve from the queued item itself, so a restored queue
     /// can still take its configured route when startup auto-reconnect
@@ -190,27 +186,20 @@ impl App {
         &mut self,
         item: &mbv_core::api::MediaItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
-        log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} tab={}", item.id, item.name, self.tab_idx);
-        if self.view_mode == ViewMode::Power
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab > 0
-        {
-            let lib_idx = self.power_left_tab - 1;
-            log::info!(target: "library_route", "resolution path=power-library item_id={:?} lib_idx={lib_idx}", item.id);
-            self.route_for_active_library_view(lib_idx)
-        } else if self.tab_idx == 0 {
-            log::info!(target: "library_route", "resolution path=ancestor item_id={:?}", item.id);
-            self.route_for_item_via_ancestors(&item.id)
-        } else if self.tab_idx >= 2 {
-            log::info!(target: "library_route", "resolution path=active-library item_id={:?}", item.id);
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
-            self.route_for_active_library_view(lib_idx)
-        } else {
+        log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} library_tab={}", item.id, item.name, self.library_tab);
+        if matches!(self.panel_focus, PanelFocus::Queue) {
             log::info!(target: "library_route", "resolution path=queue item_id={:?}", item.id);
             self.active_route
                 .clone()
                 .and_then(|name| self.resolve_route_for_library(&name))
                 .or_else(|| self.route_for_item_via_ancestors(&item.id))
+        } else if self.library_tab == 0 {
+            log::info!(target: "library_route", "resolution path=ancestor item_id={:?}", item.id);
+            self.route_for_item_via_ancestors(&item.id)
+        } else {
+            let lib_idx = self.library_tab - 1;
+            log::info!(target: "library_route", "resolution path=power-library item_id={:?} lib_idx={lib_idx}", item.id);
+            self.route_for_active_library_view(lib_idx)
         }
     }
 
@@ -239,7 +228,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{LibraryTab, PowerFocus, ViewMode};
+    use crate::app::{LibraryTab, PanelFocus};
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {
@@ -344,10 +333,8 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -374,10 +361,8 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Queue;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Queue;
+        app.library_tab = 1;
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -488,18 +473,13 @@ mod tests {
 
     #[test]
     fn resolve_route_for_play_does_not_panic_from_the_queue_tab() {
-        // Regression guard: `tab_idx` values are 0 = Home, 1 = Queue tab,
-        // 2.. = library tabs (`lib_tab_offset() == 2`, confirmed against
-        // `src/app/input.rs`). An `if tab_idx == 0 { .. } else { lib_idx =
-        // tab_idx - lib_tab_offset() }` shape (as opposed to `enqueue_selected`'s
-        // existing `tab_idx == 0` / `tab_idx >= 2` split) underflows a `usize`
-        // subtraction (1 - 2) and panics when called from the Queue tab. The
-        // Queue tab has no library of its own -- the item being played is
-        // already part of whatever queue is current, so `resolve_route_for_play`
-        // must fall through to "keep the current `active_route`" instead of
-        // either panicking or wrongly resolving a nav-scoped library.
+        // Regression guard: queue focus (`PanelFocus::Queue`) has no library
+        // of its own -- the item being played is already part of whatever
+        // queue is current, so `resolve_route_for_play` must fall through to
+        // "keep the current `active_route`" instead of either panicking or
+        // wrongly resolving a nav-scoped library.
         let mut app = make_app_stub();
-        app.tab_idx = 1;
+        app.panel_focus = PanelFocus::Queue;
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -519,7 +499,6 @@ mod tests {
     #[test]
     fn resolve_route_for_play_from_queue_resolves_item_when_no_route_is_active() {
         let mut app = make_app_stub();
-        app.tab_idx = 1;
         app.library_routes
             .insert("music".to_string(), "tcp://127.0.0.1:9000".to_string());
         app.library_route_cache.insert(

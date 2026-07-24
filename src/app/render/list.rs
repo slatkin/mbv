@@ -1,7 +1,7 @@
-use super::super::super::ui_util::*;
+use super::super::ui_util::*;
 use super::detail::compact_banner_image_cache_key;
 use super::{effective_sort_str, letter_bucket};
-use crate::app::layout::LayoutPower;
+use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
@@ -223,7 +223,7 @@ impl App {
         series_detail_rows: usize,
         lib_idx: usize,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if series_detail_rows == 0 {
             return;
@@ -292,15 +292,15 @@ impl App {
         f: &mut Frame,
         area: Rect,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
         }
 
         // Ensure the library is loaded when a library tab is selected.
-        if self.power_left_tab > 0 {
-            self.ensure_lib_loaded_for(self.power_left_tab - 1);
+        if self.library_tab > 0 {
+            self.ensure_lib_loaded_for(self.library_tab - 1);
         }
 
         let mut content_area = area;
@@ -311,13 +311,13 @@ impl App {
         // Gather items, cursor, stored scroll offset, and the *true* library total
         // (not just how many pages have been fetched so far) from the appropriate
         // source.
-        let (items, cursor, stored_scroll, total_count) = if self.power_left_tab == 0 {
+        let (items, cursor, stored_scroll, total_count) = if self.library_tab == 0 {
             let items = self.home.continue_items.clone();
             let cursor = self.home.continue_cursor.min(items.len().saturating_sub(1));
             let total = items.len();
             (items, cursor, 0usize, total)
         } else {
-            let lib_idx = self.power_left_tab - 1;
+            let lib_idx = self.library_tab - 1;
             let lib = &self.libs[lib_idx];
             let (items, cur, scroll, total) = if let Some(s) = &lib.search {
                 let items: Vec<mbv_core::api::MediaItem> = s
@@ -351,12 +351,12 @@ impl App {
         // `content_area.width.saturating_sub(2 * COMPACT_BANNER_INDENT)` (= the
         // colored block's width minus the external side padding, with the right
         // external pad covering the scrollbar column when one shows up).
-        let banner_rows: usize = if self.power_left_tab > 0 {
+        let banner_rows: usize = if self.library_tab > 0 {
             let banner_panel_width = content_area
                 .width
                 .saturating_sub(1)
                 .saturating_sub(COMPACT_BANNER_INDENT);
-            self.compact_banner_rows(self.power_left_tab - 1, banner_panel_width)
+            self.compact_banner_rows(self.library_tab - 1, banner_panel_width)
         } else {
             0
         };
@@ -368,8 +368,8 @@ impl App {
 
         // Series inline detail rows: when a TV show Series is selected,
         // show its metadata/overview inline below the selected row.
-        let series_detail_rows: usize = if self.power_left_tab > 0 && banner_rows == 0 {
-            let lib_idx = self.power_left_tab - 1;
+        let series_detail_rows: usize = if self.library_tab > 0 && banner_rows == 0 {
+            let lib_idx = self.library_tab - 1;
             if let Some(item) = self.power_selected_series_item(lib_idx) {
                 let panel_width = content_area
                     .width
@@ -390,8 +390,8 @@ impl App {
         // carousel. Only applies when a movie banner is actually showing
         // (i.e. this is a movies library with a leaf Movie selected); if
         // there's no banner, there's nothing to prefetch for.
-        if self.power_left_tab > 0 {
-            let lib_idx = self.power_left_tab - 1;
+        if self.library_tab > 0 {
+            let lib_idx = self.library_tab - 1;
             if self.power_selected_movie_item(lib_idx).is_some() {
                 const PREFETCH_AHEAD: usize = 3;
                 const PREFETCH_BEHIND: usize = 1;
@@ -425,8 +425,8 @@ impl App {
         }
 
         // When at the album level of a music library, group albums under artist headers.
-        let show_grouped = if self.power_left_tab > 0 {
-            self.is_viewing_album_folders(self.power_left_tab - 1)
+        let show_grouped = if self.library_tab > 0 {
+            self.is_viewing_album_folders(self.library_tab - 1)
         } else {
             false
         };
@@ -440,8 +440,8 @@ impl App {
         // vs. individual letters) doesn't change out from under the user as
         // more pages lazily load in, and a small filtered slice (< 50 items)
         // still shows headers.
-        let active_letter_filter = if self.power_left_tab > 0 {
-            self.libs[self.power_left_tab - 1]
+        let active_letter_filter = if self.library_tab > 0 {
+            self.libs[self.library_tab - 1]
                 .nav_stack
                 .last()
                 .and_then(|l| l.letter_filter.as_ref())
@@ -450,23 +450,23 @@ impl App {
             None
         };
         let ungrouped_total = self
-            .power_left_tab
+            .library_tab
             .checked_sub(1)
             .map_or(total_count, |lib_idx| {
                 self.libs[lib_idx].library_total.unwrap_or(total_count)
             });
         let use_letter_groups = !show_grouped
-            && self.power_left_tab > 0
+            && self.library_tab > 0
             && (ungrouped_total >= 50 || active_letter_filter.is_some())
             && {
-                let lib_idx = self.power_left_tab - 1;
+                let lib_idx = self.library_tab - 1;
                 self.libs[lib_idx].library.collection_type != "music"
                     && self.libs[lib_idx].search.is_none()
             };
 
         // First row area: search input box (when searching) or item count label.
-        if focused && self.power_left_tab > 0 && content_area.height > 0 {
-            let lib_idx = self.power_left_tab - 1;
+        if focused && self.library_tab > 0 && content_area.height > 0 {
+            let lib_idx = self.library_tab - 1;
             let has_search = self.libs[lib_idx].search.is_some();
             if has_search && content_area.height >= 3 {
                 // 3-row bordered search input, matching the home-search visual style.
@@ -508,8 +508,8 @@ impl App {
         }
 
         if n == 0 {
-            let msg = if self.power_left_tab > 0 {
-                let lib_idx = self.power_left_tab - 1;
+            let msg = if self.library_tab > 0 {
+                let lib_idx = self.library_tab - 1;
                 if self.recursive_album_search_enabled(lib_idx)
                     && self.libs[lib_idx]
                         .search
@@ -538,7 +538,7 @@ impl App {
         let final_offset: usize;
 
         if show_grouped {
-            let lib_idx = self.power_left_tab - 1;
+            let lib_idx = self.library_tab - 1;
             final_offset = self.render_power_grouped_album_rows(
                 f,
                 content_area,
@@ -824,7 +824,7 @@ impl App {
                     self.render_power_compact_detail(
                         f,
                         banner_rect,
-                        self.power_left_tab - 1,
+                        self.library_tab - 1,
                         focused,
                         layout,
                     );
@@ -839,7 +839,7 @@ impl App {
                 visible,
                 display_cursor,
                 series_detail_rows,
-                self.power_left_tab - 1,
+                self.library_tab - 1,
                 focused,
                 layout,
             );
@@ -1084,7 +1084,7 @@ impl App {
                     self.render_power_compact_detail(
                         f,
                         banner_rect,
-                        self.power_left_tab - 1,
+                        self.library_tab - 1,
                         focused,
                         layout,
                     );
@@ -1099,7 +1099,7 @@ impl App {
                 visible,
                 display_cursor,
                 series_detail_rows,
-                self.power_left_tab - 1,
+                self.library_tab - 1,
                 focused,
                 layout,
             );
@@ -1133,9 +1133,9 @@ impl App {
         }
 
         // Persist the scroll offset so the viewport is remembered across frames.
-        // power_left_tab is always > 0 here (tab == 0 uses render_power_home_list).
-        if self.power_left_tab > 0 {
-            let lib_idx = self.power_left_tab - 1;
+        // library_tab is always > 0 here (tab == 0 uses render_power_home_list).
+        if self.library_tab > 0 {
+            let lib_idx = self.library_tab - 1;
             if let Some(s) = &mut self.libs[lib_idx].search {
                 s.scroll = final_offset;
             } else if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
@@ -1148,7 +1148,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::layout::LayoutPower;
+    use crate::app::layout::LayoutMain;
     use crate::app::tests::{make_app_stub, make_item};
     use crate::app::{AlbumIndexState, BrowseLevel, LibSearch, LibraryTab, SeriesDetail};
     use ratatui::backend::TestBackend;
@@ -1169,7 +1169,7 @@ mod tests {
         out
     }
 
-    fn render_power_list_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
+    fn render_power_list_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
         let backend = TestBackend::new(60, 8);
         let mut term = Terminal::new(backend).unwrap();
         term.draw(|f| {
@@ -1181,7 +1181,7 @@ mod tests {
 
     fn render_power_list_to_string_sized(
         app: &mut App,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
         width: u16,
         height: u16,
     ) -> String {
@@ -1192,7 +1192,7 @@ mod tests {
 
     fn render_power_list_to_terminal_sized(
         app: &mut App,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
         width: u16,
         height: u16,
     ) -> Terminal<TestBackend> {
@@ -1207,7 +1207,7 @@ mod tests {
 
     fn make_power_movie_list_app(titles: Vec<&str>) -> App {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
@@ -1274,7 +1274,7 @@ mod tests {
         let mut app = make_power_movie_list_app(titles);
         app.image_protocol_enabled = true;
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let _ = render_power_list_to_string(&mut app, &mut layout);
 
         let fetch_triggered = |app: &App, key: &str| {
@@ -1311,7 +1311,7 @@ mod tests {
     #[test]
     fn recursive_album_search_loading_message_is_explicit() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.music_levels = vec!["group".into(), "album".into()];
         let mut library = make_item("Music", "CollectionFolder");
         library.id = "music-lib".into();
@@ -1342,12 +1342,12 @@ mod tests {
             },
         );
 
-        let out = render_power_list_to_string(&mut app, &mut LayoutPower::default());
+        let out = render_power_list_to_string(&mut app, &mut LayoutMain::default());
 
         assert!(out.contains("Indexing music library..."), "{out}");
 
         app.music_levels.clear();
-        let out = render_power_list_to_string(&mut app, &mut LayoutPower::default());
+        let out = render_power_list_to_string(&mut app, &mut LayoutMain::default());
         assert!(!out.contains("Indexing music library..."), "{out}");
     }
 
@@ -1380,7 +1380,7 @@ mod tests {
         let selected_title = titles[selected_idx].clone();
         let later_title = titles[25].clone(); // letter (b'A' + 25) as char == 'Z'
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 60);
 
         let selected_pos = out
@@ -1421,7 +1421,7 @@ mod tests {
             lvl.letter_filter = super::super::LetterFilter::for_index(0); // "A–C"
         }
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 20);
         let trimmed_lines: Vec<&str> = out.lines().map(str::trim).collect();
 
@@ -1470,7 +1470,7 @@ mod tests {
     #[test]
     fn series_inline_detail_has_no_stray_banner_border_in_plain_list_branch() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         let mut library = make_item("Shows", "CollectionFolder");
         library.id = "lib-shows".into();
         library.is_folder = true;
@@ -1531,7 +1531,7 @@ mod tests {
             },
         );
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let inactive = render_power_list_to_string_sized(&mut app, &mut layout, 60, 40);
         assert!(
             inactive.contains("Series: 1"),
@@ -1635,7 +1635,7 @@ mod tests {
     #[test]
     fn letter_grouped_series_detail_keeps_headers_and_episode_borders() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         let mut library = make_item("Shows", "CollectionFolder");
         library.id = "lib-shows".into();
@@ -1704,7 +1704,7 @@ mod tests {
             },
         );
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let out = render_power_list_to_string_sized(&mut app, &mut layout, 60, 200);
         let lines: Vec<&str> = out.lines().collect();
         let header = lines

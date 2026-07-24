@@ -80,28 +80,22 @@ struct MediaPlayer2Player {
 
 /// Candidate on-disk image-cache keys for a track's cover art, in the order
 /// the existing UI card-image cache (`src/app/images.rs` and
-/// `src/app/render/{power,library}/*`) is most likely to have already
+/// `src/app/render/card.rs`) is most likely to have already
 /// populated them under -- checked cheaply via `std::path::Path::is_file`,
 /// no network I/O. Covers every write site that keys on an album/item id:
-/// Power View's card (`:P`) and album-level card (`:pwr_al`), and the
-/// Library view's row/grid/album cache (`:lib`). `album_id` mirrors the
-/// audio-album grouping the Power View queue card already uses: tracks on
+/// the card (`:card`) and album-level card (`:album_card`). `album_id`
+/// mirrors the audio-album grouping the queue card already uses: tracks on
 /// the same album share one cache entry keyed by album id rather than
 /// track id.
 fn art_cache_key_candidates(item_id: &str, album_id: &str) -> Vec<String> {
-    use crate::config::{
-        IMAGE_CACHE_SUFFIX_LIBRARY, IMAGE_CACHE_SUFFIX_POWER_ALBUM,
-        IMAGE_CACHE_SUFFIX_POWER_PRIMARY,
-    };
+    use crate::config::{IMAGE_CACHE_SUFFIX_ALBUM_CARD, IMAGE_CACHE_SUFFIX_CARD_PRIMARY};
     let mut keys = Vec::new();
     if !album_id.is_empty() {
-        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_POWER_PRIMARY}"));
-        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_LIBRARY}"));
-        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_POWER_ALBUM}"));
+        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_CARD_PRIMARY}"));
+        keys.push(format!("{album_id}:{IMAGE_CACHE_SUFFIX_ALBUM_CARD}"));
     }
     if !item_id.is_empty() {
-        keys.push(format!("{item_id}:{IMAGE_CACHE_SUFFIX_POWER_PRIMARY}"));
-        keys.push(format!("{item_id}:{IMAGE_CACHE_SUFFIX_LIBRARY}"));
+        keys.push(format!("{item_id}:{IMAGE_CACHE_SUFFIX_CARD_PRIMARY}"));
     }
     keys
 }
@@ -591,14 +585,14 @@ mod tests {
                 ..PlayerStatus::default()
             },
             |key| {
-                assert_eq!(key, "track-1:P", "expected the track-id cache key first");
-                Some(std::path::PathBuf::from("/cache/images/track-1_P"))
+                assert_eq!(key, "track-1:card", "expected the track-id cache key first");
+                Some(std::path::PathBuf::from("/cache/images/track-1_card"))
             },
         );
 
         assert_eq!(
             string_value(&metadata, "mpris:artUrl"),
-            "file:///cache/images/track-1_P"
+            "file:///cache/images/track-1_card"
         );
         assert!(metadata.contains_key("xesam:artist"));
         assert_eq!(string_value(&metadata, "xesam:album"), "Album");
@@ -614,12 +608,15 @@ mod tests {
                 art_album_id: "album-9".to_string(),
                 ..PlayerStatus::default()
             },
-            |key| (key == "album-9:P").then(|| std::path::PathBuf::from("/cache/images/album-9_P")),
+            |key| {
+                (key == "album-9:card")
+                    .then(|| std::path::PathBuf::from("/cache/images/album-9_card"))
+            },
         );
 
         assert_eq!(
             string_value(&metadata, "mpris:artUrl"),
-            "file:///cache/images/album-9_P"
+            "file:///cache/images/album-9_card"
         );
     }
 
@@ -662,17 +659,11 @@ mod tests {
     fn art_cache_key_candidates_prefers_album_then_track_id() {
         assert_eq!(
             art_cache_key_candidates("track-1", "album-9"),
-            vec![
-                "album-9:P",
-                "album-9:lib",
-                "album-9:pwr_al",
-                "track-1:P",
-                "track-1:lib"
-            ]
+            vec!["album-9:card", "album-9:album_card", "track-1:card"]
         );
         assert_eq!(
             art_cache_key_candidates("track-1", ""),
-            vec!["track-1:P", "track-1:lib"]
+            vec!["track-1:card"]
         );
         assert!(art_cache_key_candidates("", "").is_empty());
     }

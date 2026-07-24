@@ -1,9 +1,9 @@
 use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_episodes, take_chars};
 use super::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, ArtistHeaderSelection, BrowseLevel,
-    ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryPositionScope,
-    LibraryTab, LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
-    RemotePlaybackTarget, SessionEvent, UndoEntry, ViewMode, PAGE_SIZE, PREFETCH_AHEAD,
+    ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryTab,
+    LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, QueueScope,
+    RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
 use crate::app::render::indicators::IndicatorData;
@@ -23,7 +23,7 @@ type BrowseRefresh = (
     String,
     String,
     usize,
-    Option<super::render::power::LetterFilter>,
+    Option<super::render::LetterFilter>,
 );
 type AlbumIndexFetch<'a> =
     dyn FnMut(&str, usize, usize) -> Result<(Vec<MediaItem>, usize), String> + 'a;
@@ -807,8 +807,7 @@ impl App {
         lib_idx: usize,
         extra_ok: impl FnOnce(&BrowseLevel) -> bool,
     ) -> bool {
-        self.view_mode == ViewMode::Power
-            && self.power_left_tab == lib_idx + 1
+        self.library_tab == lib_idx + 1
             && (self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
             && self
                 .libs
@@ -948,45 +947,26 @@ impl App {
     }
 
     pub(super) fn lib_page_size(&self) -> usize {
-        // In Power View the library list is rendered into the right panel, and the
-        // normal-view per-row height map (`layout.library.lib_row_heights`) is never populated,
-        // so it would fall back to 1. Use the panel height directly (rows are single-line;
-        // subtract 1 for the count/search header line).
-        if self.view_mode == ViewMode::Power {
-            return (self.layout.power.left_area.height as usize)
-                .saturating_sub(1)
-                .max(1);
-        }
-        let lib_idx = if self.tab_idx >= self.lib_tab_offset() {
-            self.tab_idx - self.lib_tab_offset()
-        } else {
-            0
-        };
-        self.layout
-            .library
-            .lib_row_heights
-            .get(lib_idx)
-            .map(|v| v.len().saturating_sub(1).max(1))
-            .unwrap_or(1)
+        // The library list is rendered into the right panel; use the panel
+        // height directly (rows are single-line; subtract 1 for the
+        // count/search header line).
+        (self.layout.main.left_area.height as usize)
+            .saturating_sub(1)
+            .max(1)
     }
 
     pub(super) fn queue_page_size(&self) -> usize {
-        self.layout.queue.inner.height.saturating_sub(2).max(1) as usize
+        self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize
     }
 
     pub(super) fn move_lib_cursor(&mut self, delta: i64) {
         let now = Instant::now();
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
-        if self.view_mode == ViewMode::Power {
-            self.mark_power_library_navigation(now);
-        }
-        let lib_off = self.lib_tab_offset();
-        let lib_idx = self.tab_idx - lib_off;
+        self.mark_power_library_navigation(now);
+        let lib_idx = self.library_tab.saturating_sub(1);
 
-        if self.view_mode == ViewMode::Power
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab == lib_idx + 1
+        if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && self.move_power_music_group_display_cursor(lib_idx, delta)
@@ -1010,23 +990,23 @@ impl App {
             return;
         }
 
-        // In Power View with letter-grouped display, navigate in sorted display order so
+        // With letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
-        if self.view_mode == ViewMode::Power && !self.layout.power.left_sorted_indices.is_empty() {
+        if !self.layout.main.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.last().is_some();
             if needs_sorted {
                 let current = self.libs[lib_idx].nav_stack.last().unwrap().cursor;
-                let sorted_n = self.layout.power.left_sorted_indices.len();
+                let sorted_n = self.layout.main.left_sorted_indices.len();
                 let pos = self
                     .layout
-                    .power
+                    .main
                     .left_sorted_indices
                     .iter()
                     .position(|&i| i == current)
                     .unwrap_or(0);
                 let new_pos = (pos as i64 + delta).clamp(0, sorted_n as i64 - 1) as usize;
-                let new_cursor = self.layout.power.left_sorted_indices[new_pos];
+                let new_cursor = self.layout.main.left_sorted_indices[new_pos];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
@@ -1059,12 +1039,9 @@ impl App {
     }
 
     pub(super) fn jump_lib_cursor(&mut self, to_end: bool) {
-        let lib_off = self.lib_tab_offset();
-        let lib_idx = self.tab_idx - lib_off;
+        let lib_idx = self.library_tab.saturating_sub(1);
 
-        if self.view_mode == ViewMode::Power
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab == lib_idx + 1
+        if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && self.jump_power_music_group_display_cursor(lib_idx, to_end)
@@ -1085,15 +1062,15 @@ impl App {
             return;
         }
 
-        // In Power View with letter-grouped display, Home/End jump to the first/last item
+        // With letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
-        if self.view_mode == ViewMode::Power && !self.layout.power.left_sorted_indices.is_empty() {
+        if !self.layout.main.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].search.is_none()
-                && !self.layout.power.left_sorted_indices.is_empty();
+                && !self.layout.main.left_sorted_indices.is_empty();
             if needs_sorted {
-                let n = self.layout.power.left_sorted_indices.len();
+                let n = self.layout.main.left_sorted_indices.len();
                 let new_cursor =
-                    self.layout.power.left_sorted_indices[if to_end { n - 1 } else { 0 }];
+                    self.layout.main.left_sorted_indices[if to_end { n - 1 } else { 0 }];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
@@ -1121,118 +1098,6 @@ impl App {
         self.maybe_fetch_next_page(lib_idx);
     }
 
-    pub(super) fn move_home_cursor(&mut self, delta: i64) {
-        let sec = self.home.section;
-        let (len, cur) = self.home_section_len_cur(sec);
-        if delta > 0 {
-            if cur + 1 < len {
-                self.set_home_cursor(sec, cur + 1);
-            }
-        } else {
-            if cur > 0 {
-                self.set_home_cursor(sec, cur - 1);
-            }
-        }
-    }
-
-    pub(super) fn ensure_home_section_visible(&mut self) {
-        let active = self.player.status.lock().unwrap().active;
-        let chrome: u16 = if active { 6 } else { 3 };
-        let panel_h = self.terminal_height.saturating_sub(chrome);
-
-        let n_latest = self.home.latest.len();
-        let n_sections = 1 + n_latest;
-
-        if self.home_card_view {
-            let compact = self.terminal_height < 28;
-            let max_h_full = if panel_h < 12 {
-                panel_h
-            } else {
-                ((panel_h as u32 * 24 / 25) as u16).min(24)
-            }
-            .max(4);
-            let side_h_full = ((max_h_full as u32 * 4 / 5) as u16).max(3);
-            let center_h_full = if compact {
-                side_h_full
-            } else {
-                side_h_full + 2
-            };
-            let visible = (panel_h / center_h_full).max(1).min(n_sections as u16) as usize;
-            let sec = self.home.section;
-            if sec < self.home_cards_section_offset {
-                self.home_cards_section_offset = sec;
-            } else if sec >= self.home_cards_section_offset + visible {
-                self.home_cards_section_offset = sec + 1 - visible;
-            }
-            let max_offset = n_sections.saturating_sub(visible);
-            if self.home_cards_section_offset > max_offset {
-                self.home_cards_section_offset = max_offset;
-            }
-            return;
-        }
-
-        let n_rows = 1 + n_latest.div_ceil(2);
-        let visible_rows = if (n_rows as u16) * super::HOME_MIN_SECTION_H <= panel_h {
-            n_rows
-        } else {
-            ((panel_h / super::HOME_MIN_SECTION_H) as usize).max(1)
-        };
-
-        let sec = self.home.section;
-        let sec_row = if sec == 0 { 0 } else { 1 + (sec - 1) / 2 };
-        if sec_row < self.home_panel_section_offset {
-            self.home_panel_section_offset = sec_row;
-        } else if sec_row >= self.home_panel_section_offset + visible_rows {
-            self.home_panel_section_offset = sec_row + 1 - visible_rows;
-        }
-        let max_offset = n_rows.saturating_sub(visible_rows);
-        if self.home_panel_section_offset > max_offset {
-            self.home_panel_section_offset = max_offset;
-        }
-    }
-
-    pub(super) fn home_scrollbar_seek(&mut self, row: u16) {
-        let sb = self.layout.home.home_scrollbar;
-        if sb.height == 0 {
-            return;
-        }
-        let active = self.player.status.lock().unwrap().active;
-        let chrome: u16 = if active { 6 } else { 3 };
-        let panel_h = self.terminal_height.saturating_sub(chrome);
-        let n_latest = self.home.latest.len();
-        let n_rows = 1 + n_latest.div_ceil(2);
-        let visible_rows = ((panel_h / super::HOME_MIN_SECTION_H) as usize)
-            .max(1)
-            .min(n_rows);
-        let max_offset = n_rows.saturating_sub(visible_rows);
-        if max_offset == 0 {
-            return;
-        }
-        let frac = (row.saturating_sub(sb.y)) as f64 / sb.height as f64;
-        let new_offset = ((frac * max_offset as f64).round() as usize).min(max_offset);
-        self.home_panel_section_offset = new_offset;
-    }
-
-    pub(super) fn home_section_len_cur(&self, sec: usize) -> (usize, usize) {
-        if sec == 0 {
-            (self.home.continue_items.len(), self.home.continue_cursor)
-        } else {
-            self.home
-                .latest
-                .get(sec - 1)
-                .map(|c| (c.2.len(), c.3))
-                .unwrap_or((0, 0))
-        }
-    }
-
-    pub(super) fn set_home_cursor(&mut self, sec: usize, val: usize) {
-        if sec == 0 {
-            self.home.continue_cursor = val;
-        } else if let Some(col) = self.home.latest.get_mut(sec - 1) {
-            col.3 = val;
-        }
-    }
-
     pub(super) fn current_home_item(&self) -> Option<MediaItem> {
         if let Some(hs) = self.search.state() {
             return hs.filtered_results().get(hs.cursor).copied().cloned();
@@ -1255,7 +1120,7 @@ impl App {
     }
 
     pub(super) fn current_lib_item(&self) -> Option<MediaItem> {
-        let lib_idx = self.tab_idx - self.lib_tab_offset();
+        let lib_idx = self.library_tab.checked_sub(1)?;
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
@@ -1567,11 +1432,9 @@ impl App {
 
     /// Whether the currently focused library tab is a podcast channel.
     pub(super) fn is_in_podcast_library(&self) -> bool {
-        let lib_off = self.lib_tab_offset();
-        if self.tab_idx < lib_off {
+        let Some(lib_idx) = self.library_tab.checked_sub(1) else {
             return false;
-        }
-        let lib_idx = self.tab_idx - lib_off;
+        };
         lib_idx < self.libs.len() && self.is_podcast_library(lib_idx)
     }
 
@@ -1839,7 +1702,7 @@ impl App {
     /// right now: a non-music library, not searching, at the top browse
     /// level of its nav stack (`nav_stack.len() == 1`), with a captured true
     /// total (`LibraryTab.library_total`) over `LIBRARY_PILL_THRESHOLD`. See
-    /// `render::power::LetterFilter` and
+    /// `render::LetterFilter` and
     /// `maybe_capture_library_total_and_apply_default_pill`, which populates
     /// `library_total` on a library's first load.
     pub(super) fn should_show_letter_pills(&self, lib_idx: usize) -> bool {
@@ -1856,7 +1719,7 @@ impl App {
             return false;
         }
         lib.library_total
-            .is_some_and(|total| total > super::render::power::LIBRARY_PILL_THRESHOLD)
+            .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
     }
 
     /// Selects letter-range pill `pill_index` for `lib_idx`'s top level (a
@@ -1869,7 +1732,7 @@ impl App {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
-        let Some(filter) = super::render::power::LetterFilter::for_index(pill_index) else {
+        let Some(filter) = super::render::LetterFilter::for_index(pill_index) else {
             return;
         };
         let Some(lvl) = self.libs[lib_idx].nav_stack.last() else {
@@ -1911,7 +1774,7 @@ impl App {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
-        let n = super::render::power::LetterFilter::count();
+        let n = super::render::LetterFilter::count();
         if n == 0 {
             return;
         }
@@ -2305,8 +2168,7 @@ impl App {
     }
 
     pub(super) fn trigger_lib_rescan(&mut self, lib_idx: usize) {
-        let scope = self.library_position_scope_for(lib_idx);
-        self.clear_saved_library_position(lib_idx, scope);
+        self.clear_saved_library_position(lib_idx);
         let client = self.client.lock().unwrap().clone();
         let library_id = self.libs[lib_idx].library.id.clone();
         let name = self.libs[lib_idx].library.name.clone();
@@ -2414,8 +2276,8 @@ impl App {
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the power-view library panel.
-        if !(self.view_mode == ViewMode::Power && matches!(self.power_focus, PowerFocus::Left)) {
-            self.set_power_focus(PowerFocus::Queue);
+        if !matches!(self.panel_focus, PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
         }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
@@ -2455,8 +2317,8 @@ impl App {
         }
         self.on_queue_replace_silent();
         // Keep library focus when playing from the power-view library panel.
-        if !(self.view_mode == ViewMode::Power && matches!(self.power_focus, PowerFocus::Left)) {
-            self.set_power_focus(PowerFocus::Queue);
+        if !matches!(self.panel_focus, PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
         }
         let label = item.playback_label();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -2496,7 +2358,7 @@ impl App {
     }
 
     pub(super) fn enqueue_selected(&mut self) {
-        if self.tab_idx == 0 {
+        if self.library_tab == 0 {
             let Some(item) = self.current_home_item() else {
                 return;
             };
@@ -2516,7 +2378,7 @@ impl App {
                 return;
             }
             self.append_item_to_queue_and_sync(item);
-        } else if self.tab_idx >= 2 {
+        } else {
             if self.enqueue_selected_artist_header() {
                 return;
             }
@@ -2530,7 +2392,7 @@ impl App {
             if !is_playable(&item) {
                 return;
             }
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            let lib_idx = self.library_tab - 1;
             let bypass = self.in_non_library_thin_client_mode();
             log::info!(target: "library_route", "{}", enqueue_action_context(&item.id, &item.name, "library-view", bypass));
             let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
@@ -2568,11 +2430,8 @@ impl App {
     }
 
     fn power_artist_header_action_lib_idx(&self) -> Option<usize> {
-        if self.view_mode == ViewMode::Power
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab > 0
-        {
-            Some(self.power_left_tab - 1)
+        if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
+            Some(self.library_tab - 1)
         } else {
             None
         }
@@ -2686,7 +2545,7 @@ impl App {
             items.shuffle(&mut rand::rng());
         }
         self.replace_playback_queue(items.clone(), 0);
-        self.tab_idx = 1;
+        self.set_panel_focus(PanelFocus::Queue);
         self.flash_status(if shuffle {
             format!("Shuffling {count} items")
         } else {
@@ -2768,7 +2627,7 @@ impl App {
         };
         if item.is_folder {
             if let Some(i) = self.libs.iter().position(|l| l.library.id == item.id) {
-                self.set_tab(i + 2);
+                self.set_library_tab(i + 1);
                 return;
             }
             let sec = self.home.section;
@@ -2792,7 +2651,7 @@ impl App {
                             all_items: None,
                             letter_filter: None,
                         });
-                        self.set_tab(lib_idx + 2);
+                        self.set_library_tab(lib_idx + 1);
                         self.spawn_browse(
                             lib_idx,
                             item.id,
@@ -2830,7 +2689,7 @@ impl App {
             return;
         };
         if item.is_folder {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            let lib_idx = self.library_tab - 1;
             let lib = &mut self.libs[lib_idx];
             lib.search = None;
             lib.nav_stack.push(BrowseLevel {
@@ -2848,9 +2707,6 @@ impl App {
                 all_items: None,
                 letter_filter: None,
             });
-            if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
-                *v = 0;
-            }
             self.save_default_library_position(lib_idx);
             self.spawn_browse(
                 lib_idx,
@@ -2862,7 +2718,7 @@ impl App {
                 "Ascending".into(),
             );
         } else if is_playable(&item) {
-            let lib_idx = self.tab_idx - self.lib_tab_offset();
+            let lib_idx = self.library_tab - 1;
             if self.libs[lib_idx].search.is_some() {
                 self.libs[lib_idx].search = None;
                 if self.is_feed_home_video_group_view(lib_idx) {
@@ -2879,9 +2735,6 @@ impl App {
                     if let Some(pos) = lvl.items.iter().position(|i| i.id == item.id) {
                         lvl.cursor = pos;
                     }
-                }
-                if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
-                    *v = 0;
                 }
                 self.save_default_library_position(lib_idx);
             }
@@ -2978,18 +2831,15 @@ impl App {
     }
 
     pub(super) fn go_back(&mut self) {
-        if self.tab_idx > 1 {
-            let lib_off = self.lib_tab_offset();
-            let lib_idx = self.tab_idx - lib_off;
+        if self.library_tab > 0 {
+            let lib_idx = self.library_tab - 1;
 
             // Guard: don't pop when already at the root of a synthetic "group" view
             // (music groups: nav_stack[0]=groups, nav_stack[1]=albums; feed home
             // videos: nav_stack[0]=folders, nav_stack[1]=grouped videos) -- there is
             // no list above to go back to. Search-clearing still falls through
             // because this guard only fires when search is None.
-            if self.view_mode == ViewMode::Power
-                && self.power_left_tab == lib_idx + 1
-                && self.libs[lib_idx].search.is_none()
+            if self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.len() == 2
                 && (self.is_music_group_view(lib_idx)
                     || self.is_feed_home_video_group_view(lib_idx))
@@ -3017,36 +2867,31 @@ impl App {
             };
 
             if did_pop {
-                if let Some(v) = self.layout.library.lib_scroll.get_mut(lib_idx) {
-                    *v = 0;
-                }
                 self.save_default_library_position(lib_idx);
 
-                // In Power View, skip past the auto-pushed Season level so
-                // a single Escape takes the user back to the series list.
-                if self.view_mode == ViewMode::Power && self.power_left_tab == lib_idx + 1 {
-                    let exposed_seasons = self.libs[lib_idx]
+                // Skip past the auto-pushed Season level so a single Escape
+                // takes the user back to the series list.
+                let exposed_seasons = self.libs[lib_idx]
+                    .nav_stack
+                    .last()
+                    .map(|l| {
+                        l.items
+                            .first()
+                            .map(|i| i.item_type == "Season")
+                            .unwrap_or(false)
+                    })
+                    .unwrap_or(false);
+                if exposed_seasons && self.libs[lib_idx].nav_stack.len() > 1 {
+                    let child_id2 = self.libs[lib_idx]
                         .nav_stack
                         .last()
-                        .map(|l| {
-                            l.items
-                                .first()
-                                .map(|i| i.item_type == "Season")
-                                .unwrap_or(false)
-                        })
-                        .unwrap_or(false);
-                    if exposed_seasons && self.libs[lib_idx].nav_stack.len() > 1 {
-                        let child_id2 = self.libs[lib_idx]
-                            .nav_stack
-                            .last()
-                            .map(|l| l.parent_id.clone());
-                        self.libs[lib_idx].nav_stack.pop();
-                        if let (Some(fid), Some(parent)) =
-                            (child_id2, self.libs[lib_idx].nav_stack.last_mut())
-                        {
-                            if let Some(idx) = parent.items.iter().position(|i| i.id == fid) {
-                                parent.cursor = idx;
-                            }
+                        .map(|l| l.parent_id.clone());
+                    self.libs[lib_idx].nav_stack.pop();
+                    if let (Some(fid), Some(parent)) =
+                        (child_id2, self.libs[lib_idx].nav_stack.last_mut())
+                    {
+                        if let Some(idx) = parent.items.iter().position(|i| i.id == fid) {
+                            parent.cursor = idx;
                         }
                     }
                 }
@@ -3057,14 +2902,9 @@ impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
         match action {
             Some(ContextAction::Play) => {
-                if self.view_mode == ViewMode::Power
-                    && matches!(self.power_focus, PowerFocus::Left)
-                    && self.power_left_tab == 0
-                {
+                if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0 {
                     self.power_cw_play();
-                } else if self.tab_idx == 0 {
-                    self.select_home();
-                } else if self.tab_idx == 1 {
+                } else if matches!(self.panel_focus, PanelFocus::Queue) {
                     // Was its own third copy of queue-cursor activation, with
                     // a subtly narrower `else` branch than the keyboard/mouse
                     // paths (no seek-to-start for an already-playing audio
@@ -3076,8 +2916,8 @@ impl App {
                 }
             }
             Some(ContextAction::PlayFolder(id)) => {
-                let ct = if self.tab_idx > 1 {
-                    self.libs[self.tab_idx - self.lib_tab_offset()]
+                let ct = if self.library_tab > 0 {
+                    self.libs[self.library_tab - 1]
                         .library
                         .collection_type
                         .clone()
@@ -3104,10 +2944,7 @@ impl App {
                 }
             }
             Some(ContextAction::Enqueue) => {
-                if self.view_mode == ViewMode::Power
-                    && matches!(self.power_focus, PowerFocus::Left)
-                    && self.power_left_tab == 0
-                {
+                if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0 {
                     self.power_cw_enqueue();
                 } else {
                     self.enqueue_selected();
@@ -3179,13 +3016,10 @@ impl App {
         match result {
             Ok(()) => {
                 if played {
-                    let lib_idx_opt = if self.tab_idx >= self.lib_tab_offset() {
-                        Some(self.tab_idx - self.lib_tab_offset())
-                    } else if self.view_mode == ViewMode::Power
-                        && matches!(self.power_focus, PowerFocus::Left)
-                        && self.power_left_tab > 0
+                    let lib_idx_opt = if matches!(self.panel_focus, PanelFocus::Library)
+                        && self.library_tab > 0
                     {
-                        Some(self.power_left_tab - 1)
+                        Some(self.library_tab - 1)
                     } else {
                         None
                     };
@@ -3214,7 +3048,7 @@ impl App {
                         }
                     }
                 }
-                if self.tab_idx == 0 {
+                if self.library_tab == 0 {
                     let _ = self.fetch_home();
                 } else {
                     self.refresh_lib();
@@ -3283,7 +3117,7 @@ impl App {
         match result {
             Ok(()) => {
                 if !item.played {
-                    let lib_idx = self.tab_idx - self.lib_tab_offset();
+                    let lib_idx = self.library_tab.saturating_sub(1);
                     if self.is_feed_home_video_group_view(lib_idx) {
                         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                             state.loading = true;
@@ -3305,19 +3139,13 @@ impl App {
     }
 
     pub(super) fn refresh_lib(&mut self) {
-        let lib_idx = if self.tab_idx > 1 {
-            self.tab_idx - self.lib_tab_offset()
-        } else if self.view_mode == ViewMode::Power
-            && matches!(self.power_focus, PowerFocus::Left)
-            && self.power_left_tab > 0
-        {
-            self.power_left_tab - 1
+        let lib_idx = if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
+            self.library_tab - 1
         } else {
             return;
         };
         self.start_album_index(lib_idx, true);
-        let scope = self.library_position_scope_for(lib_idx);
-        self.clear_saved_library_position(lib_idx, scope);
+        self.clear_saved_library_position(lib_idx);
         if self.is_feed_home_video_group_view(lib_idx) {
             if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                 state.loading = true;
@@ -3366,25 +3194,25 @@ impl App {
 
     pub(super) fn refresh_current_view(&mut self) {
         self.force_clear = true;
-        if self.tab_idx == 0 {
+        if matches!(self.panel_focus, PanelFocus::Queue) {
+            self.refresh_queue();
+        } else if self.library_tab == 0 {
             if let Err(e) = self.fetch_home() {
                 self.flash_status_high(format!("Refresh error: {e}"));
             }
-        } else if self.tab_idx == 1 {
-            self.refresh_queue();
         } else {
             self.refresh_lib();
         }
     }
 
     pub(super) fn shuffle_play(&mut self) {
-        if self.tab_idx <= 1 {
+        if self.library_tab == 0 {
             return;
         }
         if self.play_selected_artist_header(true) {
             return;
         }
-        let lib_idx = self.tab_idx - self.lib_tab_offset();
+        let lib_idx = self.library_tab - 1;
         let parent_id = {
             let lib = &self.libs[lib_idx];
             let item = lib.nav_stack.last().and_then(|lvl| {
@@ -3425,7 +3253,7 @@ impl App {
                 let count = items.len();
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
-                self.tab_idx = 1;
+                self.set_panel_focus(PanelFocus::Queue);
                 self.flash_status(format!("Playing {count} items"));
                 self.play_items_routed(items, 0);
             }
@@ -3441,14 +3269,12 @@ impl App {
     }
 
     /// Whether the currently focused library tab is a tvshows library.
-    /// Same bounds-check-then-delegate shape as `is_in_podcast_library`,
-    /// and correct in both the standard and Power views since
-    /// `lib_tab_offset()` is view-mode-independent.
+    /// Same bounds-check-then-delegate shape as `is_in_podcast_library`.
     ///
     /// Caveat: this reads the *active tab*, not the folder actually being
     /// shuffled -- `shuffle_folder`'s `folder_id` argument is not consulted
     /// here. That's fine for its two current callers (`shuffle_play`, only
-    /// reachable once `tab_idx` is already on a library tab; and the
+    /// reachable once the left panel is already on a library tab; and the
     /// context menu's Shuffle action, only offered for a folder while
     /// browsing a library tab), but it would silently pick the wrong fetch
     /// for a folder reached some other way -- e.g. a future caller
@@ -3460,11 +3286,9 @@ impl App {
     /// `library_route.rs` already does for the analogous "which library
     /// actually owns this item" problem in route resolution.
     fn active_lib_is_tvshows(&self) -> bool {
-        let lib_off = self.lib_tab_offset();
-        if self.tab_idx < lib_off {
+        let Some(lib_idx) = self.library_tab.checked_sub(1) else {
             return false;
-        }
-        let lib_idx = self.tab_idx - lib_off;
+        };
         lib_idx < self.libs.len() && self.is_tvshows_library(lib_idx)
     }
 
@@ -3494,7 +3318,7 @@ impl App {
                 let count = items.len();
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
-                self.tab_idx = 1;
+                self.set_panel_focus(PanelFocus::Queue);
                 self.flash_status(format!("Shuffling {count} items"));
                 self.queue_source = crate::config::QueueSource::Shuffle;
                 if !self.has_direct_remote_queue() {
@@ -3509,99 +3333,20 @@ impl App {
         }
     }
 
-    pub(super) fn set_tab(&mut self, idx: usize) {
-        if idx != self.tab_idx && !self.card_image_states.is_empty() {
-            self.force_clear = true;
-        }
-        self.tab_idx = idx;
-        self.ensure_tab_visible();
-        if self.tab_idx == 0 {
-            self.home.section = 0;
-            let _ = self.fetch_home();
-        } else if self.tab_idx == 1 {
-            if self.view_mode == ViewMode::Power && self.power_left_tab > 0 {
-                self.activate_library_position_scope(
-                    self.power_left_tab - 1,
-                    LibraryPositionScope::Power,
-                );
-            }
-        } else {
-            self.activate_library_position_scope(
-                self.tab_idx - self.lib_tab_offset(),
-                LibraryPositionScope::Default,
-            );
-        }
-    }
-
-    /// Single owner of every *runtime* view-mode transition (issue #275):
-    /// both the `'v'` key and the F2 Settings "View mode" row call this, so
-    /// entry/exit side effects (focus, scope restoration, config
-    /// persistence) happen exactly once, in exactly one place, regardless of
-    /// which entry point triggered the switch.
-    pub(super) fn set_view_mode(&mut self, mode: ViewMode) {
-        if mode == self.view_mode {
-            return;
-        }
-        match mode {
-            ViewMode::Power => {
-                self.pre_power_tab = self.tab_idx;
-                self.set_power_focus(PowerFocus::Left);
-                if self.power_left_tab > 0 {
-                    self.activate_library_position_scope(
-                        self.power_left_tab - 1,
-                        LibraryPositionScope::Power,
-                    );
-                }
-            }
-            ViewMode::Standard => {
-                // set_tab already owns library-position-scope restoration.
-                self.set_tab(self.pre_power_tab);
-            }
-        }
-        self.view_mode = mode;
-        if !self.card_image_states.is_empty() {
-            self.force_clear = true;
-        }
-        self.save_config_view_mode();
-    }
-
-    /// Persists the current `view_mode` into `config.toml` (issue #275),
-    /// replacing the old `prefs.json["playlist_view"]` scheme.
-    fn save_config_view_mode(&mut self) {
-        let cfg = {
-            let mut c = self.client.lock().unwrap();
-            c.config.view_mode = match self.view_mode {
-                ViewMode::Power => "power".to_string(),
-                ViewMode::Standard => "standard".to_string(),
-            };
-            c.config.clone()
-        };
-        if let Err(e) = crate::config::save_config_settings(&cfg) {
-            log::warn!(target: "config", "view_mode config save failed: {e}");
-        }
-    }
-
     pub(super) fn ensure_lib_loaded_for(&mut self, idx: usize) {
         if idx >= self.libs.len() {
             return;
         }
-        let scope = self.library_position_scope_for(idx);
-        if self.view_mode == ViewMode::Power
-            && self.power_left_tab == idx + 1
-            && self.is_feed_home_video_library(idx)
-        {
+        if self.library_tab == idx + 1 && self.is_feed_home_video_library(idx) {
             self.ensure_feed_home_video_root_loaded(idx);
             return;
         }
-        if self.view_mode == ViewMode::Power
-            && self.power_left_tab == idx + 1
-            && self.is_podcast_library(idx)
-        {
+        if self.library_tab == idx + 1 && self.is_podcast_library(idx) {
             self.ensure_podcast_root_loaded(idx);
             return;
         }
         if self.libs[idx].nav_stack.is_empty() {
-            if let Some(saved) = self.saved_library_position(idx, scope) {
+            if let Some(saved) = self.saved_library_position(idx) {
                 if let Some(root) = saved.levels.first() {
                     self.libs[idx].nav_stack.push(BrowseLevel {
                         parent_id: root.parent_id.clone(),
@@ -3618,7 +3363,7 @@ impl App {
                         all_items: None,
                         letter_filter: None,
                     });
-                    self.spawn_restore_library_position(idx, scope, saved);
+                    self.spawn_restore_library_position(idx, saved);
                     return;
                 }
             }
@@ -3668,7 +3413,6 @@ impl App {
     pub(super) fn spawn_restore_library_position(
         &self,
         lib_idx: usize,
-        scope: LibraryPositionScope,
         saved: crate::config::LibraryPosition,
     ) {
         let visible_rows = self.lib_page_size();
@@ -3678,7 +3422,7 @@ impl App {
             let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
                 let letter_filter = saved_level
                     .letter_filter_index
-                    .and_then(super::render::power::LetterFilter::for_index);
+                    .and_then(super::render::LetterFilter::for_index);
                 let (name_ge, name_lt) = letter_filter
                     .as_ref()
                     .map(|f| (f.name_ge, f.name_lt))
@@ -3714,7 +3458,6 @@ impl App {
                 Ok(Some((position, nav_stack))) => {
                     let _ = tx.send(LibEvent::RestoreLibraryPosition {
                         lib_idx,
-                        scope,
                         requested_position: saved,
                         position,
                         nav_stack,
@@ -3963,7 +3706,7 @@ impl App {
         unplayed_only: bool,
         sort_by: String,
         sort_order: String,
-        letter_filter: Option<super::render::power::LetterFilter>,
+        letter_filter: Option<super::render::LetterFilter>,
     ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
@@ -4189,11 +3932,7 @@ impl App {
         entries.get(item_idx).cloned()
     }
 
-    pub(super) fn activate_recursive_album(
-        &mut self,
-        lib_idx: usize,
-        scope: LibraryPositionScope,
-    ) -> bool {
+    pub(super) fn activate_recursive_album(&mut self, lib_idx: usize) -> bool {
         let Some(entry) = self.recursive_album_search_entry(lib_idx) else {
             return false;
         };
@@ -4250,33 +3989,8 @@ impl App {
                     letter_filter: None,
                 });
             }
-            if scope == LibraryPositionScope::Default {
-                let items = match fetch(&entry.album.id) {
-                    Ok(items) => items,
-                    Err(error) => {
-                        let _ = tx.send(LibEvent::Error(error));
-                        return;
-                    }
-                };
-                nav_stack.push(BrowseLevel {
-                    parent_id: entry.album.id.clone(),
-                    title: entry.album.display_name(),
-                    total_count: items.len(),
-                    items,
-                    cursor: 0,
-                    item_types: None,
-                    unplayed_only: false,
-                    sort_by: "SortName".into(),
-                    sort_order: "Ascending".into(),
-                    loading: false,
-                    scroll: 0,
-                    all_items: None,
-                    letter_filter: None,
-                });
-            }
             let _ = tx.send(LibEvent::RecursiveAlbumActivated {
                 library_id,
-                scope,
                 nav_stack,
             });
         });
@@ -4293,7 +4007,7 @@ impl App {
         sort_by: String,
         sort_order: String,
         loaded_count: usize,
-        letter_filter: Option<super::render::power::LetterFilter>,
+        letter_filter: Option<super::render::LetterFilter>,
     ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
@@ -4546,9 +4260,8 @@ impl App {
         {
             if !last.items.is_empty() {
                 let mut order: Vec<usize> = (0..last.items.len()).collect();
-                order.sort_by_key(|&i| {
-                    super::render::power::initial_group_artist_sort_key(&last.items[i])
-                });
+                order
+                    .sort_by_key(|&i| super::render::initial_group_artist_sort_key(&last.items[i]));
                 last.cursor = order[0];
             }
         }
@@ -4567,8 +4280,7 @@ impl App {
         // In Power View: when a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.
-        let should_auto_push = self.view_mode == ViewMode::Power
-            && self.power_left_tab == lib_idx + 1
+        let should_auto_push = self.library_tab == lib_idx + 1
             && self
                 .libs
                 .get(lib_idx)
@@ -4630,8 +4342,7 @@ impl App {
         // In Power View: when the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.
-        let should_auto_push_music = self.view_mode == ViewMode::Power
-            && self.power_left_tab == lib_idx + 1
+        let should_auto_push_music = self.library_tab == lib_idx + 1
             && self
                 .libs
                 .get(lib_idx)
@@ -4712,8 +4423,7 @@ impl App {
             .libs
             .get(lib_idx)
             .map(|lib| {
-                self.view_mode == ViewMode::Power
-                    && self.power_left_tab == lib_idx + 1
+                self.library_tab == lib_idx + 1
                     && (self.is_feed_home_video_library(lib_idx)
                         || self.is_podcast_library(lib_idx))
                     && lib
@@ -4781,10 +4491,10 @@ impl App {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.library_total = Some(total);
         }
-        if total <= super::render::power::LIBRARY_PILL_THRESHOLD {
+        if total <= super::render::LIBRARY_PILL_THRESHOLD {
             return;
         }
-        let filter = super::render::power::LetterFilter::default_filter();
+        let filter = super::render::LetterFilter::default_filter();
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
             last.letter_filter = Some(filter.clone());
@@ -4847,15 +4557,14 @@ impl App {
     fn handle_restored_library_position(
         &mut self,
         lib_idx: usize,
-        scope: LibraryPositionScope,
         requested_position: crate::config::LibraryPosition,
         position: crate::config::LibraryPosition,
         nav_stack: Vec<BrowseLevel>,
     ) {
-        if self.saved_library_position(lib_idx, scope).as_ref() != Some(&requested_position) {
+        if self.saved_library_position(lib_idx).as_ref() != Some(&requested_position) {
             return;
         }
-        if self.active_library_position_scope_for(lib_idx) != Some(scope) {
+        if self.active_library_position_scope_for(lib_idx).is_none() {
             return;
         }
         if let Some(lib) = self.libs.get_mut(lib_idx) {
@@ -4872,9 +4581,9 @@ impl App {
             .libs
             .get(lib_idx)
             .map(|lib| lib.library_position_snapshot());
-        if restored.as_ref() != self.saved_library_position(lib_idx, scope).as_ref() {
+        if restored.as_ref() != self.saved_library_position(lib_idx).as_ref() {
             if let Some(restored) = restored {
-                self.replace_saved_library_position(lib_idx, scope, restored);
+                self.replace_saved_library_position(lib_idx, restored);
             }
         }
         // Deliberately no `spawn_all_items_prefetch` call here (unlike
@@ -4923,13 +4632,11 @@ impl App {
             ),
             LibEvent::RestoreLibraryPosition {
                 lib_idx,
-                scope,
                 requested_position,
                 position,
                 nav_stack,
             } => self.handle_restored_library_position(
                 lib_idx,
-                scope,
                 requested_position,
                 position,
                 nav_stack,
@@ -4988,7 +4695,6 @@ impl App {
             }
             LibEvent::RecursiveAlbumActivated {
                 library_id,
-                scope,
                 nav_stack,
             } => {
                 let Some(lib_idx) = self
@@ -5001,19 +4707,9 @@ impl App {
                 if let Some(lib) = self.libs.get_mut(lib_idx) {
                     lib.nav_stack = nav_stack;
                     lib.search = None;
-                    lib.album_track_focus = if scope == LibraryPositionScope::Power {
-                        Some(0)
-                    } else {
-                        None
-                    };
+                    lib.album_track_focus = Some(0);
                 }
-                self.with_library_position_scope_override(lib_idx, scope, |app| {
-                    app.save_default_library_position(lib_idx);
-                });
-                if scope == LibraryPositionScope::Default {
-                    self.search.close();
-                    self.set_tab(lib_idx + self.lib_tab_offset());
-                }
+                self.save_default_library_position(lib_idx);
             }
             LibEvent::AllItemsPrefetched {
                 lib_idx,
@@ -5061,10 +4757,6 @@ impl App {
                 self.clamp_feed_home_video_state(lib_idx);
                 self.log_feed_home_video_state(lib_idx, "aggregated");
             }
-            LibEvent::AlbumYearFetched { album_id, year } => {
-                self.album_year_loading.remove(&album_id);
-                self.album_year_cache.insert(album_id, year);
-            }
             LibEvent::AlbumTracksFetched { album_id, tracks } => {
                 self.album_tracks_loading.remove(&album_id);
                 self.album_tracks_cache.insert(album_id, tracks);
@@ -5105,8 +4797,7 @@ impl App {
                 }
                 if switch_tab {
                     self.search.close();
-                    let target_tab = lib_idx + self.lib_tab_offset();
-                    self.set_tab(target_tab);
+                    self.set_library_tab(lib_idx + 1);
                 }
             }
             LibEvent::PlaylistsLoaded(items) => {
@@ -5372,37 +5063,49 @@ impl App {
     }
 
     /// Number of selectable left-panel tabs in Power View: Home/CW + all libraries.
-    pub(super) fn power_left_tab_count(&self) -> usize {
+    pub(super) fn library_tab_count(&self) -> usize {
         1 + self.libs.len()
     }
 
-    /// Advance the left-panel tab (wrapping); load the library if needed.
-    pub(super) fn power_left_tab_next(&mut self) {
-        let n = self.power_left_tab_count();
-        self.power_left_tab = (self.power_left_tab + 1) % n;
-        self.last_card_height = 0; // reset stale image height for new view
-        if self.power_left_tab > 0 {
-            self.set_power_focus(PowerFocus::Left);
-            self.activate_library_position_scope(
-                self.power_left_tab - 1,
-                LibraryPositionScope::Power,
-            );
+    /// Jump directly to left-panel tab `idx` (0 = Home, 1..=libs.len() =
+    /// library index `idx - 1`), e.g. from a tab-bar click or a digit key.
+    pub(super) fn set_library_tab(&mut self, idx: usize) {
+        if idx >= self.library_tab_count() {
+            return;
         }
+        self.library_tab = idx;
+        self.last_card_height = 0; // reset stale image height for new view
+        if idx > 0 {
+            self.set_panel_focus(PanelFocus::Library);
+            self.activate_library_position(idx - 1);
+        }
+        self.ensure_tab_visible();
+        self.save_prefs();
+    }
+
+    /// Advance the left-panel tab (wrapping); load the library if needed.
+    pub(super) fn library_tab_next(&mut self) {
+        let n = self.library_tab_count();
+        self.library_tab = (self.library_tab + 1) % n;
+        self.last_card_height = 0; // reset stale image height for new view
+        if self.library_tab > 0 {
+            self.set_panel_focus(PanelFocus::Library);
+            self.activate_library_position(self.library_tab - 1);
+        }
+        self.ensure_tab_visible();
         self.save_prefs();
     }
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
-    pub(super) fn power_left_tab_prev(&mut self) {
-        let n = self.power_left_tab_count();
-        self.power_left_tab = (self.power_left_tab + n - 1) % n;
+    pub(super) fn library_tab_prev(&mut self) {
+        let n = self.library_tab_count();
+        self.library_tab = (self.library_tab + n - 1) % n;
         self.last_card_height = 0;
-        if self.power_left_tab > 0 {
-            self.set_power_focus(PowerFocus::Left);
-            self.activate_library_position_scope(
-                self.power_left_tab - 1,
-                LibraryPositionScope::Power,
-            );
+        if self.library_tab > 0 {
+            self.set_panel_focus(PanelFocus::Library);
+            self.activate_library_position(self.library_tab - 1);
         }
+        self.ensure_tab_visible();
         self.save_prefs();
     }
 
@@ -5431,20 +5134,16 @@ impl App {
         if item.is_folder {
             return;
         }
-        let (saved_tab, saved_sec) = (self.tab_idx, self.home.section);
-        self.tab_idx = 0;
+        let saved_sec = self.home.section;
         self.home.section = 0;
         self.select_home();
-        self.tab_idx = saved_tab;
         self.home.section = saved_sec;
     }
 
     pub(super) fn power_cw_enqueue(&mut self) {
-        let (saved_tab, saved_sec) = (self.tab_idx, self.home.section);
-        self.tab_idx = 0;
+        let saved_sec = self.home.section;
         self.home.section = 0;
         self.enqueue_selected();
-        self.tab_idx = saved_tab;
         self.home.section = saved_sec;
     }
 
@@ -5457,9 +5156,9 @@ impl App {
 
     // ── Power-view home flat list ────────────────────────────────────────────
 
-    /// The MediaItem at the current flat `power_home_cursor`, or None.
+    /// The MediaItem at the current flat `home_cursor`, or None.
     pub(super) fn power_home_current_item(&self) -> Option<MediaItem> {
-        let cursor = self.home.power_home_cursor;
+        let cursor = self.home.home_cursor;
         let mut pos = 0usize;
         for item in &self.home.continue_items {
             if pos == cursor {
@@ -5527,12 +5226,12 @@ impl App {
             return;
         };
         self.home.section = section_idx;
-        self.home.power_home_scroll = 0;
+        self.home.home_scroll = 0;
         if let Some((start, len)) = self.power_home_section_range(section_idx) {
-            self.home.power_home_cursor = if len == 0 {
+            self.home.home_cursor = if len == 0 {
                 start
             } else {
-                self.home.power_home_cursor.clamp(start, start + len - 1)
+                self.home.home_cursor.clamp(start, start + len - 1)
             };
         }
     }
@@ -5555,26 +5254,26 @@ impl App {
     pub(super) fn power_home_move_cursor(&mut self, delta: i64) {
         let indices = self.power_home_visible_indices();
         if indices.is_empty() {
-            self.home.power_home_cursor = 0;
+            self.home.home_cursor = 0;
             return;
         };
         let pos = indices
             .iter()
-            .position(|idx| *idx == self.home.power_home_cursor)
+            .position(|idx| *idx == self.home.home_cursor)
             .unwrap_or(0);
         let next = (pos as i64 + delta).clamp(0, indices.len() as i64 - 1) as usize;
-        self.home.power_home_cursor = indices[next];
+        self.home.home_cursor = indices[next];
     }
 
     pub(super) fn power_home_select_start(&mut self) {
         if let Some(first) = self.power_home_visible_indices().first() {
-            self.home.power_home_cursor = *first;
+            self.home.home_cursor = *first;
         }
     }
 
     pub(super) fn power_home_select_end(&mut self) {
         if let Some(last) = self.power_home_visible_indices().last() {
-            self.home.power_home_cursor = *last;
+            self.home.home_cursor = *last;
         }
     }
 
@@ -5614,17 +5313,14 @@ impl App {
         if item.is_folder {
             return;
         }
-        let cursor = self.home.power_home_cursor;
+        let cursor = self.home.home_cursor;
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
             // CW items: use select_home for proper resume handling.
-            let (saved_tab, saved_sec, saved_cursor) =
-                (self.tab_idx, self.home.section, self.home.continue_cursor);
-            self.tab_idx = 0;
+            let (saved_sec, saved_cursor) = (self.home.section, self.home.continue_cursor);
             self.home.section = 0;
             self.home.continue_cursor = cursor;
             self.select_home();
-            self.tab_idx = saved_tab;
             self.home.section = saved_sec;
             self.home.continue_cursor = saved_cursor;
         } else {
@@ -5634,16 +5330,13 @@ impl App {
 
     /// Enqueue the item under the flat power-home cursor.
     pub(super) fn power_home_enqueue(&mut self) {
-        let cursor = self.home.power_home_cursor;
+        let cursor = self.home.home_cursor;
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
-            let (saved_tab, saved_sec, saved_cursor) =
-                (self.tab_idx, self.home.section, self.home.continue_cursor);
-            self.tab_idx = 0;
+            let (saved_sec, saved_cursor) = (self.home.section, self.home.continue_cursor);
             self.home.section = 0;
             self.home.continue_cursor = cursor;
             self.enqueue_selected();
-            self.tab_idx = saved_tab;
             self.home.section = saved_sec;
             self.home.continue_cursor = saved_cursor;
         } else {
@@ -5726,9 +5419,6 @@ impl App {
         self.queue_source = state.source;
         self.player_tab.set_items(state.items, cursor);
         self.queue_dirty = false;
-        if self.client.lock().unwrap().config.start_on_queue {
-            self.tab_idx = 1;
-        }
         log::info!(target: "queue", "restore: restored {restored_count} item(s), cursor={cursor}");
         self.spawn_enrich_queue_state(state.positions);
     }
@@ -5851,7 +5541,7 @@ impl App {
         self.replace_queue_or_prompt(action);
         if !self.show_save_playlist_modal {
             self.show_playlists = false;
-            self.set_tab(1);
+            self.set_panel_focus(PanelFocus::Queue);
         }
     }
 
@@ -5918,12 +5608,6 @@ impl App {
                 library_total: None,
             });
         }
-        let n = self.libs.len();
-        let lib = &mut self.layout.library;
-        lib.lib_scroll.resize(n, 0);
-        lib.lib_row_heights.resize_with(n, Vec::new);
-        lib.lib_table_area
-            .resize(n, ratatui::layout::Rect::default());
     }
 
     pub(super) fn fetch_home(&mut self) -> Result<(), String> {
@@ -5977,7 +5661,6 @@ impl App {
         if self.home.section >= n {
             self.home.section = n.saturating_sub(1);
         }
-        self.ensure_home_section_visible();
         Ok(())
     }
 
@@ -6011,7 +5694,7 @@ impl App {
                     return;
                 }
                 let start_idx = start_index.min(items.len().saturating_sub(1));
-                self.tab_idx = 1;
+                self.set_panel_focus(PanelFocus::Queue);
                 self.queue_source = crate::config::QueueSource::Remote;
                 if items.len() == 1 {
                     let mut item = items[0].clone();
@@ -6470,10 +6153,8 @@ mod tests {
     fn power_recursive_activation_keeps_power_view_and_enters_inline_tracks() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = recursive_music_app();
-        app.tab_idx = 1;
-        app.view_mode = ViewMode::Power;
-        app.power_left_tab = 1;
-        app.power_focus = PowerFocus::Left;
+        app.library_tab = 1;
+        app.panel_focus = PanelFocus::Library;
         app.libs[0].nav_stack.push(BrowseLevel {
             parent_id: "group-a".into(),
             title: "Group A".into(),
@@ -6490,13 +6171,9 @@ mod tests {
             letter_filter: None,
         });
         let default_position = app.libs[0].library_position_snapshot();
-        app.library_position_state.libraries.insert(
-            "music-lib".into(),
-            mbv_core::config::LibraryViewPositions {
-                default: Some(default_position.clone()),
-                power: None,
-            },
-        );
+        app.library_position_state
+            .libraries
+            .insert("music-lib".into(), default_position.clone());
         app.libs[0].search = Some(super::super::LibSearch {
             query: String::new(),
             items: Vec::new(),
@@ -6523,26 +6200,19 @@ mod tests {
 
         app.handle_lib_event(LibEvent::RecursiveAlbumActivated {
             library_id: "music-lib".into(),
-            scope: LibraryPositionScope::Power,
             nav_stack: vec![level],
         });
 
-        assert_eq!(app.tab_idx, 1);
         assert!(app.libs[0].search.is_none());
         assert_eq!(app.libs[0].album_track_focus, Some(0));
         assert_eq!(app.libs[0].nav_stack.last().unwrap().parent_id, "artist-c");
-        let positions = app
+        let position = app
             .library_position_state
             .libraries
             .get("music-lib")
             .unwrap();
-        assert_eq!(positions.default.as_ref(), Some(&default_position));
         assert_eq!(
-            positions
-                .power
-                .as_ref()
-                .and_then(|position| position.levels.last())
-                .map(|level| level.parent_id.as_str()),
+            position.levels.last().map(|level| level.parent_id.as_str()),
             Some("artist-c")
         );
     }
@@ -6579,7 +6249,7 @@ mod tests {
         use crate::app::tests::make_item;
 
         let mut app = crate::app::tests::make_app_stub();
-        app.tab_idx = 1;
+        app.panel_focus = crate::app::PanelFocus::Queue;
         app.player_tab
             .set_items(vec![make_item("Track One", "Audio")], 0);
         {
@@ -6601,14 +6271,12 @@ mod tests {
     fn power_view_enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
         use crate::app::action::Command;
         use crate::app::tests::make_item;
-        use crate::app::{BrowseLevel, LibraryTab, PowerFocus, ViewMode};
+        use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
         use crate::player::PlayerCommand;
 
         let mut app = crate::app::tests::make_app_stub();
-        app.tab_idx = app.lib_tab_offset();
-        app.view_mode = ViewMode::Power;
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         app.player_tab
             .set_items(vec![make_item("Queued First", "Movie")], 0);
         {
@@ -6667,7 +6335,7 @@ mod tests {
             Ok(PlayerCommand::QueueAppend { items }) if items.len() == 1 && items[0].id == queued.id
         ));
 
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.player_tab.queue_cursor = 1;
 
         app.dispatch(Command::QueuePlayCursor);
@@ -7011,8 +6679,7 @@ mod tests {
     #[test]
     fn ensure_power_feed_library_preserves_saved_feed_position() {
         let mut app = crate::app::tests::make_app_stub();
-        app.view_mode = ViewMode::Power;
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = crate::app::tests::make_item("YouTube", "CollectionFolder");
@@ -7049,8 +6716,7 @@ mod tests {
     #[test]
     fn ensure_power_podcast_library_preserves_saved_feed_position() {
         let mut app = crate::app::tests::make_app_stub();
-        app.view_mode = ViewMode::Power;
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         let mut library = crate::app::tests::make_item("Podcasts", "CollectionFolder");
         library.id = "lib-podcasts".into();
@@ -7563,7 +7229,7 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
+        app.library_tab = 1;
 
         app.enqueue_selected();
 
@@ -7668,9 +7334,9 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
+        app.library_tab = 1;
 
         app.play_item(item);
 
@@ -7697,7 +7363,6 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -7740,7 +7405,6 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.tab_idx = app.lib_tab_offset();
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -7781,16 +7445,16 @@ mod tests {
         app.libs.push(lib_tab("tvshows"));
         app.libs.push(lib_tab("music"));
 
-        app.tab_idx = app.lib_tab_offset();
+        app.library_tab = 1;
         assert!(
             app.active_lib_is_tvshows(),
-            "tab_idx on the tvshows library tab"
+            "library_tab on the tvshows library tab"
         );
 
-        app.tab_idx = app.lib_tab_offset() + 1;
+        app.library_tab = 2;
         assert!(
             !app.active_lib_is_tvshows(),
-            "tab_idx on the music library tab"
+            "library_tab on the music library tab"
         );
     }
 
@@ -7799,10 +7463,10 @@ mod tests {
         let mut app = make_app_stub();
         app.libs.push(lib_tab("tvshows"));
 
-        app.tab_idx = 0; // home
+        app.library_tab = 0; // Home
         assert!(!app.active_lib_is_tvshows());
 
-        app.tab_idx = 1; // queue
+        app.panel_focus = PanelFocus::Queue;
         assert!(!app.active_lib_is_tvshows());
     }
 
@@ -7957,7 +7621,7 @@ mod tests {
         {
             let lvl = lib.nav_stack.last_mut().unwrap();
             lvl.total_count = 40; // what get_items_sorted_ranged reported for M–O
-            lvl.letter_filter = crate::app::render::power::LetterFilter::for_index(4);
+            lvl.letter_filter = crate::app::render::LetterFilter::for_index(4);
         }
         let lvl = lib.nav_stack.last().unwrap();
 

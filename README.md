@@ -8,7 +8,7 @@ You can browse libraries, build a queue, and play from your server. Playback sta
 
 AI wrote most of this. That's why the TUI has more pictures than it needs.
 
-<img src="assets/screenshot-power.png" width="49%" alt="mbv power view: library browser, video preview, and queue" /> <img src="assets/screenshot-music.png" width="49%" alt="mbv music tab: grouped browsing by decade/artist with album art" />
+<img src="assets/screenshot-power.png" width="49%" alt="mbv: library browser, video preview, and queue" /> <img src="assets/screenshot-music.png" width="49%" alt="mbv music library: grouped browsing by decade/artist with album art" />
 
 ## Requirements
 
