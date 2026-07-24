@@ -1,94 +1,85 @@
-# General Rules
-
-## 1. Think Before Coding
-
-**Don't assume. Don't hide confusion. Surface tradeoffs.**
-
-Before implementing:
-- State your assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them - don't pick silently.
-- If a simpler approach exists, say so. Push back when warranted.
-- If something is unclear, stop. Name what's confusing. Ask.
-
-## 2. Simplicity First
-
-**Minimum code that solves the problem. Nothing speculative.**
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-- If you write 200 lines and it could be 50, rewrite it.
-
-Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-## 3. Surgical Changes
-
-**Touch only what you must. Clean up only your own mess.**
-
-When editing existing code:
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it - don't delete it.
-
-When your changes create orphans:
-- Remove imports/variables/functions that YOUR changes made unused.
-- Don't remove pre-existing dead code unless asked.
-
-The test: Every changed line should trace directly to the user's request.
-
-## 4. Goal-Driven Execution
-
-**Define success criteria. Loop until verified.**
-
-Transform tasks into verifiable goals:
-- "Add validation" → "Write tests for invalid inputs, then make them pass"
-- "Fix the bug" → "Write a test that reproduces it, then make it pass"
-- "Refactor X" → "Ensure tests pass before and after"
-
-For multi-step tasks, state a brief plan:
-```
-1. [Step] → verify: [check]
-2. [Step] → verify: [check]
-3. [Step] → verify: [check]
-```
-Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
-
-## 5. Unit Testing is Not Real Testing
-
-Unit tests are an extremely imperfect tool with baked-in assumptions. They are meant to capture intended code behaviour and not an actual test of product functionality or if a feature actually works. They are not a source of truth for anything.
-
-For reported regressions, follow `docs/agents/debugging-regressions.md` before editing code or writing tests.
-
-# Repo
+# General rules
+- Prefer evidence over assumptions: verify outcomes before final claims.
+- Choose the lightest-weight path that preserves quality.
+- Consult official docs before implementing with SDKs/frameworks/APIs.
 
 ## Development
-
 Read `docs/agents/worktrees.md` before beginning development. Read `docs/agents/repo.md` for repo setup and configuration. See `docs/CHECKIN.md` for pre-commit steps.
 
 ## Issue tracker
-
 Issues live in GitHub Issues (slatkin/mbv), managed via the `gh` CLI. External PRs are not pulled into triage. See `docs/agents/issue-tracker.md`.
 
-## Triage labels
-
-Uses the default label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `test`, `wontfix`). See `docs/agents/triage-labels.md`.
-
 ## Domain docs
-
 Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
 
-## Repo Rules
-- Use Serena if installed for code exploration and targeted writes.
-- For releases, run `scripts/release.sh X.Y.Z "one-line summary"` instead of reading a separate release checklist.
-- Always run `cargo fmt` before committing Rust code changes.
-- Do not run tests after every edit or every commit. Run the narrowest relevant checks once before pushing/opening a PR, unless the user explicitly asks for more or you are diagnosing a specific failure.
-- Input handling has one front door: `src/app/input_resolver.rs`'s context-priority registry (keyboard) and the shared `Command`/`dispatch` seam (mouse). Add new shortcuts as `Command`s + bindings there, not as ad hoc key/click checks in view or panel code. Exceptions: text-entry contexts (search boxes, the save-name dialog) and external setup flows (e.g. login), which own local state. See CONTEXT.md's "Input handling" section and `docs/adr/0002-centralized-input-handling.md`.
-- For application code changes: use isolated worktree branches from `origin/main`. Push the branch and open a PR. Do not commit directly to `main`, merge into `main`, or rebase `main`.
-- For repo hygiene (scripts, config, tooling, docs) and release changes: commit directly to `main` and push.
-- Install repo-owned branch hygiene in each clone with `scripts/install-branch-hygiene.sh`. It activates tracked hooks that block commits/merges/rebases on `main` and auto-restore the root checkout to `main` if someone checks out a feature branch there. Use `scripts/reset-root-checkout.sh` when you want a destructive reset back to one clean `main` checkout with no local worktrees or feature branches.
-- Never open a pull request unless explicitly asked to do so; don't run `gh pr create` unless requested.
-- Documentation cleanup is agent-owned work in this repo: keep `CONTEXT.md`, `docs/adr/`, and related domain docs current as part of implementation changes, do not hand that cleanup back to the user, and do not leave doc edits sitting uncommitted at the end of the task.
-- Before starting a new ADR, run `ls docs/adr/ | sort -t- -k1 -n | tail -1` against the target merge branch (not just your worktree) at plan-authoring time, and note the reserved number in the plan's header (`**ADR:** 00NN, reserved <date>`) so a concurrently-written sibling plan can grep for it. Two independently-authored plans claiming the same ADR number is a known failure mode here (#222/#223).
+# Execution protocols
+Broad requests: explore first, then plan. Keep and update domain docs while planning. 2+ independent tasks in parallel. run_in_background for builds/tests. Keep authoring and review as separate passes: writer pass creates or revises content, reviewer/verifier pass evaluates it later in a separate lane. Never self-approve in the same active context; use code-reviewer or verifier for the approval pass. Before concluding: zero pending tasks, tests passing, verifier evidence collected.
 
+# Operation principles
+- Delegate specialized or tool-heavy work to the most appropriate agent.
+- Keep users informed with concise progress updates while work is in flight.
+- Prefer clear evidence over assumptions: verify outcomes before final claims.
+- Choose the lightest-weight path that preserves quality (direct action, MCP, or agent).
+- Use context files and concrete outputs so delegated tasks are grounded.
+- Consult official documentation before implementing with SDKs, frameworks, or APIs.
+- For cleanup or refactor work, write a cleanup plan before modifying code.
+- Prefer deletion over addition when the same behavior can be preserved.
+- Reuse existing utilities and patterns before introducing new ones.
+- Do not add new dependencies unless the user explicitly requests or approves them.
+- Keep diffs small, reversible, and easy to review.
+
+# Working agreements
+- Write a cleanup plan before modifying code.
+- Prefer deletion over addition.
+- Reuse existing utilities and patterns first.
+- No new dependencies without an explicit request.
+- Keep diffs small and reversible.
+- Run lint, typecheck, tests, and static analysis after changes.
+- Final reports must include changed files, simplifications made, and remaining risks.
+
+# Delegation
+ - Use delegation when it improves quality, speed, or correctness: Multi-file implementations, refactors, debugging, reviews, planning, research, and verification. Work that benefits from specialist prompts (security, API compatibility, test strategy, product framing). Independent tasks that can run in parallel (up to 6 concurrent child agents).
+- Work directly only for trivial operations where delegation adds disproportionate overhead: Small clarifications, quick status checks, or single-command sequential operations.
+
+Delegation steps:
+1. Decide which agent role to delegate to (e.g., `architect`, `executor`, `debugger`)
+2. Call `spawn_agent` with `message` containing the agent's role and task description
+3. The child agent receives full role context and executes the task independently
+
+Parallel delegation (up to 6 concurrent):
+```
+spawn_agent(message: "<architect prompt>\n\nTask: Review the auth module")
+spawn_agent(message: "<executor prompt>\n\nTask: Add input validation to login")
+spawn_agent(message: "<test-engineer prompt>\n\nTask: Write tests for the auth changes")
+```
+Claude Code spawns child agents via the `spawn_agent` tool (requires `multi_agent = true`).
+To inject role-specific behavior, the parent MUST read the role prompt and pass it in the spawned agent message.
+
+Delegation steps:
+1. Decide which agent role to delegate to (e.g., `architect`, `executor`, `debugger`)
+2. Call `spawn_agent` with `message` containing the prompt content + task description
+3. The child agent receives full role context and executes the task independently
+
+Parallel delegation (up to 6 concurrent):
+```
+spawn_agent(message: "<architect prompt>\n\nTask: Review the auth module")
+spawn_agent(message: "<executor prompt>\n\nTask: Add input validation to login")
+spawn_agent(message: "<test-engineer prompt>\n\nTask: Write tests for the auth changes")
+```
+
+Each child agent:
+- Inherits AGENTS.md context (via child_agents_md feature flag)
+- Runs in an isolated context with its own tool access
+- Returns results to the parent when complete
+
+Key constraints:
+- Max 3 concurrent child agents
+- Each child has its own context window (not shared with parent)
+- Parent must read prompt file BEFORE calling spawn_agent
+- Child agents can access skills ($name) but should focus on their assigned role, a spec/plan should be presented to an executor agent (default for both standard and complex implementation work). For non-trivial SDK/API/framework usage, delegate to research agent to check official docs first and to answer specific questions.
+
+# Model Routing
+Match agent role to task complexity:
+- **Low complexity** (quick lookups, narrow checks): `explorer`
+- **Standard** (implementation, debugging, reviews): `executor`, `debugger`, `test-engineer`
+- **High complexity** (architecture, deep analysis, complex refactors): `architect`, `executor`, `critic`
