@@ -162,17 +162,12 @@ pub fn image_disk_cache_path(key: &str) -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-/// Cache-key suffix for a Power View card's primary image
-/// (see `src/app/render/power/card.rs`).
-pub const IMAGE_CACHE_SUFFIX_POWER_PRIMARY: &str = "P";
+/// Cache-key suffix for a card's primary image (see `src/app/render/card.rs`).
+pub const IMAGE_CACHE_SUFFIX_CARD_PRIMARY: &str = "card";
 
-/// Cache-key suffix for a Library view row/card's primary image
-/// (see `src/app/render/library/*`).
-pub const IMAGE_CACHE_SUFFIX_LIBRARY: &str = "lib";
-
-/// Cache-key suffix for a Power View album-level card
-/// (see `src/app/render/power/card.rs`).
-pub const IMAGE_CACHE_SUFFIX_POWER_ALBUM: &str = "pwr_al";
+/// Cache-key suffix for an album-level card
+/// (see `src/app/render/card.rs`).
+pub const IMAGE_CACHE_SUFFIX_ALBUM_CARD: &str = "album_card";
 
 pub fn write_image_disk_cache(key: &str, bytes: &[u8]) {
     let dir = image_disk_cache_dir();

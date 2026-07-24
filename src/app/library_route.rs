@@ -186,18 +186,18 @@ impl App {
         &mut self,
         item: &mbv_core::api::MediaItem,
     ) -> Option<(String, mbv_core::remote_player::DaemonEndpoint)> {
-        log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} power_left_tab={}", item.id, item.name, self.power_left_tab);
-        if matches!(self.power_focus, PowerFocus::Queue) {
+        log::info!(target: "library_route", "route resolution item_id={:?} item_name={:?} library_tab={}", item.id, item.name, self.library_tab);
+        if matches!(self.panel_focus, PanelFocus::Queue) {
             log::info!(target: "library_route", "resolution path=queue item_id={:?}", item.id);
             self.active_route
                 .clone()
                 .and_then(|name| self.resolve_route_for_library(&name))
                 .or_else(|| self.route_for_item_via_ancestors(&item.id))
-        } else if self.power_left_tab == 0 {
+        } else if self.library_tab == 0 {
             log::info!(target: "library_route", "resolution path=ancestor item_id={:?}", item.id);
             self.route_for_item_via_ancestors(&item.id)
         } else {
-            let lib_idx = self.power_left_tab - 1;
+            let lib_idx = self.library_tab - 1;
             log::info!(target: "library_route", "resolution path=power-library item_id={:?} lib_idx={lib_idx}", item.id);
             self.route_for_active_library_view(lib_idx)
         }
@@ -228,7 +228,7 @@ impl App {
 mod tests {
     use super::*;
     use crate::app::tests::{make_app_stub, make_item};
-    use crate::app::{LibraryTab, PowerFocus};
+    use crate::app::{LibraryTab, PanelFocus};
 
     #[test]
     fn resolve_route_for_library_matches_case_insensitively() {
@@ -333,8 +333,8 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -361,8 +361,8 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_focus = PowerFocus::Queue;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Queue;
+        app.library_tab = 1;
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 
@@ -473,13 +473,13 @@ mod tests {
 
     #[test]
     fn resolve_route_for_play_does_not_panic_from_the_queue_tab() {
-        // Regression guard: queue focus (`PowerFocus::Queue`) has no library
+        // Regression guard: queue focus (`PanelFocus::Queue`) has no library
         // of its own -- the item being played is already part of whatever
         // queue is current, so `resolve_route_for_play` must fall through to
         // "keep the current `active_route`" instead of either panicking or
         // wrongly resolving a nav-scoped library.
         let mut app = make_app_stub();
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
 

@@ -2,7 +2,7 @@ use super::ui_util::{is_playable, natural_sort_key, sort_audio_tracks, sort_epis
 use super::{
     AlbumIndexState, AlbumPathPart, AlbumSearchEntry, App, ArtistHeaderSelection, BrowseLevel,
     ContextAction, FeedHomeVideoGroup, FeedHomeVideoState, LibEvent, LibraryTab,
-    LocalPlaybackTarget, PendingQueueAction, PlaybackTarget, PowerFocus, QueueScope,
+    LocalPlaybackTarget, PanelFocus, PendingQueueAction, PlaybackTarget, QueueScope,
     RemotePlaybackTarget, SessionEvent, UndoEntry, PAGE_SIZE, PREFETCH_AHEAD,
 };
 use crate::app::images::NAV_IMAGE_FETCH_IDLE_DELAY;
@@ -23,7 +23,7 @@ type BrowseRefresh = (
     String,
     String,
     usize,
-    Option<super::render::power::LetterFilter>,
+    Option<super::render::LetterFilter>,
 );
 type AlbumIndexFetch<'a> =
     dyn FnMut(&str, usize, usize) -> Result<(Vec<MediaItem>, usize), String> + 'a;
@@ -807,7 +807,7 @@ impl App {
         lib_idx: usize,
         extra_ok: impl FnOnce(&BrowseLevel) -> bool,
     ) -> bool {
-        self.power_left_tab == lib_idx + 1
+        self.library_tab == lib_idx + 1
             && (self.is_feed_home_video_library(lib_idx) || self.is_podcast_library(lib_idx))
             && self
                 .libs
@@ -950,13 +950,13 @@ impl App {
         // The library list is rendered into the right panel; use the panel
         // height directly (rows are single-line; subtract 1 for the
         // count/search header line).
-        (self.layout.power.left_area.height as usize)
+        (self.layout.main.left_area.height as usize)
             .saturating_sub(1)
             .max(1)
     }
 
     pub(super) fn queue_page_size(&self) -> usize {
-        self.layout.power.queue_area.height.saturating_sub(1).max(1) as usize
+        self.layout.main.queue_area.height.saturating_sub(1).max(1) as usize
     }
 
     pub(super) fn move_lib_cursor(&mut self, delta: i64) {
@@ -964,9 +964,9 @@ impl App {
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
         self.mark_power_library_navigation(now);
-        let lib_idx = self.power_left_tab.saturating_sub(1);
+        let lib_idx = self.library_tab.saturating_sub(1);
 
-        if matches!(self.power_focus, PowerFocus::Left)
+        if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && self.move_power_music_group_display_cursor(lib_idx, delta)
@@ -992,21 +992,21 @@ impl App {
 
         // With letter-grouped display, navigate in sorted display order so
         // the cursor follows what the user sees (articles stripped) rather than raw item order.
-        if !self.layout.power.left_sorted_indices.is_empty() {
+        if !self.layout.main.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].search.is_none()
                 && self.libs[lib_idx].nav_stack.last().is_some();
             if needs_sorted {
                 let current = self.libs[lib_idx].nav_stack.last().unwrap().cursor;
-                let sorted_n = self.layout.power.left_sorted_indices.len();
+                let sorted_n = self.layout.main.left_sorted_indices.len();
                 let pos = self
                     .layout
-                    .power
+                    .main
                     .left_sorted_indices
                     .iter()
                     .position(|&i| i == current)
                     .unwrap_or(0);
                 let new_pos = (pos as i64 + delta).clamp(0, sorted_n as i64 - 1) as usize;
-                let new_cursor = self.layout.power.left_sorted_indices[new_pos];
+                let new_cursor = self.layout.main.left_sorted_indices[new_pos];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
@@ -1039,9 +1039,9 @@ impl App {
     }
 
     pub(super) fn jump_lib_cursor(&mut self, to_end: bool) {
-        let lib_idx = self.power_left_tab.saturating_sub(1);
+        let lib_idx = self.library_tab.saturating_sub(1);
 
-        if matches!(self.power_focus, PowerFocus::Left)
+        if matches!(self.panel_focus, PanelFocus::Library)
             && self.libs[lib_idx].search.is_none()
             && self.libs[lib_idx].album_track_focus.is_none()
             && self.jump_power_music_group_display_cursor(lib_idx, to_end)
@@ -1064,13 +1064,13 @@ impl App {
 
         // With letter-grouped display, Home/End jump to the first/last item
         // in sorted display order (article-stripped), not raw item order.
-        if !self.layout.power.left_sorted_indices.is_empty() {
+        if !self.layout.main.left_sorted_indices.is_empty() {
             let needs_sorted = self.libs[lib_idx].search.is_none()
-                && !self.layout.power.left_sorted_indices.is_empty();
+                && !self.layout.main.left_sorted_indices.is_empty();
             if needs_sorted {
-                let n = self.layout.power.left_sorted_indices.len();
+                let n = self.layout.main.left_sorted_indices.len();
                 let new_cursor =
-                    self.layout.power.left_sorted_indices[if to_end { n - 1 } else { 0 }];
+                    self.layout.main.left_sorted_indices[if to_end { n - 1 } else { 0 }];
                 if let Some(lvl) = self.libs[lib_idx].nav_stack.last_mut() {
                     lvl.cursor = new_cursor;
                 }
@@ -1120,7 +1120,7 @@ impl App {
     }
 
     pub(super) fn current_lib_item(&self) -> Option<MediaItem> {
-        let lib_idx = self.power_left_tab.checked_sub(1)?;
+        let lib_idx = self.library_tab.checked_sub(1)?;
         let lib = self.libs.get(lib_idx)?;
         if lib.nav_stack.is_empty() {
             Some(lib.library.clone())
@@ -1432,7 +1432,7 @@ impl App {
 
     /// Whether the currently focused library tab is a podcast channel.
     pub(super) fn is_in_podcast_library(&self) -> bool {
-        let Some(lib_idx) = self.power_left_tab.checked_sub(1) else {
+        let Some(lib_idx) = self.library_tab.checked_sub(1) else {
             return false;
         };
         lib_idx < self.libs.len() && self.is_podcast_library(lib_idx)
@@ -1702,7 +1702,7 @@ impl App {
     /// right now: a non-music library, not searching, at the top browse
     /// level of its nav stack (`nav_stack.len() == 1`), with a captured true
     /// total (`LibraryTab.library_total`) over `LIBRARY_PILL_THRESHOLD`. See
-    /// `render::power::LetterFilter` and
+    /// `render::LetterFilter` and
     /// `maybe_capture_library_total_and_apply_default_pill`, which populates
     /// `library_total` on a library's first load.
     pub(super) fn should_show_letter_pills(&self, lib_idx: usize) -> bool {
@@ -1719,7 +1719,7 @@ impl App {
             return false;
         }
         lib.library_total
-            .is_some_and(|total| total > super::render::power::LIBRARY_PILL_THRESHOLD)
+            .is_some_and(|total| total > super::render::LIBRARY_PILL_THRESHOLD)
     }
 
     /// Selects letter-range pill `pill_index` for `lib_idx`'s top level (a
@@ -1732,7 +1732,7 @@ impl App {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
-        let Some(filter) = super::render::power::LetterFilter::for_index(pill_index) else {
+        let Some(filter) = super::render::LetterFilter::for_index(pill_index) else {
             return;
         };
         let Some(lvl) = self.libs[lib_idx].nav_stack.last() else {
@@ -1774,7 +1774,7 @@ impl App {
         if !self.should_show_letter_pills(lib_idx) {
             return;
         }
-        let n = super::render::power::LetterFilter::count();
+        let n = super::render::LetterFilter::count();
         if n == 0 {
             return;
         }
@@ -2276,8 +2276,8 @@ impl App {
         self.on_queue_replace_silent();
         self.set_queue_scope(self.playback_target_queue_scope());
         // Keep library focus when playing from the power-view library panel.
-        if !matches!(self.power_focus, PowerFocus::Left) {
-            self.set_power_focus(PowerFocus::Queue);
+        if !matches!(self.panel_focus, PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
         }
         if let Some(ref conn_id) = self.connected_session_id.clone() {
             self.clear_playback_overlays();
@@ -2317,8 +2317,8 @@ impl App {
         }
         self.on_queue_replace_silent();
         // Keep library focus when playing from the power-view library panel.
-        if !matches!(self.power_focus, PowerFocus::Left) {
-            self.set_power_focus(PowerFocus::Queue);
+        if !matches!(self.panel_focus, PanelFocus::Library) {
+            self.set_panel_focus(PanelFocus::Queue);
         }
         let label = item.playback_label();
         if let Some(ref conn_id) = self.connected_session_id.clone() {
@@ -2358,7 +2358,7 @@ impl App {
     }
 
     pub(super) fn enqueue_selected(&mut self) {
-        if self.power_left_tab == 0 {
+        if self.library_tab == 0 {
             let Some(item) = self.current_home_item() else {
                 return;
             };
@@ -2392,7 +2392,7 @@ impl App {
             if !is_playable(&item) {
                 return;
             }
-            let lib_idx = self.power_left_tab - 1;
+            let lib_idx = self.library_tab - 1;
             let bypass = self.in_non_library_thin_client_mode();
             log::info!(target: "library_route", "{}", enqueue_action_context(&item.id, &item.name, "library-view", bypass));
             let resolved = self.route_for_active_library_view(lib_idx).map(|(n, _)| n);
@@ -2430,8 +2430,8 @@ impl App {
     }
 
     fn power_artist_header_action_lib_idx(&self) -> Option<usize> {
-        if matches!(self.power_focus, PowerFocus::Left) && self.power_left_tab > 0 {
-            Some(self.power_left_tab - 1)
+        if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
+            Some(self.library_tab - 1)
         } else {
             None
         }
@@ -2545,7 +2545,7 @@ impl App {
             items.shuffle(&mut rand::rng());
         }
         self.replace_playback_queue(items.clone(), 0);
-        self.set_power_focus(PowerFocus::Queue);
+        self.set_panel_focus(PanelFocus::Queue);
         self.flash_status(if shuffle {
             format!("Shuffling {count} items")
         } else {
@@ -2689,7 +2689,7 @@ impl App {
             return;
         };
         if item.is_folder {
-            let lib_idx = self.power_left_tab - 1;
+            let lib_idx = self.library_tab - 1;
             let lib = &mut self.libs[lib_idx];
             lib.search = None;
             lib.nav_stack.push(BrowseLevel {
@@ -2718,7 +2718,7 @@ impl App {
                 "Ascending".into(),
             );
         } else if is_playable(&item) {
-            let lib_idx = self.power_left_tab - 1;
+            let lib_idx = self.library_tab - 1;
             if self.libs[lib_idx].search.is_some() {
                 self.libs[lib_idx].search = None;
                 if self.is_feed_home_video_group_view(lib_idx) {
@@ -2831,8 +2831,8 @@ impl App {
     }
 
     pub(super) fn go_back(&mut self) {
-        if self.power_left_tab > 0 {
-            let lib_idx = self.power_left_tab - 1;
+        if self.library_tab > 0 {
+            let lib_idx = self.library_tab - 1;
 
             // Guard: don't pop when already at the root of a synthetic "group" view
             // (music groups: nav_stack[0]=groups, nav_stack[1]=albums; feed home
@@ -2902,9 +2902,9 @@ impl App {
     pub(super) fn execute_context_action(&mut self, action: Option<ContextAction>) {
         match action {
             Some(ContextAction::Play) => {
-                if matches!(self.power_focus, PowerFocus::Left) && self.power_left_tab == 0 {
+                if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0 {
                     self.power_cw_play();
-                } else if matches!(self.power_focus, PowerFocus::Queue) {
+                } else if matches!(self.panel_focus, PanelFocus::Queue) {
                     // Was its own third copy of queue-cursor activation, with
                     // a subtly narrower `else` branch than the keyboard/mouse
                     // paths (no seek-to-start for an already-playing audio
@@ -2916,8 +2916,8 @@ impl App {
                 }
             }
             Some(ContextAction::PlayFolder(id)) => {
-                let ct = if self.power_left_tab > 0 {
-                    self.libs[self.power_left_tab - 1]
+                let ct = if self.library_tab > 0 {
+                    self.libs[self.library_tab - 1]
                         .library
                         .collection_type
                         .clone()
@@ -2944,7 +2944,7 @@ impl App {
                 }
             }
             Some(ContextAction::Enqueue) => {
-                if matches!(self.power_focus, PowerFocus::Left) && self.power_left_tab == 0 {
+                if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab == 0 {
                     self.power_cw_enqueue();
                 } else {
                     self.enqueue_selected();
@@ -3016,10 +3016,10 @@ impl App {
         match result {
             Ok(()) => {
                 if played {
-                    let lib_idx_opt = if matches!(self.power_focus, PowerFocus::Left)
-                        && self.power_left_tab > 0
+                    let lib_idx_opt = if matches!(self.panel_focus, PanelFocus::Library)
+                        && self.library_tab > 0
                     {
-                        Some(self.power_left_tab - 1)
+                        Some(self.library_tab - 1)
                     } else {
                         None
                     };
@@ -3048,7 +3048,7 @@ impl App {
                         }
                     }
                 }
-                if self.power_left_tab == 0 {
+                if self.library_tab == 0 {
                     let _ = self.fetch_home();
                 } else {
                     self.refresh_lib();
@@ -3117,7 +3117,7 @@ impl App {
         match result {
             Ok(()) => {
                 if !item.played {
-                    let lib_idx = self.power_left_tab.saturating_sub(1);
+                    let lib_idx = self.library_tab.saturating_sub(1);
                     if self.is_feed_home_video_group_view(lib_idx) {
                         if let Some(state) = self.libs[lib_idx].feed_home_video.as_mut() {
                             state.loading = true;
@@ -3139,8 +3139,8 @@ impl App {
     }
 
     pub(super) fn refresh_lib(&mut self) {
-        let lib_idx = if matches!(self.power_focus, PowerFocus::Left) && self.power_left_tab > 0 {
-            self.power_left_tab - 1
+        let lib_idx = if matches!(self.panel_focus, PanelFocus::Library) && self.library_tab > 0 {
+            self.library_tab - 1
         } else {
             return;
         };
@@ -3194,9 +3194,9 @@ impl App {
 
     pub(super) fn refresh_current_view(&mut self) {
         self.force_clear = true;
-        if matches!(self.power_focus, PowerFocus::Queue) {
+        if matches!(self.panel_focus, PanelFocus::Queue) {
             self.refresh_queue();
-        } else if self.power_left_tab == 0 {
+        } else if self.library_tab == 0 {
             if let Err(e) = self.fetch_home() {
                 self.flash_status_high(format!("Refresh error: {e}"));
             }
@@ -3206,13 +3206,13 @@ impl App {
     }
 
     pub(super) fn shuffle_play(&mut self) {
-        if self.power_left_tab == 0 {
+        if self.library_tab == 0 {
             return;
         }
         if self.play_selected_artist_header(true) {
             return;
         }
-        let lib_idx = self.power_left_tab - 1;
+        let lib_idx = self.library_tab - 1;
         let parent_id = {
             let lib = &self.libs[lib_idx];
             let item = lib.nav_stack.last().and_then(|lvl| {
@@ -3253,7 +3253,7 @@ impl App {
                 let count = items.len();
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
-                self.set_power_focus(PowerFocus::Queue);
+                self.set_panel_focus(PanelFocus::Queue);
                 self.flash_status(format!("Playing {count} items"));
                 self.play_items_routed(items, 0);
             }
@@ -3286,7 +3286,7 @@ impl App {
     /// `library_route.rs` already does for the analogous "which library
     /// actually owns this item" problem in route resolution.
     fn active_lib_is_tvshows(&self) -> bool {
-        let Some(lib_idx) = self.power_left_tab.checked_sub(1) else {
+        let Some(lib_idx) = self.library_tab.checked_sub(1) else {
             return false;
         };
         lib_idx < self.libs.len() && self.is_tvshows_library(lib_idx)
@@ -3318,7 +3318,7 @@ impl App {
                 let count = items.len();
                 drop(client);
                 self.replace_playback_queue(items.clone(), 0);
-                self.set_power_focus(PowerFocus::Queue);
+                self.set_panel_focus(PanelFocus::Queue);
                 self.flash_status(format!("Shuffling {count} items"));
                 self.queue_source = crate::config::QueueSource::Shuffle;
                 if !self.has_direct_remote_queue() {
@@ -3337,11 +3337,11 @@ impl App {
         if idx >= self.libs.len() {
             return;
         }
-        if self.power_left_tab == idx + 1 && self.is_feed_home_video_library(idx) {
+        if self.library_tab == idx + 1 && self.is_feed_home_video_library(idx) {
             self.ensure_feed_home_video_root_loaded(idx);
             return;
         }
-        if self.power_left_tab == idx + 1 && self.is_podcast_library(idx) {
+        if self.library_tab == idx + 1 && self.is_podcast_library(idx) {
             self.ensure_podcast_root_loaded(idx);
             return;
         }
@@ -3422,7 +3422,7 @@ impl App {
             let restored = super::restore_library_position(&saved, visible_rows, |saved_level| {
                 let letter_filter = saved_level
                     .letter_filter_index
-                    .and_then(super::render::power::LetterFilter::for_index);
+                    .and_then(super::render::LetterFilter::for_index);
                 let (name_ge, name_lt) = letter_filter
                     .as_ref()
                     .map(|f| (f.name_ge, f.name_lt))
@@ -3706,7 +3706,7 @@ impl App {
         unplayed_only: bool,
         sort_by: String,
         sort_order: String,
-        letter_filter: Option<super::render::power::LetterFilter>,
+        letter_filter: Option<super::render::LetterFilter>,
     ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
@@ -4007,7 +4007,7 @@ impl App {
         sort_by: String,
         sort_order: String,
         loaded_count: usize,
-        letter_filter: Option<super::render::power::LetterFilter>,
+        letter_filter: Option<super::render::LetterFilter>,
     ) {
         let client = self.client.lock().unwrap().clone();
         let tx = self.lib_tx.clone();
@@ -4260,9 +4260,8 @@ impl App {
         {
             if !last.items.is_empty() {
                 let mut order: Vec<usize> = (0..last.items.len()).collect();
-                order.sort_by_key(|&i| {
-                    super::render::power::initial_group_artist_sort_key(&last.items[i])
-                });
+                order
+                    .sort_by_key(|&i| super::render::initial_group_artist_sort_key(&last.items[i]));
                 last.cursor = order[0];
             }
         }
@@ -4281,7 +4280,7 @@ impl App {
         // In Power View: when a season list arrives for a TV library,
         // automatically push a loading placeholder and fetch the first season's
         // episodes so the user lands directly in the combined series view.
-        let should_auto_push = self.power_left_tab == lib_idx + 1
+        let should_auto_push = self.library_tab == lib_idx + 1
             && self
                 .libs
                 .get(lib_idx)
@@ -4343,7 +4342,7 @@ impl App {
         // In Power View: when the group list loads for a music library with
         // levels = ["group", …], automatically push the first group's album
         // level so the user lands directly in the combined group view.
-        let should_auto_push_music = self.power_left_tab == lib_idx + 1
+        let should_auto_push_music = self.library_tab == lib_idx + 1
             && self
                 .libs
                 .get(lib_idx)
@@ -4424,7 +4423,7 @@ impl App {
             .libs
             .get(lib_idx)
             .map(|lib| {
-                self.power_left_tab == lib_idx + 1
+                self.library_tab == lib_idx + 1
                     && (self.is_feed_home_video_library(lib_idx)
                         || self.is_podcast_library(lib_idx))
                     && lib
@@ -4492,10 +4491,10 @@ impl App {
         if let Some(lib) = self.libs.get_mut(lib_idx) {
             lib.library_total = Some(total);
         }
-        if total <= super::render::power::LIBRARY_PILL_THRESHOLD {
+        if total <= super::render::LIBRARY_PILL_THRESHOLD {
             return;
         }
-        let filter = super::render::power::LetterFilter::default_filter();
+        let filter = super::render::LetterFilter::default_filter();
         if let Some(last) = self.libs[lib_idx].nav_stack.last_mut() {
             last.loading = true;
             last.letter_filter = Some(filter.clone());
@@ -5064,20 +5063,20 @@ impl App {
     }
 
     /// Number of selectable left-panel tabs in Power View: Home/CW + all libraries.
-    pub(super) fn power_left_tab_count(&self) -> usize {
+    pub(super) fn library_tab_count(&self) -> usize {
         1 + self.libs.len()
     }
 
     /// Jump directly to left-panel tab `idx` (0 = Home, 1..=libs.len() =
     /// library index `idx - 1`), e.g. from a tab-bar click or a digit key.
     pub(super) fn set_library_tab(&mut self, idx: usize) {
-        if idx >= self.power_left_tab_count() {
+        if idx >= self.library_tab_count() {
             return;
         }
-        self.power_left_tab = idx;
+        self.library_tab = idx;
         self.last_card_height = 0; // reset stale image height for new view
         if idx > 0 {
-            self.set_power_focus(PowerFocus::Left);
+            self.set_panel_focus(PanelFocus::Library);
             self.activate_library_position_scope(idx - 1);
         }
         self.ensure_tab_visible();
@@ -5085,26 +5084,26 @@ impl App {
     }
 
     /// Advance the left-panel tab (wrapping); load the library if needed.
-    pub(super) fn power_left_tab_next(&mut self) {
-        let n = self.power_left_tab_count();
-        self.power_left_tab = (self.power_left_tab + 1) % n;
+    pub(super) fn library_tab_next(&mut self) {
+        let n = self.library_tab_count();
+        self.library_tab = (self.library_tab + 1) % n;
         self.last_card_height = 0; // reset stale image height for new view
-        if self.power_left_tab > 0 {
-            self.set_power_focus(PowerFocus::Left);
-            self.activate_library_position_scope(self.power_left_tab - 1);
+        if self.library_tab > 0 {
+            self.set_panel_focus(PanelFocus::Library);
+            self.activate_library_position_scope(self.library_tab - 1);
         }
         self.ensure_tab_visible();
         self.save_prefs();
     }
 
     /// Retreat the left-panel tab (wrapping); load the library if needed.
-    pub(super) fn power_left_tab_prev(&mut self) {
-        let n = self.power_left_tab_count();
-        self.power_left_tab = (self.power_left_tab + n - 1) % n;
+    pub(super) fn library_tab_prev(&mut self) {
+        let n = self.library_tab_count();
+        self.library_tab = (self.library_tab + n - 1) % n;
         self.last_card_height = 0;
-        if self.power_left_tab > 0 {
-            self.set_power_focus(PowerFocus::Left);
-            self.activate_library_position_scope(self.power_left_tab - 1);
+        if self.library_tab > 0 {
+            self.set_panel_focus(PanelFocus::Library);
+            self.activate_library_position_scope(self.library_tab - 1);
         }
         self.ensure_tab_visible();
         self.save_prefs();
@@ -5157,9 +5156,9 @@ impl App {
 
     // ── Power-view home flat list ────────────────────────────────────────────
 
-    /// The MediaItem at the current flat `power_home_cursor`, or None.
+    /// The MediaItem at the current flat `home_cursor`, or None.
     pub(super) fn power_home_current_item(&self) -> Option<MediaItem> {
-        let cursor = self.home.power_home_cursor;
+        let cursor = self.home.home_cursor;
         let mut pos = 0usize;
         for item in &self.home.continue_items {
             if pos == cursor {
@@ -5227,12 +5226,12 @@ impl App {
             return;
         };
         self.home.section = section_idx;
-        self.home.power_home_scroll = 0;
+        self.home.home_scroll = 0;
         if let Some((start, len)) = self.power_home_section_range(section_idx) {
-            self.home.power_home_cursor = if len == 0 {
+            self.home.home_cursor = if len == 0 {
                 start
             } else {
-                self.home.power_home_cursor.clamp(start, start + len - 1)
+                self.home.home_cursor.clamp(start, start + len - 1)
             };
         }
     }
@@ -5255,26 +5254,26 @@ impl App {
     pub(super) fn power_home_move_cursor(&mut self, delta: i64) {
         let indices = self.power_home_visible_indices();
         if indices.is_empty() {
-            self.home.power_home_cursor = 0;
+            self.home.home_cursor = 0;
             return;
         };
         let pos = indices
             .iter()
-            .position(|idx| *idx == self.home.power_home_cursor)
+            .position(|idx| *idx == self.home.home_cursor)
             .unwrap_or(0);
         let next = (pos as i64 + delta).clamp(0, indices.len() as i64 - 1) as usize;
-        self.home.power_home_cursor = indices[next];
+        self.home.home_cursor = indices[next];
     }
 
     pub(super) fn power_home_select_start(&mut self) {
         if let Some(first) = self.power_home_visible_indices().first() {
-            self.home.power_home_cursor = *first;
+            self.home.home_cursor = *first;
         }
     }
 
     pub(super) fn power_home_select_end(&mut self) {
         if let Some(last) = self.power_home_visible_indices().last() {
-            self.home.power_home_cursor = *last;
+            self.home.home_cursor = *last;
         }
     }
 
@@ -5314,7 +5313,7 @@ impl App {
         if item.is_folder {
             return;
         }
-        let cursor = self.home.power_home_cursor;
+        let cursor = self.home.home_cursor;
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
             // CW items: use select_home for proper resume handling.
@@ -5331,7 +5330,7 @@ impl App {
 
     /// Enqueue the item under the flat power-home cursor.
     pub(super) fn power_home_enqueue(&mut self) {
-        let cursor = self.home.power_home_cursor;
+        let cursor = self.home.home_cursor;
         let cw_len = self.home.continue_items.len();
         if cursor < cw_len {
             let (saved_sec, saved_cursor) = (self.home.section, self.home.continue_cursor);
@@ -5542,7 +5541,7 @@ impl App {
         self.replace_queue_or_prompt(action);
         if !self.show_save_playlist_modal {
             self.show_playlists = false;
-            self.set_power_focus(PowerFocus::Queue);
+            self.set_panel_focus(PanelFocus::Queue);
         }
     }
 
@@ -5695,7 +5694,7 @@ impl App {
                     return;
                 }
                 let start_idx = start_index.min(items.len().saturating_sub(1));
-                self.set_power_focus(PowerFocus::Queue);
+                self.set_panel_focus(PanelFocus::Queue);
                 self.queue_source = crate::config::QueueSource::Remote;
                 if items.len() == 1 {
                     let mut item = items[0].clone();
@@ -6154,8 +6153,8 @@ mod tests {
     fn power_recursive_activation_keeps_power_view_and_enters_inline_tracks() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = recursive_music_app();
-        app.power_left_tab = 1;
-        app.power_focus = PowerFocus::Left;
+        app.library_tab = 1;
+        app.panel_focus = PanelFocus::Library;
         app.libs[0].nav_stack.push(BrowseLevel {
             parent_id: "group-a".into(),
             title: "Group A".into(),
@@ -6250,7 +6249,7 @@ mod tests {
         use crate::app::tests::make_item;
 
         let mut app = crate::app::tests::make_app_stub();
-        app.power_focus = crate::app::PowerFocus::Queue;
+        app.panel_focus = crate::app::PanelFocus::Queue;
         app.player_tab
             .set_items(vec![make_item("Track One", "Audio")], 0);
         {
@@ -6272,12 +6271,12 @@ mod tests {
     fn power_view_enqueue_then_queue_play_cursor_syncs_and_jumps_to_new_item() {
         use crate::app::action::Command;
         use crate::app::tests::make_item;
-        use crate::app::{BrowseLevel, LibraryTab, PowerFocus};
+        use crate::app::{BrowseLevel, LibraryTab, PanelFocus};
         use crate::player::PlayerCommand;
 
         let mut app = crate::app::tests::make_app_stub();
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         app.player_tab
             .set_items(vec![make_item("Queued First", "Movie")], 0);
         {
@@ -6336,7 +6335,7 @@ mod tests {
             Ok(PlayerCommand::QueueAppend { items }) if items.len() == 1 && items[0].id == queued.id
         ));
 
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.player_tab.queue_cursor = 1;
 
         app.dispatch(Command::QueuePlayCursor);
@@ -6680,7 +6679,7 @@ mod tests {
     #[test]
     fn ensure_power_feed_library_preserves_saved_feed_position() {
         let mut app = crate::app::tests::make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = crate::app::tests::make_item("YouTube", "CollectionFolder");
@@ -6717,7 +6716,7 @@ mod tests {
     #[test]
     fn ensure_power_podcast_library_preserves_saved_feed_position() {
         let mut app = crate::app::tests::make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         let mut library = crate::app::tests::make_item("Podcasts", "CollectionFolder");
         library.id = "lib-podcasts".into();
@@ -7230,7 +7229,7 @@ mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         app.enqueue_selected();
 
@@ -7337,7 +7336,7 @@ mod tests {
         });
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         app.play_item(item);
 
@@ -7446,16 +7445,16 @@ mod tests {
         app.libs.push(lib_tab("tvshows"));
         app.libs.push(lib_tab("music"));
 
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         assert!(
             app.active_lib_is_tvshows(),
-            "power_left_tab on the tvshows library tab"
+            "library_tab on the tvshows library tab"
         );
 
-        app.power_left_tab = 2;
+        app.library_tab = 2;
         assert!(
             !app.active_lib_is_tvshows(),
-            "power_left_tab on the music library tab"
+            "library_tab on the music library tab"
         );
     }
 
@@ -7464,10 +7463,10 @@ mod tests {
         let mut app = make_app_stub();
         app.libs.push(lib_tab("tvshows"));
 
-        app.power_left_tab = 0; // Home
+        app.library_tab = 0; // Home
         assert!(!app.active_lib_is_tvshows());
 
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         assert!(!app.active_lib_is_tvshows());
     }
 
@@ -7622,7 +7621,7 @@ mod tests {
         {
             let lvl = lib.nav_stack.last_mut().unwrap();
             lvl.total_count = 40; // what get_items_sorted_ranged reported for M–O
-            lvl.letter_filter = crate::app::render::power::LetterFilter::for_index(4);
+            lvl.letter_filter = crate::app::render::LetterFilter::for_index(4);
         }
         let lvl = lib.nav_stack.last().unwrap();
 

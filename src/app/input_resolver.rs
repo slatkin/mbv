@@ -173,19 +173,19 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_global_overlay_open,
     },
     ContextEntry {
-        name: "power_left_width",
-        handler: App::handle_key_power_left_width,
+        name: "queue_column_width",
+        handler: App::handle_key_queue_column_width,
     },
     ContextEntry {
         name: "home_search",
         handler: App::handle_key_home_search,
     },
     ContextEntry {
-        name: "power_lib_search",
+        name: "lib_search",
         handler: App::handle_key_power_lib_search,
     },
     ContextEntry {
-        name: "power_sidebar_toggle_h",
+        name: "sidebar_toggle_h",
         handler: App::handle_key_power_sidebar_toggle,
     },
     ContextEntry {
@@ -225,7 +225,7 @@ pub(super) const CONTEXT_STACK: &[ContextEntry] = &[
         handler: App::handle_key_f5_refresh,
     },
     ContextEntry {
-        name: "power_album_track_mode",
+        name: "album_track_mode",
         handler: App::handle_key_power_album_track_mode,
     },
     ContextEntry {
@@ -495,7 +495,7 @@ mod app_level_tests {
         assert!(app.show_settings);
         // PRESERVED QUIRK: a second F2 press does not close settings. Once
         // `show_settings` is true, `handle_key_settings` (ordered ahead of
-        // `global_overlay_open`/`power_left_width` in CONTEXT_STACK, matching the
+        // `global_overlay_open`/`queue_column_width` in CONTEXT_STACK, matching the
         // pre-phase-2 branch order) claims F2 first and its match has no
         // `F(2)` arm, so it falls to `_ => {}` and swallows the key. This
         // predates phase 2 (verified against commit 2147343) — not a
@@ -683,7 +683,7 @@ mod app_level_tests {
         if let Some(hs) = app.search.state_mut() {
             hs.input_focused = true;
         }
-        let collapsed_before = app.power_left_collapsed;
+        let collapsed_before = app.queue_column_collapsed;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
         assert_eq!(
             app.search.state().unwrap().query,
@@ -691,7 +691,7 @@ mod app_level_tests {
             "home search must capture the literal 'h' character"
         );
         assert_eq!(
-            app.power_left_collapsed, collapsed_before,
+            app.queue_column_collapsed, collapsed_before,
             "Power View sidebar must not toggle while home search captures 'h'"
         );
     }
@@ -699,19 +699,19 @@ mod app_level_tests {
     #[test]
     fn h_toggles_power_sidebar_in_power_view_via_handle_key() {
         let mut app = make_app_stub();
-        let before = app.power_left_collapsed;
+        let before = app.queue_column_collapsed;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
-        assert_ne!(app.power_left_collapsed, before);
+        assert_ne!(app.queue_column_collapsed, before);
     }
 
     #[test]
     fn h_does_not_toggle_power_sidebar_while_context_menu_is_open_via_handle_key() {
         let mut app = make_app_stub();
         app.context_menu = Some(test_empty_context_menu());
-        let before = app.power_left_collapsed;
+        let before = app.queue_column_collapsed;
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
         assert_eq!(
-            app.power_left_collapsed, before,
+            app.queue_column_collapsed, before,
             "Power View sidebar must not toggle while a context menu is open"
         );
     }
@@ -719,24 +719,24 @@ mod app_level_tests {
     #[test]
     fn h_moves_queue_focus_to_library_when_collapsing_power_sidebar() {
         let mut app = make_app_stub();
-        app.power_focus = crate::app::PowerFocus::Queue;
+        app.panel_focus = crate::app::PanelFocus::Queue;
 
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
 
-        assert!(app.power_left_collapsed);
-        assert_eq!(app.power_focus, crate::app::PowerFocus::Left);
+        assert!(app.queue_column_collapsed);
+        assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
 
         app.handle_key(ev(KeyCode::Char('h'), KeyModifiers::NONE));
 
-        assert!(!app.power_left_collapsed);
-        assert_eq!(app.power_focus, crate::app::PowerFocus::Left);
+        assert!(!app.queue_column_collapsed);
+        assert_eq!(app.panel_focus, crate::app::PanelFocus::Library);
     }
 
     #[test]
     fn power_lib_search_esc_closes_via_handle_key() {
         let mut app = make_app_stub();
-        app.power_focus = crate::app::PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = crate::app::PanelFocus::Library;
+        app.library_tab = 1;
         app.libs.push(test_lib_with_search());
         app.handle_key(ev(KeyCode::Esc, KeyModifiers::NONE));
         assert!(app.libs[0].search.is_none());
@@ -747,8 +747,8 @@ mod app_level_tests {
         use crate::app::{BrowseLevel, LibSearch, LibraryTab};
 
         let mut app = make_app_stub();
-        app.power_focus = crate::app::PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = crate::app::PanelFocus::Library;
+        app.library_tab = 1;
 
         let mut library = crate::app::tests::make_item("Shows", "CollectionFolder");
         library.id = "lib-shows".into();
@@ -802,7 +802,7 @@ mod app_level_tests {
 
     // `lib_search_esc_closes_via_handle_key` (deleted): identical scenario
     // to `power_lib_search_esc_closes_via_handle_key` above but without
-    // setting `power_focus`/`power_left_tab`, which is how it used to reach
+    // setting `panel_focus`/`library_tab`, which is how it used to reach
     // Standard's now-deleted `lib_search` CONTEXT_STACK entry. Power's
     // equivalent handler is already covered by the test above.
 
@@ -843,10 +843,10 @@ mod app_level_tests {
         // pins the keyboard side of that shared seam end-to-end through
         // `handle_key`.
         let mut app = make_app_stub();
-        // `handle_queue_key` branches on `power_focus`; queue-cursor Enter
+        // `handle_queue_key` branches on `panel_focus`; queue-cursor Enter
         // only fires when the queue side is focused (equivalent of the old
         // default "Queue tab").
-        app.power_focus = crate::app::PowerFocus::Queue;
+        app.panel_focus = crate::app::PanelFocus::Queue;
         app.player_tab.set_items(
             vec![
                 crate::app::tests::make_item("1", "Audio"),
@@ -887,10 +887,10 @@ mod app_level_tests {
                 "sessions",
                 "playlists",
                 "global_overlay_open",
-                "power_left_width",
+                "queue_column_width",
                 "home_search",
-                "power_lib_search",
-                "power_sidebar_toggle_h",
+                "lib_search",
+                "sidebar_toggle_h",
                 "confirm_clear_queue",
                 "confirm_rescan",
                 "confirm_skip_intro",
@@ -900,7 +900,7 @@ mod app_level_tests {
                 "playback",
                 "ctrl_l_force_clear",
                 "f5_refresh",
-                "power_album_track_mode",
+                "album_track_mode",
                 "view_dispatch",
             ],
             "precedence order must match handle_key's pre-phase-2 branch order; \

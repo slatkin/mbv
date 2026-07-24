@@ -1,5 +1,5 @@
-use super::super::super::ui_util::*;
-use crate::app::layout::LayoutPower;
+use super::super::ui_util::*;
+use crate::app::layout::LayoutMain;
 use crate::app::App;
 use mbv_core::api::MediaItem;
 use ratatui::layout::*;
@@ -31,7 +31,7 @@ impl App {
         f: &mut Frame,
         row_area: Rect,
         lib_idx: usize,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         let (groups, group_cursor) = self.music_group_state(lib_idx);
         if groups.is_empty() || row_area.width == 0 {
@@ -75,7 +75,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;

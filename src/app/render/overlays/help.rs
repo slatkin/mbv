@@ -109,8 +109,8 @@ impl App {
             mk("Ctrl+R", "Rescan"),
             blank(),
         ];
-        let is_queue = matches!(self.power_focus, crate::app::PowerFocus::Queue);
-        let is_home = !is_queue && self.power_left_tab == 0;
+        let is_queue = matches!(self.panel_focus, crate::app::PanelFocus::Queue);
+        let is_home = !is_queue && self.library_tab == 0;
         let is_lib = !is_queue && !is_home;
 
         let mut ordered: Vec<Vec<Line>> = Vec::new();

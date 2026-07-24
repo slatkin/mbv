@@ -1,5 +1,5 @@
 use super::LetterFilter;
-use crate::app::layout::LayoutPower;
+use crate::app::layout::LayoutMain;
 use crate::app::App;
 use ratatui::layout::*;
 use ratatui::Frame;
@@ -16,7 +16,7 @@ impl App {
         f: &mut Frame,
         row_area: Rect,
         lib_idx: usize,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if row_area.width == 0 {
             layout.selector_tabs = Vec::new();

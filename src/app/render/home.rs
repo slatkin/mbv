@@ -1,6 +1,6 @@
-use super::super::super::ui_util::*;
+use super::super::ui_util::*;
 use super::POWER_RENDER_FILTER;
-use crate::app::layout::LayoutPower;
+use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
@@ -176,7 +176,7 @@ impl App {
         item_h: u16,
         lib_idx: usize,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         let detail_height = item_h.saturating_sub(5);
         if detail_height == 0 {
@@ -204,7 +204,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -335,7 +335,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -767,7 +767,7 @@ impl App {
         f: &mut Frame,
         area: Rect,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if area.height == 0 || area.width == 0 {
             return;
@@ -854,13 +854,13 @@ impl App {
             })
             .collect();
         if let Some(first) = visible_flat_indices.first() {
-            if !visible_flat_indices.contains(&self.home.power_home_cursor) {
-                self.home.power_home_cursor = *first;
+            if !visible_flat_indices.contains(&self.home.home_cursor) {
+                self.home.home_cursor = *first;
             }
         } else {
-            self.home.power_home_cursor = 0;
+            self.home.home_cursor = 0;
         }
-        let cursor = self.home.power_home_cursor;
+        let cursor = self.home.home_cursor;
 
         // --- Home hero panel ----------------------------------------------
         // Shared hero above the selected Home list. It reflects the current
@@ -944,13 +944,13 @@ impl App {
             .position(|row| matches!(row, DisplayRow::Item(flat_idx, _) if *flat_idx == cursor))
             .unwrap_or(0) as u16;
         let scroll_y = power_home_panel_scroll(
-            self.home.power_home_scroll as u16,
+            self.home.home_scroll as u16,
             cursor_row,
             cursor_row + 1,
             content_h,
             list_area.height,
         );
-        self.home.power_home_scroll = scroll_y as usize;
+        self.home.home_scroll = scroll_y as usize;
 
         let mut hitmap: Vec<(Rect, usize)> = Vec::new();
 
@@ -1044,7 +1044,7 @@ impl App {
         &mut self,
         f: &mut Frame,
         area: Rect,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         if area.width == 0 || area.height == 0 {
             layout.selector_tabs = Vec::new();
@@ -1175,7 +1175,7 @@ mod tests {
         let mut layout = AppLayout::default();
         term.draw(|f| {
             let area = Rect::new(0, 0, 80, 30);
-            app.render_power_home_list(f, area, true, &mut layout.power);
+            app.render_power_home_list(f, area, true, &mut layout.main);
         })
         .unwrap();
 
@@ -1195,8 +1195,8 @@ mod tests {
         assert!(out.contains("47m"));
         assert!(out.contains("67m"));
         assert!(!out.contains("1h"));
-        assert_eq!(layout.power.home.hitmap.len(), 3);
-        assert_eq!(layout.power.selector_tabs.len(), 3);
+        assert_eq!(layout.main.home.hitmap.len(), 3);
+        assert_eq!(layout.main.selector_tabs.len(), 3);
 
         app.power_home_select_section(1);
         let backend = TestBackend::new(80, 30);
@@ -1204,7 +1204,7 @@ mod tests {
         let mut layout = AppLayout::default();
         term.draw(|f| {
             let area = Rect::new(0, 0, 80, 30);
-            app.render_power_home_list(f, area, true, &mut layout.power);
+            app.render_power_home_list(f, area, true, &mut layout.main);
         })
         .unwrap();
 
@@ -1216,7 +1216,7 @@ mod tests {
         assert!(out.contains("Newest metadata overview appears"));
         assert!(out.contains("Either/Or"));
         assert!(!out.contains("NXL Not-E3 Showcase"));
-        assert_eq!(layout.power.home.hitmap.len(), 3);
+        assert_eq!(layout.main.home.hitmap.len(), 3);
     }
 
     #[test]
@@ -1236,7 +1236,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = AppLayout::default();
         term.draw(|f| {
-            app.render_power_home_list(f, Rect::new(2, 2, 20, 14), true, &mut layout.power);
+            app.render_power_home_list(f, Rect::new(2, 2, 20, 14), true, &mut layout.main);
         })
         .unwrap();
 
@@ -1251,7 +1251,7 @@ mod tests {
     fn make_home_video_panel_app() -> crate::app::App {
         let mut app = make_app_stub();
         app.image_protocol_enabled = true;
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         let mut library = make_item("Home Videos", "CollectionFolder");
         library.id = "lib-homevideos".into();
@@ -1313,13 +1313,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = AppLayout::default();
         term.draw(|f| {
-            app.render_power_home_video_list(
-                f,
-                Rect::new(0, 0, 60, 30),
-                0,
-                true,
-                &mut layout.power,
-            );
+            app.render_power_home_video_list(f, Rect::new(0, 0, 60, 30), 0, true, &mut layout.main);
         })
         .unwrap();
 
@@ -1338,18 +1332,18 @@ mod tests {
             title < overview && overview < other,
             "unexpected render order:\n{out}"
         );
-        assert_eq!(layout.power.cursor_screen_y, Some(2));
-        assert_eq!(layout.power.left_row_map[0], Some(0));
+        assert_eq!(layout.main.cursor_screen_y, Some(2));
+        assert_eq!(layout.main.left_row_map[0], Some(0));
         let other_row = layout
-            .power
+            .main
             .left_row_map
             .iter()
             .position(|row| *row == Some(1))
             .expect("unselected home-video row should map to the display");
-        assert!(other_row + 1 < layout.power.left_row_map.len());
+        assert!(other_row + 1 < layout.main.left_row_map.len());
         assert_eq!(
             layout
-                .power
+                .main
                 .left_row_map
                 .get(other_row + 1)
                 .copied()
@@ -1381,7 +1375,7 @@ mod tests {
                 Rect::new(0, 0, 60, 30),
                 0,
                 true,
-                &mut layout.power,
+                &mut layout.main,
             );
         })
         .unwrap();
@@ -1400,7 +1394,7 @@ mod tests {
             app.libs[0].feed_home_video.as_ref().unwrap().video_scroll,
             1
         );
-        assert_eq!(layout.power.left_row_map[0], Some(1));
+        assert_eq!(layout.main.left_row_map[0], Some(1));
     }
 
     #[test]

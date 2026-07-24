@@ -45,24 +45,24 @@ pub(crate) struct LayoutPlayback {
 /// Geometry for the power-view's own Home sub-tab,
 /// separate from `LayoutHome` which belongs to the regular Home tab.
 #[derive(Default)]
-pub(crate) struct LayoutPowerHome {
+pub(crate) struct LayoutHome {
     pub hitmap: Vec<(Rect, usize)>,
 }
 
 /// Power-view left panel, queue panel, and home-grid geometry.
 #[derive(Default)]
-pub(crate) struct LayoutPower {
+pub(crate) struct LayoutMain {
     /// Full expanded Power sidebar covered by an F1-F4 panel, when present.
     pub panel_area: Rect,
     /// Content bounds inside `panel_area`, shared with panel mouse hit-testing.
     pub panel_content_area: Rect,
     pub left_row_map: Vec<Option<usize>>,
-    pub left_row_targets: Vec<Option<PowerLeftRowTarget>>,
+    pub left_row_targets: Vec<Option<LibraryRowTarget>>,
     pub left_sorted_indices: Vec<usize>,
     pub left_area: Rect,
     /// Geometry for the power-view's own Home sub-tab grid. Distinct from
     /// `AppLayout::home` (`LayoutHome`), which is the regular Home-tab.
-    pub home: LayoutPowerHome,
+    pub home: LayoutHome,
     pub queue_row_map: Vec<Option<usize>>,
     pub queue_area: Rect,
     pub queue_scope_local_area: Rect,
@@ -75,7 +75,7 @@ pub(crate) struct LayoutPower {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum PowerLeftRowTarget {
+pub(crate) enum LibraryRowTarget {
     Album(usize),
     ArtistHeader(ArtistHeaderSelection),
 }
@@ -86,7 +86,7 @@ pub(crate) enum PowerLeftRowTarget {
 #[derive(Default)]
 pub(crate) struct AppLayout {
     pub playback: LayoutPlayback,
-    pub power: LayoutPower,
+    pub main: LayoutMain,
     pub tabs_area: Rect,
     pub tabbar_vol_area: Rect,
     pub settings_area: Rect,

@@ -316,8 +316,8 @@ struct BrowseLevel {
     loading: bool,
     all_items: Option<Vec<MediaItem>>, // prefetched full list for instant search
     /// Active letter-range pill scope for a large library's top browse level
-    /// (`None` = unfiltered). See `render::power::LetterFilter`.
-    letter_filter: Option<crate::app::render::power::LetterFilter>,
+    /// (`None` = unfiltered). See `render::LetterFilter`.
+    letter_filter: Option<crate::app::render::LetterFilter>,
 }
 
 impl BrowseLevel {
@@ -354,7 +354,7 @@ impl BrowseLevel {
             all_items: None,
             letter_filter: saved
                 .letter_filter_index
-                .and_then(crate::app::render::power::LetterFilter::for_index),
+                .and_then(crate::app::render::LetterFilter::for_index),
         }
     }
 
@@ -897,9 +897,9 @@ struct HomePane {
     latest: Vec<(String, String, Vec<MediaItem>, usize)>, // (title, lib_id, items, cursor)
     section: usize,                                       // 0=continue, 1..=latest
     /// Flat cursor for the power-view home list (spans continue_items then all latest sections).
-    power_home_cursor: usize,
+    home_cursor: usize,
     /// Viewport scroll offset for the power-view home list.
-    power_home_scroll: usize,
+    home_scroll: usize,
 }
 
 struct LibraryTab {
@@ -1058,12 +1058,12 @@ pub struct App {
     next_up_item: Option<MediaItem>,
     // Power-view UI scalars. NOTE: this is NOT the whole of Power's state -- Power also
     // reuses shared self.libs.
-    power_focus: PowerFocus,
-    power_left_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
-    power_left_width: u16,
-    power_left_collapsed: bool,
-    power_left_tab_pending: usize, // restored from prefs; applied once libs have loaded
-    power_queue_scroll: usize,
+    panel_focus: PanelFocus,
+    library_tab: usize, // 0 = Home/CW, 1..=libs.len() = library index
+    queue_column_width: u16,
+    queue_column_collapsed: bool,
+    library_tab_pending: usize, // restored from prefs; applied once libs have loaded
+    queue_scroll: usize,
     last_played_item_id: Option<String>,
     last_played_completed: bool,
     card_image_states:
@@ -1337,17 +1337,17 @@ enum PendingQueueAction {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub(super) enum PowerFocus {
-    Queue, // left panel (queue list below the card)
+pub(super) enum PanelFocus {
+    Queue, // queue column (queue list below the card)
     #[default]
-    Left, // right panel (library browser); driven by power_left_tab
+    Library, // library side (library browser); driven by library_tab
 }
 
-impl PowerFocus {
+impl PanelFocus {
     fn from_pref(value: Option<&str>) -> Self {
         match value {
             Some("queue_side") => Self::Queue,
-            Some("library_side") => Self::Left,
+            Some("library_side") => Self::Library,
             _ => Self::default(),
         }
     }
@@ -1355,7 +1355,7 @@ impl PowerFocus {
     fn pref_value(self) -> &'static str {
         match self {
             Self::Queue => "queue_side",
-            Self::Left => "library_side",
+            Self::Library => "library_side",
         }
     }
 }
@@ -1451,24 +1451,24 @@ const HELP_PANEL_W: u16 = 40;
 const SETTINGS_PANEL_W: u16 = 40;
 const PLAYLISTS_PANEL_W: u16 = 40;
 impl App {
-    pub(super) fn power_left_width_max_for_terminal(terminal_width: u16) -> u16 {
+    pub(super) fn queue_column_width_max_for_terminal(terminal_width: u16) -> u16 {
         POWER_LEFT_WIDTH_DEFAULT.max(terminal_width.saturating_mul(3) / 5)
     }
 
-    pub(super) fn normalize_power_left_width(width: u16, terminal_width: u16) -> u16 {
+    pub(super) fn normalize_queue_column_width(width: u16, terminal_width: u16) -> u16 {
         width.clamp(
             POWER_LEFT_WIDTH_DEFAULT,
-            Self::power_left_width_max_for_terminal(terminal_width),
+            Self::queue_column_width_max_for_terminal(terminal_width),
         )
     }
 
-    pub(super) fn clamp_power_left_width(&mut self) -> bool {
+    pub(super) fn clamp_queue_column_width(&mut self) -> bool {
         let normalized =
-            Self::normalize_power_left_width(self.power_left_width, self.terminal_width);
-        if normalized == self.power_left_width {
+            Self::normalize_queue_column_width(self.queue_column_width, self.terminal_width);
+        if normalized == self.queue_column_width {
             return false;
         }
-        self.power_left_width = normalized;
+        self.queue_column_width = normalized;
         true
     }
 
@@ -1491,7 +1491,7 @@ impl App {
     /// panel -- used to decide whether a manual refresh/rescan should clear
     /// its saved position (see `refresh_lib`/`trigger_lib_rescan`).
     fn active_library_position_scope_for(&self, lib_idx: usize) -> Option<()> {
-        (self.power_left_tab == lib_idx + 1).then_some(())
+        (self.library_tab == lib_idx + 1).then_some(())
     }
 
     fn saved_library_position(&self, lib_idx: usize) -> Option<crate::config::LibraryPosition> {
@@ -1516,14 +1516,14 @@ impl App {
         crate::config::save_library_position_state(&self.library_position_state);
     }
 
-    fn set_power_focus(&mut self, focus: PowerFocus) {
-        if self.power_focus == focus {
+    fn set_panel_focus(&mut self, focus: PanelFocus) {
+        if self.panel_focus == focus {
             return;
         }
-        if matches!(focus, PowerFocus::Queue) {
+        if matches!(focus, PanelFocus::Queue) {
             self.focus_power_queue_initial_item();
         }
-        self.power_focus = focus;
+        self.panel_focus = focus;
         self.save_prefs();
     }
 
@@ -1730,8 +1730,8 @@ impl App {
                 continue_cursor: 0,
                 latest: Vec::new(),
                 section: 0,
-                power_home_cursor: 0,
-                power_home_scroll: 0,
+                home_cursor: 0,
+                home_scroll: 0,
             },
             libs: Vec::new(),
             status: String::new(),
@@ -1759,26 +1759,25 @@ impl App {
             next_up_item: None,
             // #361: read the new prefs key, falling back to the pre-#361 one
             // for one release. `power_focus`/`power_left_tab`/`power_left_width`
-            // are renamed to `panel_focus`/`library_tab`/`queue_column_width`
-            // in commit 2 of #361; this fallback can be deleted a release
-            // after that lands.
-            power_focus: PowerFocus::from_pref(
+            // on disk are renamed to `panel_focus`/`library_tab`/`queue_column_width`;
+            // this fallback can be deleted a release after that lands.
+            panel_focus: PanelFocus::from_pref(
                 prefs["panel_focus"]
                     .as_str()
                     .or_else(|| prefs["power_focus"].as_str()),
             ),
-            power_left_tab: 0,
-            power_left_width: prefs["queue_column_width"]
+            library_tab: 0,
+            queue_column_width: prefs["queue_column_width"]
                 .as_u64()
                 .or_else(|| prefs["power_left_width"].as_u64())
                 .map(|v| (v as u16).max(POWER_LEFT_WIDTH_DEFAULT))
                 .unwrap_or(POWER_LEFT_WIDTH_DEFAULT),
-            power_left_collapsed: false,
-            power_left_tab_pending: prefs["library_tab"]
+            queue_column_collapsed: false,
+            library_tab_pending: prefs["library_tab"]
                 .as_u64()
                 .or_else(|| prefs["power_left_tab"].as_u64())
                 .unwrap_or(0) as usize,
-            power_queue_scroll: 0,
+            queue_scroll: 0,
             ui_volume: prefs["ui_volume"].as_u64().unwrap_or(100).min(200) as u8,
             pre_mute_volume: prefs["pre_mute_volume"].as_u64().map(|v| v as u8),
             mute_on: prefs["mute_on"].as_bool().unwrap_or(false),
@@ -2382,7 +2381,7 @@ impl App {
         } else {
             QueueScope::Local
         };
-        self.power_queue_scroll = 0;
+        self.queue_scroll = 0;
     }
 
     fn session_direct_endpoint(
@@ -4533,7 +4532,7 @@ pub(crate) mod tests {
     #[test]
     fn save_default_library_position_persists_focused_item() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         app.libs.push(LibraryTab {
@@ -4734,7 +4733,7 @@ pub(crate) mod tests {
     #[test]
     fn activating_saved_power_position_initializes_feed_home_video_state() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = make_item("Youtube", "CollectionFolder");
@@ -4788,8 +4787,8 @@ pub(crate) mod tests {
     #[test]
     fn ensure_lib_loaded_for_visible_power_library_accepts_restore_from_queue_focus() {
         let mut app = make_app_stub();
-        app.power_focus = PowerFocus::Queue;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Queue;
+        app.library_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         library.collection_type = "movies".into();
@@ -4892,8 +4891,8 @@ pub(crate) mod tests {
             client.user_id = "user-1".into();
             client.token = "token-1".into();
         }
-        app.power_focus = PowerFocus::Queue;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Queue;
+        app.library_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         library.collection_type = "movies".into();
@@ -5016,8 +5015,8 @@ pub(crate) mod tests {
             ..Default::default()
         };
         app.replace_saved_library_position(0, pre_feature_position.clone());
-        app.power_focus = PowerFocus::Queue;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Queue;
+        app.library_tab = 1;
 
         app.handle_lib_event(LibEvent::RestoreLibraryPosition {
             lib_idx: 0,
@@ -5044,7 +5043,7 @@ pub(crate) mod tests {
         assert!(app.should_show_letter_pills(0));
         assert_eq!(
             app.libs[0].nav_stack[0].letter_filter,
-            Some(super::render::power::LetterFilter::default_filter()),
+            Some(super::render::LetterFilter::default_filter()),
             "large restored library should get the default A-C pill applied"
         );
     }
@@ -5054,7 +5053,7 @@ pub(crate) mod tests {
     // a power-scope write") no longer applies -- there is one saved
     // position per library now (see `save_default_library_position_persists_focused_item`).
     #[test]
-    fn power_left_tab_next_activates_saved_placeholder() {
+    fn library_tab_next_activates_saved_placeholder() {
         let mut app = make_app_stub();
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
@@ -5087,18 +5086,18 @@ pub(crate) mod tests {
                 ..Default::default()
             },
         );
-        app.power_left_tab = 0;
+        app.library_tab = 0;
 
-        app.power_left_tab_next();
+        app.library_tab_next();
 
-        assert_eq!(app.power_left_tab, 1);
+        assert_eq!(app.library_tab, 1);
         assert_eq!(app.libs[0].nav_stack.len(), 1);
         assert_eq!(app.libs[0].nav_stack[0].title, "Saved");
         assert!(app.libs[0].nav_stack[0].loading);
     }
 
     #[test]
-    fn power_left_tab_next_from_queue_focus_accepts_restore_result() {
+    fn library_tab_next_from_queue_focus_accepts_restore_result() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
         let mut library = make_item("Movies", "CollectionFolder");
@@ -5130,13 +5129,13 @@ pub(crate) mod tests {
             ..Default::default()
         };
         app.replace_saved_library_position(0, power_position.clone());
-        app.power_focus = PowerFocus::Queue;
-        app.power_left_tab = 0;
+        app.panel_focus = PanelFocus::Queue;
+        app.library_tab = 0;
 
-        app.power_left_tab_next();
+        app.library_tab_next();
 
-        assert_eq!(app.power_left_tab, 1);
-        assert_eq!(app.power_focus, PowerFocus::Left);
+        assert_eq!(app.library_tab, 1);
+        assert_eq!(app.panel_focus, PanelFocus::Library);
         assert_eq!(app.libs[0].nav_stack.len(), 1);
         assert!(app.libs[0].nav_stack[0].loading);
 
@@ -5166,37 +5165,37 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn build_restores_power_focus_from_prefs_for_both_values() {
+    fn build_restores_panel_focus_from_prefs_for_both_values() {
         let _guard = crate::config::TestStateDirGuard::new();
         for (pref, expected) in [
-            ("queue_side", PowerFocus::Queue),
-            ("library_side", PowerFocus::Left),
+            ("queue_side", PanelFocus::Queue),
+            ("library_side", PanelFocus::Library),
         ] {
             std::fs::write(
                 crate::config::prefs_path(),
-                serde_json::json!({ "power_focus": pref }).to_string(),
+                serde_json::json!({ "panel_focus": pref }).to_string(),
             )
             .expect("write prefs");
 
             let app = make_built_app();
 
-            assert_eq!(app.power_focus, expected);
+            assert_eq!(app.panel_focus, expected);
         }
     }
 
     #[test]
-    fn save_prefs_persists_power_focus_for_both_values() {
+    fn save_prefs_persists_panel_focus_for_both_values() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
 
-        app.set_power_focus(PowerFocus::Queue);
+        app.set_panel_focus(PanelFocus::Queue);
         let queue_prefs: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
         .expect("prefs json");
         assert_eq!(queue_prefs["panel_focus"].as_str(), Some("queue_side"));
 
-        app.set_power_focus(PowerFocus::Left);
+        app.set_panel_focus(PanelFocus::Library);
         let library_prefs: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
@@ -5208,7 +5207,7 @@ pub(crate) mod tests {
     fn entering_power_queue_focus_selects_now_playing_item() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
-        app.power_focus = PowerFocus::Left;
+        app.panel_focus = PanelFocus::Library;
         app.player_tab.set_items(make_items(3), 0);
         app.player_tab.queue_cursor = 2;
         {
@@ -5217,7 +5216,7 @@ pub(crate) mod tests {
             status.current_idx = 1;
         }
 
-        app.set_power_focus(PowerFocus::Queue);
+        app.set_panel_focus(PanelFocus::Queue);
 
         assert_eq!(app.player_tab.queue_cursor, 1);
     }
@@ -5226,11 +5225,11 @@ pub(crate) mod tests {
     fn entering_power_queue_focus_preserves_valid_queue_cursor_without_now_playing() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
-        app.power_focus = PowerFocus::Left;
+        app.panel_focus = PanelFocus::Library;
         app.player_tab.set_items(make_items(3), 0);
         app.player_tab.queue_cursor = 2;
 
-        app.set_power_focus(PowerFocus::Queue);
+        app.set_panel_focus(PanelFocus::Queue);
 
         assert_eq!(app.player_tab.queue_cursor, 2);
     }
@@ -5239,17 +5238,17 @@ pub(crate) mod tests {
     fn entering_power_queue_focus_defaults_invalid_queue_cursor_to_first_item() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
-        app.power_focus = PowerFocus::Left;
+        app.panel_focus = PanelFocus::Library;
         app.player_tab.set_items(make_items(3), 0);
         app.player_tab.queue_cursor = 99;
 
-        app.set_power_focus(PowerFocus::Queue);
+        app.set_panel_focus(PanelFocus::Queue);
 
         assert_eq!(app.player_tab.queue_cursor, 0);
     }
 
     #[test]
-    fn building_from_power_focus_prefs_does_not_mutate_saved_library_positions() {
+    fn building_from_panel_focus_prefs_does_not_mutate_saved_library_positions() {
         let _guard = crate::config::TestStateDirGuard::new();
         let state = crate::config::LibraryPositionState {
             libraries: std::iter::once((
@@ -5275,7 +5274,7 @@ pub(crate) mod tests {
         crate::config::save_library_position_state(&state);
         std::fs::write(
             crate::config::prefs_path(),
-            serde_json::json!({ "power_focus": "queue_side" }).to_string(),
+            serde_json::json!({ "panel_focus": "queue_side" }).to_string(),
         )
         .expect("write prefs");
 
@@ -5288,8 +5287,8 @@ pub(crate) mod tests {
     fn restored_default_library_fallback_rewrites_state_file_after_success() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_app_stub();
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         let mut library = make_item("Movies", "CollectionFolder");
         library.id = "lib-movies".into();
         app.libs.push(LibraryTab {
@@ -5521,7 +5520,7 @@ pub(crate) mod tests {
             }],
         });
 
-        // `power_left_tab` was never pointed at this library, so
+        // `library_tab` was never pointed at this library, so
         // `active_library_position_scope_for` says it's not the active
         // library and the restore must be ignored.
         assert_eq!(app.libs[0].nav_stack[0].title, "Power");
@@ -5563,8 +5562,8 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
         app.replace_saved_library_position(
             0,
             crate::config::LibraryPosition {
@@ -5622,7 +5621,7 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.replace_saved_library_position(
             0,
             crate::config::LibraryPosition {
@@ -5652,7 +5651,7 @@ pub(crate) mod tests {
     #[test]
     fn power_home_navigation_does_not_persist_library_position_state() {
         let mut app = make_app_stub();
-        app.power_left_tab = 0;
+        app.library_tab = 0;
         app.home.continue_items = make_items(3);
 
         app.power_cw_move_cursor(1);
@@ -5732,8 +5731,8 @@ pub(crate) mod tests {
                 continue_cursor: 0,
                 latest: Vec::new(),
                 section: 0,
-                power_home_cursor: 0,
-                power_home_scroll: 0,
+                home_cursor: 0,
+                home_scroll: 0,
             },
             libs: Vec::new(),
             status: String::new(),
@@ -5759,12 +5758,12 @@ pub(crate) mod tests {
             pending_remote_move_cursor: None,
             skip_intro_end_ticks: None,
             next_up_item: None,
-            power_focus: PowerFocus::default(),
-            power_left_tab: 0,
-            power_left_width: POWER_LEFT_WIDTH_DEFAULT,
-            power_left_collapsed: false,
-            power_left_tab_pending: 0,
-            power_queue_scroll: 0,
+            panel_focus: PanelFocus::default(),
+            library_tab: 0,
+            queue_column_width: POWER_LEFT_WIDTH_DEFAULT,
+            queue_column_collapsed: false,
+            library_tab_pending: 0,
+            queue_scroll: 0,
             last_played_item_id: None,
             last_played_completed: false,
             card_image_states: std::collections::HashMap::new(),
@@ -7066,7 +7065,7 @@ pub(crate) mod tests {
         });
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         app.apply_route_for_playback(&item);
 
@@ -7113,7 +7112,7 @@ pub(crate) mod tests {
         });
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         app.apply_route_for_playback(&item);
 
@@ -7148,7 +7147,7 @@ pub(crate) mod tests {
         });
         let mut item = make_item("Song", "Audio");
         item.id = "song-1".to_string();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         app.apply_route_for_playback(&item);
 
@@ -7237,7 +7236,7 @@ pub(crate) mod tests {
         });
         let mut item = make_item("Movie", "Movie");
         item.id = "movie-1".to_string();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         *DAEMON_ROUTE_CONNECT_OVERRIDE.lock().unwrap() = Some(route_connect_failure);
         app.apply_route_for_playback(&item);
@@ -7438,7 +7437,7 @@ pub(crate) mod tests {
     #[test]
     fn feed_home_video_root_does_not_auto_push_before_folder_pagination_completes() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = make_item("YouTube", "CollectionFolder");
@@ -7804,7 +7803,7 @@ pub(crate) mod tests {
     #[test]
     fn go_back_keeps_feed_home_video_group_view_intact() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = make_item("YouTube", "CollectionFolder");
@@ -7867,7 +7866,7 @@ pub(crate) mod tests {
     #[test]
     fn feed_home_video_root_filters_groups_from_all_video_paths() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = make_item("YouTube", "CollectionFolder");
@@ -7987,7 +7986,7 @@ pub(crate) mod tests {
         // A stale selected group from a prior aggregation run with more groups
         // must clamp to the groups that actually exist now.
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = make_item("YouTube", "CollectionFolder");
@@ -8051,8 +8050,8 @@ pub(crate) mod tests {
     #[test]
     fn refresh_lib_targets_power_feed_selection() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
-        app.power_focus = PowerFocus::Left;
+        app.library_tab = 1;
+        app.panel_focus = PanelFocus::Library;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = make_item("YouTube", "CollectionFolder");
@@ -8197,7 +8196,7 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         app.open_context_menu();
 
@@ -8248,7 +8247,7 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_left_tab = 1;
+        app.library_tab = 1;
 
         app.open_context_menu();
 
@@ -8297,8 +8296,8 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
 
         app.open_context_menu();
 
@@ -8364,8 +8363,8 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
 
         app.open_context_menu();
 
@@ -8468,8 +8467,8 @@ pub(crate) mod tests {
             series_season_cursor: 0,
             library_total: None,
         });
-        app.power_focus = PowerFocus::Left;
-        app.power_left_tab = 1;
+        app.panel_focus = PanelFocus::Library;
+        app.library_tab = 1;
 
         app.open_context_menu();
 
@@ -8496,7 +8495,7 @@ pub(crate) mod tests {
     #[test]
     fn refreshed_does_not_overwrite_feed_root_with_video_items() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = make_item("YouTube", "CollectionFolder");
@@ -8563,7 +8562,7 @@ pub(crate) mod tests {
     #[test]
     fn refreshed_restores_feed_loading_state_when_feed_state_is_missing() {
         let mut app = make_app_stub();
-        app.power_left_tab = 1;
+        app.library_tab = 1;
         app.client.lock().unwrap().config.feed_view_libraries = vec!["youtube".into()];
 
         let mut library = make_item("YouTube", "CollectionFolder");
@@ -8687,7 +8686,7 @@ pub(crate) mod tests {
     #[test]
     fn power_queue_renders_scope_pills_and_hitboxes_for_direct_remote() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.power_focus = PowerFocus::Left;
+        app.panel_focus = PanelFocus::Library;
         app.set_queue_scope(QueueScope::Local);
 
         let rendered = render_app_to_string(&mut app, 90, 28);
@@ -8698,17 +8697,17 @@ pub(crate) mod tests {
             rendered.contains(&format!(" {} ", upper_device_name)),
             "expected power queue local/session pills to use the device name:\n{rendered}"
         );
-        assert!(app.layout.power.queue_scope_local_area.width >= device_name.width() as u16);
-        assert!(app.layout.power.queue_scope_remote_area.width >= device_name.width() as u16);
+        assert!(app.layout.main.queue_scope_local_area.width >= device_name.width() as u16);
+        assert!(app.layout.main.queue_scope_remote_area.width >= device_name.width() as u16);
         assert!(
-            app.layout.power.queue_scope_remote_area.x > app.layout.power.queue_scope_local_area.x
+            app.layout.main.queue_scope_remote_area.x > app.layout.main.queue_scope_local_area.x
         );
     }
 
     #[test]
     fn power_queue_scope_switch_via_keyboard_works_from_queue_focus() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.set_queue_scope(QueueScope::Local);
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
@@ -8723,7 +8722,7 @@ pub(crate) mod tests {
     #[test]
     fn power_left_focus_brackets_do_not_switch_queue_scope() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.power_focus = PowerFocus::Left;
+        app.panel_focus = PanelFocus::Library;
         app.set_queue_scope(QueueScope::Local);
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
@@ -8735,15 +8734,15 @@ pub(crate) mod tests {
     #[test]
     fn power_queue_scope_switch_via_click_uses_rendered_hitboxes() {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.power_focus = PowerFocus::Left;
+        app.panel_focus = PanelFocus::Library;
         app.set_queue_scope(QueueScope::Local);
         let _ = render_app_to_string(&mut app, 90, 28);
 
-        let remote = app.layout.power.queue_scope_remote_area;
+        let remote = app.layout.main.queue_scope_remote_area;
         app.handle_mouse(left_down(remote.x, remote.y));
         assert_eq!(app.visible_queue_scope(), QueueScope::Remote);
 
-        let local = app.layout.power.queue_scope_local_area;
+        let local = app.layout.main.queue_scope_local_area;
         app.handle_mouse(left_down(local.x, local.y));
         assert_eq!(app.visible_queue_scope(), QueueScope::Local);
     }
@@ -8763,7 +8762,7 @@ pub(crate) mod tests {
     fn power_view_shift_resize_grows_from_queue_focus_and_persists_pref() {
         let _guard = crate::config::TestStateDirGuard::new();
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
 
         let handled = app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT));
 
@@ -8820,7 +8819,7 @@ pub(crate) mod tests {
     fn power_view_render_normalizes_saved_left_width_and_updates_layout() {
         let _guard = crate::config::TestStateDirGuard::new();
         let prefs = serde_json::json!({
-            "power_left_width": 70,
+            "queue_column_width": 70,
         });
         std::fs::write(
             crate::config::prefs_path(),
@@ -8832,7 +8831,7 @@ pub(crate) mod tests {
 
         let _ = render_app_to_string(&mut app, 70, 28);
 
-        assert_eq!(app.layout.power.queue_area.width, 38);
+        assert_eq!(app.layout.main.queue_area.width, 38);
         let saved: serde_json::Value = serde_json::from_str(
             &std::fs::read_to_string(crate::config::prefs_path()).expect("prefs written"),
         )
@@ -8846,13 +8845,13 @@ pub(crate) mod tests {
         let mut app = make_remote_app_stub(make_items(1), make_items(2));
 
         let _ = render_app_to_string(&mut app, 100, 28);
-        assert_eq!(app.layout.power.queue_area.width, 36);
+        assert_eq!(app.layout.main.queue_area.width, 36);
 
         assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
         assert!(!app.handle_key(KeyEvent::new(KeyCode::Right, KeyModifiers::SHIFT)));
 
         let _ = render_app_to_string(&mut app, 100, 28);
-        assert_eq!(app.layout.power.queue_area.width, 46);
+        assert_eq!(app.layout.main.queue_area.width, 46);
     }
 
     #[test]
@@ -8862,11 +8861,11 @@ pub(crate) mod tests {
 
         assert!(!app.has_direct_remote_queue());
         assert_eq!(
-            app.layout.power.queue_scope_local_area,
+            app.layout.main.queue_scope_local_area,
             ratatui::layout::Rect::default()
         );
         assert_eq!(
-            app.layout.power.queue_scope_remote_area,
+            app.layout.main.queue_scope_remote_area,
             ratatui::layout::Rect::default()
         );
         assert!(
@@ -8888,11 +8887,11 @@ pub(crate) mod tests {
 
         assert!(!app.has_direct_remote_queue());
         assert_eq!(
-            app.layout.power.queue_scope_local_area,
+            app.layout.main.queue_scope_local_area,
             ratatui::layout::Rect::default()
         );
         assert_eq!(
-            app.layout.power.queue_scope_remote_area,
+            app.layout.main.queue_scope_remote_area,
             ratatui::layout::Rect::default()
         );
         assert!(
@@ -9891,7 +9890,7 @@ pub(crate) mod tests {
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.set_queue_scope(QueueScope::Remote);
         app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
@@ -9927,7 +9926,7 @@ pub(crate) mod tests {
         let local_items = make_items(2);
         let remote_items = make_items(3);
         let mut app = make_remote_app_stub(local_items.clone(), remote_items.clone());
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.set_queue_scope(QueueScope::Remote);
         app.remote_player_tab.as_mut().unwrap().queue_cursor = 2;
 
@@ -11147,7 +11146,7 @@ pub(crate) mod tests {
         // The AUTOSAVE/queue-source segment is only shown while the queue
         // side is focused (see `render_status_bar`'s `source_label` /
         // `autosave_on` gating) -- equivalent to the old "Queue tab" state.
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.queue_source = crate::config::QueueSource::Playlist {
             id: Some("pl1".into()),
             name: "Road Trip".into(),
@@ -11378,7 +11377,7 @@ pub(crate) mod tests {
         let mut app = make_app_stub();
         // Equivalent of the old "Queue tab": the queue side is focused, so
         // the queue-source label is relevant and should render.
-        app.power_focus = PowerFocus::Queue;
+        app.panel_focus = PanelFocus::Queue;
         app.queue_source = crate::config::QueueSource::Album;
 
         let rendered = render_app_to_string(&mut app, 80, 24);

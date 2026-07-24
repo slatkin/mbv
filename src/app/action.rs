@@ -521,10 +521,11 @@ impl App {
                 }
             }
             Command::TogglePowerSidebar => {
-                self.power_left_collapsed = !self.power_left_collapsed;
-                if self.power_left_collapsed && matches!(self.power_focus, super::PowerFocus::Queue)
+                self.queue_column_collapsed = !self.queue_column_collapsed;
+                if self.queue_column_collapsed
+                    && matches!(self.panel_focus, super::PanelFocus::Queue)
                 {
-                    self.set_power_focus(super::PowerFocus::Left);
+                    self.set_panel_focus(super::PanelFocus::Library);
                 }
             }
         }

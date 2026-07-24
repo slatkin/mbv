@@ -1,6 +1,6 @@
-use super::super::super::ui_util::*;
+use super::super::ui_util::*;
 use super::POWER_RENDER_FILTER;
-use crate::app::layout::LayoutPower;
+use crate::app::layout::LayoutMain;
 use crate::app::{palette, App};
 use mbv_core::api::TICKS_PER_SECOND;
 use ratatui::layout::*;
@@ -472,7 +472,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
-        _layout: &mut LayoutPower,
+        _layout: &mut LayoutMain,
     ) {
         if area.height == 0 {
             return;
@@ -759,7 +759,7 @@ impl App {
                                 format!("{:>ep_num_w$}. ", i + 1)
                             };
                             let label_w = ep_label.chars().count();
-                            let play_icon = super::super::play_icon(self.use_nerd_fonts);
+                            let play_icon = super::play_icon(self.use_nerd_fonts);
                             let play_icon_w = if is_playing { play_icon.width() + 1 } else { 0 };
                             let title = trunc_str(
                                 &ep.name,
@@ -849,7 +849,7 @@ impl App {
         area: Rect,
         lib_idx: usize,
         focused: bool,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
     ) {
         let Some(item) = self.power_selected_movie_item(lib_idx) else {
             return;
@@ -1104,13 +1104,13 @@ mod tests {
         out
     }
 
-    fn render_power_compact_detail_to_string(app: &mut App, layout: &mut LayoutPower) -> String {
+    fn render_power_compact_detail_to_string(app: &mut App, layout: &mut LayoutMain) -> String {
         render_power_compact_detail_to_string_sized(app, layout, 60, 16)
     }
 
     fn render_power_compact_detail_to_string_sized(
         app: &mut App,
-        layout: &mut LayoutPower,
+        layout: &mut LayoutMain,
         width: u16,
         height: u16,
     ) -> String {
@@ -1172,7 +1172,7 @@ mod tests {
         movie.director = "Jane Director".into();
         push_movie_lib(&mut app, movie);
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
         assert!(
@@ -1201,7 +1201,7 @@ mod tests {
         movie.director = "Jane Director".into();
         push_movie_lib(&mut app, movie);
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
         assert!(
@@ -1234,7 +1234,7 @@ mod tests {
         movie.overview = "A short overview.".into();
         push_movie_lib(&mut app, movie);
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
         assert!(
@@ -1275,7 +1275,7 @@ mod tests {
         movie.overview = "A short overview.".into();
         push_movie_lib(&mut app, movie);
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
         assert_eq!(
@@ -1309,7 +1309,7 @@ mod tests {
         movie.overview = "A short overview.".into();
         push_movie_lib(&mut app, movie);
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         let out = render_power_compact_detail_to_string(&mut app, &mut layout);
 
         // IMG_COLS x IMG_ROWS = 24 x 14 cells at a 10x20px font is a
@@ -1338,7 +1338,7 @@ mod tests {
         movie.director = "Very Distinctive Unique Director Name".into();
         push_movie_lib(&mut app, movie);
 
-        let mut layout = LayoutPower::default();
+        let mut layout = LayoutMain::default();
         // Tall enough that the whole grown banner fits in the test buffer.
         let out = render_power_compact_detail_to_string_sized(&mut app, &mut layout, 60, 80);
 

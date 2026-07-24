@@ -12,11 +12,11 @@ const MAX_ALBUM_ARTIST_FETCHES: usize = 6;
 /// `card_image_states`. Never touches `card_image_loading`, so it never triggers
 /// the transient "Loading…" treatment — it is decoded synchronously from the
 /// bundled bytes the first time it's needed and then just sits in the cache.
-pub(super) const POWER_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
+pub(super) const QUEUE_CARD_PLACEHOLDER_KEY: &str = "__power_card_placeholder__";
 
 /// Fixed steady-state placeholder shown in the Power View queue card when no
 /// queue-card artwork is available.
-static POWER_CARD_PLACEHOLDER_BYTES: &[u8] =
+static QUEUE_CARD_PLACEHOLDER_BYTES: &[u8] =
     include_bytes!("../../assets/power-card-placeholder.webp");
 
 /// A pending card-image fetch, queued when the in-flight limit is reached.
@@ -274,18 +274,18 @@ impl App {
     pub(super) fn ensure_placeholder_card_image(&mut self) {
         if self
             .card_image_states
-            .contains_key(POWER_CARD_PLACEHOLDER_KEY)
+            .contains_key(QUEUE_CARD_PLACEHOLDER_KEY)
         {
             return;
         }
         let Some(picker) = self.image_picker.clone() else {
             return;
         };
-        let state = image::load_from_memory(POWER_CARD_PLACEHOLDER_BYTES)
+        let state = image::load_from_memory(QUEUE_CARD_PLACEHOLDER_BYTES)
             .ok()
-            .map(|img| self.new_thread_protocol(&picker, img, POWER_CARD_PLACEHOLDER_KEY));
+            .map(|img| self.new_thread_protocol(&picker, img, QUEUE_CARD_PLACEHOLDER_KEY));
         self.card_image_states
-            .insert(POWER_CARD_PLACEHOLDER_KEY.to_string(), state);
+            .insert(QUEUE_CARD_PLACEHOLDER_KEY.to_string(), state);
     }
 
     /// Builds a [`ratatui_image::thread::ThreadProtocol`] for `cache_key`,
