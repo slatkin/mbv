@@ -162,12 +162,18 @@ fn render_series_detail_background(
     visible: usize,
     display_cursor: usize,
     series_detail_rows: usize,
+    focused: bool,
 ) {
     if series_detail_rows == 0 {
         return;
     }
     let series_rule_top = display_cursor.saturating_sub(1);
     let series_rule_bottom = display_cursor + series_detail_rows.saturating_sub(1);
+    let bg = if focused {
+        palette::MEDIA_SELECTED_BG
+    } else {
+        palette::PLAYBACK_PANEL_BG
+    };
     super::render_selected_block_background(
         f,
         content_area,
@@ -175,7 +181,7 @@ fn render_series_detail_background(
         visible,
         series_rule_top,
         series_rule_bottom,
-        palette::MEDIA_SELECTED_BG,
+        bg,
     );
 }
 
@@ -267,7 +273,7 @@ impl App {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "\u{2581}".repeat(content_area.width as usize),
-                Style::default().fg(palette::SOFT_WHITE),
+                Style::default().fg(palette::SEEK_TRACK),
             )),
             Rect {
                 x: content_area.x,
@@ -671,12 +677,17 @@ impl App {
             let banner_rule_bottom = content_start + banner_rows.saturating_sub(2);
             let show_scrollbar = focused && total_display > visible;
 
-            // The selected movie + banner are wrapped in a CONTINUE_BG colored
-            // block (matching the home tab's Keep Watching look). Draw the
-            // block first, before the list items, so the per-row spans only
-            // paint their own cells and the block's background shows through
-            // on the side padding cols and on the top/bottom padding rows.
+            // The selected movie + banner are wrapped in a colored block
+            // (matching the home tab's Keep Watching look). Draw the block
+            // first, before the list items, so the per-row spans only paint
+            // their own cells and the block's background shows through on the
+            // side padding cols and on the top/bottom padding rows.
             if banner_rows > 0 {
+                let bg = if focused {
+                    palette::MEDIA_SELECTED_BG
+                } else {
+                    palette::PLAYBACK_PANEL_BG
+                };
                 super::render_selected_block_background(
                     f,
                     content_area,
@@ -684,7 +695,7 @@ impl App {
                     visible,
                     banner_rule_top,
                     banner_rule_bottom,
-                    palette::MEDIA_SELECTED_BG,
+                    bg,
                 );
             }
 
@@ -695,6 +706,7 @@ impl App {
                 visible,
                 display_cursor,
                 series_detail_rows,
+                focused,
             );
 
             // Width available to title + duration on a normal list row (with a
@@ -921,6 +933,11 @@ impl App {
             // paint their own cells and the block's background shows through
             // on the side padding cols and on the top/bottom padding rows.
             if banner_rows > 0 {
+                let bg = if focused {
+                    palette::MEDIA_SELECTED_BG
+                } else {
+                    palette::PLAYBACK_PANEL_BG
+                };
                 super::render_selected_block_background(
                     f,
                     content_area,
@@ -928,7 +945,7 @@ impl App {
                     visible,
                     banner_rule_top,
                     banner_rule_bottom,
-                    palette::MEDIA_SELECTED_BG,
+                    bg,
                 );
             }
 
@@ -939,6 +956,7 @@ impl App {
                 visible,
                 display_cursor,
                 series_detail_rows,
+                focused,
             );
 
             let list_items: Vec<ListItem> = display_rows

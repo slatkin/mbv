@@ -202,7 +202,7 @@ pub(super) fn render_selected_block_background(
     }
 }
 
-/// Paints the ▁/▔ SOFT_WHITE border rows on the reserved rows one position outside
+/// Paints the ▁/▔ border rows on the reserved rows one position outside
 /// the colored block's padding rows `[top_pad_abs, bottom_pad_abs]`.
 /// The padding rows are inserted with extra detail rule rows for border space.
 /// Call *after* the block's own content and scrollbar render, so borders paint on top.
@@ -214,7 +214,7 @@ pub(super) fn render_selected_block_borders(
     top_pad_abs: usize,
     bottom_pad_abs: usize,
 ) {
-    let border_style = Style::default().fg(palette::SOFT_WHITE);
+    let border_style = Style::default().fg(palette::SEEK_TRACK);
     // Top border: paint one row before the colored block padding
     if let Some(top_border) = top_pad_abs.checked_sub(1) {
         if top_border >= offset && top_border < offset + visible {
@@ -252,17 +252,24 @@ pub(super) fn render_selected_block_borders(
     }
 }
 
-fn render_power_queue_panel_frame(f: &mut Frame, area: Rect, desired_rows: u16) -> Rect {
+fn render_power_queue_panel_frame(
+    f: &mut Frame,
+    area: Rect,
+    desired_rows: u16,
+    focused: bool,
+) -> Rect {
     if area.width == 0 || area.height == 0 {
         return Rect::default();
     }
 
-    f.render_widget(
-        Block::default().style(Style::default().bg(palette::MEDIA_SELECTED_BG)),
-        area,
-    );
+    let bg = if focused {
+        palette::MEDIA_SELECTED_BG
+    } else {
+        palette::POWER_RIGHT_BG
+    };
+    f.render_widget(Block::default().style(Style::default().bg(bg)), area);
 
-    let border_style = Style::default().fg(palette::SOFT_WHITE);
+    let border_style = Style::default().fg(palette::SEEK_TRACK);
     f.render_widget(
         Paragraph::new(Line::from(Span::styled(
             "\u{2594}".repeat(area.width as usize),
@@ -808,7 +815,7 @@ impl App {
         // Full-column background behind the card image and queue list.
         if !self.power_left_collapsed {
             f.render_widget(
-                Block::default().style(Style::default().bg(palette::CONTINUE_BG)),
+                Block::default().style(Style::default().bg(palette::PLAYBACK_PANEL_BG)),
                 left_area,
             );
         }
@@ -971,7 +978,8 @@ impl App {
                 let queue = self.displayed_queue();
                 rendered_power_queue_rows_for_padding(&queue.items, queue_area)
             };
-            let queue_list_area = render_power_queue_panel_frame(f, queue_area, desired_queue_rows);
+            let queue_list_area =
+                render_power_queue_panel_frame(f, queue_area, desired_queue_rows, queue_focused);
             self.render_power_queue(f, queue_list_area, queue_focused, layout);
         }
         self.render_power_library(f, render_lib_area, left_focused, layout);
@@ -1506,9 +1514,9 @@ mod tests {
         let x = layout.queue_area.x;
 
         assert_eq!(buf[(x, top_y)].symbol(), "\u{2594}");
-        assert_eq!(buf[(x, top_y)].fg, palette::SOFT_WHITE);
+        assert_eq!(buf[(x, top_y)].fg, palette::SEEK_TRACK);
         assert_eq!(buf[(x, bottom_y)].symbol(), "\u{2581}");
-        assert_eq!(buf[(x, bottom_y)].fg, palette::SOFT_WHITE);
+        assert_eq!(buf[(x, bottom_y)].fg, palette::SEEK_TRACK);
         assert_eq!(buf[(x, layout.queue_area.y)].bg, palette::MEDIA_SELECTED_BG);
         assert_eq!(
             buf[(x, layout.queue_area.y - 1)].bg,
@@ -1694,7 +1702,7 @@ mod tests {
         let mut term = Terminal::new(backend).unwrap();
         let mut layout = LayoutPower::default();
         term.draw(|f| {
-            let queue_area = render_power_queue_panel_frame(f, panel_area, desired_rows);
+            let queue_area = render_power_queue_panel_frame(f, panel_area, desired_rows, true);
             app.render_power_queue(f, queue_area, true, &mut layout);
         })
         .unwrap();
