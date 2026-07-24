@@ -242,7 +242,7 @@ impl App {
             );
         }
 
-        // `list_image_renders_allowed()` (the 150ms nav-idle debounce) exists
+        // `power_right_panel_image_renders_allowed()` (the 150ms nav-idle debounce) exists
         // to stop the *real* poster from flickering in and out while rapidly
         // scrolling through many different movies -- it must keep gating
         // which image is actually substituted in. But the placeholder box's
@@ -254,7 +254,7 @@ impl App {
         // placeholder is reserved unconditionally here whenever a real image
         // isn't yet ready to show, and only the "is it the real image or the
         // placeholder" choice below still depends on the nav-idle gate.
-        let nav_gate_open = self.list_image_renders_allowed();
+        let nav_gate_open = self.power_right_panel_image_renders_allowed();
         // `image_picker` is only `None` before the run loop's one-time init
         // (or in tests that don't set one up) -- fall back to the full
         // bounding box in that case, since there's no real font metrics yet
@@ -1253,10 +1253,10 @@ mod tests {
     }
 
     // The rest of the banner's content (meta line, overview text) is never
-    // gated on `last_nav_at` -- it renders at its final layout on the very
+    // gated on `last_power_library_nav_at` -- it renders at its final layout on the very
     // first frame after navigating to a movie. The poster placeholder must
     // match that: reserved on the same first frame, not held back until
-    // `list_image_renders_allowed()`'s 150ms nav-idle window has passed.
+    // `power_right_panel_image_renders_allowed()`'s 150ms nav-idle window has passed.
     // Gating the placeholder behind that timer (inherited from the timer's
     // original purpose -- avoiding real-image flicker while rapidly
     // scrolling through many different posters) produced a small but real
@@ -1267,7 +1267,8 @@ mod tests {
         let mut app = make_app_stub();
         app.image_protocol_enabled = true;
         // Simulate having just navigated: the nav-idle gate is still closed.
-        app.last_nav_at = std::time::Instant::now();
+        app.last_power_library_nav_at = std::time::Instant::now();
+        assert!(!app.power_right_panel_image_renders_allowed());
 
         let mut movie = make_item("Focused Movie", "Movie");
         movie.id = "movie-1".into();

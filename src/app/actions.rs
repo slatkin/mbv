@@ -978,6 +978,9 @@ impl App {
         let now = Instant::now();
         let idle = now.duration_since(self.last_nav_at) >= NAV_IMAGE_FETCH_IDLE_DELAY;
         self.last_nav_at = now;
+        if self.view_mode == ViewMode::Power {
+            self.mark_power_library_navigation(now);
+        }
         let lib_off = self.lib_tab_offset();
         let lib_idx = self.tab_idx - lib_off;
 
