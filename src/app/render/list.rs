@@ -619,37 +619,34 @@ impl App {
             // extra row to clear the rule too.
             // Also, if a colored-padding BannerFiller (from a selected block) is at
             // the top, back up one row to keep the border-space BannerFiller visible.
-            if visible > 1
-                && offset > 0
-                && matches!(
-                    display_rows.get(offset),
-                    Some(
-                        DisplayRow::Item(_)
-                            | DisplayRow::BannerFiller
-                            | DisplayRow::SeriesDetailFiller
-                    )
-                )
-            {
-                if matches!(
-                    display_rows.get(offset - 1),
-                    Some(DisplayRow::LetterHeader(_))
-                ) {
-                    offset -= 1;
-                } else if offset >= 2
-                    && matches!(display_rows.get(offset - 1), Some(DisplayRow::BannerFiller))
+            if visible > 1 && offset > 0 {
+                // Walk back over any run of banner/series-detail filler rows
+                // touching `offset` (whether `offset` lands inside the run or
+                // right after it, on the Item row the fillers belong to) so
+                // `run_start` points at the run's first row. Then, if a
+                // LetterHeader immediately precedes that run, include it too
+                // -- otherwise the header (and/or the block's top padding)
+                // can be scrolled just out of view with no way back except
+                // scrolling further. This generalizes the old fixed-offset
+                // special cases to any filler-run length.
+                let mut run_start = offset;
+                while run_start > 0
                     && matches!(
-                        display_rows.get(offset - 2),
-                        Some(DisplayRow::LetterHeader(_))
+                        display_rows.get(run_start - 1),
+                        Some(DisplayRow::BannerFiller | DisplayRow::SeriesDetailFiller)
                     )
                 {
-                    offset -= 2;
-                } else if offset >= 1
-                    && matches!(display_rows.get(offset), Some(DisplayRow::BannerFiller))
-                    && matches!(display_rows.get(offset - 1), Some(DisplayRow::BannerFiller))
-                {
-                    // Colored-padding BannerFiller at top; back up to keep border visible
-                    offset -= 1;
+                    run_start -= 1;
                 }
+                offset = if run_start > 0
+                    && matches!(
+                        display_rows.get(run_start - 1),
+                        Some(DisplayRow::LetterHeader(_))
+                    ) {
+                    run_start - 1
+                } else {
+                    run_start
+                };
             }
             final_offset = offset;
 
@@ -905,14 +902,23 @@ impl App {
                 visible,
             );
             let mut offset = stored_scroll.clamp(lower_bound, display_cursor);
-            // If a colored-padding BannerFiller (from a selected block) is at
-            // the top, back up one row to keep the border-space BannerFiller visible.
-            if visible > 1
-                && offset > 0
-                && matches!(display_rows.get(offset), Some(DisplayRow::BannerFiller))
-                && matches!(display_rows.get(offset - 1), Some(DisplayRow::BannerFiller))
-            {
-                offset -= 1;
+            // Walk back over any run of banner/series-detail filler rows
+            // touching `offset` (whether `offset` lands inside the run or
+            // right after it, on the Item row the fillers belong to) so the
+            // offset lands at the run's first row instead of stranding the
+            // block's top padding just out of view. See the analogous,
+            // letter-header-aware version of this scan above for
+            // `use_letter_groups`; this (ungrouped) branch never has
+            // LetterHeader rows, so there's nothing further to include.
+            if visible > 1 && offset > 0 {
+                while offset > 0
+                    && matches!(
+                        display_rows.get(offset - 1),
+                        Some(DisplayRow::BannerFiller | DisplayRow::SeriesDetailFiller)
+                    )
+                {
+                    offset -= 1;
+                }
             }
             final_offset = offset;
 
@@ -1398,6 +1404,71 @@ mod tests {
                  buckets, not scattered after the whole list:\n{out}"
             );
         }
+    }
+
+    // Regression test for a bug where scrolling back to the very top of a
+    // letter-grouped library list could strand the first letter header (and
+    // the compact movie banner's top padding) just out of view, even though
+    // the cursor was genuinely on item 0. When the first item is itself a
+    // leaf movie (banner-eligible) that also starts the first letter
+    // bucket, `push_selected_detail_fillers_before` inserts 2 BannerFiller
+    // rows immediately before that item's row, so its display row lands at
+    // index 3, not 0. A stale `stored_scroll` >= 3 (carried over from
+    // scrolling down and back up) used to clamp to offset 3, and the old
+    // fixed-offset recovery checks didn't cover this row pattern
+    // ([LetterHeader, BannerFiller, BannerFiller, Item]), so the header and
+    // banner padding stayed permanently hidden above the viewport.
+    #[test]
+    fn scrolling_to_top_reveals_letter_header_when_first_item_has_a_banner() {
+        // "{letter}Z" (not just "{letter}") prefix avoids `strip_article`
+        // treating the first item's title as starting with the English
+        // article "A ", which would silently re-bucket it under "M-O"
+        // (from "Movie...").
+        let titles: Vec<String> = (0..60)
+            .map(|i| {
+                let letter = (b'A' + (i % 26) as u8) as char;
+                format!("{letter}Z Movie {i:02}")
+            })
+            .collect();
+        let title_refs: Vec<&str> = titles.iter().map(String::as_str).collect();
+        let mut app = make_power_movie_list_app(title_refs);
+
+        // Item 0 ("AZ Movie 00") sorts first alphabetically, so it starts
+        // the first letter bucket. Select it and give it an overview so it
+        // also reserves compact-banner filler rows -- the combination that
+        // triggers the bug.
+        {
+            let lvl = app.libs[0].nav_stack.last_mut().unwrap();
+            lvl.items[0].overview = "This is the compact movie banner overview text.".into();
+            lvl.cursor = 0;
+            // Simulate a stale scroll offset carried over from scrolling
+            // down earlier and back up -- >= 3 is enough to land past the
+            // header and banner filler rows pre-fix.
+            lvl.scroll = 6;
+        }
+
+        let mut layout = LayoutMain::default();
+        let out = render_power_list_to_string(&mut app, &mut layout);
+
+        let final_scroll = app.libs[0].nav_stack.last().unwrap().scroll;
+        assert_eq!(
+            final_scroll, 0,
+            "scrolling to the top item should land at display offset 0 so \
+             the letter header and banner padding stay visible, not \
+             stranded above the viewport:\n{out}"
+        );
+
+        let header_pos = out
+            .find("A\u{2013}C")
+            .expect("letter header should render");
+        let banner_pos = out
+            .find("compact movie banner")
+            .expect("banner overview text should render");
+        assert!(
+            header_pos < banner_pos,
+            "letter header must appear before the banner content in the \
+             rendered output:\n{out}"
+        );
     }
 
     // Letter-range pills (large libraries): a scoped "A–C" fetch is a small
